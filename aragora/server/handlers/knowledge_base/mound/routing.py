@@ -91,8 +91,8 @@ _HANDLER_SIGNATURES: dict[str, str] = {
     "_handle_get_confidence_history": "q",
     "_handle_curation_status": "q",
     "_handle_curation_history": "q",
-    "_handle_curation_scores": "q",
-    "_handle_curation_tiers": "q",
+    "_handle_quality_scores": "q",
+    "_handle_tier_distribution": "q",
     # query_params + handler
     "_handle_shared_with_me": "qh",
     "_handle_my_shares": "qh",
@@ -508,7 +508,7 @@ class RoutingMixin:
                 ),
                 RouteEntry(
                     "/api/v1/knowledge/mound/curation/run",
-                    "_handle_curation_run",
+                    "_handle_run_curation",
                     ("POST",),
                 ),
                 RouteEntry(
@@ -518,12 +518,12 @@ class RoutingMixin:
                 ),
                 RouteEntry(
                     "/api/v1/knowledge/mound/curation/scores",
-                    "_handle_curation_scores",
+                    "_handle_quality_scores",
                     ("GET",),
                 ),
                 RouteEntry(
                     "/api/v1/knowledge/mound/curation/tiers",
-                    "_handle_curation_tiers",
+                    "_handle_tier_distribution",
                     ("GET",),
                 ),
             ],
@@ -610,6 +610,28 @@ class RoutingMixin:
                 ),
             ],
         }
+
+    def routes(self) -> list[tuple[str, str, str]]:
+        """Explicit ``(METHOD, path, handler_name)`` declarations for this handler.
+
+        The OpenAPI generator treats ``routes()`` as per-path verb evidence
+        (same protocol as ``SSOHandler.routes()``, see #9360): without it, the
+        dispatch-table verbs below are invisible to spec generation and the
+        read-suffix fallback documents POST-only mound routes as GET (#9396).
+        Derived directly from ``_build_route_table()`` so the declaration
+        cannot drift from dispatch truth. Dynamic regex patterns are converted
+        to wildcard paths (``([^/]+)`` -> ``*``) for spec templating.
+        """
+        declared: list[tuple[str, str, str]] = []
+        table = self._build_route_table()
+        for entry in table["static"]:
+            for method in entry.methods:
+                declared.append((method, entry.pattern, entry.handler))
+        for entry in table["dynamic"]:
+            path = entry.pattern.lstrip("^").rstrip("$").replace("([^/]+)", "*")
+            for method in entry.methods:
+                declared.append((method, path, entry.handler))
+        return declared
 
     def _dispatch_route(
         self,
@@ -785,10 +807,9 @@ class RoutingMixin:
     ) -> HandlerResult | None:
         """Route /curation/policy endpoint based on HTTP method."""
         method = getattr(handler, "command", "GET")
-        if method == "POST":
-            return getattr(self, "_handle_create_curation_policy")(handler)
-        elif method == "PUT":
-            return getattr(self, "_handle_update_curation_policy")(handler)
+        if method in ("POST", "PUT"):
+            # Create and update share one upsert implementation.
+            return getattr(self, "_handle_set_curation_policy")(handler)
         return getattr(self, "_handle_get_curation_policy")(query_params)
 
     # -------------------------------------------------------------------------

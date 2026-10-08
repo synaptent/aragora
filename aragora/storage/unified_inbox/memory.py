@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import threading
-from typing import Any
+from typing import Any, cast
 
 from aragora.storage.unified_inbox.base import UnifiedInboxStoreBackend
 
@@ -145,14 +145,16 @@ class InMemoryUnifiedInboxStore(UnifiedInboxStoreBackend):
             if not message:
                 return False
             self._triage.get(tenant_id, {}).pop(message_id, None)
-            if (
-                tenant_id,
-                message.get("account_id"),
-                message.get("external_id"),
-            ) in self._message_index:
-                self._message_index.pop(
-                    (tenant_id, message.get("account_id"), message.get("external_id")), None
-                )
+            message_key = cast(
+                tuple[str, str, str],
+                (
+                    tenant_id,
+                    message.get("account_id"),
+                    message.get("external_id"),
+                ),
+            )
+            if message_key in self._message_index:
+                self._message_index.pop(message_key, None)
         unread_delta = -1 if not message.get("is_read") else 0
         await self.increment_account_counts(
             tenant_id, message["account_id"], total_delta=-1, unread_delta=unread_delta

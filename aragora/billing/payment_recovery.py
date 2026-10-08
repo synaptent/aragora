@@ -28,7 +28,7 @@ import os
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
-from typing import Any
+from typing import Any, cast
 
 from aragora.billing.models import SubscriptionTier
 from aragora.persistence.db_config import get_default_data_dir
@@ -68,12 +68,15 @@ class PaymentFailure:
     @property
     def days_until_downgrade(self) -> int:
         """Days until automatic downgrade."""
-        return max(0, (self.grace_ends_at - datetime.now(timezone.utc)).days)
+        return max(
+            0,
+            (cast(datetime, self.grace_ends_at) - datetime.now(timezone.utc)).days,
+        )
 
     @property
     def should_downgrade(self) -> bool:
         """Check if grace period has ended."""
-        return datetime.now(timezone.utc) >= self.grace_ends_at
+        return datetime.now(timezone.utc) >= cast(datetime, self.grace_ends_at)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -87,7 +90,7 @@ class PaymentFailure:
             "invoice_id": self.invoice_id,
             "invoice_url": self.invoice_url,
             "status": self.status,
-            "grace_ends_at": self.grace_ends_at.isoformat(),
+            "grace_ends_at": cast(datetime, self.grace_ends_at).isoformat(),
             "days_failing": self.days_failing,
             "days_until_downgrade": self.days_until_downgrade,
             "should_downgrade": self.should_downgrade,

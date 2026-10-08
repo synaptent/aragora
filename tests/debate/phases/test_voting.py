@@ -413,6 +413,17 @@ class TestCountWeightedVotes:
         assert result.vote_counts["Y"] == pytest.approx(1.5)  # 1.0 + 0.5
         assert result.total_weighted_votes == pytest.approx(2.5)
 
+    def test_with_missing_user_vote_entries(self):
+        """Missing entries in a user-vote batch do not abort aggregation."""
+        vp = VotingPhase(_make_protocol())
+        votes = [FakeVote("a", "X")]
+        user_votes = [None, {"choice": "X", "user_id": "u1"}]
+
+        result = vp.count_weighted_votes(votes, user_votes=user_votes, user_vote_weight=0.5)
+
+        assert result.vote_counts["X"] == pytest.approx(1.5)
+        assert result.total_weighted_votes == pytest.approx(1.5)
+
     def test_with_user_vote_multiplier(self):
         """User vote multiplier scales user weight by intensity."""
         vp = VotingPhase(_make_protocol())

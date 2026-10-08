@@ -840,6 +840,32 @@ class TestCompressGroup:
     """Test _compress_group method."""
 
     @pytest.mark.asyncio
+    async def test_missing_agent_call_does_not_acquire_semaphore(self):
+        compressor = HierarchicalCompressor(config=RLMConfig(cache_compressions=False))
+        nodes = [
+            AbstractionNode(
+                id="L0_0",
+                level=AbstractionLevel.FULL,
+                content="Chunk content",
+                token_count=50,
+            ),
+        ]
+        context = RLMContext(original_content="", original_tokens=50)
+
+        with patch("aragora.rlm.compressor.get_call_semaphore") as get_semaphore:
+            result, calls = await compressor._compress_group(
+                nodes,
+                0,
+                AbstractionLevel.SUMMARY,
+                HierarchicalCompressor.COMPRESSION_PROMPTS[AbstractionLevel.SUMMARY],
+                context,
+            )
+
+        get_semaphore.assert_not_called()
+        assert result is not None
+        assert calls == 0
+
+    @pytest.mark.asyncio
     async def test_compress_group_success(self):
         """Test successful group compression."""
 

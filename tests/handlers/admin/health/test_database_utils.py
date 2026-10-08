@@ -836,7 +836,7 @@ class TestCheckSyncStore:
     def test_import_error(self):
         """SyncStore module not available -> ImportError raised."""
         h = _make_handler()
-        with patch.dict("sys.modules", {"aragora.connectors.enterprise.sync_store": None}):
+        with patch.dict("sys.modules", {"aragora.storage.sync_store": None}):
             with pytest.raises(ImportError):
                 check_sync_store(h)
 
@@ -1037,7 +1037,7 @@ class TestHandleStoreCheckErrorsWithRealFunctions:
     def test_sync_store_import_error_wrapped(self):
         """SyncStore ImportError wrapped -> module_not_available."""
         h = _make_handler()
-        with patch.dict("sys.modules", {"aragora.connectors.enterprise.sync_store": None}):
+        with patch.dict("sys.modules", {"aragora.storage.sync_store": None}):
             result, healthy = handle_store_check_errors("sync_store", lambda: check_sync_store(h))
             assert healthy is True
             assert result["status"] == "module_not_available"

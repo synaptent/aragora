@@ -14,7 +14,7 @@ Key Components:
 Example:
     >>> from aragora.audit.exploration import DocumentExplorer, ExplorationAgent
     >>> explorer = DocumentExplorer(
-    ...     agents=[ExplorationAgent(name="claude", model="claude-opus-4-8")],
+    ...     agents=[ExplorationAgent(name="claude", model="claude-opus-5")],
     ... )
     >>> result = await explorer.explore(
     ...     documents=["doc1.pdf", "doc2.md"],

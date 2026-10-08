@@ -208,7 +208,7 @@ async def handle_slack_commands(request: Any) -> HandlerResult:
                     }
                 )
 
-            decision_integrity = None
+            decision_integrity: dict[str, Any] | None = None
             if subcommand == "ask":
                 decision_integrity = {
                     "include_receipt": True,

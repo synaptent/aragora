@@ -28,7 +28,7 @@ on:
 
 concurrency:
   group: docs-build-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: false
 
 env:
   NODE_VERSION: '20'
@@ -73,7 +73,7 @@ jobs:
         run: scripts/ci_install_project.sh --extras dev
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'

@@ -72,7 +72,7 @@ def _mock_trace_context(
 # Pre-declare trace_context for optional import
 trace_context: Any = _mock_trace_context
 try:
-    from aragora.server.middleware.tracing import trace_context  # type: ignore[no-redef]
+    from aragora.observability.middleware.tracing import trace_context  # type: ignore[no-redef]
 
     TRACING_AVAILABLE = True
 except ImportError:

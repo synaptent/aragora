@@ -10,6 +10,8 @@ Tests cover:
 """
 
 import asyncio
+from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -32,7 +34,7 @@ class TestOpenAIAgentInitialization:
         spec = AgentRegistry.get_spec("openai-api")
 
         assert agent.name == "openai-api"
-        assert agent.model == "gpt-5.5"
+        assert agent.model == "gpt-5.6-sol"
         assert agent.role == "proposer"
         assert agent.timeout == 120
         assert agent.agent_type == "openai"
@@ -75,7 +77,7 @@ class TestOpenAIAgentInitialization:
         spec = AgentRegistry.get_spec("openai-api")
 
         assert spec is not None
-        assert spec.default_model == "gpt-5.5"
+        assert spec.default_model == "gpt-5.6-sol"
         assert spec.agent_type == "API"
 
 
@@ -255,6 +257,652 @@ class TestOpenAIGenerate:
         assert budget_guard.current_spend_usd() > 0
 
 
+class TestOpenAIVibeProxyRouting:
+    """Exact-match OpenAI Chat routing through the central transport policy."""
+
+    class FakeClient:
+        base_url = "http://127.0.0.1:8318/v1"
+
+        def __init__(
+            self,
+            *,
+            fail: bool = False,
+            error: Exception | None = None,
+            response: dict | None = None,
+        ) -> None:
+            self.fail = fail
+            self.error = error
+            self.response = response
+            self.calls: list[dict[str, Any]] = []
+
+        def catalog(self, *, timeout: float | None = None):
+            self.calls.append({"operation": "catalog", "timeout": timeout})
+            return SimpleNamespace(models=frozenset({"gpt-5.5", "proxy-gpt"}))
+
+        def openai_request(self, **kwargs):
+            from aragora.agents.transports.vibeproxy import VibeProxyUnavailableError
+
+            self.calls.append({"operation": "request", **kwargs})
+            if self.error is not None:
+                raise self.error
+            if self.fail:
+                raise VibeProxyUnavailableError("proxy unavailable")
+            if self.response is not None:
+                return self.response
+            model = kwargs["model"]
+            return {
+                "model": model,
+                "choices": [{"message": {"content": "proxy response"}}],
+                "usage": {"prompt_tokens": 7, "completion_tokens": 3},
+            }
+
+    @pytest.mark.asyncio
+    async def test_exact_chat_uses_proxy_without_direct_request(
+        self, mock_env_with_api_keys
+    ) -> None:
+        from aragora.agents.api_agents.openai import OpenAIAPIAgent
+        from aragora.agents.transports.vibeproxy import ModelTransportPolicy, TransportMode
+
+        client = self.FakeClient()
+        agent = OpenAIAPIAgent(model="gpt-5.5", enable_fallback=False)
+        agent.enable_web_search = False
+        agent._model_transport_policy = ModelTransportPolicy(
+            TransportMode.PREFER,
+            client=client,  # type: ignore[arg-type]
+            model_map={"openai:gpt-5.5": "proxy-gpt"},
+        )
+
+        with patch(
+            "aragora.agents.api_agents.openai_compatible.create_client_session"
+        ) as direct_session:
+            result = await agent.generate("hello")
+
+        assert result == "proxy response"
+        direct_session.assert_not_called()
+        assert agent.model == "gpt-5.5"
+        assert agent.last_tokens_in == 7
+        assert agent.last_tokens_out == 3
+        request = next(call for call in client.calls if call["operation"] == "request")
+        assert request["protocol"].value == "chat"
+        assert request["model"] == "proxy-gpt"
+        assert request["payload"]["model"] == "proxy-gpt"
+        assert request["payload"]["messages"] == [{"role": "user", "content": "hello"}]
+
+    @pytest.mark.asyncio
+    async def test_web_search_stays_on_direct_path(
+        self, mock_env_with_api_keys, mock_openai_response
+    ) -> None:
+        from aragora.agents.api_agents.openai import OpenAIAPIAgent
+        from aragora.agents.transports.vibeproxy import ModelTransportPolicy, TransportMode
+
+        client = self.FakeClient()
+        agent = OpenAIAPIAgent(model="gpt-5.5", enable_fallback=False)
+        agent._model_transport_policy = ModelTransportPolicy(
+            TransportMode.PREFER,
+            client=client,  # type: ignore[arg-type]
+        )
+        response = MagicMock(status=200)
+        response.json = AsyncMock(return_value=mock_openai_response)
+        response.__aenter__ = AsyncMock(return_value=response)
+        response.__aexit__ = AsyncMock(return_value=None)
+        session = MagicMock()
+        session.post = MagicMock(return_value=response)
+        session.__aenter__ = AsyncMock(return_value=session)
+        session.__aexit__ = AsyncMock(return_value=None)
+
+        with patch(
+            "aragora.agents.api_agents.openai_compatible.create_client_session",
+            return_value=session,
+        ):
+            result = await agent.generate("check https://example.com")
+
+        assert "test response from GPT" in result
+        assert client.calls == []
+        assert session.post.call_args.kwargs["json"]["tools"]
+
+    @pytest.mark.asyncio
+    async def test_custom_openai_endpoint_stays_on_direct_path(
+        self, mock_env_with_api_keys, mock_openai_response, monkeypatch
+    ) -> None:
+        from aragora.agents.api_agents.openai import OpenAIAPIAgent
+        from aragora.agents.transports.vibeproxy import ModelTransportPolicy, TransportMode
+
+        monkeypatch.setenv("OPENAI_BASE_URL", "https://gateway.example/openai")
+        client = self.FakeClient()
+        agent = OpenAIAPIAgent(model="gpt-5.5", enable_fallback=False)
+        agent.enable_web_search = False
+        agent._model_transport_policy = ModelTransportPolicy(
+            TransportMode.PREFER,
+            client=client,  # type: ignore[arg-type]
+        )
+        response = MagicMock(status=200)
+        response.json = AsyncMock(return_value=mock_openai_response)
+        response.__aenter__ = AsyncMock(return_value=response)
+        response.__aexit__ = AsyncMock(return_value=None)
+        session = MagicMock()
+        session.post = MagicMock(return_value=response)
+        session.__aenter__ = AsyncMock(return_value=session)
+        session.__aexit__ = AsyncMock(return_value=None)
+
+        with patch(
+            "aragora.agents.api_agents.openai_compatible.create_client_session",
+            return_value=session,
+        ):
+            await agent.generate("hello")
+
+        assert client.calls == []
+        assert session.post.call_args.args[0] == (
+            "https://gateway.example/openai/v1/chat/completions"
+        )
+
+    @pytest.mark.asyncio
+    async def test_streaming_stays_on_direct_path(self, mock_env_with_api_keys) -> None:
+        from aragora.agents.api_agents.openai import OpenAIAPIAgent
+        from aragora.agents.api_agents.openai_compatible import OpenAICompatibleMixin
+        from aragora.agents.transports.vibeproxy import ModelTransportPolicy, TransportMode
+
+        client = self.FakeClient()
+        agent = OpenAIAPIAgent(model="gpt-5.5", enable_fallback=False)
+        agent.enable_web_search = False
+        agent._model_transport_policy = ModelTransportPolicy(
+            TransportMode.PREFER,
+            client=client,  # type: ignore[arg-type]
+        )
+
+        async def fake_direct_stream(_agent, _prompt, _context=None):
+            yield "direct chunk"
+
+        with patch.object(OpenAICompatibleMixin, "generate_stream", fake_direct_stream):
+            chunks = [chunk async for chunk in agent.generate_stream("hello")]
+
+        assert chunks == ["direct chunk"]
+        assert client.calls == []
+
+    @pytest.mark.asyncio
+    async def test_catalog_and_request_share_one_timeout_budget(
+        self, mock_env_with_api_keys, monkeypatch
+    ) -> None:
+        from aragora.agents.api_agents import openai as openai_module
+        from aragora.agents.api_agents.openai import OpenAIAPIAgent
+        from aragora.agents.transports.vibeproxy import ModelTransportPolicy, TransportMode
+
+        clock = [100.0]
+
+        class DeadlineClient:
+            base_url = "http://127.0.0.1:8318/v1"
+
+            def __init__(inner_self) -> None:
+                inner_self.calls: list[dict[str, Any]] = []
+
+            def catalog(inner_self, *, timeout: float | None = None):
+                inner_self.calls.append({"operation": "catalog", "timeout": timeout})
+                clock[0] += 3.0
+                return SimpleNamespace(models=frozenset({"gpt-5.5"}))
+
+            def openai_request(inner_self, **kwargs):
+                inner_self.calls.append({"operation": "request", **kwargs})
+                return {
+                    "model": kwargs["model"],
+                    "choices": [{"message": {"content": "proxy response"}}],
+                    "usage": {"prompt_tokens": 7, "completion_tokens": 3},
+                }
+
+        monkeypatch.setattr(openai_module.time, "monotonic", lambda: clock[0])
+        client = DeadlineClient()
+        agent = OpenAIAPIAgent(model="gpt-5.5", timeout=10, enable_fallback=False)
+        agent.enable_web_search = False
+        agent._model_transport_policy = ModelTransportPolicy(
+            TransportMode.PREFER,
+            client=client,  # type: ignore[arg-type]
+        )
+
+        await agent.generate("hello")
+
+        catalog = next(call for call in client.calls if call["operation"] == "catalog")
+        request = next(call for call in client.calls if call["operation"] == "request")
+        # Discovery is capped so a wedged proxy cannot burn the inference
+        # budget; the request leg still draws from the shared deadline.
+        assert catalog["timeout"] == pytest.approx(6.0)
+        assert request["timeout"] == pytest.approx(7.0)
+
+    @pytest.mark.asyncio
+    async def test_prefer_falls_back_direct_before_output(
+        self, mock_env_with_api_keys, mock_openai_response
+    ) -> None:
+        from aragora.agents.api_agents.openai import OpenAIAPIAgent
+        from aragora.agents.transports.vibeproxy import ModelTransportPolicy, TransportMode
+
+        client = self.FakeClient(fail=True)
+        agent = OpenAIAPIAgent(model="gpt-5.5", enable_fallback=False)
+        agent.enable_web_search = False
+        agent._model_transport_policy = ModelTransportPolicy(
+            TransportMode.PREFER,
+            client=client,  # type: ignore[arg-type]
+        )
+        response = MagicMock(status=200)
+        response.json = AsyncMock(return_value=mock_openai_response)
+        response.__aenter__ = AsyncMock(return_value=response)
+        response.__aexit__ = AsyncMock(return_value=None)
+        session = MagicMock()
+        session.post = MagicMock(return_value=response)
+        session.__aenter__ = AsyncMock(return_value=session)
+        session.__aexit__ = AsyncMock(return_value=None)
+
+        with patch(
+            "aragora.agents.api_agents.openai_compatible.create_client_session",
+            return_value=session,
+        ):
+            result = await agent.generate("hello")
+
+        assert "test response from GPT" in result
+        assert session.post.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_prefer_timeout_falls_back_direct_before_output(
+        self, mock_env_with_api_keys, mock_openai_response
+    ) -> None:
+        from aragora.agents.api_agents.openai import OpenAIAPIAgent
+        from aragora.agents.transports.vibeproxy import (
+            ModelTransportPolicy,
+            TransportMode,
+            VibeProxyTimeoutError,
+        )
+
+        client = self.FakeClient(error=VibeProxyTimeoutError("proxy timed out"))
+        agent = OpenAIAPIAgent(model="gpt-5.5", enable_fallback=False)
+        agent.enable_web_search = False
+        agent._model_transport_policy = ModelTransportPolicy(
+            TransportMode.PREFER,
+            client=client,  # type: ignore[arg-type]
+        )
+        response = MagicMock(status=200)
+        response.json = AsyncMock(return_value=mock_openai_response)
+        response.__aenter__ = AsyncMock(return_value=response)
+        response.__aexit__ = AsyncMock(return_value=None)
+        session = MagicMock()
+        session.post = MagicMock(return_value=response)
+        session.__aenter__ = AsyncMock(return_value=session)
+        session.__aexit__ = AsyncMock(return_value=None)
+
+        with patch(
+            "aragora.agents.api_agents.openai_compatible.create_client_session",
+            return_value=session,
+        ):
+            result = await agent.generate("hello")
+
+        assert "test response from GPT" in result
+        assert session.post.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_required_proxy_failure_never_calls_direct(self, mock_env_with_api_keys) -> None:
+        from aragora.agents.api_agents.common import AgentAPIError
+        from aragora.agents.api_agents.openai import OpenAIAPIAgent
+        from aragora.agents.transports.vibeproxy import ModelTransportPolicy, TransportMode
+
+        client = self.FakeClient(fail=True)
+        agent = OpenAIAPIAgent(model="gpt-5.5", enable_fallback=False)
+        agent.enable_web_search = False
+        agent._model_transport_policy = ModelTransportPolicy(
+            TransportMode.REQUIRED,
+            client=client,  # type: ignore[arg-type]
+        )
+
+        with patch(
+            "aragora.agents.api_agents.openai_compatible.create_client_session"
+        ) as direct_session:
+            with pytest.raises(AgentAPIError, match="required VibeProxy OpenAI request failed"):
+                await agent.generate("hello")
+
+        direct_session.assert_not_called()
+
+    def _direct_session(self, mock_openai_response) -> MagicMock:
+        response = MagicMock(status=200)
+        response.json = AsyncMock(return_value=mock_openai_response)
+        response.__aenter__ = AsyncMock(return_value=response)
+        response.__aexit__ = AsyncMock(return_value=None)
+        session = MagicMock()
+        session.post = MagicMock(return_value=response)
+        session.__aenter__ = AsyncMock(return_value=session)
+        session.__aexit__ = AsyncMock(return_value=None)
+        return session
+
+    @pytest.mark.asyncio
+    async def test_prefer_malformed_proxy_response_falls_back_direct(
+        self, mock_env_with_api_keys, mock_openai_response
+    ) -> None:
+        from aragora.agents.api_agents.openai import OpenAIAPIAgent
+        from aragora.agents.transports.vibeproxy import ModelTransportPolicy, TransportMode
+
+        client = self.FakeClient(response={"model": "gpt-5.5", "usage": {}})
+        agent = OpenAIAPIAgent(model="gpt-5.5", enable_fallback=False)
+        agent.enable_web_search = False
+        agent._model_transport_policy = ModelTransportPolicy(
+            TransportMode.PREFER,
+            client=client,  # type: ignore[arg-type]
+        )
+
+        with patch(
+            "aragora.agents.api_agents.openai_compatible.create_client_session",
+            return_value=self._direct_session(mock_openai_response),
+        ):
+            result = await agent.generate("hello")
+
+        assert "test response from GPT" in result
+        assert any(call["operation"] == "request" for call in client.calls)
+
+    @pytest.mark.asyncio
+    async def test_prefer_empty_proxy_response_falls_back_direct(
+        self, mock_env_with_api_keys, mock_openai_response
+    ) -> None:
+        from aragora.agents.api_agents.openai import OpenAIAPIAgent
+        from aragora.agents.transports.vibeproxy import ModelTransportPolicy, TransportMode
+
+        client = self.FakeClient(
+            response={
+                "model": "gpt-5.5",
+                "choices": [{"message": {"content": "   "}}],
+                "usage": {},
+            }
+        )
+        agent = OpenAIAPIAgent(model="gpt-5.5", enable_fallback=False)
+        agent.enable_web_search = False
+        agent._model_transport_policy = ModelTransportPolicy(
+            TransportMode.PREFER,
+            client=client,  # type: ignore[arg-type]
+        )
+
+        with patch(
+            "aragora.agents.api_agents.openai_compatible.create_client_session",
+            return_value=self._direct_session(mock_openai_response),
+        ):
+            result = await agent.generate("hello")
+
+        assert "test response from GPT" in result
+
+    @pytest.mark.asyncio
+    async def test_required_proxy_failure_records_circuit_breaker_failure(
+        self, mock_env_with_api_keys
+    ) -> None:
+        from aragora.agents.api_agents.common import AgentAPIError
+        from aragora.agents.api_agents.openai import OpenAIAPIAgent
+        from aragora.agents.transports.vibeproxy import ModelTransportPolicy, TransportMode
+
+        client = self.FakeClient(fail=True)
+        agent = OpenAIAPIAgent(model="gpt-5.5", enable_fallback=False)
+        agent.enable_web_search = False
+        agent._model_transport_policy = ModelTransportPolicy(
+            TransportMode.REQUIRED,
+            client=client,  # type: ignore[arg-type]
+        )
+        cb = MagicMock()
+        cb.can_proceed.return_value = True
+        agent._circuit_breaker = cb
+
+        with patch("aragora.agents.api_agents.openai.record_provider_call") as provider_call:
+            with pytest.raises(AgentAPIError, match="required VibeProxy OpenAI request failed"):
+                await agent.generate("hello")
+
+        cb.record_failure.assert_called_once()
+        cb.record_success.assert_not_called()
+        assert provider_call.call_args.kwargs["success"] is False
+        assert provider_call.call_args.kwargs["latency_seconds"] is not None
+
+    @pytest.mark.asyncio
+    async def test_required_empty_response_records_circuit_breaker_failure(
+        self, mock_env_with_api_keys
+    ) -> None:
+        from aragora.agents.api_agents.common import AgentAPIError
+        from aragora.agents.api_agents.openai import OpenAIAPIAgent
+        from aragora.agents.transports.vibeproxy import ModelTransportPolicy, TransportMode
+
+        client = self.FakeClient(response={"model": "gpt-5.5", "usage": {}})
+        agent = OpenAIAPIAgent(model="gpt-5.5", enable_fallback=False)
+        agent.enable_web_search = False
+        agent._model_transport_policy = ModelTransportPolicy(
+            TransportMode.REQUIRED,
+            client=client,  # type: ignore[arg-type]
+        )
+        cb = MagicMock()
+        cb.can_proceed.return_value = True
+        agent._circuit_breaker = cb
+
+        with pytest.raises(AgentAPIError, match="required VibeProxy OpenAI request failed"):
+            await agent.generate("hello")
+
+        cb.record_failure.assert_called_once()
+        cb.record_success.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_required_web_search_prompt_fails_closed(self, mock_env_with_api_keys) -> None:
+        from aragora.agents.api_agents.common import AgentAPIError
+        from aragora.agents.api_agents.openai import OpenAIAPIAgent
+        from aragora.agents.transports.vibeproxy import ModelTransportPolicy, TransportMode
+
+        client = self.FakeClient()
+        agent = OpenAIAPIAgent(model="gpt-5.5", enable_fallback=False)
+        agent._model_transport_policy = ModelTransportPolicy(
+            TransportMode.REQUIRED,
+            client=client,  # type: ignore[arg-type]
+        )
+
+        with patch(
+            "aragora.agents.api_agents.openai_compatible.create_client_session"
+        ) as direct_session:
+            with pytest.raises(AgentAPIError, match="vibeproxy-required cannot serve"):
+                await agent.generate("check https://example.com")
+
+        direct_session.assert_not_called()
+        assert client.calls == []
+
+    @pytest.mark.asyncio
+    async def test_required_custom_endpoint_fails_closed(
+        self, mock_env_with_api_keys, monkeypatch
+    ) -> None:
+        from aragora.agents.api_agents.common import AgentAPIError
+        from aragora.agents.api_agents.openai import OpenAIAPIAgent
+        from aragora.agents.transports.vibeproxy import ModelTransportPolicy, TransportMode
+
+        monkeypatch.setenv("OPENAI_BASE_URL", "https://gateway.example/openai")
+        client = self.FakeClient()
+        agent = OpenAIAPIAgent(model="gpt-5.5", enable_fallback=False)
+        agent.enable_web_search = False
+        agent._model_transport_policy = ModelTransportPolicy(
+            TransportMode.REQUIRED,
+            client=client,  # type: ignore[arg-type]
+        )
+
+        with patch(
+            "aragora.agents.api_agents.openai_compatible.create_client_session"
+        ) as direct_session:
+            with pytest.raises(AgentAPIError, match="vibeproxy-required cannot serve"):
+                await agent.generate("hello")
+
+        direct_session.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_required_streaming_fails_closed(self, mock_env_with_api_keys) -> None:
+        from aragora.agents.api_agents.common import AgentAPIError
+        from aragora.agents.api_agents.openai import OpenAIAPIAgent
+        from aragora.agents.api_agents.openai_compatible import OpenAICompatibleMixin
+        from aragora.agents.transports.vibeproxy import ModelTransportPolicy, TransportMode
+
+        client = self.FakeClient()
+        agent = OpenAIAPIAgent(model="gpt-5.5", enable_fallback=False)
+        agent.enable_web_search = False
+        agent._model_transport_policy = ModelTransportPolicy(
+            TransportMode.REQUIRED,
+            client=client,  # type: ignore[arg-type]
+        )
+
+        async def fake_direct_stream(_agent, _prompt, _context=None):
+            yield "direct chunk"
+
+        with patch.object(OpenAICompatibleMixin, "generate_stream", fake_direct_stream):
+            with pytest.raises(AgentAPIError, match="vibeproxy-required cannot serve"):
+                async for _ in agent.generate_stream("hello"):
+                    pass
+
+        assert client.calls == []
+
+    @pytest.mark.asyncio
+    async def test_prefer_fallback_records_proxy_leg_failure(
+        self, mock_env_with_api_keys, mock_openai_response
+    ) -> None:
+        from aragora.agents.api_agents.openai import OpenAIAPIAgent
+        from aragora.agents.transports.vibeproxy import ModelTransportPolicy, TransportMode
+
+        client = self.FakeClient(fail=True)
+        agent = OpenAIAPIAgent(model="gpt-5.5", enable_fallback=False)
+        agent.enable_web_search = False
+        agent._model_transport_policy = ModelTransportPolicy(
+            TransportMode.PREFER,
+            client=client,  # type: ignore[arg-type]
+        )
+
+        with patch("aragora.agents.api_agents.openai.record_provider_call") as provider_call:
+            with patch(
+                "aragora.agents.api_agents.openai_compatible.create_client_session",
+                return_value=self._direct_session(mock_openai_response),
+            ):
+                result = await agent.generate("hello")
+
+        assert "test response from GPT" in result
+        proxy_leg = next(
+            call
+            for call in provider_call.call_args_list
+            if call.kwargs.get("provider") == "vibeproxy"
+        )
+        assert proxy_leg.kwargs["success"] is False
+
+    @pytest.mark.asyncio
+    async def test_prefer_wedged_discovery_bounded_by_wall_clock(
+        self, mock_env_with_api_keys, mock_openai_response, monkeypatch
+    ) -> None:
+        """A stuck discovery leg (queue wait or socket) must not delay
+        PREFER-mode fallback beyond the wall-clock discovery cap."""
+        import threading
+        import time as time_module
+
+        from aragora.agents.api_agents import openai as openai_module
+        from aragora.agents.api_agents.openai import OpenAIAPIAgent
+        from aragora.agents.transports.vibeproxy import ModelTransportPolicy, TransportMode
+
+        # The abandoned discovery leg keeps running in the executor after the
+        # wall-clock cap fires; block on an event (released in the finally)
+        # instead of a bare sleep so executor teardown does not re-serialize
+        # the full wedge duration.
+        release_wedge = threading.Event()
+
+        class WedgedClient:
+            base_url = "http://127.0.0.1:8318/v1"
+
+            def catalog(self, *, timeout: float | None = None):
+                release_wedge.wait(5.0)
+                return SimpleNamespace(models=frozenset({"gpt-5.5"}))
+
+            def openai_request(self, **kwargs):
+                raise AssertionError("must not reach the request leg")
+
+        monkeypatch.setattr(openai_module, "_PROXY_DISCOVERY_TIMEOUT_SECONDS", 0.2)
+        agent = OpenAIAPIAgent(model="gpt-5.5", enable_fallback=False)
+        agent.enable_web_search = False
+        agent._model_transport_policy = ModelTransportPolicy(
+            TransportMode.PREFER,
+            client=WedgedClient(),  # type: ignore[arg-type]
+        )
+
+        try:
+            started = time_module.perf_counter()
+            with patch(
+                "aragora.agents.api_agents.openai_compatible.create_client_session",
+                return_value=self._direct_session(mock_openai_response),
+            ):
+                result = await agent.generate("hello")
+            elapsed = time_module.perf_counter() - started
+
+            assert "test response from GPT" in result
+            assert elapsed < 3.0
+        finally:
+            release_wedge.set()
+
+    @pytest.mark.asyncio
+    async def test_proxy_success_records_latency(self, mock_env_with_api_keys) -> None:
+        from aragora.agents.api_agents.openai import OpenAIAPIAgent
+        from aragora.agents.transports.vibeproxy import ModelTransportPolicy, TransportMode
+
+        client = self.FakeClient()
+        agent = OpenAIAPIAgent(model="gpt-5.5", enable_fallback=False)
+        agent.enable_web_search = False
+        agent._model_transport_policy = ModelTransportPolicy(
+            TransportMode.PREFER,
+            client=client,  # type: ignore[arg-type]
+        )
+
+        with patch("aragora.agents.api_agents.openai.record_provider_call") as provider_call:
+            result = await agent.generate("hello")
+
+        assert result == "proxy response"
+        assert provider_call.call_args.kwargs["success"] is True
+        assert provider_call.call_args.kwargs["latency_seconds"] is not None
+
+
+class TestOpenAIVibeProxyEnvDegradation:
+    """Misconfigured VibeProxy environments must not break agent construction."""
+
+    def test_invalid_model_map_degrades_prefer_to_direct(
+        self, mock_env_with_api_keys, monkeypatch
+    ) -> None:
+        from aragora.agents.api_agents.openai import OpenAIAPIAgent
+        from aragora.agents.transports.vibeproxy import TransportMode
+
+        monkeypatch.setenv("ARAGORA_MODEL_TRANSPORT", "vibeproxy-prefer")
+        monkeypatch.setenv("ARAGORA_VIBEPROXY_MODEL_MAP", "{bad")
+
+        agent = OpenAIAPIAgent(enable_fallback=False)
+
+        assert agent._model_transport_policy.mode is TransportMode.DIRECT
+
+    def test_invalid_transport_mode_degrades_to_direct(
+        self, mock_env_with_api_keys, monkeypatch
+    ) -> None:
+        from aragora.agents.api_agents.openai import OpenAIAPIAgent
+        from aragora.agents.transports.vibeproxy import TransportMode
+
+        monkeypatch.setenv("ARAGORA_MODEL_TRANSPORT", "bogus-transport")
+
+        agent = OpenAIAPIAgent(enable_fallback=False)
+
+        assert agent._model_transport_policy.mode is TransportMode.DIRECT
+
+    def test_explicit_transport_override_ignores_ambient_env(
+        self, mock_env_with_api_keys, monkeypatch
+    ) -> None:
+        from aragora.agents.api_agents.openai import OpenAIAPIAgent
+        from aragora.agents.transports.vibeproxy import ModelTransportPolicy, TransportMode
+
+        monkeypatch.setenv("ARAGORA_MODEL_TRANSPORT", "vibeproxy-prefer")
+        monkeypatch.setenv("ARAGORA_VIBEPROXY_BASE_URL", "http://127.0.0.1:8318")
+
+        agent = OpenAIAPIAgent(
+            enable_fallback=False,
+            model_transport=ModelTransportPolicy(TransportMode.DIRECT),
+        )
+
+        assert agent._model_transport_policy.mode is TransportMode.DIRECT
+
+    def test_required_mode_misconfiguration_stays_fail_closed(
+        self, mock_env_with_api_keys, monkeypatch
+    ) -> None:
+        from aragora.agents.api_agents.openai import OpenAIAPIAgent
+        from aragora.agents.transports.vibeproxy import VibeProxyConfigurationError
+
+        monkeypatch.setenv("ARAGORA_MODEL_TRANSPORT", "vibeproxy-required")
+        monkeypatch.setenv("ARAGORA_VIBEPROXY_MODEL_MAP", "{bad")
+
+        with pytest.raises(VibeProxyConfigurationError):
+            OpenAIAPIAgent(enable_fallback=False)
+
+
 class TestOpenAIGenerateStream:
     """Tests for streaming generation."""
 
@@ -388,7 +1036,7 @@ class TestOpenAICompatibleMixin:
 
         payload = agent._build_payload(messages, stream=False)
 
-        assert payload["model"] == "gpt-5.5"
+        assert payload["model"] == "gpt-5.6-sol"
         assert payload["messages"] == messages
         assert "max_tokens" in payload
         assert "stream" not in payload or payload.get("stream") is False
@@ -534,7 +1182,7 @@ class TestOpenAIModelMapping:
         assert "gpt-4o-mini" in OpenAIAPIAgent.OPENROUTER_MODEL_MAP
         assert "gpt-4" in OpenAIAPIAgent.OPENROUTER_MODEL_MAP
         assert OpenAIAPIAgent.OPENROUTER_MODEL_MAP["gpt-4o"] == "openai/gpt-5.5"
-        assert OpenAIAPIAgent.OPENROUTER_MODEL_MAP["gpt-5.4"] == "openai/gpt-5.5"
+        assert OpenAIAPIAgent.OPENROUTER_MODEL_MAP["gpt-5.4"] == "openai/gpt-5.6-sol"
 
     def test_has_default_fallback_model(self, mock_env_with_api_keys):
         """Should have default fallback model."""

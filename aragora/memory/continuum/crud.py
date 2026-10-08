@@ -12,11 +12,11 @@ import asyncio
 import json
 import logging
 import sqlite3
-from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from aragora.memory.tier_manager import MemoryTier
 from aragora.resilience.retry import PROVIDER_RETRY_POLICIES, with_retry
+from aragora.utils.datetime_helpers import utc_now_iso_naive
 from aragora.utils.json_helpers import safe_json_loads
 
 from .entry import ContinuumMemoryEntry
@@ -57,7 +57,7 @@ class CrudMixin:
         Returns:
             The created memory entry
         """
-        now: str = datetime.now().isoformat()
+        now: str = utc_now_iso_naive()
 
         # Inject tenant_id into metadata for tenant isolation
         if tenant_id is not None:
@@ -241,7 +241,7 @@ class CrudMixin:
                 SET success_count = ?, failure_count = ?, updated_at = ?
                 WHERE id = ?
                 """,
-                (entry.success_count, entry.failure_count, datetime.now().isoformat(), entry.id),
+                (entry.success_count, entry.failure_count, utc_now_iso_naive(), entry.id),
             )
             conn.commit()
             return cursor.rowcount > 0
@@ -319,7 +319,7 @@ class CrudMixin:
 
         # Always update timestamp
         updates.append("updated_at = ?")
-        params.append(datetime.now().isoformat())
+        params.append(utc_now_iso_naive())
 
         # Add memory_id as final parameter
         params.append(memory_id)
@@ -406,7 +406,7 @@ class CrudMixin:
                 SET tier = ?, updated_at = ?
                 WHERE id = ?
                 """,
-                (new_tier.value, datetime.now().isoformat(), memory_id),
+                (new_tier.value, utc_now_iso_naive(), memory_id),
             )
             conn.commit()
             return cursor.rowcount > 0
@@ -466,7 +466,7 @@ class CrudMixin:
                 SET tier = ?, updated_at = ?
                 WHERE id = ?
                 """,
-                (new_tier.value, datetime.now().isoformat(), memory_id),
+                (new_tier.value, utc_now_iso_naive(), memory_id),
             )
             conn.commit()
             return cursor.rowcount > 0

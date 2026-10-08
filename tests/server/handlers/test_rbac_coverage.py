@@ -143,6 +143,8 @@ EXEMPT_HANDLERS = frozenset(
         "GDPRDeletionHandler",
         # Debate stats (read-only public stats)
         "DebateStatsHandler",
+        # Match statistics (read-only public ELO stats, same family as leaderboard)
+        "MatchesStatsHandler",
         "PublicDebateViewerHandler",
         # Moderation analytics (admin dashboard, internal auth)
         "ModerationAnalyticsHandler",

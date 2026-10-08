@@ -6,7 +6,7 @@ on:
 
 concurrency:
   group: required-check-priority-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   actions: write
@@ -21,7 +21,7 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - name: Cancel non-required workflow runs for this PR head
+      - name: Cancel queued non-required workflow runs for superseded PR heads
         uses: actions/github-script@v7
         with:
           script: |
@@ -132,6 +132,23 @@ jobs:
             const requiredContextRunCache = new Map();
             let emptySweepCount = 0;
 
+            async function getLiveHeadSha() {
+              // Every caller treats an empty result as "stop sweeping", so a
+              // transient API error must degrade to '' rather than fail the
+              // whole priority job with another non-green rollup entry.
+              try {
+                const { data: livePr } = await github.rest.pulls.get({
+                  owner,
+                  repo,
+                  pull_number: pr.number,
+                });
+                return String(livePr.head?.sha || '').trim();
+              } catch (error) {
+                core.info(`Live PR head lookup failed; stopping sweep: ${error.message || error}`);
+                return '';
+              }
+            }
+
             async function runHasRequiredContext(run) {
               if (requiredContextsNormalized.size === 0) {
                 return false;
@@ -194,6 +211,14 @@ jobs:
             }
 
             for (let pass = 1; pass <= sweeps; pass++) {
+              const liveHeadSha = await getLiveHeadSha();
+              if (!liveHeadSha || liveHeadSha !== headSha) {
+                core.info(
+                  `Stopping stale priority sweep: event head ${headSha} is no longer ` +
+                    `the live PR head ${liveHeadSha || '(unavailable)'}`
+                );
+                break;
+              }
               const { data: runPage } = await github.rest.actions.listWorkflowRunsForRepo({
                 owner,
                 repo,
@@ -205,10 +230,34 @@ jobs:
 
               let passCanceled = 0;
               let passConsidered = 0;
+              let staleSweep = false;
               for (const run of runs) {
-                if (run.head_sha !== headSha) continue;
+                // Never cancel a run attached to the current PR head. GitHub
+                // folds cancelled advisory conclusions into mergeStateStatus,
+                // leaving otherwise-ready PRs UNSTABLE (#9034). Queue relief
+                // is limited to superseded heads on the same branch.
+                if (run.head_sha === liveHeadSha) continue;
                 if (run.id === selfRunId) continue;
-                if (run.status !== 'queued' && run.status !== 'in_progress') continue;
+                // The branch-name listing can match an unrelated PR that
+                // happens to share the name (forks, common automation branch
+                // names). A run counts as superseded only when it provably
+                // comes from this PR's own source repo and branch — and, when
+                // GitHub attributes it to PRs at all, to this PR's number.
+                const runHeadRepo = String(run.head_repository?.full_name || '').trim();
+                const prHeadRepo = String(pr.head?.repo?.full_name || '').trim();
+                if (!runHeadRepo || !prHeadRepo || runHeadRepo !== prHeadRepo) continue;
+                if (String(run.head_branch || '').trim() !== headBranch) continue;
+                const runPrNumbers = (run.pull_requests || []).map((item) => item.number);
+                if (runPrNumbers.length > 0 && !runPrNumbers.includes(pr.number)) continue;
+                // Only cancel QUEUED runs. An in-progress run already holds a
+                // runner, so cancelling it frees no queue capacity; it only
+                // converts a 1-5 minute advisory check into a red "cancelled"
+                // conclusion that the cancelled-run guardian deliberately does
+                // not rerun (its manifest covers required workflows only),
+                // creating a manual-rerun tax that stalls merge settlement on
+                // long-lived PRs. Queue-pressure relief is fully preserved:
+                // queued advisory runs still yield to required checks.
+                if (run.status !== 'queued') continue;
                 // Fail closed on a broken (empty) keep-list: cancel nothing.
                 if (keepListEmpty) continue;
                 passConsidered += 1;
@@ -228,6 +277,19 @@ jobs:
                 if (hasRequiredContext) continue;
 
                 try {
+                  // Close the race where a synchronize event lands after this
+                  // sweep listed runs: a stale worker must never cancel the new
+                  // live head's advisory checks.
+                  const confirmedLiveHeadSha = await getLiveHeadSha();
+                  if (!confirmedLiveHeadSha || confirmedLiveHeadSha !== headSha) {
+                    staleSweep = true;
+                    core.info(
+                      `Stopping stale priority sweep before cancellation: event head ` +
+                        `${headSha} is no longer the live PR head ` +
+                        `${confirmedLiveHeadSha || '(unavailable)'}`
+                    );
+                    break;
+                  }
                   await github.rest.actions.cancelWorkflowRun({
                     owner,
                     repo,
@@ -247,6 +309,8 @@ jobs:
                   core.warning(`Failed to cancel run ${run.id} (${run.name}): ${error.message}`);
                 }
               }
+
+              if (staleSweep) break;
 
               core.info(
                 `Sweep ${pass}/${sweeps}: considered ${passConsidered} run(s), canceled ${passCanceled} run(s)`

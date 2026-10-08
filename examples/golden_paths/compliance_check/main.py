@@ -40,6 +40,7 @@ from aragora.compliance.eu_ai_act import (
 # Sample decision receipt (simulating a real Aragora debate output)
 # ----------------------------------------------------------------
 
+
 def build_sample_receipt() -> dict[str, Any]:
     """Create a realistic decision receipt for an AI hiring system."""
     return {
@@ -84,15 +85,51 @@ def build_sample_receipt() -> dict[str, Any]:
             },
         ],
         "provenance_chain": [
-            {"event_type": "debate_started", "timestamp": "2026-02-24T10:00:00Z", "actor": "system"},
-            {"event_type": "proposal_submitted", "timestamp": "2026-02-24T10:01:00Z", "actor": "claude-analyst"},
-            {"event_type": "critique_submitted", "timestamp": "2026-02-24T10:02:00Z", "actor": "gemini-challenger"},
-            {"event_type": "vote_cast", "timestamp": "2026-02-24T10:04:00Z", "actor": "claude-analyst"},
-            {"event_type": "vote_cast", "timestamp": "2026-02-24T10:04:01Z", "actor": "gpt4-ethics"},
-            {"event_type": "vote_cast", "timestamp": "2026-02-24T10:04:02Z", "actor": "gemini-challenger"},
-            {"event_type": "vote_cast", "timestamp": "2026-02-24T10:04:03Z", "actor": "mistral-auditor"},
-            {"event_type": "human_approval", "timestamp": "2026-02-24T10:10:00Z", "actor": "hr-director@acme.com"},
-            {"event_type": "receipt_generated", "timestamp": "2026-02-24T10:10:05Z", "actor": "system"},
+            {
+                "event_type": "debate_started",
+                "timestamp": "2026-02-24T10:00:00Z",
+                "actor": "system",
+            },
+            {
+                "event_type": "proposal_submitted",
+                "timestamp": "2026-02-24T10:01:00Z",
+                "actor": "claude-analyst",
+            },
+            {
+                "event_type": "critique_submitted",
+                "timestamp": "2026-02-24T10:02:00Z",
+                "actor": "gemini-challenger",
+            },
+            {
+                "event_type": "vote_cast",
+                "timestamp": "2026-02-24T10:04:00Z",
+                "actor": "claude-analyst",
+            },
+            {
+                "event_type": "vote_cast",
+                "timestamp": "2026-02-24T10:04:01Z",
+                "actor": "gpt4-ethics",
+            },
+            {
+                "event_type": "vote_cast",
+                "timestamp": "2026-02-24T10:04:02Z",
+                "actor": "gemini-challenger",
+            },
+            {
+                "event_type": "vote_cast",
+                "timestamp": "2026-02-24T10:04:03Z",
+                "actor": "mistral-auditor",
+            },
+            {
+                "event_type": "human_approval",
+                "timestamp": "2026-02-24T10:10:00Z",
+                "actor": "hr-director@acme.com",
+            },
+            {
+                "event_type": "receipt_generated",
+                "timestamp": "2026-02-24T10:10:05Z",
+                "actor": "system",
+            },
         ],
         "config_used": {
             "protocol": "adversarial",
@@ -164,8 +201,10 @@ def main() -> int:
         print(f"  {indicator}  {example['name']}")
 
         if result.annex_iii_category:
-            print(f"              Annex III Category {result.annex_iii_number}: "
-                  f"{result.annex_iii_category}")
+            print(
+                f"              Annex III Category {result.annex_iii_number}: "
+                f"{result.annex_iii_category}"
+            )
         if result.matched_keywords:
             print(f"              Keywords: {', '.join(result.matched_keywords[:3])}")
         if result.obligations:
@@ -185,8 +224,10 @@ def main() -> int:
     print(f"  Receipt ID:     {receipt['receipt_id']}")
     print(f"  Risk Level:     {report.risk_classification.risk_level.value.upper()}")
     if report.risk_classification.annex_iii_category:
-        print(f"  Annex III:      Cat. {report.risk_classification.annex_iii_number} "
-              f"({report.risk_classification.annex_iii_category})")
+        print(
+            f"  Annex III:      Cat. {report.risk_classification.annex_iii_number} "
+            f"({report.risk_classification.annex_iii_category})"
+        )
     print(f"  Overall Status: {report.overall_status.upper()}")
     print(f"  Report ID:      {report.report_id}")
     print(f"  Integrity Hash: {report.integrity_hash[:24]}...")

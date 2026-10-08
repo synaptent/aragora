@@ -27,6 +27,7 @@ Contract:
 from __future__ import annotations
 
 import argparse
+import functools
 import glob as glob_module
 import hashlib
 import importlib.util
@@ -709,12 +710,18 @@ def check_lane_liveness(
         try:
             entry = json.loads(Path(ledger_file).read_text())
             lane = str(entry["lane"])
-            status = str(entry.get("status", ""))
-            launched_at = parse_iso(str(entry["launched_at"]))
+            raw_status = entry.get("status") or entry.get("state")
+            if raw_status is None:
+                raise KeyError("status")
+            status = str(raw_status)
+            if status != "in_progress":
+                continue
+            raw_launched_at = entry.get("launched_at") or entry.get("started_at")
+            if raw_launched_at is None:
+                raise KeyError("launched_at")
+            launched_at = parse_iso(str(raw_launched_at))
         except (OSError, json.JSONDecodeError, KeyError, ValueError, TypeError) as exc:
             unreadable.append(f"{ledger_file} ({exc.__class__.__name__})")
-            continue
-        if status != "in_progress":
             continue
         in_progress += 1
         age_hours = (now - launched_at).total_seconds() / 3600.0
@@ -1910,7 +1917,7 @@ def run_checks(args: argparse.Namespace, now: datetime) -> list[CheckResult]:
                         lane_max_age_hours=args.lane_max_age_hours,
                         orphan_age_hours=args.orphan_branch_age_hours,
                         now=now,
-                        remote_heads=lambda repo=repo: _default_remote_heads(repo),
+                        remote_heads=functools.partial(_default_remote_heads, repo),
                         ahead_counter=_default_ahead_counter(repo),
                         commit_dater=_default_commit_dater(repo),
                     )
@@ -1980,12 +1987,12 @@ def run_checks(args: argparse.Namespace, now: datetime) -> list[CheckResult]:
             elif name == "trail_reconcile":
                 if args.trail_witness_replica:
                     replica = Path(args.trail_witness_replica)
-                    fetcher: Callable[[], list[dict[str, Any]]] = (
-                        lambda replica=replica: _replica_witness_events(replica)
+                    fetcher: Callable[[], list[dict[str, Any]]] = functools.partial(
+                        _replica_witness_events, replica
                     )
                     coverage = "full"
                 else:
-                    fetcher = lambda slug=args.trail_witness_repo: _github_witness_events(slug)  # noqa: E731
+                    fetcher = functools.partial(_github_witness_events, args.trail_witness_repo)
                     coverage = "events_api"
                 results.append(
                     check_trail_reconcile(

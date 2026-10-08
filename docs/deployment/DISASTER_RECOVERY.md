@@ -717,11 +717,9 @@ asyncio.run(check())
 
 # Recover specific job types
 python -c "
-from aragora.queue.workers import (
-    recover_interrupted_transcriptions,
-    recover_interrupted_routing,
-)
+from aragora.queue.workers import recover_interrupted_transcriptions
 from aragora.server.workers.gauntlet_worker import recover_interrupted_gauntlets
+from aragora.server.workers.routing_worker import recover_interrupted_routing
 import asyncio
 
 async def recover():
@@ -960,11 +958,9 @@ Add to your application startup sequence:
 
 async def run_recovery_hooks():
     """Run automated recovery on startup."""
-    from aragora.queue.workers import (
-        recover_interrupted_transcriptions,
-        recover_interrupted_routing,
-    )
+    from aragora.queue.workers import recover_interrupted_transcriptions
     from aragora.server.workers.gauntlet_worker import recover_interrupted_gauntlets
+    from aragora.server.workers.routing_worker import recover_interrupted_routing
     from aragora.workflow.nodes.human_checkpoint import HumanCheckpointNode
 
     # Recover interrupted jobs

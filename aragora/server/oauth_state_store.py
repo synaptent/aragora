@@ -613,7 +613,7 @@ class JWTOAuthStateStore(OAuthStateStore):
             secret_key: Secret for signing. If not provided, uses OAUTH_JWT_SECRET
                        or ARAGORA_SECRET_KEY environment variables.
         """
-        self._secret = secret_key or get_secret(
+        secret = secret_key or get_secret(
             "OAUTH_JWT_SECRET",
             get_secret(
                 "ARAGORA_SECRET_KEY",
@@ -622,18 +622,19 @@ class JWTOAuthStateStore(OAuthStateStore):
             ),
             strict=False,
         )
-        if not self._secret:
+        if not secret:
             # Generate a random secret (will be different per instance, but that's OK
             # since we'll use this as fallback only when no persistent secret is set)
             import hashlib
 
             # Use a semi-stable secret based on machine identity
             machine_id = os.environ.get("HOSTNAME", "") + os.environ.get("USER", "")
-            self._secret = hashlib.sha256(f"aragora-oauth-{machine_id}".encode()).hexdigest()
+            secret = hashlib.sha256(f"aragora-oauth-{machine_id}".encode()).hexdigest()
             logger.warning(
                 "OAuth JWT store: No OAUTH_JWT_SECRET or ARAGORA_SECRET_KEY set. "
                 "Using derived secret. For multi-instance deployments, set a shared secret."
             )
+        self._secret: str = secret
         self._used_nonces: set[str] = set()  # Simple replay protection
         self._nonce_lock = threading.Lock()  # Protect nonce set access
         self._nonce_cleanup_threshold = 10000

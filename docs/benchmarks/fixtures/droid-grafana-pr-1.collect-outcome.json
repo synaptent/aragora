@@ -1,0 +1,49 @@
+{
+  "action": "prepare",
+  "action_reason": "offline replay of committed live reviewer output collection canonical sha256:8c675aa9f61d9962fcbe71f5e8265f68f9e334358d04dd5365f4fd4e59e603a9; golden mappings are manual adjudication",
+  "counting_families": [
+    "grok",
+    "mistral"
+  ],
+  "dissenting_families": [
+    "grok",
+    "mistral"
+  ],
+  "failures": [],
+  "has_supportive_quorum": false,
+  "head_committed_at": "",
+  "head_sha": "3647ba7360b8d157e4a294a650a365b6aca070d8",
+  "items": [
+    {
+      "body": "Provider: grok; model: grok-4-latest\nVerdict: CHANGES-REQUESTED\nLogic error in device limit enforcement causes incorrect errors and potential auth failures; misused error value; sync change in auth path.\n- [P1] pkg/services/anonymous/anonimpl/anonstore/database.go: Misused error return in updateDevice: updateDevice returns ErrDeviceLimitReached whenever rowsAffected==0 (e.g., new device_id outside the narrow time window), but this error is also used to signal the actual limit. Callers cannot distinguish the cases.\n- [P0] pkg/services/anonymous/anonimpl/client.go: Beyond-limit new devices fail authentication: When count >= deviceLimit, a new DeviceID causes updateDevice to fail and Authenticate returns the error, rejecting anonymous auth entirely instead of allowing access without tracking.\n- [P1] pkg/services/anonymous/anonimpl/client.go: Synchronous TagDevice in auth path: Removing the goroutine makes device tagging block Authenticate (including DB calls and possible errors), a regression from the prior fire-and-forget design.\n- [P1] pkg/services/anonymous/anonimpl/anonstore/database.go: Count + update is racy: No transaction between CountDevices and subsequent insert/update allows exceeding the configured deviceLimit under concurrent anonymous requests. [adjudicated golden_comment_id=2743652887]",
+      "counted_reviewer_ids": [],
+      "family": "grok",
+      "problems": [],
+      "severity_gated": false,
+      "verdict": "changes_requested",
+      "would_count": true
+    },
+    {
+      "body": "Provider: mistral-api; model: mistral-large-2512\nVerdict: CHANGES-REQUESTED\nThe PR introduces a configurable device limit for anonymous access with several implementation concerns that need addressing.\n- [P0] pkg/services/anonymous/anonimpl/anonstore/database.go: Inconsistent Error Handling in Device Limit Enforcement: The `updateDevice` method in `database.go` returns `ErrDeviceLimitReached` when no rows are affected by the update, but this could also happen if the device doesn't exist or the time window doesn't match. This creates ambiguity in error handling. The error should distinguish between 'device not found' and 'limit reached' scenarios.\n- [P0] pkg/services/anonymous/anonimpl/anonstore/database.go: Race Condition in Device Counting: The `CreateOrUpdateDevice` method checks the device count before creating a new device, which introduces a race condition. Between checking the count and creating the device, another request could create a device, potentially exceeding the limit. This should use database-level constraints or transactions. [adjudicated golden_comment_id=2743652887]\n- [P1] pkg/setting/setting.go: Missing Validation for Device Limit Configuration: The configuration accepts negative values for `AnonymousDeviceLimit` (via `MustInt64(0)`), which could lead to unexpected behavior. The setting should validate that the limit is >= 0.\n- [P1] pkg/services/anonymous/anonimpl/client.go: Inconsistent Error Propagation in Client: The `Authenticate` method in `client.go` logs but doesn't propagate `ErrDeviceLimitReached` to the caller, while other errors are propagated. This inconsistency could lead to missed error handling in upstream code.\n- [P2] pkg/services/anonymous/anonimpl/anonstore/database_test.go: Missing Test Coverage for Edge Cases: The test coverage lacks scenarios for: 1) Zero device limit configuration, 2) Negative device limit values, 3) Concurrent device creation attempts, and 4) Device update scenarios under limit conditions.\n- [P2] pkg/services/anonymous/anonimpl/anonstore/database.go: Hardcoded Expiration Period: The `anonymousDeviceExpiration` constant (30 days) is used in multiple places but isn't configurable. This should either be made configurable or clearly documented as a fixed policy.",
+      "counted_reviewer_ids": [],
+      "family": "mistral",
+      "problems": [],
+      "severity_gated": false,
+      "verdict": "changes_requested",
+      "would_count": true
+    }
+  ],
+  "mode": "collect_evidence",
+  "orchestration_timeout": false,
+  "overall_timeout_seconds": null,
+  "policy_version": 1,
+  "post_errors": [],
+  "posted_families": [],
+  "pr_number": 1,
+  "quorum_rerun": null,
+  "repo": "droid-code-review-evals/droid-grafana",
+  "supportive_families": [],
+  "tier": null,
+  "tiered_gate": false,
+  "timed_out_families": []
+}

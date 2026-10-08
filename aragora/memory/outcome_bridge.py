@@ -26,8 +26,9 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
 from typing import TYPE_CHECKING, Any
+
+from aragora.utils.datetime_helpers import utc_now_iso_naive
 
 if TYPE_CHECKING:
     from aragora.debate.outcome_tracker import ConsensusOutcome, OutcomeTracker
@@ -43,7 +44,7 @@ class MemoryUsageRecord:
 
     memory_id: str
     debate_id: str
-    used_at: str = field(default_factory=lambda: datetime.now().isoformat())
+    used_at: str = field(default_factory=utc_now_iso_naive)
 
 
 @dataclass
@@ -280,7 +281,7 @@ class OutcomeMemoryBridge:
 
             # Update the entry
             entry.update_count += 1
-            entry.updated_at = datetime.now().isoformat()
+            entry.updated_at = utc_now_iso_naive()
 
             # Recalculate consolidation score based on success rate
             if entry.success_count + entry.failure_count > 0:

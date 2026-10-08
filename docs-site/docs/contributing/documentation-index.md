@@ -7,10 +7,10 @@ description: Aragora Documentation Index
 
 Canonical documentation lives in `docs/` and is mirrored into `docs-site/`.
 
-This index intentionally links to actively maintained docs with validated paths.
-For the full goal-oriented landing page, start at **[docs/README.md](https://github.com/synaptent/aragora/blob/main/docs/README.md)**
-— that page is the canonical documentation landing; this index is the flat
-reference list.
+This is a sub-index of **[docs/README.md](https://github.com/synaptent/aragora/blob/main/docs/README.md)**, the single
+documentation index. It keeps a short flat list of the most-used pages, and
+every page linked here is also linked from docs/README.md. Start there for the
+full index of top-level pages and curated directories.
 
 ## Public Utility Path
 
@@ -27,7 +27,7 @@ then wire it into CI.
 - [Getting Started](../getting-started/overview)
 - [Cold Reviewer Guide](./cold-reviewer-guide)
 - [SDK Guide (Python)](../guides/sdk)
-- [CLI Reference (generated)](../api/cli)
+- [CLI Reference](../api/cli)
 
 ## Receipts & Verification
 
@@ -88,12 +88,13 @@ then wire it into CI.
 ## Reference
 
 - [Environment Variables](../getting-started/environment)
+- [Install Matrix](../reference/install-matrix)
 - [Library Usage](../guides/library-usage)
 
 ## Contributing
 
 - [Contributing Guide](./guide)
-- [Reference Index](./documentation-index)
+- [Reference Index](../reference/reference-index)
 - [Deprecation Policy](./deprecation)
 
 ## Notes
@@ -103,3 +104,6 @@ then wire it into CI.
 - `docs/specs/` is mirrored into `docs-site/` (as the `specs/` category) by
   `docs-site/scripts/sync-docs.js`; relative links into it from mirrored docs
   are safe to use.
+- `docs/reference/` is mirrored into `docs-site/` (as the `reference/`
+  category) the same way; relative links into it from mirrored docs are
+  safe to use.

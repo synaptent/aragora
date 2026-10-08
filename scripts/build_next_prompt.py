@@ -137,15 +137,34 @@ def _repo_runner(repo_root: Path) -> CommandRunner:
 
 
 def _json_or_empty(result: subprocess.CompletedProcess[str]) -> Any:
+    text = (result.stdout or "").strip()
+    if text:
+        try:
+            payload = json.loads(text)
+        except json.JSONDecodeError:
+            if result.returncode == 0:
+                return {"raw": text}
+        else:
+            if result.returncode != 0:
+                if not isinstance(payload, dict):
+                    return {
+                        "error": result.stderr.strip()
+                        or f"command failed with return code {result.returncode}",
+                        "returncode": result.returncode,
+                        "payload": payload,
+                    }
+                payload = dict(payload)
+                # Overwrite (not setdefault): a child that exits nonzero must not
+                # mask the failure via a stale "returncode": 0 in its own stdout.
+                payload["returncode"] = result.returncode
+                if not payload.get("error"):
+                    payload["error"] = result.stderr.strip() or (
+                        f"command failed with return code {result.returncode}"
+                    )
+            return payload
     if result.returncode != 0:
         return {"error": result.stderr.strip(), "returncode": result.returncode}
-    text = (result.stdout or "").strip()
-    if not text:
-        return {}
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        return {"raw": text}
+    return {}
 
 
 def _run_json(command: list[str], command_runner: CommandRunner) -> Any:
@@ -901,7 +920,8 @@ def _active_session_matches_target(text: str, *, pr: int | None, branch: str | N
 def _post_merge_lane_matches(packet: dict[str, Any], *, pr: int | None) -> list[dict[str, Any]]:
     """Return active lane/session rows for a PR that has already merged."""
 
-    pr_packet = packet.get("pr") if isinstance(packet.get("pr"), dict) else {}
+    raw_pr_packet = packet.get("pr")
+    pr_packet = raw_pr_packet if isinstance(raw_pr_packet, dict) else {}
     branch = str(pr_packet.get("headRefName") or "")
     rows: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -915,7 +935,8 @@ def _post_merge_lane_matches(packet: dict[str, Any], *, pr: int | None) -> list[
         seen.add(key)
         rows.append({"source": "agent_bridge_lane", **_sanitize(lane)})
 
-    tmux_panes = packet.get("tmux_panes") if isinstance(packet.get("tmux_panes"), dict) else {}
+    raw_tmux_panes = packet.get("tmux_panes")
+    tmux_panes = raw_tmux_panes if isinstance(raw_tmux_panes, dict) else {}
     for pane in tmux_panes.get("panes") or []:
         if not isinstance(pane, dict):
             continue
@@ -928,9 +949,8 @@ def _post_merge_lane_matches(packet: dict[str, Any], *, pr: int | None) -> list[
         seen.add(key)
         rows.append({"source": "tmux_pane", **_sanitize(pane)})
 
-    active_sessions = (
-        packet.get("active_sessions") if isinstance(packet.get("active_sessions"), dict) else {}
-    )
+    raw_active_sessions = packet.get("active_sessions")
+    active_sessions = raw_active_sessions if isinstance(raw_active_sessions, dict) else {}
     for collection_name in (
         "agent_bridge_lanes",
         "codex_cli_sessions",
@@ -1022,8 +1042,8 @@ def _select_merge_ready_entry(merge_packet: Any, *, pr: int | None = None) -> di
 def _selected_merge_ready_pr_number(merge_packet: Any, *, pr: int | None = None) -> int | None:
     entry = _select_merge_ready_entry(merge_packet, pr=pr)
     try:
-        return int(entry.get("pr_number"))
-    except (AttributeError, TypeError, ValueError):
+        return int(entry["pr_number"])
+    except (AttributeError, KeyError, TypeError, ValueError):
         return None
 
 
@@ -1040,8 +1060,8 @@ def _live_pr_metadata_blocker(
     if live_pr.get("error"):
         return f"live PR metadata for PR #{pr_number} is unavailable: {live_pr.get('error')}"
     try:
-        live_number = int(live_pr.get("number"))
-    except (TypeError, ValueError):
+        live_number = int(live_pr["number"])
+    except (KeyError, TypeError, ValueError):
         return f"live PR metadata for PR #{pr_number} is missing a parseable number"
     if live_number != pr_number:
         return f"live PR metadata number {live_number} does not match requested PR #{pr_number}"
@@ -1071,13 +1091,28 @@ def _live_pr_metadata_blocker(
 def _merge_ready_prompt_blocker(merge_packet: Any, *, pr: int | None = None) -> str:
     if not isinstance(merge_packet, dict) or not merge_packet:
         return "merge-packet is missing or malformed"
+    if merge_packet.get("transport_blocked") or merge_packet.get("status") == "transport_blocked":
+        kind = _prompt_one_line(merge_packet.get("error_kind")) or "unknown transport"
+        detail = _prompt_one_line(merge_packet.get("error")) or "live GitHub transport unavailable"
+        preserve = "; preserve_no_mutate=true" if merge_packet.get("preserve_no_mutate") else ""
+        return f"merge-packet transport blocked ({kind}): {detail}{preserve}"
+    if merge_packet.get("error"):
+        detail = _prompt_one_line(merge_packet.get("error")) or "command failed without details"
+        return f"merge-packet is unavailable: {detail}"
+    if "returncode" in merge_packet:
+        try:
+            returncode = int(merge_packet["returncode"])
+        except (TypeError, ValueError):
+            return "merge-packet has an invalid command return code"
+        if returncode != 0:
+            return f"merge-packet command failed with return code {returncode}"
     entry = _select_merge_ready_entry(merge_packet, pr=pr)
     if not entry:
         target = f"PR #{pr}" if pr is not None else "admin_squash_order"
         return f"merge-packet has no ready entry for {target}"
     try:
-        pr_number = int(entry.get("pr_number"))
-    except (TypeError, ValueError):
+        pr_number = int(entry["pr_number"])
+    except (KeyError, TypeError, ValueError):
         return "merge-packet ready entry is missing a parseable pr_number"
     if pr_number in _packet_not_ready_prs(merge_packet):
         return f"merge-packet still lists PR #{pr_number} as not_ready"
@@ -1088,8 +1123,8 @@ def _merge_ready_prompt_blocker(merge_packet: Any, *, pr: int | None = None) -> 
     if entry.get("requires_human_risk_settlement") or entry.get("requires_human_preapproval"):
         return f"PR #{pr_number} still requires human risk/preapproval settlement"
     try:
-        tier = int(entry.get("tier"))
-    except (TypeError, ValueError):
+        tier = int(entry["tier"])
+    except (KeyError, TypeError, ValueError):
         return f"merge-packet ready entry for PR #{pr_number} is missing a parseable tier"
     if tier >= 3:
         return f"PR #{pr_number} is Tier {tier}, not an autonomous merge-ready prompt target"
@@ -1149,7 +1184,8 @@ def build_post_merge_lane_coordination_prompt(
 ) -> str | None:
     """Build a stop-first prompt when a merged PR still has an active target lane."""
 
-    pr_packet = packet.get("pr") if isinstance(packet.get("pr"), dict) else {}
+    raw_pr_packet = packet.get("pr")
+    pr_packet = raw_pr_packet if isinstance(raw_pr_packet, dict) else {}
     if str(pr_packet.get("state") or "").upper() != "MERGED":
         return None
     active_matches = _post_merge_lane_matches(packet, pr=pr)

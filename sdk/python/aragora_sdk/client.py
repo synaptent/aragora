@@ -7,8 +7,12 @@ Main HTTP client for interacting with the Aragora platform.
 from __future__ import annotations
 
 import os
+import re
 import time
-from typing import TYPE_CHECKING, Any, cast
+from datetime import datetime, timezone
+from math import ceil
+from threading import TIMEOUT_MAX
+from typing import TYPE_CHECKING, Any, Literal, cast, overload
 from urllib.parse import urljoin
 
 if TYPE_CHECKING:
@@ -20,11 +24,93 @@ from .exceptions import (
     AragoraError,
     AuthenticationError,
     AuthorizationError,
+    ConnectionError,
     NotFoundError,
     RateLimitError,
     ServerError,
+    TimeoutError,
     ValidationError,
 )
+
+# Bound automatic server-directed waits to one minute, without retrying early.
+# The parser retains larger hints for callers; configured fallback is unchanged.
+_MAX_AUTOMATIC_RETRY_AFTER_SECONDS = 60
+
+# RFC 9110 section 5.6.7: accept the complete three HTTP-date forms, not
+# arbitrary email dates or a valid prefix followed by unsupported content.
+_HTTP_WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+_HTTP_MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+_HTTP_DAY = "(?:" + "|".join(_HTTP_WEEKDAYS) + ")"
+_HTTP_MONTH = "(?:" + "|".join(_HTTP_MONTHS) + ")"
+_HTTP_TIME = r"[0-9]{2}:[0-9]{2}:[0-9]{2}"
+_HTTP_DATE = re.compile(
+    rf"(?:{_HTTP_DAY}, [0-9]{{2}} {_HTTP_MONTH} [0-9]{{4}} {_HTTP_TIME} GMT|"
+    rf"(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday), "
+    rf"[0-9]{{2}}-{_HTTP_MONTH}-[0-9]{{2}} {_HTTP_TIME} GMT|"
+    rf"{_HTTP_DAY} {_HTTP_MONTH} (?:[0-9]{{2}}| [0-9]) {_HTTP_TIME} [0-9]{{4}})"
+)
+
+
+def _parse_retry_after(value: str | None) -> int | None:
+    """Return an HTTP retry hint representable by the platform's timeout machinery."""
+    if value is None:
+        return None
+    value = value.strip(" \t")
+    try:
+        if value.isascii() and value.isdecimal():
+            delay = int(value)
+        else:
+            if not _HTTP_DATE.fullmatch(value):
+                return None
+            # Extract literal components: email parsers reinterpret small years
+            # and use a fixed century pivot, neither of which is HTTP semantics.
+            if value[3:4] == ",":
+                weekday, day, month, year, clock, _ = value.split()
+            elif "," in value:
+                weekday, date, clock, _ = value.split()
+                day, month, year = date.split("-")
+            else:
+                weekday, month, day, clock, year = value.split()
+            now = time.time()
+            year_number = int(year)
+            month_number = _HTTP_MONTHS.index(month) + 1
+            day_number = int(day)
+            hour, minute, second = map(int, clock.split(":"))
+            if len(year) == 2:
+                current = datetime.fromtimestamp(now, timezone.utc)
+                # RFC 9110 section 5.6.7: the latest matching year no more
+                # than fifty calendar years ahead, including the time of day.
+                year_number += ((current.year + 50) // 100) * 100
+                if (year_number, month_number, day_number, hour, minute, second) > (
+                    current.year + 50,
+                    current.month,
+                    current.day,
+                    current.hour,
+                    current.minute,
+                    current.second,
+                ):
+                    year_number -= 100
+            if year_number < 1900 or not 0 <= second <= 60:
+                return None
+            # datetime validates calendar/hour/minute components. HTTP allows
+            # leap-second :60; represent it as the instant after :59.
+            retry_at = datetime(
+                year_number,
+                month_number,
+                day_number,
+                hour,
+                minute,
+                min(second, 59),
+                tzinfo=timezone.utc,
+            )
+            if _HTTP_WEEKDAYS[retry_at.weekday()] != weekday[:3]:
+                return None
+            delay = max(0, ceil(retry_at.timestamp() + (second == 60) - now))
+        # This is a representability check, not a retry-policy delay cap. Avoid
+        # losing RateLimitError to an overflow in sleep on an unusable hint.
+        return delay if delay <= TIMEOUT_MAX else None
+    except (ValueError, TypeError, OverflowError, OSError):
+        return None
 
 
 class AragoraClient:
@@ -538,6 +624,7 @@ class AragoraClient:
         self.workspaces = WorkspacesAPI(self)
         self.youtube = YouTubeAPI(self)
 
+    @overload
     def request(
         self,
         method: str,
@@ -545,7 +632,32 @@ class AragoraClient:
         params: dict[str, Any] | None = None,
         json: dict[str, Any] | None = None,
         headers: dict[str, str] | None = None,
-    ) -> dict[str, Any]:
+        *,
+        response_format: Literal["json"] = "json",
+    ) -> dict[str, Any]: ...
+
+    @overload
+    def request(
+        self,
+        method: str,
+        path: str,
+        params: dict[str, Any] | None = None,
+        json: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
+        *,
+        response_format: Literal["text"],
+    ) -> str: ...
+
+    def request(
+        self,
+        method: str,
+        path: str,
+        params: dict[str, Any] | None = None,
+        json: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
+        *,
+        response_format: Literal["json", "text"] = "json",
+    ) -> dict[str, Any] | str:
         """
         Make an HTTP request to the Aragora API.
 
@@ -557,6 +669,7 @@ class AragoraClient:
             params: Query parameters
             json: JSON body for POST/PUT requests
             headers: Additional headers
+            response_format: Parse the response as JSON or return its text body
 
         Returns:
             Parsed JSON response as a dictionary.
@@ -567,7 +680,14 @@ class AragoraClient:
         if self.demo:
             from .demo import demo_request
 
-            return demo_request(method, path, params=params, json=json, headers=headers)
+            result = demo_request(method, path, params=params, json=json, headers=headers)
+            if response_format == "text":
+                if isinstance(result, str):
+                    return result
+                # Mirror the live API: a deployment without this text resource
+                # (e.g. no ODR signing key in demo mode) answers 404.
+                raise NotFoundError(f"Demo mode has no text response for '{path}'")
+            return result
 
         url = urljoin(self.base_url, path)
         request_headers = {**self._build_headers(), **(headers or {})}
@@ -585,6 +705,8 @@ class AragoraClient:
                 )
 
                 if response.is_success:
+                    if response_format == "text":
+                        return response.text
                     if response.content:
                         return cast(dict[str, Any], response.json())
                     return {}
@@ -597,20 +719,26 @@ class AragoraClient:
                 if attempt < self.max_retries - 1:
                     time.sleep(self.retry_delay * (2**attempt))
                     continue
-                raise AragoraError("Request timed out") from e
+                raise TimeoutError("Request timed out") from e
 
             except httpx.ConnectError as e:
                 last_error = e
                 if attempt < self.max_retries - 1:
                     time.sleep(self.retry_delay * (2**attempt))
                     continue
-                raise AragoraError("Connection failed") from e
+                raise ConnectionError("Connection failed") from e
 
             except RateLimitError as e:
                 last_error = e
+                if e.retry_after is not None and e.retry_after > _MAX_AUTOMATIC_RETRY_AFTER_SECONDS:
+                    raise
                 if attempt < self.max_retries - 1:
                     # Use server-specified retry delay if available
-                    delay = e.retry_after if e.retry_after else self.retry_delay * (2**attempt)
+                    delay = (
+                        e.retry_after
+                        if e.retry_after is not None
+                        else self.retry_delay * (2**attempt)
+                    )
                     time.sleep(delay)
                     continue
                 raise
@@ -662,7 +790,7 @@ class AragoraClient:
             retry_after = response.headers.get("Retry-After")
             raise RateLimitError(
                 message,
-                retry_after=int(retry_after) if retry_after else None,
+                retry_after=_parse_retry_after(retry_after),
                 error_code=error_code,
                 trace_id=trace_id,
                 response_body=body,
@@ -1176,6 +1304,7 @@ class AragoraAsyncClient:
         self.workspaces = AsyncWorkspacesAPI(self)
         self.youtube = AsyncYouTubeAPI(self)
 
+    @overload
     async def request(
         self,
         method: str,
@@ -1183,7 +1312,32 @@ class AragoraAsyncClient:
         params: dict[str, Any] | None = None,
         json: dict[str, Any] | None = None,
         headers: dict[str, str] | None = None,
-    ) -> dict[str, Any]:
+        *,
+        response_format: Literal["json"] = "json",
+    ) -> dict[str, Any]: ...
+
+    @overload
+    async def request(
+        self,
+        method: str,
+        path: str,
+        params: dict[str, Any] | None = None,
+        json: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
+        *,
+        response_format: Literal["text"],
+    ) -> str: ...
+
+    async def request(
+        self,
+        method: str,
+        path: str,
+        params: dict[str, Any] | None = None,
+        json: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
+        *,
+        response_format: Literal["json", "text"] = "json",
+    ) -> dict[str, Any] | str:
         """
         Make an async HTTP request to the Aragora API.
 
@@ -1195,6 +1349,7 @@ class AragoraAsyncClient:
             params: Query parameters
             json: JSON body
             headers: Additional headers
+            response_format: Parse the response as JSON or return its text body
 
         Returns:
             Parsed JSON response as a dictionary.
@@ -1202,7 +1357,14 @@ class AragoraAsyncClient:
         if self.demo:
             from .demo import demo_request
 
-            return demo_request(method, path, params=params, json=json, headers=headers)
+            result = demo_request(method, path, params=params, json=json, headers=headers)
+            if response_format == "text":
+                if isinstance(result, str):
+                    return result
+                # Mirror the live API: a deployment without this text resource
+                # (e.g. no ODR signing key in demo mode) answers 404.
+                raise NotFoundError(f"Demo mode has no text response for '{path}'")
+            return result
 
         import asyncio
 
@@ -1222,6 +1384,8 @@ class AragoraAsyncClient:
                 )
 
                 if response.is_success:
+                    if response_format == "text":
+                        return response.text
                     if response.content:
                         return cast(dict[str, Any], response.json())
                     return {}
@@ -1233,20 +1397,26 @@ class AragoraAsyncClient:
                 if attempt < self.max_retries - 1:
                     await asyncio.sleep(self.retry_delay * (2**attempt))
                     continue
-                raise AragoraError("Request timed out") from e
+                raise TimeoutError("Request timed out") from e
 
             except httpx.ConnectError as e:
                 last_error = e
                 if attempt < self.max_retries - 1:
                     await asyncio.sleep(self.retry_delay * (2**attempt))
                     continue
-                raise AragoraError("Connection failed") from e
+                raise ConnectionError("Connection failed") from e
 
             except RateLimitError as e:
                 last_error = e
+                if e.retry_after is not None and e.retry_after > _MAX_AUTOMATIC_RETRY_AFTER_SECONDS:
+                    raise
                 if attempt < self.max_retries - 1:
                     # Use server-specified retry delay if available
-                    delay = e.retry_after if e.retry_after else self.retry_delay * (2**attempt)
+                    delay = (
+                        e.retry_after
+                        if e.retry_after is not None
+                        else self.retry_delay * (2**attempt)
+                    )
                     await asyncio.sleep(delay)
                     continue
                 raise
@@ -1298,7 +1468,7 @@ class AragoraAsyncClient:
             retry_after = response.headers.get("Retry-After")
             raise RateLimitError(
                 message,
-                retry_after=int(retry_after) if retry_after else None,
+                retry_after=_parse_retry_after(retry_after),
                 error_code=error_code,
                 trace_id=trace_id,
                 response_body=body,

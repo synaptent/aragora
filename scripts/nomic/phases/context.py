@@ -94,7 +94,7 @@ class ContextPhase:
         self.kilocode_agent_factory = kilocode_agent_factory
         self.cycle_count = cycle_count
         self._log = log_fn or print
-        self._stream_emit = stream_emit_fn or (lambda *args: None)
+        self._stream_emit = stream_emit_fn or (lambda *args, **kwargs: None)
         self._get_features = get_features_fn or (lambda: "No features available")
         self.codebase_auditor = codebase_auditor
         self.enable_audit = enable_audit
@@ -156,8 +156,8 @@ class ContextPhase:
             )
             grok_explorer = self.kilocode_agent_factory(
                 name="grok-explorer",
-                provider_id="openrouter/x-ai/grok-4",
-                model="openrouter/x-ai/grok-4",
+                provider_id="openrouter/x-ai/grok-4.5",
+                model="openrouter/x-ai/grok-4.5",
                 role="explorer",
                 timeout=600,
                 mode="architect",
@@ -281,10 +281,10 @@ CRITICAL: Be thorough. Features you miss here may be accidentally proposed for r
         """Run exploration with one agent."""
         agent_start = time.perf_counter()
         try:
-            self._log(f"  {name} ({harness}): exploring codebase...", agent=name)
+            self._log(f"  {name} ({harness}): exploring codebase...")
             prompt = self._build_explore_prompt()
             result = await agent.generate(prompt, context=[])
-            self._log(f"  {name}: complete ({len(result) if result else 0} chars)", agent=name)
+            self._log(f"  {name}: complete ({len(result) if result else 0} chars)")
             # Emit agent's full exploration result
             if not result:
                 return (name, harness, "Error: empty response")
@@ -294,7 +294,7 @@ CRITICAL: Be thorough. Features you miss here may be accidentally proposed for r
                 )
             return (name, harness, result)
         except Exception as e:
-            self._log(f"  {name}: error - {e}", agent=name)
+            self._log(f"  {name}: error - {e}")
             return (name, harness, f"Error: {e}")
         finally:
             # Record per-agent metrics

@@ -18,11 +18,13 @@ if TYPE_CHECKING:
     import anthropic
 
 # Use AsyncAnthropic for non-blocking API calls
-AsyncAnthropic: Any
+AsyncAnthropic: Any = None
 try:
-    from anthropic import AsyncAnthropic
+    from anthropic import AsyncAnthropic as _AsyncAnthropic
+
+    AsyncAnthropic = _AsyncAnthropic
 except ImportError:
-    AsyncAnthropic = None
+    pass
 
 logger = logging.getLogger(__name__)
 

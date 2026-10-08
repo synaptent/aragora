@@ -24,7 +24,7 @@ from aragora.inbox.trust_wedge import (
     TriageDecision,
     compute_content_hash,
 )
-from aragora.utils.semantic_extraction import ExtractionResult
+from aragora.agents.semantic_extraction import ExtractionResult
 
 
 class _DummyGmail:

@@ -204,8 +204,11 @@ def record_bridge_operation(
     _record_operation(op)
 
     logger.debug(
-        f"bridge_operation bridge={bridge_name} op={operation} "
-        f"duration={duration_ms:.1f}ms success={success}"
+        "bridge_operation bridge=%s op=%s duration=%.1fms success=%s",
+        bridge_name,
+        operation,
+        duration_ms,
+        success,
     )
 
 
@@ -246,10 +249,11 @@ class BridgeTelemetryContext:
         _record_operation(self.operation)
 
         logger.debug(
-            f"bridge_operation bridge={self.operation.bridge_name} "
-            f"op={self.operation.operation} "
-            f"duration={self.operation.duration_ms:.1f}ms "
-            f"success={self.operation.success}"
+            "bridge_operation bridge=%s op=%s duration=%.1fms success=%s",
+            self.operation.bridge_name,
+            self.operation.operation,
+            self.operation.duration_ms,
+            self.operation.success,
         )
 
 
@@ -309,8 +313,11 @@ def with_bridge_telemetry(
             finally:
                 _record_operation(op)
                 logger.debug(
-                    f"bridge_operation bridge={bridge_name} op={operation} "
-                    f"duration={op.duration_ms:.1f}ms success={op.success}"
+                    "bridge_operation bridge=%s op=%s duration=%.1fms success=%s",
+                    bridge_name,
+                    operation,
+                    op.duration_ms,
+                    op.success,
                 )
 
         @functools.wraps(func)
@@ -337,8 +344,11 @@ def with_bridge_telemetry(
             finally:
                 _record_operation(op)
                 logger.debug(
-                    f"bridge_operation bridge={bridge_name} op={operation} "
-                    f"duration={op.duration_ms:.1f}ms success={op.success}"
+                    "bridge_operation bridge=%s op=%s duration=%.1fms success=%s",
+                    bridge_name,
+                    operation,
+                    op.duration_ms,
+                    op.success,
                 )
 
         if asyncio.iscoroutinefunction(func):

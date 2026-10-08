@@ -279,6 +279,39 @@ def test_automation_pr_preflight_rejects_rescue_publish_artifacts(
     )
 
 
+def test_automation_pr_preflight_allows_canonical_rescue_status_artifacts(
+    tmp_path: Path,
+) -> None:
+    repo = _init_repo(tmp_path)
+    _run(["git", "switch", "-c", "codex/tw03-proof-surface"], cwd=repo)
+    generated_dir = repo / "docs" / "status" / "generated" / "rescue_productization"
+    latest = generated_dir / "latest.json"
+    timestamped = generated_dir / "rescue-productization-20260721T184000Z.json"
+    generated_dir.mkdir(parents=True)
+    latest.write_text('{"generated_at": "2026-07-21T18:40:00Z"}\n', encoding="utf-8")
+    timestamped.write_text(
+        '{"generated_at": "2026-07-21T18:40:00Z"}\n',
+        encoding="utf-8",
+    )
+    _run(
+        [
+            "git",
+            "add",
+            "docs/status/generated/rescue_productization/latest.json",
+            "docs/status/generated/rescue_productization/rescue-productization-20260721T184000Z.json",
+        ],
+        cwd=repo,
+    )
+    _run(["git", "commit", "-m", "docs: refresh tw03 proof surface"], cwd=repo)
+
+    proc = _run(["bash", str(SCRIPT), "--json", "origin/main", "HEAD"], cwd=repo)
+
+    assert proc.returncode == 0
+    payload = json.loads(proc.stdout)
+    assert payload["status"] == "ok"
+    assert payload["rescue_publish_files"] == []
+
+
 def test_automation_pr_preflight_rejects_reports_rescue_publish_artifacts(
     tmp_path: Path,
 ) -> None:
@@ -359,6 +392,33 @@ def test_automation_pr_preflight_rejects_nested_rescue_publish_pointers(
     assert "rescue productization publish artifacts" in proc.stderr
     assert "published/rescue-productization-20260516T162243Z.json" in proc.stderr
     assert "published/rescue_productization/snapshots/latest.json" in proc.stderr
+
+
+def test_automation_pr_preflight_rejects_noncanonical_rescue_status_artifacts(
+    tmp_path: Path,
+) -> None:
+    repo = _init_repo(tmp_path)
+    _run(["git", "switch", "-c", "codex/bad-tw03-proof-surface"], cwd=repo)
+    paths = [
+        "docs/status/generated/rescue_productization/rescue-productization-latest.json",
+        "docs/status/generated/rescue_productization/snapshots/latest.json",
+        "rescue-productization-20260721T184000Z.json",
+        "scratch/rescue_productization/latest.json",
+    ]
+    for path in paths:
+        artifact = repo / path
+        artifact.parent.mkdir(parents=True, exist_ok=True)
+        artifact.write_text("{}\n", encoding="utf-8")
+    _run(["git", "add", *paths], cwd=repo)
+    _run(["git", "commit", "-m", "bad: commit noncanonical rescue artifacts"], cwd=repo)
+
+    proc = _run(["bash", str(SCRIPT), "--json", "origin/main", "HEAD"], cwd=repo)
+
+    assert proc.returncode == 1
+    payload = json.loads(proc.stdout)
+    assert payload["status"] == "failed"
+    assert payload["error"] == "rescue productization publish artifacts must not be committed"
+    assert payload["rescue_publish_files"] == paths
 
 
 def test_automation_pr_preflight_accepts_unrelated_latest_json(

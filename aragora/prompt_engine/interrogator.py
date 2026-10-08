@@ -93,9 +93,7 @@ class PromptInterrogator:
             if get_secret_presence("OPENROUTER_API_KEY").source in {"aws", "env"}:
                 from aragora.agents.api_agents.openrouter import OpenRouterAgent
 
-                self._agent = OpenRouterAgent(
-                    name="interrogator", model="anthropic/claude-opus-4.8"
-                )
+                self._agent = OpenRouterAgent(name="interrogator", model="anthropic/claude-opus-5")
                 return self._agent
         except (ImportError, RuntimeError, ValueError) as e:
             logger.warning("Could not create OpenRouter agent: %s", e)

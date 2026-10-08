@@ -68,7 +68,7 @@ class AgentGenome:
     def from_persona(cls, persona: Persona, model: str = "claude") -> AgentGenome:
         """Create a base genome from an existing Persona."""
         # Convert trait list to weighted dict (all equal weight for base)
-        trait_weights = {t: 1.0 for t in persona.traits}
+        trait_weights = dict.fromkeys(persona.traits, 1.0)
 
         return cls(
             genome_id=generate_genome_id(trait_weights, persona.expertise, []),

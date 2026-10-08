@@ -11,18 +11,30 @@ Tests cover:
 
 from __future__ import annotations
 
+import importlib
+import sys
+
 import pytest
 
 from aragora.config import DEFAULT_ROUNDS
-from aragora.debate.protocol import (
+from aragora.protocols.debate import (
+    ARAGORA_AI_LIGHT_PROTOCOL,
+    ARAGORA_AI_PROTOCOL,
+    STRUCTURED_LIGHT_ROUND_PHASES,
+    STRUCTURED_ROUND_PHASES,
     DebateProtocol,
     RoundPhase,
-    STRUCTURED_ROUND_PHASES,
-    STRUCTURED_LIGHT_ROUND_PHASES,
-    ARAGORA_AI_PROTOCOL,
-    ARAGORA_AI_LIGHT_PROTOCOL,
     user_vote_multiplier,
 )
+
+
+def test_legacy_debate_protocol_path_warns_and_preserves_identity():
+    """The old domain path remains a warning compatibility shim."""
+    sys.modules.pop("aragora.debate.protocol", None)
+    with pytest.warns(DeprecationWarning, match=r"aragora\.debate\.protocol"):
+        legacy = importlib.import_module("aragora.debate.protocol")
+
+    assert legacy.DebateProtocol is DebateProtocol
 
 
 class TestRoundPhase:

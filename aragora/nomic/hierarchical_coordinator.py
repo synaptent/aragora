@@ -405,7 +405,7 @@ class HierarchicalCoordinator:
         try:
             from aragora.debate.orchestrator import Arena
             from aragora.core import Environment
-            from aragora.debate.protocol import DebateProtocol
+            from aragora.protocols.debate import DebateProtocol
 
             prompt = self._build_judge_prompt(goal, decomposition, reports)
 
@@ -434,12 +434,12 @@ class HierarchicalCoordinator:
             agents: list[Any] = [
                 AnthropicAPIAgent(
                     name="judge-1",
-                    model="claude-opus-4-8",
+                    model="claude-opus-5",
                     api_key=anthropic_key,
                 ),
                 AnthropicAPIAgent(
                     name="judge-2",
-                    model="claude-opus-4-8",
+                    model="claude-opus-5",
                     api_key=anthropic_key,
                 ),
             ]

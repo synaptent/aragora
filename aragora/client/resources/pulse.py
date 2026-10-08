@@ -6,7 +6,7 @@ Provides access to trending topics and debate suggestions.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -23,7 +23,7 @@ class TrendingTopic:
     category: str = "general"
     url: str | None = None
     summary: str | None = None
-    suggested_agents: list[str] = None
+    suggested_agents: list[str] = field(default_factory=list)
 
     def __post_init__(self):
         if self.suggested_agents is None:
@@ -50,8 +50,8 @@ class DebateSuggestion:
     rationale: str
     difficulty: str = "medium"
     estimated_rounds: int = 3
-    suggested_agents: list[str] = None
-    related_topics: list[str] = None
+    suggested_agents: list[str] = field(default_factory=list)
+    related_topics: list[str] = field(default_factory=list)
 
     def __post_init__(self):
         if self.suggested_agents is None:

@@ -8,7 +8,7 @@ Endpoints:
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 from aragora.server.versioning.compat import strip_version_prefix
 
@@ -80,10 +80,10 @@ class DecompositionHandler(BaseHandler):
 
         ok, err = validate_path_segment(pipeline_id, "pipeline_id", SAFE_ID_PATTERN)
         if not ok:
-            return error_response(err, 400)
+            return error_response(cast(str, err), 400)
         ok2, err2 = validate_path_segment(node_id, "node_id", SAFE_ID_PATTERN)
         if not ok2:
-            return error_response(err2, 400)
+            return error_response(cast(str, err2), 400)
 
         if sub == "tree":
             return self._get_decomposition_tree(pipeline_id, node_id)
@@ -102,7 +102,7 @@ class DecompositionHandler(BaseHandler):
                 return error_response("Authentication required", 401)
 
             auth_ctx = AuthorizationContext(
-                user_id=user_ctx.user_id,
+                user_id=cast(str, user_ctx.user_id),
                 user_email=user_ctx.email,
                 org_id=user_ctx.org_id,
                 workspace_id=None,
@@ -136,10 +136,10 @@ class DecompositionHandler(BaseHandler):
 
         ok, err = validate_path_segment(pipeline_id, "pipeline_id", SAFE_ID_PATTERN)
         if not ok:
-            return error_response(err, 400)
+            return error_response(cast(str, err), 400)
         ok2, err2 = validate_path_segment(node_id, "node_id", SAFE_ID_PATTERN)
         if not ok2:
-            return error_response(err2, 400)
+            return error_response(cast(str, err2), 400)
 
         return self._decompose_node(pipeline_id, node_id, body or {})
 
@@ -286,7 +286,13 @@ class DecompositionHandler(BaseHandler):
     ) -> None:
         """Convert tree structure to React Flow nodes/edges."""
         stage = tree.get("stage")
-        stage_val = stage.value if hasattr(stage, "value") else str(stage) if stage else ""
+        stage_val = (
+            stage.value
+            if stage is not None and hasattr(stage, "value")
+            else str(stage)
+            if stage
+            else ""
+        )
         rf_nodes.append(
             {
                 "id": tree["id"],

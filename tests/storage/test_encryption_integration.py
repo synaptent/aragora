@@ -234,7 +234,7 @@ class TestIntegrationStoreEncryption:
 
         assert len(discord_configs) >= 3
         for config in discord_configs:
-            if "user-list-" in config.user_id:
+            if config.user_id and "user-list-" in config.user_id:
                 assert "discord-token-" in config.settings.get("bot_token", "")
 
 
@@ -322,7 +322,7 @@ class TestSyncStoreEncryption:
     @pytest.mark.asyncio
     async def test_connector_credentials_encrypted(self, tmp_path) -> None:
         """Test that connector credentials are encrypted."""
-        from aragora.connectors.enterprise.sync_store import SyncStore
+        from aragora.storage.sync_store import SyncStore
 
         store = SyncStore(use_encryption=True)
         store._database_url = f"sqlite:///{tmp_path}/connectors.db"
@@ -353,7 +353,7 @@ class TestSyncStoreEncryption:
     @pytest.mark.asyncio
     async def test_encryption_disabled(self, tmp_path) -> None:
         """Test store works with encryption disabled."""
-        from aragora.connectors.enterprise.sync_store import SyncStore
+        from aragora.storage.sync_store import SyncStore
 
         store = SyncStore(use_encryption=False)
         store._database_url = f"sqlite:///{tmp_path}/connectors.db"

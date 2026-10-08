@@ -7,7 +7,7 @@ Provides access to agent tournament management.
 from __future__ import annotations
 
 import builtins
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -82,7 +82,7 @@ class Tournament:
     total_rounds: int
     created_at: str
     completed_at: str | None = None
-    metadata: dict[str, Any] = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
         if self.metadata is None:

@@ -558,7 +558,7 @@ class MLFallbackService:
     _quality_scorer: QualityScorer | None
 
     def __init__(self, manager: MLDegradationManager | None = None):
-        self._manager = manager or _global_manager
+        self._manager = manager or get_ml_manager()
         self._embedding_service = None
         self._consensus_predictor = None
         self._quality_scorer = None

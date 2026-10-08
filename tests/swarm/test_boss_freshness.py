@@ -18,13 +18,17 @@ Covers:
 
 from __future__ import annotations
 
+import json
 import os
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+import aragora.swarm.runner_registry as runner_registry
 
 from aragora.swarm.boss_freshness import (
     RunnerFreshnessResult,
@@ -763,6 +767,116 @@ class TestCheckRunnerFreshnessNoVerifiedRunner:
 
 
 class TestCheckRunnerFreshnessProbeLogic:
+    def test_single_probe_prefers_selected_unverified_over_failed_registration(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        now = datetime.now(UTC).isoformat()
+        registry_path = tmp_path / "swarm-runners.json"
+        registry_path.write_text(
+            json.dumps(
+                {
+                    "registrations": [
+                        {
+                            "runner_id": "claude-runner-failed",
+                            "runner_type": "claude",
+                            "profile": "max-01",
+                            "registered": True,
+                            "availability": "available",
+                            "available": True,
+                            "auth_mode": "subscription",
+                            "command_path": "/usr/bin/true",
+                            "owner_binding": {
+                                "user_id": "user-123",
+                                "workspace_id": "aragora",
+                            },
+                            "heartbeat_at": now,
+                            "updated_at": now,
+                            "stale_after_seconds": 3600,
+                            "capabilities": {"max_parallel_lanes": 1, "active_lanes": 0},
+                            "probe_status": "failed",
+                            "probe_checked_at": now,
+                        },
+                        {
+                            "runner_id": "claude-runner-selected",
+                            "runner_type": "claude",
+                            "profile": "max-10",
+                            "registered": True,
+                            "availability": "available",
+                            "available": True,
+                            "auth_mode": "subscription",
+                            "command_path": "/usr/bin/true",
+                            "owner_binding": {
+                                "user_id": "user-123",
+                                "workspace_id": "aragora",
+                            },
+                            "heartbeat_at": now,
+                            "updated_at": now,
+                            "stale_after_seconds": 3600,
+                            "capabilities": {"max_parallel_lanes": 1, "active_lanes": 0},
+                        },
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        failed = runner_registry.RunnerInspection(
+            runner_id="claude-runner-failed",
+            runner_type="claude",
+            profile="max-01",
+            availability="available",
+            available=True,
+            auth_mode="subscription",
+            command_path="/usr/bin/true",
+        )
+        selected = runner_registry.RunnerInspection(
+            runner_id="claude-runner-selected",
+            runner_type="claude",
+            profile="max-10",
+            availability="available",
+            available=True,
+            auth_mode="subscription",
+            command_path="/usr/bin/true",
+        )
+        probed_runner_ids: list[str] = []
+
+        monkeypatch.setattr(
+            runner_registry,
+            "refresh_discovered_runners",
+            lambda *args, **kwargs: [failed, selected],
+        )
+
+        def _probe(inspection: Any, **kwargs: Any) -> runner_registry.RunnerProbeResult:
+            probed_runner_ids.append(inspection.runner_id)
+            return runner_registry.RunnerProbeResult(
+                runner_id=inspection.runner_id,
+                runner_type=inspection.runner_type,
+                profile=inspection.profile,
+                status="passed",
+                checked_at=datetime.now(UTC).isoformat(),
+            )
+
+        monkeypatch.setattr(runner_registry, "probe_runner_execution", _probe)
+        inspector = MagicMock()
+        inspector.inspect.return_value = selected
+        monkeypatch.setattr(
+            runner_registry,
+            "make_runner_inspector",
+            lambda *args, **kwargs: inspector,
+        )
+
+        result = check_runner_freshness(
+            registry_path=str(registry_path),
+            env={"ARAGORA_USER_ID": "user-123", "ARAGORA_WORKSPACE_ID": "aragora"},
+            requested_runner_type="claude",
+            allowed_profiles={"max-01", "max-10"},
+            verified_runner_target=1,
+            runner_probe_limit=1,
+        )
+
+        assert result.fresh is True
+        assert probed_runner_ids == [selected.runner_id]
+        assert result.details["probe"]["attempted"] == 1
+
     def test_probe_triggered_when_below_target(self):
         rid = "claude-runner-1"
         routing = _make_routing(

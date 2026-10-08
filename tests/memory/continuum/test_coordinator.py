@@ -20,7 +20,7 @@ import tempfile
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch, AsyncMock
 
@@ -41,6 +41,11 @@ from aragora.memory.tier_manager import (
     TierManager,
     reset_tier_manager,
 )
+
+
+def _utc_naive_now() -> datetime:
+    """Naive-UTC now, matching how continuum rows are stamped (see PR #9311)."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 # =============================================================================
@@ -214,8 +219,8 @@ class TestMediumTierOperations:
             update_count=15,  # Sufficient updates
             success_count=10,
             failure_count=5,
-            created_at=datetime.now().isoformat(),
-            updated_at=datetime.now().isoformat(),
+            created_at=_utc_naive_now().isoformat(),
+            updated_at=_utc_naive_now().isoformat(),
         )
 
         # Stability (0.9) > demotion threshold (0.3)
@@ -316,8 +321,8 @@ class TestGlacialTierOperations:
             update_count=100,
             success_count=80,
             failure_count=20,
-            created_at=datetime.now().isoformat(),
-            updated_at=datetime.now().isoformat(),
+            created_at=_utc_naive_now().isoformat(),
+            updated_at=_utc_naive_now().isoformat(),
         )
 
         assert entry.should_demote() is False  # Already at slowest tier
@@ -442,7 +447,7 @@ class TestTierPromotion:
             )
             conn.commit()
 
-        before = datetime.now()
+        before = _utc_naive_now()
         memory.promote("timestamp_test")
 
         entry = memory.get("timestamp_test")
@@ -620,7 +625,7 @@ class TestEntryExpiration:
     def test_cleanup_fast_tier_expired(self, memory):
         """Test cleaning up expired fast tier entries."""
         # Add old entry
-        old_time = (datetime.now() - timedelta(hours=5)).isoformat()  # Older than 1hr half-life
+        old_time = (_utc_naive_now() - timedelta(hours=5)).isoformat()  # Older than 1hr half-life
         with memory.connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
@@ -637,7 +642,7 @@ class TestEntryExpiration:
 
     def test_cleanup_medium_tier_expired(self, memory):
         """Test cleaning up expired medium tier entries."""
-        old_time = (datetime.now() - timedelta(hours=50)).isoformat()  # Older than 24hr half-life
+        old_time = (_utc_naive_now() - timedelta(hours=50)).isoformat()  # Older than 24hr half-life
         with memory.connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
@@ -654,7 +659,7 @@ class TestEntryExpiration:
 
     def test_cleanup_slow_tier_expired(self, memory):
         """Test cleaning up expired slow tier entries."""
-        old_time = (datetime.now() - timedelta(days=15)).isoformat()  # Older than 7 day half-life
+        old_time = (_utc_naive_now() - timedelta(days=15)).isoformat()  # Older than 7 day half-life
         with memory.connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
@@ -671,7 +676,9 @@ class TestEntryExpiration:
 
     def test_cleanup_glacial_tier_expired(self, memory):
         """Test cleaning up expired glacial tier entries."""
-        old_time = (datetime.now() - timedelta(days=60)).isoformat()  # Older than 30 day half-life
+        old_time = (
+            _utc_naive_now() - timedelta(days=60)
+        ).isoformat()  # Older than 30 day half-life
         with memory.connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
@@ -698,7 +705,7 @@ class TestEntryExpiration:
 
     def test_cleanup_archives_by_default(self, memory):
         """Test that cleanup archives entries by default."""
-        old_time = (datetime.now() - timedelta(hours=10)).isoformat()
+        old_time = (_utc_naive_now() - timedelta(hours=10)).isoformat()
         with memory.connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
@@ -723,7 +730,7 @@ class TestEntryExpiration:
 
     def test_cleanup_skips_red_line_entries(self, memory):
         """Test that cleanup skips red-lined entries."""
-        old_time = (datetime.now() - timedelta(hours=10)).isoformat()
+        old_time = (_utc_naive_now() - timedelta(hours=10)).isoformat()
         with memory.connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
@@ -975,7 +982,7 @@ class TestPromotionCooldown:
         memory.add("cooldown_test", "Content", tier=MemoryTier.MEDIUM)
 
         # First promotion
-        now = datetime.now().isoformat()
+        now = _utc_naive_now().isoformat()
         with memory.connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
@@ -996,7 +1003,7 @@ class TestPromotionCooldown:
         memory.add("cooldown_passed", "Content", tier=MemoryTier.SLOW)
 
         # Set last promotion to 25 hours ago (beyond 24hr default cooldown)
-        old_time = (datetime.now() - timedelta(hours=25)).isoformat()
+        old_time = (_utc_naive_now() - timedelta(hours=25)).isoformat()
         with memory.connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
@@ -1022,7 +1029,7 @@ class TestPromotionCooldown:
         cms.add("short_cooldown", "Content", tier=MemoryTier.SLOW)
 
         # Set last promotion to 2 hours ago
-        old_time = (datetime.now() - timedelta(hours=2)).isoformat()
+        old_time = (_utc_naive_now() - timedelta(hours=2)).isoformat()
         with cms.connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
@@ -1403,7 +1410,7 @@ class TestMemoryLeakPrevention:
             "tags": [f"tag_{i}" for i in range(100)],
             "cross_references": [f"ref_{i}" for i in range(100)],
             "history": [
-                {"action": f"action_{i}", "timestamp": datetime.now().isoformat()}
+                {"action": f"action_{i}", "timestamp": _utc_naive_now().isoformat()}
                 for i in range(50)
             ],
         }

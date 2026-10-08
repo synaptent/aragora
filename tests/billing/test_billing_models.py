@@ -39,7 +39,19 @@ from aragora.billing.models import (
     HASH_VERSION_BCRYPT,
     HASH_VERSION_SHA256,
     BCRYPT_ROUNDS,
+    clear_mfa_bypass_audit_sink,
+    register_mfa_bypass_audit_sink,
 )
+from aragora.exceptions import ConfigurationError
+
+
+@pytest.fixture(autouse=True)
+def configured_mfa_bypass_audit_sink():
+    """Provide the required MFA audit capability for model tests."""
+    sink = MagicMock()
+    register_mfa_bypass_audit_sink(sink)
+    yield sink
+    clear_mfa_bypass_audit_sink()
 
 
 # =============================================================================
@@ -423,7 +435,7 @@ class TestUser:
 
         assert user.is_mfa_bypass_valid() is False
 
-    def test_user_approve_mfa_bypass(self):
+    def test_user_approve_mfa_bypass(self, configured_mfa_bypass_audit_sink):
         """Test approving MFA bypass."""
         user = User(is_service_account=True)
         user.approve_mfa_bypass(
@@ -436,6 +448,13 @@ class TestUser:
         assert user.mfa_bypass_approved_by == "admin-123"
         assert user.mfa_bypass_approved_at is not None
         assert user.mfa_bypass_expires_at is not None
+        configured_mfa_bypass_audit_sink.assert_called_once_with(
+            admin_id="admin-123",
+            action="mfa_bypass_approved",
+            target_type="service_account",
+            target_id=str(user.id),
+            details={"reason": "api_integration", "expires_days": 60},
+        )
 
     def test_user_approve_mfa_bypass_not_service_account(self):
         """Test MFA bypass approval fails for non-service accounts."""
@@ -443,16 +462,67 @@ class TestUser:
         with pytest.raises(ValueError, match="service accounts"):
             user.approve_mfa_bypass(approved_by="admin-123")
 
-    def test_user_revoke_mfa_bypass(self):
+    def test_user_revoke_mfa_bypass(self, configured_mfa_bypass_audit_sink):
         """Test revoking MFA bypass."""
         user = User(is_service_account=True)
         user.approve_mfa_bypass(approved_by="admin-123")
+        configured_mfa_bypass_audit_sink.reset_mock()
         user.revoke_mfa_bypass(revoked_by="admin-456", reason="security_review")
 
         assert user.mfa_bypass_approved_at is None
         assert user.mfa_bypass_approved_by is None
         assert user.mfa_bypass_expires_at is None
         assert user.mfa_bypass_reason is None
+        configured_mfa_bypass_audit_sink.assert_called_once_with(
+            admin_id="admin-456",
+            action="mfa_bypass_revoked",
+            target_type="service_account",
+            target_id=str(user.id),
+            details={
+                "reason": "security_review",
+                "previous_approved_by": "admin-123",
+            },
+        )
+
+    def test_user_approve_mfa_bypass_requires_audit_capability(self):
+        """Approval fails closed when no audit sink has been registered."""
+        clear_mfa_bypass_audit_sink()
+        user = User(is_service_account=True)
+
+        with pytest.raises(ConfigurationError, match="required to approve MFA bypasses"):
+            user.approve_mfa_bypass(approved_by="admin-123")
+
+        assert user.mfa_bypass_approved_at is None
+        assert user.mfa_bypass_approved_by is None
+        assert user.mfa_bypass_expires_at is None
+        assert user.mfa_bypass_reason is None
+
+    def test_user_revoke_mfa_bypass_requires_audit_capability(self):
+        """Revocation fails closed when no audit sink has been registered."""
+        user = User(is_service_account=True)
+        user.approve_mfa_bypass(approved_by="admin-123")
+        approved_at = user.mfa_bypass_approved_at
+        expires_at = user.mfa_bypass_expires_at
+        clear_mfa_bypass_audit_sink()
+
+        with pytest.raises(ConfigurationError, match="required to revoke MFA bypasses"):
+            user.revoke_mfa_bypass(revoked_by="admin-456")
+
+        assert user.mfa_bypass_approved_at == approved_at
+        assert user.mfa_bypass_approved_by == "admin-123"
+        assert user.mfa_bypass_expires_at == expires_at
+        assert user.mfa_bypass_reason == "service_account"
+
+    def test_user_approve_mfa_bypass_propagates_audit_failure(self):
+        """A configured but failing audit sink remains fail closed."""
+        register_mfa_bypass_audit_sink(MagicMock(side_effect=RuntimeError("audit down")))
+        user = User(is_service_account=True)
+
+        with pytest.raises(RuntimeError, match="audit down"):
+            user.approve_mfa_bypass(approved_by="admin-123")
+
+        assert user.mfa_bypass_approved_at is None
+        assert user.mfa_bypass_approved_by is None
 
     def test_user_revoke_mfa_bypass_not_service_account(self):
         """Test MFA bypass revocation fails for non-service accounts."""
@@ -903,6 +973,83 @@ class TestOrganizationInvitation:
         assert inv.id == "inv-123"
         assert inv.email == "user@example.com"  # Lowercased
         assert inv.role == "admin"
+
+
+class TestOrganizationInvitationNullExpiry:
+    """A missing expiry (legacy NULL expires_at row) fails closed."""
+
+    def test_new_invitation_defaults_to_seven_day_expiry(self):
+        before = datetime.now(timezone.utc)
+        inv = OrganizationInvitation()
+        after = datetime.now(timezone.utc)
+
+        assert inv.expires_at is not None
+        assert before + timedelta(days=7) <= inv.expires_at <= after + timedelta(days=7)
+
+    def test_null_expiry_is_expired(self):
+        inv = OrganizationInvitation(expires_at=None)
+
+        assert inv.is_expired is True
+
+    def test_null_expiry_is_not_pending(self):
+        inv = OrganizationInvitation(expires_at=None)
+
+        assert inv.status == "pending"
+        assert inv.is_pending is False
+
+    def test_null_expiry_cannot_be_accepted(self):
+        inv = OrganizationInvitation(expires_at=None)
+
+        assert inv.accept() is False
+        assert inv.status == "pending"
+        assert inv.accepted_at is None
+
+    def test_null_expiry_can_still_be_revoked(self):
+        inv = OrganizationInvitation(expires_at=None)
+
+        assert inv.revoke() is True
+        assert inv.status == "revoked"
+
+    def test_to_dict_serializes_null_expiry_as_none(self):
+        inv = OrganizationInvitation(id="inv-null", expires_at=None)
+
+        data = inv.to_dict()
+
+        assert data["expires_at"] is None
+        assert data["is_expired"] is True
+        assert data["is_pending"] is False
+
+    def test_from_dict_preserves_explicit_null_expiry(self):
+        inv = OrganizationInvitation.from_dict({"id": "inv-null", "expires_at": None})
+
+        assert inv.expires_at is None
+        assert inv.is_pending is False
+
+    def test_from_dict_without_expiry_key_keeps_seven_day_default(self):
+        before = datetime.now(timezone.utc)
+        inv = OrganizationInvitation.from_dict({"id": "inv-default"})
+
+        assert inv.expires_at is not None
+        assert inv.expires_at >= before + timedelta(days=7)
+        assert inv.is_pending is True
+
+    def test_null_expiry_round_trip(self):
+        original = OrganizationInvitation(id="inv-rt-null", email="a@example.com", expires_at=None)
+
+        restored = OrganizationInvitation.from_dict(original.to_dict(include_token=True))
+
+        assert restored.expires_at is None
+        assert restored.is_expired is True
+
+    def test_dated_invitation_expiry_is_unchanged(self):
+        future = datetime.now(timezone.utc) + timedelta(minutes=5)
+        past = datetime.now(timezone.utc) - timedelta(seconds=1)
+
+        assert OrganizationInvitation(expires_at=future).is_pending is True
+        assert OrganizationInvitation(expires_at=past).is_expired is True
+        assert OrganizationInvitation(expires_at=future).to_dict()["expires_at"] == (
+            future.isoformat()
+        )
 
 
 # =============================================================================

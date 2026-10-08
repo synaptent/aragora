@@ -132,6 +132,14 @@ class MemoryHandler(
         "/api/v1/memory/*/promote",
     ]
 
+    # Spec-only verb declaration for the continuum entry delete, whose
+    # dispatch matches the "/api/v1/memory/continuum/" prefix inside
+    # handle_delete (a prefix literal is not per-route evidence for the
+    # generator); read by openapi_impl, not used for request routing.
+    _ROUTE_MAP: dict = {
+        "DELETE /api/v1/memory/continuum/{memory_id}": None,
+    }
+
     @staticmethod
     def _normalize_path(path: str) -> str:
         if path.startswith("/api/memory/"):

@@ -29,6 +29,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
+from collections.abc import Callable
 
 # Configure logging
 logging.basicConfig(
@@ -107,7 +108,7 @@ class DisasterRecoveryDrill:
             mode="",
         )
 
-    def _run_step(self, name: str, func: callable, *args, **kwargs) -> DrillResult:
+    def _run_step(self, name: str, func: Callable[..., Any], *args, **kwargs) -> DrillResult:
         """Execute a drill step and record results."""
         logger.info(f"Starting: {name}")
         start = time.time()

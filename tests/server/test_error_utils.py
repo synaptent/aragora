@@ -1,8 +1,21 @@
 """Tests for error sanitization utilities."""
 
+import importlib
+import sys
+
 import pytest
-from aragora.server.errors import safe_error_message
+
+from aragora.api_errors import safe_error_message
 from aragora.utils.error_sanitizer import sanitize_error_text
+
+
+def test_legacy_server_errors_path_warns_and_preserves_identity():
+    """The old server path remains a warning compatibility shim."""
+    sys.modules.pop("aragora.server.errors", None)
+    with pytest.warns(DeprecationWarning, match=r"aragora\.server\.errors"):
+        legacy = importlib.import_module("aragora.server.errors")
+
+    assert legacy.safe_error_message is safe_error_message
 
 
 class TestSanitizeErrorText:

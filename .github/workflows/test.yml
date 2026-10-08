@@ -7,9 +7,11 @@ on:
     paths:
       - 'aragora/**'
       - 'aragora-debate/**'
+      - 'aragora-verify/**'
       - 'tests/**'
       - 'pyproject.toml'
       - 'requirements.txt'
+      - 'scripts/gen_odr_vectors.py'
       - 'scripts/capability_gap_report.py'
       - 'scripts/generate_capability_matrix.py'
       - 'scripts/check_capability_matrix_sync.py'
@@ -85,7 +87,7 @@ jobs:
           cache-dependency-path: pyproject.toml
 
       - name: Set up Node 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "20"
 
@@ -260,7 +262,7 @@ jobs:
           cache-dependency-path: pyproject.toml
 
       - name: Set up Node 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "20"
           cache: 'npm'
@@ -285,7 +287,7 @@ jobs:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Baseline Determinism
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 18
     needs: version-check
 
     steps:
@@ -664,6 +666,8 @@ jobs:
               - 'aragora/compliance/**'
               - 'aragora/gauntlet/**'
               - 'aragora/cli/**'
+              - 'aragora-verify/**'
+              - 'scripts/gen_odr_vectors.py'
               - 'tests/nomic/**'
               - 'tests/control_plane/**'
               - 'tests/rbac/**'
@@ -672,6 +676,7 @@ jobs:
               - 'tests/compliance/**'
               - 'tests/gauntlet/**'
               - 'tests/cli/**'
+              - 'tests/verify/**'
 
       - name: Report scopes
         run: |
@@ -683,6 +688,10 @@ jobs:
   # Sub-sharding history:
   #   2026-04-25: Heavy shards split to fit within 30-min runner cap.
   #     - debate (1 shard, 30+ min) -> debate-am, debate-nz, debate-phases
+  #   2026-07-15: debate-am re-saturated (28-30+ min, cancelled on main sched
+  #     run 29390230325 and PR #9245 run 29293412959 despite the #9280
+  #     rebalance). Re-split into 4 balanced shards: debate-phases + debate-1/2/3
+  #     (~11.5 min pytest each). Boundaries in scripts/ci_resolve_test_shard.py.
   #     - server (1 shard, 23 min)  -> server-handlers-am, server-handlers-nz, server-rest
   #     - handlers (1 shard, 26 min) -> handlers-features, handlers-amk-no-features, handlers-lz
   #   Path-filter (test-shard-scope) added: PRs touching only docs/CI/integration
@@ -719,27 +728,32 @@ jobs:
             scope: storage
             timeout: 30
           - name: infra
-            pytest_args: tests/nomic tests/control_plane tests/rbac tests/events tests/observability tests/compliance tests/gauntlet tests/cli
+            pytest_args: tests/nomic tests/control_plane tests/rbac tests/events tests/observability tests/compliance tests/gauntlet tests/cli tests/verify
             scope: infra
             timeout: 30
 
-          # debate (was 1 shard hitting 30-min cap, now 3 sub-shards by alphabet)
-          # Top-level debate test files a-m (~5500 tests)
-          - name: debate-am
-            pytest_args: ""
-            resolver: debate-am
-            scope: debate
-            timeout: 30
-          # Top-level debate test files n-z (~5600 tests)
-          - name: debate-nz
-            pytest_args: ""
-            resolver: debate-nz
-            scope: debate
-            timeout: 30
-          # Subdirectories under tests/debate/ (~3000 tests)
+          # debate: 4 balanced sub-shards (~11.5 min pytest each, measured
+          # 2026-07-15). debate-phases = tests/debate/ subdirs + first range
+          # of top-level files; debate-1/2/3 = remaining contiguous ranges.
+          # Boundaries live in scripts/ci_resolve_test_shard.py.
           - name: debate-phases
             pytest_args: ""
             resolver: debate-phases
+            scope: debate
+            timeout: 30
+          - name: debate-1
+            pytest_args: ""
+            resolver: debate-1
+            scope: debate
+            timeout: 30
+          - name: debate-2
+            pytest_args: ""
+            resolver: debate-2
+            scope: debate
+            timeout: 30
+          - name: debate-3
+            pytest_args: ""
+            resolver: debate-3
             scope: debate
             timeout: 30
 
@@ -1169,18 +1183,36 @@ jobs:
         run: echo "No high-risk path changes detected, skipping integration smoke tests."
 
   test-pollution-randomized:
-    # This is a stress guard, not a PR admission gate. It currently runs a
-    # broad randomized suite three times and regularly hits the 20-minute
-    # wall-clock cap even after the fast PR shards have passed.
+    # Stress guard for test-order pollution, not a PR admission gate.
+    #
+    # Design (M-TRUST #9239):
+    #   * Decoupled from `test-fast` so a slow/red PR shard cannot mask the guard
+    #     and vice versa. Runs on push/schedule only (not PRs).
+    #   * Split into BOUNDED DOMAIN SLICES to keep any single shard well under
+    #     the 20-minute wall-clock cap and to localize a polluted domain to its
+    #     slice.
+    #   * Each slice runs TWO seeds: a fixed per-slice seed (stable regression
+    #     signal) and a rotating seed derived from the CI run number
+    #     (broader search of the order space over time).
+    #   * On failure, the failing seed + node IDs are persisted as an artifact
+    #     so downstream lanes can bisect without rerunning the whole guard.
     if: github.event_name != 'pull_request'
     name: Randomized Order Pollution Guard
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: test-fast
     strategy:
       fail-fast: false
       matrix:
-        seed: [12345, 54321, 99999]
+        include:
+          - slice: core
+            paths: "tests/debate tests/knowledge tests/agents tests/memory"
+            fixed_seed: 12345
+          - slice: server
+            paths: "tests/server/handlers tests/control_plane tests/rbac tests/events tests/observability"
+            fixed_seed: 54321
+          - slice: workflow
+            paths: "tests/workflow tests/compliance tests/gauntlet tests/cli"
+            fixed_seed: 99999
 
     steps:
       - name: Checkout
@@ -1221,37 +1253,135 @@ jobs:
           bash scripts/ci_install_project.sh --extras test
           python -m pip install pytest-timeout pytest-xdist pytest-randomly
 
-      - name: Compute dynamic seed
-        id: dynamic-seed
+      - name: Compute rotating seed
+        id: rotating-seed
         run: echo "seed=$(( ${{ github.run_number }} % 100000 ))" >> $GITHUB_OUTPUT
 
-      - name: Run randomized-order guard (seed=${{ matrix.seed }})
+      # SCOPE NOTE: slices run in separate pytest processes, so CROSS-SLICE
+      # pollution (e.g. tests/debate state leaking into tests/workflow) is
+      # structurally out of this guard's scope — a green guard certifies
+      # within-slice order-independence only. Cross-domain leaks are the full
+      # matrix / nightly lanes' concern.
+      - name: Prepare artifact directory
+        run: mkdir -p artifacts/pollution-guard
+
+      - name: Run randomized-order guard (${{ matrix.slice }}, fixed seed=${{ matrix.fixed_seed }})
+        id: fixed-seed-run
         run: |
-          pytest tests/debate tests/knowledge tests/server/handlers tests/control_plane tests/agents tests/memory \
-            tests/rbac tests/events tests/observability tests/workflow tests/compliance tests/gauntlet tests/cli \
+          set +e
+          pytest ${{ matrix.paths }} \
             -m "not slow and not load and not e2e and not integration and not integration_minimal and not benchmark and not performance" \
             --timeout=60 \
-            -x \
             -p randomly \
-            --randomly-seed=${{ matrix.seed }} \
-            -v \
-            --tb=short
+            --randomly-seed=${{ matrix.fixed_seed }} \
+            --tb=short \
+            -q \
+            --junitxml=artifacts/pollution-guard/${{ matrix.slice }}-fixed-${{ matrix.fixed_seed }}.xml
+          rc=$?
+          echo "rc=$rc" >> $GITHUB_OUTPUT
+          echo "seed=${{ matrix.fixed_seed }}" >> $GITHUB_OUTPUT
+          exit 0
         env:
           PYTHONPATH: .:aragora-debate/src
 
-      - name: Run randomized-order guard (dynamic seed=${{ steps.dynamic-seed.outputs.seed }})
+      - name: Run randomized-order guard (${{ matrix.slice }}, rotating seed=${{ steps.rotating-seed.outputs.seed }})
+        id: rotating-seed-run
         run: |
-          pytest tests/debate tests/knowledge tests/server/handlers tests/control_plane tests/agents tests/memory \
-            tests/rbac tests/events tests/observability tests/workflow tests/compliance tests/gauntlet tests/cli \
+          set +e
+          pytest ${{ matrix.paths }} \
             -m "not slow and not load and not e2e and not integration and not integration_minimal and not benchmark and not performance" \
             --timeout=60 \
-            -x \
             -p randomly \
-            --randomly-seed=${{ steps.dynamic-seed.outputs.seed }} \
-            -v \
-            --tb=short
+            --randomly-seed=${{ steps.rotating-seed.outputs.seed }} \
+            --tb=short \
+            -q \
+            --junitxml=artifacts/pollution-guard/${{ matrix.slice }}-rotating-${{ steps.rotating-seed.outputs.seed }}.xml
+          rc=$?
+          echo "rc=$rc" >> $GITHUB_OUTPUT
+          echo "seed=${{ steps.rotating-seed.outputs.seed }}" >> $GITHUB_OUTPUT
+          exit 0
         env:
           PYTHONPATH: .:aragora-debate/src
+
+      - name: Extract failing node IDs from JUnit XML
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import glob
+          import json
+          import os
+          from pathlib import Path
+          from xml.etree import ElementTree as ET
+
+          out_dir = Path("artifacts/pollution-guard")
+          out_dir.mkdir(parents=True, exist_ok=True)
+
+          failing = []
+          for xml_path in sorted(glob.glob(str(out_dir / "*.xml"))):
+              name = os.path.basename(xml_path)
+              # File name pattern: <slice>-<kind>-<seed>.xml
+              try:
+                  slice_, kind, seed_ext = name.rsplit(".", 1)[0].split("-", 2)
+              except ValueError:
+                  slice_, kind, seed_ext = name, "unknown", "unknown"
+              try:
+                  root = ET.parse(xml_path).getroot()
+              except ET.ParseError:
+                  continue
+              for tc in root.iter("testcase"):
+                  if tc.find("failure") is None and tc.find("error") is None:
+                      continue
+                  classname = tc.get("classname", "")
+                  testname = tc.get("name", "")
+                  # JUnit classname is the dotted MODULE path plus optional
+                  # CLASS segments (tests.foo.test_mod.TestBar): a blind
+                  # dot->slash replace yields invalid IDs for class-based
+                  # tests. Find the longest prefix that is a real module file;
+                  # remaining segments are class names.
+                  node_id = testname
+                  if classname:
+                      parts = classname.split(".")
+                      node_id = f"{classname.replace('.', '/')}.py::{testname}"
+                      for i in range(len(parts), 0, -1):
+                          candidate = "/".join(parts[:i]) + ".py"
+                          if Path(candidate).exists():
+                              node_id = "::".join([candidate, *parts[i:], testname])
+                              break
+                  failing.append(
+                      {
+                          "slice": slice_,
+                          "kind": kind,
+                          "seed": seed_ext,
+                          "node_id": node_id,
+                      }
+                  )
+
+          summary_path = out_dir / "failing_nodes.json"
+          summary_path.write_text(json.dumps(failing, indent=2))
+          print(f"failing_nodes count={len(failing)} -> {summary_path}")
+          PY
+
+      - name: Upload pollution-guard artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pollution-guard-${{ matrix.slice }}-${{ github.run_number }}-${{ github.run_attempt }}
+          path: artifacts/pollution-guard/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Fail job if any seed failed
+        shell: bash
+        run: |
+          fixed_rc="${{ steps.fixed-seed-run.outputs.rc }}"
+          rotating_rc="${{ steps.rotating-seed-run.outputs.rc }}"
+          echo "fixed seed=${{ matrix.fixed_seed }} rc=$fixed_rc"
+          echo "rotating seed=${{ steps.rotating-seed.outputs.seed }} rc=$rotating_rc"
+          if [[ "$fixed_rc" != "0" || "$rotating_rc" != "0" ]]; then
+            echo "::error::Randomized pollution guard slice ${{ matrix.slice }} failed. Failing node IDs uploaded to pollution-guard-${{ matrix.slice }}-${{ github.run_number }}-${{ github.run_attempt }}."
+            exit 1
+          fi
 
   golden-paths:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
@@ -1671,7 +1801,7 @@ jobs:
           retention-days: 14
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v7
         with:
           files: ./coverage.xml
           fail_ci_if_error: false
@@ -1920,9 +2050,9 @@ jobs:
           bash scripts/ci_install_project.sh --extras dev,test
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          node-version: '24.18.0'
           cache: 'npm'
           cache-dependency-path: aragora/live/package-lock.json
 
@@ -2060,9 +2190,9 @@ jobs:
 
       - name: Set up Node.js
         if: steps.scope.outputs.frontend == 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          node-version: '24.18.0'
           cache: 'npm'
           cache-dependency-path: aragora/live/package-lock.json
 
@@ -2251,7 +2381,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           bash scripts/ci_install_project.sh --extras dev
-          python -m pip install alembic psycopg2-binary asyncpg
+          # SQLAlchemy 2.1 no longer installs greenlet by default; the async
+          # Alembic env needs it, so request the asyncio extra explicitly.
+          python -m pip install alembic psycopg2-binary asyncpg "sqlalchemy[asyncio]"
 
       - name: Verify migration files
         run: |
@@ -2268,6 +2400,13 @@ jobs:
           echo "Running migrations to head..."
           alembic upgrade head
           echo "✓ Migrations completed successfully"
+        env:
+          DATABASE_URL: postgresql://aragora:aragora@localhost:5432/aragora_test
+
+      - name: Run Aragora runtime migrations
+        run: |
+          python -m aragora.migrations upgrade --database-url "$DATABASE_URL"
+          python -m aragora.migrations status
         env:
           DATABASE_URL: postgresql://aragora:aragora@localhost:5432/aragora_test
 

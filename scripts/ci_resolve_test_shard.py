@@ -8,13 +8,13 @@ express purely in YAML. Stacking many ``--ignore-glob`` patterns also
 leaves the resulting argv hard to audit at a glance.
 
 This helper translates a logical shard name (``handlers-amk-no-features``,
-``debate-am`` and friends) into a concrete list of test files / dirs that
+``debate-1`` and friends) into a concrete list of test files / dirs that
 pytest can be invoked with directly, leaving collection itself simple,
 deterministic, and easy to verify locally.
 
 Usage::
 
-    python3 scripts/ci_resolve_test_shard.py debate-am
+    python3 scripts/ci_resolve_test_shard.py debate-1
     python3 scripts/ci_resolve_test_shard.py handlers-lz --check
 
 Each shard prints a single line with the test paths to stdout. The
@@ -76,32 +76,61 @@ def _file_letter(name: str) -> str:
 # Per-shard resolvers
 # ---------------------------------------------------------------------------
 
+# Debate shards: four contiguous ranges over the sorted top-level test files
+# of tests/debate/, plus all subdirectories (which ride with the first range
+# in ``debate-phases``). Boundaries were sized from the 2026-07-15 saturated
+# run (debate-am 25:16 pytest / 28:15 job, cancelled at 30:00 on main): each
+# range estimates ~11.5 min of pytest wall clock on ubuntu-latest ``-n auto``,
+# ~15 min per job including setup. When a debate shard saturates again, re-run
+# the sizing (test count per file x measured s/test) and move these boundaries
+# rather than adding per-file exception sets.
+_DEBATE_FILE_BOUNDARIES = (
+    "test_checkpoint_memory.py",  # debate-phases | debate-1
+    "test_event_emission.py",  # debate-1 | debate-2
+    "test_outcome_context.py",  # debate-2 | debate-3
+)
+
 
 def _under(parent: Path, names: Iterable[str]) -> list[str]:
     return [str((parent / name).relative_to(REPO_ROOT)) for name in names]
 
 
-def shard_debate_am() -> list[str]:
-    """Top-level debate test files starting a-m, no subdir tests."""
+def _debate_file_range(index: int) -> list[str]:
+    """Top-level tests/debate files in half-open boundary range ``index``.
+
+    Range 0 is everything before the first boundary; range 3 is everything
+    from the last boundary onward. Boundary files belong to the range they
+    open (half-open intervals), so every file lands in exactly one range.
+    """
     parent = TESTS_ROOT / "debate"
     _, files = _entries(parent)
-    in_am = _alpha_range("a", "m")
-    return _under(parent, [f for f in files if in_am(_file_letter(f))])
-
-
-def shard_debate_nz() -> list[str]:
-    """Top-level debate test files starting n-z, no subdir tests."""
-    parent = TESTS_ROOT / "debate"
-    _, files = _entries(parent)
-    in_nz = _alpha_range("n", "z")
-    return _under(parent, [f for f in files if in_nz(_file_letter(f))])
+    bounds = _DEBATE_FILE_BOUNDARIES
+    low = bounds[index - 1] if index > 0 else None
+    high = bounds[index] if index < len(bounds) else None
+    chosen = [f for f in files if (low is None or f >= low) and (high is None or f < high)]
+    return _under(parent, chosen)
 
 
 def shard_debate_phases() -> list[str]:
-    """All subdirectories under tests/debate/."""
+    """All tests/debate subdirectories plus the first top-level file range."""
     parent = TESTS_ROOT / "debate"
     subdirs, _ = _entries(parent)
-    return _under(parent, subdirs)
+    return _under(parent, subdirs) + _debate_file_range(0)
+
+
+def shard_debate_1() -> list[str]:
+    """Second range of top-level tests/debate files."""
+    return _debate_file_range(1)
+
+
+def shard_debate_2() -> list[str]:
+    """Third range of top-level tests/debate files."""
+    return _debate_file_range(2)
+
+
+def shard_debate_3() -> list[str]:
+    """Fourth range of top-level tests/debate files."""
+    return _debate_file_range(3)
 
 
 def _server_handlers_root() -> Path:
@@ -167,9 +196,10 @@ def shard_handlers_lz() -> list[str]:
 
 
 SHARDS: dict[str, Callable[[], list[str]]] = {
-    "debate-am": shard_debate_am,
-    "debate-nz": shard_debate_nz,
     "debate-phases": shard_debate_phases,
+    "debate-1": shard_debate_1,
+    "debate-2": shard_debate_2,
+    "debate-3": shard_debate_3,
     "server-handlers-am": shard_server_handlers_am,
     "server-handlers-nz": shard_server_handlers_nz,
     "server-rest": shard_server_rest,

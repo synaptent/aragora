@@ -7,18 +7,22 @@ Tests SLO definitions, compliance calculations, and alerting.
 from __future__ import annotations
 
 from datetime import datetime, timezone, timedelta
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 import os
 
 import pytest
 
+from aragora.observability import slo as slo_module
 from aragora.observability.slo import (
     DEFAULT_AVAILABILITY_TARGET,
     DEFAULT_DEBATE_SUCCESS_TARGET,
     DEFAULT_LATENCY_P99_MS,
+    SLOBreach,
     SLOResult,
     SLOStatus,
     SLOTarget,
+    create_notification_callback,
     get_slo_targets,
     _calculate_error_budget,
 )
@@ -297,3 +301,84 @@ class TestCalculateErrorBudget:
 
         # Budget is exhausted (clamped to 0, never negative)
         assert remaining == 0
+
+
+class _RecordingNotificationSink:
+    def __init__(self) -> None:
+        self.breaches: list[SLOBreach] = []
+
+    async def notify(self, breach: SLOBreach) -> None:
+        self.breaches.append(breach)
+
+
+def _make_breach() -> SLOBreach:
+    return SLOBreach(
+        slo_name="API Availability",
+        severity="critical",
+        current_value=0.975,
+        target_value=0.999,
+        error_budget_remaining=12.3,
+        burn_rate=4.56,
+        message="Availability below target",
+    )
+
+
+class TestNotificationCallback:
+    """Tests for the observability-owned SLO notification contract."""
+
+    @pytest.fixture(autouse=True)
+    def _reset_notification_provider(self):
+        register = getattr(slo_module, "register_slo_notification_sink_provider", None)
+        if register is not None:
+            register(None)
+        yield
+        if register is not None:
+            register(None)
+
+    def test_slo_module_has_no_control_plane_imports(self) -> None:
+        source = Path(slo_module.__file__).read_text(encoding="utf-8")
+
+        assert "aragora.control_plane.channels" not in source
+        assert "aragora.control_plane.notifications" not in source
+
+    @pytest.mark.asyncio
+    async def test_resolves_registered_provider_on_every_invocation(self) -> None:
+        first_sink = _RecordingNotificationSink()
+        second_sink = _RecordingNotificationSink()
+        sinks = iter((first_sink, second_sink))
+        provider_calls = 0
+
+        def provider():
+            nonlocal provider_calls
+            provider_calls += 1
+            return next(sinks)
+
+        slo_module.register_slo_notification_sink_provider(provider)
+        callback = create_notification_callback()
+        breach = _make_breach()
+
+        await callback(breach)
+        await callback(breach)
+
+        assert provider_calls == 2
+        assert first_sink.breaches == [breach]
+        assert second_sink.breaches == [breach]
+
+    @pytest.mark.asyncio
+    async def test_missing_provider_is_fail_soft(self, caplog: pytest.LogCaptureFixture) -> None:
+        slo_module.register_slo_notification_sink_provider(None)
+
+        await create_notification_callback()(_make_breach())
+
+        assert "Notification dispatcher not configured" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_provider_failure_is_fail_soft(self, caplog: pytest.LogCaptureFixture) -> None:
+        def failing_provider():
+            raise RuntimeError("dispatcher unavailable")
+
+        slo_module.register_slo_notification_sink_provider(failing_provider)
+
+        await create_notification_callback()(_make_breach())
+
+        assert "Failed to dispatch notification" in caplog.text

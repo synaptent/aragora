@@ -114,4 +114,3 @@ describe('NomicMetricsDashboard autopilot panel', () => {
     expect(screen.getByText('error: autopilot_script_missing')).toBeInTheDocument();
   });
 });
-

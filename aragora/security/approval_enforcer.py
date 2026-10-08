@@ -31,7 +31,13 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from typing import Any, Protocol
+
+from aragora.security.approval_mappings import (
+    PolicyActionType,
+    resolve_policy_action_type,
+    unknown_action_type_reason,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -105,12 +111,323 @@ class EnforcementDecision:
         }
 
 
+@dataclass(frozen=True)
+class PolicyEvaluation:
+    """Layer-neutral result returned by a registered policy adapter."""
+
+    result: EnforcementResult
+    reason: str
+    matched_rule: str | None = None
+
+
+@dataclass(frozen=True)
+class ApprovalRoute:
+    """Layer-neutral approval request metadata."""
+
+    approval_request_id: str
+    category: str
+    priority: str
+
+
+class PolicyEvaluationAdapter(Protocol):
+    """Adapter contract for evaluating higher-layer policy objects."""
+
+    def evaluate(self, policy: Any, request: EnforcementRequest) -> PolicyEvaluation:
+        """Evaluate a policy request."""
+        ...
+
+    def requires_approval(self, policy: Any, request: EnforcementRequest) -> bool:
+        """Return whether the policy requires approval."""
+        ...
+
+
+class ApprovalWorkflowAdapter(Protocol):
+    """Adapter contract for higher-layer approval workflow objects."""
+
+    async def request_approval(
+        self,
+        workflow: Any,
+        request: EnforcementRequest,
+        reason: str,
+    ) -> ApprovalRoute:
+        """Create an approval request."""
+        ...
+
+    async def wait_for_approval(
+        self,
+        workflow: Any,
+        approval_request_id: str,
+        timeout: float | None,
+    ) -> bool:
+        """Wait for and normalize an approval decision."""
+        ...
+
+    async def is_approval_valid(self, workflow: Any, approval_id: str) -> bool:
+        """Check whether an approval exists, is approved, and is unexpired."""
+        ...
+
+
+@dataclass(frozen=True)
+class PolicyActionRequest:
+    """Layer-neutral policy request compatible with action policy engines."""
+
+    action_type: PolicyActionType
+    user_id: str
+    session_id: str
+    workspace_id: str
+    path: str | None
+    command: str | None
+    url: str | None
+    roles: list[str]
+    tenant_id: str | None
+
+
+class _StructuralPolicyEvaluationAdapter:
+    """Evaluate policy objects through their existing structural interface."""
+
+    @staticmethod
+    def _request(request: EnforcementRequest) -> PolicyActionRequest | None:
+        action_type = resolve_policy_action_type(request.action_type)
+        if action_type is None:
+            return None
+        return PolicyActionRequest(
+            action_type=action_type,
+            user_id=request.actor_id,
+            session_id=request.session_id,
+            workspace_id=request.workspace_id,
+            path=request.details.get("path"),
+            command=request.details.get("command"),
+            url=request.details.get("url"),
+            roles=request.roles,
+            tenant_id=request.tenant_id,
+        )
+
+    def evaluate(self, policy: Any, request: EnforcementRequest) -> PolicyEvaluation:
+        policy_request = self._request(request)
+        if policy_request is None:
+            return PolicyEvaluation(
+                result=EnforcementResult.ALLOWED,
+                reason=unknown_action_type_reason(request.action_type),
+            )
+
+        result = policy.evaluate(policy_request)
+        decision = getattr(result.decision, "value", result.decision)
+        if decision == "allow":
+            enforcement_result = EnforcementResult.ALLOWED
+        elif decision == "deny":
+            enforcement_result = EnforcementResult.DENIED
+        else:
+            enforcement_result = EnforcementResult.PENDING_APPROVAL
+        return PolicyEvaluation(
+            result=enforcement_result,
+            reason=result.reason,
+            matched_rule=result.matched_rule.name if result.matched_rule else None,
+        )
+
+    def requires_approval(self, policy: Any, request: EnforcementRequest) -> bool:
+        policy_request = self._request(request)
+        if policy_request is None:
+            return False
+        result = policy.evaluate(policy_request)
+        return getattr(result.decision, "value", result.decision) == "require_approval"
+
+
+class ApprovalCapabilityUnavailable(LookupError):
+    """An approval workflow or adapter lacks what an approval operation needs.
+
+    The enforcer treats this as "not approved": routing leaves the decision
+    pending without an approval request, and waiting or token checks fail.
+    """
+
+
+def _callable_member(owner: Any, name: str, kind: str) -> Any:
+    member = getattr(owner, name, None)
+    if not callable(member):
+        raise ApprovalCapabilityUnavailable(f"approval {kind} has no callable {name}()")
+    return member
+
+
+def _route_label(value: Any) -> str:
+    return str(getattr(value, "value", value))
+
+
+@dataclass(frozen=True)
+class ExternalApprovalWorkflowAdapter:
+    """Adapt an approval workflow whose vocabulary is supplied explicitly.
+
+    Pass an instance as ``UnifiedApprovalEnforcer(approval_workflow_adapter=...)``
+    (or to :func:`register_approval_workflow_adapter`) for a workflow that does
+    not expose the ``approval_*`` metadata attributes. Each operation needs
+    only its own workflow method and fields:
+
+    - routing calls ``workflow.request_approval(context=..., priority=...)``
+      and needs ``context_factory`` (called with the ``task_id``,
+      ``action_type``, ``action_details``, ``category``, ``reason``,
+      ``risk_level``, ``user_id`` and ``tenant_id`` keywords), ``priority``
+      and ``unknown_category``; ``category_map`` maps
+      ``EnforcementRequest.source`` to a category. The returned request must
+      have an ``id``.
+    - waiting calls ``workflow.wait_for_decision(request_id, timeout=...)``
+      and needs ``approved_status``.
+    - token checks call ``workflow.get_request(approval_id)`` and need
+      ``approved_status``; the returned record must expose ``status`` and
+      ``is_expired()``.
+
+    Any other status counts as not approved. A missing workflow method,
+    adapter field or record member raises :class:`ApprovalCapabilityUnavailable`.
+    """
+
+    approved_status: Any = None
+    context_factory: Any = None
+    priority: Any = None
+    category_map: dict[str, Any] = field(default_factory=dict)
+    unknown_category: Any = None
+
+    def _require_approved_status(self, operation: str) -> None:
+        if self.approved_status is None:
+            raise ApprovalCapabilityUnavailable(f"{operation} needs approved_status")
+
+    async def request_approval(
+        self,
+        workflow: Any,
+        request: EnforcementRequest,
+        reason: str,
+    ) -> ApprovalRoute:
+        submit = _callable_member(workflow, "request_approval", "workflow")
+        if self.context_factory is None or self.priority is None or self.unknown_category is None:
+            raise ApprovalCapabilityUnavailable(
+                "request_approval needs context_factory, priority and unknown_category"
+            )
+        category = (self.category_map or {}).get(request.source, self.unknown_category)
+        context = self.context_factory(
+            task_id=request.session_id or str(uuid.uuid4()),
+            action_type=request.action_type,
+            action_details=request.details,
+            category=category,
+            reason=reason,
+            risk_level=request.details.get("risk_level", "medium"),
+            user_id=request.actor_id,
+            tenant_id=request.tenant_id,
+        )
+        approval_request = await submit(context=context, priority=self.priority)
+        approval_request_id = getattr(approval_request, "id", None)
+        if approval_request_id is None:
+            raise ApprovalCapabilityUnavailable("approval workflow returned a request without id")
+        return ApprovalRoute(
+            approval_request_id=approval_request_id,
+            category=_route_label(category),
+            priority=_route_label(self.priority),
+        )
+
+    async def wait_for_approval(
+        self,
+        workflow: Any,
+        approval_request_id: str,
+        timeout: float | None,
+    ) -> bool:
+        wait = _callable_member(workflow, "wait_for_decision", "workflow")
+        self._require_approved_status("wait_for_approval")
+        status = await wait(approval_request_id, timeout=timeout)
+        return bool(status == self.approved_status)
+
+    async def is_approval_valid(self, workflow: Any, approval_id: str) -> bool:
+        lookup = _callable_member(workflow, "get_request", "workflow")
+        self._require_approved_status("is_approval_valid")
+        record = await lookup(approval_id)
+        if not record:
+            return False
+        is_expired = _callable_member(record, "is_expired", "request record")
+        status = getattr(record, "status", None)
+        return bool(status == self.approved_status and not is_expired())
+
+
+class _StructuralApprovalWorkflowAdapter:
+    """Read adapter vocabulary from ``approval_*`` workflow attributes.
+
+    Only the attributes an operation needs are required, so a workflow that
+    supports waiting or token lookup does not also have to describe routing.
+    """
+
+    _ROUTING_METADATA = {
+        "context_factory": "approval_context_type",
+        "priority": "approval_priority_high",
+        "category_map": "approval_category_map",
+        "unknown_category": "approval_category_unknown",
+    }
+    _DECISION_METADATA = {"approved_status": "approval_status_approved"}
+
+    @staticmethod
+    def _adapter(workflow: Any, metadata: dict[str, str]) -> ExternalApprovalWorkflowAdapter:
+        missing = [attr for attr in metadata.values() if not hasattr(workflow, attr)]
+        if missing:
+            raise ApprovalCapabilityUnavailable(
+                f"approval workflow lacks metadata: {', '.join(missing)}"
+            )
+        values = {name: getattr(workflow, attr) for name, attr in metadata.items()}
+        return ExternalApprovalWorkflowAdapter(**values)
+
+    async def request_approval(
+        self,
+        workflow: Any,
+        request: EnforcementRequest,
+        reason: str,
+    ) -> ApprovalRoute:
+        adapter = self._adapter(workflow, self._ROUTING_METADATA)
+        return await adapter.request_approval(workflow, request, reason)
+
+    async def wait_for_approval(
+        self,
+        workflow: Any,
+        approval_request_id: str,
+        timeout: float | None,
+    ) -> bool:
+        adapter = self._adapter(workflow, self._DECISION_METADATA)
+        return await adapter.wait_for_approval(workflow, approval_request_id, timeout)
+
+    async def is_approval_valid(self, workflow: Any, approval_id: str) -> bool:
+        adapter = self._adapter(workflow, self._DECISION_METADATA)
+        return await adapter.is_approval_valid(workflow, approval_id)
+
+
+_structural_policy_adapter = _StructuralPolicyEvaluationAdapter()
+_structural_approval_adapter = _StructuralApprovalWorkflowAdapter()
+_policy_evaluation_adapter: PolicyEvaluationAdapter | None = None
+_approval_workflow_adapter: ApprovalWorkflowAdapter | None = None
+
+
+def _resolve_approval_workflow_adapter(
+    explicit: ApprovalWorkflowAdapter | None = None,
+) -> ApprovalWorkflowAdapter:
+    if explicit is not None:
+        return explicit
+    if _approval_workflow_adapter is not None:
+        return _approval_workflow_adapter
+    return _structural_approval_adapter
+
+
+def register_policy_evaluation_adapter(adapter: PolicyEvaluationAdapter | None) -> None:
+    """Register the concrete higher-layer policy adapter."""
+    global _policy_evaluation_adapter
+    _policy_evaluation_adapter = adapter
+
+
+def register_approval_workflow_adapter(adapter: ApprovalWorkflowAdapter | None) -> None:
+    """Register the concrete higher-layer approval workflow adapter."""
+    global _approval_workflow_adapter
+    _approval_workflow_adapter = adapter
+
+
 class UnifiedApprovalEnforcer:
     """Single enforcement path for gateway, device, and computer-use actions.
 
     Evaluates all sensitive actions against the OpenClaw policy engine and
     routes REQUIRE_APPROVAL decisions to the appropriate approval workflow.
     Emits structured audit events for every decision.
+
+    ``approval_workflow_adapter`` takes precedence over the adapter registered
+    with :func:`register_approval_workflow_adapter`; without either, the
+    workflow's ``approval_*`` attributes are used per operation. Workflows that
+    cannot be adapted fail closed.
     """
 
     def __init__(
@@ -118,9 +435,11 @@ class UnifiedApprovalEnforcer:
         policy: Any | None = None,
         approval_workflow: Any | None = None,
         audit_enabled: bool = True,
+        approval_workflow_adapter: ApprovalWorkflowAdapter | None = None,
     ) -> None:
         self._policy = policy
         self._approval_workflow = approval_workflow
+        self._approval_workflow_adapter = approval_workflow_adapter
         self._audit_enabled = audit_enabled
         self._decision_log: list[EnforcementDecision] = []
         self._max_log_size = 10_000
@@ -172,16 +491,14 @@ class UnifiedApprovalEnforcer:
         if not self._approval_workflow:
             return False
 
+        adapter = _resolve_approval_workflow_adapter(self._approval_workflow_adapter)
         try:
-            from aragora.computer_use.approval import ApprovalStatus
-        except ImportError:
+            wait = _callable_member(adapter, "wait_for_approval", "adapter")
+            approved = await wait(self._approval_workflow, approval_request_id, timeout)
+        except (ImportError, TypeError, ApprovalCapabilityUnavailable) as e:
+            logger.warning("Approval wait unavailable: %s", e)
             return False
-
-        status = await self._approval_workflow.wait_for_decision(
-            approval_request_id,
-            timeout=timeout,
-        )
-        return status == ApprovalStatus.APPROVED
+        return approved is True
 
     async def verify_not_bypassed(
         self,
@@ -320,78 +637,20 @@ class UnifiedApprovalEnforcer:
                 evaluation_time_ms=(time.time() - start) * 1000,
             )
 
+        adapter = _policy_evaluation_adapter or _structural_policy_adapter
+
         try:
-            from aragora.gateway.openclaw_policy import (
-                ActionRequest,
-                ActionType,
-                PolicyDecision,
-            )
-
-            # Map enforcement request to OpenClaw ActionRequest
-            action_type_map = {
-                "shell": ActionType.SHELL,
-                "file_read": ActionType.FILE_READ,
-                "file_write": ActionType.FILE_WRITE,
-                "file_delete": ActionType.FILE_DELETE,
-                "browser": ActionType.BROWSER,
-                "api": ActionType.API,
-                "screenshot": ActionType.SCREENSHOT,
-                "keyboard": ActionType.KEYBOARD,
-                "mouse": ActionType.MOUSE,
-            }
-
-            action_type = action_type_map.get(request.action_type)
-            if not action_type:
-                return EnforcementDecision(
-                    id=decision_id,
-                    result=EnforcementResult.ALLOWED,
-                    reason=f"Unknown action type '{request.action_type}'; not policy-controlled",
-                    request=request,
-                    evaluation_time_ms=(time.time() - start) * 1000,
-                )
-
-            policy_request = ActionRequest(
-                action_type=action_type,
-                user_id=request.actor_id,
-                session_id=request.session_id,
-                workspace_id=request.workspace_id,
-                path=request.details.get("path"),
-                command=request.details.get("command"),
-                url=request.details.get("url"),
-                roles=request.roles,
-                tenant_id=request.tenant_id,
-            )
-
-            result = self._policy.evaluate(policy_request)
+            result = adapter.evaluate(self._policy, request)
             eval_time = (time.time() - start) * 1000
 
-            if result.decision == PolicyDecision.ALLOW:
-                return EnforcementDecision(
-                    id=decision_id,
-                    result=EnforcementResult.ALLOWED,
-                    reason=result.reason,
-                    request=request,
-                    matched_rule=result.matched_rule.name if result.matched_rule else None,
-                    evaluation_time_ms=eval_time,
-                )
-            elif result.decision == PolicyDecision.DENY:
-                return EnforcementDecision(
-                    id=decision_id,
-                    result=EnforcementResult.DENIED,
-                    reason=result.reason,
-                    request=request,
-                    matched_rule=result.matched_rule.name if result.matched_rule else None,
-                    evaluation_time_ms=eval_time,
-                )
-            else:  # REQUIRE_APPROVAL
-                return EnforcementDecision(
-                    id=decision_id,
-                    result=EnforcementResult.PENDING_APPROVAL,
-                    reason=result.reason,
-                    request=request,
-                    matched_rule=result.matched_rule.name if result.matched_rule else None,
-                    evaluation_time_ms=eval_time,
-                )
+            return EnforcementDecision(
+                id=decision_id,
+                result=result.result,
+                reason=result.reason,
+                request=request,
+                matched_rule=result.matched_rule,
+                evaluation_time_ms=eval_time,
+            )
 
         except ImportError:
             logger.warning("OpenClaw policy module not available")
@@ -413,47 +672,36 @@ class UnifiedApprovalEnforcer:
             # No workflow configured - keep as pending
             return decision
 
+        adapter = _resolve_approval_workflow_adapter(self._approval_workflow_adapter)
         try:
-            from aragora.computer_use.approval import (
-                ApprovalCategory,
-                ApprovalContext,
-                ApprovalPriority,
+            submit = _callable_member(adapter, "request_approval", "adapter")
+            route = await submit(
+                self._approval_workflow,
+                request,
+                decision.reason,
             )
 
-            # Map source to category
-            category_map = {
-                "gateway": ApprovalCategory.SYSTEM_MODIFICATION,
-                "device": ApprovalCategory.EXTERNAL_SYSTEM,
-                "computer_use": ApprovalCategory.DESTRUCTIVE_ACTION,
-            }
-            category = category_map.get(request.source, ApprovalCategory.UNKNOWN)
+            # Read every route field before mutating the decision so a malformed
+            # route never publishes partial approval metadata.
+            try:
+                approval_request_id = route.approval_request_id
+                approval_context = {"category": route.category, "priority": route.priority}
+            except AttributeError as e:
+                logger.warning("Approval workflow adapter returned a malformed route: %s", e)
+                return decision
 
-            context = ApprovalContext(
-                task_id=request.session_id or str(uuid.uuid4()),
-                action_type=request.action_type,
-                action_details=request.details,
-                category=category,
-                reason=decision.reason,
-                risk_level=request.details.get("risk_level", "medium"),
-                user_id=request.actor_id,
-                tenant_id=request.tenant_id,
-            )
-
-            approval_request = await self._approval_workflow.request_approval(
-                context=context,
-                priority=ApprovalPriority.HIGH,
-            )
-
-            decision.approval_request_id = approval_request.id
-            decision.metadata["approval_context"] = {
-                "category": category.value,
-                "priority": "high",
-            }
+            decision.approval_request_id = approval_request_id
+            decision.metadata["approval_context"] = approval_context
 
             return decision
 
         except ImportError:
             logger.warning("Computer-use approval module not available")
+            return decision
+        except (TypeError, ApprovalCapabilityUnavailable) as e:
+            # TypeError here means an adapter or workflow callable has the wrong
+            # signature; leave the decision pending instead of failing open or crashing.
+            logger.warning("Approval workflow adapter not available: %s", e)
             return decision
 
     async def _action_requires_approval(self, request: EnforcementRequest) -> bool:
@@ -461,43 +709,10 @@ class UnifiedApprovalEnforcer:
         if not self._policy:
             return False
 
+        adapter = _policy_evaluation_adapter or _structural_policy_adapter
+
         try:
-            from aragora.gateway.openclaw_policy import (
-                ActionRequest,
-                ActionType,
-                PolicyDecision,
-            )
-
-            action_type_map = {
-                "shell": ActionType.SHELL,
-                "file_read": ActionType.FILE_READ,
-                "file_write": ActionType.FILE_WRITE,
-                "file_delete": ActionType.FILE_DELETE,
-                "browser": ActionType.BROWSER,
-                "api": ActionType.API,
-                "screenshot": ActionType.SCREENSHOT,
-                "keyboard": ActionType.KEYBOARD,
-                "mouse": ActionType.MOUSE,
-            }
-
-            action_type = action_type_map.get(request.action_type)
-            if not action_type:
-                return False
-
-            policy_request = ActionRequest(
-                action_type=action_type,
-                user_id=request.actor_id,
-                session_id=request.session_id,
-                workspace_id=request.workspace_id,
-                path=request.details.get("path"),
-                command=request.details.get("command"),
-                url=request.details.get("url"),
-                roles=request.roles,
-                tenant_id=request.tenant_id,
-            )
-
-            result = self._policy.evaluate(policy_request)
-            return result.decision == PolicyDecision.REQUIRE_APPROVAL
+            return adapter.requires_approval(self._policy, request)
 
         except ImportError:
             return False
@@ -510,16 +725,13 @@ class UnifiedApprovalEnforcer:
         if not self._approval_workflow:
             return False
 
+        adapter = _resolve_approval_workflow_adapter(self._approval_workflow_adapter)
         try:
-            request = await self._approval_workflow.get_request(approval_id)
-            if not request:
-                return False
-
-            from aragora.computer_use.approval import ApprovalStatus
-
-            return request.status == ApprovalStatus.APPROVED and not request.is_expired()
-        except (ImportError, AttributeError):
+            check = _callable_member(adapter, "is_approval_valid", "adapter")
+            valid = await check(self._approval_workflow, approval_id)
+        except (ImportError, AttributeError, TypeError, ApprovalCapabilityUnavailable):
             return False
+        return valid is True
 
     async def _record_decision(self, decision: EnforcementDecision) -> None:
         """Record decision in log and emit audit event."""
@@ -588,7 +800,15 @@ __all__ = [
     "EnforcementResult",
     "EnforcementRequest",
     "EnforcementDecision",
+    "PolicyEvaluation",
+    "ApprovalRoute",
+    "PolicyEvaluationAdapter",
+    "ApprovalWorkflowAdapter",
+    "ApprovalCapabilityUnavailable",
+    "ExternalApprovalWorkflowAdapter",
     "UnifiedApprovalEnforcer",
+    "register_policy_evaluation_adapter",
+    "register_approval_workflow_adapter",
     "enforce_action",
     "get_approval_enforcer",
     "set_approval_enforcer",

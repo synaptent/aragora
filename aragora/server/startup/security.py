@@ -7,7 +7,7 @@ and decision router initialization.
 """
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 from aragora.exceptions import REDIS_CONNECTION_ERRORS
 
@@ -45,6 +45,8 @@ def _get_degraded_status() -> dict[str, Any]:
         "gauntlet_worker": False,
         "settlement_review_scheduler": False,
         "redis_state_backend": False,
+        "security_edge_adapters": False,
+        "billing_edge_adapters": False,
         "key_rotation_scheduler": False,
         "access_review_scheduler": False,
         "rbac_distributed_cache": False,
@@ -52,6 +54,21 @@ def _get_degraded_status() -> dict[str, Any]:
         "graphql": False,
         "backup_scheduler": False,
     }
+
+
+def init_security_edge_adapters(*, strict: bool = False) -> bool:
+    """Register higher-layer providers consumed by the security package."""
+    try:
+        from aragora.ops.security_edge_adapters import register_security_edge_adapters
+
+        register_security_edge_adapters()
+        logger.info("Security edge adapters registered")
+        return True
+    except (ImportError, RuntimeError, ValueError, TypeError) as e:
+        if strict:
+            raise RuntimeError("Security edge adapter registration failed") from e
+        logger.warning("Security edge adapter registration failed: %s", e)
+        return False
 
 
 async def init_deployment_validation() -> dict:
@@ -865,7 +882,7 @@ async def init_mfa_drift_monitor() -> bool:
                 def _notify_violation(report) -> None:
                     """Forward MFA drift violation to the notification service."""
                     try:
-                        notif_svc.send(
+                        cast(Any, notif_svc).send(
                             channel="security",
                             subject="MFA policy drift detected",
                             body=report.summary,

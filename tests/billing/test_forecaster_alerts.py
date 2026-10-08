@@ -47,7 +47,7 @@ def _make_tracker(monthly_limit=100.0, current_spend=50.0, daily_costs=None):
     # Mock usage buffer for _get_daily_costs
     tracker._buffer_lock = AsyncMock()
     tracker._buffer_lock.__aenter__ = AsyncMock()
-    tracker._buffer_lock.__aexit__ = AsyncMock()
+    tracker._buffer_lock.__aexit__ = AsyncMock(return_value=False)
     tracker._usage_buffer = []
 
     return tracker
@@ -261,27 +261,14 @@ class TestRunBudgetRunwayCheck:
             forecaster.check_budget_runway = AsyncMock(return_value=runway_result)
 
             with patch(
-                "aragora.billing.forecaster.run_budget_runway_check.__module__",
-                new="aragora.billing.forecaster",
-            ):
-                # Patch the notification import inside run_budget_runway_check
-                mock_service = MagicMock()
-                mock_service.notify = AsyncMock()
-                with patch.dict(
-                    "sys.modules",
-                    {
-                        "aragora.notifications.service": MagicMock(
-                            get_notification_service=MagicMock(return_value=mock_service)
-                        ),
-                        "aragora.notifications.models": MagicMock(
-                            Notification=MagicMock(),
-                        ),
-                    },
-                ):
-                    results = await run_budget_runway_check(workspace_ids=["ws-001"])
+                "aragora.billing.forecaster.notify_budget_runway",
+                new_callable=AsyncMock,
+            ) as mock_notify:
+                results = await run_budget_runway_check(workspace_ids=["ws-001"])
 
             assert len(results) == 1
             assert results[0].alert_level == AlertSeverity.WARNING
+            mock_notify.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_handles_workspace_error(self):
@@ -322,13 +309,12 @@ class TestRunBudgetRunwayCheck:
             )
             forecaster.check_budget_runway = AsyncMock(return_value=runway_result)
 
-            mock_notify = MagicMock()
             with patch(
-                "aragora.notifications.service.get_notification_service",
-                return_value=mock_notify,
-            ):
+                "aragora.billing.forecaster.notify_budget_runway",
+                new_callable=AsyncMock,
+            ) as mock_notify:
                 results = await run_budget_runway_check(workspace_ids=["ws-001"])
 
             assert len(results) == 1
             # notify should NOT have been called since alert_level is INFO
-            mock_notify.notify.assert_not_called()
+            mock_notify.assert_not_awaited()

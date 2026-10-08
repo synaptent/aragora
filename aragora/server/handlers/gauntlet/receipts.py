@@ -398,7 +398,7 @@ class GauntletReceiptsMixin:
             return error_response("Invalid signed receipt format", 400)
 
         # Initialize verification result
-        verification_result = {
+        verification_result: dict[str, Any] = {
             "gauntlet_id": gauntlet_id,
             "receipt_id": signed_receipt.receipt_data.get("receipt_id"),
             "verified": False,

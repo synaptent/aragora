@@ -1,4 +1,9 @@
-"""Agent handlers - agent management, calibration, probes, config, feedback, relationships, and leaderboard."""
+"""Agent management, calibration, probes, config, feedback and relationships.
+
+Additional modules (import directly, without expanding eager package exports):
+agent_bridge, external_agents, feedback_hub, harnesses, introspection, laboratory,
+persona, routing, selection and verticals.
+"""
 
 from .agents import AgentsHandler
 from .calibration import CalibrationHandler

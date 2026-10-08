@@ -1011,7 +1011,7 @@ def init_handler_stores(nomic_dir: Path) -> dict:
 
     # DocumentStore for file uploads
     try:
-        from aragora.server.documents import DocumentStore
+        from aragora.documents.parsing import DocumentStore
 
         doc_dir = nomic_dir / "documents"
         stores["document_store"] = DocumentStore(doc_dir)
@@ -1068,8 +1068,7 @@ def init_handler_stores(nomic_dir: Path) -> dict:
     # UserStore for user/org persistence
     # Uses PostgreSQL in production for distributed deployments
     try:
-        from aragora.storage import UserStore
-        from aragora.storage.user_store import PostgresUserStore
+        from aragora.storage.user_store import PostgresUserStore, UserStore
         from aragora.storage.connection_factory import create_persistent_store
 
         stores["user_store"] = create_persistent_store(
@@ -1088,10 +1087,10 @@ def init_handler_stores(nomic_dir: Path) -> dict:
         logger.error("[init] UserStore initialization failed: %s", e)
         # Try SQLite fallback
         try:
-            from aragora.storage import UserStore
+            from aragora.storage.user_store import UserStore as SQLiteUserStore
 
             user_db_path = nomic_dir / "users.db"
-            stores["user_store"] = UserStore(user_db_path)
+            stores["user_store"] = SQLiteUserStore(user_db_path)
             logger.warning("[init] UserStore fell back to SQLite at %s", user_db_path)
         except (OSError, PermissionError, sqlite3.Error) as fallback_error:
             # SQLite fallback also failed - server continues without user store
@@ -1279,7 +1278,7 @@ def init_postgres_stores_sync() -> dict[str, bool]:
         return asyncio.run(init_postgres_stores())
 
 
-async def upgrade_handler_stores(nomic_dir: Path) -> dict[str, str]:
+async def upgrade_handler_stores(nomic_dir: Path | None) -> dict[str, str]:
     """Upgrade handler stores from SQLite to PostgreSQL using the shared pool.
 
     Called during server ``start()`` AFTER ``run_startup_sequence()`` creates

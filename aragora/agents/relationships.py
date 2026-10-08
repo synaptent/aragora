@@ -94,7 +94,7 @@ class RelationshipTracker(BaseRelationshipTracker):
         winner: str | None,
         votes: dict[str, str],
         critiques: list[dict],
-        position_changes: dict[str, list[str] | None] = None,
+        position_changes: dict[str, list[str] | None] | None = None,
     ) -> None:
         """
         Update all relationship metrics from a completed debate.

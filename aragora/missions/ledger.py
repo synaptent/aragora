@@ -87,6 +87,12 @@ class _LedgerData:
     # records what it found; only the orchestrator+gate turn a note into executable
     # work, so there is no path for ledger JSON to inject a Feature. unit -> notes.
     discoveries: dict[str, list[str]] = field(default_factory=dict)
+    # Branches a worker MATERIALIZED at claim time (#8773). unit -> branch name.
+    # Recorded only AFTER the ref actually exists (never fabricated), so reconcile
+    # can safely fold it into ``metadata.branch``. This does not weaken the
+    # propose/accept boundary: a branch name only *points* the merge gate at a
+    # ref that must still pass rev-parse, the foreign-commit guard, and quorum.
+    branches: dict[str, str] = field(default_factory=dict)
 
 
 class Ledger:
@@ -344,6 +350,29 @@ class Ledger:
         """unit -> discovered notes (reconcile folds these into feature notes)."""
         return {u: list(notes) for u, notes in self._load().discoveries.items()}
 
+    # ---- materialized branches (claim-time transition record, #8773) -----------
+
+    def record_branch(self, unit: str, branch: str) -> None:
+        """Durably record the branch a worker materialized for ``unit``.
+
+        Contract: callers record only after the ref actually exists (the #8766
+        round-1 lesson — never fabricate a branch nobody created). The record
+        makes a crash-retried claim adopt the same branch instead of spawning
+        suffix litter, and lets reconcile fold ``metadata.branch`` into state.
+        """
+        with self._locked():
+            data = self._load()
+            data.branches[unit] = branch
+            self._save(data)
+
+    def materialized_branch(self, unit: str) -> str | None:
+        """The branch previously materialized for ``unit``, or None."""
+        return self._load().branches.get(unit)
+
+    def materialized_branches(self) -> dict[str, str]:
+        """unit -> materialized branch (reconcile folds these into metadata)."""
+        return dict(self._load().branches)
+
     def prune(self, *, now: float | None = None) -> tuple[int, int]:
         """Evaporate expired leases + constraints. Returns (leases, constraints) dropped."""
         now = time.time() if now is None else now
@@ -390,6 +419,7 @@ class Ledger:
             attempts=dict(raw.get("attempts", {})),
             done=set(raw.get("done", [])),
             discoveries={u: list(notes) for u, notes in raw.get("discoveries", {}).items()},
+            branches={u: str(b) for u, b in raw.get("branches", {}).items()},
         )
 
     def _save(self, data: _LedgerData) -> None:
@@ -399,6 +429,7 @@ class Ledger:
             "attempts": data.attempts,
             "done": sorted(data.done),
             "discoveries": data.discoveries,
+            "branches": data.branches,
         }
         self.path.parent.mkdir(parents=True, exist_ok=True)
         fd, tmp = tempfile.mkstemp(
@@ -423,12 +454,17 @@ def select_for(
     *,
     ttl: float = DEFAULT_LEASE_TTL,
     now: float | None = None,
+    exclude: set[str] | None = None,
 ) -> str | None:
     """Stigmergic pickup: atomic-claim the first available feature for ``worker_id``.
 
-    "Available" = pending or orphaned in-progress, known preconditions met, not done
-    (in state OR the ledger), not parked (active constraint), and not claimed by
-    another worker.
+    "Available" = pending, awaiting a worker claim (``Status.AWAITING_CLAIM`` —
+    e.g. a decomposed intake child with no branch yet, #8758), or orphaned
+    in-progress; known preconditions met; not done (in state OR the ledger); not
+    parked (active constraint); and not claimed by another worker.
+    ``exclude`` skips units this worker already yielded back this run (e.g. an
+    AWAITING_CLAIM child it cannot materialize a branch for, #8773) so the loop
+    cannot livelock re-claiming its own hand-back.
     Returns the claimed feature id, or None if nothing is available to *this* worker.
 
     This is how non-overlapping fronts emerge with no central dispatcher: every
@@ -446,11 +482,16 @@ def select_for(
     done = {f.id for f in state.features if f.status == Status.COMPLETED} | ledger.done_units()
 
     for feat in state.features:
-        # PENDING is normal swarm work. IN_PROGRESS is also claimable here because
-        # run_worker holds the shared side of the owner fence; if an orchestrator
-        # were alive its exclusive lock would block the swarm before selection.
-        # That lets swarm-only recovery reclaim crash-orphaned checkpointed units.
-        if feat.status not in {Status.PENDING, Status.IN_PROGRESS} or feat.id in done:
+        # PENDING is normal swarm work. AWAITING_CLAIM is work whose whole point
+        # is to be claimed here (a decomposed child waiting for a worker/branch).
+        # IN_PROGRESS is also claimable because run_worker holds the shared side
+        # of the owner fence; if an orchestrator were alive its exclusive lock
+        # would block the swarm before selection. That lets swarm-only recovery
+        # reclaim crash-orphaned checkpointed units.
+        claimable = {Status.PENDING, Status.AWAITING_CLAIM, Status.IN_PROGRESS}
+        if feat.status not in claimable or feat.id in done:
+            continue
+        if exclude and feat.id in exclude:
             continue
         if not preconditions_met(feat.preconditions, done):
             continue

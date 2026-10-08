@@ -61,6 +61,12 @@ PERM_CONNECTOR_ROLLBACK = _permission(
     "Rollback Connectors",
     "Revert failed connector operations",
 )
+PERM_CONNECTOR_CONFIGURE = _permission(
+    ResourceType.CONNECTOR,
+    Action.CONFIGURE,
+    "Configure Connectors",
+    "Update and test connectors, and start or cancel connector syncs",
+)
 
 # ============================================================================
 # WEBHOOK PERMISSIONS
@@ -307,6 +313,7 @@ __all__ = [
     "PERM_CONNECTOR_TEST",
     "PERM_CONNECTOR_UPDATE",
     "PERM_CONNECTOR_ROLLBACK",
+    "PERM_CONNECTOR_CONFIGURE",
     # Webhook
     "PERM_WEBHOOK_READ",
     "PERM_WEBHOOK_CREATE",

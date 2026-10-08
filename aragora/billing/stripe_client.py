@@ -81,7 +81,7 @@ class StripeCustomer:
     id: str
     email: str
     name: str | None = None
-    metadata: dict = None
+    metadata: dict[Any, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {

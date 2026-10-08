@@ -25,7 +25,7 @@ class TestBridgeConfig:
     def test_default_values(self):
         """Test default configuration values."""
         config = BridgeConfig()
-        assert config.model == "claude-opus-4-8"
+        assert config.model == "claude-opus-5"
         assert config.max_tokens == 4096
         assert config.temperature == 0.0
         assert config.display_width == 1920
@@ -67,7 +67,7 @@ class TestClaudeComputerUseBridge:
         """Test initialization with default config."""
         bridge = ClaudeComputerUseBridge(api_key="test-key")
         assert bridge._api_key == "test-key"
-        assert bridge.config.model == "claude-opus-4-8"
+        assert bridge.config.model == "claude-opus-5"
 
     def test_init_custom_config(self):
         """Test initialization with custom config."""

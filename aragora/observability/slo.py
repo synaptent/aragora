@@ -40,9 +40,10 @@ import asyncio
 import importlib.util
 import logging
 import os
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
-from typing import Any
+from typing import Any, Protocol
 
 logger = logging.getLogger(__name__)
 
@@ -1002,6 +1003,32 @@ class SLOBreach:
         }
 
 
+class SLONotificationSink(Protocol):
+    """Higher-layer delivery contract for SLO notification messages."""
+
+    async def notify(self, breach: SLOBreach) -> None:
+        """Deliver one SLO breach notification."""
+
+
+SLONotificationSinkProvider = Callable[[], SLONotificationSink | None]
+_slo_notification_sink_provider: SLONotificationSinkProvider | None = None
+
+
+def register_slo_notification_sink_provider(
+    provider: SLONotificationSinkProvider | None,
+) -> None:
+    """Register the higher-layer provider for direct SLO notifications."""
+    global _slo_notification_sink_provider
+    _slo_notification_sink_provider = provider
+
+
+def _resolve_slo_notification_sink() -> SLONotificationSink | None:
+    """Resolve the currently registered notification sink without caching it."""
+    if _slo_notification_sink_provider is None:
+        return None
+    return _slo_notification_sink_provider()
+
+
 # Type alias for alert callback
 AlertCallback = Any  # Callable[[SLOBreach], None] or async version
 
@@ -1120,9 +1147,11 @@ class SLOAlertMonitor:
 
                 self._record_alert(alert.slo_name, alert.severity)
                 logger.warning(
-                    f"SLO breach: {alert.slo_name} ({alert.severity}) - "
-                    f"error budget: {result.error_budget_remaining:.1f}%, "
-                    f"burn rate: {result.burn_rate:.2f}x"
+                    "SLO breach: %s (%s) - error budget: %.1f%%, burn rate: %.2fx",
+                    alert.slo_name,
+                    alert.severity,
+                    result.error_budget_remaining,
+                    result.burn_rate,
                 )
 
         except Exception as e:  # noqa: BLE001 - observability must not crash app
@@ -1170,10 +1199,13 @@ class SLOAlertMonitor:
 def log_alert_callback(breach: SLOBreach) -> None:
     """Simple logging callback for SLO alerts."""
     logger.warning(
-        f"SLO ALERT [{breach.severity.upper()}]: {breach.slo_name} - "
-        f"{breach.message} (current: {breach.current_value:.4f}, "
-        f"target: {breach.target_value:.4f}, "
-        f"error_budget: {breach.error_budget_remaining:.1f}%)"
+        "SLO ALERT [%s]: %s - %s (current: %.4f, target: %.4f, error_budget: %.1f%%)",
+        breach.severity.upper(),
+        breach.slo_name,
+        breach.message,
+        breach.current_value,
+        breach.target_value,
+        breach.error_budget_remaining,
     )
 
 
@@ -1283,44 +1315,20 @@ def create_slack_alert_callback(webhook_url: str) -> AlertCallback:
 
 
 def create_notification_callback() -> AlertCallback:
-    """Create a callback using the control plane notification system.
+    """Create a callback using the registered SLO notification sink.
 
     Returns:
-        Callback function that sends alerts through NotificationDispatcher
+        Callback function that sends alerts through the current notification sink
     """
 
     async def notification_callback(breach: SLOBreach) -> None:
         try:
-            from aragora.control_plane.channels import (
-                NotificationEventType,
-                NotificationPriority,
-            )
-            from aragora.control_plane.notifications import get_default_notification_dispatcher
-
-            dispatcher = get_default_notification_dispatcher()
-            if dispatcher is None:
+            sink = _resolve_slo_notification_sink()
+            if sink is None:
                 logger.warning("Notification dispatcher not configured")
                 return
 
-            priority = (
-                NotificationPriority.CRITICAL
-                if breach.severity == "critical"
-                else NotificationPriority.HIGH
-            )
-
-            await dispatcher.dispatch(
-                event_type=NotificationEventType.SYSTEM_ALERT,
-                title=f"SLO Alert: {breach.slo_name}",
-                body=(
-                    f"{breach.message}\n\n"
-                    f"Current: {breach.current_value:.4f}\n"
-                    f"Target: {breach.target_value:.4f}\n"
-                    f"Error Budget: {breach.error_budget_remaining:.1f}%\n"
-                    f"Burn Rate: {breach.burn_rate:.2f}x"
-                ),
-                priority=priority,
-                metadata=breach.to_dict(),
-            )
+            await sink.notify(breach)
             logger.info("SLO alert dispatched via notification system")
 
         except ImportError:
@@ -1924,6 +1932,8 @@ __all__ = [
     "webhook_alert_callback",
     "create_slack_alert_callback",
     "create_notification_callback",
+    "SLONotificationSink",
+    "register_slo_notification_sink_provider",
     # SLO Enforcer
     "SLOEnforcer",
     "get_slo_enforcer",

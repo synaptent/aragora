@@ -970,6 +970,73 @@ real-time debate progress (proposals, critiques, votes, consensus events).""",
             },
             "security": [{"bearerAuth": []}],
         },
+        "patch": {
+            "tags": ["Debates"],
+            "summary": "Update debate metadata",
+            "operationId": "patchDebateV1",
+            "description": (
+                "Update debate metadata. Supported fields: title, tags, "
+                "status (active, paused, concluded, archived), and custom "
+                "metadata. Use status='archived' for soft-delete."
+            ),
+            "parameters": [
+                {"name": "id", "in": "path", "required": True, "schema": {"type": "string"}}
+            ],
+            "requestBody": {
+                "required": True,
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "title": {"type": "string"},
+                                "tags": {"type": "array", "items": {"type": "string"}},
+                                "status": {
+                                    "type": "string",
+                                    "enum": ["active", "paused", "concluded", "archived"],
+                                },
+                                "metadata": {
+                                    "type": "object",
+                                    "additionalProperties": True,
+                                },
+                            },
+                        }
+                    }
+                },
+            },
+            "responses": {
+                # _patch_debate returns an update envelope, not the full
+                # Debate resource (see debates/crud.py).
+                "200": _ok_response(
+                    "Update result with the updated debate summary",
+                    {
+                        "success": {"type": "boolean"},
+                        "debate_id": {"type": "string"},
+                        "updated_fields": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        },
+                        "debate": {
+                            "type": "object",
+                            "properties": {
+                                "id": {"type": "string"},
+                                "title": {"type": "string"},
+                                "status": {"type": "string"},
+                                "tags": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                },
+                            },
+                        },
+                    },
+                ),
+                "400": STANDARD_ERRORS["400"],
+                "403": STANDARD_ERRORS["403"],
+                "404": STANDARD_ERRORS["404"],
+                "500": STANDARD_ERRORS["500"],
+            },
+            "security": [{"bearerAuth": []}],
+        },
     },
     "/api/v1/debates/{id}/consensus": {
         "get": {
@@ -1558,6 +1625,38 @@ real-time debate progress (proposals, critiques, votes, consensus events).""",
         },
     },
     "/api/v1/debates/batch": {
+        "get": {
+            "tags": ["Debates"],
+            "summary": "List batch requests",
+            "operationId": "listDebateBatchesV1",
+            "description": "List submitted debate batches, optionally filtered by status.",
+            "parameters": [
+                {
+                    "name": "limit",
+                    "in": "query",
+                    "required": False,
+                    "schema": {"type": "integer", "default": 50, "maximum": 100},
+                    "description": "Maximum batches to return.",
+                },
+                {
+                    "name": "status",
+                    "in": "query",
+                    "required": False,
+                    "schema": {"type": "string"},
+                    "description": "Filter by batch status (pending, processing, completed, ...).",
+                },
+            ],
+            "responses": {
+                "200": _ok_response(
+                    "Batch list",
+                    {
+                        "batches": {"type": "array", "items": {"type": "object"}},
+                        "count": {"type": "integer"},
+                    },
+                ),
+                "400": STANDARD_ERRORS["400"],
+            },
+        },
         "post": {
             "tags": ["Debates"],
             "summary": "Submit batch debates",

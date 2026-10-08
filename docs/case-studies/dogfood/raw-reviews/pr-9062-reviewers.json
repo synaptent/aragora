@@ -1,0 +1,22 @@
+[
+  {
+    "family": "grok",
+    "agent_type": "grok",
+    "ok": true,
+    "text": "Verdict: CHANGES-REQUESTED\n\n- [P2] scripts/fable_goal_cycle.py:538: run_consult computes overall_timeout as `timeout * (2 + int(openrouter_fallback))`, ignoring api_fallback, fallback_model, or _planned_attempt_count, causing under/over-budgeting and potential hangs/timeouts.\n- [P2] scripts/consult_claude.py:545: cli_prompt = _compose_prompt(...) is now used only for CLI paths while raw prompt+system is passed to _run_api/_run_openrouter_api; this alters prior uniform composition and risks prompt duplication or system-instruction loss on CLI.\n- [P3] scripts/consult_claude.py:366: _run_openrouter_api performs no request-size or token validation before sending (unlike response checks), allowing oversized payloads to OPENROUTER_API_URL.",
+    "error": "",
+    "elapsed_s": 13.6,
+    "verdict": "CHANGES_REQUESTED",
+    "model": "grok-4-latest"
+  },
+  {
+    "family": "mistral",
+    "agent_type": "mistral-api",
+    "ok": true,
+    "text": "Verdict: PASS\n\n- [P3] `scripts/consult_claude.py` L369: `_run_api` now passes `system=system` where it previously passed `system=None`; this is a behavioral change that could affect API behavior if the Anthropic API treats `None` and `\"\"` differently for system prompts. Verify with Anthropic API docs or tests.\n- [P3] `scripts/consult_claude.py` L54: The docstring example for `--openrouter-fallback` could clarify that it's only used after *both* CLI and API attempts fail (not just CLI).\n- [P3] `scripts/consult_claude.py` L685: The `--openrouter-model` help text could mention that the default is configurable via `ARAGORA_CONSULT_OPENROUTER_MODEL` or `OPENROUTER_FABLE_MODEL` for clarity.",
+    "error": "",
+    "elapsed_s": 4.2,
+    "verdict": "PASS",
+    "model": "mistral-large-2512"
+  }
+]

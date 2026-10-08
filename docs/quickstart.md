@@ -6,12 +6,12 @@ Get from zero to a working adversarial debate in under a minute.
 the numbered steps below and run the guided command directly -- no API keys
 required. This is the same offline chain the [Independent Verifier
 Guide](specs/INDEPENDENT_VERIFIER_GUIDE.md) and
-[GitHub Action Setup](GITHUB_ACTION_SETUP.md) both build on:
+[GitHub Action Setup](guides/GITHUB_ACTION_SETUP.md) both build on:
 
 ```bash
 aragora quickstart --demo --no-browser --output r.json
 aragora receipt export r.json --format odr -o r.odr.json
-pip install -U 'aragora-verify>=0.1.1' && aragora-verify r.odr.json
+pip install -U 'aragora-verify>=0.2.0' && aragora-verify r.odr.json
 ```
 
 This runs a demo debate, exports the receipt to the portable ODR format, and
@@ -44,8 +44,10 @@ python3 -m aragora_debate
 You'll see three agents propose, critique each other, vote, reach consensus, and
 produce an audit-ready decision receipt with a SHA-256 verdict hash.
 
-(If you installed the full platform instead — `pip install aragora` — the
-equivalent zero-key demo is `aragora demo`.)
+(If you installed the full platform instead — `pip install -U 'aragora>=2.9.0'`
+— the equivalent zero-key receipt demo is
+`aragora demo --offline --receipt aragora-demo-receipt.json`, followed by
+`aragora receipt verify aragora-demo-receipt.json`.)
 
 ## 3. Three-Line Debate (Python)
 
@@ -79,7 +81,7 @@ export OPENAI_API_KEY="sk-..."          # GPT
 Install the full `aragora` package before using the platform API imports below:
 
 ```bash
-pip install aragora
+pip install -U 'aragora>=2.9.0'
 ```
 
 Then run a real debate:
@@ -136,7 +138,7 @@ Then visit:
 Current PyPI package:
 
 ```bash
-pip install aragora
+pip install -U 'aragora>=2.9.0'
 aragora demo --offline --receipt aragora-demo-receipt.json
 aragora receipt verify aragora-demo-receipt.json
 aragora ask "Should we build or buy our auth system?"   # real debate (needs an API key)
@@ -151,9 +153,10 @@ aragora demo --offline --receipt aragora-demo-receipt.json
 aragora receipt verify aragora-demo-receipt.json
 ```
 
-PyPI `aragora` 2.9.0 supports the explicit offline demo receipt round trip
-shown above. Use the source checkout path when you need to audit this exact
-branch or unreleased local changes.
+Use `aragora>=2.9.0` for the explicit offline demo receipt round trip shown
+above. Earlier PyPI releases do not support the `--offline` receipt flags. Use
+the source checkout path when you need to audit this exact branch or unreleased
+local changes.
 
 `aragora receipt verify` above checks the **native** demo receipt (exit 0/1);
 it is a different verb from the standalone `aragora-verify` used on the
@@ -168,9 +171,9 @@ full per-audience breakdown.
 |-------|-------------------|
 | [Receipt Lineage Reconciliation](specs/RECEIPT_LINEAGE_RECONCILIATION.md) | What a Decision Receipt is: the native record vs. the portable ODR |
 | [Independent Verifier Guide](specs/INDEPENDENT_VERIFIER_GUIDE.md) | Verify a receipt offline with `aragora-verify`, no Aragora install required |
-| [GitHub Action Setup](GITHUB_ACTION_SETUP.md) | Add multi-model CI review + receipts to your pull requests |
-| [CLI Reference](reference/CLI_REFERENCE.md) | All CLI commands and flags |
+| [GitHub Action Setup](guides/GITHUB_ACTION_SETUP.md) | Add multi-model CI review + receipts to your pull requests |
+| [CLI Reference](CLI_REFERENCE.md) | All CLI commands and flags |
 | [SDK Guide](SDK_GUIDE.md) | Python & TypeScript SDK reference |
 | [API Reference](api/API_REFERENCE.md) | REST API endpoints |
-| [Self-Hosting](deployment/DEPLOYMENT.md) | Production deployment |
+| [Self-Hosting](DEPLOYMENT.md) | Production deployment |
 | [Documentation Landing](README.md) | Deeper architectural overview |

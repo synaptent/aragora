@@ -25,6 +25,7 @@ import json
 import logging
 import os
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -151,8 +152,8 @@ class AsyncWebhookDispatcher:
         Returns:
             Tuple of (success, status_code, error_message)
         """
-        from aragora.server.handlers.webhooks import generate_signature
-        from aragora.server.middleware.tracing import get_trace_id
+        from aragora.security.webhook_signing import generate_signature
+        from aragora.observability.middleware.tracing import get_trace_id
 
         client = await self._ensure_client()
 
@@ -192,8 +193,10 @@ class AsyncWebhookDispatcher:
             duration_ms = (time.time() - start_time) * 1000
 
             logger.debug(
-                f"Async webhook delivered to {webhook.url}: "
-                f"status={response.status_code}, duration={duration_ms:.1f}ms"
+                "Async webhook delivered to %s: status=%s, duration=%.1fms",
+                webhook.url,
+                response.status_code,
+                duration_ms,
             )
 
             if 200 <= response.status_code < 300:
@@ -227,15 +230,25 @@ class AsyncWebhookDispatcher:
             AsyncDeliveryResult with outcome
         """
         # Import metrics and tracing lazily
+        record_webhook_retry: Callable[[str, int], None] | None
         try:
-            from aragora.observability.metrics.webhook import record_webhook_retry
+            from aragora.observability.metrics.webhook import (
+                record_webhook_retry as _record_webhook_retry,
+            )
         except ImportError:
             record_webhook_retry = None
+        else:
+            record_webhook_retry = _record_webhook_retry
 
+        trace_webhook_delivery: Callable[..., Any] | None
         try:
-            from aragora.observability.tracing import trace_webhook_delivery
+            from aragora.observability.tracing import (
+                trace_webhook_delivery as _trace_webhook_delivery,
+            )
         except ImportError:
             trace_webhook_delivery = None
+        else:
+            trace_webhook_delivery = _trace_webhook_delivery
 
         event_type = payload.get("event", "unknown")
         correlation_id = payload.get("correlation_id") or payload.get("data", {}).get(
@@ -276,8 +289,11 @@ class AsyncWebhookDispatcher:
                         record_webhook_retry(event_type, attempt + 1)
 
                     logger.info(
-                        f"Retrying async webhook {webhook.id} in {delay:.1f}s "
-                        f"(attempt {attempt + 1}/{max_retries})"
+                        "Retrying async webhook %s in %.1fs (attempt %s/%s)",
+                        webhook.id,
+                        delay,
+                        attempt + 1,
+                        max_retries,
                     )
                     await asyncio.sleep(delay)
                     delay = min(delay * 2, max_delay)

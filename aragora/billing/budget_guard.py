@@ -60,6 +60,7 @@ __all__ = [
 
 _CAP_ENV = "ARAGORA_MONTHLY_BUDGET_USD"
 _STORE_ENV = "ARAGORA_BUDGET_GUARD_STORE"
+_DATA_DIR_ENVS = ("ARAGORA_DATA_DIR", "ARAGORA_NOMIC_DIR")
 _lock = threading.Lock()
 # Process-local fallback: survives disk-store failures so the cap can never
 # silently reset to 0. {month: spent_usd}.
@@ -91,17 +92,39 @@ def _current_month() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m")
 
 
+def _configured_data_dir() -> Path | None:
+    for name in _DATA_DIR_ENVS:
+        raw = os.environ.get(name, "").strip()
+        if not raw:
+            continue
+        data_dir = Path(raw).expanduser()
+        return data_dir if data_dir.is_absolute() else Path.home() / data_dir
+    return None
+
+
 def _store_path() -> Path:
+    """Resolve the shared monthly spend ledger, first match wins.
+
+    1. ``ARAGORA_BUDGET_GUARD_STORE``: the exact ledger file, used as given
+       (only surrounding whitespace is stripped).
+    2. ``ARAGORA_DATA_DIR``, then ``ARAGORA_NOMIC_DIR``:
+       ``<dir>/budget_guard.json``. Whitespace-only values count as unset,
+       ``~`` is expanded, and a relative directory is anchored under the home
+       directory (``.nomic`` means ``~/.nomic``), so every process shares one
+       ledger whatever its working directory.
+    3. Otherwise the machine-global ``~/.aragora/budget_guard.json``.
+
+    Unlike the persistence helper's defaults, nothing here falls back to a
+    linked-worktree or CWD-relative location, which would fragment this
+    cross-process spend counter.
+    """
     override = os.environ.get(_STORE_ENV, "").strip()
     if override:
         return Path(override)
-    try:
-        from aragora.config import get_default_data_dir
-
-        base = Path(get_default_data_dir())
-    except Exception:  # noqa: BLE001 - data dir resolution must never crash the guard
-        base = Path.home() / ".aragora"
-    return base / "budget_guard.json"
+    data_dir = _configured_data_dir()
+    if data_dir is not None:
+        return data_dir / "budget_guard.json"
+    return Path.home() / ".aragora" / "budget_guard.json"
 
 
 def _mem_get() -> float:

@@ -26,10 +26,11 @@ Example usage:
 
 from __future__ import annotations
 
-import hashlib
 import hmac
 import time
 from dataclasses import dataclass
+
+from aragora.security.webhook_signing import generate_signature
 
 # Default tolerance for timestamp validation (5 minutes)
 DEFAULT_TIMESTAMP_TOLERANCE_SECONDS = 300
@@ -44,23 +45,6 @@ class VerificationResult:
 
     def __bool__(self) -> bool:
         return self.valid
-
-
-def generate_signature(payload: str, secret: str) -> str:
-    """
-    Generate HMAC-SHA256 signature for webhook payload.
-
-    Args:
-        payload: JSON string payload
-        secret: Webhook secret key
-
-    Returns:
-        Hex-encoded signature with sha256= prefix
-    """
-    signature = hmac.new(
-        secret.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256
-    ).hexdigest()
-    return f"sha256={signature}"
 
 
 def verify_signature(payload: str, signature: str, secret: str) -> bool:

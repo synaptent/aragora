@@ -25,6 +25,8 @@ from aragora.observability.slo_alert_bridge import (
     SLOAlertConfig,
     get_slo_alert_bridge,
     init_slo_alerting,
+    register_channel_alert_sink,
+    register_pagerduty_alert_sink,
     shutdown_slo_alerting,
 )
 
@@ -32,6 +34,23 @@ from aragora.observability.slo_alert_bridge import (
 # =============================================================================
 # Fixtures
 # =============================================================================
+
+
+@pytest.fixture(autouse=True)
+def _register_external_alert_sinks():
+    """Register concrete adapters before constructing bridge fixtures."""
+    from aragora.connectors.devops.slo_alert_sink import (
+        register_slo_alert_sink as register_pagerduty_sink,
+    )
+    from aragora.control_plane.slo_alert_sink import (
+        register_slo_alert_sink as register_channel_sink,
+    )
+
+    register_pagerduty_sink()
+    register_channel_sink()
+    yield
+    register_pagerduty_alert_sink(None)
+    register_channel_alert_sink(None)
 
 
 @pytest.fixture
@@ -119,6 +138,8 @@ def mock_pagerduty_connector():
     mock_connector = AsyncMock()
     mock_connector.create_incident = AsyncMock(return_value=mock_incident)
     mock_connector.resolve_incident = AsyncMock()
+    mock_connector.__aenter__ = AsyncMock(return_value=mock_connector)
+    mock_connector.__aexit__ = AsyncMock(return_value=None)
 
     mock_credentials_cls = MagicMock()
     mock_connector_cls = MagicMock(return_value=mock_connector)
@@ -142,6 +163,7 @@ def mock_pagerduty_connector():
 def mock_notification_manager():
     """Mock notification manager."""
     mock_manager = AsyncMock()
+    mock_manager.add_channel = MagicMock()
     mock_manager.notify = AsyncMock()
 
     mock_event_type = MagicMock()
@@ -513,6 +535,188 @@ class TestSendPagerDutyAlert:
         assert result is None
 
     @pytest.mark.asyncio
+    async def test_registered_sink_factory_handles_incident_creation(
+        self, pagerduty_config: SLOAlertConfig
+    ):
+        """PagerDuty delivery uses the connector-owned registered sink."""
+        sink = AsyncMock()
+        sink.create_incident = AsyncMock(return_value="PD-REGISTERED")
+        register_pagerduty_alert_sink(lambda config: sink)
+        try:
+            registered_bridge = SLOAlertBridge(pagerduty_config)
+            violation = ActiveViolation(
+                operation="debate",
+                percentile="p99",
+                severity="critical",
+                first_seen=time.time(),
+                last_seen=time.time(),
+                incident_key="registered-key",
+            )
+
+            result = await registered_bridge._send_pagerduty_alert(
+                violation,
+                {"latency_ms": 500, "threshold_ms": 200},
+            )
+
+            assert result == "PD-REGISTERED"
+            sink.create_incident.assert_awaited_once()
+        finally:
+            register_pagerduty_alert_sink(None)
+
+    @pytest.mark.asyncio
+    async def test_sink_registered_after_bridge_creation_is_used(
+        self, pagerduty_config: SLOAlertConfig
+    ):
+        """Direct bridges follow late registration, replacement, and removal."""
+        register_pagerduty_alert_sink(None)
+        registered_bridge = SLOAlertBridge(pagerduty_config)
+        first_sink = AsyncMock()
+        first_sink.create_incident = AsyncMock(return_value="PD-LATE")
+        second_sink = AsyncMock()
+        second_sink.create_incident = AsyncMock(return_value="PD-REPLACED")
+        register_pagerduty_alert_sink(lambda config: first_sink)
+        try:
+            violation = ActiveViolation(
+                operation="debate",
+                percentile="p99",
+                severity="critical",
+                first_seen=time.time(),
+                last_seen=time.time(),
+                incident_key="late-key",
+            )
+
+            assert (
+                await registered_bridge._send_pagerduty_alert(
+                    violation,
+                    {"latency_ms": 500, "threshold_ms": 200},
+                )
+                == "PD-LATE"
+            )
+            register_pagerduty_alert_sink(lambda config: second_sink)
+            assert (
+                await registered_bridge._send_pagerduty_alert(
+                    violation,
+                    {"latency_ms": 500, "threshold_ms": 200},
+                )
+                == "PD-REPLACED"
+            )
+            register_pagerduty_alert_sink(None)
+            assert await registered_bridge._send_pagerduty_alert(violation, {}) is None
+        finally:
+            register_pagerduty_alert_sink(None)
+
+        first_sink.create_incident.assert_awaited_once()
+        second_sink.create_incident.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_failed_factory_replacement_clears_prior_sink(
+        self, pagerduty_config: SLOAlertConfig
+    ):
+        """A failed explicit replacement cannot retain stale PagerDuty credentials."""
+        old_sink = AsyncMock()
+        old_sink.create_incident = AsyncMock(return_value="PD-OLD")
+        register_pagerduty_alert_sink(lambda config: old_sink)
+        bridge = SLOAlertBridge(pagerduty_config)
+        factory_calls = 0
+
+        def failing_factory(config):
+            nonlocal factory_calls
+            factory_calls += 1
+            raise ValueError("invalid replacement")
+
+        register_pagerduty_alert_sink(failing_factory)
+        try:
+            violation = ActiveViolation(
+                operation="debate",
+                percentile="p99",
+                severity="critical",
+                first_seen=time.time(),
+                last_seen=time.time(),
+            )
+            assert await bridge._send_pagerduty_alert(violation, {}) is None
+            assert await bridge._send_pagerduty_alert(violation, {}) is None
+        finally:
+            register_pagerduty_alert_sink(None)
+
+        old_sink.create_incident.assert_not_awaited()
+        assert factory_calls == 2
+
+    @pytest.mark.asyncio
+    async def test_connector_sink_constructs_real_incident_request(
+        self, pagerduty_config: SLOAlertConfig
+    ):
+        """The concrete adapter maps primitive urgency into the connector enum."""
+        from aragora.connectors.devops.pagerduty import IncidentUrgency
+        from aragora.connectors.devops.slo_alert_sink import PagerDutySLOAlertSink
+
+        incident = MagicMock(id="PD-REAL")
+        connector = AsyncMock()
+        connector.create_incident = AsyncMock(return_value=incident)
+        sink = PagerDutySLOAlertSink(pagerduty_config)
+        sink._connector = connector
+
+        assert (
+            await sink.create_incident(
+                title="SLO violation",
+                service_id="service-id",
+                urgency="high",
+                description="latency exceeded",
+                incident_key="dedup-key",
+            )
+            == "PD-REAL"
+        )
+        request = connector.create_incident.call_args.args[0]
+        assert request.urgency is IncidentUrgency.HIGH
+        assert request.incident_key == "dedup-key"
+
+    @pytest.mark.asyncio
+    async def test_connector_sink_manages_real_connector_context(
+        self, pagerduty_config: SLOAlertConfig
+    ):
+        """The concrete adapter enters and closes connectors it constructs."""
+        from aragora.connectors.devops.slo_alert_sink import PagerDutySLOAlertSink
+
+        incident = MagicMock(id="PD-CONTEXT")
+        initialized = AsyncMock()
+        initialized.create_incident = AsyncMock(return_value=incident)
+        connector = MagicMock()
+        connector.__aenter__ = AsyncMock(return_value=initialized)
+        connector.__aexit__ = AsyncMock(return_value=None)
+        sink = PagerDutySLOAlertSink(pagerduty_config)
+
+        with patch(
+            "aragora.connectors.devops.pagerduty.PagerDutyConnector",
+            return_value=connector,
+        ):
+            assert (
+                await sink.create_incident(
+                    title="SLO violation",
+                    service_id="service-id",
+                    urgency="high",
+                    description="latency exceeded",
+                    incident_key="dedup-key",
+                )
+                == "PD-CONTEXT"
+            )
+
+        connector.__aenter__.assert_awaited_once()
+        connector.__aexit__.assert_awaited_once()
+        initialized.create_incident.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_connector_sink_reports_resolution_failure(
+        self, pagerduty_config: SLOAlertConfig
+    ):
+        """Connector exceptions produce an explicit failed resolution result."""
+        from aragora.connectors.devops.slo_alert_sink import PagerDutySLOAlertSink
+
+        sink = PagerDutySLOAlertSink(pagerduty_config)
+        sink._connector = AsyncMock()
+        sink._connector.resolve_incident = AsyncMock(side_effect=ConnectionError("down"))
+
+        assert await sink.resolve_incident("PD-1", "recovered") is False
+
+    @pytest.mark.asyncio
     async def test_import_error_returns_none(self, pd_bridge: SLOAlertBridge):
         """Import error for PagerDuty connector returns None gracefully."""
         violation = ActiveViolation(
@@ -696,6 +900,89 @@ class TestSendSlackAlert:
         )
         result = await bridge._send_slack_alert(violation, {})
         assert result is False
+
+    @pytest.mark.asyncio
+    async def test_registered_channel_sink_handles_notification(self, slack_config: SLOAlertConfig):
+        """Slack delivery uses the control-plane-owned registered sink."""
+        sink = AsyncMock()
+        sink.notify = AsyncMock()
+        register_channel_alert_sink(lambda config: sink)
+        try:
+            registered_bridge = SLOAlertBridge(slack_config)
+            violation = ActiveViolation(
+                operation="debate",
+                percentile="p99",
+                severity="critical",
+                first_seen=time.time(),
+                last_seen=time.time(),
+            )
+
+            assert await registered_bridge._send_slack_alert(violation, {}) is True
+            sink.notify.assert_awaited_once()
+        finally:
+            register_channel_alert_sink(None)
+
+    @pytest.mark.asyncio
+    async def test_channel_sink_replacement_and_removal(self, slack_config: SLOAlertConfig):
+        """Direct bridges stop using stale channel sinks after registration changes."""
+        first_sink = AsyncMock()
+        first_sink.notify = AsyncMock()
+        second_sink = AsyncMock()
+        second_sink.notify = AsyncMock()
+        register_channel_alert_sink(lambda config: first_sink)
+        registered_bridge = SLOAlertBridge(slack_config)
+        violation = ActiveViolation(
+            operation="debate",
+            percentile="p99",
+            severity="critical",
+            first_seen=time.time(),
+            last_seen=time.time(),
+        )
+
+        try:
+            assert await registered_bridge._send_slack_alert(violation, {}) is True
+            register_channel_alert_sink(lambda config: second_sink)
+            assert await registered_bridge._send_slack_alert(violation, {}) is True
+            register_channel_alert_sink(None)
+            assert await registered_bridge._send_slack_alert(violation, {}) is False
+        finally:
+            register_channel_alert_sink(None)
+
+        first_sink.notify.assert_awaited_once()
+        second_sink.notify.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_failed_channel_factory_retries_without_stale_sink(
+        self, slack_config: SLOAlertConfig
+    ):
+        """Transient channel factory failures are retried without using the old sink."""
+        old_sink = AsyncMock()
+        old_sink.notify = AsyncMock()
+        register_channel_alert_sink(lambda config: old_sink)
+        bridge = SLOAlertBridge(slack_config)
+        factory_calls = 0
+
+        def failing_factory(config):
+            nonlocal factory_calls
+            factory_calls += 1
+            raise ValueError("invalid replacement")
+
+        register_channel_alert_sink(failing_factory)
+        violation = ActiveViolation(
+            operation="debate",
+            percentile="p99",
+            severity="critical",
+            first_seen=time.time(),
+            last_seen=time.time(),
+        )
+        try:
+            assert await bridge._send_slack_alert(violation, {}) is False
+            assert await bridge._send_slack_alert(violation, {}) is False
+        finally:
+            register_channel_alert_sink(None)
+
+        old_sink.notify.assert_not_awaited()
+        assert factory_calls == 2
 
     @pytest.mark.asyncio
     async def test_no_webhook_url_returns_false(self):
@@ -1122,6 +1409,70 @@ class TestOnSLORecovery:
         call_args = mock_client.resolve_incident.call_args
         assert call_args.args[0] == "PD-INC-001"
         assert "recovered" in call_args.kwargs.get("resolution", "").lower()
+
+    @pytest.mark.asyncio
+    async def test_recovery_refreshes_replaced_and_removed_sinks(self):
+        """Recovery never uses alert sinks invalidated by registration changes."""
+        config = SLOAlertConfig(
+            pagerduty_enabled=True,
+            pagerduty_api_key="key",
+            pagerduty_service_id="svc",
+            slack_enabled=True,
+            slack_webhook_url="https://hooks.slack.com/test",
+        )
+        first_pagerduty = AsyncMock()
+        first_pagerduty.resolve_incident = AsyncMock(return_value=True)
+        second_pagerduty = AsyncMock()
+        second_pagerduty.resolve_incident = AsyncMock(return_value=True)
+        first_channel = AsyncMock()
+        first_channel.notify = AsyncMock()
+        second_channel = AsyncMock()
+        second_channel.notify = AsyncMock()
+        register_pagerduty_alert_sink(lambda alert_config: first_pagerduty)
+        register_channel_alert_sink(lambda alert_config: first_channel)
+        bridge = SLOAlertBridge(config)
+
+        try:
+            register_pagerduty_alert_sink(lambda alert_config: second_pagerduty)
+            register_channel_alert_sink(lambda alert_config: second_channel)
+            key = bridge._make_incident_key("debate", "p99")
+            bridge._active_violations[key] = ActiveViolation(
+                operation="debate",
+                percentile="p99",
+                severity="critical",
+                first_seen=time.time() - 60,
+                last_seen=time.time(),
+                incident_key=key,
+                pagerduty_incident_id="PD-REPLACED",
+                notified_channels={"pagerduty", "slack"},
+            )
+
+            await bridge.on_slo_recovery(operation="debate", percentile="p99")
+
+            first_pagerduty.resolve_incident.assert_not_awaited()
+            first_channel.notify.assert_not_awaited()
+            second_pagerduty.resolve_incident.assert_awaited_once()
+            second_channel.notify.assert_awaited_once()
+
+            register_pagerduty_alert_sink(None)
+            register_channel_alert_sink(None)
+            bridge._active_violations[key] = ActiveViolation(
+                operation="debate",
+                percentile="p99",
+                severity="critical",
+                first_seen=time.time() - 60,
+                last_seen=time.time(),
+                incident_key=key,
+                pagerduty_incident_id="PD-REMOVED",
+                notified_channels={"pagerduty", "slack"},
+            )
+            await bridge.on_slo_recovery(operation="debate", percentile="p99")
+        finally:
+            register_pagerduty_alert_sink(None)
+            register_channel_alert_sink(None)
+
+        second_pagerduty.resolve_incident.assert_awaited_once()
+        second_channel.notify.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_recovery_skips_resolve_when_disabled(self):
@@ -1664,6 +2015,23 @@ class TestInitSLOAlerting:
             assert bridge.config.pagerduty_enabled is True
             self._reset_global_bridge()
 
+    def test_late_registration_retrofits_global_bridge(self):
+        """Startup composition can register adapters after bridge initialization."""
+        register_pagerduty_alert_sink(None)
+        bridge = init_slo_alerting(
+            pagerduty_api_key="key",
+            pagerduty_service_id="svc",
+        )
+        sink = AsyncMock()
+
+        try:
+            assert bridge._pagerduty_client is None
+            register_pagerduty_alert_sink(lambda config: sink)
+            assert bridge._pagerduty_client is sink
+        finally:
+            shutdown_slo_alerting()
+            register_pagerduty_alert_sink(None)
+
     def test_pagerduty_disabled_when_key_missing(self):
         """PagerDuty is disabled when API key is missing."""
         self._reset_global_bridge()
@@ -1821,25 +2189,37 @@ class TestShutdownSLOAlerting:
 
         module._bridge = original
 
-    def test_shutdown_calls_clear_all_callbacks(self):
-        """Shutdown unregisters callbacks via clear_all_callbacks."""
+    def test_shutdown_unregisters_only_bridge_callbacks(self):
+        """Shutdown unregisters the callbacks owned by the bridge."""
         import aragora.observability.slo_alert_bridge as module
 
         original = module._bridge
+        original_violation = module._registered_violation_callback
+        original_recovery = module._registered_recovery_callback
 
         module._bridge = SLOAlertBridge(SLOAlertConfig())
+        violation_callback = MagicMock()
+        recovery_callback = MagicMock()
+        module._registered_violation_callback = violation_callback
+        module._registered_recovery_callback = recovery_callback
 
         mock_slo_module = MagicMock()
-        mock_slo_module.clear_all_callbacks = MagicMock()
+        mock_slo_module.unregister_violation_callback = MagicMock()
+        mock_slo_module.unregister_recovery_callback = MagicMock()
 
         with patch.dict(
             "sys.modules",
             {"aragora.observability.metrics.slo": mock_slo_module},
         ):
             shutdown_slo_alerting()
-            mock_slo_module.clear_all_callbacks.assert_called_once()
+            mock_slo_module.unregister_violation_callback.assert_called_once_with(
+                violation_callback
+            )
+            mock_slo_module.unregister_recovery_callback.assert_called_once_with(recovery_callback)
 
         module._bridge = original
+        module._registered_violation_callback = original_violation
+        module._registered_recovery_callback = original_recovery
 
     def test_shutdown_handles_import_error(self):
         """Shutdown handles missing SLO module gracefully."""

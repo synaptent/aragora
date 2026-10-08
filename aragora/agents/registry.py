@@ -97,7 +97,7 @@ class AgentFactory:
         # Registration (done in agent modules)
         @AgentFactory.register(
             "claude",
-            default_model="claude-opus-4-8",
+            default_model="claude-opus-5",
             agent_type="CLI",
             requires="claude CLI (npm install -g @anthropic-ai/claude-code)",
         )
@@ -156,6 +156,15 @@ class AgentFactory:
                 accepts_api_key=accepts_api_key,
             )
             cls._registry[type_name] = spec
+            # Record the spec on the class itself so register_all_agents()
+            # can self-heal a cleared/rebound registry without re-importing
+            # (decorators never re-run while the module is cached in
+            # sys.modules). vars() lookup avoids inheriting a parent's specs.
+            own_specs = vars(agent_cls).get("__registry_specs__")
+            if own_specs is None:
+                own_specs = []
+                setattr(agent_cls, "__registry_specs__", own_specs)
+            own_specs.append(spec)
             return agent_cls
 
         return decorator
@@ -463,6 +472,11 @@ def register_all_agents() -> None:
 
     This function should be called once at startup to ensure
     all agents are registered before create() is used.
+
+    Safe to call repeatedly: if the registry was cleared (or rebound) after
+    the agent modules were first imported, the registrations are re-applied
+    from specs recorded on the agent classes, since the cached modules'
+    @AgentRegistry.register decorators never re-run.
     """
     # Import modules to trigger @register decorators
     # These imports are intentionally side-effect only
@@ -480,3 +494,24 @@ def register_all_agents() -> None:
         from aragora.agents import api_agents  # noqa: F401
     except ImportError:
         logger.debug("api_agents module not available for registration")
+
+    _heal_registry()
+
+
+def _heal_registry() -> None:
+    """Re-apply registrations recorded on already-imported agent classes.
+
+    Only production modules (``aragora.agents.*``) are scanned, so agent
+    classes registered ad hoc by tests are never resurrected. Existing
+    entries are never overwritten, so deliberate overrides survive.
+    """
+    import sys
+
+    for module_name, module in list(sys.modules.items()):
+        if module is None or not module_name.startswith("aragora.agents"):
+            continue
+        for obj in list(vars(module).values()):
+            if not isinstance(obj, type):
+                continue
+            for spec in vars(obj).get("__registry_specs__", ()):
+                AgentFactory._registry.setdefault(spec.name, spec)

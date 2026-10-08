@@ -12,6 +12,237 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 
+_NON_NOMIC_ADAPTERS = (
+    pytest.param(
+        "pagerduty",
+        "aragora.connectors.devops.slo_alert_sink",
+        "register_slo_alert_sink",
+        "PagerDuty",
+        id="pagerduty",
+    ),
+    pytest.param(
+        "channel",
+        "aragora.control_plane.slo_alert_sink",
+        "register_slo_alert_sink",
+        "Channel",
+        id="channel",
+    ),
+    pytest.param(
+        "webhook",
+        "aragora.integrations.webhooks",
+        "register_slo_event_sink",
+        "Webhook",
+        id="webhook",
+    ),
+    pytest.param(
+        "knowledge_mound",
+        "aragora.knowledge.mound.metrics",
+        "register_prometheus_health_provider",
+        "Knowledge Mound",
+        id="knowledge-mound",
+    ),
+)
+
+_ALL_ADAPTERS = (
+    (
+        "pagerduty",
+        "aragora.connectors.devops.slo_alert_sink",
+        "register_slo_alert_sink",
+    ),
+    (
+        "channel",
+        "aragora.control_plane.slo_alert_sink",
+        "register_slo_alert_sink",
+    ),
+    (
+        "webhook",
+        "aragora.integrations.webhooks",
+        "register_slo_event_sink",
+    ),
+    (
+        "knowledge_mound",
+        "aragora.knowledge.mound.metrics",
+        "register_prometheus_health_provider",
+    ),
+    (
+        "nomic",
+        "aragora.nomic.metrics",
+        "register_prometheus_metrics_provider",
+    ),
+)
+
+
+def _mock_observability_adapters() -> dict[str, MagicMock]:
+    modules: dict[str, MagicMock] = {}
+    for _name, module_path, register_name in _ALL_ADAPTERS:
+        adapter = MagicMock()
+        getattr(adapter, register_name).return_value = True
+        modules[module_path] = adapter
+    return modules
+
+
+class TestRegisterObservabilitySinks:
+    """Tests for higher-layer sink composition."""
+
+    def test_adapter_imports_do_not_mutate_observability_registries(self) -> None:
+        """Importing an adapter is side-effect free until startup composes it."""
+        import importlib
+
+        from aragora.connectors.devops import slo_alert_sink as pagerduty_adapter
+        from aragora.control_plane import slo_alert_sink as channel_adapter
+        from aragora.integrations import webhooks as webhook_adapter
+        from aragora.observability import slo
+        from aragora.observability import slo_alert_bridge
+        from aragora.observability.metrics import slo as slo_metrics
+
+        slo.register_slo_notification_sink_provider(None)
+        slo_alert_bridge.register_pagerduty_alert_sink(None)
+        slo_alert_bridge.register_channel_alert_sink(None)
+        slo_metrics.register_slo_event_sink_provider(None)
+
+        importlib.reload(pagerduty_adapter)
+        importlib.reload(channel_adapter)
+        importlib.reload(webhook_adapter)
+
+        assert slo._slo_notification_sink_provider is None
+        assert slo_alert_bridge._pagerduty_alert_sink_factory is None
+        assert slo_alert_bridge._channel_alert_sink_factory is None
+        assert slo_metrics._slo_event_sink_provider is None
+
+    def test_registers_all_external_sink_providers(self) -> None:
+        from aragora.observability.metrics import km as km_metrics
+        from aragora.observability.metrics import slo as slo_metrics
+        from aragora.observability import slo
+        from aragora.observability import slo_alert_bridge
+        from aragora.observability.server_metrics import export as server_metrics_export
+        from aragora.server.startup.observability import register_observability_sinks
+
+        slo.register_slo_notification_sink_provider(None)
+        slo_alert_bridge.register_pagerduty_alert_sink(None)
+        slo_alert_bridge.register_channel_alert_sink(None)
+        slo_metrics.register_slo_event_sink_provider(None)
+        km_metrics.register_km_health_provider(None)
+        server_metrics_export.register_nomic_metrics_provider(None)
+        try:
+            assert register_observability_sinks() is True
+            assert slo._slo_notification_sink_provider is not None
+            assert slo_alert_bridge._pagerduty_alert_sink_factory is not None
+            assert slo_alert_bridge._channel_alert_sink_factory is not None
+            assert slo_metrics._slo_event_sink_provider is not None
+            assert km_metrics._km_health_provider is not None
+            assert server_metrics_export._nomic_metrics_provider is not None
+        finally:
+            slo.register_slo_notification_sink_provider(None)
+            slo_alert_bridge.register_pagerduty_alert_sink(None)
+            slo_alert_bridge.register_channel_alert_sink(None)
+            slo_metrics.register_slo_event_sink_provider(None)
+            km_metrics.register_km_health_provider(None)
+            server_metrics_export.register_nomic_metrics_provider(None)
+
+    def test_nomic_import_failure_does_not_skip_other_adapters(
+        self,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Optional Nomic import failure cannot short-circuit other adapters."""
+        pagerduty_adapter = MagicMock()
+        pagerduty_adapter.register_slo_alert_sink.return_value = True
+        channel_adapter = MagicMock()
+        channel_adapter.register_slo_alert_sink.return_value = True
+        webhook_adapter = MagicMock()
+        webhook_adapter.register_slo_event_sink.return_value = True
+        km_adapter = MagicMock()
+        km_adapter.register_prometheus_health_provider.return_value = True
+
+        with (
+            patch.dict(
+                "sys.modules",
+                {
+                    "aragora.connectors.devops.slo_alert_sink": pagerduty_adapter,
+                    "aragora.control_plane.slo_alert_sink": channel_adapter,
+                    "aragora.integrations.webhooks": webhook_adapter,
+                    "aragora.knowledge.mound.metrics": km_adapter,
+                    "aragora.nomic.metrics": None,
+                },
+            ),
+            caplog.at_level("DEBUG", logger="aragora.server.startup.observability"),
+        ):
+            from aragora.server.startup.observability import register_observability_sinks
+
+            result = register_observability_sinks()
+
+        assert result is False
+        pagerduty_adapter.register_slo_alert_sink.assert_called_once_with()
+        channel_adapter.register_slo_alert_sink.assert_called_once_with()
+        webhook_adapter.register_slo_event_sink.assert_called_once_with()
+        km_adapter.register_prometheus_health_provider.assert_called_once_with()
+        assert "Nomic observability adapter not available" in caplog.text
+
+    @pytest.mark.parametrize(
+        ("failed_adapter", "failed_module", "register_name", "log_name"),
+        _NON_NOMIC_ADAPTERS,
+    )
+    def test_non_nomic_import_failure_does_not_skip_sibling_adapters(
+        self,
+        failed_adapter: str,
+        failed_module: str,
+        register_name: str,
+        log_name: str,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Every adapter import has its own fail-soft boundary."""
+        adapters = _mock_observability_adapters()
+        adapters_with_failure: dict[str, MagicMock | None] = dict(adapters)
+        adapters_with_failure[failed_module] = None
+
+        with (
+            patch.dict("sys.modules", adapters_with_failure),
+            caplog.at_level("DEBUG", logger="aragora.server.startup.observability"),
+        ):
+            from aragora.server.startup.observability import register_observability_sinks
+
+            result = register_observability_sinks()
+
+        assert result is False
+        for adapter_name, module_path, sibling_register_name in _ALL_ADAPTERS:
+            if adapter_name == failed_adapter:
+                continue
+            getattr(adapters[module_path], sibling_register_name).assert_called_once_with()
+        getattr(adapters[failed_module], register_name).assert_not_called()
+        assert f"{log_name} observability adapter not available" in caplog.text
+
+    @pytest.mark.parametrize(
+        ("failed_adapter", "failed_module", "register_name", "log_name"),
+        _NON_NOMIC_ADAPTERS,
+    )
+    def test_non_nomic_registration_failure_does_not_skip_sibling_adapters(
+        self,
+        failed_adapter: str,
+        failed_module: str,
+        register_name: str,
+        log_name: str,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Every adapter registration has its own fail-soft boundary."""
+        adapters = _mock_observability_adapters()
+        getattr(adapters[failed_module], register_name).side_effect = RuntimeError("boom")
+
+        with (
+            patch.dict("sys.modules", adapters),
+            caplog.at_level("WARNING", logger="aragora.server.startup.observability"),
+        ):
+            from aragora.server.startup.observability import register_observability_sinks
+
+            result = register_observability_sinks()
+
+        assert result is False
+        for adapter_name, module_path, sibling_register_name in _ALL_ADAPTERS:
+            if adapter_name == failed_adapter:
+                continue
+            getattr(adapters[module_path], sibling_register_name).assert_called_once_with()
+        getattr(adapters[failed_module], register_name).assert_called_once_with()
+        assert f"Failed to register {log_name} observability adapter" in caplog.text
+
+
 # =============================================================================
 # init_structured_logging Tests
 # =============================================================================

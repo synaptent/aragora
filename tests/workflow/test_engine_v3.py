@@ -631,6 +631,50 @@ class TestTerminationControl:
         assert terminated is True
         assert reason == "done"
 
+    @pytest.mark.asyncio
+    async def test_pause_all_stops_all_live_engine_instances(
+        self,
+        engine: WorkflowEngine,
+    ):
+        """The emergency brake should stop every currently executing engine."""
+        reset_workflow_engine()
+        other_engine = WorkflowEngine(
+            config=WorkflowConfig(enable_checkpointing=False),
+            step_registry={"slow": SlowStep, "echo": EchoStep},
+            checkpoint_store=MagicMock(),
+        )
+        workflow = WorkflowDefinition(
+            id="wf-brake",
+            name="Brake",
+            steps=[
+                StepDefinition(
+                    id="s1",
+                    name="Slow",
+                    step_type="slow",
+                    config={"delay": 0.05},
+                    next_steps=["s2"],
+                ),
+                StepDefinition(id="s2", name="Should Not Run", step_type="echo"),
+            ],
+            entry_step="s1",
+        )
+
+        try:
+            tasks = [
+                asyncio.create_task(engine.execute(workflow)),
+                asyncio.create_task(other_engine.execute(workflow)),
+            ]
+            await asyncio.sleep(0.01)
+            WorkflowEngine.pause_all("Critical alert")
+            results = await asyncio.gather(*tasks)
+
+            assert engine.check_termination() == (True, "Critical alert")
+            assert other_engine.check_termination() == (True, "Critical alert")
+            assert all([step.step_id for step in result.steps] == ["s1"] for result in results)
+            assert WorkflowEngine(checkpoint_store=MagicMock()).check_termination() == (False, None)
+        finally:
+            reset_workflow_engine()
+
 
 # ---------------------------------------------------------------------------
 # Metrics

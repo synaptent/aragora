@@ -54,6 +54,7 @@ from aragora.security.capability_gate import (
 
 if TYPE_CHECKING:
     from aragora.rbac.models import AuthorizationContext
+    from aragora.sandbox.executor import SandboxExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -241,6 +242,7 @@ class PlanExecutor:
                 logger.debug("Could not initialize knowledge_mound: %s", e)
                 knowledge_mound = None
 
+        self._sandbox_executor: SandboxExecutor | None
         if sandbox_config is not None:
             try:
                 from aragora.sandbox.executor import SandboxExecutor

@@ -8,11 +8,12 @@ All functions operate on ContinuumMemory instances passed as the first parameter
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import importlib.util
 from typing import TYPE_CHECKING
 
 from aragora.memory.tier_manager import DEFAULT_TIER_CONFIGS, MemoryTier
+from aragora.utils.datetime_helpers import utc_now_iso_naive
 
 if TYPE_CHECKING:
     from aragora.memory.continuum import ContinuumMemory
@@ -85,9 +86,11 @@ def promote_batch(
     if not ids:
         return 0
 
-    now = datetime.now().isoformat()
+    # Naive-UTC clock: rows are aged with UTC julianday('now') comparisons
+    now_dt = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = now_dt.isoformat()
     cooldown_hours = cms.hyperparams["promotion_cooldown_hours"]
-    cutoff_time = (datetime.now() - timedelta(hours=cooldown_hours)).isoformat()
+    cutoff_time = (now_dt - timedelta(hours=cooldown_hours)).isoformat()
 
     with cms._tier_lock, cms.immediate_transaction() as conn:
         cursor = conn.cursor()
@@ -172,7 +175,7 @@ def demote_batch(
     if not ids:
         return 0
 
-    now = datetime.now().isoformat()
+    now = utc_now_iso_naive()
 
     with cms._tier_lock, cms.immediate_transaction() as conn:
         cursor = conn.cursor()

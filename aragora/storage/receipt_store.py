@@ -22,6 +22,7 @@ Usage:
 from __future__ import annotations
 
 import atexit
+import hashlib
 import json
 import logging
 import os
@@ -34,6 +35,7 @@ import builtins
 from typing import Any
 
 from aragora.config import resolve_db_path
+from aragora.storage.connection_factory import is_postgres_backend
 
 from aragora.storage.backends import (
     POSTGRESQL_AVAILABLE,
@@ -46,6 +48,23 @@ logger = logging.getLogger(__name__)
 
 # Default configuration
 DEFAULT_RETENTION_DAYS = int(os.environ.get("ARAGORA_RECEIPT_RETENTION_DAYS", "2555"))  # ~7 years
+
+
+def _compute_receipt_checksum(receipt_data: dict[str, Any]) -> str:
+    """Compute the canonical decision-receipt integrity checksum."""
+    content = json.dumps(
+        {
+            "receipt_id": receipt_data.get("receipt_id", ""),
+            "verdict": receipt_data.get("verdict", "NEEDS_REVIEW"),
+            "confidence": receipt_data.get("confidence", 0.0),
+            "findings_count": len(receipt_data.get("findings") or []),
+            "critical_count": receipt_data.get("critical_count", 0),
+            "timestamp": receipt_data.get("timestamp"),
+            "audit_trail_id": receipt_data.get("audit_trail_id"),
+        },
+        sort_keys=True,
+    )
+    return hashlib.sha256(content.encode()).hexdigest()[:16]
 
 
 def _linked_worktree_shared_receipt_db_path() -> Path | None:
@@ -195,7 +214,7 @@ class StoredReceipt:
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for API responses."""
-        result = {
+        result: dict[str, Any] = {
             "receipt_id": self.receipt_id,
             "gauntlet_id": self.gauntlet_id,
             "debate_id": self.debate_id,
@@ -417,7 +436,11 @@ class ReceiptStore:
 
         if backend is None:
             env_backend = os.environ.get("ARAGORA_DB_BACKEND", "sqlite").lower()
-            backend = "postgresql" if (actual_url and env_backend == "postgresql") else "sqlite"
+            backend = (
+                "postgresql" if (actual_url and is_postgres_backend(env_backend)) else "sqlite"
+            )
+        elif is_postgres_backend(backend):
+            backend = "postgresql"
 
         self.backend_type = backend
         self._backend: DatabaseBackend | None = None
@@ -451,18 +474,21 @@ class ReceiptStore:
             schema_statements = self.SCHEMA_STATEMENTS_SQLITE
             migration_statements = self.MIGRATION_STATEMENTS_SQLITE
 
-        # Run migrations first to add any missing columns before creating indexes
+        self._backend.execute_write(schema_statements[0])
+
+        # Legacy tables need optional columns before their indexes can be created.
         for statement in migration_statements:
             try:
                 self._backend.execute_write(statement)
-            except (OSError, RuntimeError, ValueError, sqlite3.Error) as e:
+            except sqlite3.OperationalError as e:
+                if self.backend_type == "postgresql" or str(e) != (
+                    f"duplicate column name: {statement.split()[5]}"
+                ):
+                    raise
                 logger.debug("Migration statement skipped: %s", e)
 
-        for statement in schema_statements:
-            try:
-                self._backend.execute_write(statement)
-            except (OSError, RuntimeError, ValueError, sqlite3.Error) as e:
-                logger.debug("Schema statement skipped: %s", e)
+        for statement in schema_statements[1:]:
+            self._backend.execute_write(statement)
 
     def close(self) -> None:
         """Close any open backend resources."""
@@ -1257,7 +1283,7 @@ class ReceiptStore:
             )
 
         try:
-            from aragora.gauntlet.signing import (
+            from aragora.storage.receipt_signing import (
                 ReceiptSigner,
                 SignatureMetadata,
                 SignedReceipt,
@@ -1363,11 +1389,7 @@ class ReceiptStore:
             }
 
         try:
-            from aragora.export.decision_receipt import DecisionReceipt
-
-            # Recompute checksum from data
-            loaded_receipt = DecisionReceipt.from_dict(receipt.data)
-            computed_checksum = loaded_receipt._compute_checksum()
+            computed_checksum = _compute_receipt_checksum(receipt.data)
 
             is_valid = computed_checksum == receipt.checksum
 

@@ -458,7 +458,7 @@ class HybridSearcher:
         min_score = min(scores.values())
 
         if max_score == min_score:
-            return {k: 1.0 for k in scores}
+            return dict.fromkeys(scores, 1.0)
 
         return {k: (v - min_score) / (max_score - min_score) for k, v in scores.items()}
 

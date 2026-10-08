@@ -100,7 +100,7 @@ class PromptDecomposer:
 
                 self._agent = OpenRouterAgent(
                     name="decomposer",
-                    model="anthropic/claude-opus-4.8",
+                    model="anthropic/claude-opus-5",
                 )
                 return self._agent
         except (ImportError, RuntimeError, ValueError) as e:

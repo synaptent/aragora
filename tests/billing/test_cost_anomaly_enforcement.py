@@ -257,7 +257,7 @@ class TestCostTrackerEnforcement:
 
         with (
             patch(
-                "aragora.notifications.service.notify_cost_anomaly",
+                "aragora.billing.cost_tracker.notify_cost_anomaly",
                 new_callable=AsyncMock,
             ),
             patch(
@@ -302,7 +302,7 @@ class TestCostTrackerEnforcement:
 
         with (
             patch(
-                "aragora.notifications.service.notify_cost_anomaly",
+                "aragora.billing.cost_tracker.notify_cost_anomaly",
                 new_callable=AsyncMock,
             ),
             patch(

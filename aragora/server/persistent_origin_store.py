@@ -143,6 +143,20 @@ class PersistentOriginStore:
         self._cache: dict[str, OriginRecord] = {}
         self._cache_order: list[str] = []  # For LRU eviction
 
+    def _require_pool(self) -> Any:
+        """Return the initialized PostgreSQL pool."""
+        pool = self._pool
+        if pool is None:
+            raise RuntimeError("PostgreSQL pool is not initialized")
+        return pool
+
+    def _require_sqlite_path(self) -> str:
+        """Return the initialized SQLite database path."""
+        path = self._sqlite_path
+        if path is None:
+            raise RuntimeError("SQLite path is not initialized")
+        return path
+
     async def initialize(self) -> None:
         """Initialize database connection and schema."""
         if self._initialized:
@@ -240,7 +254,7 @@ class PersistentOriginStore:
 
     def _create_sqlite_schema(self) -> None:
         """Create SQLite schema (synchronous)."""
-        with sqlite3.connect(self._sqlite_path) as conn:
+        with sqlite3.connect(self._require_sqlite_path()) as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS routing_origins (
                     origin_id TEXT PRIMARY KEY,
@@ -357,13 +371,13 @@ class PersistentOriginStore:
 
         # Load from persistent store
         if self._use_postgres:
-            origin = await self._load_postgres(origin_id)
+            loaded_origin = await self._load_postgres(origin_id)
         else:
-            origin = await self._load_sqlite(origin_id)
+            loaded_origin = await self._load_sqlite(origin_id)
 
-        if origin and not origin.is_expired():
-            self._cache_put(origin)
-            return origin
+        if loaded_origin and not loaded_origin.is_expired():
+            self._cache_put(loaded_origin)
+            return loaded_origin
 
         return None
 
@@ -460,7 +474,7 @@ class PersistentOriginStore:
 
     async def _save_postgres(self, origin: OriginRecord) -> None:
         """Save origin to PostgreSQL."""
-        async with self._pool.acquire() as conn:
+        async with self._require_pool().acquire() as conn:
             await conn.execute(
                 """
                 INSERT INTO routing_origins
@@ -491,7 +505,7 @@ class PersistentOriginStore:
 
     async def _load_postgres(self, origin_id: str) -> OriginRecord | None:
         """Load origin from PostgreSQL."""
-        async with self._pool.acquire() as conn:
+        async with self._require_pool().acquire() as conn:
             row = await conn.fetchrow(
                 """
                 SELECT origin_id, origin_type, platform, channel_id, user_id,
@@ -550,7 +564,7 @@ class PersistentOriginStore:
         """  # noqa: S608 -- dynamic clause from internal state
 
         results = []
-        async with self._pool.acquire() as conn:
+        async with self._require_pool().acquire() as conn:
             rows = await conn.fetch(query, *params)
             for row in rows:
                 results.append(
@@ -574,7 +588,7 @@ class PersistentOriginStore:
 
     async def _cleanup_postgres(self) -> int:
         """Remove expired records from PostgreSQL."""
-        async with self._pool.acquire() as conn:
+        async with self._require_pool().acquire() as conn:
             result = await conn.execute("DELETE FROM routing_origins WHERE expires_at < NOW()")
             # Parse "DELETE N" result
             count = int(result.split()[-1]) if result else 0
@@ -589,7 +603,7 @@ class PersistentOriginStore:
 
     def _save_sqlite_sync(self, origin: OriginRecord) -> None:
         """Synchronous SQLite save."""
-        with sqlite3.connect(self._sqlite_path) as conn:
+        with sqlite3.connect(self._require_sqlite_path()) as conn:
             conn.execute(
                 """
                 INSERT OR REPLACE INTO routing_origins
@@ -622,7 +636,7 @@ class PersistentOriginStore:
 
     def _load_sqlite_sync(self, origin_id: str) -> OriginRecord | None:
         """Synchronous SQLite load."""
-        with sqlite3.connect(self._sqlite_path) as conn:
+        with sqlite3.connect(self._require_sqlite_path()) as conn:
             cursor = conn.execute("SELECT * FROM routing_origins WHERE origin_id = ?", (origin_id,))
             row = cursor.fetchone()
 
@@ -676,7 +690,7 @@ class PersistentOriginStore:
             LIMIT ?
         """  # noqa: S608 -- dynamic clause from internal state
 
-        with sqlite3.connect(self._sqlite_path) as conn:
+        with sqlite3.connect(self._require_sqlite_path()) as conn:
             cursor = conn.execute(query, params)
             rows = cursor.fetchall()
 
@@ -708,7 +722,7 @@ class PersistentOriginStore:
 
     def _cleanup_sqlite_sync(self) -> int:
         """Synchronous SQLite cleanup."""
-        with sqlite3.connect(self._sqlite_path) as conn:
+        with sqlite3.connect(self._require_sqlite_path()) as conn:
             cursor = conn.execute(
                 "DELETE FROM routing_origins WHERE expires_at < ?", (time.time(),)
             )

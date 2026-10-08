@@ -28,6 +28,7 @@ from aragora.storage.receipt_store import (
     ReceiptStore,
     SignatureVerificationResult,
     StoredReceipt,
+    _compute_receipt_checksum,
     close_receipt_store,
     get_receipt_store,
     set_receipt_store,
@@ -119,6 +120,190 @@ def signed_receipt_dict():
             "timestamp": datetime.now(timezone.utc).isoformat(),
         },
     }
+
+
+class _SchemaBackend:
+    """Stateful DDL double: ALTER needs a table, indexes need their columns."""
+
+    def __init__(self, columns=None, failure=None):
+        self.columns = None if columns is None else set(columns)
+        self.indexes = set()
+        self.statements = []
+        self.failure = failure
+
+    def execute_write(self, statement):
+        words = statement.split()
+        stage = "alter" if words[0] == "ALTER" else words[1].lower()
+        self.statements.append(stage)
+        if self.failure and stage == self.failure[0]:
+            raise self.failure[1]
+        if stage == "table":
+            if self.columns is None:
+                self.columns = {
+                    line.strip().split()[0] for line in statement.split("(")[1].split(",")
+                }
+        elif stage == "alter":
+            if self.columns is None:
+                raise RuntimeError('relation "receipts" does not exist')
+            column = words[8] if "IF NOT EXISTS" in statement else words[5]
+            if column in self.columns and "IF NOT EXISTS" not in statement:
+                raise sqlite3.OperationalError(f"duplicate column name: {column}")
+            self.columns.add(column)
+        else:
+            column = statement.split("(")[1].split(")")[0].split()[0]
+            if self.columns is None or column not in self.columns:
+                raise RuntimeError(f"missing indexed column: {column}")
+            self.indexes.add(words[5])
+
+    def close(self):
+        pass
+
+
+def _schema_constructor(monkeypatch, backend, engine):
+    module = importlib.import_module("aragora.storage.receipt_store")
+    name = "PostgreSQLBackend" if engine == "postgresql" else "SQLiteBackend"
+    monkeypatch.setattr(module, name, lambda *args: backend)
+    monkeypatch.setattr(module, "POSTGRESQL_AVAILABLE", True)
+    return ReceiptStore(backend=engine, database_url="postgresql://unused", file_receipt_dirs=[])
+
+
+@pytest.mark.parametrize("engine", ["sqlite", "postgresql"])
+@pytest.mark.parametrize("existing", [None, (), ("timestamp_token",), ("legal_hold",)])
+def test_schema_initialization_order_and_repeated_construction(monkeypatch, engine, existing):
+    definitions = ReceiptStore.SCHEMA_STATEMENTS_SQLITE[0].split("(")[1].split(",")
+    optional = {sql.split()[5] for sql in ReceiptStore.MIGRATION_STATEMENTS_SQLITE}
+    required = {line.strip().split()[0] for line in definitions}
+    columns = None if existing is None else (required - optional) | set(existing)
+    backend = _SchemaBackend(columns)
+    for _ in range(3):
+        backend.statements.clear()
+        store = _schema_constructor(monkeypatch, backend, engine)
+        assert backend.columns == required
+        assert "idx_receipts_legal_hold" in backend.indexes
+        expected = ["table"] + ["alter"] * 8 + ["index"] * (9 if engine == "postgresql" else 8)
+        assert backend.statements == expected
+        assert store.SCHEMA_STATEMENTS is ReceiptStore.SCHEMA_STATEMENTS_SQLITE
+        store.close()
+
+
+@pytest.mark.parametrize("engine", ["sqlite", "postgresql"])
+@pytest.mark.parametrize("stage", ["table", "alter", "index"])
+@pytest.mark.parametrize(
+    "error",
+    [
+        sqlite3.OperationalError("unexpected DDL failure"),
+        sqlite3.DatabaseError("unexpected database failure"),
+        OSError("unexpected IO failure"),
+        RuntimeError("unexpected runtime failure"),
+        ValueError("unexpected value failure"),
+    ],
+)
+def test_schema_initialization_exposes_unexpected_errors(monkeypatch, engine, stage, error):
+    backend = _SchemaBackend(failure=(stage, error))
+    with pytest.raises(type(error)) as raised:
+        _schema_constructor(monkeypatch, backend, engine)
+    assert raised.value is error
+    assert backend.statements[-1] == stage
+    assert backend.statements[0] == "table"
+
+
+@pytest.mark.parametrize("stage", ["table", "index"])
+def test_schema_duplicate_column_outside_upgrade_is_not_suppressed(monkeypatch, stage):
+    error = sqlite3.OperationalError("duplicate column name: timestamp_token")
+    with pytest.raises(sqlite3.OperationalError) as raised:
+        _schema_constructor(monkeypatch, _SchemaBackend(failure=(stage, error)), "sqlite")
+    assert raised.value is error
+
+
+@pytest.mark.parametrize("existing", [None, (), ("timestamp_token",), ("legal_hold",)])
+def test_sqlite_schema_lifecycle_preserves_rows(tmp_path, sample_receipt_dict, existing):
+    path = tmp_path / "lifecycle.db"
+    optional = {sql.split()[5] for sql in ReceiptStore.MIGRATION_STATEMENTS_SQLITE}
+    expected = {}
+    with sqlite3.connect(path) as conn:
+        assert (
+            conn.execute("SELECT name FROM sqlite_master WHERE name='receipts'").fetchone() is None
+        )
+        if existing is not None:
+            schema = "\n".join(
+                line
+                for line in ReceiptStore.SCHEMA_STATEMENTS_SQLITE[0].splitlines()
+                if not line.strip() or line.split()[0] not in optional - set(existing)
+            )
+            conn.execute(schema)
+            for i in range(2):
+                payload = dict(sample_receipt_dict, receipt_id=f"old-{i}", gauntlet_id=f"g-{i}")
+                values = {
+                    "receipt_id": payload["receipt_id"],
+                    "gauntlet_id": payload["gauntlet_id"],
+                    "created_at": 100.0,
+                    "verdict": "APPROVED",
+                    "confidence": 0.85,
+                    "risk_level": "MEDIUM",
+                    "checksum": f"checksum-{i}",
+                    "data_json": json.dumps(payload),
+                }
+                if "timestamp_token" in existing:
+                    values["timestamp_token"] = "old-token" if i == 0 else None
+                if "legal_hold" in existing:
+                    values["legal_hold"] = i
+                names = ", ".join(values)
+                conn.execute(
+                    f"INSERT INTO receipts ({names}) VALUES ({','.join('?' for _ in values)})",
+                    tuple(values.values()),
+                )
+            conn.row_factory = sqlite3.Row
+            expected = {
+                row["receipt_id"]: dict(row) for row in conn.execute("SELECT * FROM receipts")
+            }
+    for iteration in range(3):
+        store = ReceiptStore(db_path=path, backend="sqlite", file_receipt_dirs=[])
+        try:
+            with sqlite3.connect(path) as conn:
+                conn.row_factory = sqlite3.Row
+                columns = {row[1] for row in conn.execute("PRAGMA table_info(receipts)")}
+                assert optional <= columns
+                for statement in ReceiptStore.SCHEMA_STATEMENTS_SQLITE[1:]:
+                    name = statement.split()[5]
+                    column = statement.split("(")[1].split(")")[0].split()[0]
+                    assert [row[2] for row in conn.execute(f"PRAGMA index_info({name})")] == [
+                        column
+                    ]
+                actual = {
+                    row["receipt_id"]: dict(row) for row in conn.execute("SELECT * FROM receipts")
+                }
+                assert len(actual) == len(expected)
+                for rid, before in expected.items():
+                    assert {key: actual[rid][key] for key in before} == before
+                    assert store.get(rid).data == json.loads(before["data_json"])
+                    if iteration == 0:
+                        for column in optional - set(existing or ()):
+                            assert actual[rid][column] == (0 if column == "legal_hold" else None)
+                expected = actual
+            if iteration == 2:
+                if expected:
+                    rid = sorted(expected)[0]
+                    payload = dict(store.get(rid).data, statement="updated")
+                    store.save(payload)
+                    assert store.get(rid).data["statement"] == "updated"
+                    # INSERT OR REPLACE resets optional columns, the unchanged SQLite save semantics.
+                    with sqlite3.connect(path) as conn:
+                        assert conn.execute(
+                            "SELECT timestamp_token, legal_hold FROM receipts WHERE receipt_id=?",
+                            (rid,),
+                        ).fetchone() == (None, 0)
+                    assert store.count() == len(expected)
+                store.save(dict(sample_receipt_dict, receipt_id="new", gauntlet_id="new-gauntlet"))
+                assert store.count() == len(expected) + 1
+        finally:
+            store.close()
+    reopened = ReceiptStore(db_path=path, backend="sqlite", file_receipt_dirs=[])
+    try:
+        assert reopened.get("new") is not None
+        if expected:
+            assert reopened.get(sorted(expected)[0]).data["statement"] == "updated"
+    finally:
+        reopened.close()
 
 
 # ===========================================================================
@@ -648,7 +833,7 @@ class TestReceiptStoreSignatures:
         with patch.dict(
             "sys.modules",
             {
-                "aragora.gauntlet.signing": MagicMock(
+                "aragora.storage.receipt_signing": MagicMock(
                     ReceiptSigner=MagicMock(return_value=mock_signer),
                     SignatureMetadata=MagicMock(),
                     SignedReceipt=MagicMock(),
@@ -687,6 +872,24 @@ class TestReceiptStoreSignatures:
 class TestReceiptStoreIntegrity:
     """Tests for integrity verification."""
 
+    def test_checksum_matches_decision_receipt_contract(self):
+        """Storage checksum calculation stays aligned with the receipt model."""
+        from aragora.export.decision_receipt import DecisionReceipt
+
+        receipt_data = {
+            "receipt_id": "receipt-contract",
+            "gauntlet_id": "gauntlet-contract",
+            "timestamp": "2026-07-12T12:00:00+00:00",
+            "verdict": "APPROVED",
+            "confidence": 0.9,
+            "findings": [],
+            "critical_count": 0,
+            "audit_trail_id": "audit-contract",
+        }
+        receipt = DecisionReceipt.from_dict(receipt_data)
+
+        assert _compute_receipt_checksum(receipt_data) == receipt._compute_checksum()
+
     def test_verify_integrity_not_found(self, receipt_store):
         """Test verify_integrity for nonexistent receipt."""
         result = receipt_store.verify_integrity("nonexistent")
@@ -696,44 +899,26 @@ class TestReceiptStoreIntegrity:
 
     def test_verify_integrity_valid(self, receipt_store, sample_receipt_dict):
         """Test verify_integrity for valid checksum."""
-        sample_receipt_dict["checksum"] = "sha256:valid"
+        expected_checksum = _compute_receipt_checksum(sample_receipt_dict)
+        sample_receipt_dict["checksum"] = expected_checksum
         receipt_store.save(sample_receipt_dict)
 
-        # Mock DecisionReceipt to return same checksum
-        mock_receipt = MagicMock()
-        mock_receipt._compute_checksum.return_value = "sha256:valid"
-        mock_receipt_class = MagicMock()
-        mock_receipt_class.from_dict.return_value = mock_receipt
-
-        with patch.dict(
-            "sys.modules",
-            {"aragora.export.decision_receipt": MagicMock(DecisionReceipt=mock_receipt_class)},
-        ):
-            result = receipt_store.verify_integrity("receipt-001")
+        result = receipt_store.verify_integrity("receipt-001")
 
         assert result["integrity_valid"] is True
-        assert result["stored_checksum"] == "sha256:valid"
+        assert result["stored_checksum"] == expected_checksum
 
     def test_verify_integrity_invalid(self, receipt_store, sample_receipt_dict):
         """Test verify_integrity for mismatched checksum."""
-        sample_receipt_dict["checksum"] = "sha256:original"
+        computed_checksum = _compute_receipt_checksum(sample_receipt_dict)
+        sample_receipt_dict["checksum"] = "tampered"
         receipt_store.save(sample_receipt_dict)
 
-        # Mock DecisionReceipt to return different checksum
-        mock_receipt = MagicMock()
-        mock_receipt._compute_checksum.return_value = "sha256:tampered"
-        mock_receipt_class = MagicMock()
-        mock_receipt_class.from_dict.return_value = mock_receipt
-
-        with patch.dict(
-            "sys.modules",
-            {"aragora.export.decision_receipt": MagicMock(DecisionReceipt=mock_receipt_class)},
-        ):
-            result = receipt_store.verify_integrity("receipt-001")
+        result = receipt_store.verify_integrity("receipt-001")
 
         assert result["integrity_valid"] is False
-        assert result["stored_checksum"] == "sha256:original"
-        assert result["computed_checksum"] == "sha256:tampered"
+        assert result["stored_checksum"] == "tampered"
+        assert result["computed_checksum"] == computed_checksum
 
 
 # ===========================================================================

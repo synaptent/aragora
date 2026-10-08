@@ -120,7 +120,7 @@ class DiscordIntegration:
         if len(self._request_times) >= self.config.rate_limit_per_minute:
             wait_time = 60 - (now - self._request_times[0])
             if wait_time > 0:
-                logger.warning(f"Discord rate limit hit, waiting {wait_time:.1f}s")
+                logger.warning("Discord rate limit hit, waiting %.1fs", wait_time)
                 await asyncio.sleep(wait_time)
         self._request_times.append(now)
 
@@ -136,7 +136,7 @@ class DiscordIntegration:
         # Check circuit breaker before attempting
         if self._circuit_breaker is not None and not self._circuit_breaker.can_proceed():
             remaining = self._circuit_breaker.cooldown_remaining()
-            logger.warning(f"Discord circuit breaker open, retry in {remaining:.1f}s")
+            logger.warning("Discord circuit breaker open, retry in %.1fs", remaining)
             return False
 
         await self._check_rate_limit()

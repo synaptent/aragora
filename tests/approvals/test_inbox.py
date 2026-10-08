@@ -70,6 +70,20 @@ def test_collect_pending_approvals_includes_inbox_wedge_receipts(tmp_path):
     assert item["actions"]["approve"]["body"] == {"choice": "approve", "execute": True}
 
 
+def test_collect_pending_approvals_skips_non_mapping_gateway_records():
+    class GatewayStore:
+        def list_approvals(self, *, limit: int, offset: int):
+            return ([object()], 1)
+
+    with patch(
+        "aragora.server.handlers.openclaw.store._get_store",
+        return_value=GatewayStore(),
+    ):
+        approvals = collect_pending_approvals(limit=10, sources=["gateway"])
+
+    assert approvals == []
+
+
 def _settlement_packet() -> dict:
     return {
         "generated_at": "2026-07-04T18:00:00+00:00",

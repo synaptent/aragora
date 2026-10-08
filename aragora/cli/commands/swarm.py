@@ -782,9 +782,26 @@ def _build_runner_probe_payload(
         )
     if routing_after is not None:
         payload["routing_after"] = routing_after
-        payload["summary"]["selected_after"] = len(
-            [item for item in routing_after.get("selected_runners", []) if isinstance(item, dict)]
+        selected_after = [
+            item for item in routing_after.get("selected_runners", []) if isinstance(item, dict)
+        ]
+        execution_verified_after = len(
+            [
+                item
+                for item in selected_after
+                if str(item.get("probe_status", "")).strip() == "passed"
+            ]
         )
+        payload["summary"]["selected_after"] = len(selected_after)
+        payload["summary"]["execution_verified_after"] = execution_verified_after
+        if subaction == "maintain":
+            payload["heartbeat_readiness"] = {
+                "ready": execution_verified_after > 0,
+                "blocked_reason": (
+                    None if execution_verified_after > 0 else "no_execution_verified_runner"
+                ),
+                "execution_verified_count": execution_verified_after,
+            }
     return payload
 
 
@@ -1311,7 +1328,8 @@ def cmd_swarm(args: argparse.Namespace) -> None:
                 if failure_terminal_text:
                     print(f"failure_terminal_class={failure_terminal_text}")
             else:
-                print("swarm preflight: ok")
+                preflight_passed = bool(payload.get("passed", False))
+                print(f"swarm preflight: {'ok' if preflight_passed else 'blocked'}")
                 print(f"repo_root={payload['repo_root']}")
                 print(f"agent={payload['agent']}")
                 print(f"base_ref={payload['base_ref']}")
@@ -1321,6 +1339,8 @@ def cmd_swarm(args: argparse.Namespace) -> None:
                 if checksum:
                     print(f"worker_contract_checksum={checksum}")
         if contract_arg and payload["admission_gate"]["verdict"] != "pass":
+            raise SystemExit(2)
+        if not contract_arg and not bool(payload.get("passed", False)):
             raise SystemExit(2)
         return
 

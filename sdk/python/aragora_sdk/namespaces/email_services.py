@@ -12,7 +12,14 @@ Features:
 
 from __future__ import annotations
 
+import warnings
 from typing import TYPE_CHECKING, Any
+
+
+def _warn_deprecated(message: str) -> None:
+    """Emit a runtime DeprecationWarning for a dead or drifted SDK method."""
+    warnings.warn(message, DeprecationWarning, stacklevel=3)
+
 
 if TYPE_CHECKING:
     from ..client import AragoraAsyncClient, AragoraClient
@@ -167,29 +174,52 @@ class EmailServicesAPI:
     # ===========================================================================
 
     def create_triage_rule(self, **kwargs: Any) -> dict[str, Any]:
-        """Create an email triage rule.
+        """Update the triage rules document.
 
-        Args:
-            **kwargs: Rule configuration (name, conditions, actions, etc.).
+        .. deprecated::
+            The server exposes triage rules as a single GET/PUT document;
+            POST /api/v1/email/triage/rules was never served. Use
+            :meth:`update_triage_rule` with the full rules document instead.
 
-        Returns:
-            Dict with created rule details.
+        Raises:
+            ValueError: If the payload is not a full rules document. A
+                single-rule payload sent to the full-document PUT would
+                silently reset the server's triage rules to defaults, so
+                this shim fails closed instead of delegating blindly.
         """
-        return self._client.request("POST", "/api/v1/email/triage/rules", json=kwargs)
+        _warn_deprecated(
+            "create_triage_rule is deprecated: the server has no POST-create "
+            "operation for triage rules; use update_triage_rule (PUT)."
+        )
+        if "rules" not in kwargs:
+            raise ValueError(
+                "create_triage_rule cannot translate a single-rule payload: "
+                "PUT /api/v1/email/triage/rules replaces the whole document, "
+                "and a payload without 'rules' would reset the server config "
+                "to defaults. Call update_triage_rule with the full document "
+                "({'rules': [...], 'escalation_keywords': [...], ...})."
+            )
+        return self.update_triage_rule(**kwargs)
 
     def update_triage_rule(self, **kwargs: Any) -> dict[str, Any]:
-        """Update an email triage rule.
+        """Update the email triage rules.
+
+        The server exposes triage rules as a single document: GET/PUT
+        /api/v1/email/triage/rules (there is no POST-create operation).
 
         Args:
-            **kwargs: Updated rule configuration.
+            **kwargs: Updated rules configuration.
 
         Returns:
-            Dict with updated rule details.
+            Dict with updated rules details.
         """
         return self._client.request("PUT", "/api/v1/email/triage/rules", json=kwargs)
 
     def create_triage_test(self, **kwargs: Any) -> dict[str, Any]:
-        """Create an email triage test.
+        """Test a message against the triage rules.
+
+        The server serves POST /api/v1/email/triage/test only (tests are
+        stateless; there is no PUT-update operation).
 
         Args:
             **kwargs: Test configuration (email_content, rules, etc.).
@@ -200,15 +230,18 @@ class EmailServicesAPI:
         return self._client.request("POST", "/api/v1/email/triage/test", json=kwargs)
 
     def update_triage_test(self, **kwargs: Any) -> dict[str, Any]:
-        """Update an email triage test.
+        """Test a message against the triage rules.
 
-        Args:
-            **kwargs: Updated test configuration.
-
-        Returns:
-            Dict with updated test details.
+        .. deprecated::
+            Triage tests are stateless; PUT /api/v1/email/triage/test was
+            never served. Use :meth:`create_triage_test` instead. This shim
+            delegates to it.
         """
-        return self._client.request("PUT", "/api/v1/email/triage/test", json=kwargs)
+        _warn_deprecated(
+            "update_triage_test is deprecated: triage tests are stateless; "
+            "use create_triage_test (POST)."
+        )
+        return self.create_triage_test(**kwargs)
 
 
 class AsyncEmailServicesAPI:
@@ -306,17 +339,35 @@ class AsyncEmailServicesAPI:
     # ===========================================================================
 
     async def create_triage_rule(self, **kwargs: Any) -> dict[str, Any]:
-        """Create an email triage rule."""
-        return await self._client.request("POST", "/api/v1/email/triage/rules", json=kwargs)
+        """Deprecated: no POST-create exists; requires the full rules document.
+
+        Fails closed on single-rule payloads — the full-document PUT would
+        silently reset the server's triage rules to defaults otherwise.
+        """
+        _warn_deprecated(
+            "create_triage_rule is deprecated: the server has no POST-create "
+            "operation for triage rules; use update_triage_rule (PUT)."
+        )
+        if "rules" not in kwargs:
+            raise ValueError(
+                "create_triage_rule cannot translate a single-rule payload: "
+                "PUT /api/v1/email/triage/rules replaces the whole document. "
+                "Call update_triage_rule with the full document."
+            )
+        return await self.update_triage_rule(**kwargs)
 
     async def update_triage_rule(self, **kwargs: Any) -> dict[str, Any]:
-        """Update an email triage rule."""
+        """Update the email triage rules (single GET/PUT document)."""
         return await self._client.request("PUT", "/api/v1/email/triage/rules", json=kwargs)
 
     async def create_triage_test(self, **kwargs: Any) -> dict[str, Any]:
-        """Create an email triage test."""
+        """Test a message against the triage rules (stateless POST)."""
         return await self._client.request("POST", "/api/v1/email/triage/test", json=kwargs)
 
     async def update_triage_test(self, **kwargs: Any) -> dict[str, Any]:
-        """Update an email triage test."""
-        return await self._client.request("PUT", "/api/v1/email/triage/test", json=kwargs)
+        """Deprecated: triage tests are stateless; delegates to create_triage_test."""
+        _warn_deprecated(
+            "update_triage_test is deprecated: triage tests are stateless; "
+            "use create_triage_test (POST)."
+        )
+        return await self.create_triage_test(**kwargs)

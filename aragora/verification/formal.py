@@ -58,6 +58,7 @@ from enum import Enum
 from typing import Any, Protocol, runtime_checkable
 
 from aragora.config import get_api_key
+from aragora.models.compat import first_text_block
 
 logger = logging.getLogger(__name__)
 
@@ -401,7 +402,7 @@ class LeanBackend:
         2. Claude (fallback, good reasoning)
         3. GPT-4 (fallback)
         """
-        from aragora.server.http_client_pool import get_http_pool
+        from aragora.observability.http_client_pool import get_http_pool
 
         # Try DeepSeek-Prover first if configured
         if self._translation_model in (TranslationModel.AUTO, TranslationModel.DEEPSEEK_PROVER):
@@ -410,7 +411,8 @@ class LeanBackend:
                 result = await translator.translate(claim, context)
                 if result.success and result.lean_code:
                     logger.debug(
-                        f"DeepSeek-Prover translation succeeded (confidence: {result.confidence:.2f})"
+                        "DeepSeek-Prover translation succeeded (confidence: %.2f)",
+                        result.confidence,
                     )
                     return result.lean_code
                 elif self._translation_model == TranslationModel.DEEPSEEK_PROVER:
@@ -457,7 +459,7 @@ theorem claim_1 : ∀ n : Nat, n + 0 = n := by simp
                     "content-type": "application/json",
                 }
                 payload = {
-                    "model": "claude-opus-4-8",
+                    "model": "claude-opus-5",
                     "max_tokens": 2048,
                     "messages": [{"role": "user", "content": prompt}],
                 }
@@ -493,7 +495,15 @@ theorem claim_1 : ∀ n : Nat, n + 0 = n := by simp
 
                 try:
                     if anthropic_key:
-                        result = data["content"][0]["text"].strip()
+                        # Opus 5 thinks by default: content[0] is a thinking
+                        # block, so scan for the text block. Absent text is the
+                        # same failure the old content[0] KeyError signalled.
+                        result = first_text_block(data.get("content")).strip()
+                        if not result:
+                            logger.warning(
+                                "Anthropic response carried no text block for Lean translation"
+                            )
+                            return None
                     else:
                         result = data["choices"][0]["message"]["content"].strip()
                 except (KeyError, IndexError, TypeError) as e:
@@ -674,7 +684,7 @@ theorem claim_1 : ∀ n : Nat, n + 0 = n := by simp
             - confidence: 0.0-1.0 confidence in the match
             - explanation: Why it matches or doesn't match
         """
-        from aragora.server.http_client_pool import get_http_pool
+        from aragora.observability.http_client_pool import get_http_pool
 
         api_key = get_api_key("ANTHROPIC_API_KEY", "OPENAI_API_KEY", required=False)
         if not api_key:
@@ -721,8 +731,10 @@ Examples of MATCHING:
                     "content-type": "application/json",
                 }
                 payload = {
-                    "model": "claude-opus-4-8",
-                    "max_tokens": 512,
+                    "model": "claude-opus-5",
+                    # Opus 5 thinks by default; max_tokens covers thinking +
+                    # response, so keep headroom.
+                    "max_tokens": 4096,
                     "messages": [{"role": "user", "content": prompt}],
                 }
             else:
@@ -747,7 +759,11 @@ Examples of MATCHING:
                 data = response.json()
 
                 if anthropic_key:
-                    result = data["content"][0]["text"].strip()
+                    # Opus 5 thinks by default: content[0] is a thinking block,
+                    # so scan for the text block.
+                    result = first_text_block(data.get("content")).strip()
+                    if not result:
+                        return False, 0.3, "LLM response carried no text block"
                 else:
                     result = data["choices"][0]["message"]["content"].strip()
 

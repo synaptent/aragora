@@ -112,9 +112,9 @@ class AragoraJSONEncoder(json.JSONEncoder):
 
     def default(self, obj: Any) -> Any:
         if isinstance(obj, set):
-            return sorted(list(obj))
+            return sorted(obj)
         if isinstance(obj, frozenset):
-            return sorted(list(obj))
+            return sorted(obj)
         if isinstance(obj, datetime):
             return obj.isoformat()
         if hasattr(obj, "to_dict") and callable(obj.to_dict):
@@ -614,8 +614,11 @@ class WebhookDispatcher:
 
                     if attempt < cfg.max_retries - 1:
                         logger.debug(
-                            f"Webhook {cfg.name} attempt {attempt + 1} got {resp.status_code}, "
-                            f"retrying in {backoff:.1f}s"
+                            "Webhook %s attempt %s got %s, retrying in %.1fs",
+                            cfg.name,
+                            attempt + 1,
+                            resp.status_code,
+                            backoff,
                         )
                         time.sleep(backoff)
                         continue
@@ -643,8 +646,11 @@ class WebhookDispatcher:
                 if attempt < cfg.max_retries - 1:
                     backoff = cfg.backoff_base_s * (2**attempt) + random.uniform(0, 0.5)  # noqa: S311 -- retry jitter
                     logger.debug(
-                        f"Webhook {cfg.name} attempt {attempt + 1} failed: {e}, "
-                        f"retrying in {backoff:.1f}s"
+                        "Webhook %s attempt %s failed: %s, retrying in %.1fs",
+                        cfg.name,
+                        attempt + 1,
+                        e,
+                        backoff,
                     )
                     time.sleep(backoff)
                     continue
@@ -657,8 +663,11 @@ class WebhookDispatcher:
                     if attempt < cfg.max_retries - 1:
                         backoff = cfg.backoff_base_s * (2**attempt) + random.uniform(0, 0.5)  # noqa: S311 -- retry jitter
                         logger.debug(
-                            f"Webhook {cfg.name} attempt {attempt + 1} transport error: {e}, "
-                            f"retrying in {backoff:.1f}s"
+                            "Webhook %s attempt %s transport error: %s, retrying in %.1fs",
+                            cfg.name,
+                            attempt + 1,
+                            e,
+                            backoff,
                         )
                         time.sleep(backoff)
                         continue
@@ -743,6 +752,18 @@ def shutdown_dispatcher() -> None:
     if _dispatcher:
         _dispatcher.stop()
         _dispatcher = None
+
+
+def register_slo_event_sink() -> bool:
+    """Register the integrations dispatcher with observability."""
+    try:
+        from aragora.observability.metrics.slo import register_slo_event_sink_provider
+    except ImportError as e:
+        logger.debug("Observability SLO event sink contract unavailable: %s", e)
+        return False
+
+    register_slo_event_sink_provider(get_dispatcher)
+    return True
 
 
 # Alias for backward compatibility

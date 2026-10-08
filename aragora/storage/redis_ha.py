@@ -66,7 +66,7 @@ import os
 import threading
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from typing import Any, cast
 
 logger = logging.getLogger(__name__)
 
@@ -480,7 +480,7 @@ def _create_sentinel_client(config: RedisHAConfig) -> Any:
             connection_kwargs["ssl_ca_certs"] = config.ssl_ca_certs
 
     # Create sentinel connection
-    sentinel = Sentinel(
+    sentinel = cast(Any, Sentinel)(
         sentinel_hosts,
         sentinel_kwargs=sentinel_kwargs,
         **connection_kwargs,
@@ -537,7 +537,7 @@ def _create_cluster_client(config: RedisHAConfig) -> Any:
             cluster_kwargs["ssl_ca_certs"] = config.ssl_ca_certs
 
     cluster_args: dict[str, Any] = cluster_kwargs
-    client = RedisCluster(**cluster_args)
+    client: Any = RedisCluster(**cluster_args)
 
     # Verify connection
     client.ping()
@@ -684,7 +684,7 @@ async def _create_async_sentinel_client(config: RedisHAConfig) -> Any:
             connection_kwargs["ssl_ca_certs"] = config.ssl_ca_certs
 
     # Create sentinel connection
-    sentinel = Sentinel(
+    sentinel = cast(Any, Sentinel)(
         sentinel_hosts,
         sentinel_kwargs=sentinel_kwargs,
         **connection_kwargs,
@@ -740,10 +740,10 @@ async def _create_async_cluster_client(config: RedisHAConfig) -> Any:
             cluster_kwargs["ssl_ca_certs"] = config.ssl_ca_certs
 
     async_cluster_args: dict[str, Any] = cluster_kwargs
-    client = RedisCluster(**async_cluster_args)
+    client: Any = RedisCluster(**async_cluster_args)
 
     # Verify connection - RedisCluster.ping() returns coroutine but type stubs don't reflect this
-    await client.ping()  # type: ignore[misc]
+    await client.ping()
     logger.info("Connected to async Redis Cluster (%s startup nodes)", len(cluster_nodes))
 
     return client

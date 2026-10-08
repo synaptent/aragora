@@ -16,7 +16,7 @@ Aragora has everything needed at the infrastructure level:
 
 | Capability | Location | Status |
 |-----------|----------|--------|
-| Multi-model orchestration (43 agent types) | `aragora/debate/orchestrator.py` | ✅ Stable |
+| Multi-model orchestration (46 agent types) | `aragora/debate/orchestrator.py` | ✅ Stable |
 | Propose → Critique → Revise → Vote loop | `aragora/debate/phases/` | ✅ Stable |
 | Configurable debate protocol | `aragora/debate/protocol.py` | ✅ Stable |
 | Workflow engine with loops & checkpoints | `aragora/workflow/engine.py` | ✅ Stable |

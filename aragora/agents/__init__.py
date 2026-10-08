@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import importlib
 import logging
-from typing import Any
+from typing import Any, cast
 
 logger = logging.getLogger(__name__)
 
@@ -178,7 +178,7 @@ def __dir__() -> list[str]:
 
 def get_agents_by_names(names: list[str]) -> list:
     """Get agent instances for the supplied registered type names."""
-    from aragora.agents.base import create_agent
+    from aragora.agents.base import AgentType, create_agent
     from aragora.agents.registry import AgentRegistry, register_all_agents
 
     register_all_agents()
@@ -187,7 +187,7 @@ def get_agents_by_names(names: list[str]) -> list:
     for name in names:
         try:
             if AgentRegistry.is_registered(name):
-                agents.append(create_agent(name))
+                agents.append(create_agent(cast(AgentType, name)))
         except ImportError:
             pass
         except (RuntimeError, ValueError) as exc:

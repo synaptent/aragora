@@ -308,23 +308,6 @@ class RenderContext:
         return f"{(self.metrics[key].value // step) * step:,}"
 
 
-def _render_claude_codebase_scale(ctx: RenderContext) -> str:
-    return (
-        f"**Codebase Scale:** {ctx.exact('python_files')} tracked Python files | "
-        f"{ctx.exact('top_level_modules')} top-level modules | "
-        f"{ctx.exact('tests')} test functions | {ctx.exact('test_files')} test files | "
-        f"{ctx.exact('api_operations')} API operations across {ctx.exact('api_paths')} paths | "
-        "canonical counts in `docs/METRICS.md`"
-    )
-
-
-def _render_claude_test_suite(ctx: RenderContext) -> str:
-    return (
-        f"**Test Suite:** {ctx.exact('tests')} test functions across "
-        f"{ctx.exact('test_files')} test files (canonical counts in `docs/METRICS.md`)"
-    )
-
-
 def _render_readme_scale(ctx: RenderContext) -> str:
     loc_millions = (ctx.value("python_lines") // 100_000) / 10
     return (
@@ -339,7 +322,7 @@ def _render_readme_scale(ctx: RenderContext) -> str:
         f"> ({ctx.exact('adapter_files')} files) · 360+ RBAC permissions · "
         f"Python + TypeScript SDKs · v{ctx.version}.**\n"
         "> (Practical real-time debate uses 2–6 agents; the value is *heterogeneity*, not raw\n"
-        "> count — see docs/HONEST_ASSESSMENT.md.)"
+        "> count — see docs/strategy/HONEST_ASSESSMENT.md.)"
     )
 
 
@@ -422,8 +405,6 @@ def _render_km_adapter_specs(ctx: RenderContext) -> str:
 
 
 RENDERERS: dict[str, Callable[[RenderContext], str]] = {
-    "claude-codebase-scale": _render_claude_codebase_scale,
-    "claude-test-suite": _render_claude_test_suite,
     "readme-scale": _render_readme_scale,
     "extended-readme-scale": _render_extended_readme_scale,
     "extended-readme-api-surface": _render_extended_readme_api_surface,

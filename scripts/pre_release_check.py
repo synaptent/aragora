@@ -331,6 +331,103 @@ def gate_bandit() -> bool:
 # Gate: pip-audit dependency check
 # ---------------------------------------------------------------------------
 
+_PIP_AUDIT_VULN_ID_RE = re.compile(r"\b(?:CVE-\d{4}-\d+|GHSA-[0-9A-Za-z-]+|PYSEC-\d{4}-\d+)\b")
+_ANSI_ESCAPE_RE = re.compile(r"\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+# URL userinfo: covers both https://user:token@host and token-only https://token@host.
+_URL_USERINFO_RE = re.compile(r"(https?://)[^/\s@]+@", re.IGNORECASE)
+# Authorization-style headers with any scheme (Bearer, Basic, token, ...), plus
+# X-Api-Key-style headers, in `Header: value` or `header=value` form.
+_AUTH_HEADER_RE = re.compile(
+    r"(?i)\b((?:proxy-)?authorization[\"']?\s*[:=]\s*)[\"']?(?:[A-Za-z0-9_-]+\s+)?[^\s\"',;]+"
+)
+_API_KEY_HEADER_RE = re.compile(r"(?i)\b(x-(?:goog-)?api-key[\"']?\s*[:=]\s*)[\"']?[^\s\"',;]+")
+# Secret-bearing assignments in env, query-param, JSON, or YAML form. The
+# leading [\w.-]* deliberately catches compound keys (refresh_token=,
+# client_secret=, ARAGORA_API_TOKEN=, "auth_password": ...).
+_SECRET_ASSIGNMENT_RE = re.compile(
+    r"(?i)([\w.-]*(?:token|secret|password|passwd|pwd|api[_-]?key|apikey|credential)s?"
+    r"[\"']?\s*[:=]\s*)[\"']?[^\s\"',;&]+"
+)
+
+_REDACTED = "[redacted]"
+_SANITIZER_UNSET = object()
+_canonical_sanitizer: object = _SANITIZER_UNSET
+
+
+def _load_canonical_sanitizer():
+    """Load aragora.utils.error_sanitizer.sanitize_error without importing the package.
+
+    Loaded by file path so the release script keeps working when the aragora
+    package is not installed. Returns None when unavailable; callers must then
+    fail closed (withhold diagnostics) rather than emit unsanitized output.
+    """
+    global _canonical_sanitizer
+    if _canonical_sanitizer is _SANITIZER_UNSET:
+        try:
+            import importlib.util
+
+            path = PROJECT_ROOT / "aragora" / "utils" / "error_sanitizer.py"
+            spec = importlib.util.spec_from_file_location("_pre_release_error_sanitizer", path)
+            if spec is None or spec.loader is None:
+                raise ImportError(f"cannot load {path}")
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            _canonical_sanitizer = module.sanitize_error
+        except Exception:
+            _canonical_sanitizer = None
+    return _canonical_sanitizer
+
+
+def _sanitized_diagnostic_tail(output: str) -> str | None:
+    """Bounded, redacted tail of audit diagnostics, or None to fail closed.
+
+    Applies local redaction (URL userinfo, authorization/API-key headers,
+    secret-bearing assignments in env/query/JSON/YAML form) and then the
+    canonical repo sanitizer as a backstop. When the canonical sanitizer
+    cannot be loaded, returns None so no diagnostic output is emitted.
+    """
+    sanitize_error = _load_canonical_sanitizer()
+    if sanitize_error is None:
+        return None
+
+    sanitized = _ANSI_ESCAPE_RE.sub("", output)
+    sanitized = _URL_USERINFO_RE.sub(rf"\1{_REDACTED}@", sanitized)
+    sanitized = _AUTH_HEADER_RE.sub(rf"\1{_REDACTED}", sanitized)
+    sanitized = _API_KEY_HEADER_RE.sub(rf"\1{_REDACTED}", sanitized)
+    sanitized = _SECRET_ASSIGNMENT_RE.sub(rf"\1{_REDACTED}", sanitized)
+    sanitized = sanitize_error(sanitized, max_length=4000)
+
+    lines = [line.strip()[:240] for line in sanitized.splitlines() if line.strip()]
+    if not lines:
+        return ""
+
+    tail = " | ".join(lines[-5:])
+    if len(tail) > 800:
+        tail = "..." + tail[-797:]
+    return tail
+
+
+def _pip_audit_failure_detail(output: str) -> str:
+    """Classify a failed audit without hiding helper or service failures."""
+    vulnerability_ids = list(dict.fromkeys(_PIP_AUDIT_VULN_ID_RE.findall(output)))
+    if vulnerability_ids:
+        detail = f"{len(vulnerability_ids)} vulnerability/ies detected"
+        if _verbose:
+            detail += "\n" + "\n".join(f"  {vuln_id}" for vuln_id in vulnerability_ids[:5])
+        return detail
+
+    base = "audit execution failed without vulnerability findings"
+    if not _verbose:
+        # Never echo raw subprocess diagnostics in normal output.
+        return f"{base} (rerun with --verbose for sanitized diagnostics)"
+
+    tail = _sanitized_diagnostic_tail(output)
+    if tail is None:
+        return f"{base} (diagnostics withheld: sanitizer unavailable)"
+    if not tail:
+        return f"{base} or diagnostic output"
+    return f"{base}: {tail}"
+
 
 def gate_pip_audit() -> bool:
     """Run the locked project dependency pip-audit gate."""
@@ -342,11 +439,7 @@ def gate_pip_audit() -> bool:
         timeout=180,
     )
     if code != 0:
-        vuln_lines = [l for l in output.splitlines() if "PYSEC" in l or "CVE" in l or "GHSA" in l]
-        detail = f"{len(vuln_lines)} vulnerability/ies detected"
-        if _verbose and vuln_lines:
-            detail += "\n" + "\n".join(f"  {l.strip()}" for l in vuln_lines[:5])
-        return _gate("pip_audit", False, detail)
+        return _gate("pip_audit", False, _pip_audit_failure_detail(output))
     return _gate("pip_audit", True, "no known vulnerabilities")
 
 

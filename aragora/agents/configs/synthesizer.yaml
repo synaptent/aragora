@@ -4,7 +4,7 @@
 name: synthesizer
 # OpenRouter-first so a missing Anthropic key never blocks debates.
 model_type: openrouter
-model: anthropic/claude-opus-4.8
+model: anthropic/claude-opus-5
 
 role: synthesizer
 stance: neutral

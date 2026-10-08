@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 import pytest
 
 from aragora.swarm.spec import SwarmSpec
-from aragora.utils.semantic_extraction import ExtractionResult
+from aragora.agents.semantic_extraction import ExtractionResult
 
 
 class TestSwarmSpecCreation:

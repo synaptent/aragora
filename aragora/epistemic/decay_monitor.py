@@ -21,7 +21,7 @@ DIC-22 add quarantine and repair on top).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Collection
+from typing import TYPE_CHECKING, Collection, Iterable
 
 from .claim_verifier import ClaimStatus
 
@@ -259,3 +259,78 @@ def compute_decay_impact_set(
     if transitive:
         return graph.multi_hop_impact_set(failing_claim_ids, max_depth=max_depth)
     return graph.impact_set(failing_claim_ids)
+
+
+# ---------------------------------------------------------------------------
+# Batch evaluation (DIC-20 / #6031 — batch report path)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class EpistemicDecayBatchReport:
+    """Aggregate result from :func:`evaluate_units`.
+
+    Counts partition ``total``: healthy (score == 1.0 and action != fail_closed),
+    degraded (score < 1.0 and action != fail_closed), fail_closed.
+    No side effects. The dataclass is always importable; activating the CLI
+    monitor is caller-enforced via ``ARAGORA_DECAY_MONITOR_ENABLED``.
+    """
+
+    signals: list[DecaySignal] = field(default_factory=list)
+    generated_at: str = ""
+
+    @property
+    def total(self) -> int:
+        return len(self.signals)
+
+    @property
+    def healthy_count(self) -> int:
+        return sum(
+            1
+            for s in self.signals
+            if s.integrity_score == 1.0 and s.recommended_action != "fail_closed"
+        )
+
+    @property
+    def degraded_count(self) -> int:
+        return sum(
+            1
+            for s in self.signals
+            if s.integrity_score < 1.0 and s.recommended_action != "fail_closed"
+        )
+
+    @property
+    def fail_closed_count(self) -> int:
+        return sum(1 for s in self.signals if s.recommended_action == "fail_closed")
+
+    def to_dict(self) -> dict:
+        return {
+            "generated_at": self.generated_at,
+            "total": self.total,
+            "healthy_count": self.healthy_count,
+            "degraded_count": self.degraded_count,
+            "fail_closed_count": self.fail_closed_count,
+            "signals": [s.to_dict() for s in self.signals],
+        }
+
+
+def evaluate_units(
+    units: "Iterable[ProofCarryingCodeUnit]",
+    claim_results: "dict[str, ClaimResult] | None" = None,
+    unresolved_crux_ids: "frozenset[str] | None" = None,
+    *,
+    generated_at: str = "",
+) -> EpistemicDecayBatchReport:
+    """Batch-evaluate units against shared claim results and crux IDs.
+
+    Returns an :class:`EpistemicDecayBatchReport` — report-only, no side
+    effects. ``generated_at`` defaults to current UTC ISO-8601 time.
+    """
+    from datetime import datetime, timezone
+
+    signals = [
+        evaluate_unit(unit, claim_results=claim_results, unresolved_crux_ids=unresolved_crux_ids)
+        for unit in units
+    ]
+    ts = generated_at or datetime.now(timezone.utc).isoformat()
+    return EpistemicDecayBatchReport(signals=signals, generated_at=ts)

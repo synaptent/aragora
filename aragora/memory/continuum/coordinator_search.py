@@ -13,11 +13,11 @@ import hashlib
 import json
 import logging
 import sqlite3
-from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from aragora.memory.tier_manager import MemoryTier
 from aragora.resilience.retry import PROVIDER_RETRY_POLICIES, with_retry
+from aragora.utils.datetime_helpers import utc_now_iso_naive
 from aragora.utils.json_helpers import safe_json_loads
 
 from aragora.memory.continuum.base import (
@@ -533,8 +533,8 @@ class CoordinatorSearchMixin:
                 return 0
 
             # Batch update all entries in a single transaction using executemany
-            prewarm_time: str = datetime.now().isoformat()
-            current_time: str = datetime.now().isoformat()
+            prewarm_time: str = utc_now_iso_naive()
+            current_time: str = utc_now_iso_naive()
 
             # Prepare batch update data
             update_data: list[tuple[str, str, str]] = []

@@ -53,7 +53,7 @@ class ClaudeCodeConfig(HarnessConfig):
 
     # Claude Code CLI settings
     claude_code_path: str = "claude"  # Path to claude CLI
-    model: str = "claude-opus-4-8"  # Model to use
+    model: str = "claude-opus-5"  # Model to use
     execution_mode: ExecutionMode = ExecutionMode.INTERACTIVE
 
     # Analysis settings

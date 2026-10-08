@@ -24,7 +24,13 @@ import asyncio
 import logging
 import os
 import threading
+import warnings
 from typing import TYPE_CHECKING, Any
+
+from aragora.utils.async_utils import (
+    get_pool_event_loop as _get_pool_event_loop,
+    register_pool_event_loop_provider,
+)
 
 if TYPE_CHECKING:
     from asyncpg import Pool
@@ -274,16 +280,14 @@ def is_pool_initialized() -> bool:
 
 
 def get_pool_event_loop() -> asyncio.AbstractEventLoop | None:
-    """Get a running event loop suitable for pool operations.
-
-    If the original event loop is still running, returns it directly.
-    If it's stale (not running), transparently creates a dedicated background
-    loop, reinitializes the pool on it, and returns that loop.
-
-    Returns:
-        A running event loop with a valid pool, or None if pool is not configured.
-    """
-    return _ensure_pool_loop()
+    """Compatibility shim for the foundation-owned pool-loop accessor."""
+    warnings.warn(
+        "aragora.storage.pool_manager.get_pool_event_loop is deprecated; import "
+        "aragora.utils.async_utils.get_pool_event_loop instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return _get_pool_event_loop()
 
 
 def _ensure_pool_loop() -> asyncio.AbstractEventLoop | None:
@@ -360,6 +364,9 @@ def _ensure_pool_loop() -> asyncio.AbstractEventLoop | None:
             thread.name,
         )
         return _pool_event_loop
+
+
+register_pool_event_loop_provider(_ensure_pool_loop)
 
 
 def get_pool_info() -> dict[str, Any]:

@@ -1481,6 +1481,18 @@ class TestMaybeTriggerBroadcast:
         await phase._maybe_trigger_broadcast(ctx)
 
     @pytest.mark.asyncio
+    async def test_broadcast_async_returns_when_pipeline_is_none(self):
+        """Direct async broadcast returns before building pipeline options."""
+        phase = FeedbackPhase()
+        ctx = MockDebateContext()
+
+        with patch(
+            "aragora.broadcast.pipeline.BroadcastOptions",
+            side_effect=AssertionError("broadcast options should not be built"),
+        ):
+            await phase._broadcast_async(ctx)
+
+    @pytest.mark.asyncio
     async def test_broadcast_disabled(self):
         """Returns early when broadcast disabled."""
         pipeline = MagicMock()

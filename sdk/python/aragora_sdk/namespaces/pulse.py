@@ -10,7 +10,14 @@ Provides access to trending topics and real-time signals:
 
 from __future__ import annotations
 
+import warnings
 from typing import TYPE_CHECKING, Any, Literal
+
+
+def _warn_deprecated(message: str) -> None:
+    """Emit a runtime DeprecationWarning for a dead or drifted SDK method."""
+    warnings.warn(message, DeprecationWarning, stacklevel=3)
+
 
 if TYPE_CHECKING:
     from ..client import AragoraAsyncClient, AragoraClient
@@ -111,7 +118,7 @@ class PulseAPI:
             Dict with analytics data including topic counts by source,
             category distribution, and daily trends.
         """
-        return self._client.request("POST", "/api/v1/pulse/analytics", json=kwargs)
+        return self._client.request("GET", "/api/v1/pulse/analytics", params=kwargs)
 
     def get_scheduler_analytics(self) -> dict[str, Any]:
         """
@@ -137,17 +144,22 @@ class PulseAPI:
             Dict with scheduler running state, next poll time,
             and configuration.
         """
-        return self._client.request("POST", "/api/v1/pulse/scheduler/status")
+        return self._client.request("GET", "/api/v1/pulse/scheduler/status")
 
     def get_scheduler_config(self) -> dict[str, Any]:
-        """
-        Get pulse scheduler configuration.
+        """Get pulse scheduler configuration.
 
-        Returns:
-            Dict with scheduler configuration including poll interval,
-            sources, and filtering rules.
+        .. deprecated::
+            The server has no read endpoint for scheduler configuration
+            (config is PATCH-only via /api/v1/pulse/scheduler/config); the
+            previous implementation POSTed into the config-update branch.
+            This shim performs a safe GET, which the server does not serve.
         """
-        return self._client.request("POST", "/api/v1/pulse/scheduler/config")
+        _warn_deprecated(
+            "get_scheduler_config is deprecated: the server has no scheduler "
+            "config read endpoint (config is PATCH-only)."
+        )
+        return self._client.request("GET", "/api/v1/pulse/scheduler/config")
 
     def get_scheduler_history(self) -> dict[str, Any]:
         """
@@ -156,7 +168,7 @@ class PulseAPI:
         Returns:
             Dict with recent scheduler runs, their results, and timing.
         """
-        return self._client.request("POST", "/api/v1/pulse/scheduler/history")
+        return self._client.request("GET", "/api/v1/pulse/scheduler/history")
 
     def start_scheduler(self) -> dict[str, Any]:
         """
@@ -249,7 +261,7 @@ class AsyncPulseAPI:
 
     async def get_analytics(self, **kwargs: Any) -> dict[str, Any]:
         """Get pulse analytics including topic distribution and trends."""
-        return await self._client.request("POST", "/api/v1/pulse/analytics", json=kwargs)
+        return await self._client.request("GET", "/api/v1/pulse/analytics", params=kwargs)
 
     async def get_scheduler_analytics(self) -> dict[str, Any]:
         """Get scheduler runtime metrics and store analytics."""
@@ -261,15 +273,19 @@ class AsyncPulseAPI:
 
     async def get_scheduler_status(self) -> dict[str, Any]:
         """Get pulse scheduler status."""
-        return await self._client.request("POST", "/api/v1/pulse/scheduler/status")
+        return await self._client.request("GET", "/api/v1/pulse/scheduler/status")
 
     async def get_scheduler_config(self) -> dict[str, Any]:
-        """Get pulse scheduler configuration."""
-        return await self._client.request("POST", "/api/v1/pulse/scheduler/config")
+        """Deprecated: no scheduler-config read endpoint exists (PATCH-only)."""
+        _warn_deprecated(
+            "get_scheduler_config is deprecated: the server has no scheduler "
+            "config read endpoint (config is PATCH-only)."
+        )
+        return await self._client.request("GET", "/api/v1/pulse/scheduler/config")
 
     async def get_scheduler_history(self) -> dict[str, Any]:
         """Get pulse scheduler execution history."""
-        return await self._client.request("POST", "/api/v1/pulse/scheduler/history")
+        return await self._client.request("GET", "/api/v1/pulse/scheduler/history")
 
     async def start_scheduler(self) -> dict[str, Any]:
         """Start the pulse scheduler."""

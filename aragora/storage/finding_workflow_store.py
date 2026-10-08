@@ -39,6 +39,7 @@ if TYPE_CHECKING:
 
 
 from aragora.config import resolve_db_path
+from aragora.storage.timestamps import canonical_utc_timestamp, timestamp_before
 from aragora.utils.async_utils import run_async
 
 logger = logging.getLogger(__name__)
@@ -183,7 +184,8 @@ class InMemoryFindingWorkflowStore(FindingWorkflowStoreBackend):
     """
     In-memory finding workflow store for testing.
 
-    Data is lost on restart.
+    Data is lost on restart. ``due_date`` is stored as canonical UTC
+    ISO-8601 text; see :mod:`aragora.storage.timestamps` for accepted inputs.
     """
 
     def __init__(self) -> None:
@@ -197,12 +199,20 @@ class InMemoryFindingWorkflowStore(FindingWorkflowStoreBackend):
             return self._data.get(finding_id)
 
     async def save(self, data: dict[str, Any]) -> None:
-        """Save workflow data for a finding."""
+        """Store a copy of ``data`` with ``due_date`` in canonical UTC form.
+
+        Raises:
+            ValueError: If ``finding_id`` is missing or ``due_date`` is not a
+                supported timestamp. The stored record is left unchanged.
+        """
         finding_id = data.get("finding_id")
         if not finding_id:
             raise ValueError("finding_id is required")
+        record = dict(data)
+        if "due_date" in record:
+            record["due_date"] = canonical_utc_timestamp(record["due_date"], field="due_date")
         with self._lock:
-            self._data[finding_id] = data
+            self._data[finding_id] = record
 
     async def delete(self, finding_id: str) -> bool:
         """Delete workflow data for a finding."""
@@ -224,17 +234,14 @@ class InMemoryFindingWorkflowStore(FindingWorkflowStoreBackend):
 
     async def list_overdue(self) -> list[dict[str, Any]]:
         """List all overdue findings."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(timezone.utc)
         terminal_states = {"resolved", "false_positive", "duplicate", "accepted_risk"}
         with self._lock:
             return [
                 wf
                 for wf in self._data.values()
-                if (
-                    wf.get("due_date")
-                    and wf.get("due_date") < now
-                    and wf.get("current_state") not in terminal_states
-                )
+                if wf.get("current_state") not in terminal_states
+                and timestamp_before(wf.get("due_date"), now, field="due_date")
             ]
 
     async def list_by_state(self, state: str) -> list[dict[str, Any]]:

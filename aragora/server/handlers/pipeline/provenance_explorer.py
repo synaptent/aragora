@@ -20,7 +20,7 @@ infrastructure to the ProvenanceExplorer's expected wire format.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 from aragora.server.versioning.compat import strip_version_prefix
 
@@ -123,7 +123,7 @@ class ProvenanceExplorerHandler(SecureHandler):
         graph_id = parts[4]
         ok, err = validate_path_segment(graph_id, "graph_id", SAFE_ID_PATTERN)
         if not ok:
-            return error_response(err, 400)
+            return error_response(cast(str, err), 400)
 
         sub = parts[5]
 
@@ -134,7 +134,7 @@ class ProvenanceExplorerHandler(SecureHandler):
             node_id = parts[6]
             ok2, err2 = validate_path_segment(node_id, "node_id", SAFE_ID_PATTERN)
             if not ok2:
-                return error_response(err2, 400)
+                return error_response(cast(str, err2), 400)
             return self._node_provenance(graph_id, node_id)
 
         return None

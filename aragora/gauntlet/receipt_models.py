@@ -13,10 +13,14 @@ The main receipt.py re-exports all models for backward compatibility.
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
+import math
 import uuid
-from dataclasses import dataclass, field
+
+from aragora.agents.failure_semantics import all_responses_are_failures
+from dataclasses import InitVar, dataclass, field
 from datetime import datetime, timezone
 from html import escape
 from typing import TYPE_CHECKING, Any
@@ -117,12 +121,15 @@ def _clamp_receipt_confidence(value: Any, *, default: float = 0.0) -> float:
     return numeric
 
 
-def _normalize_receipt_boolean(value: Any, *, default: bool = False) -> bool:
+def _normalize_receipt_boolean(value: Any, *, default: bool = False, strict: bool = False) -> bool:
+    """Decode legacy flags; strict consumers reject unknowns instead of defaulting."""
     if isinstance(value, bool):
         return value
     if value is None:
-        return default
+        return False if strict else default
     if isinstance(value, int | float):
+        if strict and isinstance(value, float) and not math.isfinite(value):
+            raise ValueError("receipt boolean must be finite")
         return value != 0
     if isinstance(value, str):
         normalized = value.strip().lower()
@@ -130,7 +137,8 @@ def _normalize_receipt_boolean(value: Any, *, default: bool = False) -> bool:
             return True
         if normalized in {"false", "0", "no", "n", "off", ""}:
             return False
-        return default
+    if strict:
+        raise ValueError("unrecognized receipt boolean")
     return default
 
 
@@ -456,6 +464,160 @@ def build_crux_receipt_from_proof(
     )
 
 
+# Receipt schema version changelog:
+#   1.0 — original receipt schema
+#   1.1 — current baseline (agent responses, provenance enrichment)
+#   1.2 — carries a ``cruxes`` block (crux cards, #8227). Cruxes are bound
+#         into ``artifact_hash`` together with ``schema_version`` itself, so
+#         a 1.2→1.1 downgrade breaks verification instead of silently
+#         defeating the version signal.
+#   1.3 — carries evidence-linked planning decisions. The artifact hash binds
+#         sorted evidence references, the decision-payload hash, and the schema
+#         version; the decision-payload hash separately binds normalized goals.
+#
+# Hash-binding rule: ``cruxes`` is bound whenever present; ``schema_version``
+# is bound ONLY when it is exactly 1.2 (version-gated, not presence-gated).
+# Crux binding shipped on main (#9414) BEFORE the 1.2 stamp existed, so
+# already-persisted audit receipts carry cruxes with schema_version 1.1 and a
+# hash computed WITHOUT schema_version — those must keep verifying. Receipts
+# stamped 1.2 bind schema_version, so a downgrade to 1.1 breaks verification.
+# Pre-crux receipts (no cruxes) keep the original recipe untouched.
+RECEIPT_SCHEMA_VERSION = "1.1"
+RECEIPT_SCHEMA_VERSION_CRUXES = "1.2"
+RECEIPT_SCHEMA_VERSION_EVIDENCE = "1.3"
+
+
+def _canonical_decision_value(value: Any) -> Any:
+    """Convert decision material to deterministic JSON primitives."""
+    if hasattr(value, "to_dict") and callable(value.to_dict):
+        value = value.to_dict()
+    if isinstance(value, dict):
+        return {
+            str(key): _canonical_decision_value(value[key])
+            for key in sorted(value, key=lambda item: str(item))
+        }
+    if isinstance(value, (list, tuple)):
+        return [_canonical_decision_value(item) for item in value]
+    if isinstance(value, set):
+        normalized = [_canonical_decision_value(item) for item in value]
+        return sorted(normalized, key=lambda item: json.dumps(item, sort_keys=True, default=str))
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return value
+
+
+def normalize_evidence_references(references: Any) -> list[dict[str, Any]]:
+    """Normalize and sort portable evidence references for hashing/export."""
+    normalized: list[dict[str, Any]] = []
+    for reference in references or []:
+        value = _canonical_decision_value(reference)
+        if isinstance(value, dict):
+            normalized.append(value)
+    return sorted(
+        normalized,
+        key=lambda item: (
+            str(item.get("evidence_id", "")),
+            str(item.get("path", "")),
+            json.dumps(item, sort_keys=True, default=str),
+        ),
+    )
+
+
+def compute_decision_payload_hash(
+    decision_payload: Any,
+    evidence_references: Any = None,
+) -> str:
+    """Hash normalized selected goals together with their sorted evidence links."""
+    content = json.dumps(
+        {
+            "decision_payload": _canonical_decision_value(decision_payload or {}),
+            "evidence_references": normalize_evidence_references(evidence_references),
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+    return hashlib.sha256(content.encode()).hexdigest()
+
+
+def compute_receipt_artifact_hash(data: Any) -> str:
+    """Canonical ``artifact_hash`` recipe for a receipt-shaped mapping.
+
+    Single source of truth for the integrity hash: ``DecisionReceipt.
+    _calculate_hash`` and the standalone ``aragora verify`` command both
+    delegate here, so the hashed field set cannot drift between producer and
+    verifier. Covers the decision-integrity fields (receipt_id, gauntlet_id,
+    input_hash, risk_summary, verdict, confidence); binds ``cruxes`` whenever
+    present; and binds ``schema_version`` only for receipts stamped 1.2
+    (downgrade-tamper protection). The version binding is gated on the 1.2
+    stamp — NOT on crux presence — because #9414 shipped crux binding before
+    the stamp existed: receipts with cruxes + schema_version 1.1 hashed
+    without schema_version and must keep verifying (see changelog above).
+    """
+    if not isinstance(data, dict):
+        data = {}
+    payload: dict[str, Any] = {
+        "receipt_id": data.get("receipt_id", ""),
+        "gauntlet_id": data.get("gauntlet_id", ""),
+        "input_hash": data.get("input_hash", ""),
+        "risk_summary": data.get("risk_summary", {}),
+        "verdict": data.get("verdict", ""),
+        "confidence": data.get("confidence", 0.0),
+    }
+    if data.get("cruxes") is not None:
+        payload["cruxes"] = data.get("cruxes")
+        # Missing schema_version defaults to "1.0" (the from_dict convention)
+        # so the same JSON cannot hash two ways.
+        schema_version = data.get("schema_version", "1.0")
+        if schema_version == RECEIPT_SCHEMA_VERSION_CRUXES:
+            payload["schema_version"] = schema_version
+    if data.get("schema_version") == RECEIPT_SCHEMA_VERSION_EVIDENCE:
+        payload["schema_version"] = RECEIPT_SCHEMA_VERSION_EVIDENCE
+        payload["decision_payload_hash"] = data.get("decision_payload_hash", "")
+        payload["evidence_references"] = normalize_evidence_references(
+            data.get("evidence_references")
+        )
+    content = json.dumps(payload, sort_keys=True)
+    return hashlib.sha256(content.encode()).hexdigest()
+
+
+def receipt_schema_version(
+    cruxes: dict[str, Any] | None,
+    evidence_references: Any = None,
+    decision_payload_hash: str | None = None,
+) -> str:
+    """Schema version for a receipt given its cruxes block.
+
+    Bumps to 1.2 exactly when a cruxes block is carried, giving older
+    verifiers a version signal instead of a spurious tampering report.
+    Shared by ``DecisionReceipt.from_debate_result`` and the CLI receipt
+    persistence so version and content cannot drift apart.
+    """
+    if evidence_references or decision_payload_hash:
+        return RECEIPT_SCHEMA_VERSION_EVIDENCE
+    return RECEIPT_SCHEMA_VERSION_CRUXES if cruxes is not None else RECEIPT_SCHEMA_VERSION
+
+
+def crux_cards_from_metadata(metadata: Any) -> dict[str, Any] | None:
+    """Return the crux-cards block from debate-result metadata, or None.
+
+    Crux cards (#8227) are attached by the consensus phase when the debate ran
+    with ``enable_crux_cards``. The block is only carried into receipts when it
+    has items — a missing or empty block keeps flag-off receipts byte-identical
+    to pre-crux output. Returns a deep copy so receipts never alias the live
+    result metadata at any nesting depth (cruxes bind into ``artifact_hash``,
+    so a later nested mutation must not flip ``verify_integrity``). Shared by
+    ``DecisionReceipt.from_debate_result`` and the CLI receipt persistence so
+    this invariant cannot drift.
+    """
+    if not isinstance(metadata, dict):
+        return None
+    crux_cards = metadata.get("crux_cards")
+    if isinstance(crux_cards, dict) and crux_cards.get("items"):
+        return copy.deepcopy(crux_cards)
+    return None
+
+
 def _compute_risk_summary_from_critiques(
     critiques: list,
     dissenting_views: list,
@@ -555,6 +717,18 @@ class DecisionReceipt:
     # Tracks queries, retrievals, and injection counts for cross-debate visibility
     km_operations: dict[str, Any] | None = None
 
+    # Crux cards (#8227): load-bearing disagreements detected in the debate,
+    # populated when the debate ran with enable_crux_cards. Additive-only:
+    # None means "not recorded" and serialization omits the key entirely, so
+    # flag-off receipts remain byte-identical to pre-crux receipts.
+    cruxes: dict[str, Any] | None = None
+
+    # Evidence-linked decision material (schema 1.3). Omitted on legacy
+    # receipts so schemas 1.0-1.2 serialize and verify exactly as before.
+    evidence_references: list[dict[str, Any]] = field(default_factory=list)
+    decision_payload: dict[str, Any] | None = None
+    decision_payload_hash: str | None = None
+
     # Schema version for forward compatibility
     schema_version: str = "1.1"
 
@@ -568,14 +742,41 @@ class DecisionReceipt:
     signature_key_id: str | None = None
     signed_at: str | None = None  # ISO format timestamp
 
-    def __post_init__(self):
-        """Calculate artifact hash if not provided."""
+    # New evidence-linked receipts initialize their schema and decision hash.
+    # Deserialized receipts disable only that path so absent or altered evidence
+    # integrity fields survive loading and can be rejected by verification.
+    _initialize_evidence_integrity: InitVar[bool] = True
+
+    def __post_init__(self, _initialize_evidence_integrity: bool):
+        """Normalize evidence and initialize integrity fields for new receipts."""
+        self.evidence_references = normalize_evidence_references(self.evidence_references)
+        if _initialize_evidence_integrity and (
+            self.evidence_references
+            or self.decision_payload is not None
+            or self.decision_payload_hash
+        ):
+            self.schema_version = RECEIPT_SCHEMA_VERSION_EVIDENCE
+            if not self.decision_payload_hash:
+                self.decision_payload_hash = compute_decision_payload_hash(
+                    self.decision_payload,
+                    self.evidence_references,
+                )
         if not self.artifact_hash:
             self.artifact_hash = self._calculate_hash()
 
     def _calculate_hash(self) -> str:
-        """Calculate content-addressable hash."""
-        content = json.dumps(
+        """Calculate content-addressable hash.
+
+        Delegates to :func:`compute_receipt_artifact_hash` — the single
+        canonical recipe shared with ``aragora verify`` — so producer and
+        verifier cannot drift. Crux cards are audit-bearing content: when
+        present they are bound into the integrity material, and receipts
+        stamped 1.2 additionally bind ``schema_version`` (a 1.2→1.1 downgrade
+        breaks ``verify_integrity()``). Pre-crux receipts and pre-stamp
+        #9414-era crux receipts (schema 1.1) hash exactly as before, so
+        existing stored hashes keep verifying.
+        """
+        return compute_receipt_artifact_hash(
             {
                 "receipt_id": self.receipt_id,
                 "gauntlet_id": self.gauntlet_id,
@@ -583,15 +784,25 @@ class DecisionReceipt:
                 "risk_summary": self.risk_summary,
                 "verdict": self.verdict,
                 "confidence": self.confidence,
-            },
-            sort_keys=True,
+                "cruxes": self.cruxes,
+                "evidence_references": self.evidence_references,
+                "decision_payload_hash": self.decision_payload_hash,
+                "schema_version": self.schema_version,
+            }
         )
-        return hashlib.sha256(content.encode()).hexdigest()
 
     def verify_integrity(self) -> bool:
         """Verify receipt has not been tampered with."""
         expected_hash = self._calculate_hash()
-        return expected_hash == self.artifact_hash
+        if expected_hash != self.artifact_hash:
+            return False
+        if self.schema_version == RECEIPT_SCHEMA_VERSION_EVIDENCE:
+            expected_decision_hash = compute_decision_payload_hash(
+                self.decision_payload,
+                self.evidence_references,
+            )
+            return expected_decision_hash == self.decision_payload_hash
+        return True
 
     def sign(self, signer: ReceiptSigner | None = None) -> DecisionReceipt:
         """
@@ -1343,6 +1554,8 @@ class DecisionReceipt:
         input_hash: str | None = None,
         cost_summary: dict[str, Any] | None = None,
         settlement_metadata: dict[str, Any] | None = None,
+        evidence_references: list[dict[str, Any]] | None = None,
+        decision_payload: dict[str, Any] | None = None,
     ) -> DecisionReceipt:
         """Create receipt from aragora.core_types.DebateResult.
 
@@ -1356,6 +1569,9 @@ class DecisionReceipt:
                 DebateCostSummary.to_dict()
             settlement_metadata: Optional settlement metadata dict from
                 SettlementMetadata.to_dict() for epistemic quality tracking
+            evidence_references: Optional portable evidence links supporting
+                the selected planning goals.
+            decision_payload: Optional normalized planning decision payload.
 
         Returns:
             DecisionReceipt for audit trail
@@ -1420,13 +1636,44 @@ class DecisionReceipt:
                 if agent_name:
                     dissenting_agents.append(agent_name)
 
+        # Zero-evidence gate (issue #9303): if every agent response is an error
+        # placeholder (autonomic/chaos-theater text) — or there are none — no
+        # deliberation happened. A decision-integrity receipt must say so
+        # instead of asserting PASS on top of provider failures.
+        response_texts = [
+            getattr(msg, "content", "") for msg in getattr(result, "messages", []) or []
+        ]
+        # Proposals are evidence too (openai #9306 r5 [P2]): a result with
+        # empty messages but substantive proposals is NOT zero-evidence.
+        proposals = getattr(result, "proposals", None) or {}
+        proposal_texts = list(proposals.values()) if isinstance(proposals, dict) else []
+        # agent_responses is the third evidence source _build_agent_responses
+        # reads (openai #9306 r6 [P2]) — detection now mirrors that method's
+        # sources exactly: messages, proposals, agent_responses, final_answer.
+        agent_response_texts = [
+            (
+                r.get("response") or r.get("content") or ""
+                if isinstance(r, dict)
+                else getattr(r, "response", "") or str(getattr(r, "content", "") or "")
+            )
+            for r in getattr(result, "agent_responses", []) or []
+        ]
+        zero_evidence = (
+            all_responses_are_failures(response_texts)
+            and all_responses_are_failures(proposal_texts)
+            and all_responses_are_failures(agent_response_texts)
+            and all_responses_are_failures([result.final_answer])
+        )
+
         # Supporting agents = participants minus dissenters
         supporting_agents = [p for p in participants if p not in dissenting_agents]
 
+        # A zero-evidence run cannot claim consensus: the 'agreement' is between
+        # error placeholders (openai #9306 r3 [P2]).
         consensus = ConsensusProof(
-            reached=result.consensus_reached,
-            confidence=result.confidence,
-            supporting_agents=supporting_agents,
+            reached=False if zero_evidence else result.consensus_reached,
+            confidence=0.0 if zero_evidence else result.confidence,
+            supporting_agents=[] if zero_evidence else supporting_agents,
             dissenting_agents=dissenting_agents,
             method=getattr(result, "consensus_strength", "majority") or "majority",
             evidence_hash=(
@@ -1460,8 +1707,15 @@ class DecisionReceipt:
         if live_explainability is not None:
             explainability = {"live_explainability": live_explainability}
 
+        # Crux cards (#8227): attached by the consensus phase when the debate
+        # ran with enable_crux_cards. Only carried when items exist — a missing
+        # or empty block keeps the receipt byte-identical to pre-crux output.
+        cruxes = crux_cards_from_metadata(metadata)
+
         # Determine verdict from consensus
-        if result.consensus_reached and result.confidence >= 0.7:
+        if zero_evidence:
+            verdict = "NO_EVIDENCE"
+        elif result.consensus_reached and result.confidence >= 0.7:
             verdict = "PASS"
         elif result.consensus_reached:
             verdict = "CONDITIONAL"
@@ -1472,6 +1726,8 @@ class DecisionReceipt:
         robustness_score = result.confidence * (0.8 if result.consensus_reached else 0.5)
         if hasattr(result, "convergence_similarity"):
             robustness_score = (robustness_score + result.convergence_similarity) / 2
+        if zero_evidence:
+            robustness_score = 0.0
 
         # Build verdict reasoning
         reasoning_parts = []
@@ -1487,6 +1743,11 @@ class DecisionReceipt:
             reasoning_parts.append(f"Winner: {result.winner}")
 
         verdict_reasoning = ". ".join(reasoning_parts)
+        if zero_evidence:
+            verdict_reasoning = (
+                "NO EVIDENCE: every agent response was a provider/error placeholder; "
+                "no substantive deliberation occurred."
+            )
 
         agent_responses = cls._build_agent_responses(result, cost_summary=cost_summary)
 
@@ -1505,7 +1766,7 @@ class DecisionReceipt:
             probes_run=result.rounds_used,  # Map rounds to probes
             vulnerabilities_found=len(dissenting_views),
             verdict=verdict,
-            confidence=result.confidence,
+            confidence=0.0 if zero_evidence else result.confidence,
             robustness_score=robustness_score,
             vulnerability_details=[],  # No vulnerability details for debates
             verdict_reasoning=verdict_reasoning,
@@ -1516,6 +1777,10 @@ class DecisionReceipt:
             explainability=explainability,
             cost_summary=cost_summary,
             settlement_metadata=settlement_metadata,
+            cruxes=cruxes,
+            evidence_references=evidence_references or [],
+            decision_payload=decision_payload,
+            schema_version=receipt_schema_version(cruxes, evidence_references),
             config_used=config_used,
         )
 
@@ -2047,6 +2312,16 @@ class DecisionReceipt:
             "artifact_hash": self.artifact_hash,
             "config_used": self.config_used,
         }
+        # Additive crux-cards block: omit the key when not recorded so
+        # flag-off receipts stay byte-identical (#8227).
+        if self.cruxes is not None:
+            data["cruxes"] = self.cruxes
+        if self.evidence_references:
+            data["evidence_references"] = self.evidence_references
+        if self.decision_payload is not None:
+            data["decision_payload"] = self.decision_payload
+        if self.decision_payload_hash is not None:
+            data["decision_payload_hash"] = self.decision_payload_hash
         # Include signature fields if present
         if self.signature:
             data["signature"] = self.signature
@@ -2097,12 +2372,17 @@ class DecisionReceipt:
             settlement_metadata=data.get("settlement_metadata"),
             settlement_status=data.get("settlement_status"),
             explainability=data.get("explainability"),
+            cruxes=data.get("cruxes"),
+            evidence_references=data.get("evidence_references", []) or [],
+            decision_payload=data.get("decision_payload"),
+            decision_payload_hash=data.get("decision_payload_hash"),
             config_used=data.get("config_used", {}) or {},
             # Signature fields
             signature=data.get("signature"),
             signature_algorithm=data.get("signature_algorithm"),
             signature_key_id=data.get("signature_key_id"),
             signed_at=data.get("signed_at"),
+            _initialize_evidence_integrity=False,
         )
 
     def to_markdown(self, include_provenance: bool = True, include_evidence: bool = True) -> str:

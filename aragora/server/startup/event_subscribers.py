@@ -13,8 +13,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from aragora.server.webhook_store_registration import register_webhook_store
+
 if TYPE_CHECKING:
     from aragora.events.cross_subscribers import CrossSubscriberManager
+
+__all__ = ["bootstrap_event_subscribers", "register_webhook_store"]
 
 
 def bootstrap_event_subscribers() -> CrossSubscriberManager:
@@ -37,6 +41,7 @@ def bootstrap_event_subscribers() -> CrossSubscriberManager:
     from aragora.server import event_subscribers as server_home
     from aragora.workflow import event_subscribers as workflow_home
 
+    register_webhook_store()
     bootstrap_debate_event_subscribers()
     workflow_home.register()
     server_home.register()

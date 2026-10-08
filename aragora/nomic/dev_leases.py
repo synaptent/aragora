@@ -6,12 +6,17 @@ import sqlite3
 import uuid
 from datetime import timedelta
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from . import dev_coordination as _dev
-from .dev_coordination.core import _claims_overlap
+if TYPE_CHECKING:
+    from .dev_coordination import core as _dev
+else:
+    # Runtime access goes through the package facade (PEP 562 fall-through to
+    # ``core``) because ``core`` delegates lease operations back to this module.
+    from . import dev_coordination as _dev
 from .dev_coordination.models import LeaseConflictError, LeaseStatus, WorkLease
 
+_claims_overlap = _dev._claims_overlap
 _json_dump = _dev._json_dump
 _json_loads = _dev._json_loads
 _normalize_claim = _dev._normalize_claim

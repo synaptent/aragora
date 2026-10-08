@@ -1,0 +1,83 @@
+{
+  "_comment": [
+    "Committed capture of the live OpenRouter catalog for OFFLINE catalog",
+    "validation (required CI never calls the network). Refresh with:",
+    "  python3 scripts/model_catalog_drift.py --refresh",
+    "and commit the diff; the scheduled advisory drift job reports when",
+    "this snapshot disagrees with the live catalog."
+  ],
+  "captured_at": "2026-08-17T04:39:24Z",
+  "models": {
+    "ai21/jamba-large-1.7": {
+      "context_length": 256000,
+      "input_per_mtok": 2.0,
+      "output_per_mtok": 8.0
+    },
+    "anthropic/claude-fable-5": {
+      "context_length": 1000000,
+      "input_per_mtok": 10.0,
+      "output_per_mtok": 50.0
+    },
+    "anthropic/claude-opus-4.8": {
+      "context_length": 1000000,
+      "input_per_mtok": 5.0,
+      "output_per_mtok": 25.0
+    },
+    "anthropic/claude-opus-5": {
+      "context_length": 1000000,
+      "input_per_mtok": 5.0,
+      "output_per_mtok": 25.0
+    },
+    "cohere/command-a": {
+      "context_length": 256000,
+      "input_per_mtok": 2.5,
+      "output_per_mtok": 10.0
+    },
+    "moonshotai/kimi-k2.7-code": {
+      "context_length": 262144,
+      "input_per_mtok": 0.71,
+      "output_per_mtok": 3.5
+    },
+    "moonshotai/kimi-k3": {
+      "context_length": 1048576,
+      "input_per_mtok": 3.0,
+      "output_per_mtok": 15.0
+    },
+    "openai/gpt-5.5": {
+      "context_length": 1050000,
+      "input_per_mtok": 5.0,
+      "output_per_mtok": 30.0
+    },
+    "openai/gpt-5.6-sol": {
+      "context_length": 1050000,
+      "input_per_mtok": 5.0,
+      "output_per_mtok": 30.0
+    },
+    "perplexity/sonar-reasoning-pro": {
+      "context_length": 128000,
+      "input_per_mtok": 2.0,
+      "output_per_mtok": 8.0
+    },
+    "qwen/qwen3.7-max": {
+      "context_length": 1000000,
+      "input_per_mtok": 1.475,
+      "output_per_mtok": 4.425
+    },
+    "qwen/qwen3.8-max": {
+      "context_length": 1000000,
+      "input_per_mtok": 2.0,
+      "output_per_mtok": 6.0
+    },
+    "x-ai/grok-4.3": {
+      "context_length": 1000000,
+      "input_per_mtok": 1.25,
+      "output_per_mtok": 2.5
+    },
+    "x-ai/grok-4.5": {
+      "context_length": 500000,
+      "input_per_mtok": 2.0,
+      "output_per_mtok": 6.0
+    }
+  },
+  "source": "https://openrouter.ai/api/v1/models"
+}

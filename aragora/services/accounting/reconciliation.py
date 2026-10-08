@@ -341,10 +341,11 @@ class ReconciliationService:
         self._reconciliation_history[reconciliation_id] = result
 
         logger.info(
-            f"[Reconciliation] {reconciliation_id}: "
-            f"Matched {result.matched_count}, "
-            f"Discrepancies {len(discrepancies)}, "
-            f"Difference ${float(result.difference):.2f}"
+            "[Reconciliation] %s: Matched %s, Discrepancies %s, Difference $%.2f",
+            reconciliation_id,
+            result.matched_count,
+            len(discrepancies),
+            float(result.difference),
         )
 
         return result
@@ -556,12 +557,18 @@ class ReconciliationService:
                 if disc.resolution_status != ResolutionStatus.PENDING:
                     continue
 
+                bank_amount = (
+                    f"${float(disc.bank_amount):.2f}" if disc.bank_amount is not None else "N/A"
+                )
+                book_amount = (
+                    f"${float(disc.book_amount):.2f}" if disc.book_amount is not None else "N/A"
+                )
                 question = f"""Suggest a resolution for this bank reconciliation discrepancy:
 
 Type: {disc.discrepancy_type.value}
 Description: {disc.description}
-Bank Amount: ${float(disc.bank_amount):.2f if disc.bank_amount else 'N/A'}
-Book Amount: ${float(disc.book_amount):.2f if disc.book_amount else 'N/A'}
+Bank Amount: {bank_amount}
+Book Amount: {book_amount}
 Bank Date: {disc.bank_date or "N/A"}
 Book Date: {disc.book_date or "N/A"}
 

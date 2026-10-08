@@ -32,9 +32,13 @@ Operational runbooks for responding to Aragora alerts and incidents.
 | Redis Failover | [redis-failover.md](./redis-failover.md) | Redis HA and recovery procedures |
 | Multi-Region | [RUNBOOK_MULTI_REGION_SETUP.md](./RUNBOOK_MULTI_REGION_SETUP.md) | Multi-region deployment and failover |
 | Fleet Coordination | [RUNBOOK_FLEET_COORDINATION.md](./RUNBOOK_FLEET_COORDINATION.md) | Multi-agent worktree ownership and merge queue policy |
-| Merge-State `UNSTABLE` Settlement | [MERGE_STATE_UNSTABLE_SETTLEMENT.md](./MERGE_STATE_UNSTABLE_SETTLEMENT.md) | Classifying GitHub merge-state blockers from required checks, advisory checks, and cancelled CI runs |
+| Merge-State `UNSTABLE` Settlement | [MERGE_STATE_UNSTABLE_SETTLEMENT.md](./MERGE_STATE_UNSTABLE_SETTLEMENT.md) | Classifying GitHub merge-state blockers from required checks, advisory checks, cancelled CI runs, and the proposed allowlisted non-required cancellation predicate |
 | Proof-First tmux Operator | [RUNBOOK_PROOF_FIRST_TMUX_OPERATOR.md](./RUNBOOK_PROOF_FIRST_TMUX_OPERATOR.md) | Conductor-led tmux coordination for benchmark/docs/monitor lanes without replacing the unattended proof-first shift |
+| Outbox Depth Reconcile | [RUNBOOK_OUTBOX_DEPTH_RECONCILE.md](./RUNBOOK_OUTBOX_DEPTH_RECONCILE.md) | Queue-depth disposition rubric for protected, human-gated, and unparseable automation outbox items |
+| First-Error Diagnostic Receipts | [first-error-receipt-protocol.md](./first-error-receipt-protocol.md) | Exact-main diagnostic ownership, durable logs and reports, outcome classification, and conservative worktree reclaim |
 | Outbox Disposition | [outbox-disposition-rubric.md](./outbox-disposition-rubric.md) | Read-only rubric for classifying automation outbox-depth blockers before any publisher or reconcile mutation |
+| Harvest Disposition | [harvest-disposition-rubric.md](./harvest-disposition-rubric.md) | Claim, classify, and receipt stale #8993 worktree harvest items without mutating shared-root or source worktree state |
+| Second-Signal Completion | [second-signal-completion-rubric.md](./second-signal-completion-rubric.md) | Conductor rubric for completing a missing model-family signal without bypassing evidence gates |
 
 ## Incident Severity Levels
 

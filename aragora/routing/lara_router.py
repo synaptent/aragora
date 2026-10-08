@@ -15,13 +15,12 @@ Factual lookups -> RAG, Complex reasoning -> RLM, Connected concepts -> Graph.
 """
 
 from dataclasses import dataclass, field
+from statistics import fmean
 from typing import Any
 from enum import Enum
 import logging
 import re
 import time
-
-import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -551,8 +550,8 @@ class LaRARouter:
             "total_decisions": total,
             "mode_distribution": {mode: count / total for mode, count in mode_counts.items()},
             "mode_counts": mode_counts,
-            "avg_confidence": float(np.mean([d.confidence for d in self._decision_history])),
-            "avg_latency_ms": float(np.mean([d.duration_ms for d in self._decision_history])),
+            "avg_confidence": fmean(d.confidence for d in self._decision_history),
+            "avg_latency_ms": fmean(d.duration_ms for d in self._decision_history),
         }
 
 

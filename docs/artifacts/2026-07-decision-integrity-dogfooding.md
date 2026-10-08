@@ -4,6 +4,10 @@
 **Repo:** [synaptent/aragora](https://github.com/synaptent/aragora)
 **Audience:** engineering leaders evaluating whether "AI decision gates" are real or theater.
 
+> **Receipt-backed follow-up:** [Review, Receipt, Verify](../case-studies/dogfood/2026-07-PUBLIC-PROOF.md)
+> connects eight real review artifacts to independently verified Open Decision Receipts and a
+> pinned quorum-vs-single benchmark.
+
 ---
 
 ## The claim

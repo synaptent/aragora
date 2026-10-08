@@ -15,8 +15,9 @@ from __future__ import annotations
 
 import logging
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from aragora.canvas.stages import PipelineStage, StageEdgeType
 from aragora.pipeline.universal_node import UniversalEdge, UniversalGraph, UniversalNode
@@ -75,7 +76,7 @@ class DAGOperationsCoordinator:
         try:
             from aragora.core import Environment
             from aragora.debate.orchestrator import Arena
-            from aragora.debate.protocol import DebateProtocol
+            from aragora.protocols.debate import DebateProtocol
 
             env = Environment(task=f"{node.label}: {node.description}")
             protocol = DebateProtocol(rounds=rounds, consensus="majority")
@@ -84,9 +85,10 @@ class DAGOperationsCoordinator:
             if agents:
                 from aragora.agents import create_agent
 
+                agent_factory = cast(Callable[[str], Any], create_agent)
                 for agent_name in agents:
                     try:
-                        debate_agents.append(create_agent(agent_name))  # type: ignore[arg-type]
+                        debate_agents.append(agent_factory(agent_name))
                     except (RuntimeError, ImportError, ValueError) as exc:
                         logger.debug("Skipping agent %r: %s", agent_name, exc)
 
@@ -305,10 +307,11 @@ class DAGOperationsCoordinator:
             try:
                 from aragora.agents import create_agent
 
+                agent_factory = cast(Callable[[str], Any], create_agent)
                 available_agents = []
                 for name in ("claude", "gpt", "gemini", "mistral", "grok"):
                     try:
-                        available_agents.append(create_agent(name))  # type: ignore[arg-type]
+                        available_agents.append(agent_factory(name))
                     except (RuntimeError, ImportError, ValueError) as exc:
                         logger.debug("Skipping agent %r: %s", name, exc)
             except ImportError:
@@ -406,7 +409,7 @@ class DAGOperationsCoordinator:
         try:
             from aragora.core import Environment
             from aragora.debate.orchestrator import Arena
-            from aragora.debate.protocol import DebateProtocol
+            from aragora.protocols.debate import DebateProtocol
 
             env = Environment(task=prompt)
             protocol = DebateProtocol(rounds=rounds, consensus="majority")
@@ -414,9 +417,10 @@ class DAGOperationsCoordinator:
             debate_agents = []
             from aragora.agents import create_agent
 
+            agent_factory = cast(Callable[[str], Any], create_agent)
             for agent_name in agent_names[:3]:  # Use up to 3 agents for the debate
                 try:
-                    debate_agents.append(create_agent(agent_name))  # type: ignore[arg-type]
+                    debate_agents.append(agent_factory(agent_name))
                 except (RuntimeError, ImportError, ValueError):
                     pass
 

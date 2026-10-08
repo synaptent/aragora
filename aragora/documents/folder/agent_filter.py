@@ -30,6 +30,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from aragora.models.compat import first_text_block
+
 from .config import ExcludedFile, ExclusionReason, FileInfo
 
 logger = logging.getLogger(__name__)
@@ -233,7 +235,9 @@ Provide a decision for every file listed above."""
                 max_tokens=4096,
                 messages=[{"role": "user", "content": prompt}],
             )
-            return str(response.content[0].text)
+            # Gemini by default, but a caller may pass a modern Claude id,
+            # which emits a leading thinking block. Scan for the text block.
+            return first_text_block(response.content)
 
         elif "gpt" in self.model.lower() or "openai" in self.model.lower():
             response = await asyncio.to_thread(

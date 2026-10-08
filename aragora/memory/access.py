@@ -65,7 +65,7 @@ def _has_role(auth_context: AuthorizationContext | None, *roles: str) -> bool:
             _logger.debug("Role check failed for %s", roles, exc_info=True)
             return False
     # Fallback: check roles attribute
-    current_roles = getattr(auth_context, "roles", set()) or set()
+    current_roles: Any = getattr(auth_context, "roles", set()) or set()
     return bool(set(roles) & set(current_roles))
 
 
@@ -131,7 +131,7 @@ def build_access_envelope(
         return envelope
 
     roles = sorted(str(role) for role in (getattr(auth_context, "roles", set()) or set()))
-    permissions = getattr(auth_context, "permissions", set()) or set()
+    permissions: Any = getattr(auth_context, "permissions", set()) or set()
     workspace_id = getattr(auth_context, "workspace_id", None)
     org_id = getattr(auth_context, "org_id", None)
 

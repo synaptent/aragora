@@ -817,7 +817,7 @@ class TestCheckSyncStore:
     def test_import_error(self):
         """SyncStore module not available -> module_not_available."""
         h = _make_handler()
-        with patch.dict("sys.modules", {"aragora.connectors.enterprise.sync_store": None}):
+        with patch.dict("sys.modules", {"aragora.storage.sync_store": None}):
             result = h._check_sync_store()
             assert result["healthy"] is True
             assert result["status"] == "module_not_available"
@@ -1123,7 +1123,7 @@ class TestImportErrorPaths:
     def test_sync_store_import_error_with_store_in_ctx(self):
         """SyncStore import fails even with store in ctx."""
         h = _make_handler({"sync_store": MagicMock()})
-        with patch.dict("sys.modules", {"aragora.connectors.enterprise.sync_store": None}):
+        with patch.dict("sys.modules", {"aragora.storage.sync_store": None}):
             result = h._check_sync_store()
             assert result["healthy"] is True
             assert result["status"] == "module_not_available"

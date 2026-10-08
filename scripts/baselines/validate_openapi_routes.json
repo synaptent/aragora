@@ -1,34 +1,4 @@
 {
-  "missing_in_spec": [
-    "/api/v1/agent-evolution/elo-trends",
-    "/api/v1/agent-evolution/pending",
-    "/api/v1/agent-evolution/pending/{param}/approve",
-    "/api/v1/agent-evolution/pending/{param}/reject",
-    "/api/v1/agent-evolution/timeline",
-    "/api/v1/compliance/rbac-coverage",
-    "/api/v1/debates/public/{param}",
-    "/api/v1/debates/public/{param}/og",
-    "/api/v1/inbox/messages/{param}/debate",
-    "/api/v1/mcp/tools",
-    "/api/v1/relationship/{param}/*"
-  ],
-  "orphaned_in_spec": [
-    "/api/v1/accounting/report",
-    "/api/v1/bots/slack/status",
-    "/api/v1/coordination/consent",
-    "/api/v1/coordination/execute",
-    "/api/v1/coordination/executions",
-    "/api/v1/coordination/federation",
-    "/api/v1/coordination/health",
-    "/api/v1/coordination/stats",
-    "/api/v1/coordination/workspaces",
-    "/api/v1/km/checkpoints/compare",
-    "/api/v1/knowledge/facts/batch",
-    "/api/v1/knowledge/facts/batch/delete",
-    "/api/v1/knowledge/facts/merge",
-    "/api/v1/knowledge/facts/relationships",
-    "/api/v1/knowledge/facts/stats",
-    "/api/v1/knowledge/facts/validate",
-    "/api/v1/matches/stats"
-  ]
+  "missing_in_spec": [],
+  "orphaned_in_spec": []
 }

@@ -62,7 +62,7 @@ Multi-agent debate achieves +13.8pp accuracy over single-model baselines [2] and
 
 PyPI: https://pypi.org/project/aragora-debate/
 GitHub: https://github.com/synaptent/aragora
-Full platform (web UI, 43 agent types, SDKs): https://aragora.ai
+Full platform (web UI, 46 agent types, SDKs): https://aragora.ai
 
 [1] https://arxiv.org/abs/2602.06176
 [2] https://arxiv.org/abs/2410.04663

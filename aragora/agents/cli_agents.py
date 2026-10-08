@@ -34,6 +34,7 @@ from aragora.agents.errors import (
 )
 from aragora.agents.registry import AgentRegistry
 from aragora.config import get_api_key
+from aragora.config.model_pins import GEMINI_31_PRO_VIA_OPENROUTER
 from aragora.core import Agent, Critique, Message
 from aragora.core_types import AgentRole
 from aragora.resilience import BaseCircuitBreaker, get_v2_circuit_breaker as get_circuit_breaker
@@ -194,6 +195,31 @@ def terminate_tracked_cli_processes(grace_seconds: float = 0.2) -> dict[str, int
     }
 
 
+#: UNMISTAKABLE provider-wall signatures printed to STDOUT with exit 0
+#: (issue #9304): phrases that never occur as ordinary debate content.
+_EXIT0_STRONG_ERROR_MARKERS: tuple[str, ...] = (
+    "do not have access to this model",
+    "out of usage credits",
+    "run /usage-credits",
+    "hit your usage limit",
+    "please run /login",
+    "invalid x-api-key",
+    "credit balance is too low",
+)
+
+#: Generic phrases ("quota exceeded", "not logged in") appear in legitimate
+#: answers ABOUT auth/quota topics — this repo's own debates discuss them.
+#: They only classify one-line outputs (#9315 round 1, both families).
+_EXIT0_WEAK_ERROR_MARKERS: tuple[str, ...] = (
+    "not logged in",
+    "quota exceeded",
+    "authentication_error",
+)
+
+_EXIT0_STRONG_MAX_CHARS = 2000
+_EXIT0_WEAK_MAX_CHARS = 160
+
+
 class CLIAgent(CritiqueMixin, Agent):
     """Base class for CLI-based agents.
 
@@ -205,14 +231,16 @@ class CLIAgent(CritiqueMixin, Agent):
     # Map CLI agent models to OpenRouter model identifiers
     OPENROUTER_MODEL_MAP: dict[str, str] = {
         # Claude models
-        "claude": "anthropic/claude-opus-4.8",  # Default claude CLI
-        "claude-opus-4-8": "anthropic/claude-opus-4.8",
-        "claude-opus-4-7": "anthropic/claude-opus-4.8",
-        "claude-sonnet-4-6": "anthropic/claude-opus-4.8",
-        "claude-opus-4-5-20251101": "anthropic/claude-opus-4.8",
-        "claude-sonnet-4-20250514": "anthropic/claude-opus-4.8",
-        "claude-3-opus-20240229": "anthropic/claude-opus-4.8",
-        "claude-3-sonnet-20240229": "anthropic/claude-opus-4.8",
+        "claude": "anthropic/claude-opus-5",  # Default claude CLI
+        "claude-fable-5": "anthropic/claude-fable-5",
+        "claude-opus-5": "anthropic/claude-opus-5",
+        "claude-opus-4-8": "anthropic/claude-opus-5",
+        "claude-opus-4-7": "anthropic/claude-opus-5",
+        "claude-sonnet-4-6": "anthropic/claude-opus-5",
+        "claude-opus-4-5-20251101": "anthropic/claude-opus-5",
+        "claude-sonnet-4-20250514": "anthropic/claude-opus-5",
+        "claude-3-opus-20240229": "anthropic/claude-opus-5",
+        "claude-3-sonnet-20240229": "anthropic/claude-opus-5",
         # OpenAI/Codex models
         "gpt-5.5": "openai/gpt-5.5",
         "gpt-5.4": "openai/gpt-5.5",
@@ -226,20 +254,20 @@ class CLIAgent(CritiqueMixin, Agent):
         "gpt-4-turbo": "openai/gpt-5.5",
         "gpt-4": "openai/gpt-5.5",
         # Gemini models
-        "gemini-3.1-pro-preview": "google/gemini-3.1-pro",
-        "gemini-3.1-pro": "google/gemini-3.1-pro",
-        "gemini-3-pro-preview": "google/gemini-3.1-pro",
-        "gemini-3-pro": "google/gemini-3.1-pro",
+        "gemini-3.1-pro-preview": GEMINI_31_PRO_VIA_OPENROUTER,
+        "gemini-3.1-pro": GEMINI_31_PRO_VIA_OPENROUTER,
+        "gemini-3-pro-preview": GEMINI_31_PRO_VIA_OPENROUTER,
+        "gemini-3-pro": GEMINI_31_PRO_VIA_OPENROUTER,
         "gemini-3-flash-preview": "google/gemini-3-flash-preview",
         "gemini-3-flash": "google/gemini-3-flash-preview",
         "gemini-2.0-flash": "google/gemini-2.0-flash-001",
         "gemini-1.5-pro": "google/gemini-pro-1.5",
         # Grok models
         "grok-4-1-fast": "x-ai/grok-4.1-fast",
-        "grok-4-latest": "x-ai/grok-4",
-        "grok-4": "x-ai/grok-4",
-        "grok-3": "x-ai/grok-4",
-        "grok-2": "x-ai/grok-4",
+        "grok-4-latest": "x-ai/grok-4.5",
+        "grok-4": "x-ai/grok-4.5",
+        "grok-3": "x-ai/grok-4.5",
+        "grok-2": "x-ai/grok-4.5",
         # Deepseek models
         "deepseek-coder": "deepseek/deepseek-v4-pro",
         "deepseek-v3": "deepseek/deepseek-v4-pro",
@@ -280,6 +308,7 @@ class CLIAgent(CritiqueMixin, Agent):
 
         # Use provided circuit breaker, global registry, or disable
         # Global registry ensures consistent state across agent instances
+        self._circuit_breaker: BaseCircuitBreaker | None
         if circuit_breaker is not None:
             self._circuit_breaker = circuit_breaker
         elif enable_circuit_breaker:
@@ -333,7 +362,7 @@ class CLIAgent(CritiqueMixin, Agent):
                     else:
                         openrouter_model = self.model
                 else:
-                    openrouter_model = "anthropic/claude-opus-4.8"  # Default fallback model
+                    openrouter_model = "anthropic/claude-opus-5"  # Default fallback model
 
             self._fallback_agent = OpenRouterAgent(
                 name=f"{self.name}_fallback",
@@ -453,6 +482,28 @@ class CLIAgent(CritiqueMixin, Agent):
 
                 stdout_text = stdout.decode("utf-8", errors="replace").strip()
                 stderr_text = stderr.decode("utf-8", errors="replace").strip()
+
+                # Provider walls/errors printed to STDOUT with exit 0 (issue
+                # #9304): a proxy's 403 body or a subscription wall is not a
+                # proposal. Without this, error text enters the debate as
+                # content ('Round 1: Low novelty 0.00') and rots memory.
+                lowered_stdout = stdout_text.lower()
+                is_wall = (
+                    len(stdout_text) < _EXIT0_STRONG_MAX_CHARS
+                    and any(m in lowered_stdout for m in _EXIT0_STRONG_ERROR_MARKERS)
+                ) or (
+                    len(stdout_text) < _EXIT0_WEAK_MAX_CHARS
+                    and any(m in lowered_stdout for m in _EXIT0_WEAK_ERROR_MARKERS)
+                )
+                if stdout_text and is_wall:
+                    if self._circuit_breaker is not None:
+                        self._circuit_breaker.record_failure()
+                    raise CLISubprocessError(
+                        message=f"CLI returned a provider error as output: {stdout_text[:200]}",
+                        agent_name=self.name,
+                        returncode=0,
+                        stderr=stderr_text or None,
+                    )
 
                 # Some CLIs (e.g., Kilo) emit errors on stderr but return code 0.
                 # Treat "no stdout + non-empty stderr" as a failure to enable fallback.
@@ -775,7 +826,7 @@ Be constructive but thorough. Identify both technical and conceptual issues."""
 
 @AgentRegistry.register(
     "claude",
-    default_model="claude-opus-4-8",
+    default_model="claude-fable-5",
     agent_type="CLI",
     requires="claude CLI (npm install -g @anthropic-ai/claude-code)",
 )
@@ -795,7 +846,13 @@ class ClaudeAgent(CLIAgent):
         command unchanged when no pool/profile is available.
         """
         full_prompt = self._build_full_prompt(prompt, context)
-        command, used_profile = build_claude_command(["claude", "--print", "-p", "-"])
+        # Pin the CLI to the registered model: without --model the CLI runs
+        # whatever the active profile defaults to, and receipts would claim
+        # self.model while a different model answered.
+        base_command = ["claude", "--print"]
+        if self.model:
+            base_command += ["--model", self.model]
+        command, used_profile = build_claude_command([*base_command, "-p", "-"])
         # Pass prompt via stdin to avoid shell argument length limits.
         return await self._generate_with_fallback(
             command,
@@ -867,13 +924,13 @@ class KiloCodeAgent(CLIAgent):
     via direct API or OpenRouter.
 
     Provider IDs should be in provider/model format for the `kilo run` CLI.
-    Example: google/gemini-3.1-pro
+    Example: google/gemini-3.1-pro-preview
     """
 
     def __init__(
         self,
         name: str,
-        provider_id: str = "google/gemini-3.1-pro",
+        provider_id: str = GEMINI_31_PRO_VIA_OPENROUTER,
         model: str | None = None,
         role: AgentRole = "proposer",
         timeout: int = 600,

@@ -1,0 +1,90 @@
+{
+  "odr_version": "0.1",
+  "profile": "https://aragora.ai/specs/open-decision-receipt/v0.1",
+  "receipt_id": "pr-9193-65521e892675",
+  "issued_at": null,
+  "subject": {
+    "identifier": "merge-quorum/synaptent/aragora#9193",
+    "digest": {
+      "status": "present",
+      "alg": "sha-256",
+      "value": "a0bb35d264ebcbab3285f7385c429ea3f9a7a0a3c0e599ef823600b8b9a5b24b"
+    },
+    "summary": "Merge synaptent/aragora#9193 @ 65521e892675"
+  },
+  "claim": {
+    "verdict": "CHANGES_REQUESTED",
+    "statement": "Merge synaptent/aragora#9193 @ 65521e892675"
+  },
+  "reasoning": {
+    "status": "present",
+    "summary": "1 reviewer(s) requested changes, 1 passed"
+  },
+  "quorum": {
+    "status": "present",
+    "method": "merge-quorum",
+    "reached": false,
+    "supporting_agents": [
+      "mistral"
+    ],
+    "participants": [
+      {
+        "agent": "grok",
+        "model_family": "xai",
+        "model_id": "undisclosed"
+      },
+      {
+        "agent": "mistral",
+        "model_family": "mistral",
+        "model_id": "undisclosed"
+      }
+    ],
+    "independence": {
+      "disclosed": true,
+      "distinct_model_families": 2,
+      "model_families": [
+        "mistral",
+        "xai"
+      ]
+    },
+    "dissent": {
+      "present": true,
+      "dissenting_agents": [
+        "grok"
+      ],
+      "views": [
+        "grok: Verdict: CHANGES-REQUESTED\n- [P2] tests/scripts/test_docs_site_sync_links.py:163: subprocess.run invokes `node sync-docs.js` in a stripped tmp tree (only docs/ + scripts/ + a few ../ sources copied); missing node_modules/deps will cause runtime failures or silent partial syncs.\n- [P2] tests/scripts/test_docs_site_sync_links.py:145: root_source_files logic only handles entries starting with \"../\"; any DOC_MAP entry using a different relative form will be omitted from the temp workspace and produce false mismatches.\n- [P2] tests/scripts/test_docs_site_sync_links.py:128: new test now requires Node.js + sync-docs.js runtime in the test env (previously absent), introducing an undeclared CI dependency and potential flakiness."
+      ]
+    }
+  },
+  "confidence": {
+    "status": "present",
+    "value": 0.5,
+    "scale": "unit_interval",
+    "calibration": {
+      "status": "present",
+      "provenance_ref": {
+        "type": "aragora.settlement_metadata",
+        "receipt_id": "pr-9193-65521e892675"
+      }
+    }
+  },
+  "cruxes": {
+    "status": "absent",
+    "reason": "no crux set recorded for this decision (DecisionReceipt does not carry one; supply crux_set= from a CruxReceipt)"
+  },
+  "attestation": {
+    "disposition": "autonomous"
+  },
+  "routing": {
+    "status": "reserved"
+  },
+  "signatures": [],
+  "source": {
+    "system": "aragora",
+    "schema": "aragora.gauntlet.DecisionReceipt",
+    "schema_version": "1.1",
+    "receipt_id": "pr-9193-65521e892675",
+    "artifact_hash": "6da4548979e60439f7f156c79c8707dad55bfa12dedcf7743f2e21412bb2c994"
+  }
+}

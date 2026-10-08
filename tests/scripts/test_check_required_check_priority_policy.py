@@ -14,10 +14,14 @@ def _valid_workflow_text() -> str:
 jobs:
   prioritize-required-checks:
     steps:
-      - name: Cancel non-required workflow runs for this PR head
+      - name: Cancel queued non-required workflow runs for superseded PR heads
         uses: actions/github-script@v7
         with:
           script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const pr = context.payload.pull_request;
+            const headSha = pr.head.sha;
             const alwaysKeepWorkflowPaths = new Set([
               '.github/workflows/aragora-merge-quorum.yml',
               '.github/workflows/aragora-review-gate.yml',
@@ -64,6 +68,36 @@ jobs:
               'Tests',
               'OpenAPI Spec',
             ]);
+            async function getLiveHeadSha() {
+              const { data: livePr } = await github.rest.pulls.get({
+                owner,
+                repo,
+                pull_number: pr.number,
+              });
+              return String(livePr.head?.sha || '').trim();
+            }
+            for (let pass = 1; pass <= sweeps; pass++) {
+              const liveHeadSha = await getLiveHeadSha();
+              if (!liveHeadSha || liveHeadSha !== headSha) break;
+              for (const run of runs) {
+                if (run.head_sha === liveHeadSha) continue;
+                if (run.id === selfRunId) continue;
+                const runHeadRepo = String(run.head_repository?.full_name || '').trim();
+                const prHeadRepo = String(pr.head?.repo?.full_name || '').trim();
+                if (!runHeadRepo || !prHeadRepo || runHeadRepo !== prHeadRepo) continue;
+                if (String(run.head_branch || '').trim() !== headBranch) continue;
+                const runPrNumbers = (run.pull_requests || []).map((item) => item.number);
+                if (runPrNumbers.length > 0 && !runPrNumbers.includes(pr.number)) continue;
+                if (run.status !== 'queued') continue;
+                const confirmedLiveHeadSha = await getLiveHeadSha();
+                if (!confirmedLiveHeadSha || confirmedLiveHeadSha !== headSha) break;
+                await github.rest.actions.cancelWorkflowRun({
+                  owner,
+                  repo,
+                  run_id: run.id,
+                });
+              }
+            }
 """
 
 
@@ -292,6 +326,9 @@ jobs:
               'Tests',
               'OpenAPI Spec',
             ]);
+            for (const run of runs) {
+              if (run.status !== 'queued') continue;
+            }
 """
     violations = find_required_check_priority_violations(text, repo_root=repo_root)
     assert violations
@@ -489,6 +526,120 @@ jobs:
     )
 
     assert violations == []
+
+
+def test_policy_rejects_in_progress_cancellation_status_filter() -> None:
+    # The pre-fix filter (`queued` OR `in_progress`) cancelled in-flight
+    # advisory runs, leaving red "cancelled" conclusions the guardian never
+    # reruns. The policy must reject it.
+    text = _valid_workflow_text().replace(
+        "if (run.status !== 'queued') continue;",
+        "if (run.status !== 'queued' && run.status !== 'in_progress') continue;",
+    )
+    violations = find_required_check_priority_violations(text)
+    assert any("not restricted to queued runs" in v for v in violations)
+
+
+def test_policy_rejects_missing_queued_only_status_filter() -> None:
+    lines = [line for line in _valid_workflow_text().splitlines() if "run.status" not in line]
+    violations = find_required_check_priority_violations("\n".join(lines))
+    assert any("not restricted to queued runs" in v for v in violations)
+
+
+def test_policy_rejects_cancelling_only_current_head() -> None:
+    text = _valid_workflow_text().replace(
+        "if (run.head_sha === liveHeadSha) continue;",
+        "if (run.head_sha !== liveHeadSha) continue;",
+    )
+    violations = find_required_check_priority_violations(text)
+    assert any("does not skip the current PR head" in v for v in violations)
+
+
+def test_policy_rejects_missing_current_head_skip() -> None:
+    lines = [line for line in _valid_workflow_text().splitlines() if "run.head_sha" not in line]
+    violations = find_required_check_priority_violations("\n".join(lines))
+    assert any("does not skip the current PR head" in v for v in violations)
+
+
+def test_policy_rejects_missing_source_repo_guard() -> None:
+    lines = [line for line in _valid_workflow_text().splitlines() if "runHeadRepo" not in line]
+    violations = find_required_check_priority_violations("\n".join(lines))
+    assert any("source repo matches this PR's head repo" in v for v in violations)
+
+
+def test_policy_rejects_missing_pr_attribution_guard() -> None:
+    lines = [line for line in _valid_workflow_text().splitlines() if "runPrNumbers" not in line]
+    violations = find_required_check_priority_violations("\n".join(lines))
+    assert any("does not verify PR attribution" in v for v in violations)
+
+
+def test_policy_rejects_missing_live_head_fetch() -> None:
+    text = _valid_workflow_text().replace("github.rest.pulls.get", "github.rest.pulls.list")
+    violations = find_required_check_priority_violations(text)
+    assert any("does not resolve the live PR head" in v for v in violations)
+
+
+def test_policy_rejects_missing_per_sweep_live_head_refresh() -> None:
+    text = _valid_workflow_text().replace(
+        "const liveHeadSha = await getLiveHeadSha();",
+        "const liveHeadSha = headSha;",
+    )
+    violations = find_required_check_priority_violations(text)
+    assert any("does not refresh the live PR head at the start" in v for v in violations)
+
+
+def test_policy_rejects_missing_stale_event_head_guard() -> None:
+    text = _valid_workflow_text().replace(
+        "if (!liveHeadSha || liveHeadSha !== headSha) break;",
+        "if (!liveHeadSha) break;",
+        1,
+    )
+    violations = find_required_check_priority_violations(text)
+    assert any("does not stop when its event head is stale" in v for v in violations)
+
+
+def test_policy_rejects_missing_pre_cancel_head_refresh() -> None:
+    text = _valid_workflow_text().replace(
+        "const confirmedLiveHeadSha = await getLiveHeadSha();",
+        "const confirmedLiveHeadSha = liveHeadSha;",
+    )
+    violations = find_required_check_priority_violations(text)
+    assert any("does not refresh the live PR head" in v for v in violations)
+
+
+def test_policy_accepts_double_quoted_queued_only_status_filter() -> None:
+    text = _valid_workflow_text().replace(
+        "if (run.status !== 'queued') continue;",
+        'if (run.status !== "queued") continue;',
+    )
+    violations = find_required_check_priority_violations(text)
+    assert violations == []
+
+
+def test_unstable_allowlisted_workflows_do_not_cancel_same_pr_runs() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    workflow_paths = (
+        ".github/workflows/docs-build.yml",
+        ".github/workflows/docs-consistency.yml",
+        ".github/workflows/portability-lint.yml",
+    )
+
+    for rel in workflow_paths:
+        text = (repo_root / rel).read_text(encoding="utf-8")
+        concurrency_block = text.split("concurrency:", maxsplit=1)[1].split("jobs:", maxsplit=1)[0]
+        assert "cancel-in-progress: false" in concurrency_block, rel
+
+
+def test_self_hosted_shadow_keeps_superseded_run_reclamation() -> None:
+    # Both shadow jobs occupy the scarce self-hosted fleet, the priority sweep
+    # never cancels in_progress runs, and self-hosted-shadow.yml is on the
+    # sweep's keep-list — so workflow-level concurrency cancellation is the
+    # only path that frees a runner when a new head supersedes a run. Cancelled
+    # current-head runs are absorbed by the UNSTABLE cancellation receipt.
+    repo_root = Path(__file__).resolve().parents[2]
+    text = (repo_root / ".github/workflows/self-hosted-shadow.yml").read_text(encoding="utf-8")
+    concurrency_block = text.split("concurrency:", maxsplit=1)[1].split("jobs:", maxsplit=1)[0]
+    assert "cancel-in-progress: ${{ github.event_name == 'pull_request' }}" in concurrency_block
 
 
 def test_repo_required_check_priority_policy_passes_for_current_tree() -> None:

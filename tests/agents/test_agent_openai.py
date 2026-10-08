@@ -16,6 +16,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import aiohttp
 
 from aragora.agents.api_agents.openai import OpenAIAPIAgent
+from aragora.agents.api_agents.common import AgentAPIError, AgentStreamError
+from tests.utils.aiohttp_mocks import make_mock_client_session, make_mock_response
 
 
 class TestOpenAIAgentInitialization:
@@ -111,10 +113,11 @@ class TestOpenAIGenerate:
 
         mock_session = MagicMock()
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_session.__aexit__ = AsyncMock(return_value=False)
         mock_session.post = MagicMock(
             return_value=MagicMock(
-                __aenter__=AsyncMock(return_value=mock_response), __aexit__=AsyncMock()
+                __aenter__=AsyncMock(return_value=mock_response),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
 
@@ -125,28 +128,16 @@ class TestOpenAIGenerate:
 
     @pytest.mark.asyncio
     async def test_api_error_handled(self, agent):
-        """Test API errors are handled (may raise or return error message)."""
-        mock_response = MagicMock()
-        mock_response.status = 500
-        mock_response.text = AsyncMock(return_value="Internal Server Error")
-
-        mock_session = MagicMock()
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
-        mock_session.post = MagicMock(
-            return_value=MagicMock(
-                __aenter__=AsyncMock(return_value=mock_response), __aexit__=AsyncMock()
-            )
-        )
+        """Test a non-quota 5xx raises AgentAPIError without retry."""
+        mock_response = make_mock_response(status=500, text="Internal Server Error")
+        mock_session = make_mock_client_session(mock_response)
 
         with patch("aiohttp.ClientSession", return_value=mock_session):
-            # The handle_agent_errors decorator may wrap or handle errors
-            try:
-                result = await agent.generate("Test prompt")
-                # If no exception, result should indicate error
-                assert "error" in result.lower() or result == ""
-            except Exception:
-                pass  # Expected - error raised
+            with pytest.raises(AgentAPIError, match="API error 500") as exc_info:
+                await agent.generate("Test prompt")
+        assert exc_info.value.status_code == 500
+        # Exactly one HTTP call: AgentAPIError is not in the decorator's retryable set.
+        assert mock_session.post.call_count == 1
 
     @pytest.mark.asyncio
     async def test_quota_error_triggers_fallback(self):
@@ -164,10 +155,11 @@ class TestOpenAIGenerate:
 
         mock_session = MagicMock()
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_session.__aexit__ = AsyncMock(return_value=False)
         mock_session.post = MagicMock(
             return_value=MagicMock(
-                __aenter__=AsyncMock(return_value=mock_openai_response), __aexit__=AsyncMock()
+                __aenter__=AsyncMock(return_value=mock_openai_response),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
 
@@ -193,29 +185,23 @@ class TestOpenAIGenerate:
             enable_fallback=True,
         )
 
-        mock_response = MagicMock()
-        mock_response.status = 429
-        mock_response.text = AsyncMock(return_value="Rate limit exceeded")
-
-        mock_session = MagicMock()
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
-        mock_session.post = MagicMock(
-            return_value=MagicMock(
-                __aenter__=AsyncMock(return_value=mock_response), __aexit__=AsyncMock()
-            )
-        )
+        mock_response = make_mock_response(status=429, text="Rate limit exceeded")
+        mock_session = make_mock_client_session(mock_response)
 
         with patch("aiohttp.ClientSession", return_value=mock_session):
-            with patch.dict("os.environ", {"OPENROUTER_API_KEY": ""}, clear=False):
-                # Should log warning when fallback unavailable
-                # The warning comes from QuotaFallbackMixin in aragora.agents.fallback
-                with patch("aragora.agents.fallback.logger") as mock_logger:
-                    try:
-                        await agent.generate("Test prompt")
-                    except Exception:
-                        pass  # Some errors may still propagate
-                    mock_logger.warning.assert_called()
+            with patch.object(agent, "_build_fallback_providers", return_value=[]):
+                with patch.dict("os.environ", {"OPENROUTER_API_KEY": ""}, clear=False):
+                    # The warning comes from QuotaFallbackMixin.fallback_generate; with no
+                    # providers the 429 then surfaces as a non-retryable AgentAPIError.
+                    with patch("aragora.agents.fallback.logger") as mock_logger:
+                        with pytest.raises(AgentAPIError, match="API error 429") as exc_info:
+                            await agent.generate("Test prompt")
+                        assert exc_info.value.status_code == 429
+                        mock_logger.warning.assert_called()
+                        assert any(
+                            "no fallback provider" in call.args[0]
+                            for call in mock_logger.warning.call_args_list
+                        )
 
     @pytest.mark.asyncio
     async def test_system_prompt_included(self):
@@ -235,12 +221,13 @@ class TestOpenAIGenerate:
             nonlocal captured_payload
             captured_payload = kwargs.get("json", {})
             return MagicMock(
-                __aenter__=AsyncMock(return_value=mock_response), __aexit__=AsyncMock()
+                __aenter__=AsyncMock(return_value=mock_response),
+                __aexit__=AsyncMock(return_value=False),
             )
 
         mock_session = MagicMock()
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_session.__aexit__ = AsyncMock(return_value=False)
         mock_session.post = capture_post
 
         with patch("aiohttp.ClientSession", return_value=mock_session):
@@ -284,10 +271,11 @@ class TestOpenAIStreaming:
 
         mock_session = MagicMock()
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_session.__aexit__ = AsyncMock(return_value=False)
         mock_session.post = MagicMock(
             return_value=MagicMock(
-                __aenter__=AsyncMock(return_value=mock_response), __aexit__=AsyncMock()
+                __aenter__=AsyncMock(return_value=mock_response),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
 
@@ -304,31 +292,17 @@ class TestOpenAIStreaming:
 
     @pytest.mark.asyncio
     async def test_streaming_error_response(self, agent):
-        """Test streaming with error response raises or returns error."""
-        mock_response = MagicMock()
-        mock_response.status = 500
-        mock_response.text = AsyncMock(return_value="Server Error")
-
-        mock_session = MagicMock()
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
-        mock_session.post = MagicMock(
-            return_value=MagicMock(
-                __aenter__=AsyncMock(return_value=mock_response), __aexit__=AsyncMock()
-            )
-        )
+        """Test streaming with a non-quota 5xx raises AgentStreamError."""
+        mock_response = make_mock_response(status=500, text="Server Error")
+        mock_session = make_mock_client_session(mock_response)
 
         with patch("aiohttp.ClientSession", return_value=mock_session):
-            # Error may raise or return error message depending on decorator
-            chunks = []
-            try:
+            chunks: list[str] = []
+            with pytest.raises(AgentStreamError, match="streaming API error 500"):
                 async for chunk in agent.generate_stream("Test"):
                     chunks.append(chunk)
-                # If no exception, result should indicate error
-                result = "".join(chunks)
-                assert "error" in result.lower() or result == ""
-            except (RuntimeError, Exception):
-                pass  # Expected behavior - error raised
+            # The error is raised before any stream data is read, so nothing is yielded.
+            assert chunks == []
 
     @pytest.mark.asyncio
     async def test_streaming_fallback_on_quota_error(self):
@@ -345,10 +319,11 @@ class TestOpenAIStreaming:
 
         mock_session = MagicMock()
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_session.__aexit__ = AsyncMock(return_value=False)
         mock_session.post = MagicMock(
             return_value=MagicMock(
-                __aenter__=AsyncMock(return_value=mock_response), __aexit__=AsyncMock()
+                __aenter__=AsyncMock(return_value=mock_response),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
 
@@ -449,18 +424,8 @@ class TestOpenAIFallbackDisabled:
             enable_fallback=False,
         )
 
-        mock_response = MagicMock()
-        mock_response.status = 429
-        mock_response.text = AsyncMock(return_value="Rate limit")
-
-        mock_session = MagicMock()
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
-        mock_session.post = MagicMock(
-            return_value=MagicMock(
-                __aenter__=AsyncMock(return_value=mock_response), __aexit__=AsyncMock()
-            )
-        )
+        mock_response = make_mock_response(status=429, text="Rate limit")
+        mock_session = make_mock_client_session(mock_response)
 
         # Track whether fallback was called
         fallback_called = False
@@ -474,11 +439,11 @@ class TestOpenAIFallbackDisabled:
             with patch.dict("os.environ", {"OPENROUTER_API_KEY": "router-key"}):
                 # Mock the cached fallback agent from QuotaFallbackMixin
                 with patch.object(agent, "_get_cached_fallback_agent", mock_get_fallback):
-                    # Should not call fallback when disabled
-                    try:
+                    # With fallback disabled the 429 must surface as AgentAPIError
+                    # rather than being routed to OpenRouter.
+                    with pytest.raises(AgentAPIError, match="API error 429") as exc_info:
                         await agent.generate("Test")
-                    except Exception:
-                        pass  # Error may or may not be raised
+                    assert exc_info.value.status_code == 429
                     # Key assertion: fallback should not be called
                     assert not fallback_called
 

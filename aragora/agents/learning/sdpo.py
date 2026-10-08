@@ -587,6 +587,9 @@ class SDPOLearner:
 
         insights = []
         outcome = trajectory.outcome
+        if outcome is None:
+            logger.warning("Cannot evaluate trajectory without an outcome")
+            return []
 
         # Evaluate each step
         for step in trajectory.steps[-self.config.retrospective_depth :]:

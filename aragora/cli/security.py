@@ -251,8 +251,10 @@ def cmd_security_status(args: argparse.Namespace) -> int:
 def cmd_rotate_key(args: argparse.Namespace) -> int:
     """Rotate encryption key."""
     try:
+        from aragora.ops.security_edge_adapters import register_security_migration_adapters
         from aragora.security.migration import rotate_encryption_key
 
+        register_security_migration_adapters()
         stores = [s.strip() for s in args.stores.split(",")]
 
         print("\n🔑 Key Rotation")
@@ -302,11 +304,13 @@ def cmd_rotate_key(args: argparse.Namespace) -> int:
 def cmd_migrate(args: argparse.Namespace) -> int:
     """Migrate plaintext data to encrypted."""
     try:
+        from aragora.ops.security_edge_adapters import register_security_migration_adapters
         from aragora.security.migration import (
             run_startup_migration,
             StartupMigrationConfig,
         )
 
+        register_security_migration_adapters()
         stores = [s.strip() for s in args.stores.split(",")]
 
         print("\n🔄 Data Migration (Plaintext → Encrypted)")

@@ -1424,8 +1424,8 @@ class TestCLIAgentModelMapping:
     def test_claude_model_mapping(self):
         """Should map Claude models correctly."""
         agent = ClaudeAgent(name="test", model="claude-opus-4-8")
-        assert agent.OPENROUTER_MODEL_MAP.get("claude-opus-4-8") == "anthropic/claude-opus-4.8"
-        assert agent.OPENROUTER_MODEL_MAP.get("claude-opus-4-7") == "anthropic/claude-opus-4.8"
+        assert agent.OPENROUTER_MODEL_MAP.get("claude-opus-4-8") == "anthropic/claude-opus-5"
+        assert agent.OPENROUTER_MODEL_MAP.get("claude-opus-4-7") == "anthropic/claude-opus-5"
 
     def test_codex_model_mapping(self):
         """Should map Codex models correctly."""
@@ -1433,14 +1433,15 @@ class TestCLIAgentModelMapping:
         assert agent.OPENROUTER_MODEL_MAP.get("gpt-4.1-codex") == "openai/gpt-5.5"
 
     def test_gemini_model_mapping(self):
-        """Should map Gemini models correctly."""
+        """Should map Gemini models to the LIVE catalog slug (#9073: the
+        unsuffixed google/gemini-3.1-pro id does not exist on OpenRouter)."""
         agent = GeminiCLIAgent(name="test", model="gemini-3-pro")
-        assert agent.OPENROUTER_MODEL_MAP.get("gemini-3-pro") == "google/gemini-3.1-pro"
+        assert agent.OPENROUTER_MODEL_MAP.get("gemini-3-pro") == "google/gemini-3.1-pro-preview"
 
     def test_grok_model_mapping(self):
         """Should map Grok models correctly."""
         agent = GrokCLIAgent(name="test", model="grok-3")
-        assert agent.OPENROUTER_MODEL_MAP.get("grok-3") == "x-ai/grok-4"
+        assert agent.OPENROUTER_MODEL_MAP.get("grok-3") == "x-ai/grok-4.5"
 
     def test_deepseek_model_mapping(self):
         """Should map Deepseek models correctly."""
@@ -1466,7 +1467,7 @@ class TestCLIAgentModelMapping:
 
                 call_kwargs = mock_or.call_args[1]
                 # Should default to the current frontier Claude model.
-                assert call_kwargs["model"] == "anthropic/claude-opus-4.8"
+                assert call_kwargs["model"] == "anthropic/claude-opus-5"
 
 
 # =============================================================================

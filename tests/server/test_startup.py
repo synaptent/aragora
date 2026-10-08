@@ -330,3 +330,30 @@ class TestGauntletRecovery:
         result = init_gauntlet_run_recovery()
         assert isinstance(result, int)
         assert result >= 0
+
+
+@pytest.mark.asyncio
+async def test_sequential_startup_registers_webhook_store_before_components():
+    """Durable webhook wiring must precede optional component initialization."""
+    from aragora.server.startup import _init_all_components
+
+    order: list[str] = []
+
+    async def fail_first_component():
+        order.append("first_component")
+        raise RuntimeError("stop after ordering assertion")
+
+    with (
+        patch(
+            "aragora.server.startup.event_subscribers.register_webhook_store",
+            side_effect=lambda: order.append("webhook_store"),
+        ),
+        patch(
+            "aragora.server.startup.init_postgres_pool",
+            side_effect=fail_first_component,
+        ),
+        pytest.raises(RuntimeError, match="stop after ordering assertion"),
+    ):
+        await _init_all_components({}, None, None)
+
+    assert order == ["webhook_store", "first_component"]

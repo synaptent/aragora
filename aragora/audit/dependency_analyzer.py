@@ -38,6 +38,14 @@ else:
 logger = logging.getLogger(__name__)
 
 
+def _first_non_none_string(*values: Any) -> str:
+    """Return the first present value as a string, preserving falsy values."""
+    for value in values:
+        if value is not None:
+            return str(value)
+    return ""
+
+
 class DependencyType(str, Enum):
     """Type of dependency."""
 
@@ -806,15 +814,36 @@ class DependencyAnalyzer:
 
                             vulnerabilities.append(
                                 Vulnerability(
-                                    id=str(vuln_info.get("source", vuln_info.get("id", "UNKNOWN"))),
-                                    severity=self._map_severity(
-                                        vuln_info.get("severity", "moderate")
+                                    id=_first_non_none_string(
+                                        vuln_info.get("source"),
+                                        vuln_info.get("id"),
+                                        "UNKNOWN",
                                     ),
-                                    title=vuln_info.get("title", adv.get("name", "Vulnerability")),
-                                    description=vuln_info.get("overview", vuln_info.get("url", "")),
-                                    affected_package=adv.get("name", ""),
-                                    affected_versions=vuln_info.get(
-                                        "vulnerable_versions", adv.get("range", "*")
+                                    severity=self._map_severity(
+                                        _first_non_none_string(
+                                            vuln_info.get("severity"),
+                                            adv.get("severity"),
+                                            "moderate",
+                                        )
+                                    ),
+                                    title=_first_non_none_string(
+                                        vuln_info.get("title"),
+                                        adv.get("name"),
+                                        "Vulnerability",
+                                    ),
+                                    description=_first_non_none_string(
+                                        vuln_info.get("overview"),
+                                        vuln_info.get("url"),
+                                        "",
+                                    ),
+                                    affected_package=_first_non_none_string(
+                                        adv.get("name"),
+                                        "",
+                                    ),
+                                    affected_versions=_first_non_none_string(
+                                        vuln_info.get("vulnerable_versions"),
+                                        adv.get("range"),
+                                        "*",
                                     ),
                                     fixed_version=(
                                         adv.get("fixAvailable", {}).get("version")

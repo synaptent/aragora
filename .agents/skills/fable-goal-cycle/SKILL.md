@@ -52,7 +52,7 @@ Useful flags: `--dry-run` (build the packet only — inspect it before spending
 a consult), `--context-file <path>` (repeatable; include a redacted cycle
 report or steering note only after placing it under
 `.aragora/goal-cycle-context/`), `--since-hours 48`, `--skip-digest`,
-`--timeout 1200`, `--model claude-opus-4-8`.
+`--timeout 1200`, `--model claude-opus-5`.
 
 Exit codes: `0` ok, `2` consult failed/timed out, `5` response lacked a
 `## NEXT PROMPT` block (raw response is still saved).

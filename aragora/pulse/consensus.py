@@ -14,9 +14,12 @@ Features:
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from aragora.pulse.ingestor import TrendingTopic
+
+if TYPE_CHECKING:
+    from aragora.debate.similarity.backends import SimilarityBackend
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +99,7 @@ class CrossSourceConsensus:
         self.min_platforms_for_consensus = min_platforms_for_consensus
         self.consensus_confidence_boost = consensus_confidence_boost
         self.keyword_weight = keyword_weight
-        self._similarity_backend = None
+        self._similarity_backend: SimilarityBackend | None = None
 
         # Common words to ignore in comparison
         self._stopwords = {

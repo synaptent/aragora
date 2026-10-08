@@ -81,19 +81,21 @@ class AragoraDiscordBot:
         intents = discord.Intents.default()
         intents.message_content = True
 
-        self._client = discord.Client(intents=intents)
-        self._tree = app_commands.CommandTree(self._client)
+        client = discord.Client(intents=intents)
+        tree = app_commands.CommandTree(client)
+        self._client = client
+        self._tree = tree
 
         # Register event handlers
-        @self._client.event
+        @client.event
         async def on_ready():
-            logger.info("Discord bot logged in as %s", self._client.user)
+            logger.info("Discord bot logged in as %s", client.user)
             # Sync slash commands
             if self.application_id:
-                await self._tree.sync()
+                await tree.sync()
                 logger.info("Discord slash commands synced")
 
-        @self._client.event
+        @client.event
         async def on_message(message: discord.Message):
             # Ignore bot messages
             if message.author.bot:
@@ -102,7 +104,7 @@ class AragoraDiscordBot:
             # Handle DMs or mentions
             if isinstance(message.channel, discord.DMChannel):
                 await self._handle_dm(message)
-            elif self._client.user and self._client.user.mentioned_in(message):
+            elif client.user and client.user.mentioned_in(message):
                 await self._handle_mention(message)
 
         # Register slash commands
@@ -113,7 +115,11 @@ class AragoraDiscordBot:
         import discord
         from discord import app_commands
 
-        @self._tree.command(name="aragora", description="Aragora multi-agent debate commands")
+        tree = self._tree
+        if tree is None:
+            raise RuntimeError("Discord command tree is not initialized; call setup() first")
+
+        @tree.command(name="aragora", description="Aragora multi-agent debate commands")
         @app_commands.describe(
             command="The command to run (debate, gauntlet, status, help)",
             args="Arguments for the command",
@@ -125,17 +131,17 @@ class AragoraDiscordBot:
         ):
             await self._handle_slash_command(interaction, command, args or "")
 
-        @self._tree.command(name="debate", description="Start a multi-agent debate on a topic")
+        @tree.command(name="debate", description="Start a multi-agent debate on a topic")
         @app_commands.describe(topic="The topic to debate")
         async def debate_command(interaction: discord.Interaction, topic: str):
             await self._handle_slash_command(interaction, "debate", topic)
 
-        @self._tree.command(name="gauntlet", description="Run adversarial stress-test validation")
+        @tree.command(name="gauntlet", description="Run adversarial stress-test validation")
         @app_commands.describe(statement="The statement to validate")
         async def gauntlet_command(interaction: discord.Interaction, statement: str):
             await self._handle_slash_command(interaction, "gauntlet", statement)
 
-        @self._tree.command(name="status", description="Check Aragora system status")
+        @tree.command(name="status", description="Check Aragora system status")
         async def status_command(interaction: discord.Interaction):
             await self._handle_slash_command(interaction, "status", "")
 
@@ -349,11 +355,15 @@ class AragoraDiscordBot:
 
     async def run(self) -> None:
         """Run the Discord bot."""
-        if not self._client:
+        if self._client is None:
             await self.setup()
 
+        client = self._client
+        if client is None:
+            raise RuntimeError("Discord client initialization failed")
+
         logger.info("Starting Discord bot...")
-        await self._client.start(self.token)
+        await client.start(self.token)
 
     async def close(self) -> None:
         """Close the Discord bot connection."""

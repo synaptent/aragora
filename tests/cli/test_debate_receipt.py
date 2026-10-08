@@ -176,3 +176,87 @@ def test_receipt_agents_fall_back_to_artifact_authors(
     assert receipt_path is not None
     data = json.loads(Path(receipt_path).read_text(encoding="utf-8"))
     assert set(data["agents"]) == {"grok", "mistral-api"}
+
+
+def test_receipt_carries_crux_cards_from_metadata(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A debate run with enable_crux_cards (--crux-cards) attaches a crux_cards
+    block to result metadata; the persisted receipt must carry it as cruxes
+    and still verify."""
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    result = _mixed_family_result()
+    result.metadata["crux_cards"] = {
+        "items": [
+            {
+                "claim_id": "c1",
+                "statement": "Rate limiter should be token-bucket",
+                "crux_score": 0.72,
+                "author": "grok",
+                "contesting_agents": ["mistral-api"],
+            }
+        ],
+        "total_claims": 4,
+        "total_disagreements": 1,
+        "convergence_barrier": 0.4,
+        "detector": "belief_network",
+    }
+
+    receipt_path = _persist_debate_receipt(result)
+
+    assert receipt_path is not None
+    data = json.loads(Path(receipt_path).read_text(encoding="utf-8"))
+    assert data["cruxes"]["items"][0]["claim_id"] == "c1"
+    assert data["cruxes"]["detector"] == "belief_network"
+    # Cruxes bind into artifact_hash, so the schema version must signal it
+    # to older verifiers instead of reading as tampering.
+    assert data["schema_version"] == "1.2"
+    assert DecisionReceipt.from_dict(data).verify_integrity() is True
+
+
+def test_receipt_preserves_long_reasoning_verbatim(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Receipts are audit artifacts: verdict_reasoning, final_answer, and
+    agent responses longer than 2,000 chars must survive persistence intact
+    (previously silently cut mid-word at 2,000, weakening signed evidence)."""
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    long_answer = "All twelve mitigations were weighed against Article 14. " * 100
+    long_response = "The proposer's threat model holds because " * 120
+    assert len(long_answer) > 2000 and len(long_response) > 2000
+    result = _mixed_family_result()
+    result.final_answer = long_answer
+    result.messages = [
+        SimpleNamespace(agent="grok", role="proposer", round=0, content=long_response)
+    ]
+
+    receipt_path = _persist_debate_receipt(result)
+
+    assert receipt_path is not None
+    data = json.loads(Path(receipt_path).read_text(encoding="utf-8"))
+    assert data["final_answer"] == long_answer
+    assert data["verdict_reasoning"] == long_answer
+    assert data["agent_responses"][0]["response"] == long_response.strip()
+    assert DecisionReceipt.from_dict(data).verify_integrity() is True
+
+
+def test_receipt_omits_cruxes_when_crux_cards_absent_or_empty(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Flag-off receipts must stay byte-identical: no cruxes key without items."""
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+    result = _mixed_family_result()
+    receipt_path = _persist_debate_receipt(result)
+    assert receipt_path is not None
+    data = json.loads(Path(receipt_path).read_text(encoding="utf-8"))
+    assert "cruxes" not in data
+    assert data["schema_version"] == "1.1"
+
+    empty = _mixed_family_result()
+    empty.metadata["crux_cards"] = {"items": []}
+    receipt_path = _persist_debate_receipt(empty)
+    assert receipt_path is not None
+    data = json.loads(Path(receipt_path).read_text(encoding="utf-8"))
+    assert "cruxes" not in data
+    assert data["schema_version"] == "1.1"

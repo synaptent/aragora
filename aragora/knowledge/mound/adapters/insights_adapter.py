@@ -106,11 +106,7 @@ class InsightSearchResult:
 
     insight: dict[str, Any]
     relevance_score: float = 0.0
-    matched_topics: list[str] = None
-
-    def __post_init__(self) -> None:
-        if self.matched_topics is None:
-            self.matched_topics = []
+    matched_topics: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -334,7 +330,7 @@ class InsightsAdapter(FusionMixin, SemanticSearchMixin, KnowledgeMoundAdapter):
     def store_insight(
         self,
         insight: Insight,
-        min_confidence: float = None,
+        min_confidence: float | None = None,
     ) -> str | None:
         """
         Store an insight in the Knowledge Mound.
@@ -389,7 +385,7 @@ class InsightsAdapter(FusionMixin, SemanticSearchMixin, KnowledgeMoundAdapter):
     def store_debate_insights(
         self,
         debate_insights: DebateInsights,
-        min_confidence: float = None,
+        min_confidence: float | None = None,
     ) -> list[str]:
         """
         Store all insights from a debate above the threshold.
@@ -882,7 +878,7 @@ class InsightsAdapter(FusionMixin, SemanticSearchMixin, KnowledgeMoundAdapter):
             "debates_with_insights": len(self._debate_insights),
             "agents_with_flips": len(self._agent_flips),
             "domains_with_flips": len(self._domain_flips),
-            "insight_types": dict((t, len(ids)) for t, ids in self._type_insights.items()),
+            "insight_types": {t: len(ids) for t, ids in self._type_insights.items()},
             "flip_types": flip_types,
             # Reverse flow stats
             "km_validations_applied": self._km_validations_applied,

@@ -4,7 +4,10 @@ Pure-core, fixture-driven: the lane decision is exercised against explicit
 open-PR lists, so no ``gh`` subprocess is ever invoked. A drift guard asserts
 the vendored serialized-surface list stays in sync with the canonical
 ``review_queue.TIER_4_PREFIXES`` (skipped when that import's heavy dependency
-closure is unavailable, e.g. in a minimal sandbox).
+closure is unavailable, e.g. in a minimal sandbox). The maintained exact-name
+Stage-1 regressions additionally exercise canonical classification directly;
+those proofs intentionally fail rather than skip when the canonical classifier
+cannot be imported.
 """
 
 from __future__ import annotations
@@ -30,6 +33,8 @@ def _load_module() -> Any:
 
 
 train = _load_module()
+
+HOSTILE_EXACT_FILE_VARIANTS = (".bak", ".old", ".pyx", "/child", "x")
 
 
 def _pr(number: int, files: list[str], *, created: str = "", title: str = "") -> dict[str, Any]:
@@ -57,6 +62,52 @@ def test_matches_directory_prefix_surface() -> None:
         train.matches_serialized_path(".github/workflows/aragora-merge-quorum.yml")
         == ".github/workflows/"
     )
+
+
+def test_every_slash_directory_root_matches_descendant_files_at_two_depths() -> None:
+    review_queue = importlib.import_module("aragora.cli.commands.review_queue")
+    directory_roots = tuple(rule for rule in train.SERIALIZED_TIER4_PREFIXES if rule.endswith("/"))
+    assert directory_roots
+    assert directory_roots == tuple(
+        rule for rule in review_queue.TIER_4_PREFIXES if rule.endswith("/")
+    )
+
+    for index, root in enumerate(directory_roots, start=1):
+        shallow = f"{root}stage1_probe.txt"
+        deep = f"{root}stage1/nested_probe.txt"
+        occupying_pr = 9_000 + index
+
+        for path in (shallow, deep):
+            canonical_rule = next(
+                (
+                    rule
+                    for rule in review_queue.TIER_4_PREFIXES
+                    if review_queue._matches_prefix(path, (rule,))
+                ),
+                None,
+            )
+            tier, name, _reason = review_queue._classify_model_review_tier([path])
+            assert canonical_rule == root
+            assert (tier, name) == (4, "tier_4_preapproval_required")
+            assert train.matches_serialized_path(path) == root
+            assert train.serialized_paths_for([path]) == {root}
+
+            allowed = train.evaluate_merge_train([path], open_prs=[], cap=1)
+            assert allowed["decision"] == train.ALLOW
+            assert allowed["candidate_surfaces"] == [root]
+
+        queued = train.evaluate_merge_train(
+            [deep],
+            open_prs=[_pr(occupying_pr, [shallow])],
+            cap=1,
+        )
+        assert queued["decision"] == train.QUEUE
+        assert queued["blocking_prs"] == [occupying_pr]
+        assert queued["contended_surfaces"][root] == {
+            "open_pr_numbers": [occupying_pr],
+            "head_pr": occupying_pr,
+            "lane_full": True,
+        }
 
 
 def test_non_serialized_path_returns_none() -> None:
@@ -99,6 +150,92 @@ def test_full_lane_queues_candidate() -> None:
     assert result["blocking_prs"] == [8405]
     assert result["contended_surfaces"]["scripts/settle_tier4_pr.py"]["head_pr"] == 8405
     assert result["contended_surfaces"]["scripts/settle_tier4_pr.py"]["lane_full"] is True
+
+
+def test_cap_one_contention_is_deterministic_for_exact_authority_file() -> None:
+    authority = "scripts/check_contract_drift_ratchet.py"
+    open_prs = [
+        _pr(9412, [authority], created="2026-07-17T20:01:00Z"),
+        _pr(9410, [authority], created="2026-07-17T19:59:00Z"),
+    ]
+
+    first = train.evaluate_merge_train([authority], open_prs=open_prs, cap=1)
+    second = train.evaluate_merge_train([authority], open_prs=list(reversed(open_prs)), cap=1)
+
+    assert first == second
+    assert first["decision"] == train.QUEUE
+    assert first["blocking_prs"] == [9410, 9412]
+    assert first["contended_surfaces"][authority] == {
+        "open_pr_numbers": [9410, 9412],
+        "head_pr": 9410,
+        "lane_full": True,
+    }
+
+
+def test_every_exact_file_root_serializes_and_contends_with_occupying_pr_and_hostile_variants_join_no_lane() -> (
+    None
+):
+    review_queue = importlib.import_module("aragora.cli.commands.review_queue")
+    exact_roots = tuple(rule for rule in train.SERIALIZED_TIER4_PREFIXES if not rule.endswith("/"))
+    assert exact_roots
+    assert exact_roots == tuple(
+        rule for rule in review_queue.TIER_4_PREFIXES if not rule.endswith("/")
+    )
+
+    for index, root in enumerate(exact_roots, start=1):
+        occupying_pr = 10_000 + index
+        assert train.matches_serialized_path(root) == root
+        assert train.serialized_paths_for([root]) == {root}
+        tier, name, _reason = review_queue._classify_model_review_tier([root])
+        assert (tier, name) == (4, "tier_4_preapproval_required")
+
+        allowed = train.evaluate_merge_train([root], open_prs=[], cap=1)
+        assert allowed["decision"] == train.ALLOW
+        assert allowed["candidate_surfaces"] == [root]
+        assert allowed["blocking_prs"] == []
+
+        queued = train.evaluate_merge_train(
+            [root],
+            open_prs=[_pr(occupying_pr, [root])],
+            cap=1,
+        )
+        assert queued["decision"] == train.QUEUE
+        assert queued["blocking_prs"] == [occupying_pr]
+        assert queued["contended_surfaces"][root] == {
+            "open_pr_numbers": [occupying_pr],
+            "head_pr": occupying_pr,
+            "lane_full": True,
+        }
+
+        for suffix in HOSTILE_EXACT_FILE_VARIANTS:
+            variant = f"{root}{suffix}"
+            canonical_rule = next(
+                (
+                    rule
+                    for rule in review_queue.TIER_4_PREFIXES
+                    if review_queue._matches_prefix(variant, (rule,))
+                ),
+                None,
+            )
+            variant_tier, _variant_name, _variant_reason = review_queue._classify_model_review_tier(
+                [variant]
+            )
+            assert canonical_rule is None
+            assert variant_tier < 4
+            assert train.matches_serialized_path(variant) is None
+            assert train.serialized_paths_for([variant]) == set()
+            assert train.build_train([_pr(occupying_pr, [variant])]) == {}
+
+            variant_decision = train.evaluate_merge_train(
+                [variant],
+                open_prs=[_pr(occupying_pr, [root])],
+                cap=1,
+            )
+            assert variant_decision["decision"] == train.ALLOW
+            assert variant_decision["candidate_surfaces"] == []
+            assert variant_decision["contended_surfaces"] == {}
+            assert variant_decision["blocking_prs"] == []
+            assert "no serialized Tier-4 surface" in variant_decision["reason"]
 
 
 def test_cap_two_allows_second_pr() -> None:
@@ -232,7 +369,7 @@ def test_serialized_prefixes_match_canonical_tier4() -> None:
         "aragora.cli.commands.review_queue",
         reason="review_queue import closure unavailable in this environment",
     )
-    assert set(train.SERIALIZED_TIER4_PREFIXES) == set(review_queue.TIER_4_PREFIXES), (
+    assert train.SERIALIZED_TIER4_PREFIXES == review_queue.TIER_4_PREFIXES, (
         "scripts/tier4_merge_train.py SERIALIZED_TIER4_PREFIXES has drifted from "
         "review_queue.TIER_4_PREFIXES — re-sync the vendored copy."
     )

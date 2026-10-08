@@ -5,7 +5,7 @@
 /** @type {import('@docusaurus/types').Config} */
 const config = {
   title: 'Aragora Documentation',
-  tagline: 'Auditable execution control plane for consequential AI-assisted work',
+  tagline: 'Auditable execution control plane for AI-assisted decisions',
   favicon: 'img/favicon.ico',
 
   // Production URL
@@ -114,6 +114,12 @@ const config = {
             sidebarId: 'apiSidebar',
             position: 'left',
             label: 'API Reference',
+          },
+          {
+            type: 'docSidebar',
+            sidebarId: 'referenceSidebar',
+            position: 'left',
+            label: 'Reference',
           },
           {
             href: 'https://aragora.ai',

@@ -25,6 +25,10 @@ from aragora.connectors.devops.pagerduty import (
     get_mock_service,
     get_mock_user,
 )
+from aragora.connectors.devops.slo_alert_sink import (
+    PagerDutySLOAlertSink,
+    register_slo_alert_sink,
+)
 
 __all__ = [
     "PagerDutyConnector",
@@ -45,4 +49,6 @@ __all__ = [
     "get_mock_on_call",
     "get_mock_service",
     "get_mock_user",
+    "PagerDutySLOAlertSink",
+    "register_slo_alert_sink",
 ]

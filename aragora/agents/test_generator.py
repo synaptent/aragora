@@ -17,7 +17,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from typing import Any, TypedDict
 
 from aragora.agents.base import BaseDebateAgent
 from aragora.core import Critique
@@ -37,12 +37,20 @@ class TestType(str, Enum):
     SECURITY = "security"
 
 
+class FunctionParameter(TypedDict):
+    """Parsed function parameter metadata."""
+
+    name: str
+    type: str | None
+    default: str | None
+
+
 @dataclass
 class FunctionSignature:
     """Extracted function signature for test generation."""
 
     name: str
-    parameters: list[dict[str, str]]
+    parameters: list[FunctionParameter]
     return_type: str | None
     docstring: str | None
     decorators: list[str] = field(default_factory=list)
@@ -236,12 +244,12 @@ Follow testing best practices:
 
         return signatures
 
-    def _parse_parameters(self, params_str: str) -> list[dict[str, str]]:
+    def _parse_parameters(self, params_str: str) -> list[FunctionParameter]:
         """Parse function parameters from string."""
         if not params_str.strip():
             return []
 
-        params = []
+        params: list[FunctionParameter] = []
         # Simple parameter parsing (doesn't handle all edge cases)
         for param in params_str.split(","):
             param = param.strip()
@@ -452,7 +460,7 @@ Follow testing best practices:
 
         return suggestions
 
-    def _generate_sample_inputs(self, parameters: list[dict[str, str]]) -> dict[str, Any]:
+    def _generate_sample_inputs(self, parameters: list[FunctionParameter]) -> dict[str, Any]:
         """Generate sample input values for parameters."""
         inputs: dict[str, Any] = {}
         for param in parameters:

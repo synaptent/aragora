@@ -1,4 +1,4 @@
-"""Field-drift guard for docs/GITHUB_ACTION_SETUP.md's receipt-emission section.
+"""Field-drift guard for docs/guides/GITHUB_ACTION_SETUP.md's receipt-emission section.
 
 The doc hand-transcribes action.yml input/output names and a "uses:" target into
 prose and YAML snippets. Nothing enforces that transcription stays accurate as
@@ -13,18 +13,29 @@ import re
 from pathlib import Path
 from typing import Any
 
+import pytest
 import yaml
 
 from aragora.gauntlet.odr_verify import verify_odr_document
 
-DOC_PATH = Path("docs/GITHUB_ACTION_SETUP.md")
+DOC_PATH = Path("docs/guides/GITHUB_ACTION_SETUP.md")
+DOCS_SITE_DOC_PATH = Path("docs-site/docs/guides/github-action-setup.md")
 README_PATH = Path("README.md")
+NESTED_REVIEW_GUIDE_PATH = Path("docs/guides/github-actions-review.md")
 ROOT_ACTION_PATH = Path("action.yml")
 EXAMPLE_RECEIPT_PATH = Path("docs/specs/examples/example-merge-quorum-receipt.odr.json")
 RECEIPT_WORKFLOW_EXAMPLE_PATH = Path("examples/github-action/receipt.yml")
-PINNED_ROOT_ACTION_REF = "synaptent/aragora@8b600a3a8dbf076f4027ae27f3dcbbf48e75409f"
+EXAMPLE_WORKFLOW_PATHS = (
+    Path("examples/github-action/advanced.yml"),
+    Path("examples/github-action/aragora-review-strict.yml"),
+    Path("examples/github-action/aragora-review.yml"),
+    Path("examples/github-action/basic.yml"),
+)
+INIT_SCAFFOLD_PATH = Path("aragora/cli/init.py")
+PINNED_ROOT_ACTION_REF = "synaptent/aragora@486a10d835be5da00df488b5bef6c1e708da8f10"
 
 _BACKTICK_TABLE_FIELD_RE = re.compile(r"^\|\s*`([a-zA-Z0-9_-]+)`\s*\|", re.MULTILINE)
+_PINNED_ACTION_REF_RE = re.compile(r"synaptent/aragora@[0-9a-f]{40}(?![0-9a-f])")
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:
@@ -55,6 +66,44 @@ def _first_uses_step(steps: list[dict[str, Any]], prefix: str) -> dict[str, Any]
         if str(step.get("uses", "")).startswith(prefix):
             return step
     raise AssertionError(f"no step with uses starting with {prefix!r} in {steps!r}")
+
+
+def _comment_permission_blocks(path: Path) -> list[tuple[str, dict[str, Any]]]:
+    blocks = []
+    for block in _fenced_blocks(path.read_text(encoding="utf-8"), "yaml"):
+        if "pull-requests: write" not in block:
+            continue
+        workflow = yaml.safe_load(block)
+        if not isinstance(workflow, dict) or "jobs" not in workflow:
+            continue
+        blocks.append((block, workflow))
+    return blocks
+
+
+def _workflow_permission_sets(workflow: dict[str, Any]) -> list[dict[str, Any]]:
+    permission_sets = []
+    top_level = workflow.get("permissions")
+    if isinstance(top_level, dict):
+        permission_sets.append(top_level)
+    for job in workflow.get("jobs", {}).values():
+        if isinstance(job, dict) and isinstance(job.get("permissions"), dict):
+            permission_sets.append(job["permissions"])
+    return permission_sets
+
+
+def test_comment_posting_workflow_snippets_grant_issue_comment_permission() -> None:
+    """`gh pr comment` writes issue comments, so snippets that post PR comments
+    need `issues: write` in addition to `pull-requests: write`."""
+    for path in (README_PATH, DOC_PATH, NESTED_REVIEW_GUIDE_PATH):
+        blocks = _comment_permission_blocks(path)
+        assert blocks, f"expected at least one comment-posting workflow block in {path}"
+        for block, workflow in blocks:
+            permission_sets = _workflow_permission_sets(workflow)
+            assert permission_sets, f"workflow block in {path} has no permissions: {block}"
+            assert any(
+                permissions.get("pull-requests") == "write" and permissions.get("issues") == "write"
+                for permissions in permission_sets
+            ), f"workflow block in {path} must grant issues: write with pull-requests: write"
 
 
 def test_documented_input_names_match_action_yml_exactly() -> None:
@@ -165,8 +214,15 @@ def test_receipt_workflow_example_is_valid_yaml_and_wires_emit_receipt() -> None
 
 
 def test_docs_do_not_recommend_mutable_main_action_ref() -> None:
-    for path in (README_PATH, DOC_PATH):
-        assert "synaptent/aragora@main" not in path.read_text(encoding="utf-8")
+    for path in (
+        README_PATH,
+        DOC_PATH,
+        DOCS_SITE_DOC_PATH,
+        RECEIPT_WORKFLOW_EXAMPLE_PATH,
+        *EXAMPLE_WORKFLOW_PATHS,
+        INIT_SCAFFOLD_PATH,
+    ):
+        assert "synaptent/aragora@main" not in path.read_text(encoding="utf-8"), path
 
 
 def test_readme_wedge_snippet_is_valid_yaml_and_uses_pinned_root_action() -> None:
@@ -184,6 +240,30 @@ def test_readme_wedge_snippet_is_valid_yaml_and_uses_pinned_root_action() -> Non
         "includes newer action.yml capabilities like emit-receipt"
     )
     assert aragora_step["with"]["emit-receipt"] == "true"
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        README_PATH,
+        DOC_PATH,
+        DOCS_SITE_DOC_PATH,
+        RECEIPT_WORKFLOW_EXAMPLE_PATH,
+        *EXAMPLE_WORKFLOW_PATHS,
+        INIT_SCAFFOLD_PATH,
+    ],
+    ids=str,
+)
+def test_every_pinned_root_action_ref_matches_the_tested_pin(path: Path) -> None:
+    """A pin bump must move every copy at once: a copy left on an older SHA sends
+    readers of that file to an Action that may lack the inputs the docs describe."""
+    refs = _PINNED_ACTION_REF_RE.findall(path.read_text(encoding="utf-8"))
+    assert refs, f"expected at least one synaptent/aragora@<40-hex> pin in {path}"
+    stale = sorted(set(refs) - {PINNED_ROOT_ACTION_REF})
+    assert not stale, (
+        f"{path} pins {stale} instead of {PINNED_ROOT_ACTION_REF}; "
+        "bump every pin and PINNED_ROOT_ACTION_REF together"
+    )
 
 
 def test_example_merge_quorum_receipt_verifies_with_sufficient_diversity() -> None:

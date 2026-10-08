@@ -65,6 +65,7 @@ class APIAgent(CritiqueMixin, Agent):
 
         # Use provided circuit breaker, global registry, or disable
         # Global registry ensures consistent state across agent instances
+        self._circuit_breaker: BaseCircuitBreaker | None
         if circuit_breaker is not None:
             self._circuit_breaker = circuit_breaker
         elif enable_circuit_breaker:

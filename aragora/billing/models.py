@@ -13,11 +13,53 @@ import secrets
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
 from enum import Enum
-from typing import Any
+from typing import Any, Protocol
 from uuid import uuid4
 
 from aragora.exceptions import ConfigurationError
 from aragora.serialization import SerializableMixin
+
+
+class MFABypassAuditSink(Protocol):
+    """Required audit capability for privileged MFA bypass changes."""
+
+    def __call__(self, admin_id: str, action: str, **kwargs: Any) -> None: ...
+
+
+_mfa_bypass_audit_sink: MFABypassAuditSink | None = None
+
+
+def register_mfa_bypass_audit_sink(sink: MFABypassAuditSink) -> None:
+    """Register the required MFA bypass audit capability."""
+    global _mfa_bypass_audit_sink
+    _mfa_bypass_audit_sink = sink
+
+
+def clear_mfa_bypass_audit_sink() -> None:
+    """Clear the audit capability, primarily for isolated tests."""
+    global _mfa_bypass_audit_sink
+    _mfa_bypass_audit_sink = None
+
+
+def _audit_mfa_bypass(
+    *,
+    component: str,
+    missing_reason: str,
+    admin_id: str,
+    action: str,
+    target_id: str,
+    details: dict[str, Any],
+) -> None:
+    if _mfa_bypass_audit_sink is None:
+        raise ConfigurationError(component=component, reason=missing_reason)
+    _mfa_bypass_audit_sink(
+        admin_id=admin_id,
+        action=action,
+        target_type="service_account",
+        target_id=target_id,
+        details=details,
+    )
+
 
 # Try to import bcrypt for secure password hashing
 try:
@@ -532,10 +574,23 @@ class User:
         if not self.is_service_account:
             raise ValueError("MFA bypass can only be approved for service accounts")
 
+        approved_at = datetime.now(timezone.utc)
+        expires_at = approved_at + timedelta(days=expires_days)
+        _audit_mfa_bypass(
+            component="MFA Bypass Approval Audit",
+            missing_reason=(
+                "aragora.audit.unified.audit_admin is required to approve MFA bypasses"
+            ),
+            admin_id=approved_by,
+            action="mfa_bypass_approved",
+            target_id=str(self.id),
+            details={"reason": reason, "expires_days": expires_days},
+        )
+
         self.mfa_bypass_reason = reason
         self.mfa_bypass_approved_by = approved_by
-        self.mfa_bypass_approved_at = datetime.now(timezone.utc)
-        self.mfa_bypass_expires_at = datetime.now(timezone.utc) + timedelta(days=expires_days)
+        self.mfa_bypass_approved_at = approved_at
+        self.mfa_bypass_expires_at = expires_at
         self.updated_at = datetime.now(timezone.utc)
 
         logger.info(
@@ -544,27 +599,21 @@ class User:
             approved_by,
             self.mfa_bypass_expires_at,
         )
-        try:
-            from aragora.audit.unified import audit_admin
-
-            audit_admin(
-                admin_id=approved_by,
-                action="mfa_bypass_approved",
-                target_type="service_account",
-                target_id=str(self.id),
-                details={"reason": reason, "expires_days": expires_days},
-            )
-        except ImportError as exc:
-            raise ConfigurationError(
-                component="MFA Bypass Approval Audit",
-                reason="aragora.audit.unified.audit_admin is required to approve MFA bypasses",
-            ) from exc
 
     def revoke_mfa_bypass(self, revoked_by: str, reason: str = "manual_revocation") -> None:
         """Revoke MFA bypass for this service account."""
         if not self.is_service_account:
             raise ValueError("MFA bypass can only be revoked for service accounts")
         previous_approved_by = self.mfa_bypass_approved_by
+        _audit_mfa_bypass(
+            component="MFA Bypass Revocation Audit",
+            missing_reason=("aragora.audit.unified.audit_admin is required to revoke MFA bypasses"),
+            admin_id=revoked_by,
+            action="mfa_bypass_revoked",
+            target_id=str(self.id),
+            details={"reason": reason, "previous_approved_by": previous_approved_by},
+        )
+
         self.mfa_bypass_approved_at = None
         self.mfa_bypass_approved_by = None
         self.mfa_bypass_expires_at = None
@@ -577,21 +626,6 @@ class User:
             reason,
             previous_approved_by,
         )
-        try:
-            from aragora.audit.unified import audit_admin
-
-            audit_admin(
-                admin_id=revoked_by,
-                action="mfa_bypass_revoked",
-                target_type="service_account",
-                target_id=str(self.id),
-                details={"reason": reason, "previous_approved_by": previous_approved_by},
-            )
-        except ImportError as exc:
-            raise ConfigurationError(
-                component="MFA Bypass Revocation Audit",
-                reason="aragora.audit.unified.audit_admin is required to revoke MFA bypasses",
-            ) from exc
 
     def to_dict(self, include_sensitive: bool = False) -> dict[str, Any]:
         """Convert to dictionary."""
@@ -1000,6 +1034,10 @@ class OrganizationInvitation:
     Invitations are sent to email addresses. When the user registers or
     logs in with that email, they can accept the invitation to join.
     Invitations expire after a configurable number of days.
+
+    ``expires_at`` is ``None`` only for legacy rows stored without an expiry.
+    Such invitations are treated as expired: they are never pending and
+    cannot be accepted, but they can still be revoked.
     """
 
     id: str = field(default_factory=lambda: str(uuid4()))
@@ -1010,7 +1048,7 @@ class OrganizationInvitation:
     invited_by: str | None = None  # User ID of inviter
     status: str = "pending"  # pending, accepted, expired, revoked
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    expires_at: datetime = field(
+    expires_at: datetime | None = field(
         default_factory=lambda: datetime.now(timezone.utc) + timedelta(days=7)
     )
     accepted_by: str | None = None  # User ID who accepted the invitation
@@ -1018,7 +1056,9 @@ class OrganizationInvitation:
 
     @property
     def is_expired(self) -> bool:
-        """Check if invitation has expired."""
+        """Check if invitation has expired (always True without an expiry)."""
+        if self.expires_at is None:
+            return True
         return datetime.now(timezone.utc) > self.expires_at
 
     @property
@@ -1061,7 +1101,7 @@ class OrganizationInvitation:
             "is_pending": self.is_pending,
             "is_expired": self.is_expired,
             "created_at": self.created_at.isoformat(),
-            "expires_at": self.expires_at.isoformat(),
+            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
             "accepted_at": self.accepted_at.isoformat() if self.accepted_at else None,
         }
         if include_token:
@@ -1080,6 +1120,10 @@ class OrganizationInvitation:
             invited_by=data.get("invited_by"),
             status=data.get("status", "pending"),
         )
+        # An explicit empty expiry must stay empty; replacing it with the
+        # seven-day default would revive a legacy invitation.
+        if "expires_at" in data and not data["expires_at"]:
+            inv.expires_at = None
         for field_name in ["created_at", "expires_at", "accepted_at"]:
             if field_name in data and data[field_name]:
                 value = data[field_name]

@@ -1,556 +1,482 @@
+"""Selection logic for scripts/retrigger_cancelled_pr_runs.py (M1 guardian).
+
+Pins the five guard conditions from PR_RUN_CANCELLATION_DIAGNOSIS.md M1: exact
+current head, no newer run, non-draft open PR, TTL, and the run_attempt==1
+once-per-run marker that bounds rerun loops.
+"""
+
 from __future__ import annotations
 
-import json
-import subprocess
-from datetime import datetime, timezone
-from typing import Any
+import importlib.util
+import sys
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
-import scripts.retrigger_cancelled_pr_runs as retrigger
-from scripts.retrigger_cancelled_pr_runs import (
-    compute_retriggerable_runs,
-    main,
-    prune_marker,
-)
+import pytest
 
-NOW = datetime(2026, 6, 6, 21, 0, 0, tzinfo=timezone.utc)
-RECENT = "2026-06-06T20:59:00Z"  # 1 min before NOW
-OLD = "2026-06-06T19:00:00Z"  # 2 h before NOW
-PR_EVENTS = {"pull_request", "pull_request_target"}
+_SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "retrigger_cancelled_pr_runs.py"
 
 
-def make_run(**over: Any) -> dict[str, Any]:
-    run = {
-        "id": 1,
-        "event": "pull_request",
-        "conclusion": "cancelled",
-        "status": "completed",
-        "head_branch": "feat/x",
-        "head_sha": "sha-x",
-        "run_attempt": 1,
-        "run_number": 1,
-        "workflow_id": 100,
-        "name": "Portability Lint",
-        "created_at": RECENT,
-        "pull_requests": [{"number": 123}],
-    }
-    run.update(over)
-    return run
+@pytest.fixture()
+def mod():
+    spec = importlib.util.spec_from_file_location("retrigger_cancelled_under_test", _SCRIPT)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
 
 
-def _compute(runs: list[dict[str, Any]], active_heads: dict[str, str], **kw: Any):
-    params: dict[str, Any] = {
-        "active_heads": active_heads,
-        "cancel_events": PR_EVENTS,
-        "now": NOW,
-        "ttl_minutes": 60,
-    }
-    params.update(kw)
-    return compute_retriggerable_runs(runs, **params)
+NOW = datetime(2026, 7, 10, 12, 0, 0, tzinfo=timezone.utc)
 
 
-def test_genuine_cancelled_non_superseded_is_selected() -> None:
-    runs = [make_run(id=1, head_branch="feat/a", head_sha="sha-a")]
-    eligible, reasons, candidates = _compute(runs, {"feat/a": "sha-a"})
-    assert candidates == 1
-    assert reasons == {}
-    assert [e["run_id"] for e in eligible] == [1]
-    assert eligible[0]["rerun_command"] == "gh run rerun 1"
+def _protected(mod) -> dict:
+    paths = mod.load_protected_manifest()
+    assert paths  # the committed manifest must never be empty
+    return {"protected_paths": paths}
 
 
-def test_superseded_sha_is_skipped() -> None:
-    runs = [make_run(id=2, head_branch="feat/b", head_sha="old-sha")]
-    eligible, reasons, candidates = _compute(runs, {"feat/b": "new-sha"})
-    assert eligible == []
-    assert reasons == {"superseded-sha": 1}
-    assert candidates == 1
-
-
-def test_draft_or_closed_branch_is_skipped() -> None:
-    # Draft PRs are excluded from active_heads upstream, so the branch is absent.
-    runs = [make_run(id=3, head_branch="feat/c", head_sha="sha-c")]
-    eligible, reasons, _ = _compute(runs, {})
-    assert eligible == []
-    assert reasons == {"draft-or-closed": 1}
-
-
-def test_ttl_expired_is_skipped() -> None:
-    runs = [make_run(id=4, head_branch="feat/d", head_sha="sha-d", created_at=OLD)]
-    eligible, reasons, _ = _compute(runs, {"feat/d": "sha-d"})
-    assert eligible == []
-    assert reasons == {"ttl-expired": 1}
-
-
-def test_loop_guard_marker_is_honored() -> None:
-    runs = [make_run(id=5, head_branch="feat/e", head_sha="sha-e")]
-    eligible, reasons, _ = _compute(runs, {"feat/e": "sha-e"}, already_retriggered={5})
-    assert eligible == []
-    assert reasons == {"already-retriggered": 1}
-
-
-def test_superseded_by_newer_run_is_skipped() -> None:
-    runs = [
-        make_run(
-            id=6,
-            head_branch="feat/f",
-            head_sha="sha-f",
-            run_number=1,
-            created_at="2026-06-06T20:50:00Z",
-        ),
-        make_run(
-            id=7,
-            head_branch="feat/f",
-            head_sha="sha-f",
-            run_number=2,
-            conclusion="success",
-            created_at="2026-06-06T20:55:00Z",
-        ),
-    ]
-    eligible, reasons, candidates = _compute(runs, {"feat/f": "sha-f"})
-    assert eligible == []
-    assert reasons == {"superseded-by-newer-run": 1}
-    # only the cancelled run is a candidate; the success sibling is not counted
-    assert candidates == 1
-
-
-def test_newer_non_pr_sibling_does_not_supersede() -> None:
-    # A newer push/workflow_dispatch run on the same branch+workflow+SHA must not
-    # suppress re-running a still-current cancelled PR run.
-    runs = [
-        make_run(
-            id=20,
-            head_branch="feat/p",
-            head_sha="sha-p",
-            run_number=1,
-            created_at="2026-06-06T20:50:00Z",
-        ),
-        make_run(
-            id=21,
-            event="push",
-            conclusion="success",
-            head_branch="feat/p",
-            head_sha="sha-p",
-            run_number=2,
-            created_at="2026-06-06T20:55:00Z",
-        ),
-    ]
-    eligible, reasons, candidates = _compute(runs, {"feat/p": "sha-p"})
-    assert [e["run_id"] for e in eligible] == [20]
-    assert reasons == {}
-    assert candidates == 1
-
-
-def test_newer_different_sha_sibling_does_not_supersede() -> None:
-    # A newer run for a *different* head SHA on the same branch+workflow must not
-    # suppress the cancelled run that still matches the current PR head.
-    runs = [
-        make_run(
-            id=22,
-            head_branch="feat/q",
-            head_sha="sha-q",
-            run_number=1,
-            created_at="2026-06-06T20:50:00Z",
-        ),
-        make_run(
-            id=23,
-            head_branch="feat/q",
-            head_sha="other-sha",
-            conclusion="success",
-            run_number=2,
-            created_at="2026-06-06T20:55:00Z",
-        ),
-    ]
-    eligible, reasons, candidates = _compute(runs, {"feat/q": "sha-q"})
-    assert [e["run_id"] for e in eligible] == [22]
-    assert reasons == {}
-    assert candidates == 1
-
-
-def test_max_attempts_guard_is_honored() -> None:
-    runs = [make_run(id=8, head_branch="feat/g", head_sha="sha-g", run_attempt=2)]
-    eligible, reasons, _ = _compute(runs, {"feat/g": "sha-g"}, max_attempts=2)
-    assert eligible == []
-    assert reasons == {"max-attempts": 1}
-
-
-def test_non_pr_and_non_cancelled_runs_are_not_candidates() -> None:
-    runs = [
-        make_run(id=9, event="push", head_branch="feat/h", head_sha="sha-h"),
-        make_run(id=10, conclusion="success", head_branch="feat/h", head_sha="sha-h"),
-    ]
-    eligible, reasons, candidates = _compute(runs, {"feat/h": "sha-h"})
-    assert eligible == []
-    assert reasons == {}
-    assert candidates == 0
-
-
-def test_prune_marker_drops_old_entries() -> None:
-    data = {"1": RECENT, "2": "2026-06-05T10:00:00Z"}
-    pruned = prune_marker(data, now=NOW, retention_hours=24)
-    assert pruned == {"1": RECENT}
-
-
-def test_main_scopes_to_pr_and_writes_receipt(tmp_path, monkeypatch, capsys) -> None:
-    class FakeClient:
-        def __init__(self, repo: str, token: str) -> None:
-            assert repo == "synaptent/aragora"
-            assert token == "token"
-
-        def get_pull(self, pr_number: int) -> dict[str, Any]:
-            assert pr_number == 123
-            return {
-                "state": "open",
-                "draft": False,
-                "head": {"ref": "feat/a", "sha": "sha-a"},
-            }
-
-        def list_recent_workflow_runs(
-            self,
-            max_runs: int,
-            *,
-            branch: str | None = None,
-            event: str | None = None,
-        ) -> list[dict[str, Any]]:
-            assert max_runs == 300
-            assert branch == "feat/a"
-            if event != "pull_request":
-                return []
-            return [
-                make_run(id=31, head_branch="feat/a", head_sha="sha-a"),
-                make_run(
-                    id=32,
-                    head_branch="feat/a",
-                    head_sha="sha-a",
-                    pull_requests=[{"number": 456}],
-                ),
-            ]
-
-    monkeypatch.setenv("GITHUB_TOKEN", "token")
-    monkeypatch.setattr(retrigger, "GitHubClient", FakeClient)
-
-    rc = main(
-        [
-            "--repo",
-            "synaptent/aragora",
-            "--pr",
-            "123",
-            "--ttl-minutes",
-            "100000",
-            "--receipt-dir",
-            str(tmp_path),
-        ]
-    )
-
-    assert rc == 0
-    summary = json.loads(capsys.readouterr().out)
-    assert summary["pr"] == 123
-    assert summary["scope"] == "pr-123"
-    assert summary["scoped_branch"] == "feat/a"
-    assert summary["scoped_sha"] == "sha-a"
-    assert summary["scanned"] == 1
-    assert summary["eligible"] == 1
-    assert [run["run_id"] for run in summary["eligible_runs"]] == [31]
-    assert summary["dry_run"] is True
-
-    receipt_path = tmp_path / summary["receipt"].split("/")[-1]
-    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
-    assert receipt["schema"] == "retrigger-cancelled-pr-runs-receipt/v1"
-    assert receipt["repo"] == "synaptent/aragora"
-    assert receipt["scope"] == "pr-123"
-    assert receipt["dry_run"] is True
-    assert receipt["eligible_run_ids"] == [31]
-    assert receipt["head_shas"] == ["sha-a"]
-
-
-def test_main_uses_gh_auth_token_when_env_token_missing(tmp_path, monkeypatch, capsys) -> None:
-    class FakeClient:
-        def __init__(self, repo: str, token: str) -> None:
-            assert repo == "synaptent/aragora"
-            assert token == "from-gh-auth"
-
-        def list_open_pulls(self) -> list[dict[str, Any]]:
-            return [
-                {
-                    "state": "open",
-                    "draft": False,
-                    "head": {"ref": "feat/a", "sha": "sha-a"},
-                }
-            ]
-
-        def list_recent_workflow_runs(self, max_runs: int) -> list[dict[str, Any]]:
-            return [make_run(id=71, head_branch="feat/a", head_sha="sha-a")]
-
-    def fake_run(cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
-        assert cmd == ["gh", "auth", "token"]
-        assert kwargs["check"] is False
-        assert kwargs["capture_output"] is True
-        assert kwargs["text"] is True
-        assert kwargs["timeout"] == 10
-        return subprocess.CompletedProcess(
-            args=cmd, returncode=0, stdout="from-gh-auth\n", stderr=""
+def _run(
+    run_id: int = 1,
+    *,
+    workflow_id: int = 77,
+    name: str = "Tests",
+    path: str = ".github/workflows/test.yml",
+    branch: str = "feat/x",
+    sha: str = "a" * 40,
+    conclusion: str = "cancelled",
+    event: str = "pull_request",
+    attempt: int = 1,
+    age_hours: float = 1.0,
+    cancelled_age_hours: float | None = None,
+) -> dict:
+    return {
+        "id": run_id,
+        "workflow_id": workflow_id,
+        "name": name,
+        "path": path,
+        "head_branch": branch,
+        "head_sha": sha,
+        "conclusion": conclusion,
+        "event": event,
+        "run_attempt": attempt,
+        "created_at": (NOW - timedelta(hours=age_hours)).isoformat().replace("+00:00", "Z"),
+        "updated_at": (
+            NOW - timedelta(hours=age_hours if cancelled_age_hours is None else cancelled_age_hours)
         )
+        .isoformat()
+        .replace("+00:00", "Z"),
+    }
 
-    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-    monkeypatch.setattr(retrigger.subprocess, "run", fake_run)
-    monkeypatch.setattr(retrigger, "GitHubClient", FakeClient)
 
-    rc = main(
-        [
-            "--repo",
-            "synaptent/aragora",
-            "--ttl-minutes",
-            "100000",
-            "--receipt-dir",
-            str(tmp_path),
-        ]
+def _heads(branch: str = "feat/x", sha: str = "a" * 40) -> set[tuple[str, str]]:
+    return {(branch, sha)}
+
+
+def test_cancelled_current_head_run_is_selected(mod) -> None:
+    reruns = mod.compute_reruns(
+        [_run()], active_head_pairs=_heads(), now=NOW, ttl_hours=6.0, **_protected(mod)
+    )
+    assert [r["run_id"] for r in reruns] == [1]
+    assert reruns[0]["workflow"] == "Tests"
+
+
+def test_superseded_head_is_skipped(mod) -> None:
+    reruns = mod.compute_reruns(
+        [_run(sha="b" * 40)],
+        active_head_pairs=_heads(sha="a" * 40),
+        now=NOW,
+        ttl_hours=6.0,
+        **_protected(mod),
+    )
+    assert reruns == []
+
+
+def test_draft_or_closed_pr_branch_is_skipped(mod) -> None:
+    # compute_active_head_pairs excludes drafts, so an absent pair == draft/closed.
+    reruns = mod.compute_reruns(
+        [_run(branch="gone")], active_head_pairs=_heads(), now=NOW, ttl_hours=6.0, **_protected(mod)
+    )
+    assert reruns == []
+
+
+def test_newer_run_of_same_workflow_supersedes(mod) -> None:
+    cancelled = _run(run_id=1, age_hours=2.0)
+    newer = _run(run_id=2, conclusion="success", age_hours=0.5)
+    reruns = mod.compute_reruns(
+        [cancelled, newer], active_head_pairs=_heads(), now=NOW, ttl_hours=6.0, **_protected(mod)
+    )
+    assert reruns == []
+
+
+def test_second_attempt_is_never_rerun_again(mod) -> None:
+    # run_attempt > 1 means a rerun already happened: the stateless once-marker.
+    reruns = mod.compute_reruns(
+        [_run(attempt=2)], active_head_pairs=_heads(), now=NOW, ttl_hours=6.0, **_protected(mod)
+    )
+    assert reruns == []
+
+
+def test_old_cancellation_outside_ttl_is_skipped(mod) -> None:
+    reruns = mod.compute_reruns(
+        [_run(age_hours=7.0)], active_head_pairs=_heads(), now=NOW, ttl_hours=6.0, **_protected(mod)
+    )
+    assert reruns == []
+
+
+def test_non_pr_events_and_non_cancelled_conclusions_are_skipped(mod) -> None:
+    runs = [
+        _run(run_id=1, event="push"),
+        _run(run_id=2, conclusion="failure"),
+        _run(run_id=3, conclusion="success"),
+    ]
+    assert (
+        mod.compute_reruns(
+            runs, active_head_pairs=_heads(), now=NOW, ttl_hours=6.0, **_protected(mod)
+        )
+        == []
     )
 
-    assert rc == 0
-    summary = json.loads(capsys.readouterr().out)
-    assert summary["eligible"] == 1
+
+def test_active_head_pairs_excludes_drafts_and_keeps_name_collisions(mod) -> None:
+    pulls = [
+        {"draft": False, "head": {"ref": "feat/x", "sha": "a" * 40}},
+        {"draft": True, "head": {"ref": "feat/draft", "sha": "b" * 40}},
+        # fork PR sharing the branch name with a different head (#9133 P2):
+        {"draft": False, "head": {"ref": "feat/x", "sha": "c" * 40}},
+    ]
+    pairs = mod.compute_active_head_pairs(pulls)
+    assert pairs == {("feat/x", "a" * 40), ("feat/x", "c" * 40)}
 
 
-def test_main_prefers_env_token_without_calling_gh_auth(tmp_path, monkeypatch, capsys) -> None:
-    class FakeClient:
-        def __init__(self, repo: str, token: str) -> None:
-            assert token == "from-env"
+def test_advisory_cancellation_is_intentional_and_never_rerun(mod) -> None:
+    """Portability Lint is NOT in the protected manifest: without a jobs
+    probe (fetch_jobs=None) the advisory class is disabled entirely and its
+    PR-open cancellation stays intentional_advisory_priority — fail closed."""
+    advisory = _run(name="Portability Lint", path=".github/workflows/portability.yml")
+    reruns = mod.compute_reruns(
+        [advisory], active_head_pairs=_heads(), now=NOW, ttl_hours=6.0, **_protected(mod)
+    )
+    assert reruns == []
 
-        def list_open_pulls(self) -> list[dict[str, Any]]:
+
+def test_empty_manifest_fails_closed(mod, tmp_path) -> None:
+    paths = mod.load_protected_manifest(tmp_path / "missing.json")
+    assert paths == set()
+    reruns = mod.compute_reruns(
+        [_run()],
+        active_head_pairs=_heads(),
+        now=NOW,
+        ttl_hours=6.0,
+        protected_paths=paths,
+    )
+    assert reruns == []  # with no manifest, nothing is rerun-eligible
+
+
+def test_manifest_matches_priority_keep_list(mod) -> None:
+    """Drift guard: every keep-list entry in required-check-priority.yml must
+    be present in the manifest, so the guardian's protected class can never
+    silently diverge from what the priority canceller preserves."""
+    workflow = (
+        Path(__file__).resolve().parents[2]
+        / ".github"
+        / "workflows"
+        / "required-check-priority.yml"
+    ).read_text(encoding="utf-8")
+    paths = mod.load_protected_manifest()
+    import re as _re
+
+    # Scope the scan to the alwaysKeepWorkflowPaths block only (#9133 P3 r7):
+    # matching any quoted workflow path anywhere in the file would silently
+    # track unrelated strings if the workflow gains other path literals.
+    block_match = _re.search(
+        r"alwaysKeepWorkflowPaths\s*=\s*new Set\(\[(.*?)\]\)", workflow, _re.DOTALL
+    )
+    assert block_match, "drift guard is vacuous: keep-list block not found"
+    matches = _re.findall(r"'(\.github/workflows/[^']+\.yml)'", block_match.group(1))
+    assert len(matches) >= 1, "drift guard is vacuous: keep-list regex matched nothing"
+    for path in matches:
+        assert path in paths, f"keep-list path missing from manifest: {path}"
+
+
+def test_newer_non_pr_run_does_not_suppress_pr_rerun(mod) -> None:
+    """A newer push/dispatch run on the same branch does not re-evaluate the
+    PR's required contexts, so it must not count as supersession (#9133 P2)."""
+    cancelled_pr_run = _run(run_id=1, age_hours=2.0)
+    newer_push_run = _run(run_id=2, conclusion="success", event="push", age_hours=0.5)
+    reruns = mod.compute_reruns(
+        [cancelled_pr_run, newer_push_run],
+        active_head_pairs=_heads(),
+        now=NOW,
+        ttl_hours=6.0,
+        **_protected(mod),
+    )
+    assert [r["run_id"] for r in reruns] == [1]
+
+
+def test_newer_run_at_stale_sha_does_not_suppress_current_head_rerun(mod) -> None:
+    """A newer PR run at a DIFFERENT (stale) SHA does not cover the current
+    head, so it must not suppress the rerun (#9133 claude P2 round 3)."""
+    cancelled_current = _run(run_id=1, age_hours=2.0)
+    newer_stale_sha = _run(run_id=2, conclusion="success", sha="b" * 40, age_hours=0.5)
+    reruns = mod.compute_reruns(
+        [cancelled_current, newer_stale_sha],
+        active_head_pairs=_heads(),
+        now=NOW,
+        ttl_hours=6.0,
+        **_protected(mod),
+    )
+    assert [r["run_id"] for r in reruns] == [1]
+
+
+def test_same_second_tie_broken_by_run_id(mod) -> None:
+    """Second-granular timestamps tie in a synchronize+labeled burst; the
+    higher run id is newest, so only it survives (#9133 claude P3)."""
+    older = _run(run_id=10, age_hours=1.0)
+    newer = _run(run_id=11, age_hours=1.0)  # same created_at, higher id
+    reruns = mod.compute_reruns(
+        [older, newer], active_head_pairs=_heads(), now=NOW, ttl_hours=6.0, **_protected(mod)
+    )
+    assert [r["run_id"] for r in reruns] == [11]
+
+
+def test_name_spoofing_alone_never_qualifies(mod) -> None:
+    """Protection matching is path-ONLY: a PR-branch workflow merely NAMED
+    'Tests' at an advisory path stays intentionally cancelled (#9133 P3)."""
+    spoofed = _run(name="Tests", path=".github/workflows/my-advisory.yml")
+    reruns = mod.compute_reruns(
+        [spoofed], active_head_pairs=_heads(), now=NOW, ttl_hours=6.0, **_protected(mod)
+    )
+    assert reruns == []
+
+
+def test_run_scan_filters_pull_request_events_server_side(mod, monkeypatch) -> None:
+    """The runs window is bounded; without a server-side event filter,
+    push/schedule runs consume it and eligible cancelled PR runs fall
+    outside (#9133 openai P2 round 5)."""
+    seen = {}
+
+    class _Client(mod.GitHubClient):
+        def paginate(self, path, *, query=None, max_pages=10):
+            seen.update(query or {})
             return []
 
-        def list_recent_workflow_runs(self, max_runs: int) -> list[dict[str, Any]]:
-            return []
-
-    def unexpected_run(cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
-        raise AssertionError("gh auth token should not be called when GITHUB_TOKEN is set")
-
-    monkeypatch.setenv("GITHUB_TOKEN", "from-env")
-    monkeypatch.setattr(retrigger.subprocess, "run", unexpected_run)
-    monkeypatch.setattr(retrigger, "GitHubClient", FakeClient)
-
-    rc = main(["--repo", "synaptent/aragora", "--receipt-dir", str(tmp_path)])
-
-    assert rc == 0
-    summary = json.loads(capsys.readouterr().out)
-    assert summary["scanned"] == 0
+    _Client("o/r", "tok").list_recent_workflow_runs(300)
+    assert seen.get("event") == "pull_request"
 
 
-def test_main_reports_missing_token_when_env_and_gh_auth_fail(monkeypatch, capsys) -> None:
-    def fake_run(cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
-        return subprocess.CompletedProcess(
-            args=cmd, returncode=1, stdout="", stderr="not logged in"
-        )
-
-    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-    monkeypatch.setattr(retrigger.subprocess, "run", fake_run)
-
-    rc = main(["--repo", "synaptent/aragora"])
-
-    assert rc == 1
-    captured = capsys.readouterr()
-    assert captured.out == ""
-    assert "GITHUB_TOKEN is required" in captured.err
-    assert "gh auth token" in captured.err
-
-
-def test_main_reports_missing_token_when_gh_binary_missing(monkeypatch, capsys) -> None:
-    def fake_run(cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
-        raise FileNotFoundError("gh")
-
-    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-    monkeypatch.setattr(retrigger.subprocess, "run", fake_run)
-
-    rc = main(["--repo", "synaptent/aragora"])
-
-    assert rc == 1
-    captured = capsys.readouterr()
-    assert captured.out == ""
-    assert "GITHUB_TOKEN is required" in captured.err
-    assert "gh auth token" in captured.err
-
-
-def test_main_reports_missing_token_when_gh_auth_times_out(monkeypatch, capsys) -> None:
-    def fake_run(cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
-        raise subprocess.TimeoutExpired(cmd=cmd, timeout=kwargs["timeout"])
-
-    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-    monkeypatch.setattr(retrigger.subprocess, "run", fake_run)
-
-    rc = main(["--repo", "synaptent/aragora"])
-
-    assert rc == 1
-    captured = capsys.readouterr()
-    assert captured.out == ""
-    assert "GITHUB_TOKEN is required" in captured.err
-    assert "gh auth token" in captured.err
-
-
-def test_main_apply_records_rerun_results_in_receipt(tmp_path, monkeypatch, capsys) -> None:
-    class FakeClient:
-        def __init__(self, repo: str, token: str) -> None:
-            self.repo = repo
-
-        def list_open_pulls(self) -> list[dict[str, Any]]:
-            return [
-                {
-                    "state": "open",
-                    "draft": False,
-                    "head": {"ref": "feat/a", "sha": "sha-a"},
-                }
-            ]
-
-        def list_recent_workflow_runs(self, max_runs: int) -> list[dict[str, Any]]:
-            return [make_run(id=41, head_branch="feat/a", head_sha="sha-a")]
-
-        def rerun_workflow_run(self, run_id: int) -> tuple[bool, str]:
-            assert run_id == 41
-            return True, "rerun_requested"
-
-    monkeypatch.setenv("GITHUB_TOKEN", "token")
-    monkeypatch.setattr(retrigger, "GitHubClient", FakeClient)
-
-    rc = main(
-        [
-            "--repo",
-            "synaptent/aragora",
-            "--ttl-minutes",
-            "100000",
-            "--apply",
-            "--receipt-dir",
-            str(tmp_path),
-        ]
+def test_ttl_anchors_to_cancellation_time_not_run_creation(mod) -> None:
+    """A shard that STARTED 8h ago but was cancelled 1h ago is eligible: the
+    motivating incidents were long-running shards killed mid-run (#9133 P3)."""
+    long_runner = _run(age_hours=8.0, cancelled_age_hours=1.0)
+    reruns = mod.compute_reruns(
+        [long_runner], active_head_pairs=_heads(), now=NOW, ttl_hours=6.0, **_protected(mod)
     )
-
-    assert rc == 0
-    summary = json.loads(capsys.readouterr().out)
-    assert summary["dry_run"] is False
-    assert summary["applied"] == 1
-    assert summary["rerun_results"] == [{"run_id": 41, "ok": True, "message": "rerun_requested"}]
-
-    receipt_path = tmp_path / summary["receipt"].split("/")[-1]
-    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
-    assert receipt["dry_run"] is False
-    assert receipt["rerun_run_ids"] == [41]
+    assert [r["run_id"] for r in reruns] == [1]
 
 
-def test_client_classifies_app_token_rerun_permission_failure(monkeypatch) -> None:
-    client = retrigger.GitHubClient(repo="synaptent/aragora", token="token")
+def test_keep_list_names_block_also_matches_manifest(mod) -> None:
+    """Both canceller keep-lists are drift-guarded: names too, read straight
+    from the manifest JSON since the script consumes only paths (#9133 r8)."""
+    import json as _json
+    import re as _re
 
-    def fail_post(path: str, payload: dict[str, Any] | None = None) -> None:
-        assert path == "/repos/synaptent/aragora/actions/runs/61/rerun"
-        assert payload is None
-        raise retrigger.GitHubApiError(
-            "GitHub API POST /rerun failed: 403 Forbidden\n"
-            '{"message":"Resource not accessible by integration"}'
-        )
+    workflow = (
+        Path(__file__).resolve().parents[2]
+        / ".github"
+        / "workflows"
+        / "required-check-priority.yml"
+    ).read_text(encoding="utf-8")
+    manifest = _json.loads(mod.DEFAULT_MANIFEST.read_text(encoding="utf-8"))
+    manifest_names = set(manifest.get("workflow_names", []))
+    block = _re.search(r"alwaysKeepWorkflowNames\s*=\s*new Set\(\[(.*?)\]\)", workflow, _re.DOTALL)
+    assert block, "names drift guard is vacuous: keep-list names block not found"
+    names = _re.findall(r"'([^']+)'", block.group(1))
+    assert len(names) >= 1
+    for name in names:
+        assert name in manifest_names, f"keep-list name missing from manifest: {name}"
 
-    monkeypatch.setattr(client, "post", fail_post)
 
-    ok, message = client.rerun_workflow_run(61)
-
-    assert ok is False
-    assert message == retrigger.APP_TOKEN_RERUN_PERMISSION_RESULT
-
-
-def test_main_apply_permission_denied_writes_human_packet_and_receipt(
-    tmp_path, monkeypatch, capsys
-) -> None:
-    class FakeClient:
-        def __init__(self, repo: str, token: str) -> None:
-            self.repo = repo
-
-        def list_open_pulls(self) -> list[dict[str, Any]]:
-            return [
-                {
-                    "state": "open",
-                    "draft": False,
-                    "head": {"ref": "feat/a", "sha": "sha-a"},
-                }
-            ]
-
-        def list_recent_workflow_runs(self, max_runs: int) -> list[dict[str, Any]]:
-            return [
-                make_run(
-                    id=61,
-                    name="Portability Lint",
-                    head_branch="feat/a",
-                    head_sha="sha-a",
-                )
-            ]
-
-        def rerun_workflow_run(self, run_id: int) -> tuple[bool, str]:
-            assert run_id == 61
-            return False, retrigger.APP_TOKEN_RERUN_PERMISSION_RESULT
-
-    receipt_dir = tmp_path / "receipts"
-    packet_dir = tmp_path / "operator-packets"
-
-    monkeypatch.setenv("GITHUB_TOKEN", "token")
-    monkeypatch.setattr(retrigger, "GitHubClient", FakeClient)
-
-    rc = main(
-        [
-            "--repo",
-            "synaptent/aragora",
-            "--ttl-minutes",
-            "100000",
-            "--apply",
-            "--receipt-dir",
-            str(receipt_dir),
-            "--operator-packet-dir",
-            str(packet_dir),
-        ]
+def test_run_pr_association_must_intersect_open_prs_when_named(mod) -> None:
+    """When the API names the run's pull_requests, at least one must be an
+    open scanned PR; an empty list stays eligible (fork runs omit it)."""
+    # Distinct workflows so the same-head supersession tie-break stays out
+    # of this test's way.
+    named_foreign = _run(run_id=1, workflow_id=71)
+    named_foreign["pull_requests"] = [{"number": 424242}]
+    named_ok = _run(run_id=2, workflow_id=72)
+    named_ok["pull_requests"] = [{"number": 9133}]
+    unnamed = _run(run_id=3, workflow_id=73)
+    reruns = mod.compute_reruns(
+        [named_foreign, named_ok, unnamed],
+        active_head_pairs=_heads(),
+        now=NOW,
+        ttl_hours=6.0,
+        open_pr_numbers={9133},
+        **_protected(mod),
     )
-
-    assert rc == retrigger.OPERATOR_ACTION_EXIT
-    summary = json.loads(capsys.readouterr().out)
-    assert summary["applied"] == 0
-    assert summary["apply_failed"] == 1
-    assert summary["operator_action_required"] is True
-    assert summary["permission_denied_reruns"][0]["run_id"] == 61
-    assert summary["human_rerun_commands"] == ["gh run rerun 61"]
-
-    packet_path = packet_dir / summary["operator_packet"].split("/")[-1]
-    packet = packet_path.read_text(encoding="utf-8")
-    assert "Resource not accessible by integration" in packet
-    assert "https://github.com/synaptent/aragora/actions/runs/61" in packet
-    assert "`gh run rerun 61`" in packet
-
-    receipt_path = receipt_dir / summary["receipt"].split("/")[-1]
-    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
-    assert receipt["operator_action_required"] is True
-    assert receipt["permission_denied_run_ids"] == [61]
-    assert receipt["human_rerun_commands"] == ["gh run rerun 61"]
-    assert receipt["operator_packet"] == summary["operator_packet"]
+    assert sorted(r["run_id"] for r in reruns) == [2, 3]
 
 
-def test_receipt_write_failure_is_reported_without_failing(monkeypatch, capsys) -> None:
-    class FakeClient:
-        def __init__(self, repo: str, token: str) -> None:
-            self.repo = repo
+# --- queued-phase advisory displacement (#9351 round 2) -----------------------
 
-        def list_open_pulls(self) -> list[dict[str, Any]]:
-            return [
-                {
-                    "state": "open",
-                    "draft": False,
-                    "head": {"ref": "feat/a", "sha": "sha-a"},
-                }
-            ]
+_ADVISORY_PATH = ".github/workflows/module-tier-drift.yml"
 
-        def list_recent_workflow_runs(self, max_runs: int) -> list[dict[str, Any]]:
-            return [make_run(id=51, head_branch="feat/a", head_sha="sha-a")]
 
-    def fail_receipt(**_: Any) -> str:
-        raise OSError("receipt path unavailable")
+def _advisory_run(run_id: int = 1, **kwargs) -> dict:
+    kwargs.setdefault("name", "Module Tier Drift")
+    kwargs.setdefault("path", _ADVISORY_PATH)
+    return _run(run_id, **kwargs)
 
-    monkeypatch.setenv("GITHUB_TOKEN", "token")
-    monkeypatch.setattr(retrigger, "GitHubClient", FakeClient)
-    monkeypatch.setattr(retrigger, "_write_receipt", fail_receipt)
 
-    rc = main(["--repo", "synaptent/aragora", "--ttl-minutes", "100000"])
+def _queued_jobs() -> list[dict]:
+    """Jobs of a run cancelled while still queued: nothing ever started."""
+    return [
+        {"started_at": None, "steps": []},
+        {"started_at": None, "steps": [{"name": "Set up job", "started_at": None}]},
+    ]
 
-    assert rc == 0
-    summary = json.loads(capsys.readouterr().out)
-    assert summary["eligible"] == 1
-    assert summary["receipt"] == ""
-    assert summary["receipt_error"] == "receipt path unavailable"
+
+def _checkout_jobs() -> list[dict]:
+    """Jobs of a run cancelled at the Checkout step: execution began."""
+    return [
+        {
+            "started_at": "2026-07-10T11:00:00Z",
+            "steps": [
+                {"name": "Set up job", "started_at": "2026-07-10T11:00:01Z"},
+                {"name": "Checkout", "started_at": "2026-07-10T11:00:05Z"},
+            ],
+        }
+    ]
+
+
+class _CountingFetcher:
+    def __init__(self, jobs) -> None:
+        self.jobs = jobs
+        self.calls: list[int] = []
+
+    def __call__(self, run_id: int):
+        self.calls.append(run_id)
+        return self.jobs
+
+
+def test_queued_phase_advisory_displacement_is_selected_once(mod) -> None:
+    """An advisory run displaced while QUEUED (no job/step ever started) is
+    the residual settlement tax: the guardian now reruns it exactly once,
+    classified distinctly so reports separate it from the protected class."""
+    fetcher = _CountingFetcher(_queued_jobs())
+    reruns = mod.compute_reruns(
+        [_advisory_run()],
+        active_head_pairs=_heads(),
+        now=NOW,
+        ttl_hours=6.0,
+        fetch_jobs=fetcher,
+        **_protected(mod),
+    )
+    assert [r["run_id"] for r in reruns] == [1]
+    assert reruns[0]["classification"] == "queued_phase_advisory_displacement"
+    assert fetcher.calls == [1]
+
+
+def test_checkout_phase_advisory_run_stays_cancelled(mod) -> None:
+    """An advisory run that STARTED (cancelled at Checkout) has a started
+    step: it is not a queued-phase displacement and stays cancelled — that
+    class is eliminated upstream by RCP's queued-only rule."""
+    fetcher = _CountingFetcher(_checkout_jobs())
+    reruns = mod.compute_reruns(
+        [_advisory_run()],
+        active_head_pairs=_heads(),
+        now=NOW,
+        ttl_hours=6.0,
+        fetch_jobs=fetcher,
+        **_protected(mod),
+    )
+    assert reruns == []
+    assert fetcher.calls == [1]  # probe ran (all other guards passed), said no
+
+
+def test_protected_selection_unchanged_and_never_probed(mod) -> None:
+    """Protected-manifest behavior is byte-identical: selected under the same
+    guards, classified unexpected_required_cancellation, and the jobs probe
+    is never spent on it."""
+    fetcher = _CountingFetcher(_queued_jobs())
+    reruns = mod.compute_reruns(
+        [_run()],
+        active_head_pairs=_heads(),
+        now=NOW,
+        ttl_hours=6.0,
+        fetch_jobs=fetcher,
+        **_protected(mod),
+    )
+    assert [r["run_id"] for r in reruns] == [1]
+    assert reruns[0]["classification"] == "unexpected_required_cancellation"
+    assert fetcher.calls == []
+
+
+def test_attempt_2_advisory_is_never_rerun_again(mod) -> None:
+    """run_attempt > 1 bounds the advisory class exactly like the protected
+    one: once per run, even if the probe would say never-executed."""
+    fetcher = _CountingFetcher(_queued_jobs())
+    reruns = mod.compute_reruns(
+        [_advisory_run(attempt=2)],
+        active_head_pairs=_heads(),
+        now=NOW,
+        ttl_hours=6.0,
+        fetch_jobs=fetcher,
+        **_protected(mod),
+    )
+    assert reruns == []
+    assert fetcher.calls == []  # cheap guard rejected it before any API spend
+
+
+def test_jobs_probe_is_lazy_only_surviving_candidates_pay(mod) -> None:
+    """Advisory runs failing ANY earlier guard (stale head, attempt 2, TTL,
+    supersession) never trigger a jobs fetch; only the single surviving
+    candidate costs one probe call (API budget vs --max-runs 300)."""
+    fetcher = _CountingFetcher(_queued_jobs())
+    runs = [
+        _advisory_run(1, sha="b" * 40),  # stale head pair
+        _advisory_run(2, attempt=2),  # already rerun once
+        _advisory_run(3, age_hours=9.0),  # outside TTL
+        _advisory_run(4, age_hours=2.0),  # superseded by run 5 below
+        _advisory_run(5, conclusion="success", age_hours=0.5),  # not cancelled
+        _advisory_run(6, workflow_id=99, path=".github/workflows/other-advisory.yml"),
+    ]
+    reruns = mod.compute_reruns(
+        runs,
+        active_head_pairs=_heads(),
+        now=NOW,
+        ttl_hours=6.0,
+        fetch_jobs=fetcher,
+        **_protected(mod),
+    )
+    assert [r["run_id"] for r in reruns] == [6]
+    assert fetcher.calls == [6]
+
+
+def test_failed_jobs_probe_fails_closed(mod) -> None:
+    """A probe returning None (API error upstream) cannot PROVE the run never
+    executed, so the run stays cancelled."""
+    fetcher = _CountingFetcher(None)
+    reruns = mod.compute_reruns(
+        [_advisory_run()],
+        active_head_pairs=_heads(),
+        now=NOW,
+        ttl_hours=6.0,
+        fetch_jobs=fetcher,
+        **_protected(mod),
+    )
+    assert reruns == []
+    assert fetcher.calls == [1]
+
+
+def test_run_never_executed_signal_matrix(mod) -> None:
+    """Either never-executed signal suffices: all job started_at null, OR no
+    step started_at anywhere (GitHub stamps job started_at on some
+    queued-cancelled jobs without ever running a step). A started step is
+    always disqualifying; zero jobs means nothing ever executed."""
+    assert mod.run_never_executed([]) is True
+    assert mod.run_never_executed(_queued_jobs()) is True
+    # Job-level stamp but no step ever started: still queued-phase.
+    assert mod.run_never_executed([{"started_at": "2026-07-10T11:00:00Z", "steps": []}]) is True
+    assert mod.run_never_executed(_checkout_jobs()) is False

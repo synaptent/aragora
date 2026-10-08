@@ -32,6 +32,7 @@ from aragora.agents.api_agents.common import (
 )
 from aragora.agents.fallback import QuotaFallbackMixin
 from aragora.agents.registry import AgentRegistry
+from aragora.config.model_pins import GEMINI_31_PRO_VIA_OPENROUTER
 
 logger = logging.getLogger(__name__)
 
@@ -116,21 +117,21 @@ class GeminiAgent(QuotaFallbackMixin, APIAgent):
         # Every Gemini ID maps to Gemini 3.1 Pro via OpenRouter so weaker
         # historical models are transparently upgraded and a missing
         # GEMINI_API_KEY / GOOGLE_API_KEY never blocks a debate.
-        "gemini-3.1-pro-preview": "google/gemini-3.1-pro",
-        "gemini-3.1-pro": "google/gemini-3.1-pro",
-        "gemini-3-flash-preview": "google/gemini-3.1-pro",
-        "gemini-3-flash": "google/gemini-3.1-pro",
-        "gemini-3-pro-preview": "google/gemini-3.1-pro",
-        "gemini-3-pro": "google/gemini-3.1-pro",
-        "gemini-2.5-pro": "google/gemini-3.1-pro",
-        "gemini-2.5-flash": "google/gemini-3.1-pro",
-        "gemini-2.0-flash": "google/gemini-3.1-pro",
-        "gemini-2.0-flash-001": "google/gemini-3.1-pro",
-        "gemini-1.5-pro": "google/gemini-3.1-pro",
-        "gemini-1.5-flash": "google/gemini-3.1-pro",
-        "gemini-pro": "google/gemini-3.1-pro",
+        "gemini-3.1-pro-preview": GEMINI_31_PRO_VIA_OPENROUTER,
+        "gemini-3.1-pro": GEMINI_31_PRO_VIA_OPENROUTER,
+        "gemini-3-flash-preview": GEMINI_31_PRO_VIA_OPENROUTER,
+        "gemini-3-flash": GEMINI_31_PRO_VIA_OPENROUTER,
+        "gemini-3-pro-preview": GEMINI_31_PRO_VIA_OPENROUTER,
+        "gemini-3-pro": GEMINI_31_PRO_VIA_OPENROUTER,
+        "gemini-2.5-pro": GEMINI_31_PRO_VIA_OPENROUTER,
+        "gemini-2.5-flash": GEMINI_31_PRO_VIA_OPENROUTER,
+        "gemini-2.0-flash": GEMINI_31_PRO_VIA_OPENROUTER,
+        "gemini-2.0-flash-001": GEMINI_31_PRO_VIA_OPENROUTER,
+        "gemini-1.5-pro": GEMINI_31_PRO_VIA_OPENROUTER,
+        "gemini-1.5-flash": GEMINI_31_PRO_VIA_OPENROUTER,
+        "gemini-pro": GEMINI_31_PRO_VIA_OPENROUTER,
     }
-    DEFAULT_FALLBACK_MODEL = "google/gemini-3.1-pro"
+    DEFAULT_FALLBACK_MODEL = GEMINI_31_PRO_VIA_OPENROUTER
 
     def __init__(
         self,

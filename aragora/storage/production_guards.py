@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import logging
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 
 logger = logging.getLogger(__name__)
@@ -62,27 +62,29 @@ class EnvironmentMode(str, Enum):
     TEST = "test"
 
 
+def _default_fallback_envs() -> set[EnvironmentMode]:
+    return {
+        EnvironmentMode.DEVELOPMENT,
+        EnvironmentMode.TEST,
+    }
+
+
+def _default_fail_open_stores() -> set[str]:
+    # Stores that can safely fall back to local storage
+    return {
+        "cache_store",  # Ephemeral cache
+        "session_store",  # Short-lived sessions
+        "workflow_store",  # Workflow definitions (static config, not dynamic state)
+    }
+
+
 @dataclass
 class StorageGuardConfig:
     """Configuration for storage guards."""
 
     require_distributed: bool = True
-    allowed_fallback_envs: set[EnvironmentMode] = None
-    fail_open_stores: set[str] = None
-
-    def __post_init__(self):
-        if self.allowed_fallback_envs is None:
-            self.allowed_fallback_envs = {
-                EnvironmentMode.DEVELOPMENT,
-                EnvironmentMode.TEST,
-            }
-        if self.fail_open_stores is None:
-            # Stores that can safely fall back to local storage
-            self.fail_open_stores = {
-                "cache_store",  # Ephemeral cache
-                "session_store",  # Short-lived sessions
-                "workflow_store",  # Workflow definitions (static config, not dynamic state)
-            }
+    allowed_fallback_envs: set[EnvironmentMode] = field(default_factory=_default_fallback_envs)
+    fail_open_stores: set[str] = field(default_factory=_default_fail_open_stores)
 
 
 # Global configuration
@@ -358,7 +360,7 @@ def check_multi_instance_readiness() -> dict[str, bool]:
 
     # Check audit log - critical for compliance
     try:
-        from aragora.audit.log import get_audit_log
+        from aragora.observability.audit_log import get_audit_log
 
         audit_log = get_audit_log()
         # Note: AuditLog currently uses SQLite backend for simplicity.

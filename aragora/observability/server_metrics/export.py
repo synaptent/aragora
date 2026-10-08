@@ -7,6 +7,8 @@ Generates Prometheus-format metrics output from all metric modules.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
+from dataclasses import dataclass
 
 from .agents import AGENT_LATENCY, AGENT_REQUESTS, AGENT_TOKENS
 from .api import ACTIVE_DEBATES, API_LATENCY, API_REQUESTS, WEBSOCKET_CONNECTIONS
@@ -49,8 +51,40 @@ from .knowledge_mound import (
     KNOWLEDGE_VISIBILITY_CHANGES,
 )
 from .security import AUTH_FAILURES, RATE_LIMIT_HITS, SECURITY_VIOLATIONS
+from .types import Counter, Gauge, Histogram
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class NomicMetricCollection:
+    """Nomic-owned metrics exposed through the lower observability contract."""
+
+    counters: tuple[Counter, ...] = ()
+    gauges: tuple[Gauge, ...] = ()
+    histograms: tuple[Histogram, ...] = ()
+
+
+NomicMetricsProvider = Callable[[], NomicMetricCollection]
+_nomic_metrics_provider: NomicMetricsProvider | None = None
+
+
+def register_nomic_metrics_provider(provider: NomicMetricsProvider | None) -> None:
+    """Register a higher-layer provider for optional Nomic export metrics."""
+    global _nomic_metrics_provider
+    _nomic_metrics_provider = provider
+
+
+def _get_nomic_metrics() -> NomicMetricCollection:
+    """Resolve optional Nomic metrics without importing the higher layer."""
+    if _nomic_metrics_provider is None:
+        return NomicMetricCollection()
+
+    try:
+        return _nomic_metrics_provider()
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        logger.warning("Failed to collect registered Nomic metrics: %s", exc)
+        return NomicMetricCollection()
 
 
 def _format_labels(labels: dict) -> str:
@@ -130,35 +164,10 @@ def generate_metrics() -> str:
         KNOWLEDGE_FEDERATION_LATENCY,
     ]
 
-    # Add nomic loop metrics if available. Resolved dynamically so this
-    # observability-layer aggregator does not take a static import edge on the
-    # application-layer aragora.nomic package (would invert the layer contract).
-    try:
-        import importlib
-
-        _nomic = importlib.import_module("aragora.nomic.metrics")
-
-        counters.extend(
-            [
-                _nomic.NOMIC_PHASE_TRANSITIONS,
-                _nomic.NOMIC_CYCLES_TOTAL,
-                _nomic.NOMIC_ERRORS,
-                _nomic.NOMIC_RECOVERY_DECISIONS,
-                _nomic.NOMIC_RETRIES,
-            ]
-        )
-        gauges.extend(
-            [
-                _nomic.NOMIC_CURRENT_PHASE,
-                _nomic.NOMIC_CYCLES_IN_PROGRESS,
-                _nomic.NOMIC_PHASE_LAST_TRANSITION,
-                _nomic.NOMIC_CIRCUIT_BREAKERS_OPEN,
-            ]
-        )
-        histograms.append(_nomic.NOMIC_PHASE_DURATION)
-    except (ImportError, AttributeError):
-        # Nomic metrics not available
-        pass
+    nomic_metrics = _get_nomic_metrics()
+    counters.extend(nomic_metrics.counters)
+    gauges.extend(nomic_metrics.gauges)
+    histograms.extend(nomic_metrics.histograms)
 
     # Export counters
     for counter in counters:
@@ -195,6 +204,16 @@ def generate_metrics() -> str:
         from prometheus_client import REGISTRY, generate_latest
 
         observability_metrics = generate_latest(REGISTRY).decode("utf-8")
+        observability_metrics = "".join(
+            line
+            for line in observability_metrics.splitlines(keepends=True)
+            if not (
+                line.startswith("# HELP aragora_active_debates ")
+                or line.startswith("# TYPE aragora_active_debates ")
+                or line.startswith("aragora_active_debates ")
+                or line.startswith("aragora_active_debates{")
+            )
+        )
         if observability_metrics.strip():
             lines.append("# Observability metrics (from prometheus_client)")
             lines.append(observability_metrics)

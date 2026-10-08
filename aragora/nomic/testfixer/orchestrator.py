@@ -521,8 +521,9 @@ class TestFixerOrchestrator:
                 # Check confidence
                 if proposal.post_debate_confidence < self.config.min_confidence_to_apply:
                     logger.info(
-                        f"Proposal confidence {proposal.post_debate_confidence:.0%} "
-                        f"below threshold {self.config.min_confidence_to_apply:.0%}, skipping"
+                        "Proposal confidence %.0f%% below threshold %.0f%%, skipping",
+                        proposal.post_debate_confidence * 100,
+                        self.config.min_confidence_to_apply * 100,
                     )
                     result.attempts.append(
                         FixAttempt(

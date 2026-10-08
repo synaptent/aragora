@@ -15,6 +15,15 @@ from aragora.exceptions import REDIS_CONNECTION_ERRORS
 logger = logging.getLogger(__name__)
 
 
+def register_control_plane_event_contributors() -> bool:
+    """Register control-plane event metadata providers before registry use."""
+    from aragora.control_plane.event_registry import (
+        register_notification_event_contributor,
+    )
+
+    return register_notification_event_contributor()
+
+
 async def init_control_plane_coordinator() -> Any | None:
     """Initialize the Control Plane coordinator.
 

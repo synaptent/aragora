@@ -382,7 +382,8 @@ def _print_receipt_summary(result: DebateResult, elapsed: float, receipt_file: s
         short_hash = artifact_hash[:12] + "..." if len(artifact_hash) > 12 else artifact_hash
         print(f"  Hash:         sha256:{short_hash}")
     print()
-    print(f"  Full receipt saved to: ./{receipt_file}")
+    display_path = receipt_file if Path(receipt_file).is_absolute() else f"./{receipt_file}"
+    print(f"  Full receipt saved to: {display_path}")
     print("=" * 64)
     print()
 
@@ -598,18 +599,24 @@ def _build_builtin_demo_result(topic: str) -> Any:
     )
 
 
-async def _run_demo_debate(topic: str) -> tuple[DebateResult, float]:
-    """Run a demo debate and return (result, elapsed_seconds)."""
+async def _run_demo_debate(
+    topic: str,
+    receipt_path: str | None = None,
+) -> tuple[DebateResult, float]:
+    """Run a demo debate and return (result, elapsed_seconds).
+
+    The receipt is written once, to ``receipt_path`` when provided (e.g. via
+    ``--receipt``), otherwise to ``aragora-demo-receipt.json`` in the CWD. The
+    receipt summary banner names whichever file was written.
+    """
+    receipt_target = receipt_path or "aragora-demo-receipt.json"
     if not HAS_ARAGORA_DEBATE or StyledMockAgent is None or Arena is None or DebateConfig is None:
         agent_names = [name for name, _ in _AGENT_CONFIGS]
         _print_banner(topic, agent_names)
-        print()
-        print("  Note: Built-in mock fallback (aragora-debate package unavailable)")
-        print()
         result = _build_builtin_demo_result(topic)
         elapsed = 0.0
         _print_result(result, elapsed)
-        receipt_file = _save_demo_receipt(result, elapsed, "aragora-demo-receipt.json")
+        receipt_file = _save_demo_receipt(result, elapsed, receipt_target)
         _print_receipt_summary(result, elapsed, receipt_file)
         return cast(Any, result), elapsed
 
@@ -695,8 +702,8 @@ async def _run_demo_debate(topic: str) -> tuple[DebateResult, float]:
 
     _print_result(result, elapsed)
 
-    # Auto-save receipt JSON to CWD
-    receipt_file = _save_demo_receipt(result, elapsed, "aragora-demo-receipt.json")
+    # Save the receipt once: --receipt path if given, else default in CWD
+    receipt_file = _save_demo_receipt(result, elapsed, receipt_target)
     _print_receipt_summary(result, elapsed, receipt_file)
 
     return result, elapsed
@@ -753,7 +760,7 @@ def _run_real_demo(topic: str, receipt_path: str | None = None) -> None:
     print()
 
     try:
-        from aragora.server.handlers.playground import start_playground_debate
+        from aragora.server.handlers.demo.playground import start_playground_debate
 
         start_time = time.monotonic()
         result = start_playground_debate(
@@ -870,23 +877,18 @@ def _save_live_demo_receipt(
 
 def _run_mock_demo(args: argparse.Namespace) -> None:
     """Run the offline mock demo using aragora-debate package or builtin."""
+    receipt_path = getattr(args, "receipt", None)
     if not HAS_ARAGORA_DEBATE:
         topic = getattr(args, "topic", None) or DEMO_TASKS.get(
             getattr(args, "name", None) or _DEFAULT_DEMO, {}
         ).get("topic", "Should we adopt microservices?")
-        result, elapsed = asyncio.run(_run_demo_debate(topic))
-        receipt_path = getattr(args, "receipt", None)
-        if receipt_path:
-            _save_demo_receipt(result, elapsed, receipt_path)
+        asyncio.run(_run_demo_debate(topic, receipt_path=receipt_path))
         return
 
     # Use existing aragora-debate based logic
-    receipt_path = getattr(args, "receipt", None)
     custom_topic = getattr(args, "topic", None)
     if custom_topic:
-        result, elapsed = asyncio.run(_run_demo_debate(custom_topic))
-        if receipt_path:
-            _save_demo_receipt(result, elapsed, receipt_path)
+        asyncio.run(_run_demo_debate(custom_topic, receipt_path=receipt_path))
         return
 
     demo_name = getattr(args, "name", None) or _DEFAULT_DEMO
@@ -914,11 +916,7 @@ def run_demo(
         return None
 
     topic = DEMO_TASKS[demo_name]["topic"]
-    result, elapsed = asyncio.run(_run_demo_debate(topic))
-
-    if receipt_path:
-        saved = _save_demo_receipt(result, elapsed, receipt_path)
-        print(f"\n  Receipt saved to: {saved}")
+    result, _elapsed = asyncio.run(_run_demo_debate(topic, receipt_path=receipt_path))
 
     return result
 

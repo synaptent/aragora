@@ -81,7 +81,9 @@ class ArenaEventBridge:
             cross_manager: Optional CrossSubscriberManager (uses global if not provided)
         """
         self._event_bus = event_bus
-        self._cross_manager = cross_manager or get_cross_subscriber_manager()
+        self._cross_manager = (
+            cross_manager if cross_manager is not None else get_cross_subscriber_manager()
+        )
         self._connected = False
 
     def connect_to_cross_subscribers(self) -> None:
@@ -172,7 +174,10 @@ def create_arena_bridge(event_bus: EventBus) -> ArenaEventBridge:
     Returns:
         Connected ArenaEventBridge
     """
-    bridge = ArenaEventBridge(event_bus)
+    from aragora.debate.event_subscribers import bootstrap_debate_event_subscribers
+
+    cross_manager = bootstrap_debate_event_subscribers()
+    bridge = ArenaEventBridge(event_bus, cross_manager)
     bridge.connect_to_cross_subscribers()
     return bridge
 

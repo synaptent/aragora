@@ -35,6 +35,9 @@ class ProviderMetrics:
     failure_rate: float = 0.0
     p95_latency_seconds: float = 0.0
     last_updated: str = ""
+    # True when avg_cost_per_debate is a pricing-ladder estimate (no observed
+    # spend recorded), not real spend. Set by aragora.routing.pricing.
+    cost_estimated: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
@@ -48,6 +51,7 @@ class ProviderMetrics:
             "failure_rate": self.failure_rate,
             "p95_latency_seconds": self.p95_latency_seconds,
             "last_updated": self.last_updated,
+            "cost_estimated": self.cost_estimated,
         }
 
     @classmethod
@@ -63,6 +67,7 @@ class ProviderMetrics:
             failure_rate=data.get("failure_rate", 0.0),
             p95_latency_seconds=data.get("p95_latency_seconds", 0.0),
             last_updated=data.get("last_updated", ""),
+            cost_estimated=data.get("cost_estimated", False),
         )
 
 

@@ -34,10 +34,13 @@ from __future__ import annotations
 
 import logging
 import os
+import warnings
 from dataclasses import dataclass
 from functools import wraps
 from typing import TYPE_CHECKING, Any
 from collections.abc import Callable
+
+from aragora.utils.request_ip import extract_client_ip as _extract_client_ip
 
 if TYPE_CHECKING:
     from aragora.rbac.models import AuthorizationContext
@@ -121,8 +124,19 @@ class AuthContext:
         return permission_key in self.permissions or "*" in self.permissions
 
 
-# Import utilities from auth_v2 to avoid duplication
-from .user_auth import extract_client_ip, extract_token
+# Import token utilities from auth_v2 to avoid duplication
+from .user_auth import extract_token
+
+
+def extract_client_ip(handler: Any) -> str | None:
+    """Compatibility wrapper for the foundation request-IP utility."""
+    warnings.warn(
+        "aragora.server.middleware.auth.extract_client_ip is deprecated; "
+        "import aragora.utils.request_ip.extract_client_ip instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return _extract_client_ip(handler)
 
 
 def validate_token(token: str) -> bool:
@@ -247,7 +261,7 @@ def optional_auth(func: Callable) -> Callable:
         # Build auth context
         token = extract_token(handler)
         authenticated = validate_token(token) if token else False
-        client_ip = extract_client_ip(handler)
+        client_ip = _extract_client_ip(handler)
 
         auth_context = AuthContext(
             authenticated=authenticated,

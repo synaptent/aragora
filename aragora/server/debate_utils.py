@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from typing import Any
+from typing import Any, TypeVar, overload
 
 from aragora.server.state import get_state_manager
 
@@ -33,6 +33,8 @@ logger = logging.getLogger(__name__)
 
 # TTL for completed debates (24 hours)
 _DEBATE_TTL_SECONDS = 86400
+_T = TypeVar("_T")
+_MISSING = object()
 
 
 class _ActiveDebatesProxy(dict[str, dict]):
@@ -98,12 +100,18 @@ class _ActiveDebatesProxy(dict[str, dict]):
         debates = get_state_manager().get_active_debates()
         return [v.to_dict() for v in debates.values()]
 
-    def pop(self, key: str, *args) -> dict | None:
+    @overload
+    def pop(self, key: str) -> dict: ...
+
+    @overload
+    def pop(self, key: str, default: _T) -> dict | _T: ...
+
+    def pop(self, key: str, default: Any = _MISSING) -> Any:
         state = get_state_manager().unregister_debate(key)
         if state is not None:
             return state.to_dict()
-        if args:
-            return args[0]
+        if default is not _MISSING:
+            return default
         raise KeyError(key)
 
 
@@ -267,9 +275,9 @@ async def watchdog_stuck_debates(check_interval: float = 60.0) -> None:
                 manager.update_debate_status(debate_id, status="timeout")
 
                 # Try to cancel the task if tracked
-                state = manager.get_debate(debate_id)
-                if state:
-                    task = state.metadata.get("_task")
+                tracked_state = manager.get_debate(debate_id)
+                if tracked_state:
+                    task = tracked_state.metadata.get("_task")
                     if (
                         task
                         and hasattr(task, "cancel")

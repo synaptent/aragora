@@ -22,6 +22,7 @@ from aragora.observability.metrics.km import (
     record_reverse_query_latency,
     record_semantic_search,
     record_validation_feedback,
+    register_km_health_provider,
     set_km_active_adapters,
     set_km_health_status,
     sync_km_metrics_to_prometheus,
@@ -31,7 +32,9 @@ from aragora.observability.metrics.km import (
 @pytest.fixture(autouse=True)
 def _reset_module():
     mod._initialized = False
+    register_km_health_provider(None)
     yield
+    register_km_health_provider(None)
     mod._initialized = False
 
 
@@ -144,14 +147,22 @@ class TestCalibrationFusionMetrics:
 
 
 class TestSyncToPrometheus:
-    def test_sync_handles_import_error(self, _init_noop):
-        with patch("aragora.observability.metrics.km.set_km_health_status"):
+    def test_sync_handles_missing_provider(self, _init_noop):
+        with patch("aragora.observability.metrics.km.set_km_health_status") as set_health:
             sync_km_metrics_to_prometheus()
+        set_health.assert_not_called()
 
     def test_sync_handles_exception(self, _init_noop):
+        register_km_health_provider(lambda: 3)
         with patch(
             "aragora.observability.metrics.km.set_km_health_status",
             side_effect=Exception("test"),
         ):
             # Should not raise
             sync_km_metrics_to_prometheus()
+
+    def test_sync_uses_registered_health_provider(self, _init_noop):
+        register_km_health_provider(lambda: 2)
+        with patch("aragora.observability.metrics.km.set_km_health_status") as set_health:
+            sync_km_metrics_to_prometheus()
+        set_health.assert_called_once_with(2)

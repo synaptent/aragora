@@ -183,6 +183,133 @@ def first_error_line(stderr: str, stdout: str) -> str:
     return text.splitlines()[0]
 
 
+def _rollup_recency(item: dict[str, Any]) -> tuple[str, str]:
+    """Sortable recency for one rollup row; ``("", "")`` when unknown.
+
+    Timestamps are ISO-8601 UTC as returned by ``gh``, so lexical order is
+    chronological order. Rows missing both stamps rank lowest and are treated
+    as unrankable by the caller.
+
+    ``startedAt`` is deliberately the primary key. A run that is still in
+    flight has **no** ``completedAt``, so ordering on completion first would
+    rank the current run below a stale row that has already finished — letting
+    an old ``SUCCESS`` outrank a re-run that is still deciding, which is the
+    very hazard this reduction exists to prevent. Check *runs* always carry a
+    start time, and the most recently started one is the current run.
+
+    Commit *statuses* (the ``context``/``state`` shape) carry neither stamp, so
+    ``("", "")`` means **unrankable**, not "oldest" — see
+    :func:`_rollup_is_rankable`.
+    """
+    return (str(item.get("startedAt") or ""), str(item.get("completedAt") or ""))
+
+
+def _rollup_is_rankable(recency: tuple[str, str]) -> bool:
+    """Whether a row carries enough information to be ordered against another.
+
+    A row without a start time cannot be proven newer *or* older than anything.
+    Treating it as merely "oldest" is what let a timestamped stale ``SUCCESS``
+    outrank an untimestamped ``FAILURE``.
+
+    Requires ``startedAt`` specifically, not "either stamp": ordering is
+    start-primary, so a ``completedAt``-only row compares as ``("", cAt)`` and
+    would rank below *every* start-bearing row regardless of the actual times —
+    re-admitting the same stale-outranks-current hazard for that shape.
+    """
+    return bool(recency[0])
+
+
+def _state_precedence(state: str) -> int:
+    """How decision-relevant a collapsed state is; higher must never be masked.
+
+    ``decide_auto_merge`` blocks on ``_FAILING_CHECK_STATES`` specifically, so
+    collapsing a terminal ``FAILURE`` into a transient ``PENDING`` would silently
+    disarm that guard even though both are non-success. Terminal failure
+    therefore outranks transient non-success, which outranks success.
+    """
+    if state in _FAILING_CHECK_STATES:
+        return 2
+    if state != "SUCCESS":
+        return 1
+    return 0
+
+
+def _reduce_rollup_states(rollup: Any) -> dict[str, str]:
+    """Collapse a status-check rollup to one state per check name.
+
+    Newest row per name wins, but **only between rows that can actually be
+    ordered**. When two rows are not comparable — equal stamps, or *either* row
+    carrying no stamps at all — **any non-success state wins over ``SUCCESS``**
+    — not merely an explicitly failing one. ``PENDING``,
+    ``QUEUED``, ``IN_PROGRESS`` and unknown/empty states are all "not yet
+    proven green", and a success that cannot be shown to be the current row
+    must never be what authorises an unattended merge.
+
+    States are upper-cased so this reduction cannot be bypassed by casing,
+    matching the normalisation the cheap prefilter applies.
+    """
+    # Three disjoint pools, so no row can be displaced out of the reduction by a
+    # row it is not comparable to. Folding everything into one slot is what let a
+    # veto vanish: an unrankable PENDING landing on a FAILURE incumbent matched
+    # no branch and was dropped, after which a later SUCCESS outranked the
+    # FAILURE and the name read green while the PENDING was still deciding.
+    rankable: dict[str, tuple[tuple[str, str], str]] = {}
+    veto: dict[str, str] = {}
+    unrankable_success: set[str] = set()
+
+    for item in rollup or []:
+        if not isinstance(item, dict):
+            continue
+        name = item.get("name") or item.get("context")
+        if not name:
+            continue
+        name = str(name)
+        state = str(item.get("conclusion") or item.get("state") or item.get("status") or "").upper()
+        recency = _rollup_recency(item)
+
+        if not _rollup_is_rankable(recency):
+            if state == "SUCCESS":
+                # Cannot be proven current, so it may not outrank anything; it only
+                # decides a name that has no rankable row at all.
+                unrankable_success.add(name)
+            else:
+                # Cannot be proven stale either — an unconditional veto, kept out
+                # of the rankable pool so nothing can displace it. Among several,
+                # keep the most decision-relevant rather than the first seen, so
+                # the surviving representative does not depend on row order.
+                if _state_precedence(state) > _state_precedence(veto.get(name, "SUCCESS")):
+                    veto[name] = state
+            continue
+
+        previous = rankable.get(name)
+        if previous is None:
+            rankable[name] = (recency, state)
+            continue
+        previous_recency, previous_state = previous
+        if recency > previous_recency:
+            rankable[name] = (recency, state)
+        elif recency == previous_recency and _state_precedence(state) > _state_precedence(
+            previous_state
+        ):
+            # Same instant: neither row is provably the live one, so keep the more
+            # decision-relevant state. Resolving by input order — or letting a
+            # transient mask a terminal failure — is exactly the defect this
+            # reduction exists to remove.
+            rankable[name] = (recency, state)
+
+    resolved = {name: state for name, (_, state) in rankable.items()}
+    for name in unrankable_success:
+        resolved.setdefault(name, "SUCCESS")
+    # A veto blocks a success it cannot be proven staler than, but must not
+    # *substitute* for a more decision-relevant state: replacing a rankable
+    # terminal FAILURE with a transient PENDING would disarm the failing-checks
+    # guard in `decide_auto_merge`, which keys on `_FAILING_CHECK_STATES`.
+    for name, veto_state in veto.items():
+        if _state_precedence(veto_state) > _state_precedence(resolved.get(name, "SUCCESS")):
+            resolved[name] = veto_state
+    return resolved
+
+
 def context_from_gh(view: dict[str, Any], packet_entry: dict[str, Any] | None) -> PRMergeContext:
     """Build a :class:`PRMergeContext` from a ``gh pr view`` payload + packet entry.
 
@@ -190,16 +317,18 @@ def context_from_gh(view: dict[str, Any], packet_entry: dict[str, Any] | None) -
     ``conclusion``; commit *statuses* expose ``context`` + ``state``. Both are
     normalised into ``check_states`` so the decision core sees one flat map.
     A missing ``packet_entry`` leaves ``tier=None`` (which always blocks).
+
+    Rollups routinely carry **several rows per check name** (a rerun, or a
+    superseded draft-phase run, leaves its old row in place). Collapsing them
+    by last-write-wins made the resulting state depend on GitHub's arbitrary
+    row order, so a stale ``SUCCESS`` ordered after the current ``FAILURE``
+    would read as green — including for ``aragora-merge-quorum`` itself, which
+    directly authorises the merge. Rows are therefore reduced by **recency**
+    (``completedAt`` then ``startedAt``), and when recency cannot be
+    established the reduction is **fail-closed**: an unranked failing row wins
+    over a success it cannot be proven newer than.
     """
-    check_states: dict[str, str] = {}
-    for item in view.get("statusCheckRollup") or []:
-        if not isinstance(item, dict):
-            continue
-        name = item.get("name") or item.get("context")
-        if not name:
-            continue
-        state = item.get("conclusion") or item.get("state") or item.get("status")
-        check_states[str(name)] = str(state or "")
+    check_states = _reduce_rollup_states(view.get("statusCheckRollup") or [])
 
     packet = packet_entry or {}
     tier_raw = packet.get("tier")

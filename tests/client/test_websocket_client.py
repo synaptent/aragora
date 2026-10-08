@@ -657,6 +657,13 @@ class TestDebateStreamReceiveLoop:
     """Tests for message receiving logic."""
 
     @pytest.mark.asyncio
+    async def test_receive_loop_returns_when_socket_is_missing(self):
+        """A disconnected stream should not attempt to iterate a null socket."""
+        stream = DebateStream("ws://localhost", "d1")
+
+        await stream._receive_loop()
+
+    @pytest.mark.asyncio
     async def test_receive_loop_parses_json_messages(self):
         """Valid JSON parsed."""
         stream = DebateStream("ws://localhost", "d1")

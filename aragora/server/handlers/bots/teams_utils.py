@@ -15,7 +15,8 @@ import logging
 import os
 import time
 import uuid
-from typing import Any
+from collections.abc import Callable
+from typing import Any, cast
 
 logger = logging.getLogger(__name__)
 
@@ -363,7 +364,7 @@ async def _start_teams_debate(
         )
 
         # Create response channel for result routing
-        response_channel = ResponseChannel(
+        response_channel = cast(Callable[..., Any], ResponseChannel)(
             platform="teams",
             channel_id=conversation_id,
             user_id=user_id,
@@ -372,7 +373,7 @@ async def _start_teams_debate(
         )
 
         # Create request context
-        context = RequestContext(
+        context = cast(Callable[..., Any], RequestContext)(
             user_id=user_id,
             session_id=f"teams:{conversation_id}",
         )
@@ -382,12 +383,14 @@ async def _start_teams_debate(
             if isinstance(decision_integrity, bool):
                 decision_integrity = {} if decision_integrity else None
             if isinstance(decision_integrity, dict):
-                config = DecisionConfig(decision_integrity=decision_integrity)
+                config = cast(Callable[..., Any], DecisionConfig)(
+                    decision_integrity=decision_integrity
+                )
 
         request_kwargs = {
             "content": topic,
-            "decision_type": DecisionType.DEBATE,
-            "source": InputSource.TEAMS,
+            "decision_type": cast(Any, DecisionType).DEBATE,
+            "source": cast(Any, InputSource).TEAMS,
             "response_channels": [response_channel],
             "context": context,
             "attachments": attachments or [],
@@ -397,7 +400,7 @@ async def _start_teams_debate(
             request_kwargs["config"] = config
 
         # Create decision request
-        request = DecisionRequest(**request_kwargs)  # type: ignore[arg-type]
+        request = cast(Callable[..., Any], DecisionRequest)(**request_kwargs)
 
         # Register origin for result routing (best-effort)
         try:
@@ -418,7 +421,7 @@ async def _start_teams_debate(
             logger.debug("Failed to register Teams debate origin: %s", exc)
 
         # Route through DecisionRouter
-        router = get_decision_router()
+        router = cast(Callable[..., Any], get_decision_router)()
         result = await router.route(request)
 
         if result.request_id and result.request_id != request.request_id:

@@ -747,7 +747,6 @@ class AuthAPI:
 
         return self._client.request("POST", "/api/auth/setup-organization", json=data)
 
-
     # ===========================================================================
     # Onboarding
     # ===========================================================================

@@ -190,3 +190,56 @@ def test_publishes_refresh_via_branch_and_verifies_draft_pr() -> None:
     assert 'echo "Draft PR: $pr_url"' in run
     assert "[skip ci]" not in run
     assert "git push origin HEAD:main" not in run
+
+
+def test_publisher_syncs_docs_site_mirrors_before_staging() -> None:
+    """The publisher must not be a source of docs-site mirror drift.
+
+    ``docs-build.yml`` fails closed when a ``docs/**`` change lands without its
+    mirror, so a publication that skips the sync reds ``build`` on every daily
+    PR and hands that red to the next unrelated docs PR once merged. Mirroring
+    was a manual add-on until #9519 follow-through.
+
+    Scope is deliberately narrow: repair the drift this workflow creates, not
+    re-implement docs-build's full closure. docs-build stays the authority.
+    """
+    names = [str(step.get("name", "")) for step in _benchmark_truth_publication_steps()]
+    sync_run = str(_workflow_step("Sync docs-site mirrors").get("run", ""))
+
+    assert "node scripts/sync-docs.js" in sync_run
+
+    # Step ordering, not string offsets: an offset check cannot tell that the
+    # sync moved after a later staging line.
+    publish = "Commit, publish, and verify draft PR for refreshed trust-loop surfaces"
+    assert names.index("Sync docs-site mirrors") < names.index(publish)
+
+    publish_run = str(_workflow_step(publish).get("run", ""))
+    # Repository JavaScript must not run in the step holding the PAT.
+    assert "sync-docs.js" not in publish_run
+    # Stage every mirror the sync rewrote (it regenerates category indexes too),
+    # but tracked-only: the checkout uses `clean: false`, so `-A` could sweep
+    # untracked leftovers from earlier runs into the publication commit.
+    assert "git add -u docs-site/docs" in publish_run
+    assert "git add -A docs-site" not in publish_run
+
+
+def test_mirror_sync_degrades_rather_than_losing_the_publication() -> None:
+    """A sync problem must not cost the day's publication.
+
+    By the time the sync runs, --ensure-issues has already mutated GitHub
+    issues, so aborting would discard rendered surfaces mid-flight and leave
+    the very staleness this workflow exists to prevent. The worst case of
+    continuing is the pre-existing one: a red `build` on the PR.
+    """
+    sync_run = str(_workflow_step("Sync docs-site mirrors").get("run", ""))
+
+    assert "::warning::" in sync_run
+    assert "||" in sync_run, "sync must not abort the publication"
+
+    # Regression guard: actions/setup-node killed this self-hosted runner
+    # mid-step (run 30134420462), taking the whole publication with it.
+    # sync-docs.js needs only fs/path, so the ambient node is enough.
+    assert all(
+        not str(step.get("uses", "")).startswith("actions/setup-node")
+        for step in _benchmark_truth_publication_steps()
+    ), "actions/setup-node kills the mac-studio runner; use ambient node"

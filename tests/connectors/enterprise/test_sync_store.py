@@ -5,10 +5,13 @@ Tests for SyncStore encryption and persistence.
 import pytest
 import tempfile
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch, MagicMock
+from urllib.parse import urlsplit
+from uuid import uuid4
 
-from aragora.connectors.enterprise.sync_store import (
+from aragora.storage.sync_store import (
     SyncStore,
     ConnectorConfig,
     SyncJob,
@@ -77,8 +80,8 @@ class TestConfigEncryption:
         # Without crypto available, returns unchanged
         assert result == config
 
-    @patch("aragora.connectors.enterprise.sync_store.CRYPTO_AVAILABLE", True)
-    @patch("aragora.connectors.enterprise.sync_store.get_encryption_service")
+    @patch("aragora.storage.sync_store.CRYPTO_AVAILABLE", True)
+    @patch("aragora.storage.sync_store.get_encryption_service")
     def test_encrypt_with_crypto(self, mock_get_service):
         """Should encrypt sensitive fields when crypto available."""
         mock_service = MagicMock()
@@ -110,8 +113,8 @@ class TestConfigEncryption:
         # No _encrypted markers, returns as-is
         assert result == config
 
-    @patch("aragora.connectors.enterprise.sync_store.CRYPTO_AVAILABLE", True)
-    @patch("aragora.connectors.enterprise.sync_store.get_encryption_service")
+    @patch("aragora.storage.sync_store.CRYPTO_AVAILABLE", True)
+    @patch("aragora.storage.sync_store.get_encryption_service")
     def test_decrypt_with_crypto(self, mock_get_service):
         """Should decrypt fields when crypto available."""
         mock_service = MagicMock()
@@ -134,7 +137,7 @@ class TestSyncStoreBasics:
         """Default database URL should resolve under DATA_DIR."""
         expected_db = str(tmp_path / "connectors.db")
         monkeypatch.setattr(
-            "aragora.connectors.enterprise.sync_store.resolve_db_path",
+            "aragora.storage.sync_store.resolve_db_path",
             lambda p: expected_db,
         )
         monkeypatch.delenv("ARAGORA_SYNC_DATABASE_URL", raising=False)
@@ -206,8 +209,8 @@ class TestSyncStoreEncryption:
     """Tests for SyncStore with encryption enabled."""
 
     @pytest.mark.asyncio
-    @patch("aragora.connectors.enterprise.sync_store.CRYPTO_AVAILABLE", True)
-    @patch("aragora.connectors.enterprise.sync_store.get_encryption_service")
+    @patch("aragora.storage.sync_store.CRYPTO_AVAILABLE", True)
+    @patch("aragora.storage.sync_store.get_encryption_service")
     async def test_encrypt_config_uses_aad(self, mock_get_service):
         """Should encrypt credentials with connector_id as AAD."""
         mock_service = MagicMock()
@@ -230,8 +233,8 @@ class TestSyncStoreEncryption:
         assert call_args[0][2] == "secure-1"  # AAD = connector_id
 
     @pytest.mark.asyncio
-    @patch("aragora.connectors.enterprise.sync_store.CRYPTO_AVAILABLE", True)
-    @patch("aragora.connectors.enterprise.sync_store.get_encryption_service")
+    @patch("aragora.storage.sync_store.CRYPTO_AVAILABLE", True)
+    @patch("aragora.storage.sync_store.get_encryption_service")
     async def test_decrypt_config_uses_aad(self, mock_get_service):
         """Should decrypt credentials with connector_id as AAD."""
         mock_service = MagicMock()
@@ -554,3 +557,72 @@ class TestSyncJobRecovery:
         assert history[0].status == "interrupted"
 
         await store.close()
+
+
+@pytest.fixture(params=["sqlite", "postgresql"])
+async def status_store_url(request, tmp_path):
+    """A fresh SQLite file, or a throwaway database on ARAGORA_TEST_DATABASE_URL."""
+    if request.param == "sqlite":
+        yield f"sqlite:///{tmp_path / 'status.db'}"
+        return
+    dsn = os.environ.get("ARAGORA_TEST_DATABASE_URL")
+    if not dsn:
+        pytest.skip("set ARAGORA_TEST_DATABASE_URL to run live PostgreSQL tests")
+    asyncpg = pytest.importorskip("asyncpg")
+    database = "sync_store_test_" + uuid4().hex
+    admin = await asyncpg.connect(dsn)
+    await admin.execute(f'CREATE DATABASE "{database}"')
+    try:
+        yield urlsplit(dsn)._replace(path=f"/{database}").geturl()
+    finally:
+        await admin.execute(f'DROP DATABASE "{database}" WITH (FORCE)')
+        await admin.close()
+
+
+async def test_update_connector_status_persists_on_every_backend(status_store_url):
+    store = SyncStore(database_url=status_store_url, use_encryption=False)
+    await store.initialize()
+    await store._connection.execute(
+        "INSERT INTO connectors (id, connector_type, name, config_json, status, created_at,"
+        " updated_at, error_message) VALUES ('c1', 'github', 'Seeded', '{}', 'error',"
+        " '2026-01-01T00:00:00+00:00', '2026-01-01T00:00:00+00:00', 'token expired')"
+    )
+    if status_store_url.startswith("sqlite"):
+        await store._connection.commit()
+    await store.close()
+
+    store = SyncStore(database_url=status_store_url, use_encryption=False)
+    await store.initialize()
+    assert await store.update_connector_status("c1", "configuring") is None
+    assert await store.update_connector_status("missing", "error", "boom") is None
+    await store.close()
+
+    reopened = SyncStore(database_url=status_store_url, use_encryption=False)
+    await reopened.initialize()
+    try:
+        row = await reopened.get_connector("c1")
+        assert row is not None
+        assert (row.status, row.error_message) == ("configuring", None)
+        assert row.updated_at > datetime(2026, 1, 1, tzinfo=timezone.utc)
+        assert [c.id for c in await reopened.list_connectors()] == ["c1"]
+    finally:
+        await reopened.close()
+
+
+async def test_save_connector_creates_and_edits_on_every_backend(status_store_url):
+    store = SyncStore(database_url=status_store_url, use_encryption=True)
+    await store.initialize()
+    try:
+        await store.save_connector("c1", "github", "Repo", {"org": "a", "api_key": "sk-1"})
+        await store.save_connector("c1", "github", "Renamed", {"org": "b", "api_key": "sk-2"})
+    finally:
+        await store.close()
+
+    reopened = SyncStore(database_url=status_store_url, use_encryption=True)
+    await reopened.initialize()
+    try:
+        row = await reopened.get_connector("c1")
+        assert row is not None
+        assert (row.name, row.config) == ("Renamed", {"org": "b", "api_key": "sk-2"})
+    finally:
+        await reopened.close()

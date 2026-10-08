@@ -8,7 +8,7 @@
 
 The Aragora Control Plane is the central orchestration layer that manages multi-agent vetted decisionmaking across your organization's knowledge and communication channels. It provides:
 
-- **Agent Orchestration**: Coordinate 43 agent types with role assignment and capability matching
+- **Agent Orchestration**: Coordinate 46 agent types with role assignment and capability matching
 - **Task Scheduling**: Priority-based task distribution with Redis-backed queues
 - **Service Discovery**: Agent registry with heartbeat-based liveness tracking
 - **Multi-Region Support**: Regional routing for compliance and latency optimization

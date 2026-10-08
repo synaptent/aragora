@@ -21,7 +21,7 @@ pip install aragora-debate[openai]       # GPT
 pip install aragora-debate[all]          # All providers
 ```
 
-For the full Aragora platform (server, CLI, knowledge management, 43 agent types):
+For the full Aragora platform (server, CLI, knowledge management, 46 agent types):
 
 ```bash
 pip install aragora[all]
@@ -242,7 +242,7 @@ debate = Debate(
 The standalone `aragora-debate` package gives you the debate engine. Install
 the full platform for:
 
-- **43 agent types** with ELO rankings and calibration tracking
+- **46 agent types** with ELO rankings and calibration tracking
 - **Knowledge Mound** -- semantic search, contradiction detection, cross-debate learning
 - **Gauntlet** -- adversarial stress-testing with attack/defend cycles
 - **Workflow engine** -- DAG-based automation with 50+ templates
@@ -267,12 +267,12 @@ aragora repl
 
 | Example | What it does | File |
 |---------|-------------|------|
-| Basic debate + receipt | Run a debate, get signed receipt | [`examples/quickstart/basic_debate.py`](../examples/quickstart/basic_debate.py) |
-| Batch claim verification | Verify multiple claims concurrently | [`examples/batch_verify_claims.py`](../examples/batch_verify_claims.py) |
-| Slack bot | `/debate` command with streaming | [`examples/nodejs-slack-bot/`](../examples/nodejs-slack-bot/) |
-| Healthcare review | Clinical decision vetting | [`examples/quickstart/healthcare_review.py`](../examples/quickstart/healthcare_review.py) |
-| Gauntlet demo | Adversarial stress-testing | [`examples/gauntlet_demo.py`](../examples/gauntlet_demo.py) |
-| TypeScript SDK | Basic debate in TypeScript | [`examples/typescript/01-basic-debate.ts`](../examples/typescript/01-basic-debate.ts) |
+| Basic debate + receipt | Run a debate, get signed receipt | [`examples/quickstart/basic_debate.py`](../../examples/quickstart/basic_debate.py) |
+| Batch claim verification | Verify multiple claims concurrently | [`examples/batch_verify_claims.py`](../../examples/batch_verify_claims.py) |
+| Slack bot | `/debate` command with streaming | [`examples/nodejs-slack-bot/`](../../examples/nodejs-slack-bot/) |
+| Healthcare review | Clinical decision vetting | [`examples/quickstart/healthcare_review.py`](../../examples/quickstart/healthcare_review.py) |
+| Gauntlet demo | Adversarial stress-testing | [`examples/gauntlet_demo.py`](../../examples/gauntlet_demo.py) |
+| TypeScript SDK | Basic debate in TypeScript | [`examples/typescript/01-basic-debate.ts`](../../examples/typescript/01-basic-debate.ts) |
 
 All examples work offline with mock agents (no API keys needed).
 

@@ -1,0 +1,884 @@
+{
+  "article_14_mapping": [
+    {
+      "clause": "14(1)",
+      "evidence_basis": "A dedicated oversight identity layer, credential-separated from execution identities; receipts carry per-decision oversight dispositions (human_attested / autonomous).",
+      "requirement": "High-risk AI systems shall be designed and developed such that they can be effectively overseen by natural persons during use.",
+      "status": "partial",
+      "status_basis": "1 human-settlement attestation(s) demonstrate the oversight mechanism operating in the window, but no windowed receipt is itself human-attested"
+    },
+    {
+      "clause": "14(2)",
+      "evidence_basis": "Adversarial multi-model review precedes decisions; receipts record verdicts, confidence, and preserved dissent so overseers act on risk signals rather than summaries.",
+      "requirement": "Oversight shall aim at preventing or minimising risks to health, safety or fundamental rights.",
+      "status": "satisfied",
+      "status_basis": "all 1 windowed receipts carry verdict + confidence"
+    },
+    {
+      "clause": "14(3)",
+      "evidence_basis": "The settlement mechanism (head-bound human-settlement status, preapproval comments) is machine-checkable and cited per attestation in this pack.",
+      "requirement": "Oversight measures shall be built into the system or identified for implementation by the deployer.",
+      "status": "partial",
+      "status_basis": "1 human-settlement attestation(s) demonstrate the oversight mechanism operating in the window, but no windowed receipt is itself human-attested"
+    },
+    {
+      "clause": "14(4)(a)",
+      "evidence_basis": "Receipts expose agent responses, confidence, dissenting views, and provenance chains for every windowed decision.",
+      "requirement": "Overseers can understand the capacities and limitations of the system and monitor its operation.",
+      "status": "satisfied",
+      "status_basis": "all 1 windowed receipts carry agent responses / provenance"
+    },
+    {
+      "clause": "14(4)(b)",
+      "evidence_basis": "Heterogeneous-model dissent is preserved verbatim in receipts rather than averaged away; hollow-consensus detection is part of the debate protocol.",
+      "requirement": "Overseers remain aware of automation bias.",
+      "status": "satisfied",
+      "status_basis": "all 1 windowed receipts carry recorded dissent field"
+    },
+    {
+      "clause": "14(4)(c)",
+      "evidence_basis": "Receipts carry verdict reasoning and explainability blocks; attestations record the exact evidence digest the overseer saw.",
+      "requirement": "Overseers can correctly interpret the system's output.",
+      "status": "partial",
+      "status_basis": "amended 2026-07-22: the 1 windowed receipt carries a verdict_reasoning field, but the recorded verdict_reasoning/final_answer are truncated mid-sentence at 2,000 characters by the receipt persistence path; the local receipt store copy carries the identical truncation, so the full synthesis text is not recoverable. Truncated reasoning only partially supports 'overseers can correctly interpret the system's output'"
+    },
+    {
+      "clause": "14(4)(d)",
+      "evidence_basis": "Human settlement is the merge/act gate for oversight-tier decisions: absence of a human attestation withholds settlement; dispositions record which decisions a human actually accepted.",
+      "requirement": "Overseers can decide not to use the system or otherwise disregard, override or reverse its output.",
+      "status": "partial",
+      "status_basis": "1 human-settlement attestation(s) demonstrate the oversight mechanism operating in the window, but no windowed receipt is itself human-attested"
+    },
+    {
+      "clause": "14(4)(e)",
+      "evidence_basis": "Operational kill-switches and halt files stop autonomous lanes; interruption capability is procedural and referenced, not evidenced per-receipt (status is at most 'partial' from receipts alone).",
+      "requirement": "Overseers can intervene in the operation or interrupt the system (stop button or similar).",
+      "status": "partial",
+      "status_basis": "interruption capability is procedural (kill-switches, halt files); not evidenced per-receipt by this pack"
+    }
+  ],
+  "artifact": "aragora.oversight_pack",
+  "framework": {
+    "eu_ai_act": "Regulation (EU) 2024/1689, Article 14 (Human Oversight)",
+    "nist": "NIST AI RMF 1.0 (cross-referenced functions)"
+  },
+  "generated_at": "2026-07-20T15:37:36.007105+00:00",
+  "integrity": {
+    "algorithm": "sha256/jcs",
+    "content_digest": "088e0e97992023fd379d738e7d5010754038c42a5cff86259d29fc3a5f132595"
+  },
+  "nist_cross_references": [
+    {
+      "evidence_basis": "Oversight identity layer and per-decision attestor records.",
+      "function": "GOVERN 3.2",
+      "requirement": "Policies define human oversight roles and responsibilities for AI systems."
+    },
+    {
+      "evidence_basis": "Human settlement gate; withheld attestation withholds action.",
+      "function": "MANAGE 2.4",
+      "requirement": "Mechanisms are in place to supersede, disengage, or deactivate AI systems that demonstrate performance or outcomes inconsistent with intended use."
+    },
+    {
+      "evidence_basis": "Preserved dissent and confidence in every windowed receipt.",
+      "function": "MEASURE 2.10",
+      "requirement": "Human-AI configurations are evaluated (automation bias)."
+    }
+  ],
+  "receipts": [
+    {
+      "confidence": 0.8,
+      "disposition": "autonomous",
+      "evidence": {
+        "has_confidence": true,
+        "has_dissent_record": true,
+        "has_reasoning": true,
+        "has_responses": true
+      },
+      "format": "native",
+      "receipt_id": "debate-9ea6b178-a438-4964-9836-3ba84230bd03",
+      "source": "docs/compliance/bundles/2026-07-eu-ai-act/receipts/2026-06-22-packaging-decision-8263.receipt.json",
+      "timestamp": "2026-06-22T22:11:52Z",
+      "verdict": "PASS"
+    }
+  ],
+  "settlement_attestations": [
+    {
+      "attestation": {
+        "attested_at": "2026-06-23T02:54:44Z",
+        "attestor": {
+          "id": "scarmani",
+          "role": "oversight"
+        },
+        "disposition": "human_attested",
+        "execution_identity": {
+          "id": "app/dependabot"
+        },
+        "mechanism": {
+          "context": "aragora/human-settlement",
+          "ref": "https://api.github.com/repos/synaptent/aragora/statuses/076a6f9068e82bda42a680e76d57d96fa02c9185",
+          "type": "settlement_status"
+        },
+        "observed": {
+          "evidence_digest": "sha256:a039bfae4dd07c44b2e7e73e4935a5c5a7659f0eda0a19f43412756cc1c552ba",
+          "head_sha": "076a6f9068e82bda42a680e76d57d96fa02c9185"
+        }
+      },
+      "head_sha": "076a6f9068e82bda42a680e76d57d96fa02c9185",
+      "merged_at": "2026-06-23T03:01:01Z",
+      "pr": 8533,
+      "pr_url": "https://github.com/synaptent/aragora/pull/8533"
+    }
+  ],
+  "settlement_attestations_invalid": [
+    {
+      "attestation": {
+        "attested_at": "2026-07-13T20:07:20Z",
+        "attestor": {
+          "id": "scarmani",
+          "role": "oversight"
+        },
+        "disposition": "human_attested",
+        "execution_identity": {
+          "id": "an0mium"
+        },
+        "mechanism": {
+          "context": "aragora/human-settlement",
+          "ref": "https://api.github.com/repos/synaptent/aragora/statuses/a928aaaf1439cab93272f44b41cbe552a41877b4",
+          "type": "settlement_status"
+        },
+        "observed": {
+          "head_sha": "a928aaaf1439cab93272f44b41cbe552a41877b4"
+        }
+      },
+      "head_sha": "a928aaaf1439cab93272f44b41cbe552a41877b4",
+      "invalid_reason": "missing observed.evidence_digest (status-to-receipt binding absent)",
+      "merged_at": "2026-07-13T20:10:14Z",
+      "pr": 9249,
+      "pr_url": "https://github.com/synaptent/aragora/pull/9249"
+    },
+    {
+      "attestation": {
+        "attested_at": "2026-07-14T01:07:34Z",
+        "attestor": {
+          "id": "scarmani",
+          "role": "oversight"
+        },
+        "disposition": "human_attested",
+        "execution_identity": {
+          "id": "an0mium"
+        },
+        "mechanism": {
+          "context": "aragora/human-settlement",
+          "ref": "https://api.github.com/repos/synaptent/aragora/statuses/d076f07bf3383bc4745f0b524ed9519c39753c51",
+          "type": "settlement_status"
+        },
+        "observed": {
+          "head_sha": "d076f07bf3383bc4745f0b524ed9519c39753c51"
+        }
+      },
+      "head_sha": "d076f07bf3383bc4745f0b524ed9519c39753c51",
+      "invalid_reason": "missing observed.evidence_digest (status-to-receipt binding absent)",
+      "merged_at": "2026-07-14T01:07:49Z",
+      "pr": 9246,
+      "pr_url": "https://github.com/synaptent/aragora/pull/9246"
+    },
+    {
+      "attestation": {
+        "attested_at": "2026-07-15T16:48:46Z",
+        "attestor": {
+          "id": "scarmani",
+          "role": "oversight"
+        },
+        "disposition": "human_attested",
+        "execution_identity": {
+          "id": "an0mium"
+        },
+        "mechanism": {
+          "context": "aragora/human-settlement",
+          "ref": "https://api.github.com/repos/synaptent/aragora/statuses/ee9c7ef82e4f98d9ffcdae90bdbf9186500a4540",
+          "type": "settlement_status"
+        },
+        "observed": {
+          "head_sha": "ee9c7ef82e4f98d9ffcdae90bdbf9186500a4540"
+        }
+      },
+      "head_sha": "ee9c7ef82e4f98d9ffcdae90bdbf9186500a4540",
+      "invalid_reason": "missing observed.evidence_digest (status-to-receipt binding absent)",
+      "merged_at": "2026-07-15T16:49:01Z",
+      "pr": 9245,
+      "pr_url": "https://github.com/synaptent/aragora/pull/9245"
+    },
+    {
+      "attestation": {
+        "attested_at": "2026-07-11T07:04:33Z",
+        "attestor": {
+          "id": "scarmani",
+          "role": "oversight"
+        },
+        "disposition": "human_attested",
+        "execution_identity": {
+          "id": "an0mium"
+        },
+        "mechanism": {
+          "context": "aragora/human-settlement",
+          "ref": "https://api.github.com/repos/synaptent/aragora/statuses/5eab7af56ae06085a16d749308c04183784950ea",
+          "type": "settlement_status"
+        },
+        "observed": {
+          "head_sha": "5eab7af56ae06085a16d749308c04183784950ea"
+        }
+      },
+      "head_sha": "5eab7af56ae06085a16d749308c04183784950ea",
+      "invalid_reason": "missing observed.evidence_digest (status-to-receipt binding absent)",
+      "merged_at": "2026-07-11T07:05:33Z",
+      "pr": 9203,
+      "pr_url": "https://github.com/synaptent/aragora/pull/9203"
+    },
+    {
+      "attestation": {
+        "attested_at": "2026-07-17T00:37:27Z",
+        "attestor": {
+          "id": "scarmani",
+          "role": "oversight"
+        },
+        "disposition": "human_attested",
+        "execution_identity": {
+          "id": "an0mium"
+        },
+        "mechanism": {
+          "context": "aragora/human-settlement",
+          "ref": "https://api.github.com/repos/synaptent/aragora/statuses/3a32a3f06c064e46046ae5f43329960946eaaca5",
+          "type": "settlement_status"
+        },
+        "observed": {
+          "head_sha": "3a32a3f06c064e46046ae5f43329960946eaaca5"
+        }
+      },
+      "head_sha": "3a32a3f06c064e46046ae5f43329960946eaaca5",
+      "invalid_reason": "missing observed.evidence_digest (status-to-receipt binding absent)",
+      "merged_at": "2026-07-17T00:39:03Z",
+      "pr": 9200,
+      "pr_url": "https://github.com/synaptent/aragora/pull/9200"
+    },
+    {
+      "attestation": {
+        "attested_at": "2026-07-17T00:35:36Z",
+        "attestor": {
+          "id": "scarmani",
+          "role": "oversight"
+        },
+        "disposition": "human_attested",
+        "execution_identity": {
+          "id": "an0mium"
+        },
+        "mechanism": {
+          "context": "aragora/human-settlement",
+          "ref": "https://api.github.com/repos/synaptent/aragora/statuses/035a4d05be7d2710032e628474532df78ff4f815",
+          "type": "settlement_status"
+        },
+        "observed": {
+          "head_sha": "035a4d05be7d2710032e628474532df78ff4f815"
+        }
+      },
+      "head_sha": "035a4d05be7d2710032e628474532df78ff4f815",
+      "invalid_reason": "missing observed.evidence_digest (status-to-receipt binding absent)",
+      "merged_at": "2026-07-17T00:37:13Z",
+      "pr": 9195,
+      "pr_url": "https://github.com/synaptent/aragora/pull/9195"
+    },
+    {
+      "attestation": {
+        "attested_at": "2026-07-16T07:34:43Z",
+        "attestor": {
+          "id": "scarmani",
+          "role": "oversight"
+        },
+        "disposition": "human_attested",
+        "execution_identity": {
+          "id": "an0mium"
+        },
+        "mechanism": {
+          "context": "aragora/human-settlement",
+          "ref": "https://api.github.com/repos/synaptent/aragora/statuses/2b4dda13227b1617592f4edcd57faf9472094ef4",
+          "type": "settlement_status"
+        },
+        "observed": {
+          "head_sha": "2b4dda13227b1617592f4edcd57faf9472094ef4"
+        }
+      },
+      "head_sha": "2b4dda13227b1617592f4edcd57faf9472094ef4",
+      "invalid_reason": "missing observed.evidence_digest (status-to-receipt binding absent)",
+      "merged_at": "2026-07-16T07:42:14Z",
+      "pr": 9133,
+      "pr_url": "https://github.com/synaptent/aragora/pull/9133"
+    },
+    {
+      "attestation": {
+        "attested_at": "2026-07-12T07:22:12Z",
+        "attestor": {
+          "id": "scarmani",
+          "role": "oversight"
+        },
+        "disposition": "human_attested",
+        "execution_identity": {
+          "id": "an0mium"
+        },
+        "mechanism": {
+          "context": "aragora/human-settlement",
+          "ref": "https://api.github.com/repos/synaptent/aragora/statuses/464528c2cb4e67e4d809ad619f322df1367a695d",
+          "type": "settlement_status"
+        },
+        "observed": {
+          "head_sha": "464528c2cb4e67e4d809ad619f322df1367a695d"
+        }
+      },
+      "head_sha": "464528c2cb4e67e4d809ad619f322df1367a695d",
+      "invalid_reason": "missing observed.evidence_digest (status-to-receipt binding absent)",
+      "merged_at": "2026-07-12T07:22:45Z",
+      "pr": 9129,
+      "pr_url": "https://github.com/synaptent/aragora/pull/9129"
+    },
+    {
+      "attestation": {
+        "attested_at": "2026-07-08T02:52:56Z",
+        "attestor": {
+          "id": "scarmani",
+          "role": "oversight"
+        },
+        "disposition": "human_attested",
+        "execution_identity": {
+          "id": "an0mium"
+        },
+        "mechanism": {
+          "context": "aragora/human-settlement",
+          "ref": "https://api.github.com/repos/synaptent/aragora/statuses/0d30c5114c5dbf5a011f53225581cc41d1b6f1bf",
+          "type": "settlement_status"
+        },
+        "observed": {
+          "head_sha": "0d30c5114c5dbf5a011f53225581cc41d1b6f1bf"
+        }
+      },
+      "head_sha": "0d30c5114c5dbf5a011f53225581cc41d1b6f1bf",
+      "invalid_reason": "missing observed.evidence_digest (status-to-receipt binding absent)",
+      "merged_at": "2026-07-08T02:54:10Z",
+      "pr": 8987,
+      "pr_url": "https://github.com/synaptent/aragora/pull/8987"
+    },
+    {
+      "attestation": {
+        "attested_at": "2026-07-07T17:48:25Z",
+        "attestor": {
+          "id": "scarmani",
+          "role": "oversight"
+        },
+        "disposition": "human_attested",
+        "execution_identity": {
+          "id": "an0mium"
+        },
+        "mechanism": {
+          "context": "aragora/human-settlement",
+          "ref": "https://api.github.com/repos/synaptent/aragora/statuses/6b532b6151aa7478eb7ec290372c91353863f72d",
+          "type": "settlement_status"
+        },
+        "observed": {
+          "head_sha": "6b532b6151aa7478eb7ec290372c91353863f72d"
+        }
+      },
+      "head_sha": "6b532b6151aa7478eb7ec290372c91353863f72d",
+      "invalid_reason": "missing observed.evidence_digest (status-to-receipt binding absent)",
+      "merged_at": "2026-07-07T17:51:09Z",
+      "pr": 8984,
+      "pr_url": "https://github.com/synaptent/aragora/pull/8984"
+    },
+    {
+      "attestation": {
+        "attested_at": "2026-07-08T14:30:52Z",
+        "attestor": {
+          "id": "scarmani",
+          "role": "oversight"
+        },
+        "disposition": "human_attested",
+        "execution_identity": {
+          "id": "app/aragora-automation-fable"
+        },
+        "mechanism": {
+          "context": "aragora/human-settlement",
+          "ref": "https://api.github.com/repos/synaptent/aragora/statuses/02c79792b429145760309a230f0b9ed25c65a340",
+          "type": "settlement_status"
+        },
+        "observed": {
+          "head_sha": "02c79792b429145760309a230f0b9ed25c65a340"
+        }
+      },
+      "head_sha": "02c79792b429145760309a230f0b9ed25c65a340",
+      "invalid_reason": "missing observed.evidence_digest (status-to-receipt binding absent)",
+      "merged_at": "2026-07-08T14:32:39Z",
+      "pr": 8965,
+      "pr_url": "https://github.com/synaptent/aragora/pull/8965"
+    },
+    {
+      "attestation": {
+        "attested_at": "2026-07-07T16:59:36Z",
+        "attestor": {
+          "id": "scarmani",
+          "role": "oversight"
+        },
+        "disposition": "human_attested",
+        "execution_identity": {
+          "id": "an0mium"
+        },
+        "mechanism": {
+          "context": "aragora/human-settlement",
+          "ref": "https://api.github.com/repos/synaptent/aragora/statuses/4c267816b7754f1d0bf1b2a79894fc9b0e2533a8",
+          "type": "settlement_status"
+        },
+        "observed": {
+          "head_sha": "4c267816b7754f1d0bf1b2a79894fc9b0e2533a8"
+        }
+      },
+      "head_sha": "4c267816b7754f1d0bf1b2a79894fc9b0e2533a8",
+      "invalid_reason": "missing observed.evidence_digest (status-to-receipt binding absent)",
+      "merged_at": "2026-07-07T17:01:05Z",
+      "pr": 8952,
+      "pr_url": "https://github.com/synaptent/aragora/pull/8952"
+    },
+    {
+      "attestation": {
+        "attested_at": "2026-07-07T13:03:44Z",
+        "attestor": {
+          "id": "scarmani",
+          "role": "oversight"
+        },
+        "disposition": "human_attested",
+        "execution_identity": {
+          "id": "an0mium"
+        },
+        "mechanism": {
+          "context": "aragora/human-settlement",
+          "ref": "https://api.github.com/repos/synaptent/aragora/statuses/d4d14561cc105fef807a985dca5198d36671c96a",
+          "type": "settlement_status"
+        },
+        "observed": {
+          "head_sha": "d4d14561cc105fef807a985dca5198d36671c96a"
+        }
+      },
+      "head_sha": "d4d14561cc105fef807a985dca5198d36671c96a",
+      "invalid_reason": "missing observed.evidence_digest (status-to-receipt binding absent)",
+      "merged_at": "2026-07-07T13:10:40Z",
+      "pr": 8951,
+      "pr_url": "https://github.com/synaptent/aragora/pull/8951"
+    },
+    {
+      "attestation": {
+        "attested_at": "2026-07-05T02:38:13Z",
+        "attestor": {
+          "id": "scarmani",
+          "role": "oversight"
+        },
+        "disposition": "human_attested",
+        "execution_identity": {
+          "id": "an0mium"
+        },
+        "mechanism": {
+          "context": "aragora/human-settlement",
+          "ref": "https://api.github.com/repos/synaptent/aragora/statuses/3e433141648050bdad6aa115521f43f9da4a213d",
+          "type": "settlement_status"
+        },
+        "observed": {
+          "head_sha": "3e433141648050bdad6aa115521f43f9da4a213d"
+        }
+      },
+      "head_sha": "3e433141648050bdad6aa115521f43f9da4a213d",
+      "invalid_reason": "missing observed.evidence_digest (status-to-receipt binding absent)",
+      "merged_at": "2026-07-05T02:39:39Z",
+      "pr": 8848,
+      "pr_url": "https://github.com/synaptent/aragora/pull/8848"
+    },
+    {
+      "attestation": {
+        "attested_at": "2026-07-05T02:00:56Z",
+        "attestor": {
+          "id": "scarmani",
+          "role": "oversight"
+        },
+        "disposition": "human_attested",
+        "execution_identity": {
+          "id": "an0mium"
+        },
+        "mechanism": {
+          "context": "aragora/human-settlement",
+          "ref": "https://api.github.com/repos/synaptent/aragora/statuses/3e9e11bb4f4074a953849d38a9510d3c8d729650",
+          "type": "settlement_status"
+        },
+        "observed": {
+          "head_sha": "3e9e11bb4f4074a953849d38a9510d3c8d729650"
+        }
+      },
+      "head_sha": "3e9e11bb4f4074a953849d38a9510d3c8d729650",
+      "invalid_reason": "missing observed.evidence_digest (status-to-receipt binding absent)",
+      "merged_at": "2026-07-05T02:06:55Z",
+      "pr": 8846,
+      "pr_url": "https://github.com/synaptent/aragora/pull/8846"
+    },
+    {
+      "attestation": {
+        "attested_at": "2026-07-04T08:04:11Z",
+        "attestor": {
+          "id": "scarmani",
+          "role": "oversight"
+        },
+        "disposition": "human_attested",
+        "execution_identity": {
+          "id": "an0mium"
+        },
+        "mechanism": {
+          "context": "aragora/human-settlement",
+          "ref": "https://api.github.com/repos/synaptent/aragora/statuses/15e87b1c1af65d745b4f64790f6069be0632acb4",
+          "type": "settlement_status"
+        },
+        "observed": {
+          "head_sha": "15e87b1c1af65d745b4f64790f6069be0632acb4"
+        }
+      },
+      "head_sha": "15e87b1c1af65d745b4f64790f6069be0632acb4",
+      "invalid_reason": "missing observed.evidence_digest (status-to-receipt binding absent)",
+      "merged_at": "2026-07-04T08:05:30Z",
+      "pr": 8811,
+      "pr_url": "https://github.com/synaptent/aragora/pull/8811"
+    },
+    {
+      "attestation": {
+        "attested_at": "2026-07-03T20:51:43Z",
+        "attestor": {
+          "id": "scarmani",
+          "role": "oversight"
+        },
+        "disposition": "human_attested",
+        "execution_identity": {
+          "id": "an0mium"
+        },
+        "mechanism": {
+          "context": "aragora/human-settlement",
+          "ref": "https://api.github.com/repos/synaptent/aragora/statuses/97aede9b476a663400d688b175caeac77a00fa23",
+          "type": "settlement_status"
+        },
+        "observed": {
+          "head_sha": "97aede9b476a663400d688b175caeac77a00fa23"
+        }
+      },
+      "head_sha": "97aede9b476a663400d688b175caeac77a00fa23",
+      "invalid_reason": "missing observed.evidence_digest (status-to-receipt binding absent)",
+      "merged_at": "2026-07-03T20:52:58Z",
+      "pr": 8808,
+      "pr_url": "https://github.com/synaptent/aragora/pull/8808"
+    },
+    {
+      "attestation": {
+        "attested_at": "2026-07-03T20:49:52Z",
+        "attestor": {
+          "id": "scarmani",
+          "role": "oversight"
+        },
+        "disposition": "human_attested",
+        "execution_identity": {
+          "id": "an0mium"
+        },
+        "mechanism": {
+          "context": "aragora/human-settlement",
+          "ref": "https://api.github.com/repos/synaptent/aragora/statuses/32f2306cde92a61b447ee0343334f33abc5f8346",
+          "type": "settlement_status"
+        },
+        "observed": {
+          "head_sha": "32f2306cde92a61b447ee0343334f33abc5f8346"
+        }
+      },
+      "head_sha": "32f2306cde92a61b447ee0343334f33abc5f8346",
+      "invalid_reason": "missing observed.evidence_digest (status-to-receipt binding absent)",
+      "merged_at": "2026-07-03T20:51:30Z",
+      "pr": 8803,
+      "pr_url": "https://github.com/synaptent/aragora/pull/8803"
+    },
+    {
+      "attestation": {
+        "attested_at": "2026-06-24T03:14:52Z",
+        "attestor": {
+          "id": "scarmani",
+          "role": "oversight"
+        },
+        "disposition": "human_attested",
+        "execution_identity": {
+          "id": "app/aragora-automation-fable"
+        },
+        "mechanism": {
+          "context": "aragora/human-settlement",
+          "ref": "https://api.github.com/repos/synaptent/aragora/statuses/1b1644ba311f0a81c0beb2640a36d2720fdc4e20",
+          "type": "settlement_status"
+        },
+        "observed": {
+          "head_sha": "1b1644ba311f0a81c0beb2640a36d2720fdc4e20"
+        }
+      },
+      "head_sha": "1b1644ba311f0a81c0beb2640a36d2720fdc4e20",
+      "invalid_reason": "missing observed.evidence_digest (status-to-receipt binding absent)",
+      "merged_at": "2026-06-24T03:29:54Z",
+      "pr": 8574,
+      "pr_url": "https://github.com/synaptent/aragora/pull/8574"
+    },
+    {
+      "attestation": {
+        "attested_at": "2026-06-21T18:01:33Z",
+        "attestor": {
+          "id": "scarmani",
+          "role": "oversight"
+        },
+        "disposition": "human_attested",
+        "execution_identity": {
+          "id": "app/dependabot"
+        },
+        "mechanism": {
+          "context": "aragora/human-settlement",
+          "ref": "https://api.github.com/repos/synaptent/aragora/statuses/add6405d02b341d5f40552c5381d5184ebd6b0d6",
+          "type": "settlement_status"
+        },
+        "observed": {
+          "head_sha": "add6405d02b341d5f40552c5381d5184ebd6b0d6"
+        }
+      },
+      "head_sha": "add6405d02b341d5f40552c5381d5184ebd6b0d6",
+      "invalid_reason": "missing observed.evidence_digest (status-to-receipt binding absent)",
+      "merged_at": "2026-06-21T19:18:55Z",
+      "pr": 8452,
+      "pr_url": "https://github.com/synaptent/aragora/pull/8452"
+    }
+  ],
+  "settlement_fetch": {
+    "repo": "synaptent/aragora",
+    "scanned_prs": 424,
+    "skipped": [
+      {
+        "pr": 9417,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 9413,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 9412,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 9406,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 9371,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 9370,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 9368,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 9367,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 9366,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 9365,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 9360,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 9358,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 9351,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 9346,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 9343,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 9320,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 9319,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 9316,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 9314,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 9312,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 9310,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 9307,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 9302,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 9284,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 9271,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 9238,
+        "reason": "oversight identity must differ from execution identity (both are 'an0mium'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 9144,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 9123,
+        "reason": "oversight identity must differ from execution identity (both are 'an0mium'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 9093,
+        "reason": "oversight identity must differ from execution identity (both are 'an0mium'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 8950,
+        "reason": "oversight identity must differ from execution identity (both are 'an0mium'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 8912,
+        "reason": "oversight identity must differ from execution identity (both are 'an0mium'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 8892,
+        "reason": "oversight identity must differ from execution identity (both are 'an0mium'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 8809,
+        "reason": "oversight identity must differ from execution identity (both are 'an0mium'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 8750,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 8745,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 8741,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 8738,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 8729,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 8726,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 8701,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 8696,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 8695,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 8693,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 8673,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 8672,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 8638,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 8624,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 8568,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 8525,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      },
+      {
+        "pr": 8507,
+        "reason": "oversight identity must differ from execution identity (both are 'scarmani'); record the decision as 'autonomous' instead of self-attesting"
+      }
+    ],
+    "truncated": false
+  },
+  "summary": {
+    "attestor_identities": [
+      "scarmani"
+    ],
+    "autonomous": 1,
+    "excluded_no_timestamp": 0,
+    "excluded_out_of_window": 3,
+    "human_attested": 0,
+    "mechanisms": {
+      "settlement_status": 1
+    },
+    "other_dispositions": {},
+    "receipts_in_window": 1,
+    "settlement_attestations": 1,
+    "settlement_attestations_invalid": 20,
+    "settlement_attestations_out_of_window": 0
+  },
+  "version": "0.1",
+  "window": {
+    "days": 30,
+    "end": "2026-07-20T15:37:36.007105+00:00",
+    "start": "2026-06-20T15:37:36.007105+00:00"
+  }
+}

@@ -127,6 +127,33 @@ MODEL_PROFILES: dict[str, ModelProfile] = {
         supports_vision=True,
     ),
     "claude-opus": ModelProfile(
+        model_id="claude-opus-5",
+        display_name="Claude Opus 5",
+        provider="anthropic",
+        capabilities={
+            ModelCapability.REASONING: 0.99,
+            ModelCapability.CODING: 0.99,
+            ModelCapability.LEGAL: 0.97,
+            ModelCapability.MEDICAL: 0.96,
+            ModelCapability.FINANCIAL: 0.97,
+            ModelCapability.CREATIVE: 0.95,
+            ModelCapability.MATH: 0.98,
+            ModelCapability.LONG_CONTEXT: 0.96,
+            ModelCapability.INSTRUCTION_FOLLOWING: 0.99,
+            ModelCapability.FACTUAL_ACCURACY: 0.98,
+        },
+        max_context_tokens=1000000,
+        max_output_tokens=128000,
+        cost_input_per_1k=0.005,
+        cost_output_per_1k=0.025,
+        avg_latency_ms=1200,
+        reliability_score=0.97,
+        supports_vision=True,
+    ),
+    # Previous Anthropic frontier. Kept selectable (and priced) because it is
+    # still Active upstream and is Opus 5's documented fallback target for
+    # cyber-classifier refusals.
+    "claude-opus-4-8": ModelProfile(
         model_id="claude-opus-4-8",
         display_name="Claude Opus 4.8",
         provider="anthropic",
@@ -193,8 +220,10 @@ MODEL_PROFILES: dict[str, ModelProfile] = {
         },
         max_context_tokens=1000000,
         max_output_tokens=32768,
-        cost_input_per_1k=0.002,
-        cost_output_per_1k=0.008,
+        # Provider repriced ~2026-07-14; must match aragora/models/catalog.py
+        # ($5/$30 per MTok) — enforced by tests/models/test_catalog.py.
+        cost_input_per_1k=0.005,
+        cost_output_per_1k=0.030,
         avg_latency_ms=900,
         reliability_score=0.97,
         supports_vision=True,
@@ -396,8 +425,8 @@ MODEL_PROFILES: dict[str, ModelProfile] = {
     ),
     # Qwen
     "qwen": ModelProfile(
-        model_id="qwen3-max",
-        display_name="Qwen3 Max",
+        model_id="qwen3.8-max",
+        display_name="Qwen 3.8 Max",
         provider="alibaba",
         capabilities={
             ModelCapability.REASONING: 0.92,
@@ -412,9 +441,9 @@ MODEL_PROFILES: dict[str, ModelProfile] = {
             ModelCapability.INSTRUCTION_FOLLOWING: 0.90,
             ModelCapability.FACTUAL_ACCURACY: 0.84,
         },
-        max_context_tokens=262000,
-        max_output_tokens=8192,
-        cost_input_per_1k=0.0012,
+        max_context_tokens=1_000_000,
+        max_output_tokens=131_072,
+        cost_input_per_1k=0.002,
         cost_output_per_1k=0.006,
         avg_latency_ms=700,
         reliability_score=0.93,
@@ -446,8 +475,8 @@ MODEL_PROFILES: dict[str, ModelProfile] = {
     ),
     # Kimi (Moonshot AI)
     "kimi": ModelProfile(
-        model_id="kimi-k2.6",
-        display_name="Kimi K2.6",
+        model_id="kimi-k3",
+        display_name="Kimi K3",
         provider="moonshot",
         capabilities={
             ModelCapability.REASONING: 0.91,
@@ -462,12 +491,13 @@ MODEL_PROFILES: dict[str, ModelProfile] = {
             ModelCapability.INSTRUCTION_FOLLOWING: 0.90,
             ModelCapability.FACTUAL_ACCURACY: 0.82,
         },
-        max_context_tokens=256000,
-        max_output_tokens=8192,
-        cost_input_per_1k=0.0007448,
-        cost_output_per_1k=0.004655,
+        max_context_tokens=1_048_576,
+        max_output_tokens=32_768,
+        cost_input_per_1k=0.003,
+        cost_output_per_1k=0.015,
         avg_latency_ms=800,
         reliability_score=0.91,
+        supports_vision=True,
     ),
     # Llama 4
     "llama4-maverick": ModelProfile(

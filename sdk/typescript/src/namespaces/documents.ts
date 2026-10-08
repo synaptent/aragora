@@ -118,13 +118,6 @@ export class DocumentsAPI {
   }
 
   /**
-   * Download document content.
-   */
-  async download(documentId: string): Promise<Record<string, unknown>> {
-    return this.client.request('GET', `/api/v1/documents/${encodeURIComponent(documentId)}/download`);
-  }
-
-  /**
    * Get chunked representation for a document.
    */
   async getChunks(
@@ -134,13 +127,6 @@ export class DocumentsAPI {
     return this.client.request('GET', `/api/v1/documents/${encodeURIComponent(documentId)}/chunks`, {
       params: options as Record<string, unknown> | undefined,
     });
-  }
-
-  /**
-   * Reprocess a document (chunks/embeddings).
-   */
-  async reprocess(documentId: string): Promise<Record<string, unknown>> {
-    return this.client.request('POST', `/api/v1/documents/${encodeURIComponent(documentId)}/reprocess`);
   }
 
   /**

@@ -10,7 +10,7 @@ import hashlib
 import json
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from aragora.core_types import DebateResult
 from aragora.implement.types import ImplementPlan, ImplementTask
@@ -1246,7 +1246,9 @@ def _coerce_risk_level(value: Any) -> RiskLevel:
     return RiskLevel.LOW
 
 
-def _complexity_for_estimated_lines(estimated_lines: int) -> str:
+def _complexity_for_estimated_lines(
+    estimated_lines: int,
+) -> Literal["simple", "moderate", "complex"]:
     if estimated_lines >= 200:
         return "complex"
     if estimated_lines >= 50:

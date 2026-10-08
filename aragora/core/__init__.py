@@ -44,7 +44,7 @@ __all__ = [
 ]
 
 _LAZY_EXPORTS = {
-    "DebateProtocol": ("aragora.debate.protocol", "DebateProtocol"),
+    "DebateProtocol": ("aragora.protocols.debate", "DebateProtocol"),
     "DecisionConfig": ("aragora.core.decision", "DecisionConfig"),
     "DecisionRequest": ("aragora.core.decision", "DecisionRequest"),
     "DecisionResult": ("aragora.core.decision", "DecisionResult"),

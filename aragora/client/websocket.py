@@ -472,8 +472,11 @@ class DebateStream:
 
     async def _receive_loop(self) -> None:
         """Receive messages from WebSocket."""
+        websocket = self._ws
+        if websocket is None:
+            return
         try:
-            async for message in self._ws:
+            async for message in websocket:
                 try:
                     data = json.loads(message)
                     event = DebateEvent.from_dict(data)

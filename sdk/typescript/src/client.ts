@@ -105,7 +105,6 @@ import type {
   RelationshipGraph,
   RelationshipSummary,
   Replay,
-  ReplayFormat,
   RiskHeatmap,
   RoleRotationAnalytics,
   SastFinding,
@@ -320,6 +319,7 @@ interface RequestOptions {
   params?: Record<string, unknown>;
   headers?: Record<string, string>;
   timeout?: number;
+  responseType?: 'json' | 'text';
 }
 
 /**
@@ -1274,52 +1274,68 @@ export class AragoraClient {
     const maxAttempts = this.config.retryEnabled ? this.config.maxRetries : 1;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const controller = new AbortController();
+      const timeout = options.timeout ?? this.config.timeout;
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
       try {
-        const controller = new AbortController();
-        const timeout = options.timeout ?? this.config.timeout;
-        const timeoutId = setTimeout(() => controller.abort(), timeout);
+        let response: Response | undefined;
+        try {
+          response = await fetch(url.toString(), {
+            method,
+            headers,
+            body: options.body ? JSON.stringify(options.body) : undefined,
+            signal: controller.signal,
+          });
 
-        const response = await fetch(url.toString(), {
-          method,
-          headers,
-          body: options.body ? JSON.stringify(options.body) : undefined,
-          signal: controller.signal,
-        });
+          if (!response.ok) {
+            const statusText = response.statusText;
+            const body = await response.json().catch(error => {
+              if (controller.signal.aborted) throw error;
+              return { error: statusText };
+            });
+            throw AragoraError.fromResponse(response.status, body);
+          }
+        } catch (error) {
+          lastError = error as Error;
 
+          // Don't retry on client errors (4xx) or abort.
+          if (error instanceof AragoraError && error.statusCode && error.statusCode < 500) {
+            throw error;
+          }
+          if ((error as Error).name === 'AbortError') {
+            throw new TimeoutError(
+              response ? 'Response body timeout' : 'Request timeout', 'SERVICE_UNAVAILABLE'
+            );
+          }
+
+          if (error instanceof TypeError && (error.message.includes('fetch') || error.message.includes('network'))) {
+            throw new ConnectionError('Connection failed', 'SERVICE_UNAVAILABLE');
+          }
+        }
+
+        if (response?.ok) {
+          // A successful response may represent an operation already performed.
+          // Consumption stays outside retry handling; only our deadline abort
+          // is translated. Unrelated body/decoding errors propagate unchanged.
+          try {
+            const text = await response.text();
+            if (options.responseType === 'text') return text as T;
+            if (!text) return {} as T;
+            return JSON.parse(text) as T;
+          } catch (error) {
+            if (controller.signal.aborted && (error as Error)?.name === 'AbortError') {
+              throw new TimeoutError('Response body timeout', 'SERVICE_UNAVAILABLE');
+            }
+            throw error;
+          }
+        }
+      } finally {
         clearTimeout(timeoutId);
+      }
 
-        if (!response.ok) {
-          const body = await response.json().catch(() => ({ error: response.statusText }));
-          throw AragoraError.fromResponse(response.status, body);
-        }
-
-        // Handle empty responses
-        const text = await response.text();
-        if (!text) {
-          return {} as T;
-        }
-
-        return JSON.parse(text) as T;
-      } catch (error) {
-        lastError = error as Error;
-
-        // Don't retry on client errors (4xx) or abort
-        if (error instanceof AragoraError && error.statusCode && error.statusCode < 500) {
-          throw error;
-        }
-        if ((error as Error).name === 'AbortError') {
-          throw new TimeoutError('Request timeout', 'SERVICE_UNAVAILABLE');
-        }
-
-        // Check for network/connection errors
-        if (error instanceof TypeError && (error.message.includes('fetch') || error.message.includes('network'))) {
-          throw new ConnectionError('Connection failed', 'SERVICE_UNAVAILABLE');
-        }
-
-        // Retry on server errors and network failures
-        if (attempt < maxAttempts) {
-          await this.sleep(Math.pow(2, attempt - 1) * 1000);
-        }
+      // Attempt resources are released before retry backoff begins.
+      if (attempt < maxAttempts) {
+        await this.sleep(Math.pow(2, attempt - 1) * 1000);
       }
     }
 
@@ -3011,6 +3027,11 @@ export class AragoraClient {
   /**
    * Store a value in memory.
    *
+   * @deprecated The server does not implement a key/value memory API.
+   * POST /api/v1/memory/store expects `{ content, tier?, importance? }` and
+   * rejects this method's `{ key, value }` payload with 400. Use
+   * {@link storeMemoryEntry} instead.
+   *
    * @param key - Memory key
    * @param value - Value to store
    * @param options - Storage options
@@ -3031,7 +3052,33 @@ export class AragoraClient {
   }
 
   /**
+   * Store a new entry in continuum memory.
+   *
+   * Matches the server contract for POST /api/v1/memory/store
+   * (`{ content, tier?, importance? }` -> `{ id, tier }`).
+   *
+   * @param content - The memory content to store
+   * @param options - Storage options (tier defaults to 'fast', importance to 0.5)
+   * @returns The stored entry ID and tier
+   */
+  async storeMemoryEntry(content: string, options?: {
+    tier?: 'fast' | 'medium' | 'slow' | 'glacial';
+    importance?: number;
+  }): Promise<{ id: string; tier: string }> {
+    return this.request<{ id: string; tier: string }>('POST', '/api/v1/memory/store', {
+      body: {
+        content,
+        ...options,
+      },
+    });
+  }
+
+  /**
    * Retrieve a value from memory by key.
+   *
+   * @deprecated The server does not implement GET /api/v1/memory/retrieve,
+   * so this method always resolves to `null` (the 404 is swallowed). Use
+   * {@link retrieveFromContinuum} to query continuum memory instead.
    *
    * @param key - Memory key
    * @param options - Retrieval options
@@ -3057,6 +3104,10 @@ export class AragoraClient {
   /**
    * Delete a memory entry.
    *
+   * @deprecated The server does not implement DELETE /api/v1/memory/delete,
+   * so this method always rejects with a 404. Use {@link deleteMemoryEntry}
+   * with the entry ID returned by {@link storeMemoryEntry} instead.
+   *
    * @param key - Memory key
    * @param tier - Optional tier to delete from
    */
@@ -3064,6 +3115,21 @@ export class AragoraClient {
     return this.request<{ deleted: boolean }>('DELETE', '/api/v1/memory/delete', {
       params: { key, tier },
     });
+  }
+
+  /**
+   * Delete a continuum memory entry by ID.
+   *
+   * Matches the server contract for DELETE /api/v1/memory/continuum/{id}
+   * (returns `{ success, message }`; 404 if the entry does not exist).
+   *
+   * @param memoryId - ID of the entry to delete (as returned by storeMemoryEntry)
+   */
+  async deleteMemoryEntry(memoryId: string): Promise<{ success: boolean; message: string }> {
+    return this.request<{ success: boolean; message: string }>(
+      'DELETE',
+      `/api/v1/memory/continuum/${encodeURIComponent(memoryId)}`
+    );
   }
 
   // ===========================================================================
@@ -3205,6 +3271,18 @@ export class AragoraClient {
   // Memory & Consensus
   // ===========================================================================
 
+  /**
+   * Get memory system statistics.
+   *
+   * @deprecated No memory-handler branch serves GET /api/v1/memory/stats.
+   * After version-stripping the request is routed to the analytics handler's
+   * GET /api/memory/stats, which requires the `analytics:read` permission
+   * (not `memory:read`) and returns only
+   * `{ stats: { embeddings_db, insights_db, continuum_memory } }` — database
+   * file-existence booleans, not the declared {@link MemoryStats} shape.
+   * Use {@link getMemoryTiers} or the memory namespace's `getTierStats()`
+   * for real memory metrics.
+   */
   async getMemoryStats(): Promise<MemoryStats> {
     return this.request<MemoryStats>('GET', '/api/v1/memory/stats');
   }
@@ -3233,23 +3311,17 @@ export class AragoraClient {
   /**
    * Store content in the continuum memory system.
    *
-   * The continuum memory system organizes data across tiers based on
-   * access patterns and importance, automatically promoting or demoting
-   * entries over time.
+   * @deprecated No handler serves POST /api/memory/continuum/store —
+   * MemoryHandler matches the normalized path but never dispatches it, so this
+   * method always rejects with an HTTP 500 (`handler_no_result`). The real
+   * continuum store endpoint is POST /api/v1/memory/store
+   * (`{ content, tier?, importance? }` -> `{ id, tier }`); it does not return
+   * the `created_at` field declared on ContinuumStoreResult, and ignores
+   * `tags`/`metadata`. Use {@link storeMemoryEntry} instead.
    *
    * @param content - Content to store in memory
    * @param options - Storage options
    * @returns Storage confirmation with entry ID and tier
-   *
-   * @example
-   * ```typescript
-   * const result = await client.storeToContinuum('Important insight from debate', {
-   *   tier: 'medium',
-   *   tags: ['debate', 'insight'],
-   *   metadata: { debate_id: 'deb-123' }
-   * });
-   * console.log(`Stored with ID: ${result.id}`);
-   * ```
    */
   async storeToContinuum(content: string, options?: ContinuumStoreOptions): Promise<ContinuumStoreResult> {
     return this.request<ContinuumStoreResult>('POST', '/api/memory/continuum/store', {
@@ -3274,33 +3346,37 @@ export class AragoraClient {
    *
    * @example
    * ```typescript
-   * const { entries } = await client.retrieveFromContinuum('database optimization', {
+   * const { memories } = await client.retrieveFromContinuum('database optimization', {
    *   tier: 'slow',
    *   limit: 5
    * });
-   * entries.forEach(e => console.log(e.content));
+   * memories.forEach(m => console.log(m.content));
    * ```
    */
-  async retrieveFromContinuum(query: string, options?: ContinuumRetrieveOptions): Promise<{ entries: MemoryEntry[] }> {
-    return this.request<{ entries: MemoryEntry[] }>('GET', '/api/memory/continuum/retrieve', {
-      params: { q: query, ...options },
-    });
+  async retrieveFromContinuum(
+    query: string,
+    options?: ContinuumRetrieveOptions
+  ): Promise<{ memories: MemoryEntry[]; count: number }> {
+    const params: Record<string, unknown> = { query };
+    if (options?.tier) params.tiers = options.tier;
+    if (options?.limit !== undefined) params.limit = options.limit;
+    return this.request<{ memories: MemoryEntry[]; count: number }>(
+      'GET',
+      '/api/memory/continuum/retrieve',
+      { params }
+    );
   }
 
   /**
    * Get statistics for the continuum memory system.
    *
-   * Returns detailed metrics about memory usage across all tiers,
-   * including entry counts, consolidation rates, and health status.
+   * @deprecated GET /api/memory/continuum/stats (normalized to
+   * /api/v1/memory/continuum/stats) has no dispatch branch in the memory
+   * handler, so this method always fails against a live server
+   * (HTTP 500 handler_no_result). Use {@link getMemoryTiers} or the memory
+   * namespace's `getTierStats()` (GET /api/v1/memory/tier-stats) instead.
    *
-   * @returns Continuum memory statistics
-   *
-   * @example
-   * ```typescript
-   * const stats = await client.getContinuumStats();
-   * console.log(`Total entries: ${stats.total_entries}`);
-   * console.log(`Health: ${stats.health_status}`);
-   * ```
+   * @returns Never resolves successfully against a live server
    */
   async getContinuumStats(): Promise<MemoryStats> {
     return this.request<MemoryStats>('GET', '/api/memory/continuum/stats');
@@ -5218,17 +5294,6 @@ export class AragoraClient {
   }
 
   /**
-   * Export a replay in a specific format.
-   */
-  async exportReplay(replayId: string, format: ReplayFormat): Promise<{ content: string; filename: string }> {
-    return this.request<{ content: string; filename: string }>(
-      'GET',
-      `/api/v1/replays/${encodeURIComponent(replayId)}/export`,
-      { params: { format } }
-    );
-  }
-
-  /**
    * Delete a replay.
    */
   async deleteReplay(replayId: string): Promise<{ deleted: boolean }> {
@@ -5432,13 +5497,6 @@ export class AragoraClient {
    */
   async getTenant(tenantId: string): Promise<import('./types').Tenant> {
     return this.request<import('./types').Tenant>('GET', `/api/v1/tenants/${encodeURIComponent(tenantId)}`);
-  }
-
-  /**
-   * Create a new tenant.
-   */
-  async createTenant(body: import('./types').CreateTenantRequest): Promise<import('./types').Tenant> {
-    return this.request<import('./types').Tenant>('POST', '/api/v1/tenants', { body });
   }
 
   /**

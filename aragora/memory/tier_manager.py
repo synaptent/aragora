@@ -30,7 +30,7 @@ import asyncio
 import logging
 import threading
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
@@ -272,7 +272,11 @@ class TierManager:
         # Check cooldown
         if last_promotion_at:
             last_dt = datetime.fromisoformat(last_promotion_at)
-            hours_since = (datetime.now() - last_dt).total_seconds() / 3600
+            if last_dt.tzinfo is not None:
+                last_dt = last_dt.astimezone(timezone.utc).replace(tzinfo=None)
+            # Stamps are naive UTC, so measure the cooldown against naive-UTC now
+            now_dt = datetime.now(timezone.utc).replace(tzinfo=None)
+            hours_since = (now_dt - last_dt).total_seconds() / 3600
             if hours_since < self._promotion_cooldown_hours:
                 return False
 
@@ -581,7 +585,7 @@ def get_tier_manager() -> TierManager:
 
     Uses ServiceRegistry for centralized singleton management.
     """
-    from aragora.services import ServiceRegistry
+    from aragora.runtime.service_registry import ServiceRegistry
 
     registry = ServiceRegistry.get()
     if not registry.has(TierManager):
@@ -594,6 +598,6 @@ def reset_tier_manager() -> None:
 
     Removes TierManager from the ServiceRegistry.
     """
-    from aragora.services import ServiceRegistry
+    from aragora.runtime.service_registry import ServiceRegistry
 
     ServiceRegistry.get().unregister(TierManager)

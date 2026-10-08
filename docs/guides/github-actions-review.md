@@ -14,7 +14,7 @@ Add multi-agent AI code review to any repository using GitHub Actions.
 > Most external adopters instead want the **root** `synaptent/aragora` action:
 > `uses: synaptent/aragora@<sha>` works directly from any repository, needs no
 > vendoring, and supports `emit-receipt`. See the
-> [GitHub Action Setup Guide](../GITHUB_ACTION_SETUP.md) — the canonical doc
+> [GitHub Action Setup Guide](GITHUB_ACTION_SETUP.md) — the canonical doc
 > for that action.
 
 ## Quick Start
@@ -39,6 +39,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+      issues: write
     steps:
       - uses: actions/checkout@v4
 

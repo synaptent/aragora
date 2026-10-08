@@ -478,7 +478,10 @@ class TestGeminiFallback:
     def test_gemini_fallback_model_mapping(self, gemini_agent):
         """Test that Gemini models are mapped correctly to OpenRouter."""
         assert "gemini-3.1-pro-preview" in GeminiAgent.OPENROUTER_MODEL_MAP
-        assert GeminiAgent.OPENROUTER_MODEL_MAP["gemini-3.1-pro-preview"] == "google/gemini-3.1-pro"
+        assert (
+            GeminiAgent.OPENROUTER_MODEL_MAP["gemini-3.1-pro-preview"]
+            == "google/gemini-3.1-pro-preview"
+        )
         assert "gemini-1.5-pro" in GeminiAgent.OPENROUTER_MODEL_MAP
 
     def test_gemini_quota_keyword_detection(self, gemini_agent):

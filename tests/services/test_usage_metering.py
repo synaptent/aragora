@@ -435,11 +435,11 @@ class TestTokenCostCalculation:
             ("anthropic", "claude-opus-4-7", Decimal("5.00"), Decimal("25.00")),
             ("anthropic", "claude-opus-4", Decimal("5.00"), Decimal("25.00")),
             ("anthropic", "claude-haiku-4.5", Decimal("1.00"), Decimal("5.00")),
-            ("openai", "gpt-5.5", Decimal("2.50"), Decimal("10.00")),
+            ("openai", "gpt-5.5", Decimal("5.00"), Decimal("30.00")),  # live 2026-07-16
             ("google", "gemini-3.5-flash", Decimal("1.50"), Decimal("9.00")),
             ("google", "gemini-3.1-pro", Decimal("2.00"), Decimal("12.00")),
             ("google", "gemini-3.1-pro-preview", Decimal("2.00"), Decimal("12.00")),
-            ("openrouter", "openai/gpt-5.5", Decimal("2.50"), Decimal("10.00")),
+            ("openrouter", "openai/gpt-5.5", Decimal("5.00"), Decimal("30.00")),
             (
                 "openrouter",
                 "anthropic/claude-opus-4-8",
@@ -888,11 +888,11 @@ class TestRecordTokenUsage:
             ("anthropic", "claude-opus-4-8", Decimal("5.00"), Decimal("25.00")),
             ("anthropic", "claude-opus-4", Decimal("5.00"), Decimal("25.00")),
             ("anthropic", "claude-haiku-4.5", Decimal("1.00"), Decimal("5.00")),
-            ("openai", "gpt-5.5", Decimal("2.50"), Decimal("10.00")),
+            ("openai", "gpt-5.5", Decimal("5.00"), Decimal("30.00")),  # live 2026-07-16
             ("google", "gemini-3.5-flash", Decimal("1.50"), Decimal("9.00")),
             ("google", "gemini-3.1-pro", Decimal("2.00"), Decimal("12.00")),
             ("google", "gemini-3.1-pro-preview", Decimal("2.00"), Decimal("12.00")),
-            ("openrouter", "openai/gpt-5.5", Decimal("2.50"), Decimal("10.00")),
+            ("openrouter", "openai/gpt-5.5", Decimal("5.00"), Decimal("30.00")),
             (
                 "openrouter",
                 "anthropic/claude-opus-4-8",
@@ -1802,7 +1802,7 @@ class TestGetUsageMeter:
 
     def test_returns_usage_meter_instance(self):
         """Test that get_usage_meter returns a UsageMeter."""
-        from aragora.services import usage_metering
+        from aragora.billing import usage_metering
         from aragora.services.usage_metering import UsageMeter
 
         original = usage_metering._usage_meter
@@ -1815,7 +1815,7 @@ class TestGetUsageMeter:
 
     def test_returns_same_instance(self):
         """Test singleton behavior returns the same instance."""
-        from aragora.services import usage_metering
+        from aragora.billing import usage_metering
 
         original = usage_metering._usage_meter
         usage_metering._usage_meter = None

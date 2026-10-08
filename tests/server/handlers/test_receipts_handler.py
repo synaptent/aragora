@@ -2085,3 +2085,153 @@ class TestReceiptsHandlerSarifExport:
 
         assert result.status_code == 200
         assert result.content_type == "application/json"
+
+
+# ===========================================================================
+# ODR Signing Key Endpoint Tests (issue #8804)
+# ===========================================================================
+
+
+def _make_ed25519_private_key():
+    """Generate a throwaway Ed25519 key for signing-key endpoint tests."""
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    return Ed25519PrivateKey.generate()
+
+
+class TestSigningKeyEndpoints:
+    """Tests for the public ODR signing-key trust anchor endpoints."""
+
+    def test_can_handle_wellknown_get(self, receipts_handler):
+        """The /.well-known route is GET-only."""
+        assert receipts_handler.can_handle("/.well-known/aragora-odr-signing-key", "GET") is True
+        assert receipts_handler.can_handle("/.well-known/aragora-odr-signing-key", "POST") is False
+
+    def test_can_handle_api_alias(self, receipts_handler):
+        """The /api/v2 alias is claimed by the receipts prefix."""
+        assert receipts_handler.can_handle("/api/v2/receipts/signing-key", "GET") is True
+
+    @pytest.mark.asyncio
+    async def test_api_route_returns_public_key_envelope(self, receipts_handler):
+        """GET /api/v2/receipts/signing-key returns the JSON trust anchor."""
+        from aragora.gauntlet.odr_signing import compute_key_id, public_key_pem
+
+        key = _make_ed25519_private_key()
+        with patch(
+            "aragora.gauntlet.odr_signing.load_signing_key_from_secrets",
+            return_value=key,
+        ):
+            result = await receipts_handler.handle("GET", "/api/v2/receipts/signing-key")
+
+        assert result.status_code == 200
+        data = parse_handler_response(result)
+        assert data["algorithm"] == "Ed25519"
+        assert data["key_id"] == compute_key_id(key.public_key())
+        assert data["public_key_pem"] == public_key_pem(key)
+        assert data["public_key_pem"].startswith("-----BEGIN PUBLIC KEY-----")
+
+    @pytest.mark.asyncio
+    async def test_wellknown_route_returns_raw_pem(self, receipts_handler):
+        """GET /.well-known/aragora-odr-signing-key returns the raw PEM."""
+        from aragora.gauntlet.odr_signing import compute_key_id, public_key_pem
+
+        key = _make_ed25519_private_key()
+        with patch(
+            "aragora.gauntlet.odr_signing.load_signing_key_from_secrets",
+            return_value=key,
+        ):
+            result = await receipts_handler.handle("GET", "/.well-known/aragora-odr-signing-key")
+
+        assert result.status_code == 200
+        assert result.content_type.startswith("application/x-pem-file")
+        assert result.body.decode("utf-8") == public_key_pem(key)
+        assert result.headers.get("X-Aragora-Key-Id") == compute_key_id(key.public_key())
+
+    @pytest.mark.asyncio
+    async def test_no_private_key_material_in_responses(self, receipts_handler):
+        """Neither route may ever leak private key material."""
+        key = _make_ed25519_private_key()
+        with patch(
+            "aragora.gauntlet.odr_signing.load_signing_key_from_secrets",
+            return_value=key,
+        ):
+            for path in (
+                "/api/v2/receipts/signing-key",
+                "/.well-known/aragora-odr-signing-key",
+            ):
+                receipts_handler._signing_key_cache = None
+                result = await receipts_handler.handle("GET", path)
+                assert result.status_code == 200
+                assert b"PRIVATE" not in result.body
+
+    @pytest.mark.asyncio
+    async def test_unconfigured_key_fails_closed_with_404(self, receipts_handler):
+        """No configured signing key -> 404, never a generated key."""
+        from aragora.gauntlet.odr_signing import OdrSigningError
+
+        with patch(
+            "aragora.gauntlet.odr_signing.load_signing_key_from_secrets",
+            side_effect=OdrSigningError("no key configured"),
+        ):
+            for path in (
+                "/api/v2/receipts/signing-key",
+                "/.well-known/aragora-odr-signing-key",
+            ):
+                result = await receipts_handler.handle("GET", path)
+                assert result.status_code == 404
+                data = parse_handler_response(result)
+                assert "signing key" in data["error"].lower()
+
+    @pytest.mark.asyncio
+    async def test_signing_key_load_failure_is_negative_cached(self, receipts_handler):
+        """A failed load is negative-cached: these endpoints are public and
+        unauthenticated, so uncached failures would forward every request to
+        Secrets Manager (throttling/billing amplification). The negative entry
+        expires quickly so a freshly provisioned key is still picked up."""
+        import time as time_module
+
+        from aragora.gauntlet.odr_signing import OdrSigningError
+
+        key = _make_ed25519_private_key()
+        fake_now = [1000.0]
+        with (
+            patch(
+                "aragora.gauntlet.odr_signing.load_signing_key_from_secrets",
+                side_effect=[OdrSigningError("transient"), key],
+            ) as loader,
+            patch.object(time_module, "monotonic", side_effect=lambda: fake_now[0]),
+        ):
+            first = await receipts_handler.handle("GET", "/api/v2/receipts/signing-key")
+            # Within the negative-cache TTL: served from cache, loader NOT re-hit.
+            second = await receipts_handler.handle("GET", "/api/v2/receipts/signing-key")
+            assert loader.call_count == 1
+
+            # After the negative TTL expires the loader is retried and succeeds.
+            fake_now[0] += receipts_handler.SIGNING_KEY_NEGATIVE_CACHE_TTL_SECONDS + 1
+            third = await receipts_handler.handle("GET", "/api/v2/receipts/signing-key")
+
+        assert first.status_code == 404
+        assert second.status_code == 404
+        assert third.status_code == 200
+        assert loader.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_resolved_key_is_cached(self, receipts_handler):
+        """A successful load is served from cache within the TTL."""
+        key = _make_ed25519_private_key()
+        with patch(
+            "aragora.gauntlet.odr_signing.load_signing_key_from_secrets",
+            return_value=key,
+        ) as loader:
+            first = await receipts_handler.handle("GET", "/api/v2/receipts/signing-key")
+            second = await receipts_handler.handle("GET", "/.well-known/aragora-odr-signing-key")
+
+        assert first.status_code == 200
+        assert second.status_code == 200
+        assert loader.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_post_to_signing_key_routes_is_rejected(self, receipts_handler):
+        """POST is not part of the trust-anchor surface."""
+        result = await receipts_handler.handle("POST", "/api/v2/receipts/signing-key")
+        assert result.status_code == 404

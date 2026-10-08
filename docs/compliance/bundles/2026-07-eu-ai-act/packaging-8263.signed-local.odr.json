@@ -1,0 +1,90 @@
+{
+  "attestation": {
+    "disposition": "autonomous"
+  },
+  "claim": {
+    "statement": "Packaging decision for issue #8263: Option A = one 'aragora' distribution shipping the full package including CLI and server console entry points (aragora=aragora.cli.main:main), keeping aragora-debate/ as a separate standalone wedge. Option B = a minimal wedge package plus a full meta-package depending on it. Which best delivers a single clean documented pip-install -> CLI -> zero-key decision-receipt path while honoring ODR-3 (#8226) standalone aragora-verify offline verifier? Pick one option,",
+    "verdict": "PASS"
+  },
+  "confidence": {
+    "calibration": {
+      "reason": "source receipt records raw consensus confidence with no calibration provenance (settlement_metadata not populated)",
+      "status": "absent"
+    },
+    "scale": "unit_interval",
+    "status": "present",
+    "value": 0.8
+  },
+  "cruxes": {
+    "reason": "no crux set recorded for this decision (DecisionReceipt does not carry one; supply crux_set= from a CruxReceipt)",
+    "status": "absent"
+  },
+  "issued_at": "2026-06-22T22:11:52Z",
+  "odr_version": "0.1",
+  "profile": "https://aragora.ai/specs/open-decision-receipt/v0.1",
+  "quorum": {
+    "dissent": {
+      "dissenting_agents": [],
+      "present": false,
+      "views": []
+    },
+    "independence": {
+      "disclosed": true,
+      "distinct_model_families": 2,
+      "model_families": [
+        "deepseek",
+        "xai"
+      ]
+    },
+    "method": "majority",
+    "participants": [
+      {
+        "agent": "deepseek",
+        "model_family": "deepseek",
+        "model_id": "deepseek/deepseek-v4-pro"
+      },
+      {
+        "agent": "grok",
+        "model_family": "xai",
+        "model_id": "grok-4-latest"
+      }
+    ],
+    "reached": true,
+    "status": "present",
+    "supporting_agents": [
+      "grok",
+      "deepseek"
+    ]
+  },
+  "reasoning": {
+    "status": "present",
+    "summary": "## Final Synthesis\n\n**Question:** Packaging decision for issue #8263: Option A = one 'aragora' distribution shipping the full package including CLI and server console entry points (aragora=aragora.cli.main:main), keeping aragora-debate/ as a separate standalone wedge. Option B = a minimal wedge package plus a full meta-package depending on it. Which best delivers a single clean documented pip-install -> CLI -> zero-key decision-receipt path while honoring ODR-3 (#8226) standalone aragora-verify offline verifier? Pick one option, give rationale.\n\n### Winning Position (grok)\n\nThe choice between a unified path and a modular one echoes ancient questions about how humans best pursue clarity and purpose. Wisdom traditions from the Stoics to the Taoists have long weighed whether fulfillment arises from embracing a complete, integrated way of living or from selecting distinct elements that suit one's stage of growth. Psychology, too, reminds us through studies of decision fatigue and self-determination theory that people often thrive when the route to meaningful action feels direct and unobtrusive, yet they also value the freedom to adapt tools to their unique circumstances.\n\nA single encompassing approach carries clear strengths. It mirrors the insight found in many contemplative practices that a straightforward invitation\u2014one clear step into reflection and resolution\u2014removes unnecessary barriers between intention and outcome. When the emphasis lies on enabling anyone to move quickly from openness to a tangible sense of resolution, this unity reduces the cognitive load that can otherwise drain energy better spent on living. The presence of more focused companions for those who already know their precise need preserves autonomy without forcing the majority through extra thresholds.\n\nThe modular alternative holds merit where lived experience shows genuine divergence in human needs. Some individuals seek only a quiet instrument for personal verification, much as a solitary wa"
+  },
+  "receipt_id": "debate-9ea6b178-a438-4964-9836-3ba84230bd03",
+  "routing": {
+    "status": "reserved"
+  },
+  "signatures": [
+    {
+      "alg": "Ed25519",
+      "key_id": "ed25519-7be72c773c6db3a5",
+      "signature": "mdvOxmBWBmeyvrDEEjV8kISKa/XzTzQRYnZr150QAsGd5t32uxxWK4SR805sp3skbbJ8Jq5WQVDYkuhI8MwpAg=="
+    }
+  ],
+  "source": {
+    "artifact_hash": "b665b43f8af31673911b3676a115182c3f3e971b0d6012970433b3a7a8559655",
+    "receipt_id": "debate-9ea6b178-a438-4964-9836-3ba84230bd03",
+    "schema": "aragora.gauntlet.DecisionReceipt",
+    "schema_version": "1.1",
+    "system": "aragora"
+  },
+  "subject": {
+    "digest": {
+      "alg": "sha-256",
+      "status": "present",
+      "value": "05e1b2f374b5708e925f11c05ec1f00bd230aa3b0b5af350fb26f70a85904fc8"
+    },
+    "identifier": "9ea6b178-a438-4964-9836-3ba84230bd03",
+    "summary": "Packaging decision for issue #8263: Option A = one 'aragora' distribution shipping the full package including CLI and server console entry points (aragora=aragora.cli.main:main), keeping aragora-debate/ as a separate standalone wedge. Option B = a minimal wedge package plus a full meta-package depending on it. Which best delivers a single clean documented pip-install -> CLI -> zero-key decision-receipt path while honoring ODR-3 (#8226) standalone aragora-verify offline verifier? Pick one option,"
+  }
+}

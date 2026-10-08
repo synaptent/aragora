@@ -21,7 +21,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, cast
 
 from aragora.persistence.db_config import get_default_data_dir
 
@@ -694,12 +694,13 @@ class EmailStore(SQLiteStore):
             (inbox_id,),
         )
 
+        stats = cast(tuple[Any, ...], stats_row)
         return {
-            "total": stats_row[0] or 0,
-            "open": stats_row[1] or 0,
-            "assigned": stats_row[2] or 0,
-            "in_progress": stats_row[3] or 0,
-            "resolved": stats_row[4] or 0,
+            "total": stats[0] or 0,
+            "open": stats[1] or 0,
+            "assigned": stats[2] or 0,
+            "in_progress": stats[3] or 0,
+            "resolved": stats[4] or 0,
         }
 
     # =========================================================================

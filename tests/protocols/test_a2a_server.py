@@ -17,7 +17,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from aragora.protocols.a2a.server import A2AServer, TaskHandler
 from aragora.protocols.a2a.types import (
     AgentCapability,
     AgentCard,
@@ -25,6 +24,7 @@ from aragora.protocols.a2a.types import (
     TaskResult,
     TaskStatus,
 )
+from aragora.server.a2a_runtime import A2AServer, TaskHandler
 
 
 # ============================================================================

@@ -1,0 +1,338 @@
+{
+  "schema_version": 1,
+  "kind": "factory_review_quorum_vs_single_adjudicated_evidence",
+  "collected_at": "2026-07-11T17:27:10.818661+00:00",
+  "adjudication_basis": "Manifest validation_url goldens plus independent exact-head source inspection",
+  "cases": [
+    {
+      "case_id": "droid-sentry-pr-6",
+      "repo": "droid-code-review-evals/droid-sentry",
+      "pr_number": 6,
+      "base_sha": "1a440b410a2b617f22db936658bb3272e4774ac6",
+      "head_sha": "cb7212e11dbdbc1813237ad129c7bc108f944e3d",
+      "validation_blob_sha": "29067be0cc2bc91fa32c6669436d83cd851ebbb4",
+      "goldens": [
+        {
+          "comment_id": 2743651586,
+          "file": "src/sentry/api/paginator.py",
+          "line": 884,
+          "verdict": "true_positive",
+          "bug_type": "runtime_error",
+          "claim": "Negative slicing on Django QuerySets raises at runtime"
+        }
+      ],
+      "model_results": [
+        {
+          "provider": "grok",
+          "family": "grok",
+          "model": "grok-4-latest",
+          "status": "changes_requested",
+          "summary": "Critical runtime bugs: undefined variable and unsupported negative queryset slicing",
+          "findings": [
+            {
+              "finding_id": "grok-1",
+              "file": "src/sentry/api/endpoints/organization_auditlogs.py",
+              "priority": "P0",
+              "title": "Undefined variable organization_context causes NameError",
+              "body": "organization_context is not defined in the shown function scope."
+            },
+            {
+              "finding_id": "grok-2",
+              "file": "src/sentry/api/paginator.py",
+              "priority": "P0",
+              "title": "Negative queryset slicing is unsupported and crashes",
+              "body": "The exact head passes cursor.offset < 0 into queryset[start_offset:stop], which Django QuerySets reject.",
+              "golden_comment_id": 2743651586
+            },
+            {
+              "finding_id": "grok-3",
+              "file": "src/sentry/api/paginator.py",
+              "priority": "P0",
+              "title": "Same negative-offset slicing bug in DateTimePaginator modification",
+              "body": "The reviewer claimed a related prev-cursor path may retain a negative offset."
+            }
+          ]
+        },
+        {
+          "provider": "mistral-api",
+          "family": "mistral",
+          "model": "mistral-large-2512",
+          "status": "changes_requested",
+          "summary": "Potential security and correctness issues in pagination optimization",
+          "findings": [
+            {
+              "finding_id": "mistral-1",
+              "file": "src/sentry/api/paginator.py",
+              "priority": "P0",
+              "title": "Insecure Direct Object Reference risk in negative offset pagination",
+              "body": "The reviewer alleged a permission-boundary risk but did not identify the golden runtime exception."
+            },
+            {
+              "finding_id": "mistral-2",
+              "file": "src/sentry/api/endpoints/organization_auditlogs.py",
+              "priority": "P1",
+              "title": "Missing input validation for pagination parameters",
+              "body": "The reviewer requested stricter boolean validation."
+            },
+            {
+              "finding_id": "mistral-3",
+              "file": "src/sentry/api/paginator.py",
+              "priority": "P1",
+              "title": "Inconsistent boundary handling in negative offset logic",
+              "body": "The reviewer cited incorrect results or performance, not the validated QuerySet crash."
+            },
+            {
+              "finding_id": "mistral-4",
+              "file": "src/sentry/api/paginator.py",
+              "priority": "P1",
+              "title": "Missing test coverage for security-critical pagination features",
+              "body": "The reviewer requested negative-offset and permission-boundary tests."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "droid-grafana-pr-1",
+      "repo": "droid-code-review-evals/droid-grafana",
+      "pr_number": 1,
+      "base_sha": "ed865831071a0c0a63c75ad0cfa6661107dabcaf",
+      "head_sha": "3647ba7360b8d157e4a294a650a365b6aca070d8",
+      "validation_blob_sha": "f1a2057d21993c39dd761ad4083c9133f4f9bf45",
+      "goldens": [
+        {
+          "comment_id": 2743652887,
+          "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+          "line": 118,
+          "verdict": "true_positive",
+          "bug_type": "race_condition",
+          "claim": "CountDevices followed by a separate insert is a TOCTOU race"
+        }
+      ],
+      "model_results": [
+        {
+          "provider": "grok",
+          "family": "grok",
+          "model": "grok-4-latest",
+          "status": "changes_requested",
+          "summary": "Device-limit logic can fail authentication and is racy",
+          "findings": [
+            {
+              "finding_id": "grok-1",
+              "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+              "priority": "P1",
+              "title": "Misused error return in updateDevice",
+              "body": "No affected row is conflated with reaching the device limit."
+            },
+            {
+              "finding_id": "grok-2",
+              "file": "pkg/services/anonymous/anonimpl/client.go",
+              "priority": "P0",
+              "title": "Beyond-limit new devices fail authentication",
+              "body": "A new device can turn the tracking quota into a hard authentication error."
+            },
+            {
+              "finding_id": "grok-3",
+              "file": "pkg/services/anonymous/anonimpl/client.go",
+              "priority": "P1",
+              "title": "Synchronous TagDevice in auth path",
+              "body": "The reviewer identified blocking database work in Authenticate."
+            },
+            {
+              "finding_id": "grok-4",
+              "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+              "priority": "P1",
+              "title": "Count plus update is racy",
+              "body": "CountDevices and the later insert use separate sessions without a transaction.",
+              "golden_comment_id": 2743652887
+            }
+          ]
+        },
+        {
+          "provider": "mistral-api",
+          "family": "mistral",
+          "model": "mistral-large-2512",
+          "status": "changes_requested",
+          "summary": "The configurable device limit has implementation concerns",
+          "findings": [
+            {
+              "finding_id": "mistral-1",
+              "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+              "priority": "P0",
+              "title": "Inconsistent error handling in device limit enforcement",
+              "body": "No affected row is conflated with reaching the device limit."
+            },
+            {
+              "finding_id": "mistral-2",
+              "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+              "priority": "P0",
+              "title": "Race condition in device counting",
+              "body": "Another request can insert between CountDevices and this request's insert.",
+              "golden_comment_id": 2743652887
+            },
+            {
+              "finding_id": "mistral-3",
+              "file": "pkg/setting/setting.go",
+              "priority": "P1",
+              "title": "Missing validation for device limit configuration",
+              "body": "The reviewer requested rejection of negative limit values."
+            },
+            {
+              "finding_id": "mistral-4",
+              "file": "pkg/services/anonymous/anonimpl/client.go",
+              "priority": "P1",
+              "title": "Inconsistent error propagation in client",
+              "body": "The reviewer described inconsistent handling of device-limit errors."
+            },
+            {
+              "finding_id": "mistral-5",
+              "file": "pkg/services/anonymous/anonimpl/anonstore/database_test.go",
+              "priority": "P2",
+              "title": "Missing test coverage for edge cases",
+              "body": "The reviewer requested zero, negative, concurrency, and update cases."
+            },
+            {
+              "finding_id": "mistral-6",
+              "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+              "priority": "P2",
+              "title": "Hardcoded expiration period",
+              "body": "The reviewer requested a configurable or documented expiration period."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "case_id": "droid-keycloak-pr-7",
+      "repo": "droid-code-review-evals/droid-keycloak",
+      "pr_number": 7,
+      "base_sha": "21d53112849fe55f328f3de2f071989b8763de61",
+      "head_sha": "5d77e7ea7d431aa0a6b65904457b7471bd050e81",
+      "validation_blob_sha": "95f5e20c1d6b510c96a425b63ba3ded4bd2d9442",
+      "goldens": [
+        {
+          "comment_id": 2743702342,
+          "file": "themes/src/main/resources-community/theme/base/account/messages/messages_lt.properties",
+          "line": 101,
+          "verdict": "true_positive",
+          "bug_type": "logic_bug",
+          "claim": "Lithuanian locale contains an Italian TOTP instruction"
+        },
+        {
+          "comment_id": 2743702343,
+          "file": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties",
+          "line": 112,
+          "verdict": "true_positive",
+          "bug_type": "logic_bug",
+          "claim": "Simplified Chinese locale contains Traditional Chinese characters"
+        },
+        {
+          "comment_id": 2743702347,
+          "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+          "line": 110,
+          "verdict": "true_positive",
+          "bug_type": "runtime_error",
+          "claim": "Overlapping prefix and suffix trimming can produce invalid substring bounds"
+        }
+      ],
+      "model_results": [
+        {
+          "provider": "grok",
+          "family": "grok",
+          "model": "grok-4-latest",
+          "status": "changes_requested",
+          "summary": "The sanitizer change contains translation regressions and verifier issues",
+          "findings": [
+            {
+              "finding_id": "grok-1",
+              "file": "themes/src/main/resources-community/theme/base/account/messages/messages_fi.properties",
+              "priority": "P1",
+              "title": "Hyperlinks stripped from non-English messages",
+              "body": "The reviewer alleged that the sanitizer removes source hyperlinks."
+            },
+            {
+              "finding_id": "grok-2",
+              "file": "themes/src/main/resources-community/theme/base/account/messages/messages_lt.properties",
+              "priority": "P0",
+              "title": "Incorrect translation introduced",
+              "body": "totpStep1 is Italian text in the Lithuanian locale.",
+              "golden_comment_id": 2743702342
+            },
+            {
+              "finding_id": "grok-3",
+              "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+              "priority": "P1",
+              "title": "Verifier logic bugs",
+              "body": "The reviewer described brittle source-path and normalization handling."
+            },
+            {
+              "finding_id": "grok-4",
+              "file": "misc/theme-verifier/src/test/java/org/keycloak/themeverifier/VerifyMessagePropertiesTest.java",
+              "priority": "P2",
+              "title": "Missing coverage for allowed HTML",
+              "body": "The reviewer requested tests for allowed anchor and bold tags."
+            }
+          ]
+        },
+        {
+          "provider": "mistral-api",
+          "family": "mistral",
+          "model": "mistral-large-2512",
+          "status": "changes_requested",
+          "summary": "The sanitizer implementation has security and correctness concerns",
+          "findings": [
+            {
+              "finding_id": "mistral-1",
+              "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+              "priority": "P0",
+              "title": "Inconsistent HTML sanitization policy enforcement",
+              "body": "The reviewer requested a consistent, documented policy."
+            },
+            {
+              "finding_id": "mistral-2",
+              "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+              "priority": "P0",
+              "title": "Anchor tag validation is incomplete",
+              "body": "The reviewer alleged that translated href values could be unsafe."
+            },
+            {
+              "finding_id": "mistral-3",
+              "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+              "priority": "P1",
+              "title": "HTML entity handling is error-prone",
+              "body": "The reviewer warned that unescaping after sanitization can be risky."
+            },
+            {
+              "finding_id": "mistral-4",
+              "file": "misc/theme-verifier/src/test/java/org/keycloak/themeverifier/VerifyMessagePropertiesTest.java",
+              "priority": "P1",
+              "title": "Missing test coverage for edge cases",
+              "body": "The reviewer requested nested, malformed, script-attribute, and equivalent-HTML cases."
+            },
+            {
+              "finding_id": "mistral-5",
+              "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+              "priority": "P2",
+              "title": "Potential resource exhaustion in property processing",
+              "body": "The reviewer alleged memory and regular-expression risks."
+            },
+            {
+              "finding_id": "mistral-6",
+              "file": "themes/src/main/resources-community/theme/base/email/messages/messages_*.properties",
+              "priority": "P2",
+              "title": "Inconsistent HTML in translations",
+              "body": "The reviewer noted inconsistent tag spelling and malformed HTML."
+            },
+            {
+              "finding_id": "mistral-7",
+              "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+              "priority": "P1",
+              "title": "No validation of message format placeholders",
+              "body": "The reviewer requested parity checks for translated placeholders."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

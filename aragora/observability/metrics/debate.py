@@ -8,12 +8,16 @@ performance monitoring, phases, and consensus outcomes.
 from __future__ import annotations
 
 import logging
+from threading import Lock
 import time
 from contextlib import contextmanager
 from typing import Any
 from collections.abc import Generator
 
 from aragora.observability.metrics.base import NoOpMetric, get_metrics_enabled
+from aragora.observability.server_metrics.api import (
+    ACTIVE_DEBATES as _CANONICAL_ACTIVE_DEBATES,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -25,12 +29,40 @@ AGENT_PARTICIPATION: Any = None
 SLOW_DEBATES_TOTAL: Any = None
 SLOW_ROUNDS_TOTAL: Any = None
 DEBATE_ROUND_LATENCY: Any = None
-ACTIVE_DEBATES: Any = None
+ACTIVE_DEBATES: Any = _CANONICAL_ACTIVE_DEBATES
 CONSENSUS_RATE: Any = None
 DEBATE_EARLY_TERMINATION_TOTAL: Any = None
 DEBATE_STABILITY_SCORE: Any = None
 
 _initialized = False
+_active_debates_collector_lock = Lock()
+
+
+class _ActiveDebatesCollector:
+    """Prometheus adapter that reads the canonical active-debates gauge."""
+
+    _canonical_gauge = _CANONICAL_ACTIVE_DEBATES
+
+    def collect(self) -> Generator[Any, None, None]:
+        from prometheus_client.core import GaugeMetricFamily
+
+        metric = GaugeMetricFamily(
+            _CANONICAL_ACTIVE_DEBATES.name,
+            _CANONICAL_ACTIVE_DEBATES.help,
+        )
+        metric.add_metric([], _CANONICAL_ACTIVE_DEBATES.get())
+        yield metric
+
+
+def _ensure_active_debates_collector(registry: Any) -> None:
+    """Register one read-only Prometheus view of the canonical gauge."""
+    with _active_debates_collector_lock:
+        existing = registry._names_to_collectors.get(_CANONICAL_ACTIVE_DEBATES.name)
+        if getattr(existing, "_canonical_gauge", None) is _CANONICAL_ACTIVE_DEBATES:
+            return
+        if existing is not None:
+            registry.unregister(existing)
+        registry.register(_ActiveDebatesCollector())
 
 
 def init_debate_metrics() -> None:
@@ -130,10 +162,8 @@ def init_debate_metrics() -> None:
             [0.5, 1, 2, 5, 10, 20, 30, 60],
         )
 
-        ACTIVE_DEBATES = _get_or_create_gauge(
-            "aragora_active_debates",
-            "Number of currently active debates",
-        )
+        ACTIVE_DEBATES = _CANONICAL_ACTIVE_DEBATES
+        _ensure_active_debates_collector(REGISTRY)
 
         CONSENSUS_RATE = _get_or_create_gauge(
             "aragora_consensus_rate",
@@ -175,7 +205,7 @@ def _init_noop_metrics() -> None:
     SLOW_DEBATES_TOTAL = NoOpMetric()
     SLOW_ROUNDS_TOTAL = NoOpMetric()
     DEBATE_ROUND_LATENCY = NoOpMetric()
-    ACTIVE_DEBATES = NoOpMetric()
+    ACTIVE_DEBATES = _CANONICAL_ACTIVE_DEBATES
     CONSENSUS_RATE = NoOpMetric()
     DEBATE_EARLY_TERMINATION_TOTAL = NoOpMetric()
     DEBATE_STABILITY_SCORE = NoOpMetric()

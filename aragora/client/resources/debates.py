@@ -71,11 +71,9 @@ class DebatesAPI:
         Returns:
             DebateCreateResponse with debate_id and status.
         """
-        metadata_payload = dict(metadata or {})
+        metadata_payload: dict[str, Any] = dict(metadata or {})
         if kwargs:
             metadata_payload.update(kwargs)
-        if not metadata_payload:
-            metadata_payload = None
 
         if agents is None:
             agents_payload: list[Any] = [] if auto_select else _default_agent_list()
@@ -96,7 +94,7 @@ class DebatesAPI:
             documents=documents,
             enable_verticals=enable_verticals,
             vertical_id=vertical_id,
-            metadata=metadata_payload,
+            metadata=metadata_payload or None,
         )
 
         response = self._client._post("/api/debates", request.model_dump(exclude_none=True))
@@ -121,11 +119,9 @@ class DebatesAPI:
         **kwargs: Any,
     ) -> DebateCreateResponse:
         """Async version of create()."""
-        metadata_payload = dict(metadata or {})
+        metadata_payload: dict[str, Any] = dict(metadata or {})
         if kwargs:
             metadata_payload.update(kwargs)
-        if not metadata_payload:
-            metadata_payload = None
 
         if agents is None:
             agents_payload: list[Any] = [] if auto_select else _default_agent_list()
@@ -146,7 +142,7 @@ class DebatesAPI:
             documents=documents,
             enable_verticals=enable_verticals,
             vertical_id=vertical_id,
-            metadata=metadata_payload,
+            metadata=metadata_payload or None,
         )
 
         response = await self._client._post_async(

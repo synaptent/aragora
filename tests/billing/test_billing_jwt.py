@@ -323,7 +323,7 @@ class TestExtractUserFromRequest:
         handler = Mock()
         handler.headers = {}
 
-        with patch("aragora.server.middleware.auth.extract_client_ip", return_value="127.0.0.1"):
+        with patch("aragora.billing.auth.context.extract_client_ip", return_value="127.0.0.1"):
             ctx = extract_user_from_request(handler)
 
         assert ctx.authenticated is False
@@ -341,7 +341,7 @@ class TestExtractUserFromRequest:
         handler = Mock()
         handler.headers = {"Authorization": f"Bearer {token}"}
 
-        with patch("aragora.server.middleware.auth.extract_client_ip", return_value="127.0.0.1"):
+        with patch("aragora.billing.auth.context.extract_client_ip", return_value="127.0.0.1"):
             ctx = extract_user_from_request(handler)
 
         assert ctx.authenticated is True
@@ -361,7 +361,7 @@ class TestExtractUserFromRequest:
         handler = Mock()
         handler.headers = {"Authorization": f"Bearer {api_key}"}
 
-        with patch("aragora.server.middleware.auth.extract_client_ip", return_value="127.0.0.1"):
+        with patch("aragora.billing.auth.context.extract_client_ip", return_value="127.0.0.1"):
             ctx = extract_user_from_request(handler, store)
 
         assert ctx.authenticated is True
@@ -374,9 +374,7 @@ class TestExtractUserFromRequest:
         handler.headers = {"Authorization": "Bearer ara_validapikeywithsufficient_length"}
 
         with patch.dict(os.environ, {"ARAGORA_ALLOW_FORMAT_ONLY_API_KEYS": "0"}):
-            with patch(
-                "aragora.server.middleware.auth.extract_client_ip", return_value="127.0.0.1"
-            ):
+            with patch("aragora.billing.auth.context.extract_client_ip", return_value="127.0.0.1"):
                 ctx = extract_user_from_request(handler)
 
         assert ctx.authenticated is False
@@ -386,7 +384,7 @@ class TestExtractUserFromRequest:
         handler = Mock()
         handler.headers = {"Authorization": "Bearer ara_short"}
 
-        with patch("aragora.server.middleware.auth.extract_client_ip", return_value="127.0.0.1"):
+        with patch("aragora.billing.auth.context.extract_client_ip", return_value="127.0.0.1"):
             ctx = extract_user_from_request(handler)
 
         assert ctx.authenticated is False

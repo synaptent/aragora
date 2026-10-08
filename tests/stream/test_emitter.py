@@ -338,6 +338,63 @@ class TestSyncEventEmitter:
         assert events[0].type == StreamEventType.DEBATE_START
         assert events[0].loop_id == "loop_001"
 
+    def test_emit_sync_adapts_legacy_trickster_event(self):
+        """Legacy debate emissions are converted without crashing the stream path."""
+        from aragora.server.stream.emitter import SyncEventEmitter
+
+        emitter = SyncEventEmitter()
+
+        emitter.emit_sync(
+            event_type="trickster_intervention",
+            debate_id="debate-123",
+            correlation_id="correlation-456",
+            agent="trickster",
+            round=2,
+            challenge="Surface independent evidence",
+        )
+
+        events = emitter.drain()
+        assert len(events) == 1
+        event = events[0]
+        assert event.type == StreamEventType.TRICKSTER_INTERVENTION
+        assert event.loop_id == "debate-123"
+        assert event.correlation_id == "correlation-456"
+        assert event.agent == "trickster"
+        assert event.round == 2
+        assert event.data == {
+            "agent": "trickster",
+            "round": 2,
+            "challenge": "Surface independent evidence",
+        }
+
+    def test_emit_sync_supports_early_termination_event(self):
+        from aragora.server.stream.emitter import SyncEventEmitter
+
+        emitter = SyncEventEmitter()
+
+        emitter.emit_sync(
+            event_type="debate_early_terminated",
+            debate_id="debate-123",
+            round_num=1,
+            total_rounds=3,
+        )
+
+        [event] = emitter.drain()
+        assert event.type == StreamEventType.DEBATE_EARLY_TERMINATED
+        assert event.round == 1
+        assert event.data == {"round_num": 1, "total_rounds": 3}
+
+    def test_emit_sync_drops_unknown_event_type_with_warning(self, caplog):
+        from aragora.server.stream.emitter import SyncEventEmitter
+
+        emitter = SyncEventEmitter()
+
+        with caplog.at_level("WARNING"):
+            emitter.emit_sync(event_type="not_registered", debate_id="debate-123")
+
+        assert emitter.drain() == []
+        assert "Unknown event type 'not_registered'; event dropped" in caplog.text
+
     def test_sequence_numbers(self):
         """Test sequence numbers are assigned."""
         from aragora.server.stream.emitter import SyncEventEmitter

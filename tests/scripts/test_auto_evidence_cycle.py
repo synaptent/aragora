@@ -113,6 +113,7 @@ def _run(
     clock: Any = None,
     breaker_threshold: int = 3,
     write_routing_record: Any = None,
+    families: tuple[str, ...] | None = None,
 ) -> tuple[dict[str, Any], CollectRecorder, ReconcilerRecorder]:
     collect = collect or CollectRecorder()
     reconciler = reconciler or ReconcilerRecorder()
@@ -136,6 +137,7 @@ def _run(
         write_routing_record=write_routing_record,
         allow_legacy_apply=allow_legacy_apply,
         clock=(lambda: next(ticks) * 0.001) if clock is None else clock,
+        **({} if families is None else {"families": families}),
     )
     summary["_packet_calls"] = packet_calls
     return summary, collect, reconciler
@@ -776,7 +778,14 @@ def test_routing_record_fields_are_honest() -> None:
             }
         }
     )
-    _run([_pr(1)], {1: _entry(1, tier=1)}, apply=True, collect=collect, write_routing_record=writer)
+    _run(
+        [_pr(1)],
+        {1: _entry(1, tier=1)},
+        apply=True,
+        collect=collect,
+        write_routing_record=writer,
+        families=("claude", "grok"),
+    )
     (record,) = writer.records
     assert record["record_type"] == "routing_rationale"
     assert record["schema"] == cycle.ROUTING_RECORD_SCHEMA

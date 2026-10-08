@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 import uuid
 
 from aragora.pipeline.execution_mode import (
@@ -14,7 +14,7 @@ from aragora.pipeline.execution_mode import (
 )
 
 if TYPE_CHECKING:
-    pass
+    from aragora.pipeline.executor import ExecutionMode
 
 logger = logging.getLogger(__name__)
 
@@ -328,7 +328,7 @@ async def execute_decision_plan_with_backbone(
     outcome = await bridge.execute_approved_plan(
         plan.id,
         auth_context=auth_context,
-        execution_mode=raw_mode,
+        execution_mode=cast("ExecutionMode | None", raw_mode),
         safety_mode=resolve_safety_mode(safety_mode, auth_context=auth_context),
         execution_id=str(launch.get("execution_id", "") or ""),
         correlation_id=str(launch.get("correlation_id", "") or ""),

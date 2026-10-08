@@ -36,7 +36,7 @@ def test_validate_all_accepts_sentinel_when_distributed(
     )
     monkeypatch.setenv("ARAGORA_REDIS_SENTINEL_MASTER", "mymaster")
 
-    with patch("aragora.control_plane.leader.is_distributed_state_required", return_value=True):
+    with patch("aragora.config.validator.is_distributed_state_required", return_value=True):
         result = validate_all()
 
     assert result["config_summary"]["redis_configured"] is True
@@ -50,7 +50,7 @@ def test_validate_all_reports_missing_redis_for_distributed_state(
     """Distributed state should fail validation without Redis URL/sentinel/cluster config."""
     monkeypatch.setenv("ARAGORA_ENV", "development")
 
-    with patch("aragora.control_plane.leader.is_distributed_state_required", return_value=True):
+    with patch("aragora.config.validator.is_distributed_state_required", return_value=True):
         result = validate_all()
 
     assert any("Distributed state required" in err for err in result["errors"])

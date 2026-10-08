@@ -106,7 +106,7 @@ class InterrogatorConfig:
     """Configuration for the SwarmInterrogator."""
 
     max_turns: int = 8
-    model: str = "claude-opus-4-8"
+    model: str = "claude-opus-5"
     system_prompt: str = ""
     fallback_to_fixed_questions: bool = True
     user_profile: UserProfile = UserProfile.CEO
