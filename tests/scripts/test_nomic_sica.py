@@ -3,8 +3,23 @@
 from __future__ import annotations
 
 import importlib
+import sys
+from types import ModuleType
 
 import pytest
+
+
+def _import_nomic_loop_fresh(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
+    # scripts.nomic_loop takes its NOMIC_SICA_* flags from scripts.nomic.config, which
+    # reads the environment once at import time. Reloading nomic_loop alone keeps a
+    # config module cached by an earlier test, so import both fresh; monkeypatch puts
+    # the original modules and package attributes back at teardown.
+    for name in ("scripts.nomic.config", "scripts.nomic_loop"):
+        parent_name, _, child = name.rpartition(".")
+        parent = importlib.import_module(parent_name)
+        monkeypatch.setattr(parent, child, getattr(parent, child, None), raising=False)
+        monkeypatch.delitem(sys.modules, name, raising=False)
+    return importlib.import_module("scripts.nomic_loop")
 
 
 @pytest.mark.asyncio
@@ -23,9 +38,7 @@ async def test_run_sica_cycle_parses_env(monkeypatch, tmp_path):
     monkeypatch.setenv("NOMIC_SICA_MAX_OPPORTUNITIES", "2")
     monkeypatch.setenv("NOMIC_SICA_MAX_ROLLBACKS", "1")
 
-    import scripts.nomic_loop as nomic_loop
-
-    nomic_loop = importlib.reload(nomic_loop)
+    nomic_loop = _import_nomic_loop_fresh(monkeypatch)
 
     captured: dict[str, object] = {}
 
