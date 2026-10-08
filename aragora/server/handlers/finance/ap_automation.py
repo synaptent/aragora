@@ -96,6 +96,51 @@ def get_ap_automation():
 # =============================================================================
 
 
+def _validate_invoice_vendor(vendor_id: Any, vendor_name: Any) -> tuple[str, str] | HandlerResult:
+    if not vendor_id:
+        return error_response("vendor_id is required", status=400)
+    if not isinstance(vendor_id, str) or not vendor_id.strip():
+        return error_response("vendor_id must be a non-empty string", status=400)
+
+    if not vendor_name:
+        return error_response("vendor_name is required", status=400)
+    if not isinstance(vendor_name, str) or not vendor_name.strip():
+        return error_response("vendor_name must be a non-empty string", status=400)
+    return vendor_id, vendor_name
+
+
+def _parse_invoice_amount(total_amount: Any) -> tuple[Decimal | None, HandlerResult | None]:
+    if total_amount is None:
+        return None, error_response("total_amount is required", status=400)
+
+    try:
+        amount_decimal = Decimal(str(total_amount))
+        if amount_decimal <= 0:
+            return None, error_response("total_amount must be positive", status=400)
+    except (ValueError, TypeError, ArithmeticError):
+        return None, error_response("total_amount must be a valid number", status=400)
+    return amount_decimal, None
+
+
+def _parse_invoice_dates(
+    data: dict[str, Any],
+) -> tuple[datetime | None, datetime | None, dict[str, int]]:
+    """Parse the optional invoice dates; a non-ISO value raises ``ValueError``."""
+    invoice_date: datetime | None = None
+    due_date: datetime | None = None
+    # The service derives the discount deadline from invoice_date + discount_days.
+    discount: dict[str, int] = {}
+
+    if data.get("invoice_date"):
+        invoice_date = parse_iso_datetime(data["invoice_date"])
+    if data.get("due_date"):
+        due_date = parse_iso_datetime(data["due_date"])
+    if data.get("discount_deadline"):
+        deadline = parse_iso_datetime(data["discount_deadline"])
+        discount["discount_days"] = (deadline - (invoice_date or datetime.now())).days
+    return invoice_date, due_date, discount
+
+
 @rate_limit(requests_per_minute=60)
 @require_permission("finance:write")
 async def handle_add_invoice(
@@ -125,40 +170,16 @@ async def handle_add_invoice(
     vendor_name = data.get("vendor_name")
     total_amount = data.get("total_amount")
 
-    if not vendor_id:
-        return error_response("vendor_id is required", status=400)
-    if not isinstance(vendor_id, str) or not vendor_id.strip():
-        return error_response("vendor_id must be a non-empty string", status=400)
-
-    if not vendor_name:
-        return error_response("vendor_name is required", status=400)
-    if not isinstance(vendor_name, str) or not vendor_name.strip():
-        return error_response("vendor_name must be a non-empty string", status=400)
-
-    if total_amount is None:
-        return error_response("total_amount is required", status=400)
+    vendor = _validate_invoice_vendor(vendor_id, vendor_name)
+    if not isinstance(vendor, tuple):
+        return vendor
+    vendor_id, vendor_name = vendor
+    amount_decimal, amount_error = _parse_invoice_amount(total_amount)
+    if amount_error is not None:
+        return amount_error
 
     try:
-        amount_decimal = Decimal(str(total_amount))
-        if amount_decimal <= 0:
-            return error_response("total_amount must be positive", status=400)
-    except (ValueError, TypeError, ArithmeticError):
-        return error_response("total_amount must be a valid number", status=400)
-
-    # Parse and validate dates
-    invoice_date = None
-    due_date = None
-    # The service derives the discount deadline from invoice_date + discount_days.
-    discount: dict[str, int] = {}
-
-    try:
-        if data.get("invoice_date"):
-            invoice_date = parse_iso_datetime(data["invoice_date"])
-        if data.get("due_date"):
-            due_date = parse_iso_datetime(data["due_date"])
-        if data.get("discount_deadline"):
-            deadline = parse_iso_datetime(data["discount_deadline"])
-            discount["discount_days"] = (deadline - (invoice_date or datetime.now())).days
+        invoice_date, due_date, discount = _parse_invoice_dates(data)
     except ValueError:
         return error_response("Dates must be in ISO format", status=400)
     # The AP service adds up to 60 days of payment terms to invoice_date.

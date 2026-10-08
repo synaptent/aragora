@@ -240,6 +240,24 @@ local development uses a gitignored `.env`. See the
 Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). MIT licensed
 (see [LICENSE](LICENSE)).
 
+### Development
+
+Root Python package, from a source checkout with the `dev,test` extras installed
+(`pip install -e ".[dev,test]"`):
+
+| Task | Command |
+|------|---------|
+| Run the API server | `aragora serve --api-port 8080 --ws-port 8765` (or `make serve`) |
+| Build the wheel/sdist | `python -m build` (setuptools backend) |
+| Test | `make test-fast` (quick tier) · `make test` (full suite) |
+| Lint / format | `make lint` · `make format` |
+| Type check | `make typecheck` |
+| Readiness gate (all apps) | `make readiness-lint && make readiness-typecheck && make readiness-test` |
+
+The `readiness-*` targets fan out to every app in the repo and print
+`SKIP <app>: <reason>` when a toolchain is absent; see
+[docs/RATCHETS.md](docs/RATCHETS.md) for the baseline ratchets they run.
+
 ---
 
 <a id="full-vision"></a>
@@ -349,7 +367,7 @@ proves. *(docs/CANONICAL_GOALS.md, docs/vision/MAXIMALIST_VISION.md)*
 <!-- metrics:begin readme-scale -->
 > Scale (canonical counts in [`docs/METRICS.md`](docs/METRICS.md), rounded):
 > **~4,300 Python files · ~2.0M LOC · 140+ top-level modules · 200,000+ test
-> functions across ~5,600 files · 3,205 API operations across 2,912 paths ·
+> functions across ~5,700 files · 3,205 API operations across 2,912 paths ·
 > 35+ allowlisted agent types across 12+ providers · 42 Knowledge Mound adapter specs
 > (47 files) · 360+ RBAC permissions · Python + TypeScript SDKs · v2.11.1.**
 > (Practical real-time debate uses 2–6 agents; the value is *heterogeneity*, not raw

@@ -148,16 +148,8 @@ def _sequence(value: Any, field: str, *, allow_empty: bool = False) -> Sequence[
     return value
 
 
-def _validate_manifest(manifest: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
-    _keys(manifest, _MANIFEST_KEYS, "manifest")
-    if manifest["schema_version"] != MANIFEST_SCHEMA:
-        raise ValueError(f"manifest.schema_version must be {MANIFEST_SCHEMA}")
-    if manifest["benchmark_id"] != BENCHMARK_ID:
-        raise ValueError(f"manifest.benchmark_id must be {BENCHMARK_ID}")
-    _text(manifest["revision"], "manifest.revision")
-    _timestamp(manifest["frozen_at"], "manifest.frozen_at")
-
-    corpus = _mapping(manifest["corpus"], "manifest.corpus")
+def _validate_manifest_corpus(value: Any) -> None:
+    corpus = _mapping(value, "manifest.corpus")
     _keys(corpus, _CORPUS_KEYS, "manifest.corpus")
     for field, expected_digest in FROZEN_CORPUS_DIGESTS.items():
         digest = _sha256(corpus[field], f"manifest.corpus.{field}")
@@ -170,17 +162,9 @@ def _validate_manifest(manifest: Mapping[str, Any]) -> dict[str, Mapping[str, An
         if _integer(corpus[field], f"manifest.corpus.{field}") != expected:
             raise ValueError(f"manifest.corpus.{field} must be {expected}")
 
-    if manifest["scorer_contract_version"] != SCORER_CONTRACT_VERSION:
-        raise ValueError(f"manifest.scorer_contract_version must be {SCORER_CONTRACT_VERSION}")
-    prompts = _mapping(manifest["prompt_sha256"], "manifest.prompt_sha256")
-    _keys(prompts, _PROMPT_KEYS, "manifest.prompt_sha256")
-    for name in sorted(_PROMPT_KEYS):
-        _sha256(prompts[name], f"manifest.prompt_sha256.{name}")
-    implementation_sha = _text(manifest["implementation_sha"], "manifest.implementation_sha")
-    if not _GIT_SHA_RE.fullmatch(implementation_sha):
-        raise ValueError("manifest.implementation_sha must be a 40-character lowercase Git SHA")
 
-    policy = _mapping(manifest["policy"], "manifest.policy")
+def _validate_manifest_policy(value: Any) -> None:
+    policy = _mapping(value, "manifest.policy")
     _keys(policy, _POLICY_KEYS, "manifest.policy")
     if (
         _number(policy["daily_cost_cap_usd"], "manifest.policy.daily_cost_cap_usd")
@@ -204,7 +188,51 @@ def _validate_manifest(manifest: Mapping[str, Any]) -> dict[str, Mapping[str, An
     ):
         raise ValueError(f"manifest.policy.holdout_repetitions must be {HOLDOUT_REPETITIONS}")
 
-    conditions = _sequence(manifest["conditions"], "manifest.conditions")
+
+def _validate_condition_members(value: Any, field: str) -> list[str]:
+    members = _sequence(value, f"{field}.members")
+    families: list[str] = []
+    for member_index, raw_member in enumerate(members):
+        member_field = f"{field}.members[{member_index}]"
+        member = _mapping(raw_member, member_field)
+        _keys(member, _MEMBER_KEYS, member_field)
+        family = _text(member["family"], f"{member_field}.family")
+        if family not in MODEL_FAMILIES:
+            raise ValueError(f"{member_field}.family must be a fixed benchmark family")
+        families.append(family)
+        for name in ("requested_model", "resolved_model", "transport"):
+            _text(member[name], f"{member_field}.{name}")
+    if len(set(families)) != len(families):
+        raise ValueError(f"{field}.members must not repeat a model family")
+    return families
+
+
+def _check_condition_topology(
+    field: str,
+    condition_id: str,
+    kind: str,
+    families: list[str],
+    *,
+    adversarial_rounds: int,
+    syntheses: int,
+) -> None:
+    if condition_id in SINGLE_CONDITION_FAMILIES:
+        expected_family = SINGLE_CONDITION_FAMILIES[condition_id]
+        if kind != "single_model" or families != [expected_family]:
+            raise ValueError(f"{field} must contain only the {expected_family} single model")
+        if adversarial_rounds != 0 or syntheses != 0:
+            raise ValueError(f"{field} single-model topology must have zero team rounds")
+    elif condition_id == TEAM_CONDITION_ID:
+        if kind != "aragora_team" or set(families) != set(MODEL_FAMILIES):
+            raise ValueError(f"{field} must contain exactly the three fixed model families")
+        if adversarial_rounds != 1 or syntheses != 1:
+            raise ValueError(f"{field} must have one adversarial round and one synthesis")
+    else:
+        raise ValueError(f"unknown benchmark condition_id {condition_id}")
+
+
+def _validate_manifest_conditions(value: Any) -> dict[str, Mapping[str, Any]]:
+    conditions = _sequence(value, "manifest.conditions")
     if len(conditions) != len(CONDITION_IDS):
         raise ValueError(
             f"manifest.conditions must contain exactly {len(CONDITION_IDS)} conditions"
@@ -224,37 +252,43 @@ def _validate_manifest(manifest: Mapping[str, Any]) -> dict[str, Mapping[str, An
             raise ValueError(f"manifest.conditions has duplicate condition_id {condition_id}")
         by_id[condition_id] = condition
 
-        members = _sequence(condition["members"], f"{field}.members")
-        families: list[str] = []
-        for member_index, raw_member in enumerate(members):
-            member_field = f"{field}.members[{member_index}]"
-            member = _mapping(raw_member, member_field)
-            _keys(member, _MEMBER_KEYS, member_field)
-            family = _text(member["family"], f"{member_field}.family")
-            if family not in MODEL_FAMILIES:
-                raise ValueError(f"{member_field}.family must be a fixed benchmark family")
-            families.append(family)
-            for name in ("requested_model", "resolved_model", "transport"):
-                _text(member[name], f"{member_field}.{name}")
-        if len(set(families)) != len(families):
-            raise ValueError(f"{field}.members must not repeat a model family")
-
-        if condition_id in SINGLE_CONDITION_FAMILIES:
-            expected_family = SINGLE_CONDITION_FAMILIES[condition_id]
-            if kind != "single_model" or families != [expected_family]:
-                raise ValueError(f"{field} must contain only the {expected_family} single model")
-            if adversarial_rounds != 0 or syntheses != 0:
-                raise ValueError(f"{field} single-model topology must have zero team rounds")
-        elif condition_id == TEAM_CONDITION_ID:
-            if kind != "aragora_team" or set(families) != set(MODEL_FAMILIES):
-                raise ValueError(f"{field} must contain exactly the three fixed model families")
-            if adversarial_rounds != 1 or syntheses != 1:
-                raise ValueError(f"{field} must have one adversarial round and one synthesis")
-        else:
-            raise ValueError(f"unknown benchmark condition_id {condition_id}")
+        families = _validate_condition_members(condition["members"], field)
+        _check_condition_topology(
+            field,
+            condition_id,
+            kind,
+            families,
+            adversarial_rounds=adversarial_rounds,
+            syntheses=syntheses,
+        )
     if set(by_id) != set(CONDITION_IDS):
         raise ValueError("manifest.conditions must contain the four fixed benchmark conditions")
     return by_id
+
+
+def _validate_manifest(manifest: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
+    _keys(manifest, _MANIFEST_KEYS, "manifest")
+    if manifest["schema_version"] != MANIFEST_SCHEMA:
+        raise ValueError(f"manifest.schema_version must be {MANIFEST_SCHEMA}")
+    if manifest["benchmark_id"] != BENCHMARK_ID:
+        raise ValueError(f"manifest.benchmark_id must be {BENCHMARK_ID}")
+    _text(manifest["revision"], "manifest.revision")
+    _timestamp(manifest["frozen_at"], "manifest.frozen_at")
+
+    _validate_manifest_corpus(manifest["corpus"])
+
+    if manifest["scorer_contract_version"] != SCORER_CONTRACT_VERSION:
+        raise ValueError(f"manifest.scorer_contract_version must be {SCORER_CONTRACT_VERSION}")
+    prompts = _mapping(manifest["prompt_sha256"], "manifest.prompt_sha256")
+    _keys(prompts, _PROMPT_KEYS, "manifest.prompt_sha256")
+    for name in sorted(_PROMPT_KEYS):
+        _sha256(prompts[name], f"manifest.prompt_sha256.{name}")
+    implementation_sha = _text(manifest["implementation_sha"], "manifest.implementation_sha")
+    if not _GIT_SHA_RE.fullmatch(implementation_sha):
+        raise ValueError("manifest.implementation_sha must be a 40-character lowercase Git SHA")
+
+    _validate_manifest_policy(manifest["policy"])
+    return _validate_manifest_conditions(manifest["conditions"])
 
 
 def validate_benchmark_manifest(manifest: Mapping[str, Any]) -> str:
@@ -310,6 +344,95 @@ def _validate_receipt(value: Any, *, require_verified: bool) -> None:
         )
 
 
+def _validate_call_identity(
+    raw_call: Any,
+    field: str,
+    members: Mapping[str, Mapping[str, Any]],
+    call_ids: set[str],
+) -> tuple[Mapping[str, Any], str, str]:
+    call = _mapping(raw_call, field)
+    _keys(call, _CALL_KEYS, field)
+    call_id = _text(call["call_id"], f"{field}.call_id")
+    if call_id in call_ids:
+        raise ValueError(f"result.calls contains duplicate call_id {call_id}")
+    call_ids.add(call_id)
+    role = _text(call["role"], f"{field}.role")
+    family = _text(call["family"], f"{field}.family")
+    member = members.get(family)
+    if member is None:
+        raise ValueError(f"{field}.family is not in the frozen condition roster")
+    for name in ("requested_model", "resolved_model", "transport"):
+        if call[name] != member[name]:
+            raise ValueError(f"{field}.{name} does not match the frozen model roster")
+    return call, role, family
+
+
+def _validate_call_attempts(
+    attempts_value: Any,
+    field: str,
+    *,
+    started_at: datetime,
+    completed_at: datetime,
+    costs: list[tuple[datetime, float]],
+) -> list[str]:
+    attempts = _sequence(attempts_value, f"{field}.attempts")
+    if len(attempts) > MAX_INFRASTRUCTURE_RETRIES_PER_CALL + 1:
+        raise ValueError(f"{field}.attempts exceeds the one-infrastructure-retry policy")
+    statuses: list[str] = []
+    for attempt_index, raw_attempt in enumerate(attempts):
+        attempt_field = f"{field}.attempts[{attempt_index}]"
+        attempt = _mapping(raw_attempt, attempt_field)
+        _keys(attempt, _ATTEMPT_KEYS, attempt_field)
+        if _integer(attempt["attempt"], f"{attempt_field}.attempt", minimum=1) != (
+            attempt_index + 1
+        ):
+            raise ValueError(f"{attempt_field}.attempt must be sequential from 1")
+        status = _text(attempt["status"], f"{attempt_field}.status")
+        if status not in _ATTEMPT_STATUSES:
+            raise ValueError(f"{attempt_field}.status is not recognized")
+        statuses.append(status)
+        occurred_at = _timestamp(attempt["occurred_at"], f"{attempt_field}.occurred_at")
+        if not started_at <= occurred_at <= completed_at:
+            raise ValueError(f"{attempt_field}.occurred_at must be within the result window")
+        _number(attempt["latency_ms"], f"{attempt_field}.latency_ms")
+        cost = _number(attempt["cost_usd"], f"{attempt_field}.cost_usd")
+        costs.append((occurred_at, cost))
+        error_class = attempt["error_class"]
+        if status == "success":
+            if error_class is not None:
+                raise ValueError(f"{attempt_field}.error_class must be null on success")
+        else:
+            _text(error_class, f"{attempt_field}.error_class")
+    if len(statuses) == 2 and statuses[0] != "infrastructure_error":
+        raise ValueError(f"{field} may retry only after an infrastructure_error")
+    if "success" in statuses[:-1]:
+        raise ValueError(f"{field} must not retry after success")
+    return statuses
+
+
+def _check_team_topology(
+    topology: Counter[tuple[str, str]], *, require_complete_topology: bool
+) -> None:
+    expected = Counter(
+        {(role, family): 1 for role in ("proposal", "adversarial") for family in MODEL_FAMILIES}
+    )
+    synthesis_count = sum(
+        count for (role, _family), count in topology.items() if role == "synthesis"
+    )
+    non_synthesis = Counter(
+        {key: count for key, count in topology.items() if key[0] != "synthesis"}
+    )
+    if any(role not in {"proposal", "adversarial", "synthesis"} for role, _family in topology):
+        raise ValueError("result.calls contains an unknown team role")
+    if require_complete_topology:
+        if non_synthesis != expected or synthesis_count != 1:
+            raise ValueError("result.calls does not match the frozen team topology")
+    # A run that aborts on an unrecoverable failure records only the calls it made,
+    # so a failure result carries a subset of the frozen topology and never more.
+    elif synthesis_count > 1 or non_synthesis - expected:
+        raise ValueError("result.calls exceeds the frozen team topology")
+
+
 def _validate_calls(
     calls_value: Any,
     condition: Mapping[str, Any],
@@ -326,77 +449,22 @@ def _validate_calls(
     costs: list[tuple[datetime, float]] = []
     for call_index, raw_call in enumerate(calls):
         field = f"result.calls[{call_index}]"
-        call = _mapping(raw_call, field)
-        _keys(call, _CALL_KEYS, field)
-        call_id = _text(call["call_id"], f"{field}.call_id")
-        if call_id in call_ids:
-            raise ValueError(f"result.calls contains duplicate call_id {call_id}")
-        call_ids.add(call_id)
-        role = _text(call["role"], f"{field}.role")
-        family = _text(call["family"], f"{field}.family")
-        member = members.get(family)
-        if member is None:
-            raise ValueError(f"{field}.family is not in the frozen condition roster")
-        for name in ("requested_model", "resolved_model", "transport"):
-            if call[name] != member[name]:
-                raise ValueError(f"{field}.{name} does not match the frozen model roster")
+        call, role, family = _validate_call_identity(raw_call, field, members, call_ids)
         topology[(role, family)] += 1
 
-        attempts = _sequence(call["attempts"], f"{field}.attempts")
-        if len(attempts) > MAX_INFRASTRUCTURE_RETRIES_PER_CALL + 1:
-            raise ValueError(f"{field}.attempts exceeds the one-infrastructure-retry policy")
-        statuses: list[str] = []
-        for attempt_index, raw_attempt in enumerate(attempts):
-            attempt_field = f"{field}.attempts[{attempt_index}]"
-            attempt = _mapping(raw_attempt, attempt_field)
-            _keys(attempt, _ATTEMPT_KEYS, attempt_field)
-            if _integer(attempt["attempt"], f"{attempt_field}.attempt", minimum=1) != (
-                attempt_index + 1
-            ):
-                raise ValueError(f"{attempt_field}.attempt must be sequential from 1")
-            status = _text(attempt["status"], f"{attempt_field}.status")
-            if status not in _ATTEMPT_STATUSES:
-                raise ValueError(f"{attempt_field}.status is not recognized")
-            statuses.append(status)
-            occurred_at = _timestamp(attempt["occurred_at"], f"{attempt_field}.occurred_at")
-            if not started_at <= occurred_at <= completed_at:
-                raise ValueError(f"{attempt_field}.occurred_at must be within the result window")
-            _number(attempt["latency_ms"], f"{attempt_field}.latency_ms")
-            cost = _number(attempt["cost_usd"], f"{attempt_field}.cost_usd")
-            costs.append((occurred_at, cost))
-            error_class = attempt["error_class"]
-            if status == "success":
-                if error_class is not None:
-                    raise ValueError(f"{attempt_field}.error_class must be null on success")
-            else:
-                _text(error_class, f"{attempt_field}.error_class")
-        if len(statuses) == 2 and statuses[0] != "infrastructure_error":
-            raise ValueError(f"{field} may retry only after an infrastructure_error")
-        if "success" in statuses[:-1]:
-            raise ValueError(f"{field} must not retry after success")
+        statuses = _validate_call_attempts(
+            call["attempts"],
+            field,
+            started_at=started_at,
+            completed_at=completed_at,
+            costs=costs,
+        )
         all_succeeded = all_succeeded and statuses[-1] == "success"
 
     if condition["kind"] == "single_model":
         expected = Counter({("decision", next(iter(members))): 1})
     else:
-        expected = Counter(
-            {(role, family): 1 for role in ("proposal", "adversarial") for family in MODEL_FAMILIES}
-        )
-        synthesis_count = sum(
-            count for (role, _family), count in topology.items() if role == "synthesis"
-        )
-        non_synthesis = Counter(
-            {key: count for key, count in topology.items() if key[0] != "synthesis"}
-        )
-        if any(role not in {"proposal", "adversarial", "synthesis"} for role, _family in topology):
-            raise ValueError("result.calls contains an unknown team role")
-        if require_complete_topology:
-            if non_synthesis != expected or synthesis_count != 1:
-                raise ValueError("result.calls does not match the frozen team topology")
-        # A run that aborts on an unrecoverable failure records only the calls it made,
-        # so a failure result carries a subset of the frozen topology and never more.
-        elif synthesis_count > 1 or non_synthesis - expected:
-            raise ValueError("result.calls exceeds the frozen team topology")
+        _check_team_topology(topology, require_complete_topology=require_complete_topology)
         return all_succeeded, costs
     if topology != expected:
         raise ValueError("result.calls does not match the frozen single-model topology")
