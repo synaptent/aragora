@@ -217,14 +217,16 @@ class TestDecisionPipelineHappyPath:
                 from aragora.server.handlers.plans import _fire_plan_notification
 
                 # Fire notification for plan creation
-                _fire_plan_notification("created", plan)
+                _fire_plan_notification("created", plan, org_id="org-e2e")
                 # Give event loop a tick
                 await asyncio.sleep(0.05)
 
                 # Approve
                 plan.approve("notifier-tester")
                 store.update_status(plan.id, PlanStatus.APPROVED, approved_by="notifier-tester")
-                _fire_plan_notification("approved", plan, approved_by="notifier-tester")
+                _fire_plan_notification(
+                    "approved", plan, org_id="org-e2e", approved_by="notifier-tester"
+                )
                 await asyncio.sleep(0.05)
 
                 # Execute
@@ -233,15 +235,17 @@ class TestDecisionPipelineHappyPath:
                 bridge = ExecutionBridge(plan_store=store, executor=mock_executor)
                 outcome = await bridge.execute_approved_plan(plan.id)
 
-                _fire_plan_notification("execution_started", plan)
+                _fire_plan_notification("execution_started", plan, org_id="org-e2e")
                 await asyncio.sleep(0.05)
 
             assert outcome.success is True
 
-            # Notifications were fired (async, best-effort)
+            # Notifications were fired (async, best-effort) for the acting org
             mock_notify_created.assert_called_once()
             mock_notify_approved.assert_called_once()
             mock_notify_exec_started.assert_called_once()
+            assert mock_notify_created.call_args.kwargs["org_id"] == "org-e2e"
+            assert mock_notify_approved.call_args.kwargs["org_id"] == "org-e2e"
 
 
 # ---------------------------------------------------------------------------

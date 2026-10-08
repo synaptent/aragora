@@ -51,14 +51,20 @@ _RESERVED_BACKBONE_METADATA_KEYS = frozenset(
 )
 
 
-def _fire_plan_notification(event: str, plan: Any, **kwargs: Any) -> None:
-    """Fire-and-forget plan lifecycle notification.
+def _fire_plan_notification(event: str, plan: Any, *, org_id: str | None, **kwargs: Any) -> None:
+    """Fire-and-forget plan lifecycle notification for ``org_id``'s plan.
 
     Runs async notification in background; never blocks the HTTP response.
+    The task sends nothing unless ``org_id`` owns the plan when it runs.
     """
     import asyncio
 
+    acting_org = str(org_id or "").strip()
+
     async def _send() -> None:
+        if not acting_org:
+            logger.warning("Plan notification (%s) skipped: no org to act for", event)
+            return
         try:
             from aragora.pipeline.notifications import (
                 notify_plan_created,
@@ -68,17 +74,20 @@ def _fire_plan_notification(event: str, plan: Any, **kwargs: Any) -> None:
             )
 
             if event == "created":
-                await notify_plan_created(plan)
+                await notify_plan_created(plan, org_id=acting_org)
             elif event == "approved":
-                await notify_plan_approved(plan, approved_by=kwargs.get("approved_by", "unknown"))
+                await notify_plan_approved(
+                    plan, approved_by=kwargs.get("approved_by", "unknown"), org_id=acting_org
+                )
             elif event == "rejected":
                 await notify_plan_rejected(
                     plan,
                     rejected_by=kwargs.get("rejected_by", "unknown"),
                     reason=kwargs.get("reason", ""),
+                    org_id=acting_org,
                 )
             elif event == "execution_started":
-                await notify_execution_started(plan)
+                await notify_execution_started(plan, org_id=acting_org)
         except (ValueError, KeyError, TypeError, RuntimeError, OSError) as exc:
             logger.debug("Plan notification (%s) failed: %s", event, exc)
 
@@ -388,7 +397,7 @@ class PlansHandler(BaseHandler):
         sync_decision_plan_backbone_receipt(plan, append_event=False)
 
         logger.info("Created plan %s for debate %s", plan.id, plan.debate_id)
-        _fire_plan_notification("created", plan)
+        _fire_plan_notification("created", plan, org_id=scope.org_id)
 
         response = self._plan_detail(plan)
         response["run_id"] = run_id
@@ -435,7 +444,7 @@ class PlansHandler(BaseHandler):
         runtime.sync_plan_receipt_to_run(plan, append_event=True)
 
         logger.info("Plan %s approved by %s", plan_id, approver_id)
-        _fire_plan_notification("approved", plan, approved_by=approver_id)
+        _fire_plan_notification("approved", plan, org_id=scope.org_id, approved_by=approver_id)
 
         # Optionally trigger execution on approval
         auto_execute = body.get("auto_execute", False)
@@ -474,7 +483,7 @@ class PlansHandler(BaseHandler):
                     plan_id,
                     launch.get("execution_id"),
                 )
-                _fire_plan_notification("execution_started", plan)
+                _fire_plan_notification("execution_started", plan, org_id=scope.org_id)
             except BackbonePersistenceError as exc:
                 logger.warning("Auto-execution blocked for plan %s: %s", plan_id, exc)
                 execution_error = FAIL_CLOSED_BACKBONE_MESSAGE
@@ -551,7 +560,9 @@ class PlansHandler(BaseHandler):
         runtime.sync_plan_receipt_to_run(plan, append_event=True)
 
         logger.info("Plan %s rejected by %s: %s", plan_id, rejecter_id, reason)
-        _fire_plan_notification("rejected", plan, rejected_by=rejecter_id, reason=str(reason))
+        _fire_plan_notification(
+            "rejected", plan, org_id=scope.org_id, rejected_by=rejecter_id, reason=str(reason)
+        )
 
         return json_response(
             {
@@ -639,7 +650,7 @@ class PlansHandler(BaseHandler):
             return error_response(f"Failed to schedule execution: {exc}", 500)
 
         logger.info("Execution scheduled for plan %s", plan_id)
-        _fire_plan_notification("execution_started", plan)
+        _fire_plan_notification("execution_started", plan, org_id=scope.org_id)
 
         return json_response(
             {

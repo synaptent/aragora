@@ -513,7 +513,8 @@ class WebhookProvider(NotificationProvider):
         start_time = time.perf_counter()
 
         endpoint = self.endpoints.get(recipient)
-        if not endpoint:
+        # Another org's endpoint is reported exactly like a missing one.
+        if not endpoint or not endpoint.receives_org(notification.org_id):
             latency = time.perf_counter() - start_time
             _record_notification_metric(
                 "webhook",
@@ -634,10 +635,10 @@ class WebhookProvider(NotificationProvider):
         notification: Notification,
         event_type: str,
     ) -> list[NotificationResult]:
-        """Send to all endpoints matching the event type."""
+        """Send to all endpoints matching the event type and the notification's org."""
         results = []
         for endpoint in self.endpoints.values():
-            if endpoint.matches_event(event_type):
+            if endpoint.matches_event(event_type) and endpoint.receives_org(notification.org_id):
                 result = await self.send(notification, endpoint.id)
                 results.append(result)
         return results

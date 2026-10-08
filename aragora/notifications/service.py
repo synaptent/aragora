@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -218,7 +219,7 @@ class NotificationService:
         self,
         notification: Notification,
         channels: list[NotificationChannel] | None = None,
-        recipients: dict[NotificationChannel, list[str] | None] = None,
+        recipients: Mapping[NotificationChannel, list[str] | None] | None = None,
     ) -> list[NotificationResult]:
         """
         Send notification to specified channels and recipients.
@@ -335,6 +336,7 @@ class NotificationService:
                 title=entry.payload.get("title", ""),
                 message=entry.payload.get("message", ""),
                 severity=entry.payload.get("severity", "info"),
+                org_id=entry.payload.get("org_id"),
             )
 
             result = await provider.send(notification, entry.recipient)
@@ -405,9 +407,12 @@ class NotificationService:
                 return [provider.config.default_channel]
 
         if channel == NotificationChannel.WEBHOOK:
-            # Return all enabled webhook endpoint IDs
             webhook_provider = self.webhook_provider
-            return [ep.id for ep in webhook_provider.endpoints.values() if ep.enabled]
+            return [
+                ep.id
+                for ep in webhook_provider.endpoints.values()
+                if ep.enabled and ep.receives_org(notification.org_id)
+            ]
 
         return []
 
