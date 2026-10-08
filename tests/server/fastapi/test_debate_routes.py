@@ -10,6 +10,9 @@ Covers:
 - DELETE /api/v2/debates/{debate_id}           - Delete a debate
 - Input validation (Pydantic 422 errors)
 - Auth enforcement on write operations
+
+Callers are signed in as an owner of ``org-1``, which owns every mocked debate;
+cross-org isolation is covered in ``test_debates_decisions_isolation.py``.
 """
 
 from __future__ import annotations
@@ -31,10 +34,11 @@ def app():
 
 @pytest.fixture
 def mock_storage():
-    """Create a mock debate storage with sample data."""
+    """Create a mock debate storage whose debates all belong to org-1."""
     storage = MagicMock()
-    storage.list_debates = MagicMock(return_value=[])
+    storage.list_recent = MagicMock(return_value=[])
     storage.count_debates = MagicMock(return_value=0)
+    storage.get_access_info = MagicMock(side_effect=lambda ref: (ref, "org-1", False))
     storage.get_debate = MagicMock(return_value=None)
     storage.save_debate = MagicMock()
     storage.delete_debate = MagicMock(return_value=True)
@@ -42,8 +46,12 @@ def mock_storage():
 
 
 @pytest.fixture
-def client(app, mock_storage):
-    """Create a test client with mocked context."""
+def org1_headers(fastapi_bearer):
+    return fastapi_bearer("user-1", "org-1")
+
+
+@pytest.fixture
+def app_with_context(app, mock_storage):
     app.state.context = {
         "storage": mock_storage,
         "elo_system": MagicMock(),
@@ -51,7 +59,19 @@ def client(app, mock_storage):
         "rbac_checker": MagicMock(),
         "decision_service": MagicMock(),
     }
-    return TestClient(app, raise_server_exceptions=False)
+    return app
+
+
+@pytest.fixture
+def anon_client(app_with_context):
+    """A client with mocked context and no credentials."""
+    return TestClient(app_with_context, raise_server_exceptions=False)
+
+
+@pytest.fixture
+def client(app_with_context, org1_headers):
+    """A client signed in as an owner of org-1."""
+    return TestClient(app_with_context, headers=org1_headers, raise_server_exceptions=False)
 
 
 @pytest.fixture
@@ -155,9 +175,16 @@ class TestListDebates:
         assert data["limit"] == 50
         assert data["offset"] == 0
 
+    def test_requires_auth(self, anon_client, mock_storage):
+        """Anonymous callers get 401 and storage is never listed."""
+        response = anon_client.get("/api/v2/debates")
+        assert response.status_code == 401
+        assert response.json()["code"] == "auth_required"
+        mock_storage.list_recent.assert_not_called()
+
     def test_returns_debates_with_data(self, client, mock_storage, sample_debates_list):
         """List debates returns summaries from storage."""
-        mock_storage.list_debates.return_value = sample_debates_list
+        mock_storage.list_recent.return_value = sample_debates_list
         mock_storage.count_debates.return_value = 3
 
         response = client.get("/api/v2/debates")
@@ -176,8 +203,8 @@ class TestListDebates:
         assert first["has_consensus"] is True
 
     def test_pagination_params(self, client, mock_storage):
-        """List debates passes pagination params to storage."""
-        mock_storage.list_debates.return_value = []
+        """List debates passes pagination params and the caller's org to storage."""
+        mock_storage.list_recent.return_value = []
         mock_storage.count_debates.return_value = 0
 
         response = client.get("/api/v2/debates?limit=10&offset=20")
@@ -185,19 +212,18 @@ class TestListDebates:
         data = response.json()
         assert data["limit"] == 10
         assert data["offset"] == 20
-        mock_storage.list_debates.assert_called_once_with(limit=10, offset=20, status=None)
+        mock_storage.list_recent.assert_called_once_with(limit=10, org_id="org-1", offset=20)
+        mock_storage.count_debates.assert_called_once_with(org_id="org-1")
 
     def test_status_filter(self, client, mock_storage, sample_debates_list):
         """List debates supports status filter."""
-        active_only = [d for d in sample_debates_list if d["status"] == "active"]
-        mock_storage.list_debates.return_value = active_only
-        mock_storage.count_debates.return_value = 1
+        mock_storage.list_recent.return_value = sample_debates_list
+        mock_storage.count_debates.return_value = 3
 
         response = client.get("/api/v2/debates?status=active")
         assert response.status_code == 200
         data = response.json()
-        assert len(data["debates"]) == 1
-        mock_storage.list_debates.assert_called_once_with(limit=50, offset=0, status="active")
+        assert [d["id"] for d in data["debates"]] == ["debate-002"]
 
     def test_limit_validation_min(self, client):
         """Limit must be >= 1."""
@@ -216,7 +242,7 @@ class TestListDebates:
 
     def test_no_consensus_shows_false(self, client, mock_storage):
         """Debate without consensus shows has_consensus=False."""
-        mock_storage.list_debates.return_value = [
+        mock_storage.list_recent.return_value = [
             {
                 "id": "d-1",
                 "task": "No consensus yet",
@@ -232,10 +258,10 @@ class TestListDebates:
         data = response.json()
         assert data["debates"][0]["has_consensus"] is False
 
-    def test_returns_503_when_storage_unavailable(self, app):
+    def test_returns_503_when_storage_unavailable(self, app, org1_headers):
         """List debates returns 503 when storage not available."""
         app.state.context = {"storage": None}
-        c = TestClient(app, raise_server_exceptions=False)
+        c = TestClient(app, headers=org1_headers, raise_server_exceptions=False)
         response = c.get("/api/v2/debates")
         assert response.status_code == 503
 
@@ -515,9 +541,9 @@ def _as_org_member(client):
 class TestCreateDebate:
     """Tests for POST /api/v2/debates."""
 
-    def test_requires_auth(self, client):
+    def test_requires_auth(self, anon_client):
         """Create debate requires authentication."""
-        response = client.post("/api/v2/debates", json={"question": "Review this selection"})
+        response = anon_client.post("/api/v2/debates", json={"question": "Review this selection"})
         assert response.status_code == 401
 
     def test_requires_org_before_the_controller(self, client, monkeypatch):
@@ -687,13 +713,14 @@ class TestCreateDebate:
 class TestUpdateDebate:
     """Tests for PATCH /api/v2/debates/{debate_id}."""
 
-    def test_requires_auth(self, client):
+    def test_requires_auth(self, anon_client, mock_storage):
         """PATCH debates requires authentication."""
-        response = client.patch(
+        response = anon_client.patch(
             "/api/v2/debates/debate-abc123",
             json={"title": "New title"},
         )
         assert response.status_code == 401
+        mock_storage.save_debate.assert_not_called()
 
     def test_returns_404_for_nonexistent(self, client, mock_storage):
         """PATCH returns 404 for nonexistent debate."""
@@ -906,10 +933,11 @@ class TestUpdateDebate:
 class TestDeleteDebate:
     """Tests for DELETE /api/v2/debates/{debate_id}."""
 
-    def test_requires_auth(self, client):
+    def test_requires_auth(self, anon_client, mock_storage):
         """DELETE debates requires authentication."""
-        response = client.delete("/api/v2/debates/debate-abc123")
+        response = anon_client.delete("/api/v2/debates/debate-abc123")
         assert response.status_code == 401
+        mock_storage.delete_debate.assert_not_called()
 
     def test_deletes_debate(self, client, mock_storage, sample_debate_dict):
         """DELETE removes debate from storage."""
@@ -988,23 +1016,23 @@ class TestDeleteDebate:
 class TestStorageFallback:
     """Tests for storage dependency fallback behavior."""
 
-    def test_returns_503_without_context(self, app):
+    def test_returns_503_without_context(self, app, org1_headers):
         """Routes return 503 when server context is not initialized."""
         # Don't set app.state.context
-        c = TestClient(app, raise_server_exceptions=False)
+        c = TestClient(app, headers=org1_headers, raise_server_exceptions=False)
         response = c.get("/api/v2/debates")
         assert response.status_code == 503
 
-    def test_returns_503_without_storage(self, app):
+    def test_returns_503_without_storage(self, app, org1_headers):
         """Routes return 503 when storage is not available."""
         app.state.context = {"storage": None}
-        c = TestClient(app, raise_server_exceptions=False)
+        c = TestClient(app, headers=org1_headers, raise_server_exceptions=False)
         response = c.get("/api/v2/debates")
         assert response.status_code == 503
 
-    def test_fallback_to_debates_dict(self, app):
-        """Routes fall back to storage.debates when list_debates not available."""
-        storage = MagicMock(spec=[])  # No list_debates or count_debates
+    def test_fallback_to_debates_dict(self, app, org1_headers):
+        """Without list_recent the list reads storage.debates, keeping the caller org's."""
+        storage = MagicMock(spec=[])  # No list_recent or count_debates
         storage.debates = {
             "d-1": {
                 "id": "d-1",
@@ -1013,7 +1041,10 @@ class TestStorageFallback:
                 "agents": [],
                 "rounds": [],
                 "consensus": None,
+                "org_id": "org-1",
             },
+            "d-other": {"id": "d-other", "task": "Other org", "org_id": "org-2"},
+            "d-unowned": {"id": "d-unowned", "task": "No owner"},
         }
         app.state.context = {
             "storage": storage,
@@ -1021,8 +1052,9 @@ class TestStorageFallback:
             "rbac_checker": None,
             "decision_service": None,
         }
-        c = TestClient(app, raise_server_exceptions=False)
+        c = TestClient(app, headers=org1_headers, raise_server_exceptions=False)
         response = c.get("/api/v2/debates")
         assert response.status_code == 200
         data = response.json()
-        assert len(data["debates"]) == 1
+        assert [d["id"] for d in data["debates"]] == ["d-1"]
+        assert data["total"] == 1

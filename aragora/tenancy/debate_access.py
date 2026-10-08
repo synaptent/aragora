@@ -16,21 +16,30 @@ extend :mod:`aragora.tenancy.record_scope`:
   get the same 404 body.
 * A debate that is still running has no stored row yet. Its org comes from the
   server's active-debate registry, where the create path records it.
+
+FastAPI routes use :func:`authorize_debate_read_fastapi` and
+:func:`authorize_debate_write_fastapi`, which apply the same rules and raise
+the same bodies as ``APIError``.
 """
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from aragora.tenancy.record_scope import (
     OrgScope,
     record_not_found,
+    record_not_found_error,
     record_visible,
     require_org_scope,
+    require_org_scope_fastapi,
 )
 
 if TYPE_CHECKING:
+    from starlette.requests import Request
+
     from aragora.server.handlers.utils.responses import HandlerResult
 
 
@@ -124,6 +133,39 @@ def authorize_debate_write(
     return DebateWrite(debate_id=access.debate_id, scope=scope), None
 
 
+async def authorize_debate_read_fastapi(
+    request: Request, storage: Any, ref: str, resource: str = "Debate"
+) -> str:
+    """The id of the debate ``ref`` names when the caller may read it, else raise.
+
+    FastAPI form of :func:`authorize_debate_read`: a public debate needs no
+    scope; otherwise the scope denial (401/403) or the shared 404 is raised as
+    ``APIError``. Read the debate by the returned id, never by ``ref``.
+    """
+    access = await asyncio.to_thread(find_debate_access, storage, ref)
+    if access is not None and access.is_public:
+        return access.debate_id
+    scope = await require_org_scope_fastapi(request)
+    if access is None or not debate_visible_to_org(access, scope.org_id):
+        raise record_not_found_error(resource)
+    return access.debate_id
+
+
+async def authorize_debate_write_fastapi(
+    scope: OrgScope, storage: Any, ref: str, resource: str = "Debate"
+) -> DebateWrite:
+    """The write the caller's org may make to the debate ``ref`` names, else raise
+    the shared 404.
+
+    FastAPI form of :func:`authorize_debate_write`; ``scope`` comes from the
+    ``require_org_scope_fastapi`` dependency, so it is checked before the lookup.
+    """
+    access = await asyncio.to_thread(find_debate_access, storage, ref)
+    if access is None or not record_visible(access.org_id, scope):
+        raise record_not_found_error(resource)
+    return DebateWrite(debate_id=access.debate_id, scope=scope)
+
+
 def _running_debate_access(debate_id: str) -> DebateAccess | None:
     try:
         from aragora.server.state import get_state_manager
@@ -146,7 +188,9 @@ __all__ = [
     "DebateAccess",
     "DebateWrite",
     "authorize_debate_read",
+    "authorize_debate_read_fastapi",
     "authorize_debate_write",
+    "authorize_debate_write_fastapi",
     "debate_visible_to_org",
     "find_debate_access",
 ]

@@ -183,3 +183,39 @@ def override_fastapi_auth():
 def override_auth(override_fastapi_auth):
     """Short alias for common auth override helper usage."""
     return override_fastapi_auth
+
+
+@pytest.fixture
+def fastapi_bearer(monkeypatch):
+    """Sign real JWTs: returns ``bearer(user_id, org_id, role="owner")`` -> headers.
+
+    For routes whose org scope comes from ``require_org_scope_fastapi`` or
+    ``authorize_debate_read_fastapi``, which read the token itself and so are
+    not reached by dependency overrides.
+    """
+    import aragora.billing.auth.config as jwt_config
+    import aragora.storage.token_blacklist_store as blacklist_store
+    from aragora.billing.auth.tokens import create_access_token
+    from aragora.server import auth as server_auth
+
+    for name in (
+        "ARAGORA_ENV",
+        "ARAGORA_ENVIRONMENT",
+        "ARAGORA_SECRETS_STRICT",
+        "ARAGORA_API_TOKEN",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("ARAGORA_USE_SECRETS_MANAGER", "false")
+    monkeypatch.setenv("ARAGORA_JWT_SECRET", "fastapi-route-test-secret-" + "s" * 32)
+    monkeypatch.setattr(jwt_config, "_jwt_secret_cache", None)
+    monkeypatch.setattr(jwt_config, "_jwt_secret_previous_cache", None)
+    monkeypatch.setattr(blacklist_store, "_blacklist_backend", blacklist_store.InMemoryBlacklist())
+    config = server_auth.AuthConfig()
+    config.configure_from_env()
+    monkeypatch.setattr(server_auth, "auth_config", config, raising=False)
+
+    def _bearer(user_id: str, org_id: str | None, role: str = "owner") -> dict[str, str]:
+        token = create_access_token(user_id, f"{user_id}@example.test", org_id, role)
+        return {"Authorization": f"Bearer {token}"}
+
+    return _bearer

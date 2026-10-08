@@ -16,11 +16,11 @@ _SCOPE = OrgScope(org_id="org-1", user_id="user-1", role="member")
 
 
 class _SlowSyncStorage:
-    def list_debates(self, **kwargs):
+    def list_recent(self, **kwargs):
         time.sleep(0.2)
         return []
 
-    def count_debates(self, status: str | None = None) -> int:
+    def count_debates(self, org_id: str | None = None) -> int:
         time.sleep(0.2)
         return 0
 
@@ -66,6 +66,7 @@ async def test_list_debates_does_not_block_event_loop_for_sync_storage() -> None
         limit=10,
         offset=0,
         status=None,
+        scope=_SCOPE,
         storage=_SlowSyncStorage(),
     )
     ticks = await task

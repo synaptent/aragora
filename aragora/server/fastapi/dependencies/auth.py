@@ -98,6 +98,33 @@ async def require_authenticated(
     return auth
 
 
+def check_permission(auth: AuthorizationContext, permission: str) -> AuthorizationContext:
+    """Return ``auth`` when it holds ``permission`` (directly or through its
+    roles), else raise 403.
+
+    For routes that must check something else first, such as record ownership,
+    so that another org's record answers 404 whatever the caller's role.
+    """
+    if auth.has_permission(permission):
+        return auth
+    # Try the RBAC checker for role-based resolution
+    try:
+        from aragora.rbac.checker import get_permission_checker
+
+        checker = get_permission_checker()
+        if checker:
+            decision = checker.check_permission(auth, permission)
+            if decision.allowed:
+                return auth
+    except (ValueError, RuntimeError, ImportError, AttributeError) as e:
+        logger.debug("RBAC checker error: %s", e)
+
+    raise HTTPException(
+        status_code=403,
+        detail=f"Permission denied: {permission}",
+    )
+
+
 def require_permission(permission: str) -> Any:
     """Create a dependency that requires a specific RBAC permission.
 
@@ -116,23 +143,6 @@ def require_permission(permission: str) -> Any:
     async def _check_permission(
         auth: AuthorizationContext = Depends(require_authenticated),
     ) -> AuthorizationContext:
-        if not auth.has_permission(permission):
-            # Try the RBAC checker for role-based resolution
-            try:
-                from aragora.rbac.checker import get_permission_checker
-
-                checker = get_permission_checker()
-                if checker:
-                    decision = checker.check_permission(auth, permission)
-                    if decision.allowed:
-                        return auth
-            except (ValueError, RuntimeError, ImportError, AttributeError) as e:
-                logger.debug("RBAC checker error: %s", e)
-
-            raise HTTPException(
-                status_code=403,
-                detail=f"Permission denied: {permission}",
-            )
-        return auth
+        return check_permission(auth, permission)
 
     return _check_permission
