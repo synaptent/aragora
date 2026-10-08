@@ -666,17 +666,16 @@ class TestHandleApproveTransitionRootPath:
     async def test_root_approve_transition_reads_fastapi_cached_body(self, handler):
         http = _CompatFakeHandler({"pipeline_id": "pipe-fastapi-body"})
 
-        with patch.object(CanvasPipelineHandler, "_check_permission", return_value=None):
-            result = handler.handle_post(
-                "/api/v1/canvas/pipeline/approve-transition",
-                {},
-                http,
-            )
-            if hasattr(result, "__await__"):
-                result = await result
+        result = handler.handle_post(
+            "/api/v1/canvas/pipeline/approve-transition",
+            {},
+            http,
+        )
+        if hasattr(result, "__await__"):
+            result = await result
 
         assert result.status_code == 404
-        assert _body(result)["error"] == "Pipeline pipe-fastapi-body not found"
+        assert _body(result) == {"error": "Pipeline not found", "code": "not_found"}
 
     @pytest.mark.asyncio
     async def test_from_ideas_reads_fastapi_cached_body(self, handler):

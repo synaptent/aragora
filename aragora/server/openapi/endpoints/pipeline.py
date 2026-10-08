@@ -112,7 +112,7 @@ def _transition_request_body(*, include_pipeline_id: bool) -> dict:
     }
 
 
-PIPELINE_ENDPOINTS = {
+PIPELINE_ENDPOINTS: dict[str, dict] = {
     "/api/v1/canvas/pipeline": {
         "get": {
             "tags": ["Pipeline"],
@@ -122,7 +122,7 @@ PIPELINE_ENDPOINTS = {
                 "Return the latest canvas pipeline by default. Pass `list=true` to return "
                 "pipeline summaries instead."
             ),
-            "security": AUTH_REQUIREMENTS["optional"]["security"],
+            "security": AUTH_REQUIREMENTS["required"]["security"],
             "parameters": [
                 {
                     "name": "list",
@@ -154,7 +154,7 @@ PIPELINE_ENDPOINTS = {
             "summary": "Create pipeline from ideas",
             "operationId": "createPipelineFromIdeas",
             "description": "Create a full 4-stage pipeline from a list of raw idea strings.",
-            "security": AUTH_REQUIREMENTS["optional"]["security"],
+            "security": AUTH_REQUIREMENTS["required"]["security"],
             "requestBody": {
                 "required": True,
                 "content": {
@@ -186,7 +186,7 @@ PIPELINE_ENDPOINTS = {
             "summary": "Create pipeline from debate",
             "operationId": "createPipelineFromDebate",
             "description": "Create a pipeline from an ArgumentCartographer debate graph (nodes + edges).",
-            "security": AUTH_REQUIREMENTS["optional"]["security"],
+            "security": AUTH_REQUIREMENTS["required"]["security"],
             "requestBody": _GRAPH_BODY,
             "responses": {
                 "200": _json_response("Pipeline result"),
@@ -204,7 +204,7 @@ PIPELINE_ENDPOINTS = {
                 "Parse unstructured text into ideas and immediately create a pipeline from "
                 "the extracted ideas."
             ),
-            "security": AUTH_REQUIREMENTS["optional"]["security"],
+            "security": AUTH_REQUIREMENTS["required"]["security"],
             "requestBody": {
                 "required": True,
                 "content": {
@@ -235,7 +235,7 @@ PIPELINE_ENDPOINTS = {
             "summary": "Create pipeline from template",
             "operationId": "createPipelineFromTemplate",
             "description": "Create a pipeline from a named template.",
-            "security": AUTH_REQUIREMENTS["optional"]["security"],
+            "security": AUTH_REQUIREMENTS["required"]["security"],
             "requestBody": {
                 "required": True,
                 "content": {
@@ -264,7 +264,7 @@ PIPELINE_ENDPOINTS = {
             "summary": "Create demo pipeline",
             "operationId": "createDemoPipeline",
             "description": "Create a pre-populated demo pipeline with all stages completed.",
-            "security": AUTH_REQUIREMENTS["optional"]["security"],
+            "security": AUTH_REQUIREMENTS["required"]["security"],
             "requestBody": {
                 "required": False,
                 "content": {
@@ -293,7 +293,7 @@ PIPELINE_ENDPOINTS = {
             "summary": "Advance pipeline stage",
             "operationId": "advancePipelineStage",
             "description": "Advance a pipeline to the next stage (e.g. ideas -> goals).",
-            "security": AUTH_REQUIREMENTS["optional"]["security"],
+            "security": AUTH_REQUIREMENTS["required"]["security"],
             "requestBody": {
                 "required": True,
                 "content": {
@@ -328,7 +328,7 @@ PIPELINE_ENDPOINTS = {
                 "Approve or reject a pending stage transition when the pipeline ID is sent "
                 "in the request body."
             ),
-            "security": AUTH_REQUIREMENTS["optional"]["security"],
+            "security": AUTH_REQUIREMENTS["required"]["security"],
             "requestBody": _transition_request_body(include_pipeline_id=True),
             "responses": {
                 "200": _json_response("Transition result"),
@@ -343,7 +343,7 @@ PIPELINE_ENDPOINTS = {
             "summary": "Run async pipeline",
             "operationId": "runPipeline",
             "description": "Start an asynchronous pipeline execution from ideas through all stages.",
-            "security": AUTH_REQUIREMENTS["optional"]["security"],
+            "security": AUTH_REQUIREMENTS["required"]["security"],
             "requestBody": {
                 "required": True,
                 "content": {
@@ -386,7 +386,7 @@ PIPELINE_ENDPOINTS = {
             "summary": "Extract goals from ideas",
             "operationId": "extractGoals",
             "description": "Use AI to extract structured goals from an ideas canvas.",
-            "security": AUTH_REQUIREMENTS["optional"]["security"],
+            "security": AUTH_REQUIREMENTS["required"]["security"],
             "requestBody": _GRAPH_BODY,
             "responses": {
                 "200": _json_response("Extracted goals"),
@@ -401,7 +401,7 @@ PIPELINE_ENDPOINTS = {
             "summary": "Extract principles from ideas canvas",
             "operationId": "extractPipelinePrinciples",
             "description": "Extract principles and themes from an ideas canvas.",
-            "security": AUTH_REQUIREMENTS["optional"]["security"],
+            "security": AUTH_REQUIREMENTS["required"]["security"],
             "requestBody": {
                 "required": True,
                 "content": {
@@ -436,7 +436,7 @@ PIPELINE_ENDPOINTS = {
                 "Start an asynchronous pipeline from freeform text and return a pipeline "
                 "identifier immediately."
             ),
-            "security": AUTH_REQUIREMENTS["optional"]["security"],
+            "security": AUTH_REQUIREMENTS["required"]["security"],
             "requestBody": {
                 "required": True,
                 "content": {
@@ -468,7 +468,7 @@ PIPELINE_ENDPOINTS = {
             "summary": "Create pipeline from system metrics",
             "operationId": "createPipelineFromSystemMetrics",
             "description": "Auto-generate a pipeline from system health analysis.",
-            "security": AUTH_REQUIREMENTS["optional"]["security"],
+            "security": AUTH_REQUIREMENTS["required"]["security"],
             "requestBody": {
                 "required": False,
                 "content": {
@@ -489,7 +489,7 @@ PIPELINE_ENDPOINTS = {
             "summary": "Convert debate to ideas canvas",
             "operationId": "convertDebateToCanvas",
             "description": "Convert a debate graph into an ideas-stage canvas.",
-            "security": AUTH_REQUIREMENTS["optional"]["security"],
+            "security": AUTH_REQUIREMENTS["required"]["security"],
             "requestBody": _GRAPH_BODY,
             "responses": {
                 "200": _json_response("Ideas canvas"),
@@ -504,7 +504,7 @@ PIPELINE_ENDPOINTS = {
             "summary": "Convert workflow to actions canvas",
             "operationId": "convertWorkflowToCanvas",
             "description": "Convert a workflow definition into an actions-stage canvas.",
-            "security": AUTH_REQUIREMENTS["optional"]["security"],
+            "security": AUTH_REQUIREMENTS["required"]["security"],
             "requestBody": {
                 "required": True,
                 "content": {
@@ -526,7 +526,7 @@ PIPELINE_ENDPOINTS = {
             "summary": "List pipeline templates",
             "operationId": "listPipelineTemplates",
             "description": "List available pipeline templates.",
-            "security": AUTH_REQUIREMENTS["optional"]["security"],
+            "security": AUTH_REQUIREMENTS["required"]["security"],
             "responses": {
                 "200": _json_response("Template list"),
             },
@@ -538,7 +538,7 @@ PIPELINE_ENDPOINTS = {
             "summary": "Get pipeline",
             "operationId": "getPipeline",
             "description": "Get a pipeline result by ID.",
-            "security": AUTH_REQUIREMENTS["optional"]["security"],
+            "security": AUTH_REQUIREMENTS["required"]["security"],
             "parameters": [_ID_PARAM],
             "responses": {
                 "200": _json_response("Pipeline result"),
@@ -550,7 +550,7 @@ PIPELINE_ENDPOINTS = {
             "summary": "Save pipeline canvas state",
             "operationId": "savePipeline",
             "description": "Save the current canvas state for a pipeline.",
-            "security": AUTH_REQUIREMENTS["optional"]["security"],
+            "security": AUTH_REQUIREMENTS["required"]["security"],
             "parameters": [_ID_PARAM],
             "requestBody": {
                 "required": True,
@@ -571,7 +571,7 @@ PIPELINE_ENDPOINTS = {
             "summary": "Get pipeline stage status",
             "operationId": "getPipelineStatus",
             "description": "Get per-stage completion status for a pipeline.",
-            "security": AUTH_REQUIREMENTS["optional"]["security"],
+            "security": AUTH_REQUIREMENTS["required"]["security"],
             "parameters": [_ID_PARAM],
             "responses": {
                 "200": _json_response("Stage status"),
@@ -585,7 +585,7 @@ PIPELINE_ENDPOINTS = {
             "summary": "Get pipeline stage canvas",
             "operationId": "getPipelineStage",
             "description": "Get the canvas data for a specific pipeline stage.",
-            "security": AUTH_REQUIREMENTS["optional"]["security"],
+            "security": AUTH_REQUIREMENTS["required"]["security"],
             "parameters": [_ID_PARAM, _STAGE_PARAM],
             "responses": {
                 "200": _json_response("Stage canvas"),
@@ -599,7 +599,7 @@ PIPELINE_ENDPOINTS = {
             "summary": "Get pipeline React Flow graph",
             "operationId": "getPipelineGraph",
             "description": "Get the React Flow compatible graph JSON for a pipeline.",
-            "security": AUTH_REQUIREMENTS["optional"]["security"],
+            "security": AUTH_REQUIREMENTS["required"]["security"],
             "parameters": [
                 _ID_PARAM,
                 {
@@ -621,7 +621,7 @@ PIPELINE_ENDPOINTS = {
             "summary": "Get pipeline decision receipt",
             "operationId": "getPipelineReceipt",
             "description": "Get the cryptographic decision receipt for a completed pipeline.",
-            "security": AUTH_REQUIREMENTS["optional"]["security"],
+            "security": AUTH_REQUIREMENTS["required"]["security"],
             "parameters": [_ID_PARAM],
             "responses": {
                 "200": _json_response("Decision receipt"),
@@ -635,7 +635,7 @@ PIPELINE_ENDPOINTS = {
             "summary": "Approve stage transition",
             "operationId": "approvePipelineTransition",
             "description": "Approve or reject a pending stage transition.",
-            "security": AUTH_REQUIREMENTS["optional"]["security"],
+            "security": AUTH_REQUIREMENTS["required"]["security"],
             "parameters": [_ID_PARAM],
             "requestBody": _transition_request_body(include_pipeline_id=False),
             "responses": {
@@ -654,7 +654,7 @@ PIPELINE_ENDPOINTS = {
                 "Queue execution for a completed pipeline or return a dry-run summary of the "
                 "planned work."
             ),
-            "security": AUTH_REQUIREMENTS["optional"]["security"],
+            "security": AUTH_REQUIREMENTS["required"]["security"],
             "parameters": [_ID_PARAM],
             "requestBody": {
                 "required": False,
@@ -685,7 +685,7 @@ PIPELINE_ENDPOINTS = {
             "description": (
                 "Return beliefs, explanations, and precedents for nodes in the pipeline."
             ),
-            "security": AUTH_REQUIREMENTS["optional"]["security"],
+            "security": AUTH_REQUIREMENTS["required"]["security"],
             "parameters": [_ID_PARAM],
             "responses": {
                 "200": _json_response("Pipeline intelligence"),
@@ -699,7 +699,7 @@ PIPELINE_ENDPOINTS = {
             "summary": "Get pipeline beliefs",
             "operationId": "getPipelineBeliefs",
             "description": "Return belief-network-style confidence data for pipeline nodes.",
-            "security": AUTH_REQUIREMENTS["optional"]["security"],
+            "security": AUTH_REQUIREMENTS["required"]["security"],
             "parameters": [_ID_PARAM],
             "responses": {
                 "200": _json_response("Pipeline beliefs"),
@@ -713,7 +713,7 @@ PIPELINE_ENDPOINTS = {
             "summary": "Get pipeline explanations",
             "operationId": "getPipelineExplanations",
             "description": "Return explainability factors for pipeline nodes.",
-            "security": AUTH_REQUIREMENTS["optional"]["security"],
+            "security": AUTH_REQUIREMENTS["required"]["security"],
             "parameters": [_ID_PARAM],
             "responses": {
                 "200": _json_response("Pipeline explanations"),
@@ -727,7 +727,7 @@ PIPELINE_ENDPOINTS = {
             "summary": "Get pipeline precedents",
             "operationId": "getPipelinePrecedents",
             "description": "Return similar goals or precedents linked to the pipeline.",
-            "security": AUTH_REQUIREMENTS["optional"]["security"],
+            "security": AUTH_REQUIREMENTS["required"]["security"],
             "parameters": [_ID_PARAM],
             "responses": {
                 "200": _json_response("Pipeline precedents"),
@@ -744,7 +744,7 @@ PIPELINE_ENDPOINTS = {
                 "Trigger the self-improvement system using a pipeline as the source task "
                 "definition."
             ),
-            "security": AUTH_REQUIREMENTS["optional"]["security"],
+            "security": AUTH_REQUIREMENTS["required"]["security"],
             "parameters": [_ID_PARAM],
             "requestBody": {
                 "required": False,
@@ -776,7 +776,7 @@ PIPELINE_ENDPOINTS = {
             "description": (
                 "Load a completed debate's argument graph and create a pipeline from it."
             ),
-            "security": AUTH_REQUIREMENTS["optional"]["security"],
+            "security": AUTH_REQUIREMENTS["required"]["security"],
             "parameters": [_DEBATE_ID_PARAM],
             "requestBody": {
                 "required": False,
@@ -805,7 +805,7 @@ PIPELINE_ENDPOINTS = {
             "summary": "List pipeline agents",
             "operationId": "listPipelineAgents",
             "description": "Return current agent assignments and statuses for a pipeline.",
-            "security": AUTH_REQUIREMENTS["optional"]["security"],
+            "security": AUTH_REQUIREMENTS["required"]["security"],
             "parameters": [_ID_PARAM],
             "responses": {
                 "200": _json_response("Pipeline agent assignments"),
@@ -818,7 +818,7 @@ PIPELINE_ENDPOINTS = {
             "summary": "Approve pipeline agent",
             "operationId": "approvePipelineAgent",
             "description": "Approve an assigned agent task for a pipeline.",
-            "security": AUTH_REQUIREMENTS["optional"]["security"],
+            "security": AUTH_REQUIREMENTS["required"]["security"],
             "parameters": [_ID_PARAM, _AGENT_ID_PARAM],
             "requestBody": {
                 "required": False,
@@ -844,7 +844,7 @@ PIPELINE_ENDPOINTS = {
             "summary": "Reject pipeline agent",
             "operationId": "rejectPipelineAgent",
             "description": "Reject an assigned agent task for a pipeline.",
-            "security": AUTH_REQUIREMENTS["optional"]["security"],
+            "security": AUTH_REQUIREMENTS["required"]["security"],
             "parameters": [_ID_PARAM, _AGENT_ID_PARAM],
             "requestBody": {
                 "required": True,
@@ -867,3 +867,18 @@ PIPELINE_ENDPOINTS = {
         },
     },
 }
+
+# Body-addressed routes that look up an existing pipeline by ``pipeline_id``.
+_BODY_ID_ROUTES = frozenset(
+    {"/api/v1/canvas/pipeline/advance", "/api/v1/canvas/pipeline/approve-transition"}
+)
+
+# Every pipeline route needs a signed-in user with an organization, and another
+# org's pipeline answers exactly like a missing one.
+for _path, _operations in PIPELINE_ENDPOINTS.items():
+    for _operation in _operations.values():
+        _responses = _operation["responses"]
+        _responses.setdefault("401", STANDARD_ERRORS["401"])
+        _responses.setdefault("403", STANDARD_ERRORS["403"])
+        if "{id}" in _path or _path in _BODY_ID_ROUTES:
+            _responses.setdefault("404", STANDARD_ERRORS["404"])

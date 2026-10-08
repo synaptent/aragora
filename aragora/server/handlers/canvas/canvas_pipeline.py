@@ -22,6 +22,12 @@ Exposes the idea-to-execution pipeline via REST endpoints:
 - POST /api/v1/canvas/pipeline/{id}/execute              → Execute completed pipeline
 - POST /api/v1/canvas/pipeline/from-template            → Create pipeline from template
 - POST /api/v1/debates/{id}/to-pipeline                 → Convert debate to pipeline
+
+Every route needs a signed-in member of an org (401 ``auth_required`` / 403
+``org_required``) and a canvas permission (see
+:mod:`aragora.tenancy.pipeline_access`). Pipelines are owned by the org that
+created them; a pipeline of another org, or of no known org, answers the same
+404 ``Pipeline not found`` as a missing one.
 """
 
 from __future__ import annotations
@@ -56,6 +62,9 @@ _PIPELINE_GRAPH = re.compile(r"^/api/v1/canvas/pipeline/([a-zA-Z0-9_-]+)/graph$"
 _PIPELINE_RECEIPT = re.compile(r"^/api/v1/canvas/pipeline/([a-zA-Z0-9_-]+)/receipt$")
 _PIPELINE_EXECUTE = re.compile(r"^/api/v1/canvas/pipeline/([a-zA-Z0-9_-]+)/execute$")
 _PIPELINE_SELF_IMPROVE = re.compile(r"^/api/v1/canvas/pipeline/([a-zA-Z0-9_-]+)/self-improve$")
+_PIPELINE_APPROVE_TRANSITION = re.compile(
+    r"^/api/v1/canvas/pipeline/([a-zA-Z0-9_-]+)/approve-transition$"
+)
 _PIPELINE_INSIGHT = re.compile(
     r"^/api/v1/canvas/pipeline/([a-zA-Z0-9_-]+)/(intelligence|beliefs|explanations|precedents)$"
 )
@@ -709,6 +718,31 @@ class CanvasPipelineHandler:
     def _owns(pipeline_id: str, scope: OrgScope | None) -> bool:
         return pipeline_access.record_owned(_get_store(), pipeline_id, scope)
 
+    def _call_owned(
+        self,
+        handler: Any,
+        permission: str,
+        pipeline_id: str | None,
+        call: Callable[[dict[str, Any], OrgScope], Any],
+    ) -> Any:
+        """Run ``call(body, scope)`` when the caller's org owns the pipeline.
+
+        ``pipeline_id`` None takes the id from the body's ``pipeline_id``; a
+        body without one goes to ``call``, which answers 400.
+        """
+        scope, denial = self._authorize(handler, permission)
+        if scope is None:
+            return denial
+        body = self._get_request_body(handler)
+        if pipeline_id is None:
+            body_id = body.get("pipeline_id")
+            if not body_id:
+                return call(body, scope)
+            pipeline_id = str(body_id)
+        if not self._owns(pipeline_id, scope):
+            return record_not_found(_PIPELINE)
+        return call(body, scope)
+
     def _create_routes(self) -> dict[str, tuple[str, Callable[[dict[str, Any], OrgScope], Any]]]:
         """POST routes that act on no stored pipeline: path → (permission, call)."""
         create = pipeline_access.PIPELINE_CREATE
@@ -762,6 +796,52 @@ class CanvasPipelineHandler:
             ),
         }
 
+    def _owned_post_route(
+        self, path: str
+    ) -> tuple[str | None, Callable[[dict[str, Any], OrgScope], Any]] | None:
+        """``(pipeline_id, call)`` for a POST route on one pipeline, else None.
+
+        ``pipeline_id`` None means the id comes from the request body.
+        """
+        if path == "/api/v1/canvas/pipeline/advance":
+            return None, lambda body, scope: self.handle_advance(body)
+        if path == "/api/v1/canvas/pipeline/approve-transition":
+
+            def _approve_from_body(body: dict[str, Any], scope: OrgScope) -> Any:
+                pipeline_id = body.get("pipeline_id")
+                if not pipeline_id:
+                    return error_response("Missing pipeline_id in request body", 400)
+                return self.handle_approve_transition(str(pipeline_id), body)
+
+            return None, _approve_from_body
+
+        m = _PIPELINE_APPROVE_TRANSITION.match(path)
+        if m:
+            pipeline_id = m.group(1)
+            return pipeline_id, lambda body, scope: self.handle_approve_transition(
+                pipeline_id, body
+            )
+        m = _PIPELINE_EXECUTE.match(path)
+        if m:
+            pipeline_id = m.group(1)
+            return pipeline_id, lambda body, scope: self.handle_execute(
+                pipeline_id, body, scope=scope
+            )
+        m = _PIPELINE_SELF_IMPROVE.match(path)
+        if m:
+            pipeline_id = m.group(1)
+            return pipeline_id, lambda body, scope: self.handle_self_improve(
+                pipeline_id, body, scope=scope
+            )
+        m = _PIPELINE_AGENT_DECISION.match(path)
+        if m:
+            pipeline_id, agent_id, decision = m.group(1), m.group(2), m.group(3)
+            method = (
+                self.handle_approve_agent if decision == "approve" else self.handle_reject_agent
+            )
+            return pipeline_id, lambda body, scope: method(pipeline_id, agent_id, body)
+        return None
+
     @handle_errors("canvas pipeline operation")
     def handle_post(self, path: str, query_params: dict[str, Any], handler: Any) -> Any:
         """Dispatch POST requests to the appropriate handler method.
@@ -771,6 +851,11 @@ class CanvasPipelineHandler:
         """
         path = _versioned(path)
 
+        # POST /api/v1/debates/{id}/to-pipeline
+        m = _DEBATE_TO_PIPELINE.match(path)
+        if m:
+            return self._debate_to_pipeline(m.group(1), handler)
+
         create = self._create_routes().get(path)
         if create is not None:
             permission, call = create
@@ -779,87 +864,46 @@ class CanvasPipelineHandler:
                 return denial
             return call(self._get_request_body(handler), scope)
 
-        if path == "/api/v1/canvas/pipeline/advance":
-            auth_error = self._check_permission(handler, "pipeline:write")
-            if auth_error:
-                return auth_error
-            return self.handle_advance(self._get_request_body(handler))
-
-        # Check for debate-to-pipeline: /api/v1/debates/{id}/to-pipeline
-        m = _DEBATE_TO_PIPELINE.match(path)
-        if m:
-            auth_error = self._check_permission(handler, "pipeline:write")
-            if auth_error:
-                return auth_error
-            body = self._get_request_body(handler)
-            return self.handle_debate_to_pipeline(m.group(1), body)
-
-        # Check for self-improve: /api/v1/canvas/pipeline/{id}/self-improve
-        m = _PIPELINE_SELF_IMPROVE.match(path)
-        if m:
-            auth_error = self._check_permission(handler, "pipeline:write")
-            if auth_error:
-                return auth_error
-            body = self._get_request_body(handler)
-            return self.handle_self_improve(m.group(1), body)
-
-        # Check for agent approve: /api/v1/pipeline/{id}/agents/{agent_id}/approve
-        m = re.match(r".*/pipeline/([a-zA-Z0-9_-]+)/agents/([a-zA-Z0-9_-]+)/approve$", path)
-        if m:
-            body = self._get_request_body(handler)
-            return self.handle_approve_agent(m.group(1), m.group(2), body)
-
-        # Check for agent reject: /api/v1/pipeline/{id}/agents/{agent_id}/reject
-        m = re.match(r".*/pipeline/([a-zA-Z0-9_-]+)/agents/([a-zA-Z0-9_-]+)/reject$", path)
-        if m:
-            body = self._get_request_body(handler)
-            return self.handle_reject_agent(m.group(1), m.group(2), body)
-
-        # Check for execute: /api/v1/canvas/pipeline/{id}/execute
-        m = _PIPELINE_EXECUTE.match(path)
-        if m:
-            auth_error = self._check_permission(handler, "pipeline:write")
-            if auth_error:
-                return auth_error
-            body = self._get_request_body(handler)
-            return self.handle_execute(m.group(1), body)
-
-        # Check for transition approval: /api/v1/canvas/pipeline/{id}/approve-transition
-        # Also supports root path with pipeline_id in body (frontend pattern)
-        if "/approve-transition" in path:
-            auth_error = self._check_permission(handler, "pipeline:write")
-            if auth_error:
-                return auth_error
-            body = self._get_request_body(handler)
-            m = re.match(r".*/pipeline/([a-zA-Z0-9_-]+)/approve-transition$", path)
-            if m:
-                return self.handle_approve_transition(m.group(1), body)
-            # Fallback: root-path approve-transition with pipeline_id in body
-            if path.endswith("/pipeline/approve-transition"):
-                pipeline_id = body.get("pipeline_id")
-                if not pipeline_id:
-                    return error_response("Missing pipeline_id in request body", 400)
-                return self.handle_approve_transition(str(pipeline_id), body)
-            return None
-
+        owned = self._owned_post_route(path)
+        if owned is not None:
+            pipeline_id, call = owned
+            return self._call_owned(handler, pipeline_access.PIPELINE_RUN, pipeline_id, call)
         return None
+
+    def _debate_to_pipeline(self, debate_ref: str, handler: Any) -> Any:
+        from aragora.tenancy.debate_access import authorize_debate_write
+
+        scope, denial = self._authorize(handler, pipeline_access.PIPELINE_CREATE)
+        if scope is None:
+            return denial
+        write, denial = authorize_debate_write(handler, self.ctx.get("storage"), debate_ref)
+        if write is None:
+            return denial
+        body = self._get_request_body(handler)
+        return self.handle_debate_to_pipeline(write.debate_id, body, scope=scope)
 
     @handle_errors("canvas pipeline save")
     def handle_put(self, path: str, query_params: dict[str, Any], handler: Any) -> Any:
         """Dispatch PUT requests — save canvas state.
 
         PUT /api/v1/canvas/pipeline/{id}
+
+        Saving to an id no pipeline has yet creates the pipeline for the
+        caller's org.
         """
-        m = _PIPELINE_ID.match(path)
+        m = _PIPELINE_ID.match(_versioned(path))
         if not m:
             return None
 
-        auth_error = self._check_permission(handler, "pipeline:write")
-        if auth_error:
-            return auth_error
+        scope, denial = self._authorize(handler, pipeline_access.PIPELINE_UPDATE)
+        if denial is not None:
+            return denial
 
+        pipeline_id = m.group(1)
+        if not self._owns(pipeline_id, scope) and _get_store().get(pipeline_id) is not None:
+            return record_not_found(_PIPELINE)
         body = self._get_request_body(handler)
-        return self.handle_save_pipeline(m.group(1), body)
+        return self.handle_save_pipeline(pipeline_id, body, scope=scope)
 
     @staticmethod
     def _get_request_body(handler: Any) -> dict[str, Any]:
@@ -2111,6 +2155,8 @@ class CanvasPipelineHandler:
         self,
         pipeline_id: str,
         request_data: dict[str, Any],
+        *,
+        scope: OrgScope | None = None,
     ) -> HandlerResult:
         """PUT /api/v1/canvas/pipeline/{id}
 
@@ -2151,7 +2197,7 @@ class CanvasPipelineHandler:
                     existing.setdefault("stage_status", {})[stage_name] = "complete"
 
         existing = attach_unified_live_state(existing)
-        store.save(pipeline_id, existing)
+        store.save(pipeline_id, existing, **_owner_fields(scope))
 
         return json_response(
             {
@@ -2263,6 +2309,8 @@ class CanvasPipelineHandler:
         self,
         pipeline_id: str,
         request_data: dict[str, Any],
+        *,
+        scope: OrgScope | None = None,
     ) -> HandlerResult:
         """POST /api/v1/canvas/pipeline/{id}/self-improve
 
@@ -2334,6 +2382,7 @@ class CanvasPipelineHandler:
                     "status": "started",
                     "budget_limit": budget_limit,
                 },
+                **_owner_fields(scope),
             )
 
             logger.info(
@@ -2362,6 +2411,8 @@ class CanvasPipelineHandler:
         self,
         pipeline_id: str,
         request_data: dict[str, Any],
+        *,
+        scope: OrgScope | None = None,
     ) -> HandlerResult:
         """POST /api/v1/canvas/pipeline/{id}/execute
 
@@ -2443,7 +2494,7 @@ class CanvasPipelineHandler:
 
             graph_store = get_graph_store()
             # Try to find the universal graph for this pipeline
-            graphs = graph_store.list(limit=100)
+            graphs = graph_store.list(limit=100, org_id=scope.org_id if scope else None)
             pipeline_graph = None
             for g_summary in graphs:
                 g_id = g_summary.get("id", g_summary) if isinstance(g_summary, dict) else g_summary
@@ -2470,6 +2521,7 @@ class CanvasPipelineHandler:
             execute_queued_plan,
             queue_plan_execution,
         )
+        from aragora.pipeline.execution_ownership import ExecutionNotAuthorizedError
 
         plan, tasks = build_decision_plan_from_orchestration(
             subject_id=pipeline_id,
@@ -2488,7 +2540,11 @@ class CanvasPipelineHandler:
                 plan,
                 execution_mode="workflow",
                 safety_mode=SafetyMode.INTERACTIVE,
+                **_owner_fields(scope),
             )
+        except ExecutionNotAuthorizedError as exc:
+            logger.warning("Canvas pipeline execution of %s refused: %s", pipeline_id, exc.code)
+            return record_not_found(_PIPELINE)
         except BackbonePersistenceError as exc:
             logger.warning("Canvas pipeline execution blocked for %s: %s", pipeline_id, exc)
             return error_response(FAIL_CLOSED_BACKBONE_MESSAGE, 503)
@@ -2611,6 +2667,8 @@ class CanvasPipelineHandler:
         self,
         debate_id: str,
         request_data: dict[str, Any],
+        *,
+        scope: OrgScope | None = None,
     ) -> HandlerResult:
         """POST /api/v1/debates/{id}/to-pipeline
 
@@ -2653,7 +2711,7 @@ class CanvasPipelineHandler:
         )
 
         result_dict = attach_unified_live_state(result.to_dict())
-        _get_store().save(result.pipeline_id, result_dict)
+        _get_store().save(result.pipeline_id, result_dict, **_owner_fields(scope))
         _pipeline_objects[result.pipeline_id] = result
         _persist_pipeline_to_km(result)
 
