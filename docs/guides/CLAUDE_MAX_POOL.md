@@ -64,9 +64,22 @@ pool.
 }
 ```
 
-States: `ok`, `expired`, `logged_out`, `not_configured`, `unknown`. The review router skips
-profiles whose state is unhealthy (`expired` / `logged_out` / `not_configured` /
-`unauthenticated`) and only counts the snapshot when it is fresh (see TTL below).
+The `state` field retains the legacy values `ok`, `expired`, `logged_out`,
+`not_configured`, and `unauthenticated` so existing readers keep excluding
+unavailable profiles. It is an availability signal, not a precise diagnosis:
+`expired` can also represent a nonzero exit caused by exhausted quota.
+
+New verifier records additionally include a sanitized `reason_code`: `ok`,
+`quota_exhausted`, `auth_revoked`, `auth_expired`, `auth_missing`,
+`transport_timeout`, `service_unavailable`, `invalid_response`, or
+`unknown_failure`. Raw provider errors are not stored in this field. The CLI
+reports quota exhaustion separately from profiles requiring reauthentication.
+
+Unknown states and contradictory state/reason pairs are normalized to an existing
+unhealthy state rather than being advertised as healthy to older readers. Records
+without a reason remain compatible. The review router still requires a fresh
+snapshot (see TTL below); these changes do not add live transport failover or
+change which model evidence can count toward quorum.
 
 Override the snapshot location with `ARAGORA_CLAUDE_POOL_HEALTH_FILE`.
 
