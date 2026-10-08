@@ -178,6 +178,12 @@ audit = "aragora.audit.code_scanners:register_code_scanners"
 [project.entry-points."aragora.debate_completed_subscribers"]
 analytics = "aragora.analytics.debate_events:subscribe_debate_analytics"
 
+# Run by aragora/debate/workspace_stores.py on the first lookup that finds nothing
+# registered, so the debate engine records beads in the canonical workspace stores
+# without importing aragora.stores.
+[project.entry-points."aragora.workspace_stores"]
+stores = "aragora.stores.debate_registration:register_debate_workspace_stores"
+
 # -----------------------------------------------------------------------------
 # uv resolver constraints — security floors for the pip-audit security gate
 # (scripts/run_pip_audit_gate.py). They bound what the lockfile may resolve
