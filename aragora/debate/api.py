@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sys
-from typing import Any
+from typing import Any, cast
 
 from aragora.agents.demo_agent import DemoAgent
 from aragora.core_types import AgentRole, DebateResult, Environment
@@ -43,7 +43,8 @@ async def debate(
         agent_list = list(agents)
 
     env = Environment(task=task)
-    protocol = DebateProtocol(rounds=rounds, consensus=consensus)
+    # The public signature accepts any str; DebateProtocol narrows it to a Literal.
+    protocol = DebateProtocol(rounds=rounds, consensus=cast(Any, consensus))
     arena = Arena(environment=env, agents=agent_list, protocol=protocol)
     return await arena.run()
 
