@@ -501,7 +501,10 @@ class TestRecentEvents:
             )
         )
 
-        result = handler.handle("/api/v1/spectate/recent", {"pipeline_id": "p-abc"}, mock_handler)
+        with patch.object(spectate_ws_handler, "pipeline_owned", return_value=True):
+            result = handler.handle(
+                "/api/v1/spectate/recent", {"pipeline_id": "p-abc"}, mock_handler
+            )
         body = result[0]
         assert body["count"] == 1
         assert body["events"][0]["pipeline_id"] == "p-abc"

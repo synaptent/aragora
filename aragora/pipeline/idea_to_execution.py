@@ -62,18 +62,21 @@ if TYPE_CHECKING:
     from aragora.workflow.types import WorkflowDefinition
 
 
-def _spectate(event_type: str, details: str) -> None:
+def _spectate(event_type: str, details: str, *, pipeline_id: str | None = None) -> None:
     """Emit a SpectatorStream event using the graceful degradation pattern.
 
     This is a fire-and-forget helper: if the spectate module is unavailable
     or the stream is not enabled, the call silently does nothing.  A cached
     module-level instance is reused across calls to avoid repeated allocations.
+    ``pipeline_id`` tags the event so only the pipeline's org can spectate it.
     """
     try:
         from aragora.spectate.stream import SpectatorStream  # noqa: F401
+        from aragora.spectate.ws_bridge import bind_spectate_context
 
         stream = _get_spectator_stream()
-        stream.emit(event_type=event_type, details=details)
+        with bind_spectate_context(pipeline_id=pipeline_id):
+            stream.emit(event_type=event_type, details=details)
     except (ImportError, TypeError):
         logger.debug("SpectatorStream unavailable, event skipped")
 
@@ -1030,7 +1033,9 @@ class IdeaToExecutionPipeline:
             pipeline_id=pipeline_id,
             stage_status=_initial_stage_status(),
         )
-        _spectate("pipeline.started", f"pipeline_id={pipeline_id} source=debate")
+        _spectate(
+            "pipeline.started", f"pipeline_id={pipeline_id} source=debate", pipeline_id=pipeline_id
+        )
 
         # Stage 1: Ideas
         _spectate("pipeline.stage_started", "stage=ideation")
@@ -1127,7 +1132,7 @@ class IdeaToExecutionPipeline:
         except (ImportError, RuntimeError, TypeError) as exc:
             logger.debug("KM pipeline result storage unavailable: %s", exc)
 
-        _spectate("pipeline.completed", f"pipeline_id={pipeline_id}")
+        _spectate("pipeline.completed", f"pipeline_id={pipeline_id}", pipeline_id=pipeline_id)
         return result
 
     def from_ideas(
@@ -1152,7 +1157,9 @@ class IdeaToExecutionPipeline:
             pipeline_id=pipeline_id,
             stage_status=_initial_stage_status(),
         )
-        _spectate("pipeline.started", f"pipeline_id={pipeline_id} source=ideas")
+        _spectate(
+            "pipeline.started", f"pipeline_id={pipeline_id} source=ideas", pipeline_id=pipeline_id
+        )
 
         # Stage 1: Convert raw ideas to canvas
         _spectate("pipeline.stage_started", "stage=ideation")
@@ -1321,7 +1328,7 @@ class IdeaToExecutionPipeline:
         except (ImportError, RuntimeError, TypeError) as exc:
             logger.debug("KM pipeline result storage unavailable: %s", exc)
 
-        _spectate("pipeline.completed", f"pipeline_id={pipeline_id}")
+        _spectate("pipeline.completed", f"pipeline_id={pipeline_id}", pipeline_id=pipeline_id)
         return result
 
     def advance_stage(
@@ -1385,7 +1392,9 @@ class IdeaToExecutionPipeline:
             pipeline_id=pipeline_id,
             stage_status=_initial_stage_status(enable_principles=cfg.enable_principles),
         )
-        _spectate("pipeline.started", f"pipeline_id={pipeline_id} source=async")
+        _spectate(
+            "pipeline.started", f"pipeline_id={pipeline_id} source=async", pipeline_id=pipeline_id
+        )
 
         # Create ProvenanceChain for cryptographic audit trail
         provenance_chain = None
@@ -1793,7 +1802,7 @@ class IdeaToExecutionPipeline:
                     "receipt": result.receipt,
                 },
             )
-            _spectate("pipeline.completed", f"pipeline_id={pipeline_id}")
+            _spectate("pipeline.completed", f"pipeline_id={pipeline_id}", pipeline_id=pipeline_id)
 
         except BaseException as exc:
             result.duration = time.monotonic() - start_time
@@ -1812,7 +1821,9 @@ class IdeaToExecutionPipeline:
                     "error": error_label,
                 },
             )
-            _spectate(f"pipeline.{event_type}", f"pipeline_id={pipeline_id}")
+            _spectate(
+                f"pipeline.{event_type}", f"pipeline_id={pipeline_id}", pipeline_id=pipeline_id
+            )
             # Record outcome so MetaPlanner can learn from failures/cancellations
             self._record_pipeline_outcome(result)
 

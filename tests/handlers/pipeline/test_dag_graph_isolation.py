@@ -29,7 +29,7 @@ USER_A = SimpleNamespace(is_authenticated=True, user_id="user-a", org_id="org-a"
 USER_B = SimpleNamespace(is_authenticated=True, user_id="user-b", org_id="org-b", role="owner")
 ANONYMOUS = SimpleNamespace(is_authenticated=False, user_id=None, org_id=None, role=None)
 
-GA, GB, MISSING = "graph-a", "graph-b", "graph-missing"
+GA, GB, GU, MISSING = "graph-a", "graph-b", "graph-unowned", "graph-missing"
 NOT_FOUND = {"error": "Graph not found", "code": "not_found"}
 
 DAG_POSTS = [
@@ -251,21 +251,61 @@ class TestUniversalGraph:
         assert store.get_owner_org(graph_id) == "org-b"
         assert _graph_call("get", USER_A, "", None, graph_id=graph_id).status_code == 404
 
-    def test_create_cannot_reuse_another_orgs_graph_id(self, store):
-        before = _snapshot(store, GA)
-        result = UniversalGraphHandler().handle_post(
-            "/api/v1/pipeline/graphs", {"id": GA, "name": "taken"}, _Request(USER_B)
+    @staticmethod
+    def _unowned_graph(store: GraphStore) -> None:
+        graph = UniversalGraph(id=GU, name="legacy graph")
+        graph.nodes["idea-u1"] = UniversalNode(
+            id="idea-u1", stage=PipelineStage.IDEAS, node_subtype="concept", label="legacy"
         )
-        assert result.status_code == 409
-        assert _snapshot(store, GA) == before
-        assert store.get_owner_org(GA) == "org-a"
+        store.create(graph)
 
-    def test_add_node_cannot_reuse_another_orgs_node_id(self, store):
-        result = _graph_call(
-            "post", USER_B, "/nodes", {"id": "idea-a1", "label": "stolen"}, graph_id=GB
-        )
-        assert result.status_code == 409
+    def test_create_answers_every_requested_id_like_a_free_one(self, store):
+        self._unowned_graph(store)
+        before = {g: (_snapshot(store, g), store.get_owner_org(g)) for g in (GA, GB, GU)}
+        handler = UniversalGraphHandler()
+        answers = []
+        for requested in (GA, GU, GB, "graph-free"):
+            body = {"id": requested, "name": "B new"}
+            result = handler.handle_post("/api/v1/pipeline/graphs", body, _Request(USER_B))
+            created = _json(result)
+            answers.append((result.status_code, sorted(created)))
+            assert created["id"] != requested
+            assert store.get_owner_org(created["id"]) == "org-b"
+        assert answers == [(201, answers[0][1])] * 4
+        assert {g: (_snapshot(store, g), store.get_owner_org(g)) for g in before} == before
+        assert store.get("graph-free") is None
+
+    def test_add_node_answers_every_requested_id_like_a_free_one(self, store):
+        self._unowned_graph(store)
+        before = {g: _snapshot(store, g) for g in (GA, GU)}
+        answers = []
+        for requested in ("idea-a1", "idea-u1", "idea-b1", "idea-free"):
+            body = {"id": requested, "label": "B idea"}
+            result = _graph_call("post", USER_B, "/nodes", body, graph_id=GB)
+            created = _json(result)
+            answers.append((result.status_code, sorted(created)))
+            assert created["id"] != requested
+            assert store.node_graph_id(created["id"]) == GB
+        assert answers == [(201, answers[0][1])] * 4
+        assert {g: _snapshot(store, g) for g in before} == before
         assert store.node_graph_id("idea-a1") == GA
+        assert store.node_graph_id("idea-free") is None
+        assert store.get(GB).nodes["idea-b1"].label == "B"
+
+    def test_edges_and_promote_use_the_returned_node_ids(self, store):
+        ids = [
+            _json(_graph_call("post", USER_B, "/nodes", {"label": label}, graph_id=GB))["id"]
+            for label in ("one", "two")
+        ]
+        edge = _graph_call(
+            "post", USER_B, "/edges", {"source_id": ids[0], "target_id": ids[1]}, graph_id=GB
+        )
+        promoted = _graph_call(
+            "post", USER_B, "/promote", {"node_ids": ids, "target_stage": "goals"}, graph_id=GB
+        )
+        assert edge.status_code == 201
+        assert promoted.status_code == 200
+        assert _json(promoted)["count"] >= 1
 
     def test_checker_failure_denies_owner(self, store):
         with patch("aragora.rbac.checker.get_permission_checker", side_effect=RuntimeError):
