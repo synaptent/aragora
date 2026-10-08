@@ -9,7 +9,7 @@ the RBAC v2 checker is not patched (``no_auto_auth``).
 RBAC v2 grants ``knowledge.read`` to owner, admin and member (analyst and
 viewer have none), and ``knowledge.write`` / ``knowledge.delete`` to owner only.
 
-Until facts are scoped to an organization, every route that returns data derived
+Until organization scoping lands for them, every route that returns data derived
 from stored facts or touches an existing fact is closed: anonymous callers get
 401 and every authenticated caller, owner included, gets the closure 403.
 Creating a fact and the routes that never touch stored facts follow RBAC v2,

@@ -56,6 +56,7 @@ for _mod_name in (
             setattr(_m, _a, None)
         sys.modules[_mod_name] = _m
 
+from aragora.knowledge import InMemoryFactStore, ScopedFactStore
 from aragora.server.handlers.knowledge_base.handler import (
     KnowledgeHandler,
     _knowledge_limiter,
@@ -70,6 +71,8 @@ from aragora.server.handlers.base import error_response
 
 class MockAuthenticatedUser:
     """Mock authenticated user with full knowledge permissions."""
+
+    org_id = "test-org-001"
 
     def __init__(
         self,
@@ -226,7 +229,11 @@ def mock_server_context() -> dict[str, Any]:
 @pytest.fixture
 def handler(mock_server_context) -> KnowledgeHandler:
     """Create a KnowledgeHandler instance."""
-    return KnowledgeHandler(mock_server_context)
+    h = KnowledgeHandler(mock_server_context)
+    # Handler logic over an org-scoped store only: production _get_fact_store() builds an
+    # unscoped store, so reads answer 403 (tests/server/fastapi/test_knowledge_org_isolation.py).
+    h._fact_store = ScopedFactStore(InMemoryFactStore(), "test-org-001")  # type: ignore[assignment]
+    return h
 
 
 @pytest.fixture
@@ -287,9 +294,10 @@ class TestKnowledgeHandlerInitialization:
 
     def test_fact_store_lazy_initialization(self, handler):
         """Fact store is lazily initialized on first access."""
-        assert handler._fact_store is None
+        handler._fact_store = None
         store = handler._get_fact_store()
         assert store is not None
+        assert not isinstance(store, ScopedFactStore)
         assert handler._fact_store is store
 
     def test_query_engine_lazy_initialization(self, handler):

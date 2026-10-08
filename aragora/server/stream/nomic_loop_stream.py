@@ -513,7 +513,7 @@ class NomicLoopStreamServer:
             )
         )
 
-    async def emit_error(self, error: str, context: dict[str, Any] = None):
+    async def emit_error(self, error: str, context: dict[str, Any] | None = None):
         """Emit error event."""
         await self.broadcast(
             NomicLoopEvent(

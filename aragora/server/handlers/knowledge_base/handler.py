@@ -80,9 +80,9 @@ def _permission_denied_as_403(
 FACT_ACCESS_CLOSED_MESSAGE = "Knowledge fact access is disabled until org scoping is available"
 FACT_ACCESS_CLOSED_CODE = "knowledge_fact_access_closed"
 
-# Stored facts carry no organization, so any caller that can read them reads every
-# organization's facts. Until facts are org-scoped, routes that return data derived
-# from stored facts or act on an existing fact are closed to every authenticated caller.
+# POST /facts binds each new fact to the caller's organization. Until organization
+# scoping lands for the other fact routes, routes that return data derived from
+# stored facts or act on an existing fact are closed to every authenticated caller.
 _CLOSED_FACT_DATA_PATHS = frozenset(
     {
         "/api/v1/knowledge/query",

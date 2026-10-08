@@ -145,8 +145,9 @@ class PowerSamplingMixin:
             # If nothing meets threshold, use the best we have
             best_idx = scores.index(max(scores))
             logger.debug(
-                f"[{getattr(self, 'name', 'agent')}] No samples met quality threshold, "
-                f"using best available (score={scores[best_idx]:.2f})"
+                "[%s] No samples met quality threshold, using best available (score=%.2f)",
+                getattr(self, "name", "agent"),
+                scores[best_idx],
             )
             return samples[best_idx]
 
@@ -172,8 +173,10 @@ class PowerSamplingMixin:
             selected = filtered_samples[diverse_indices[0]]  # Best diverse sample
 
         logger.debug(
-            f"[{getattr(self, 'name', 'agent')}] Power sampling: selected from "
-            f"{len(samples)} samples (best score={max(scores):.2f})"
+            "[%s] Power sampling: selected from %s samples (best score=%.2f)",
+            getattr(self, "name", "agent"),
+            len(samples),
+            max(scores),
         )
 
         return selected

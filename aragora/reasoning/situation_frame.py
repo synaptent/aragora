@@ -21,11 +21,15 @@ from __future__ import annotations
 import json
 from collections.abc import Iterable
 from dataclasses import dataclass, field, replace
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from aragora.export.decision_receipt import ReceiptDissent
 from aragora.reasoning.epistemics import EpistemicTag
 from aragora.work.affordances import ActionAffordance, AffordanceDisposition
+
+if TYPE_CHECKING:
+    # Annotation-only: a runtime import would pull aragora.export.decision_receipt,
+    # which reaches aragora.gauntlet (an upper layer) from this domain module.
+    from aragora.export.decision_receipt import ReceiptDissent
 
 __all__ = [
     "ControlEnvelope",

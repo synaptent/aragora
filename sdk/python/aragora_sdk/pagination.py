@@ -10,8 +10,60 @@ from __future__ import annotations
 from collections.abc import AsyncIterator, Iterator
 from typing import TYPE_CHECKING, Any
 
+from .exceptions import AragoraError
+
 if TYPE_CHECKING:
     from .client import AragoraAsyncClient, AragoraClient
+
+
+def _named_page(
+    response: Any,
+    items_key: str,
+    offset: int,
+    page_size: int,
+    *,
+    known_total: int | None = None,
+    known_has_more: bool | None = None,
+) -> tuple[list[dict[str, Any]], int | None, bool, bool | None]:
+    """Validate an opted-in endpoint envelope before changing iterator state.
+
+    ``known_total`` and ``known_has_more`` carry the metadata declared by the
+    previous page, so a later page that omits metadata is still checked against
+    what the server already promised instead of being read as a complete result.
+    """
+    if not isinstance(response, dict) or not isinstance(response.get(items_key), list):
+        raise AragoraError("Invalid pagination response: expected named item list")
+    items = response[items_key]
+    if any(not isinstance(item, dict) for item in items):
+        raise AragoraError("Invalid pagination response: expected object items")
+    total = response.get("total")
+    if total is not None and (type(total) is not int or total < 0):
+        raise AragoraError("Invalid pagination response: expected non-negative total")
+    if total is None:
+        total = known_total
+    next_offset = offset + len(items)
+    # An empty page may report a total below the offset already delivered when items were
+    # deleted between requests; only a page that carries items beyond its own total contradicts it.
+    if total is not None and (
+        (items and next_offset > total) or (not items and next_offset < total)
+    ):
+        raise AragoraError("Invalid pagination response: inconsistent total")
+    has_more: bool | None = None
+    if "has_more" in response:
+        has_more = response["has_more"]
+        if not isinstance(has_more, bool) or (has_more and not items):
+            raise AragoraError("Invalid pagination response: inconsistent has_more")
+        if total is not None and has_more != (next_offset < total):
+            raise AragoraError("Invalid pagination response: inconsistent has_more")
+        # Servers may clamp the requested limit; a short page can still continue.
+        exhausted = not has_more
+    elif total is not None:
+        exhausted = next_offset >= total
+    elif known_has_more and not items:
+        raise AragoraError("Invalid pagination response: inconsistent has_more")
+    else:
+        exhausted = len(items) < page_size
+    return items, total, exhausted, has_more
 
 
 class SyncPaginator(Iterator[dict[str, Any]]):
@@ -31,6 +83,8 @@ class SyncPaginator(Iterator[dict[str, Any]]):
         path: str,
         params: dict[str, Any] | None = None,
         page_size: int = 20,
+        *,
+        items_key: str | None = None,
     ) -> None:
         """Initialize the paginator.
 
@@ -39,7 +93,12 @@ class SyncPaginator(Iterator[dict[str, Any]]):
             path: The API endpoint path.
             params: Additional query parameters to include in requests.
             page_size: Number of items to fetch per page.
+            items_key: Opt into a named object-list envelope with validated metadata.
+                Omit to retain the generic items/data/raw-list response formats.
         """
+        if items_key is not None and (type(page_size) is not int or page_size <= 0):
+            raise AragoraError("Pagination page_size must be a positive integer")
+        self._items_key = items_key
         self._client = client
         self._path = path
         self._params = params or {}
@@ -48,6 +107,7 @@ class SyncPaginator(Iterator[dict[str, Any]]):
         self._buffer: list[dict[str, Any]] = []
         self._exhausted = False
         self._total: int | None = None
+        self._has_more: bool | None = None
 
     def __iter__(self) -> SyncPaginator:
         return self
@@ -69,6 +129,22 @@ class SyncPaginator(Iterator[dict[str, Any]]):
             "offset": self._offset,
         }
         response = self._client.request("GET", self._path, params=params)
+
+        if self._items_key is not None:
+            page, total, exhausted, has_more = _named_page(
+                response,
+                self._items_key,
+                self._offset,
+                self._page_size,
+                known_total=self._total,
+                known_has_more=self._has_more,
+            )
+            self._buffer.extend(page)
+            self._offset += len(page)
+            self._total = total
+            self._has_more = has_more
+            self._exhausted = exhausted
+            return
 
         # Handle different response formats
         if isinstance(response, dict):
@@ -113,6 +189,8 @@ class AsyncPaginator(AsyncIterator[dict[str, Any]]):
         path: str,
         params: dict[str, Any] | None = None,
         page_size: int = 20,
+        *,
+        items_key: str | None = None,
     ) -> None:
         """Initialize the paginator.
 
@@ -121,7 +199,12 @@ class AsyncPaginator(AsyncIterator[dict[str, Any]]):
             path: The API endpoint path.
             params: Additional query parameters to include in requests.
             page_size: Number of items to fetch per page.
+            items_key: Opt into a named object-list envelope with validated metadata.
+                Omit to retain the generic items/data/raw-list response formats.
         """
+        if items_key is not None and (type(page_size) is not int or page_size <= 0):
+            raise AragoraError("Pagination page_size must be a positive integer")
+        self._items_key = items_key
         self._client = client
         self._path = path
         self._params = params or {}
@@ -130,6 +213,7 @@ class AsyncPaginator(AsyncIterator[dict[str, Any]]):
         self._buffer: list[dict[str, Any]] = []
         self._exhausted = False
         self._total: int | None = None
+        self._has_more: bool | None = None
 
     def __aiter__(self) -> AsyncPaginator:
         return self
@@ -151,6 +235,22 @@ class AsyncPaginator(AsyncIterator[dict[str, Any]]):
             "offset": self._offset,
         }
         response = await self._client.request("GET", self._path, params=params)
+
+        if self._items_key is not None:
+            page, total, exhausted, has_more = _named_page(
+                response,
+                self._items_key,
+                self._offset,
+                self._page_size,
+                known_total=self._total,
+                known_has_more=self._has_more,
+            )
+            self._buffer.extend(page)
+            self._offset += len(page)
+            self._total = total
+            self._has_more = has_more
+            self._exhausted = exhausted
+            return
 
         # Handle different response formats
         if isinstance(response, dict):

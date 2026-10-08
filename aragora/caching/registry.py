@@ -31,7 +31,7 @@ Usage:
     )
 
     # Using the cached decorator
-    @cached(ttl_seconds=300, key_prefix="users")
+    @cached(ttl_seconds=300, maxsize=128)
     def get_user(user_id: str) -> dict:
         return expensive_lookup(user_id)
 

@@ -523,7 +523,8 @@ def create_logging_hooks(
             def log_hook(**kwargs: Any) -> None:
                 hook_logger.log(
                     log_level,
-                    f"Hook triggered: {ht.value}",
+                    "Hook triggered: %s",
+                    ht.value,
                     extra={"hook_type": ht.value, "kwargs": list(kwargs.keys())},
                 )
 

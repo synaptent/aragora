@@ -818,9 +818,13 @@ class EvidenceStore(SQLiteStore):
 
             duration_ms = (time.time() - start_time) * 1000
             logger.info(
-                f"Evidence cleanup: deleted={deleted_count}, "
-                f"preserved_high_reliability={preserved_count}, "
-                f"preserved_linked={linked_count}, duration={duration_ms:.1f}ms"
+                "Evidence cleanup: deleted=%s, "
+                "preserved_high_reliability=%s, "
+                "preserved_linked=%s, duration=%.1fms",
+                deleted_count,
+                preserved_count,
+                linked_count,
+                duration_ms,
             )
 
             return {

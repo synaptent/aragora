@@ -272,6 +272,12 @@ class FactsOperationsMixin:
         user, err = self.require_auth_or_error(handler)
         if err:
             return err
+        if not getattr(user, "org_id", None):
+            return error_response(
+                "Creating knowledge facts requires an organization",
+                403,
+                code="knowledge_org_required",
+            )
 
         try:
             content_length = int(handler.headers.get("Content-Length", 0))
@@ -291,8 +297,6 @@ class FactsOperationsMixin:
         workspace_id = data.get("workspace_id", "default")
 
         store = self._get_fact_store()
-        # Store deduplication matches statement and the caller-supplied workspace
-        # only, so it would hand another organization's existing fact to this caller.
         fact = store.add_fact(
             statement=statement,
             workspace_id=workspace_id,
@@ -301,7 +305,7 @@ class FactsOperationsMixin:
             confidence=data.get("confidence", 0.5),
             topics=data.get("topics", []),
             metadata=data.get("metadata", {}),
-            deduplicate=False,
+            org_id=user.org_id,
         )
 
         return json_response(fact.to_dict(), status=201)

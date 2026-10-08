@@ -1,7 +1,7 @@
 # Test Skip Marker Audit
 
-**Generated**: 2026-09-21
-**Total Skip Markers**: 93
+**Generated**: 2026-10-07
+**Total Skip Markers**: 96
 
 ---
 
@@ -9,21 +9,21 @@
 
 | Category | Count | Percentage |
 |----------|-------|------------|
-| integration_dependency | 28 | 30.1% |
-| missing_feature | 21 | 22.6% |
-| uncategorized | 21 | 22.6% |
-| optional_dependency | 9 | 9.7% |
-| platform_specific | 9 | 9.7% |
-| performance | 4 | 4.3% |
-| known_bug | 1 | 1.1% |
+| integration_dependency | 28 | 29.2% |
+| missing_feature | 21 | 21.9% |
+| uncategorized | 21 | 21.9% |
+| optional_dependency | 11 | 11.5% |
+| platform_specific | 9 | 9.4% |
+| performance | 4 | 4.2% |
+| known_bug | 2 | 2.1% |
 
 ## Summary by Marker Type
 
 | Type | Count |
 |------|-------|
-| `pytest.skip` | 46 |
+| `pytest.skip` | 48 |
 | `skipif` | 40 |
-| `pytest.importorskip` | 5 |
+| `pytest.importorskip` | 6 |
 | `skip` | 2 |
 
 ## High-Skip Files (Top 10)
@@ -31,15 +31,15 @@
 | File | Skip Count |
 |------|------------|
 | `tests/integration/test_knowledge_visibility_sharing.py` | 6 |
+| `tests/swarm/test_quorum_evidence.py` | 5 |
 | `tests/debate/test_voting_engine.py` | 5 |
-| `tests/swarm/test_quorum_evidence.py` | 4 |
 | `tests/plugins/test_plugin_sandbox.py` | 4 |
 | `tests/debate/test_convergence_root.py` | 3 |
 | `tests/inbox/test_inbox_receipt_convergence.py` | 2 |
-| `tests/integration/test_postgres.py` | 2 |
 | `tests/server/middleware/rate_limit/test_distributed_integration.py` | 2 |
 | `tests/server/startup/test_validation.py` | 2 |
 | `tests/triage/test_auto_handle_calibration.py` | 2 |
+| `tests/cli/test_receipt_output_errors.py` | 2 |
 
 ---
 
@@ -71,7 +71,7 @@
 
 ## Skip Count Baseline
 
-Current baseline: **93** skips
+Current baseline: **96** skips
 
 CI will warn if skip count exceeds this baseline.
 Update `tests/.skip_baseline` when intentionally adding skips.
