@@ -1026,14 +1026,23 @@ class CollectOutcome:
         return [item.family for item in self.items if item.supportive]
 
     @property
+    def _head_bound_live_families(self) -> list[str]:
+        # A rehydrated artifact keeps its live families after the branch moves;
+        # they only count while they were read at this outcome's own head.
+        head = (self.head_sha or "").strip()
+        if head and self.live_evidence_head_sha.strip() == head:
+            return list(self.live_counting_families)
+        return []
+
+    @property
     def combined_counting_families(self) -> list[str]:
         """Distinct prepared plus same-head live comment families."""
-        return sorted({*self.counting_families, *self.live_counting_families})
+        return sorted({*self.counting_families, *self._head_bound_live_families})
 
     @property
     def combined_supportive_families(self) -> list[str]:
         """Supportive prepared families plus canonical live countable families."""
-        return sorted({*self.supportive_families, *self.live_counting_families})
+        return sorted({*self.supportive_families, *self._head_bound_live_families})
 
     @property
     def dissenting_families(self) -> list[str]:

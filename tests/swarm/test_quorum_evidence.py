@@ -3832,6 +3832,31 @@ def test_apply_prepared_evidence_dogfood_only_live_family_does_not_meet_frontier
     assert posted == []
 
 
+@pytest.mark.parametrize("live_head", ["", "0" * 40])
+def test_live_families_count_only_when_bound_to_outcome_head(live_head: str) -> None:
+    outcome = CollectOutcome(
+        repo="o/r",
+        pr=1,
+        head_sha=HEAD,
+        head_committed_at=COMMITTED,
+        tier=2,
+        action="post",
+        action_reason="",
+        items=[EvidenceItem("claude", _prepared_body("claude"), True, ["claude"], [], "pass")],
+        tiered_gate=False,
+    )
+    payload = outcome.to_dict()
+    payload["live_evidence_head_sha"] = live_head
+    payload["live_counting_families"] = ["openai"]
+
+    rehydrated = qe.collect_outcome_from_dict(payload)
+
+    assert rehydrated.combined_counting_families == ["claude"]
+    assert rehydrated.combined_supportive_families == ["claude"]
+    assert rehydrated.has_supportive_quorum is False
+    assert rehydrated.to_dict()["has_supportive_quorum"] is False
+
+
 def test_apply_prepared_evidence_recomputes_exact_head_adjudication(
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,
