@@ -4,25 +4,43 @@ from __future__ import annotations
 
 import importlib
 import sys
+from collections.abc import Iterator, MutableMapping
 from types import ModuleType
+from typing import Any
 
 import pytest
 
 
-def _import_nomic_loop_fresh(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
-    # scripts.nomic_loop takes its NOMIC_SICA_* flags from scripts.nomic.config, which
-    # reads the environment once at import time. Reloading nomic_loop alone keeps a
-    # config module cached by an earlier test, so import both fresh; monkeypatch puts
-    # the original modules and package attributes back at teardown.
+def _put_back(mapping: MutableMapping[str, Any], key: str, value: ModuleType | None) -> None:
+    if value is None:
+        mapping.pop(key, None)
+    else:
+        mapping[key] = value
+
+
+@pytest.fixture
+def fresh_nomic_modules() -> Iterator[None]:
+    """Make the test import scripts.nomic.config and scripts.nomic_loop under its own env.
+
+    scripts.nomic_loop takes its NOMIC_SICA_* flags from scripts.nomic.config, which
+    reads the environment once at import time, so a config module cached by an earlier
+    test would win over the env the test sets. Both modules are dropped before the test
+    body runs; afterwards the previous modules and package attributes are put back, or
+    removed again when they had not been imported before.
+    """
+    saved = []
     for name in ("scripts.nomic.config", "scripts.nomic_loop"):
         parent_name, _, child = name.rpartition(".")
         parent = importlib.import_module(parent_name)
-        monkeypatch.setattr(parent, child, getattr(parent, child, None), raising=False)
-        monkeypatch.delitem(sys.modules, name, raising=False)
-    return importlib.import_module("scripts.nomic_loop")
+        saved.append((name, parent, child, sys.modules.pop(name, None), vars(parent).get(child)))
+    yield
+    for name, parent, child, module, attribute in saved:
+        _put_back(sys.modules, name, module)
+        _put_back(vars(parent), child, attribute)
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("fresh_nomic_modules")
 async def test_run_sica_cycle_parses_env(monkeypatch, tmp_path):
     monkeypatch.setenv("NOMIC_SICA_ENABLED", "1")
     monkeypatch.setenv("NOMIC_SICA_IMPROVEMENT_TYPES", "reliability,readability")
@@ -38,7 +56,7 @@ async def test_run_sica_cycle_parses_env(monkeypatch, tmp_path):
     monkeypatch.setenv("NOMIC_SICA_MAX_OPPORTUNITIES", "2")
     monkeypatch.setenv("NOMIC_SICA_MAX_ROLLBACKS", "1")
 
-    nomic_loop = _import_nomic_loop_fresh(monkeypatch)
+    import scripts.nomic_loop as nomic_loop
 
     captured: dict[str, object] = {}
 
