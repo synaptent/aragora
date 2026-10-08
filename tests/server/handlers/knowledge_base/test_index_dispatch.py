@@ -56,18 +56,6 @@ class _RegistryMixin(HandlerRegistryMixin):
     knowledge_mound = None
 
 
-class _ReadOnlyUser:
-    user_id = "reader"
-    permissions = {"knowledge.read"}
-    roles = {"viewer"}
-
-
-class _NoPermissionUser:
-    user_id = "nobody"
-    permissions: set[str] = set()
-    roles: set[str] = set()
-
-
 @pytest.fixture(scope="module")
 def registry_cls() -> type[_RegistryMixin]:
     _RegistryMixin._init_handlers()
@@ -198,6 +186,37 @@ def test_embed_batch_rejects_invalid_payload(registry_cls, hash_service, payload
     with patch("aragora.core.embeddings.service.get_embedding_service", return_value=hash_service):
         status, body = _dispatch(registry_cls, "POST", "/api/v1/index/embed-batch", payload)
     assert status == 400, body
+
+
+@pytest.mark.parametrize(("length", "status"), [(8192, 200), (8193, 400)])
+def test_embed_batch_caps_each_text_at_8192_characters(
+    registry_cls, hash_service, length: int, status: int
+) -> None:
+    payload = {"texts": ["short", "x" * length]}
+    with patch(
+        "aragora.core.embeddings.service.get_embedding_service", return_value=hash_service
+    ) as get_service:
+        got, body = _dispatch(registry_cls, "POST", "/api/v1/index/embed-batch", payload)
+    assert got == status, body
+    if status == 400:
+        assert "8192 characters" in body["error"]
+        get_service.assert_not_called()
+
+
+@pytest.mark.parametrize(("count", "status"), [(125, 200), (126, 400)])
+def test_embed_batch_caps_the_request_at_one_million_characters(
+    registry_cls, hash_service, count: int, status: int
+) -> None:
+    # 125 x 8000 is exactly 1,000,000 characters; every text is under the per-text cap.
+    payload = {"texts": [f"{i:08d}" + "y" * 7992 for i in range(count)]}
+    with patch(
+        "aragora.core.embeddings.service.get_embedding_service", return_value=hash_service
+    ) as get_service:
+        got, body = _dispatch(registry_cls, "POST", "/api/v1/index/embed-batch", payload)
+    assert got == status, body
+    if status == 400:
+        assert "1000000 characters" in body["error"]
+        get_service.assert_not_called()
 
 
 def test_embed_batch_requires_a_json_content_type(registry_cls, hash_service) -> None:
@@ -366,39 +385,6 @@ def test_unsupported_methods_answer_405(registry_cls, method: str, path: str) ->
     assert status == 405, body
 
 
-def test_search_needs_only_read_permission(registry_cls) -> None:
-    with patch.object(
-        KnowledgeHandler, "require_auth_or_error", return_value=(_ReadOnlyUser(), None)
-    ):
-        status, body = _dispatch(
-            registry_cls, "POST", "/api/v1/index/search", {"query": "q", "index_name": "docs"}
-        )
-    assert status == 501, body
-
-
-@pytest.mark.parametrize("path", ["/api/v1/index", "/api/v1/index/embed-batch"])
-def test_writes_still_need_write_permission(registry_cls, hash_service, path: str) -> None:
-    with (
-        patch.object(
-            KnowledgeHandler, "require_auth_or_error", return_value=(_ReadOnlyUser(), None)
-        ),
-        patch("aragora.core.embeddings.service.get_embedding_service", return_value=hash_service),
-    ):
-        status, body = _dispatch(registry_cls, "POST", path, {"name": "docs", "texts": ["a"]})
-    assert status == 403, body
-
-
-@pytest.mark.parametrize(
-    ("method", "path"), [("GET", "/api/v1/index"), ("POST", "/api/v1/index/search")]
-)
-def test_reads_still_need_read_permission(registry_cls, method: str, path: str) -> None:
-    with patch.object(
-        KnowledgeHandler, "require_auth_or_error", return_value=(_NoPermissionUser(), None)
-    ):
-        status, body = _dispatch(registry_cls, method, path, {"query": "q"})
-    assert status == 403, body
-
-
 def test_list_requires_authentication(registry_cls) -> None:
     with patch.object(
         KnowledgeHandler,
@@ -409,24 +395,36 @@ def test_list_requires_authentication(registry_cls) -> None:
     assert status == 401, body
 
 
-@pytest.mark.no_auto_auth
-@pytest.mark.parametrize("role", ["owner", "admin", "member"])
-@pytest.mark.parametrize(
-    ("method", "path", "payload"),
-    [("GET", "/api/v1/index", None), ("POST", "/api/v1/index/embed-batch", {"texts": ["a"]})],
-)
-def test_real_jwt_callers_get_403_known_pre_existing_defect(
-    registry_cls, hash_service, role: str, method: str, path: str, payload: dict | None
-) -> None:
-    """Documents a KNOWN PRE-EXISTING defect; this test pins today's behavior, not the goal.
+_INDEX_ROLE_REQUESTS: dict[str, tuple[str, str, dict[str, Any] | None]] = {
+    "list": ("GET", "/api/v1/index", None),
+    "create": ("POST", "/api/v1/index", {"name": "docs"}),
+    "search": ("POST", "/api/v1/index/search", {"query": "q"}),
+    "embed": ("POST", "/api/v1/index/embed-batch", {"texts": ["a"]}),
+}
+# RBAC v2: owner, admin and member hold knowledge.read; only owner holds
+# knowledge.write; viewer holds neither. Search is a read, create and embed are writes.
+_INDEX_ROLE_MATRIX: dict[str, dict[str, int]] = {
+    "owner": {"list": 200, "create": 501, "search": 501, "embed": 200},
+    "admin": {"list": 200, "create": 403, "search": 501, "embed": 403},
+    "member": {"list": 200, "create": 403, "search": 501, "embed": 403},
+    "viewer": {"list": 403, "create": 403, "search": 403, "embed": 403},
+}
 
-    ``KnowledgeHandler._check_permission`` reads ``user.permissions`` and
-    ``user.roles``, but the ``UserAuthContext`` built from a real JWT carries
-    only ``role``, so every JWT caller (owner and admin included) gets 403 on
-    every knowledge route, the index family among them. The fix belongs to the
-    separate feature ``m4-knowledge-auth-fix``; when it lands, this test must be
-    replaced by the permission matrix that feature defines.
-    """
+
+@pytest.mark.no_auto_auth
+@pytest.mark.parametrize(
+    ("role", "request_name", "expected"),
+    [
+        (role, request_name, status)
+        for role, cells in _INDEX_ROLE_MATRIX.items()
+        for request_name, status in cells.items()
+    ],
+)
+def test_real_jwt_roles_follow_rbac_v2(
+    registry_cls, hash_service, role: str, request_name: str, expected: int
+) -> None:
+    """A real access token per role, the real RBAC v2 checker and the real dispatcher."""
+    method, path, payload = _INDEX_ROLE_REQUESTS[request_name]
     token = create_access_token(user_id=f"jwt-{role}", email=f"{role}@example.com", role=role)
     # Keep token validation off whatever revocation database the host environment points at.
     with (
@@ -436,5 +434,13 @@ def test_real_jwt_callers_get_403_known_pre_existing_defect(
         status, body = _dispatch(
             registry_cls, method, path, payload, headers={"Authorization": f"Bearer {token}"}
         )
-    assert status == 403, body
-    assert body == {"error": "Permission denied"}
+    assert status == expected, body
+    if expected == 403:
+        assert body == {"error": "Permission denied"}
+    elif expected == 501:
+        assert body["error"]["code"] == "not_implemented"
+    elif request_name == "list":
+        assert body == {"indexes": [], "count": 0}
+    else:
+        assert body["count"] == 1
+        assert body["provider"] == "hash"

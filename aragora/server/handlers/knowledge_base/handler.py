@@ -146,6 +146,12 @@ _INDEX_ROUTE_METHODS = {
 }
 _MAX_EMBED_BATCH_TEXTS = 1000
 _MAX_EMBED_BATCH_SIZE = 100
+# About 2,048 tokens of English text: the input limit of the Gemini backend's
+# text-embedding-004 (OpenAI's text-embedding-3-small allows 8,191), so an
+# over-long text answers 400 here instead of a provider error that surfaces as 503.
+_MAX_EMBED_TEXT_CHARS = 8192
+# Bounds the provider work one request can buy; the 10 MB body limit alone does not.
+_MAX_EMBED_BATCH_TOTAL_CHARS = 1_000_000
 # Shared by every backend call of one embed-batch request, so small batch sizes
 # cannot turn one request into many sequential 30 s waits.
 _EMBED_BATCH_BUDGET_SECONDS = 30.0
@@ -391,6 +397,15 @@ class KnowledgeHandler(
             return error_response("'texts' must be a non-empty list of non-empty strings", 400)
         if len(texts) > _MAX_EMBED_BATCH_TEXTS:
             return error_response(f"At most {_MAX_EMBED_BATCH_TEXTS} texts per request", 400)
+        if any(len(t) > _MAX_EMBED_TEXT_CHARS for t in texts):
+            return error_response(
+                f"Each text may have at most {_MAX_EMBED_TEXT_CHARS} characters", 400
+            )
+        if sum(len(t) for t in texts) > _MAX_EMBED_BATCH_TOTAL_CHARS:
+            return error_response(
+                f"Texts may total at most {_MAX_EMBED_BATCH_TOTAL_CHARS} characters per request",
+                400,
+            )
         batch_size = data.get("batch_size", _MAX_EMBED_BATCH_SIZE)
         if (
             isinstance(batch_size, bool)
