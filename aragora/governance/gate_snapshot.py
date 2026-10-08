@@ -137,7 +137,8 @@ def _rollup_verdict(rollup: Any) -> tuple[bool, bool]:
         if not isinstance(item, dict):
             return (False, False)
         status = str(item.get("status") or "").upper()
-        conclusion = str(item.get("conclusion") or "").upper()
+        # Commit statuses ({context, state}) share the rollup with check runs and carry no conclusion.
+        conclusion = str(item.get("conclusion") or item.get("state") or "").upper()
         if status and status != "COMPLETED":
             return (False, True)
         if conclusion not in {"SUCCESS", "NEUTRAL", "SKIPPED"}:

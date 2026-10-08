@@ -112,6 +112,43 @@ def test_unknown_checks_are_not_a_pass() -> None:
     assert not snap.checks_known and not snap.mergeable_now
 
 
+def _rollup_payload(rollup: list[dict]) -> str:
+    return json.dumps(
+        {
+            "number": 42,
+            "headRefOid": HEAD_A,
+            "state": "OPEN",
+            "isDraft": False,
+            "mergeStateStatus": "CLEAN",
+            "statusCheckRollup": rollup,
+        }
+    )
+
+
+def test_a_successful_commit_status_counts_as_green() -> None:
+    """statusCheckRollup mixes check runs with commit statuses ({context, state})."""
+    rollup = [
+        {"__typename": "CheckRun", "name": "lint", "status": "COMPLETED", "conclusion": "SUCCESS"},
+        {"__typename": "StatusContext", "context": "ci/legacy", "state": "SUCCESS"},
+    ]
+    snap = capture_gate_snapshot(
+        42, "o/r", runner=_Recorder([_proc(stdout=_rollup_payload(rollup))])
+    )
+    assert snap.checks_known and snap.required_checks_green and snap.mergeable_now
+
+
+@pytest.mark.parametrize("state", ["PENDING", "EXPECTED", "FAILURE", "ERROR", ""])
+def test_a_commit_status_that_is_not_success_blocks(state: str) -> None:
+    rollup = [
+        {"__typename": "CheckRun", "name": "lint", "status": "COMPLETED", "conclusion": "SUCCESS"},
+        {"__typename": "StatusContext", "context": "ci/legacy", "state": state},
+    ]
+    snap = capture_gate_snapshot(
+        42, "o/r", runner=_Recorder([_proc(stdout=_rollup_payload(rollup))])
+    )
+    assert snap.checks_known and not snap.required_checks_green and not snap.mergeable_now
+
+
 # --------------------------------------------------------------------------
 # The race: head changes between classification and merge
 # --------------------------------------------------------------------------
