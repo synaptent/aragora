@@ -6,6 +6,7 @@ import { Scanlines, CRTVignette } from '@/components/MatrixRain';
 import { AsciiBannerCompact } from '@/components/AsciiBanner';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useBackend } from '@/components/BackendSelector';
+import { fetchWithAuth } from '@/lib/api';
 
 interface ForkNode {
   id: string;
@@ -41,7 +42,7 @@ export default function ForksPage() {
     setLoading(true);
     try {
       // Fetch debates that have forks
-      const res = await fetch(`${backendConfig.api}/api/debates?has_forks=true&limit=50`);
+      const res = await fetchWithAuth(`${backendConfig.api}/api/debates?has_forks=true&limit=50`);
       if (!res.ok) {
         if (res.status === 503) {
           setError('Backend not available');
@@ -59,7 +60,7 @@ export default function ForksPage() {
       for (const debate of debates) {
         // Fetch fork tree for this debate
         try {
-          const treeRes = await fetch(`${backendConfig.api}/api/debates/${debate.id}/fork-tree`);
+          const treeRes = await fetchWithAuth(`${backendConfig.api}/api/debates/${debate.id}/fork-tree`);
           if (treeRes.ok) {
             const treeData = await treeRes.json();
             const forks = treeData.forks || treeData.nodes || [];

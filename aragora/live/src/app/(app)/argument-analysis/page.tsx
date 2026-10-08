@@ -7,6 +7,7 @@ import { ArgumentMap } from '@/components/visualization/ArgumentMap';
 import type { GraphData, ArgumentNode } from '@/components/visualization/ArgumentMap';
 import { ExplainabilityPanel } from '@/components/ExplainabilityPanel';
 import { API_BASE_URL } from '@/config';
+import { fetchWithAuth } from '@/lib/api';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -47,8 +48,8 @@ export default function ArgumentAnalysisPage() {
 
     try {
       const [graphRes, statsRes] = await Promise.allSettled([
-        fetch(`${API_BASE_URL}/api/v1/debates/${encodeURIComponent(id)}/argument-graph?format=json`),
-        fetch(`${API_BASE_URL}/api/v1/debates/${encodeURIComponent(id)}/graph/stats`),
+        fetchWithAuth(`${API_BASE_URL}/api/v1/debates/${encodeURIComponent(id)}/argument-graph?format=json`),
+        fetchWithAuth(`${API_BASE_URL}/api/v1/debates/${encodeURIComponent(id)}/graph/stats`),
       ]);
 
       // Graph data

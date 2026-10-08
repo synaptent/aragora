@@ -1,4 +1,13 @@
-import { renderWithProviders, screen, act, waitFor } from '@/test-utils';
+import {
+  renderWithProviders,
+  screen,
+  act,
+  waitFor,
+  TEST_SESSION_TOKEN,
+  authHeaderOf,
+  clearTestSession,
+  storeTestSession,
+} from '@/test-utils';
 import userEvent from '@testing-library/user-event';
 import SocialPage from '../page';
 
@@ -762,5 +771,61 @@ describe('SocialPage', () => {
         expect(screen.getByTestId('error-display')).toBeInTheDocument();
       });
     });
+  });
+});
+
+describe('SocialPage authenticated requests', () => {
+  const bearer = `Bearer ${TEST_SESSION_TOKEN}`;
+
+  beforeEach(() => {
+    global.fetch = mockFetch;
+    storeTestSession();
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes('/youtube/status')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ is_configured: true, is_connected: true }) });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          connectors: [],
+          debates: [{ id: 'debate-1', task: 'Test Debate', metadata: {} }],
+          auth_url: '',
+        }),
+      });
+    });
+  });
+
+  afterEach(() => clearTestSession());
+
+  it('sends the session token with the debate list and connector status requests', async () => {
+    renderWithProviders(<SocialPage />);
+
+    await waitFor(() => expect(authHeaderOf(mockFetch, 'http://localhost:8080/api/debates?limit=20')).toBe(bearer));
+    expect(authHeaderOf(mockFetch, '/api/youtube/status')).toBe(bearer);
+    expect(authHeaderOf(mockFetch, '/api/connectors')).toBe(bearer);
+  });
+
+  it('sends the session token when publishing a debate', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<SocialPage />);
+
+    await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: 'Publish' }));
+    });
+    await act(async () => {
+      await user.selectOptions(screen.getByRole('combobox'), 'debate-1');
+    });
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: 'YouTube' }));
+    });
+    const publishButtons = screen.getAllByRole('button', { name: 'Publish' });
+    await act(async () => {
+      await user.click(publishButtons[publishButtons.length - 1]);
+    });
+
+    await waitFor(() =>
+      expect(authHeaderOf(mockFetch, '/api/debates/debate-1/publish/youtube', 'POST')).toBe(bearer),
+    );
   });
 });

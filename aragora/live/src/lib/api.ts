@@ -92,6 +92,41 @@ export async function apiFetch<T = unknown>(
   return response.json();
 }
 
+function headersToRecord(headers: HeadersInit | undefined): Record<string, string> {
+  const record: Record<string, string> = {};
+  if (!headers) return record;
+  if (Array.isArray(headers)) {
+    for (const [key, value] of headers) record[key] = value;
+  } else if (typeof (headers as Headers).forEach === 'function') {
+    (headers as Headers).forEach((value, key) => {
+      record[key] = value;
+    });
+  } else {
+    Object.assign(record, headers);
+  }
+  return record;
+}
+
+/**
+ * Drop-in replacement for `fetch` on Aragora API calls that need the signed-in
+ * user's session. Adds `Authorization: Bearer <token>` from the stored session
+ * and otherwise leaves the request alone: no Content-Type is forced (FormData
+ * uploads keep their multipart boundary) and the raw Response is returned, so
+ * callers keep their own status, blob and stream handling.
+ */
+export function fetchWithAuth(input: string, init?: RequestInit): Promise<Response> {
+  const token = getAccessToken();
+  if (!token) {
+    // Without a session the call is exactly the plain fetch it replaces.
+    return init === undefined ? fetch(input) : fetch(input, init);
+  }
+  const headers = headersToRecord(init?.headers);
+  if (!Object.keys(headers).some((key) => key.toLowerCase() === 'authorization')) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  return fetch(input, { ...init, headers });
+}
+
 /**
  * Safe fetch wrapper that returns an object with either data or error.
  * Useful for components that want to handle errors without try/catch.

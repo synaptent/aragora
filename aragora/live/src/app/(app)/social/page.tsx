@@ -8,6 +8,7 @@ import { BackendSelector, useBackend } from '@/components/BackendSelector';
 import { ErrorWithRetry } from '@/components/ErrorWithRetry';
 import { HistoryEmptyState } from '@/components/ui/EmptyState';
 import { logger } from '@/utils/logger';
+import { fetchWithAuth } from '@/lib/api';
 
 interface ConnectorStatus {
   name: string;
@@ -54,11 +55,11 @@ export default function SocialPage() {
   const fetchConnectorStatus = useCallback(async () => {
     try {
       const [youtube, twitter] = await Promise.all([
-        fetch(`${backendUrl}/api/youtube/status`).then(r => r.ok ? r.json() : null).catch((err) => {
+        fetchWithAuth(`${backendUrl}/api/youtube/status`).then(r => r.ok ? r.json() : null).catch((err) => {
           logger.warn('Failed to fetch YouTube status:', err);
           return null;
         }),
-        fetch(`${backendUrl}/api/connectors`).then(r => r.ok ? r.json() : null).catch((err) => {
+        fetchWithAuth(`${backendUrl}/api/connectors`).then(r => r.ok ? r.json() : null).catch((err) => {
           logger.warn('Failed to fetch connector status:', err);
           return null;
         }),
@@ -110,7 +111,7 @@ export default function SocialPage() {
 
   const fetchRecentDebates = useCallback(async () => {
     try {
-      const response = await fetch(`${backendUrl}/api/debates?limit=20`);
+      const response = await fetchWithAuth(`${backendUrl}/api/debates?limit=20`);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       setRecentDebates(data.debates?.map((d: {
@@ -153,7 +154,7 @@ export default function SocialPage() {
     setError(null);
 
     try {
-      const response = await fetch(
+      const response = await fetchWithAuth(
         `${backendUrl}/api/debates/${selectedDebate}/publish/${selectedPlatform}`,
         { method: 'POST' }
       );
@@ -186,7 +187,7 @@ export default function SocialPage() {
   const initiateOAuth = async (platform: string) => {
     try {
       if (platform === 'YouTube') {
-        const response = await fetch(`${backendUrl}/api/youtube/auth`);
+        const response = await fetchWithAuth(`${backendUrl}/api/youtube/auth`);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
         if (data.auth_url) {

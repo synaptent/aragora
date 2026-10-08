@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Scanlines, CRTVignette } from '@/components/MatrixRain';
 import { useBackend } from '@/components/BackendSelector';
 import { logger } from '@/utils/logger';
+import { fetchWithAuth } from '@/lib/api';
 
 interface Episode {
   id: string;
@@ -72,7 +73,7 @@ export default function BroadcastPage() {
   const fetchStatus = useCallback(async () => {
     try {
       // Get episode count from podcast API
-      const res = await fetch(`${backendUrl}/api/podcast/episodes?limit=1`);
+      const res = await fetchWithAuth(`${backendUrl}/api/podcast/episodes?limit=1`);
       if (res.ok) {
         const data = await res.json();
         setStatus({
@@ -106,7 +107,7 @@ export default function BroadcastPage() {
   const fetchEpisodes = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${backendUrl}/api/podcast/episodes?limit=50`);
+      const res = await fetchWithAuth(`${backendUrl}/api/podcast/episodes?limit=50`);
       if (res.ok) {
         const data = await res.json();
         // Map podcast episode format to our Episode interface
@@ -144,7 +145,7 @@ export default function BroadcastPage() {
 
   const fetchDebates = useCallback(async () => {
     try {
-      const res = await fetch(`${backendUrl}/api/debates?status=completed&limit=100`);
+      const res = await fetchWithAuth(`${backendUrl}/api/debates?status=completed&limit=100`);
       if (res.ok) {
         const data = await res.json();
         setDebates(data.debates || []);
@@ -168,7 +169,7 @@ export default function BroadcastPage() {
 
       setGenerator((prev) => ({ ...prev, progress: 'Generating audio...' }));
 
-      const res = await fetch(`${backendUrl}/api/debates/${generator.selectedDebate.id}/broadcast/full?${params}`, {
+      const res = await fetchWithAuth(`${backendUrl}/api/debates/${generator.selectedDebate.id}/broadcast/full?${params}`, {
         method: 'POST',
       });
 
