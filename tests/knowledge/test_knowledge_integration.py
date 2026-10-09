@@ -123,6 +123,7 @@ def pipeline_config(temp_db_dir):
     """Create PipelineConfig for testing."""
     return PipelineConfig(
         workspace_id="test_pipeline",
+        org_id="org-test",
         use_weaviate=False,
         extract_facts=False,
         fact_db_path=temp_db_dir / "facts.db",

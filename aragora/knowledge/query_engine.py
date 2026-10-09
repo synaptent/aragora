@@ -37,6 +37,15 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _org_chunk_key(fact_store: object, workspace_id: str, org_id: str | None) -> str:
+    """(org, workspace) chunk key: the caller's org, else the scoped store's; none raises."""
+    if isinstance(fact_store, ScopedFactStore):
+        if org_id is not None and org_id != fact_store.org_id:
+            raise ValueError("org_id does not match the scoped org")
+        org_id = fact_store.org_id
+    return chunk_namespace(workspace_id, org_id, require_org=True)
+
+
 class AgentProtocol(Protocol):
     """Protocol for agents that can answer questions."""
 
@@ -237,22 +246,26 @@ class DatasetQueryEngine:
             return self._error_result(ctx, "Unexpected query failure")
 
     async def _search_chunks(self, ctx: QueryContext) -> list[ChunkMatch]:
-        """Search for relevant chunks."""
+        """Search the caller's organization's chunks; raises OrgScopeRequiredError without one."""
+        key = _org_chunk_key(self._fact_store, ctx.workspace_id, ctx.org_id)
         try:
-            return await self._embedding_service.hybrid_search(
+            matches = await self._embedding_service.hybrid_search(
                 query=ctx.query,
-                workspace_id=ctx.workspace_id,
+                workspace_id=key,
                 limit=ctx.options.max_chunks,
                 alpha=ctx.options.search_alpha,
                 min_score=ctx.options.min_chunk_score,
             )
         except (ConnectionError, TimeoutError, RuntimeError) as e:
             logger.warning("Embedding search failed, trying keyword: %s", e)
-            return await self._embedding_service.keyword_search(
+            matches = await self._embedding_service.keyword_search(
                 query=ctx.query,
-                workspace_id=ctx.workspace_id,
+                workspace_id=key,
                 limit=ctx.options.max_chunks,
             )
+        for match in matches:
+            match.workspace_id = ctx.workspace_id
+        return matches
 
     async def _get_existing_facts(self, ctx: QueryContext) -> list[Fact]:
         """Get existing facts relevant to the query."""
@@ -720,12 +733,7 @@ class SimpleQueryEngine:
 
         # Facts first: a missing or mismatched org fails before any chunk is read.
         facts = await self.get_facts(question, workspace_id, limit=10, org_id=org_id)
-
-        scope = org_id
-        if scope is None and isinstance(self._fact_store, ScopedFactStore):
-            scope = self._fact_store.org_id
-        chunk_key = chunk_namespace(workspace_id, scope, require_org=True)
-        chunks = await self.search(question, chunk_key, options.max_chunks)
+        chunks = await self.search(question, workspace_id, options.max_chunks, org_id=org_id)
 
         # Build simple answer from chunks
         if chunks:
@@ -755,13 +763,19 @@ class SimpleQueryEngine:
         query: str,
         workspace_id: str,
         limit: int = 10,
+        *,
+        org_id: str | None = None,
     ) -> list[ChunkMatch]:
-        """Search for relevant chunks."""
-        return await self._embedding_service.hybrid_search(
+        """Search the chunks of org_id (else the scoped store's org); raises without an org."""
+        key = _org_chunk_key(self._fact_store, workspace_id, org_id)
+        matches = await self._embedding_service.hybrid_search(
             query=query,
-            workspace_id=workspace_id,
+            workspace_id=key,
             limit=limit,
         )
+        for match in matches:
+            match.workspace_id = workspace_id
+        return matches
 
     async def get_facts(
         self,

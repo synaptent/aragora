@@ -70,7 +70,12 @@ from aragora.knowledge.embeddings import (
     WeaviateEmbeddingService,
     chunk_namespace,
 )
-from aragora.knowledge.fact_store import FactStore, InMemoryFactStore, ScopedFactStore
+from aragora.knowledge.fact_store import (
+    FactStore,
+    InMemoryFactStore,
+    OrgScopeRequiredError,
+    ScopedFactStore,
+)
 from aragora.knowledge.query_engine import DatasetQueryEngine, QueryOptions, SimpleQueryEngine
 from aragora.knowledge.types import Fact, QueryResult, ValidationStatus
 
@@ -115,8 +120,8 @@ class PipelineConfig:
 
     # Workspace
     workspace_id: str = "default"
-    # Set only from verified authentication. Without it, fact reads and
-    # writes fail closed with OrgScopeRequiredError.
+    # Set only from verified authentication. Without it, fact and chunk reads
+    # and writes fail closed with OrgScopeRequiredError.
     org_id: str | None = None
 
     # Chunking
@@ -234,12 +239,12 @@ class KnowledgePipeline:
     def _org_id(self) -> str | None:
         return self.config.org_id or None
 
-    def _chunk_key(self, *, require_org: bool) -> str:
+    def _chunk_key(self) -> str:
         # A caller-built ScopedFactStore is the same trusted org boundary as config.org_id.
         org_id = self._org_id
         if org_id is None and isinstance(self._fact_store, ScopedFactStore):
             org_id = self._fact_store.org_id
-        return chunk_namespace(self.config.workspace_id, org_id, require_org=require_org)
+        return chunk_namespace(self.config.workspace_id, org_id, require_org=True)
 
     def set_progress_callback(self, callback: Callable[[str, float, str], None]) -> None:
         """Set progress callback: callback(document_id, progress, message)."""
@@ -435,6 +440,8 @@ class KnowledgePipeline:
                 facts=facts,
             )
 
+        except OrgScopeRequiredError as e:
+            return self._refused(document_id, filename, start_time, e)
         except (OSError, RuntimeError, ValueError, KeyError, AttributeError) as e:  # noqa: BLE001 - adapter isolation
             logger.warning("Document processing failed: %s", e)
             duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
@@ -546,6 +553,8 @@ class KnowledgePipeline:
                 facts=facts,
             )
 
+        except OrgScopeRequiredError as e:
+            return self._refused(document_id, filename, start_time, e)
         except (OSError, RuntimeError, ValueError, KeyError, AttributeError) as e:  # noqa: BLE001 - adapter isolation
             logger.warning("Text processing failed: %s", e)
             duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
@@ -562,6 +571,24 @@ class KnowledgePipeline:
                 success=False,
                 error="Text processing failed",
             )
+
+    def _refused(
+        self, document_id: str, filename: str, start_time: datetime, error: Exception
+    ) -> ProcessingResult:
+        """A document refused before any chunk was written, e.g. for a missing organization."""
+        logger.warning("Knowledge processing refused for %s: %s", document_id, error)
+        return ProcessingResult(
+            document_id=document_id,
+            filename=filename,
+            workspace_id=self.config.workspace_id,
+            chunk_count=0,
+            embedded_count=0,
+            fact_count=0,
+            total_tokens=0,
+            duration_ms=int((datetime.now() - start_time).total_seconds() * 1000),
+            success=False,
+            error=str(error),
+        )
 
     async def process_batch(
         self,
@@ -743,7 +770,7 @@ class KnowledgePipeline:
         # Embed in batches
         total_embedded = 0
         batch_size = self.config.embedding_batch_size
-        key = self._chunk_key(require_org=False)
+        key = self._chunk_key()
 
         for i in range(0, len(chunk_data), batch_size):
             batch = chunk_data[i : i + batch_size]
@@ -1024,7 +1051,7 @@ Include dates, numbers, names, and specific claims where possible."""
         if not self._running:
             await self.start()
 
-        key = self._chunk_key(require_org=True)
+        key = self._chunk_key()
         if not self._embedding_service:
             return []
 
@@ -1074,9 +1101,7 @@ Include dates, numbers, names, and specific claims where possible."""
         """Get pipeline statistics."""
         embedding_stats = {}
         if self._embedding_service:
-            embedding_stats = self._embedding_service.get_statistics(
-                self._chunk_key(require_org=True)
-            )
+            embedding_stats = self._embedding_service.get_statistics(self._chunk_key())
 
         fact_stats = {}
         if self._fact_store:

@@ -36,6 +36,7 @@ from aragora.knowledge.fact_store import (
     ScopedFactStore,
 )
 from aragora.knowledge.pipeline import KnowledgePipeline, PipelineConfig
+from aragora.knowledge.query_engine import DatasetQueryEngine, QueryOptions, SimpleQueryEngine
 from aragora.knowledge.types import FactFilters
 
 WS = "shared-ws"
@@ -216,6 +217,64 @@ class TestChunkOrgScope:
         with pytest.raises(OrgScopeRequiredError):
             chunk_namespace(WS, "", require_org=True)
 
+    @pytest.mark.asyncio
+    async def test_upload_without_org_fails_and_writes_no_chunk(self) -> None:
+        shared = InMemoryEmbeddingService()
+        writer = _chunk_pipeline(None, shared)
+        try:
+            result = await writer.process_text(NULL_FACT, "legacy.txt")
+        finally:
+            await writer.stop()
+        assert (result.success, result.embedded_count) == (False, 0)
+        assert "organization" in (result.error or "")
+        assert shared.get_statistics()["total_chunks"] == 0
+
+
+async def _seeded_chunks() -> InMemoryEmbeddingService:
+    """Org A, org B and a pre-change bare-key chunk share one workspace id."""
+    service = InMemoryEmbeddingService()
+    for chunk_id, content, key in (
+        ("a-chunk", A_FACT, chunk_namespace(WS, "org-a")),
+        ("b-chunk", B_FACT, chunk_namespace(WS, "org-b")),
+        ("legacy-chunk", NULL_FACT, WS),
+    ):
+        chunk = {"chunk_id": chunk_id, "document_id": chunk_id, "content": content}
+        await service.embed_chunks([chunk], key)
+    return service
+
+
+async def _chunk_ids(kind: str, service: Any, org_id: str | None, workspace: str = WS) -> list[str]:
+    if kind == "simple":
+        engine = SimpleQueryEngine(embedding_service=service)
+        return sorted(m.chunk_id for m in await engine.search("invoices", workspace, org_id=org_id))
+    options = QueryOptions(use_agents=False, extract_facts=False)
+    dataset = DatasetQueryEngine(embedding_service=service)
+    return sorted((await dataset.query("invoices", workspace, options, org_id=org_id)).evidence_ids)
+
+
+@pytest.mark.parametrize("kind", ["simple", "dataset"])
+class TestQueryEngineChunkScope:
+    """SimpleQueryEngine.search and DatasetQueryEngine read only the caller's org's chunks."""
+
+    @pytest.mark.asyncio
+    async def test_each_org_reads_only_its_own_chunks(self, kind: str) -> None:
+        service = await _seeded_chunks()
+        assert await _chunk_ids(kind, service, "org-a") == ["a-chunk"]
+        assert await _chunk_ids(kind, service, "org-b") == ["b-chunk"]
+        forged = chunk_namespace(WS, "org-a")
+        assert await _chunk_ids(kind, service, "org-b", workspace=forged) == []
+
+    @pytest.mark.asyncio
+    async def test_without_org_no_chunk_search_runs(
+        self, kind: str, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        service = await _seeded_chunks()
+        spy = AsyncMock(side_effect=service.hybrid_search)
+        monkeypatch.setattr(service, "hybrid_search", spy)
+        with pytest.raises(OrgScopeRequiredError):
+            await _chunk_ids(kind, service, None)
+        spy.assert_not_awaited()
+
 
 @pytest.fixture
 def default_db(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[Path]:
@@ -242,6 +301,17 @@ def default_db(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[Path
 def _processed(org_id: str | None) -> int:
     pipeline = asyncio.run(integration.get_pipeline(WS, org_id=org_id))
     return int(pipeline.get_stats()["pipeline_stats"]["documents_processed"])
+
+
+def _finished_jobs(job_ids: list[str]) -> list[dict[str, Any]]:
+    deadline = time.monotonic() + 30
+    jobs: list[dict[str, Any]] = []
+    while time.monotonic() < deadline:
+        jobs = [integration.get_job_status(j) or {} for j in job_ids]
+        if all(job.get("status") in ("completed", "failed") for job in jobs):
+            break
+        time.sleep(0.05)
+    return jobs
 
 
 class TestIntegrationOrgScope:
@@ -304,15 +374,22 @@ class TestIntegrationOrgScope:
             ),
         ]
         job_ids = [u["knowledge_processing"]["job_id"] for u in uploads]
-        deadline = time.monotonic() + 30
-        statuses: list[Any] = []
-        while time.monotonic() < deadline:
-            statuses = [(integration.get_job_status(j) or {}).get("status") for j in job_ids]
-            if all(s in ("completed", "failed") for s in statuses):
-                break
-            time.sleep(0.05)
+        statuses = [job.get("status") for job in _finished_jobs(job_ids)]
         assert statuses == ["completed", "completed"]
         assert (_processed("org-b"), _processed("org-a")) == (2, 0)
+
+    def test_upload_without_org_reports_failure(self, default_db: Path) -> None:
+        sync = integration.process_uploaded_text(
+            "Orphan notes.", workspace_id=WS, async_processing=False
+        )
+        processing = sync["knowledge_processing"]
+        assert (processing["success"], processing["embedded"]) == (False, 0)
+        queued = integration.process_uploaded_document(
+            b"Orphan contract.", "o.txt", workspace_id=WS
+        )
+        [job] = _finished_jobs([queued["knowledge_processing"]["job_id"]])
+        assert (job["status"], job["result"]["embedded_count"]) == ("failed", 0)
+        assert "organization" in job["error"]
 
     def test_shutdown_stops_every_org_pipeline(self, default_db: Path) -> None:
         async def run() -> list[bool]:

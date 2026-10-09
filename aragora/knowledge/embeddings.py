@@ -26,15 +26,16 @@ def chunk_namespace(workspace_id: str, org_id: str | None, *, require_org: bool 
 
     Organizations share one embedding store, so an organization's chunks are
     keyed by (organization, workspace) inside the existing ``workspace_id``
-    property; the JSON pair keeps distinct pairs distinct. Writers without an
-    organization keep the bare workspace id, which may not use the reserved
-    prefix and so never equals an organization key. Readers pass
-    ``require_org`` and fail closed without an organization.
+    property; the JSON pair keeps distinct pairs distinct. Readers and writers
+    pass ``require_org`` and fail closed without an organization. The bare
+    workspace id (no organization) is only the key of chunks written before
+    organization keys existed; it may not use the reserved prefix and so never
+    equals an organization key.
     """
     if org_id:
         return _ORG_CHUNK_PREFIX + json.dumps([org_id, workspace_id])
     if require_org:
-        raise OrgScopeRequiredError()
+        raise OrgScopeRequiredError("Knowledge document chunks require an organization")
     if workspace_id.startswith(_ORG_CHUNK_PREFIX):
         raise ValueError("workspace id uses the reserved organization chunk prefix")
     return workspace_id
