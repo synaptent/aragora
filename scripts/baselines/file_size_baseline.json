@@ -20,7 +20,6 @@
     "aragora/nomic/dev_receipts.py": 3262,
     "aragora/nomic/hardened_orchestrator.py": 2847,
     "aragora/nomic/meta_planner.py": 2563,
-    "aragora/nomic/self_improve.py": 2437,
     "aragora/nomic/task_decomposer.py": 2879,
     "aragora/pipeline/idea_to_execution.py": 4034,
     "aragora/server/debate_controller.py": 2008,
