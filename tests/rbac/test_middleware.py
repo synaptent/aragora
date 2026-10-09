@@ -665,7 +665,7 @@ class TestDefaultRoutePermissions:
             if hasattr(r.pattern, "pattern")
             and "health" in r.pattern.pattern.lower()
             # Per-connector health scores are connector data behind connectors.read.
-            and "connectors" not in r.pattern.pattern
+            and r.pattern.pattern != r"^/api/(?:v1/)?connectors?/[^/]+/health$"
         ]
 
         # All health rules should allow unauthenticated

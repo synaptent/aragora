@@ -252,7 +252,6 @@ DEFAULT_ROUTE_PERMISSIONS = [
     RoutePermission(r"^/api/(?:v1/)?memory", "GET", "memory.read"),
     RoutePermission(r"^/api/(?:v1/)?memory", "POST", "memory.update"),
     RoutePermission(r"^/api/(?:v1/)?memory", "DELETE", "memory.delete"),
-    RoutePermission(r"^/api/(?:v1/)?memory/[^/]+$", "PUT", "memory.update"),
     # Analytics
     RoutePermission(r"^/api/(?:v1/)?analytics", "GET", "analytics.read"),
     RoutePermission(r"^/api/(?:v1/)?analytics/export", "POST", "analytics.export_data"),
@@ -290,25 +289,6 @@ DEFAULT_ROUTE_PERMISSIONS = [
     ),
     RoutePermission(r"^/api/(?:v1/)?connectors?/[^/]+/health$", "GET", "connectors.read"),
     RoutePermission(r"^/api/(?:v1/)?connectors?/[^/]+/test$", "POST", "connectors.test"),
-    # Cross-pollination
-    RoutePermission(r"^/api/(v1/)?cross-pollination/metrics$", "GET", "analytics.read"),
-    RoutePermission(
-        r"^/api/(v1/)?cross-pollination/(stats|conflicts|federation|federation/sync|subscribe"
-        r"|sync/status|sync/trigger|subscribers|bridge|km|km/culture)$",
-        "GET",
-        "cross_pollination.read",
-    ),
-    RoutePermission(
-        r"^/api/(v1/)?cross-pollination/(reset|km/sync|km/staleness-check)$",
-        "POST",
-        "cross_pollination.write",
-    ),
-    RoutePermission(
-        r"^/api/(v1/)?cross-pollination/conflicts/[^/]+/resolve$", "POST", "cross_pollination.write"
-    ),
-    # Teams
-    RoutePermission(r"^/api/(v1/)?teams$", "GET", "bots.read"),
-    RoutePermission(r"^/api/(v1/)?teams$", "POST", "bots.read"),
     # Webhooks
     RoutePermission(r"^/api/(?:v1/)?webhooks?$", "GET", "webhooks.read"),
     RoutePermission(r"^/api/(?:v1/)?webhooks?$", "POST", "webhooks.create"),
@@ -807,8 +787,6 @@ DEFAULT_ROUTE_PERMISSIONS = [
     RoutePermission(r"^/api/documents", "POST", "documents.write"),
     RoutePermission(r"^/api/documents", "DELETE", "documents.delete"),
     # ── Document batch processing ──
-    RoutePermission(r"^/api/(?:v1/)?batch$", "GET", "documents.read"),
-    RoutePermission(r"^/api/(?:v1/)?batch/queue/status$", "GET", "documents.read"),
     RoutePermission(r"^/api/(?:v1/)?documents/processing/stats$", "GET", "documents.read"),
     # ── Red team / Auditing ──
     RoutePermission(r"^/api/redteam", "GET", "auditing.read"),

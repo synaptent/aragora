@@ -204,29 +204,41 @@ RULES: dict[tuple[str, str], str] = {
     ("POST", "/api/v1/connectors/c1/test"): "connectors.test",
     ("GET", "/api/v1/connectors/types"): "",
     ("DELETE", "/api/v1/analytics/metabase"): "analytics.configure",
-    ("GET", "/api/v1/cross-pollination/stats"): "cross_pollination.read",
-    ("GET", "/api/v1/cross-pollination/conflicts"): "cross_pollination.read",
-    ("GET", "/api/v1/cross-pollination/federation"): "cross_pollination.read",
-    ("GET", "/api/v1/cross-pollination/federation/sync"): "cross_pollination.read",
-    ("GET", "/api/v1/cross-pollination/subscribe"): "cross_pollination.read",
-    ("GET", "/api/v1/cross-pollination/sync/status"): "cross_pollination.read",
-    ("GET", "/api/v1/cross-pollination/sync/trigger"): "cross_pollination.read",
-    ("GET", "/api/v1/cross-pollination/subscribers"): "cross_pollination.read",
-    ("GET", "/api/v1/cross-pollination/bridge"): "cross_pollination.read",
-    ("GET", "/api/v1/cross-pollination/km"): "cross_pollination.read",
-    ("GET", "/api/v1/cross-pollination/km/culture"): "cross_pollination.read",
-    ("GET", "/api/v1/cross-pollination/metrics"): "analytics.read",
-    ("POST", "/api/v1/cross-pollination/reset"): "cross_pollination.write",
-    ("POST", "/api/v1/cross-pollination/km/sync"): "cross_pollination.write",
-    ("POST", "/api/v1/cross-pollination/km/staleness-check"): "cross_pollination.write",
-    ("POST", "/api/v1/cross-pollination/conflicts/c1/resolve"): "cross_pollination.write",
-    ("GET", "/api/v1/teams"): "bots.read",
-    ("POST", "/api/v1/teams"): "bots.read",
-    ("GET", "/api/v1/batch"): "documents.read",
-    ("GET", "/api/v1/batch/queue/status"): "documents.read",
     ("GET", "/api/v1/documents/processing/stats"): "documents.read",
-    ("PUT", "/api/v1/memory/k1"): "memory.update",
 }
+
+_XP = "/api/v1/cross-pollination"
+
+# Routes whose handlers have no branch yet: a rule would turn the default-deny 403 into a
+# 500 handler_no_result for every key holder, so they stay without one until they are served.
+UNSERVED: list[tuple[str, str]] = [
+    ("GET", "/api/v1/batch"),
+    ("GET", "/api/v1/batch/queue/status"),
+    ("PUT", "/api/v1/memory/k1"),
+    *(
+        ("GET", f"{_XP}/{route}")
+        for route in (
+            "stats",
+            "conflicts",
+            "federation",
+            "federation/sync",
+            "subscribe",
+            "sync/status",
+            "sync/trigger",
+            "subscribers",
+            "bridge",
+            "km",
+            "km/culture",
+            "metrics",
+        )
+    ),
+    ("POST", f"{_XP}/reset"),
+    ("POST", f"{_XP}/km/sync"),
+    ("POST", f"{_XP}/km/staleness-check"),
+    ("POST", f"{_XP}/conflicts/c1/resolve"),
+    ("GET", "/api/v1/teams"),
+    ("POST", "/api/v1/teams"),
+]
 
 # Roles whose RBAC v2 defaults hold each key (measured with the real checker).
 HOLDERS: dict[str, set[str]] = {
@@ -235,12 +247,7 @@ HOLDERS: dict[str, set[str]] = {
     "connectors.read": {"owner", "admin"},
     "connectors.test": {"owner", "admin"},
     "analytics.configure": {"owner", "admin"},
-    "analytics.read": {"owner", "admin", "member", "analyst"},
-    "cross_pollination.read": {"owner", "admin", "member", "analyst"},
-    "cross_pollination.write": {"owner", "admin"},
-    "bots.read": {"owner", "admin", "member"},
     "documents.read": {"owner", "admin", "analyst"},
-    "memory.update": {"owner", "admin"},
 }
 
 
@@ -257,6 +264,11 @@ def test_first_matching_rule_carries_the_handler_key(method: str, path: str) -> 
     # The handlers check these keys without a resource ID; capturing one would let the
     # checker's ownership fallback admit a resource owner who lacks the key.
     assert rule.matches(path, method) == (True, None)
+
+
+@pytest.mark.parametrize(("method", "path"), UNSERVED)
+def test_unserved_routes_stay_default_denied(method: str, path: str) -> None:
+    assert _first_rule(method, path) is None
 
 
 def test_every_supported_analytics_platform_has_a_disconnect_rule() -> None:
@@ -310,11 +322,10 @@ def _cells(spec: str) -> dict[str, int | str]:
 
 
 # (method, path) -> (handler-layer answers, server answers) per caller. "x" marks a caller
-# the rules admit to a handler that has no branch for the route yet, which the dispatcher
-# answers 500 handler_no_result without running any handler body. Owner and admin probe
+# the handler layer passes to a handler that has no branch for the route yet, which the
+# dispatcher answers 500 handler_no_result without running any handler body; the server's
+# default-deny answers 403 for those routes before dispatch. Owner and admin probe
 # empty in-memory state, so a connector or platform they may touch is not found (404).
-# Cross-pollination and /api/v1/teams have no handler answer on this base and are
-# covered by the rule tests above only.
 DISPATCH: dict[tuple[str, str], tuple[str, str]] = {
     ("PATCH", "/api/v1/connectors/c1"): ("404 404 403 403 403 401",) * 2,
     ("PUT", "/api/v1/connectors/c1"): ("404 404 403 403 403 401",) * 2,
@@ -336,10 +347,10 @@ DISPATCH: dict[tuple[str, str], tuple[str, str]] = {
         "200 200 403 200 403 401",
     ),
     # The batch handler's documents:read GET entry has no branch for these two routes yet.
-    ("GET", "/api/v1/batch"): ("x x 403 x 403 403", "x x 403 x 403 401"),
-    ("GET", "/api/v1/batch/queue/status"): ("x x 403 x 403 403", "x x 403 x 403 401"),
+    ("GET", "/api/v1/batch"): ("x x 403 x 403 403", "403 403 403 403 403 401"),
+    ("GET", "/api/v1/batch/queue/status"): ("x x 403 x 403 403", "403 403 403 403 403 401"),
     # MemoryHandler has no handle_put, so PUT falls back to its memory:read GET entry.
-    ("PUT", "/api/v1/memory/k1"): ("x x x x 403 403", "x x 403 403 403 401"),
+    ("PUT", "/api/v1/memory/k1"): ("x x x x 403 403", "403 403 403 403 403 401"),
     # Continuum memory is not initialized here, so a caller holding memory.read gets 503.
     ("GET", "/api/v1/memory/tier-stats"): ("503 503 503 503 403 403", "503 503 503 503 403 401"),
     # The middleware's knowledge.read rule admits member; the handler's documents:read does not.
@@ -377,9 +388,38 @@ def test_real_jwt_callers_get_the_same_rule_at_both_layers(
 
 
 @pytest.mark.no_auto_auth
+@pytest.mark.parametrize("caller", CALLERS)
+@pytest.mark.parametrize(("method", "path"), UNSERVED)
+def test_unserved_routes_are_denied_before_dispatch(
+    registry, method: str, path: str, caller: str
+) -> None:
+    status, body = _dispatch(_Server, method, path, caller)
+    expected = (401, "auth_required") if caller == "anon" else (403, "permission_denied")
+    assert (status, body["code"]) == expected, body
+
+
+@pytest.mark.no_auto_auth
 def test_memory_get_as_viewer_answers_403_not_500(registry, fresh_memory_context) -> None:
     status, body = _dispatch(registry, "GET", "/api/v1/memory/tier-stats", "viewer")
     assert (status, body) == (403, FORBIDDEN)
+
+
+@pytest.mark.no_auto_auth
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason=(
+        "plan X3: MemoryHandler keeps the request's auth context on the shared handler and "
+        "checks the next request against it; fixed in PR-B (m4-server-defects-pr-b)"
+    ),
+)
+def test_memory_handler_checks_each_request_against_its_own_caller(registry, monkeypatch) -> None:
+    monkeypatch.setattr(_memory_handler(), "_auth_context", None, raising=False)
+    statuses = [
+        _dispatch(registry, "GET", "/api/v1/memory/tier-stats", caller)[0]
+        for caller in ("owner", "viewer")
+    ]
+    assert statuses == [503, 403]
 
 
 @pytest.mark.no_auto_auth
