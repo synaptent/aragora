@@ -45,6 +45,7 @@ import {
 
 // Import event handlers
 import { eventHandlerRegistry, type EventHandlerContext, type ParsedEventData } from './eventHandlers';
+import { fetchWithAuth } from '@/lib/api';
 
 // Re-export types for convenience
 export type {
@@ -295,7 +296,7 @@ export function useDebateWebSocket({
   // Fetch debate status from HTTP API
   const fetchDebateStatus = useCallback(async (): Promise<DebateStatus | null> => {
     try {
-      const response = await fetch(`${apiBase}/api/debates/${debateId}`);
+      const response = await fetchWithAuth(`${apiBase}/api/debates/${debateId}`);
       if (response.ok) {
         const data = await response.json();
         return {
@@ -451,7 +452,7 @@ export function useDebateWebSocket({
       try {
         const sinceSeq = lastSeqRef.current;
         const url = `${apiBase}/api/debates/${debateId}/events?since=${sinceSeq}`;
-        const response = await fetch(url);
+        const response = await fetchWithAuth(url);
         if (!response.ok) {
           // If 404 the endpoint does not exist -- stop polling gracefully
           if (response.status === 404) {

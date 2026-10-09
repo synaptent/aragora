@@ -3,6 +3,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import type { StreamEvent } from '@/types/events';
 import { logger } from '@/utils/logger';
+import { fetchWithAuth } from '@/lib/api';
 
 interface VerdictCardProps {
   events: StreamEvent[];
@@ -57,7 +58,7 @@ export function VerdictCard({ events, debateId, apiUrl }: VerdictCardProps) {
       setSummaryLoading(true);
       try {
         const baseUrl = apiUrl || '';
-        const response = await fetch(`${baseUrl}/api/debates/${debateId}/summary`);
+        const response = await fetchWithAuth(`${baseUrl}/api/debates/${debateId}/summary`);
         if (response.ok) {
           const data = await response.json();
           setSummary(data.summary);

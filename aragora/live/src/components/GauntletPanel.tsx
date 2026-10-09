@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { logger } from '@/utils/logger';
+import { fetchWithAuth } from '@/lib/api';
 
 // Lazy load the heatmap component
 const GauntletHeatmap = dynamic(() => import('./GauntletHeatmap'), {
@@ -52,13 +53,13 @@ export function GauntletPanel({ apiBase }: GauntletPanelProps) {
   const fetchResults = useCallback(async () => {
     try {
       setLoading(true);
-      const url = new URL(`${apiBase}/api/gauntlet/results`);
-      url.searchParams.set('limit', '20');
+      // apiBase may be '' (same-origin proxy), so build the query without new URL().
+      const params = new URLSearchParams({ limit: '20' });
       if (selectedVerdict) {
-        url.searchParams.set('verdict', selectedVerdict);
+        params.set('verdict', selectedVerdict);
       }
 
-      const response = await fetch(url.toString());
+      const response = await fetchWithAuth(`${apiBase}/api/gauntlet/results?${params}`);
       if (!response.ok) throw new Error('Failed to fetch gauntlet results');
 
       const data = await response.json();
@@ -79,7 +80,7 @@ export function GauntletPanel({ apiBase }: GauntletPanelProps) {
   const fetchDetails = async (gauntletId: string) => {
     try {
       setDetailsError(null);
-      const response = await fetch(`${apiBase}/api/gauntlet/${gauntletId}`);
+      const response = await fetchWithAuth(`${apiBase}/api/gauntlet/${gauntletId}`);
       if (!response.ok) throw new Error('Failed to fetch details');
       const data = await response.json();
       setExpandedDetails(data);

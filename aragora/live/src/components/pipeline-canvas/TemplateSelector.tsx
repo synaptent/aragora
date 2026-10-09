@@ -3,6 +3,7 @@
 import { memo, useState, useEffect, useCallback } from 'react';
 import { useBackend } from '@/components/BackendSelector';
 import { joinBackendPath } from '@/lib/backendUrls';
+import { fetchWithAuth } from '@/lib/api';
 
 // =============================================================================
 // Types
@@ -57,7 +58,7 @@ export const TemplateSelector = memo(function TemplateSelector({
 
     async function fetchTemplates() {
       try {
-        const res = await fetch(joinBackendPath(backendConfig.api, '/api/v1/canvas/pipeline/templates'));
+        const res = await fetchWithAuth(joinBackendPath(backendConfig.api, '/api/v1/canvas/pipeline/templates'));
         if (res.ok) {
           const data = await res.json();
           if (!cancelled) {

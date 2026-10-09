@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { API_BASE_URL } from '@/config';
 import { logger } from '@/utils/logger';
+import { fetchWithAuth } from '@/lib/api';
 
 interface RhetoricalObservation {
   pattern: string;
@@ -66,7 +67,7 @@ export function RhetoricalPanel({ debateId }: RhetoricalPanelProps) {
     async function fetchRhetoricalData() {
       try {
         setLoading(true);
-        const response = await fetch(`${API_BASE_URL}/api/debates/${debateId}/rhetorical`);
+        const response = await fetchWithAuth(`${API_BASE_URL}/api/debates/${debateId}/rhetorical`);
         if (!response.ok) {
           if (response.status === 404) {
             setError('Rhetorical analysis not available for this debate');

@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { API_BASE_URL } from '@/config';
 import { logger } from '@/utils/logger';
+import { fetchWithAuth } from '@/lib/api';
 
 interface Claim {
   text: string;
@@ -85,7 +86,7 @@ export function EvidenceLinkGraph({ debateId }: EvidenceLinkGraphProps) {
     async function fetchEvidenceData() {
       try {
         setLoading(true);
-        const response = await fetch(`${API_BASE_URL}/api/debates/${debateId}/evidence`);
+        const response = await fetchWithAuth(`${API_BASE_URL}/api/debates/${debateId}/evidence`);
         if (!response.ok) {
           if (response.status === 404) {
             setError('Evidence analysis not available for this debate');

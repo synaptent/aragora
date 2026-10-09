@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { useBackend } from '@/components/BackendSelector';
+import { fetchWithAuth } from '@/lib/api';
 
 interface ForkResult {
   success: boolean;
@@ -71,7 +72,7 @@ export function DebateForkPanel({
     setForkResult(null);
 
     try {
-      const response = await fetch(`${apiUrl}/api/debates/${debateId}/fork`, {
+      const response = await fetchWithAuth(`${apiUrl}/api/debates/${debateId}/fork`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -98,7 +99,7 @@ export function DebateForkPanel({
   const loadSuggestions = useCallback(async () => {
     setLoadingSuggestions(true);
     try {
-      const response = await fetch(`${apiUrl}/api/debates/${debateId}/followups`);
+      const response = await fetchWithAuth(`${apiUrl}/api/debates/${debateId}/followups`);
       const data = await response.json();
 
       if (response.ok && data.suggestions) {
@@ -122,7 +123,7 @@ export function DebateForkPanel({
     setFollowupResult(null);
 
     try {
-      const response = await fetch(`${apiUrl}/api/debates/${debateId}/followup`, {
+      const response = await fetchWithAuth(`${apiUrl}/api/debates/${debateId}/followup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

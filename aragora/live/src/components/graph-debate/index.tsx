@@ -12,6 +12,7 @@ import { GraphVisualization } from './GraphVisualization';
 import { NodeDetailPanel } from './NodeDetailPanel';
 import { MobileGraphListView } from './MobileGraphListView';
 import { useIsMobile } from './hooks';
+import { fetchWithAuth } from '@/lib/api';
 
 export interface GraphDebateBrowserProps {
   events?: StreamEvent[];
@@ -59,7 +60,7 @@ export function GraphDebateBrowser({ events = [], initialDebateId }: GraphDebate
     const refreshDebate = async () => {
       try {
         const apiUrl = API_BASE_URL;
-        const response = await fetch(
+        const response = await fetchWithAuth(
           `${apiUrl}/api/debates/graph/${selectedDebate.debate_id}`
         );
         if (response.ok) {
@@ -84,7 +85,7 @@ export function GraphDebateBrowser({ events = [], initialDebateId }: GraphDebate
       const refreshDebate = async () => {
         try {
           const apiUrl = API_BASE_URL;
-          const response = await fetch(
+          const response = await fetchWithAuth(
             `${apiUrl}/api/debates/graph/${selectedDebate.debate_id}`
           );
           if (response.ok) {
@@ -107,7 +108,7 @@ export function GraphDebateBrowser({ events = [], initialDebateId }: GraphDebate
     try {
       setLoading(true);
       const apiUrl = API_BASE_URL;
-      const response = await fetch(`${apiUrl}/api/debates/graph`);
+      const response = await fetchWithAuth(`${apiUrl}/api/debates/graph`);
       if (!response.ok) {
         throw new Error(`Failed to fetch graph debates (${response.status})`);
       }
@@ -150,7 +151,7 @@ export function GraphDebateBrowser({ events = [], initialDebateId }: GraphDebate
       try {
         setLoading(true);
         const apiUrl = API_BASE_URL;
-        const response = await fetch(`${apiUrl}/api/debates/graph/${initialDebateId}`);
+        const response = await fetchWithAuth(`${apiUrl}/api/debates/graph/${initialDebateId}`);
         if (response.ok) {
           const data = await response.json();
           setSelectedDebate(data);
@@ -178,7 +179,7 @@ export function GraphDebateBrowser({ events = [], initialDebateId }: GraphDebate
     try {
       setCreating(true);
       const apiUrl = API_BASE_URL;
-      const response = await fetch(`${apiUrl}/api/debates/graph`, {
+      const response = await fetchWithAuth(`${apiUrl}/api/debates/graph`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

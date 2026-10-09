@@ -5,6 +5,7 @@
  */
 
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { TEST_SESSION_TOKEN, authHeaderOf, clearTestSession, storeTestSession } from '@/test-utils';
 
 // Mock d3-force with chainable simulation methods used in the component.
 jest.mock('d3-force', () => {
@@ -260,6 +261,32 @@ describe('GraphDebateBrowser', () => {
 
     expect(document.querySelector('svg')).toBeInTheDocument();
     expect(screen.getByText(/drag nodes/i)).toBeInTheDocument();
+  });
+
+  it('sends the session token when listing, opening and creating graph debates', async () => {
+    storeTestSession();
+    try {
+      mockFetch.mockImplementation((url: string, init?: RequestInit) => {
+        const isList = url.endsWith('/api/debates/graph') && (init?.method ?? 'GET') === 'GET';
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(isList ? { debates: [] } : mockGraphDebate),
+        });
+      });
+
+      render(<GraphDebateBrowser initialDebateId="debate-1" />);
+      fireEvent.change(screen.getByPlaceholderText(/enter a topic for graph debate/i), {
+        target: { value: 'Should AI be regulated?' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: /create/i }));
+
+      const bearer = `Bearer ${TEST_SESSION_TOKEN}`;
+      await waitFor(() => expect(authHeaderOf(mockFetch, '/api/debates/graph', 'POST')).toBe(bearer));
+      expect(authHeaderOf(mockFetch, /\/api\/debates\/graph$/, 'GET')).toBe(bearer);
+      expect(authHeaderOf(mockFetch, '/api/debates/graph/debate-1')).toBe(bearer);
+    } finally {
+      clearTestSession();
+    }
   });
 
   it('shows websocket status and reconnect control', async () => {

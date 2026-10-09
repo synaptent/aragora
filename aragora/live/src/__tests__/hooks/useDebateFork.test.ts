@@ -1,5 +1,6 @@
 import { renderHook, act } from '@testing-library/react';
 import { useDebateFork, ForkNode } from '@/hooks/useDebateFork';
+import { TEST_SESSION_TOKEN, authHeaderOf, clearTestSession, storeTestSession } from '@/test-utils';
 
 // Mock fetch
 const mockFetch = jest.fn();
@@ -512,6 +513,27 @@ describe('useDebateFork', () => {
       });
 
       expect(result.current.forkResult).toBeNull();
+    });
+  });
+
+  describe('with a signed-in session', () => {
+    beforeEach(() => storeTestSession());
+    afterEach(() => clearTestSession());
+
+    it('sends the session token when loading forks and creating a fork', async () => {
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ forks: [], tree: null }) });
+      const { result } = renderHook(() => useDebateFork(debateId));
+
+      await act(async () => {
+        await result.current.loadForks();
+      });
+      await act(async () => {
+        await result.current.createFork(3, 'What if?');
+      });
+
+      const bearer = `Bearer ${TEST_SESSION_TOKEN}`;
+      expect(authHeaderOf(mockFetch, 'http://localhost:8080/api/debates/debate-123/forks')).toBe(bearer);
+      expect(authHeaderOf(mockFetch, 'http://localhost:8080/api/debates/debate-123/fork', 'POST')).toBe(bearer);
     });
   });
 });

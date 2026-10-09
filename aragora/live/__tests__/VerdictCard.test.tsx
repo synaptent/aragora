@@ -2,8 +2,9 @@
  * Tests for VerdictCard component
  */
 
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { VerdictCard, VerdictBadge } from '../src/components/VerdictCard';
+import { TEST_SESSION_TOKEN, authHeaderOf, clearTestSession, storeTestSession } from '@/test-utils';
 import type { StreamEvent } from '../src/types/events';
 
 describe('VerdictCard', () => {
@@ -340,6 +341,29 @@ describe('VerdictCard', () => {
       render(<VerdictCard events={events} />);
 
       expect(screen.getByText('Cross-Examination Notes')).toBeInTheDocument();
+    });
+  });
+
+  describe('Summary request', () => {
+    const mockFetch = global.fetch as jest.Mock;
+
+    beforeEach(() => {
+      storeTestSession();
+      mockFetch.mockResolvedValue({ ok: false, status: 404, json: async () => ({}) });
+    });
+
+    afterEach(() => clearTestSession());
+
+    it('sends the session token when loading the debate summary', async () => {
+      const events = [createVerdictEvent({ recommendation: 'Ship it', confidence: 0.8 })];
+
+      render(<VerdictCard events={events} debateId="debate-a" apiUrl="http://backend.test" />);
+
+      await waitFor(() =>
+        expect(authHeaderOf(mockFetch, 'http://backend.test/api/debates/debate-a/summary')).toBe(
+          `Bearer ${TEST_SESSION_TOKEN}`,
+        ),
+      );
     });
   });
 });

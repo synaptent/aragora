@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { API_BASE_URL } from '@/config';
+import { fetchWithAuth } from '@/lib/api';
 
 interface HeatmapCell {
   category: string;
@@ -48,7 +49,7 @@ export function GauntletHeatmap({
   const fetchHeatmap = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${apiBase}/api/gauntlet/${gauntletId}/heatmap`);
+      const response = await fetchWithAuth(`${apiBase}/api/gauntlet/${gauntletId}/heatmap`);
 
       if (!response.ok) {
         throw new Error('Failed to fetch heatmap data');

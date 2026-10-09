@@ -1,5 +1,6 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useEvidence, EvidenceData } from '@/hooks/useEvidence';
+import { TEST_SESSION_TOKEN, authHeaderOf, clearTestSession, storeTestSession } from '@/test-utils';
 
 // Mock fetch globally
 const mockFetch = jest.fn();
@@ -100,6 +101,20 @@ describe('useEvidence', () => {
   });
 
   describe('successful fetch', () => {
+    it('sends the session token with the evidence request', async () => {
+      storeTestSession();
+      try {
+        mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockEvidenceData) });
+
+        const { result } = renderHook(() => useEvidence('debate-123'));
+
+        await waitFor(() => expect(result.current.loading).toBe(false));
+        expect(authHeaderOf(mockFetch, '/api/debates/debate-123/evidence')).toBe(`Bearer ${TEST_SESSION_TOKEN}`);
+      } finally {
+        clearTestSession();
+      }
+    });
+
     it('fetches evidence data on mount', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,

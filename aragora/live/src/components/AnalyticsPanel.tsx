@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { StreamEvent } from '@/types/events';
+import { fetchWithAuth } from '@/lib/api';
 
 interface Disagreement {
   debate_id: string;
@@ -68,7 +69,7 @@ export function AnalyticsPanel({ apiBase, loopId, events = [] }: AnalyticsPanelP
           setLoading(false);
           return;
         }
-        const response = await fetch(`${apiBase}/api/debate/${encodeURIComponent(loopId)}/graph/stats`);
+        const response = await fetchWithAuth(`${apiBase}/api/debate/${encodeURIComponent(loopId)}/graph/stats`);
         if (response.ok) {
           const data = await response.json();
           setGraphStats(data);
@@ -77,7 +78,7 @@ export function AnalyticsPanel({ apiBase, loopId, events = [] }: AnalyticsPanelP
         }
       } else {
         const endpoint = tab === 'roles' ? 'role-rotation' : tab;
-        const response = await fetch(`${apiBase}/api/analytics/${endpoint}?limit=10`);
+        const response = await fetchWithAuth(`${apiBase}/api/analytics/${endpoint}?limit=10`);
         if (!response.ok) throw new Error(`Failed to fetch ${tab}`);
         const data = await response.json();
 

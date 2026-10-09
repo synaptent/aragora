@@ -3,6 +3,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import { VoiceRecorder } from './VoiceRecorder';
 import { YouTubeInput } from './YouTubeInput';
+import { fetchWithAuth } from '@/lib/api';
 
 interface UploadedDocument {
   id: string;
@@ -98,7 +99,7 @@ export function MediaUpload({
     const formData = new FormData();
     formData.append('file', file);
 
-    const response = await fetch(`${apiBase}/api/documents/upload`, {
+    const response = await fetchWithAuth(`${apiBase}/api/documents/upload`, {
       method: 'POST',
       body: formData,
     });
@@ -139,7 +140,7 @@ export function MediaUpload({
       ? `${apiBase}/api/transcription/video`
       : `${apiBase}/api/transcription/audio`;
 
-    const response = await fetch(endpoint, {
+    const response = await fetchWithAuth(endpoint, {
       method: 'POST',
       body: formData,
     });
@@ -227,7 +228,7 @@ export function MediaUpload({
     setError(null);
 
     try {
-      const response = await fetch(`${apiBase}/api/transcription/youtube`, {
+      const response = await fetchWithAuth(`${apiBase}/api/transcription/youtube`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url }),

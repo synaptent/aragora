@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { API_BASE_URL } from '@/config';
+import { fetchWithAuth } from '@/lib/api';
 
 const API_BASE = API_BASE_URL;
 
@@ -75,7 +76,7 @@ export function useEvidence(debateId: string) {
     setState((s) => ({ ...s, loading: true, error: null }));
 
     try {
-      const response = await fetch(`${API_BASE}/api/debates/${debateId}/evidence`);
+      const response = await fetchWithAuth(`${API_BASE}/api/debates/${debateId}/evidence`);
 
       if (!response.ok) {
         if (response.status === 404) {

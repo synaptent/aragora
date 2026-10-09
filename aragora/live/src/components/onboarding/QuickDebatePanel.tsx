@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useOnboardingStore } from '@/store/onboardingStore';
 import { getRuntimeBackendConfig } from '@/components/BackendSelector';
 import { logger } from '@/utils/logger';
+import { fetchWithAuth } from '@/lib/api';
 
 const DEFAULT_QUESTIONS: Record<string, string> = {
   hiring: 'Should we hire a senior engineer or two junior engineers for our growing team?',
@@ -40,7 +41,7 @@ export function QuickDebatePanel() {
     setFirstDebateTopic(question);
 
     try {
-      const res = await fetch(`${apiBase}/api/v1/debates`, {
+      const res = await fetchWithAuth(`${apiBase}/api/v1/debates`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -73,7 +74,7 @@ export function QuickDebatePanel() {
     for (let i = 0; i < maxAttempts; i++) {
       await new Promise((r) => setTimeout(r, 3000));
       try {
-        const res = await fetch(`${apiBase}/api/v1/debates/${debateId}`);
+        const res = await fetchWithAuth(`${apiBase}/api/v1/debates/${debateId}`);
         if (!res.ok) continue;
         const data = await res.json();
         if (data.status === 'completed') {

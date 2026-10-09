@@ -13,6 +13,7 @@
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { AnalyticsPanel } from '../src/components/AnalyticsPanel';
+import { TEST_SESSION_TOKEN, authHeaderOf, clearTestSession, storeTestSession } from '@/test-utils';
 
 // Mock fetch
 const mockFetch = jest.fn();
@@ -470,6 +471,26 @@ describe('AnalyticsPanel', () => {
           expect.stringContaining('/api/debate/debate-123/graph/stats')
         );
       });
+    });
+
+    it('sends the session token with the analytics and graph stats requests', async () => {
+      setupSuccessfulFetch();
+      storeTestSession();
+      try {
+        render(<AnalyticsPanel apiBase="http://localhost:8080" loopId="debate-123" />);
+
+        fireEvent.click(screen.getByText('[ANALYTICS]'));
+        await waitFor(() => {
+          expect(authHeaderOf(mockFetch, '/api/analytics/disagreements')).toBe(`Bearer ${TEST_SESSION_TOKEN}`);
+        });
+
+        fireEvent.click(screen.getByText('GRAPH'));
+        await waitFor(() => {
+          expect(authHeaderOf(mockFetch, '/api/debate/debate-123/graph/stats')).toBe(`Bearer ${TEST_SESSION_TOKEN}`);
+        });
+      } finally {
+        clearTestSession();
+      }
     });
 
     it('displays graph stats', async () => {
