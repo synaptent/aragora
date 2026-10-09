@@ -248,7 +248,8 @@ class TestHelperFunctions:
         assert result is not None
 
     def test_parse_datetime_invalid(self):
-        assert _parse_datetime("not-a-date") is None
+        with pytest.raises(ValueError, match="Invalid Pipedrive datetime value"):
+            _parse_datetime("not-a-date")
 
     def test_parse_date_none(self):
         assert _parse_date(None) is None
@@ -264,10 +265,12 @@ class TestHelperFunctions:
         assert result.day == 15
 
     def test_parse_date_invalid(self):
-        assert _parse_date("not-a-date") is None
+        with pytest.raises(ValueError, match="Invalid Pipedrive date value"):
+            _parse_date("not-a-date")
 
     def test_parse_date_wrong_format(self):
-        assert _parse_date("15/06/2023") is None
+        with pytest.raises(ValueError, match="Invalid Pipedrive date value"):
+            _parse_date("15/06/2023")
 
 
 # =============================================================================
@@ -2059,10 +2062,14 @@ class TestEdgeCases:
         assert person.email is None
 
     def test_parse_datetime_type_error(self):
-        assert _parse_datetime(12345) is None
+        with pytest.raises(ValueError, match="Invalid Pipedrive datetime value") as exc_info:
+            _parse_datetime(12345)
+        assert isinstance(exc_info.value.__cause__, TypeError)
 
     def test_parse_date_type_error(self):
-        assert _parse_date(12345) is None
+        with pytest.raises(ValueError, match="Invalid Pipedrive date value") as exc_info:
+            _parse_date(12345)
+        assert isinstance(exc_info.value.__cause__, TypeError)
 
     def test_deal_from_api_deleted_status(self):
         data = {"id": 1, "title": "Deleted", "status": "deleted"}

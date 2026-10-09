@@ -688,60 +688,47 @@ class TestCalibrationEngineIntegration:
 
     @pytest.fixture
     def real_db(self):
-        """Create a real temporary database."""
+        """Create a real temporary database with the production ELO schema."""
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "integration_test.db"
+            from aragora.ranking.database import EloDatabase
+
+            EloDatabase(str(db_path))
             yield db_path
 
     def test_full_calibration_workflow(self, real_db):
         """Test full workflow: record, resolve, query."""
-        # This test requires the actual CalibrationDatabase
-        # Skip if imports fail
-        try:
-            from aragora.ranking.calibration_database import CalibrationDatabase
+        engine = CalibrationEngine(real_db)
 
-            db = CalibrationDatabase(real_db)
-            engine = CalibrationEngine(real_db)
+        # Record some predictions
+        engine.record_winner_prediction("t1", "claude", "gemini", 0.7)
+        engine.record_winner_prediction("t1", "gpt", "codex", 0.8)
 
-            # Record some predictions
-            engine.record_winner_prediction("t1", "claude", "gemini", 0.7)
-            engine.record_winner_prediction("t1", "gpt", "codex", 0.8)
+        # Resolve the tournament
+        scores = engine.resolve_tournament("t1", "gemini")
 
-            # Resolve the tournament
-            scores = engine.resolve_tournament("t1", "gemini")
-
-            assert "claude" in scores
-            assert "gpt" in scores
-            # Claude predicted correctly with 0.7 confidence
-            assert scores["claude"] == (0.7 - 1.0) ** 2  # 0.09
-            # GPT predicted incorrectly with 0.8 confidence
-            assert scores["gpt"] == (0.8 - 0.0) ** 2  # 0.64
-
-        except Exception as e:
-            pytest.skip(f"Integration test requires full database setup: {e}")
+        assert "claude" in scores
+        assert "gpt" in scores
+        # Claude predicted correctly with 0.7 confidence
+        assert scores["claude"] == (0.7 - 1.0) ** 2  # 0.09
+        # GPT predicted incorrectly with 0.8 confidence
+        assert scores["gpt"] == (0.8 - 0.0) ** 2  # 0.64
 
     def test_domain_calibration_workflow(self, real_db):
         """Test domain calibration workflow."""
-        try:
-            from aragora.ranking.calibration_database import CalibrationDatabase
+        engine = DomainCalibrationEngine(real_db)
 
-            db = CalibrationDatabase(real_db)
-            engine = DomainCalibrationEngine(real_db)
+        # Record some domain predictions
+        engine.record_prediction("claude", "security", 0.8, correct=True)
+        engine.record_prediction("claude", "security", 0.7, correct=True)
+        engine.record_prediction("claude", "security", 0.9, correct=False)
+        engine.record_prediction("claude", "performance", 0.6, correct=True)
 
-            # Record some domain predictions
-            engine.record_prediction("claude", "security", 0.8, correct=True)
-            engine.record_prediction("claude", "security", 0.7, correct=True)
-            engine.record_prediction("claude", "security", 0.9, correct=False)
-            engine.record_prediction("claude", "performance", 0.6, correct=True)
+        # Get stats
+        stats = engine.get_domain_stats("claude")
+        assert stats["total"] == 4
+        assert stats["correct"] == 3
 
-            # Get stats
-            stats = engine.get_domain_stats("claude")
-            assert stats["total"] == 4
-            assert stats["correct"] == 3
-
-            # Get calibration curve
-            curve = engine.get_calibration_curve("claude")
-            assert len(curve) > 0
-
-        except Exception as e:
-            pytest.skip(f"Integration test requires full database setup: {e}")
+        # Get calibration curve
+        curve = engine.get_calibration_curve("claude")
+        assert len(curve) > 0

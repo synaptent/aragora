@@ -253,8 +253,10 @@ class ByzantineConsensus:
                 confidence = len(commit_votes) / self.n
 
                 logger.info(
-                    f"byzantine_consensus_success view={self._current_view} "
-                    f"commits={len(commit_votes)} confidence={confidence:.2f}"
+                    "byzantine_consensus_success view=%s commits=%s confidence=%.2f",
+                    self._current_view,
+                    len(commit_votes),
+                    confidence,
                 )
 
                 return ByzantineConsensusResult(
@@ -266,7 +268,7 @@ class ByzantineConsensus:
                     commit_count=len(commit_votes),
                     total_agents=self.n,
                     duration_seconds=duration,
-                    agent_votes={agent: proposal_hash for agent in commit_votes},
+                    agent_votes=dict.fromkeys(commit_votes, proposal_hash),
                 )
 
             except ConsensusFailure as e:

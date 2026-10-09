@@ -45,7 +45,7 @@ from __future__ import annotations
 from dataclasses import fields as dataclass_fields
 from typing import TYPE_CHECKING, Any
 
-from aragora.debate.protocol import CircuitBreaker
+from aragora.resilience import CircuitBreaker
 
 if TYPE_CHECKING:
     pass

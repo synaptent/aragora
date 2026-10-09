@@ -27,6 +27,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+from typing import Any, TypedDict
 
 # Ensure project root is on path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -56,8 +57,18 @@ from aragora.reasoning.crux_detector import (
 # Debate scenario: Cloud migration strategy
 # ---------------------------------------------------------------------------
 
+
+class DebateClaim(TypedDict):
+    id: str
+    statement: str
+    author: str
+    type: ClaimType
+    confidence: float
+    evidence: list[tuple[str, float]]
+
+
 # Claims from a realistic multi-agent debate about migrating to cloud
-DEBATE_CLAIMS = [
+DEBATE_CLAIMS: list[DebateClaim] = [
     # Agent: cloud_architect (pro-migration)
     {
         "id": "cost-savings",
@@ -449,7 +460,7 @@ def run_benchmark() -> BenchmarkResults:
             fresh_net.propagate()
 
             # Measure changes against baseline
-            changes = []
+            changes: list[dict[str, Any]] = []
             for node in fresh_net.nodes.values():
                 base_p = baseline.get(node.claim_id, 0.5)
                 new_p = node.posterior.p_true

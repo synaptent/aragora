@@ -72,7 +72,7 @@ def _topological_sort(adj: dict[str, list[str]], nodes: list[str]) -> list[list[
 
     Returns a list of layers, each containing node IDs at that depth.
     """
-    in_degree: dict[str, int] = {n: 0 for n in nodes}
+    in_degree: dict[str, int] = dict.fromkeys(nodes, 0)
     for src in nodes:
         for dst in adj.get(src, []):
             if dst in in_degree:

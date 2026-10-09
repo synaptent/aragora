@@ -424,9 +424,10 @@ class KnowledgeMoundMetaLearner:
                     )
 
                     logger.info(
-                        f"Applied tier optimization for {rec.tier}: "
-                        f"promo={rec.recommended_promotion_threshold:.2f}, "
-                        f"demo={rec.recommended_demotion_threshold:.2f}"
+                        "Applied tier optimization for %s: promo=%.2f, demo=%.2f",
+                        rec.tier,
+                        rec.recommended_promotion_threshold,
+                        rec.recommended_demotion_threshold,
                     )
 
             return True
