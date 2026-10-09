@@ -241088,6 +241088,10 @@
                     },
                     "limit": {
                       "type": "integer"
+                    },
+                    "run_id": {
+                      "type": "string",
+                      "nullable": true
                     }
                   },
                   "required": [
@@ -241195,7 +241199,7 @@
         ],
         "summary": "Start a workspace decision",
         "operationId": "createWorkspaceDecision",
-        "description": "Create a decision from a question, optional pasted text and up to `ARAGORA_WORKSPACE_MAX_DOCUMENTS` `.md`/`.txt` files, debated by the selected offered agents. Sources are labelled S1, S2, ... in intake order and split into passages S1:P1, ... with SHA-256 hashes. Any refused field answers 400/413/415 naming the field and creates nothing. Returns 202 with status `debating`. JSON bodies are accepted for decisions without files. Requires a signed-in user with an organization (401 without a user, 403 `org_required` without an org). Another organization's decision answers exactly like a missing one (404).",
+        "description": "Create a decision from a question, optional pasted text and up to `ARAGORA_WORKSPACE_MAX_DOCUMENTS` `.md`/`.txt` files, debated by the selected offered agents. Sources are labelled S1, S2, ... in intake order and split into passages S1:P1, ... with SHA-256 hashes. Any refused field answers 400/413/415 naming the field and creates nothing. Returns 202 with status `debating` and the started run; when the debate cannot be started the run and the decision are already `failed` with the reason, and the decision can be rerun. JSON bodies are accepted for decisions without files. Requires a signed-in user with an organization (401 without a user, 403 `org_required` without an org). Another organization's decision answers exactly like a missing one (404).",
         "security": [
           {
             "bearerAuth": []
@@ -241355,6 +241359,347 @@
                     "passage_count": {
                       "type": "integer"
                     },
+                    "omitted_passage_count": {
+                      "type": "integer",
+                      "description": "Passages left out of the debate context by the context budget."
+                    },
+                    "run": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "run_id": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "running",
+                            "completed",
+                            "failed",
+                            "interrupted",
+                            "budget_exceeded"
+                          ]
+                        },
+                        "debate_id": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "agents": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "rounds": {
+                          "type": "integer"
+                        },
+                        "started_by": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "started_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "finished_at": {
+                          "type": "string",
+                          "format": "date-time",
+                          "nullable": true
+                        },
+                        "error": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "budget_usd": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "cost_actual_usd": {
+                          "type": "number",
+                          "description": "Cost reported by providers billed directly (for example grok)."
+                        },
+                        "cost_estimated_usd": {
+                          "type": "number",
+                          "description": "Cost estimated from token counts for agents routed through a proxy."
+                        },
+                        "result": {
+                          "type": "object",
+                          "nullable": true,
+                          "description": "What the run captured, kept when it fails: context counts, the debate record (final answer, proposals, dissenting views, cruxes, evidence suggestions, transcript), per-agent costs and the synthesis attempts."
+                        }
+                      }
+                    },
+                    "runs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "run_id": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "running",
+                              "completed",
+                              "failed",
+                              "interrupted",
+                              "budget_exceeded"
+                            ]
+                          },
+                          "debate_id": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "agents": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "rounds": {
+                            "type": "integer"
+                          },
+                          "started_by": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "started_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "finished_at": {
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
+                          },
+                          "error": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "budget_usd": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "cost_actual_usd": {
+                            "type": "number",
+                            "description": "Cost reported by providers billed directly (for example grok)."
+                          },
+                          "cost_estimated_usd": {
+                            "type": "number",
+                            "description": "Cost estimated from token counts for agents routed through a proxy."
+                          }
+                        }
+                      },
+                      "description": "Every run of the decision, newest first."
+                    },
+                    "current_revision": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "revision_id": {
+                          "type": "string"
+                        },
+                        "number": {
+                          "type": "integer"
+                        },
+                        "parent_revision_id": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "draft",
+                            "current",
+                            "superseded"
+                          ]
+                        },
+                        "origin": {
+                          "type": "string",
+                          "enum": [
+                            "debate",
+                            "user_edit"
+                          ]
+                        },
+                        "author_id": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "content": {
+                          "type": "object",
+                          "properties": {
+                            "recommendation": {
+                              "type": "string"
+                            },
+                            "citations": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "description": "Mechanical checks only: whether the passage exists and whether the quote appears in it. Neither says the passage supports the claim.",
+                                "properties": {
+                                  "claim": {
+                                    "type": "string"
+                                  },
+                                  "passage_label": {
+                                    "type": "string"
+                                  },
+                                  "quote": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "passage_id": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "passage_exists": {
+                                    "type": "boolean"
+                                  },
+                                  "quote_provided": {
+                                    "type": "boolean"
+                                  },
+                                  "quote_found": {
+                                    "type": "boolean"
+                                  }
+                                }
+                              }
+                            },
+                            "alternatives": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "summary": {
+                                    "type": "string"
+                                  },
+                                  "why_not_chosen": {
+                                    "type": "string"
+                                  },
+                                  "citations": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "description": "Mechanical checks only: whether the passage exists and whether the quote appears in it. Neither says the passage supports the claim.",
+                                      "properties": {
+                                        "claim": {
+                                          "type": "string"
+                                        },
+                                        "passage_label": {
+                                          "type": "string"
+                                        },
+                                        "quote": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "passage_id": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "passage_exists": {
+                                          "type": "boolean"
+                                        },
+                                        "quote_provided": {
+                                          "type": "boolean"
+                                        },
+                                        "quote_found": {
+                                          "type": "boolean"
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            "dissent": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "agent": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "position": {
+                                    "type": "string"
+                                  },
+                                  "citations": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "description": "Mechanical checks only: whether the passage exists and whether the quote appears in it. Neither says the passage supports the claim.",
+                                      "properties": {
+                                        "claim": {
+                                          "type": "string"
+                                        },
+                                        "passage_label": {
+                                          "type": "string"
+                                        },
+                                        "quote": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "passage_id": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "passage_exists": {
+                                          "type": "boolean"
+                                        },
+                                        "quote_provided": {
+                                          "type": "boolean"
+                                        },
+                                        "quote_found": {
+                                          "type": "boolean"
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            "missing_evidence": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "question": {
+                                    "type": "string"
+                                  },
+                                  "why_it_matters": {
+                                    "type": "string"
+                                  }
+                                }
+                              }
+                            },
+                            "assumptions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "statement": {
+                                    "type": "string"
+                                  },
+                                  "basis": {
+                                    "type": "string"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "content_hash": {
+                          "type": "string",
+                          "description": "SHA-256 of the RFC 8785 (JCS) canonical JSON of the decision id, revision number, parent revision id and `content`"
+                        },
+                        "created_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    },
                     "decision_id": {
                       "type": "string"
                     },
@@ -241478,6 +241823,10 @@
                     },
                     "limit": {
                       "type": "integer"
+                    },
+                    "run_id": {
+                      "type": "string",
+                      "nullable": true
                     }
                   },
                   "required": [
@@ -241616,6 +241965,10 @@
                     },
                     "limit": {
                       "type": "integer"
+                    },
+                    "run_id": {
+                      "type": "string",
+                      "nullable": true
                     }
                   },
                   "required": [
@@ -241666,6 +242019,10 @@
                     },
                     "limit": {
                       "type": "integer"
+                    },
+                    "run_id": {
+                      "type": "string",
+                      "nullable": true
                     }
                   },
                   "required": [
@@ -241716,6 +242073,10 @@
                     },
                     "limit": {
                       "type": "integer"
+                    },
+                    "run_id": {
+                      "type": "string",
+                      "nullable": true
                     }
                   },
                   "required": [
@@ -241766,6 +242127,10 @@
                     },
                     "limit": {
                       "type": "integer"
+                    },
+                    "run_id": {
+                      "type": "string",
+                      "nullable": true
                     }
                   },
                   "required": [
@@ -241787,7 +242152,7 @@
         ],
         "summary": "Get a workspace decision",
         "operationId": "getWorkspaceDecision",
-        "description": "One decision with its status, agents and counts. Requires a signed-in user with an organization (401 without a user, 403 `org_required` without an org). Another organization's decision answers exactly like a missing one (404).",
+        "description": "One decision with its status, agents and counts, its runs (the latest with what it captured, kept when it fails) and the current revision with the structured result and its citation checks. Requires a signed-in user with an organization (401 without a user, 403 `org_required` without an org). Another organization's decision answers exactly like a missing one (404).",
         "security": [
           {
             "bearerAuth": []
@@ -241881,6 +242246,347 @@
                     },
                     "passage_count": {
                       "type": "integer"
+                    },
+                    "omitted_passage_count": {
+                      "type": "integer",
+                      "description": "Passages left out of the debate context by the context budget."
+                    },
+                    "run": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "run_id": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "running",
+                            "completed",
+                            "failed",
+                            "interrupted",
+                            "budget_exceeded"
+                          ]
+                        },
+                        "debate_id": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "agents": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "rounds": {
+                          "type": "integer"
+                        },
+                        "started_by": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "started_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "finished_at": {
+                          "type": "string",
+                          "format": "date-time",
+                          "nullable": true
+                        },
+                        "error": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "budget_usd": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "cost_actual_usd": {
+                          "type": "number",
+                          "description": "Cost reported by providers billed directly (for example grok)."
+                        },
+                        "cost_estimated_usd": {
+                          "type": "number",
+                          "description": "Cost estimated from token counts for agents routed through a proxy."
+                        },
+                        "result": {
+                          "type": "object",
+                          "nullable": true,
+                          "description": "What the run captured, kept when it fails: context counts, the debate record (final answer, proposals, dissenting views, cruxes, evidence suggestions, transcript), per-agent costs and the synthesis attempts."
+                        }
+                      }
+                    },
+                    "runs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "run_id": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "running",
+                              "completed",
+                              "failed",
+                              "interrupted",
+                              "budget_exceeded"
+                            ]
+                          },
+                          "debate_id": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "agents": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "rounds": {
+                            "type": "integer"
+                          },
+                          "started_by": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "started_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "finished_at": {
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
+                          },
+                          "error": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "budget_usd": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "cost_actual_usd": {
+                            "type": "number",
+                            "description": "Cost reported by providers billed directly (for example grok)."
+                          },
+                          "cost_estimated_usd": {
+                            "type": "number",
+                            "description": "Cost estimated from token counts for agents routed through a proxy."
+                          }
+                        }
+                      },
+                      "description": "Every run of the decision, newest first."
+                    },
+                    "current_revision": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "revision_id": {
+                          "type": "string"
+                        },
+                        "number": {
+                          "type": "integer"
+                        },
+                        "parent_revision_id": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "draft",
+                            "current",
+                            "superseded"
+                          ]
+                        },
+                        "origin": {
+                          "type": "string",
+                          "enum": [
+                            "debate",
+                            "user_edit"
+                          ]
+                        },
+                        "author_id": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "content": {
+                          "type": "object",
+                          "properties": {
+                            "recommendation": {
+                              "type": "string"
+                            },
+                            "citations": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "description": "Mechanical checks only: whether the passage exists and whether the quote appears in it. Neither says the passage supports the claim.",
+                                "properties": {
+                                  "claim": {
+                                    "type": "string"
+                                  },
+                                  "passage_label": {
+                                    "type": "string"
+                                  },
+                                  "quote": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "passage_id": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "passage_exists": {
+                                    "type": "boolean"
+                                  },
+                                  "quote_provided": {
+                                    "type": "boolean"
+                                  },
+                                  "quote_found": {
+                                    "type": "boolean"
+                                  }
+                                }
+                              }
+                            },
+                            "alternatives": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "summary": {
+                                    "type": "string"
+                                  },
+                                  "why_not_chosen": {
+                                    "type": "string"
+                                  },
+                                  "citations": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "description": "Mechanical checks only: whether the passage exists and whether the quote appears in it. Neither says the passage supports the claim.",
+                                      "properties": {
+                                        "claim": {
+                                          "type": "string"
+                                        },
+                                        "passage_label": {
+                                          "type": "string"
+                                        },
+                                        "quote": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "passage_id": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "passage_exists": {
+                                          "type": "boolean"
+                                        },
+                                        "quote_provided": {
+                                          "type": "boolean"
+                                        },
+                                        "quote_found": {
+                                          "type": "boolean"
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            "dissent": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "agent": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "position": {
+                                    "type": "string"
+                                  },
+                                  "citations": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "description": "Mechanical checks only: whether the passage exists and whether the quote appears in it. Neither says the passage supports the claim.",
+                                      "properties": {
+                                        "claim": {
+                                          "type": "string"
+                                        },
+                                        "passage_label": {
+                                          "type": "string"
+                                        },
+                                        "quote": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "passage_id": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "passage_exists": {
+                                          "type": "boolean"
+                                        },
+                                        "quote_provided": {
+                                          "type": "boolean"
+                                        },
+                                        "quote_found": {
+                                          "type": "boolean"
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            "missing_evidence": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "question": {
+                                    "type": "string"
+                                  },
+                                  "why_it_matters": {
+                                    "type": "string"
+                                  }
+                                }
+                              }
+                            },
+                            "assumptions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "statement": {
+                                    "type": "string"
+                                  },
+                                  "basis": {
+                                    "type": "string"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "content_hash": {
+                          "type": "string",
+                          "description": "SHA-256 of the RFC 8785 (JCS) canonical JSON of the decision id, revision number, parent revision id and `content`"
+                        },
+                        "created_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
                     }
                   }
                 }
@@ -263483,6 +264189,637 @@
         "x-aragora-stability": "experimental",
         "operationId": "liststatus",
         "description": "Autogenerated placeholder (spec pending)"
+      }
+    },
+    "/api/v1/workspace/decisions/{decision_id}/rerun": {
+      "post": {
+        "tags": [
+          "Decision Workspace"
+        ],
+        "summary": "Rerun a failed decision",
+        "operationId": "rerunWorkspaceDecision",
+        "description": "Start a new run of a `failed` decision with the same agents and rounds; earlier runs are kept. Returns 202 with the decision back in `debating`. A decision that is not `failed`, or already has a run in progress, answers 409, so a double submit starts only one run. Needs `decisions:update`. Requires a signed-in user with an organization (401 without a user, 403 `org_required` without an org). Another organization's decision answers exactly like a missing one (404).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "decision_id",
+            "in": "path",
+            "required": true,
+            "description": "Decision id (the id of its decision plan).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Rerun started",
+            "headers": {
+              "X-Request-ID": {
+                "description": "Unique request identifier for tracing and debugging",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "X-Response-Time": {
+                "description": "Server processing time in milliseconds",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "question": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "debating",
+                        "ready",
+                        "failed"
+                      ]
+                    },
+                    "agents": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "rounds": {
+                      "type": "integer"
+                    },
+                    "created_by": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "created_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "updated_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "current_revision_id": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "budget_usd": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "cost_actual_usd": {
+                      "type": "number"
+                    },
+                    "cost_estimated_usd": {
+                      "type": "number"
+                    },
+                    "source_count": {
+                      "type": "integer"
+                    },
+                    "passage_count": {
+                      "type": "integer"
+                    },
+                    "omitted_passage_count": {
+                      "type": "integer",
+                      "description": "Passages left out of the debate context by the context budget."
+                    },
+                    "run": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "run_id": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "running",
+                            "completed",
+                            "failed",
+                            "interrupted",
+                            "budget_exceeded"
+                          ]
+                        },
+                        "debate_id": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "agents": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "rounds": {
+                          "type": "integer"
+                        },
+                        "started_by": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "started_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "finished_at": {
+                          "type": "string",
+                          "format": "date-time",
+                          "nullable": true
+                        },
+                        "error": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "budget_usd": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "cost_actual_usd": {
+                          "type": "number",
+                          "description": "Cost reported by providers billed directly (for example grok)."
+                        },
+                        "cost_estimated_usd": {
+                          "type": "number",
+                          "description": "Cost estimated from token counts for agents routed through a proxy."
+                        },
+                        "result": {
+                          "type": "object",
+                          "nullable": true,
+                          "description": "What the run captured, kept when it fails: context counts, the debate record (final answer, proposals, dissenting views, cruxes, evidence suggestions, transcript), per-agent costs and the synthesis attempts."
+                        }
+                      }
+                    },
+                    "runs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "run_id": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "running",
+                              "completed",
+                              "failed",
+                              "interrupted",
+                              "budget_exceeded"
+                            ]
+                          },
+                          "debate_id": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "agents": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "rounds": {
+                            "type": "integer"
+                          },
+                          "started_by": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "started_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "finished_at": {
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
+                          },
+                          "error": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "budget_usd": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "cost_actual_usd": {
+                            "type": "number",
+                            "description": "Cost reported by providers billed directly (for example grok)."
+                          },
+                          "cost_estimated_usd": {
+                            "type": "number",
+                            "description": "Cost estimated from token counts for agents routed through a proxy."
+                          }
+                        }
+                      },
+                      "description": "Every run of the decision, newest first."
+                    },
+                    "current_revision": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "revision_id": {
+                          "type": "string"
+                        },
+                        "number": {
+                          "type": "integer"
+                        },
+                        "parent_revision_id": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "draft",
+                            "current",
+                            "superseded"
+                          ]
+                        },
+                        "origin": {
+                          "type": "string",
+                          "enum": [
+                            "debate",
+                            "user_edit"
+                          ]
+                        },
+                        "author_id": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "content": {
+                          "type": "object",
+                          "properties": {
+                            "recommendation": {
+                              "type": "string"
+                            },
+                            "citations": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "description": "Mechanical checks only: whether the passage exists and whether the quote appears in it. Neither says the passage supports the claim.",
+                                "properties": {
+                                  "claim": {
+                                    "type": "string"
+                                  },
+                                  "passage_label": {
+                                    "type": "string"
+                                  },
+                                  "quote": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "passage_id": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "passage_exists": {
+                                    "type": "boolean"
+                                  },
+                                  "quote_provided": {
+                                    "type": "boolean"
+                                  },
+                                  "quote_found": {
+                                    "type": "boolean"
+                                  }
+                                }
+                              }
+                            },
+                            "alternatives": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "summary": {
+                                    "type": "string"
+                                  },
+                                  "why_not_chosen": {
+                                    "type": "string"
+                                  },
+                                  "citations": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "description": "Mechanical checks only: whether the passage exists and whether the quote appears in it. Neither says the passage supports the claim.",
+                                      "properties": {
+                                        "claim": {
+                                          "type": "string"
+                                        },
+                                        "passage_label": {
+                                          "type": "string"
+                                        },
+                                        "quote": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "passage_id": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "passage_exists": {
+                                          "type": "boolean"
+                                        },
+                                        "quote_provided": {
+                                          "type": "boolean"
+                                        },
+                                        "quote_found": {
+                                          "type": "boolean"
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            "dissent": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "agent": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "position": {
+                                    "type": "string"
+                                  },
+                                  "citations": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "description": "Mechanical checks only: whether the passage exists and whether the quote appears in it. Neither says the passage supports the claim.",
+                                      "properties": {
+                                        "claim": {
+                                          "type": "string"
+                                        },
+                                        "passage_label": {
+                                          "type": "string"
+                                        },
+                                        "quote": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "passage_id": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "passage_exists": {
+                                          "type": "boolean"
+                                        },
+                                        "quote_provided": {
+                                          "type": "boolean"
+                                        },
+                                        "quote_found": {
+                                          "type": "boolean"
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            "missing_evidence": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "question": {
+                                    "type": "string"
+                                  },
+                                  "why_it_matters": {
+                                    "type": "string"
+                                  }
+                                }
+                              }
+                            },
+                            "assumptions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "statement": {
+                                    "type": "string"
+                                  },
+                                  "basis": {
+                                    "type": "string"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "content_hash": {
+                          "type": "string",
+                          "description": "SHA-256 of the RFC 8785 (JCS) canonical JSON of the decision id, revision number, parent revision id and `content`"
+                        },
+                        "created_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Authentication required or token invalid",
+            "headers": {
+              "X-Request-ID": {
+                "description": "Unique request identifier for tracing and debugging",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "X-Response-Time": {
+                "description": "Server processing time in milliseconds",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "missing_token": {
+                    "summary": "No authentication token",
+                    "value": {
+                      "error": "Authentication required",
+                      "code": "AUTH_REQUIRED",
+                      "trace_id": "req_abc123xyz"
+                    }
+                  },
+                  "invalid_token": {
+                    "summary": "Invalid or expired token",
+                    "value": {
+                      "error": "Invalid or expired authentication token",
+                      "code": "INVALID_TOKEN",
+                      "trace_id": "req_abc123xyz"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions for this operation",
+            "headers": {
+              "X-Request-ID": {
+                "description": "Unique request identifier for tracing and debugging",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "X-Response-Time": {
+                "description": "Server processing time in milliseconds",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "insufficient_permissions": {
+                    "summary": "Insufficient permissions",
+                    "value": {
+                      "error": "You do not have permission to access this resource",
+                      "code": "FORBIDDEN",
+                      "required_role": "admin",
+                      "trace_id": "req_abc123xyz"
+                    }
+                  },
+                  "resource_owner": {
+                    "summary": "Not resource owner",
+                    "value": {
+                      "error": "You do not have permission to modify this debate",
+                      "code": "NOT_OWNER",
+                      "resource_type": "debate",
+                      "trace_id": "req_abc123xyz"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found - The requested resource does not exist",
+            "headers": {
+              "X-Request-ID": {
+                "description": "Unique request identifier for tracing and debugging",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "X-Response-Time": {
+                "description": "Server processing time in milliseconds",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "not_found": {
+                    "summary": "Resource not found",
+                    "value": {
+                      "error": "Debate not found",
+                      "code": "NOT_FOUND",
+                      "resource_type": "debate",
+                      "resource_id": "deb_abc123",
+                      "trace_id": "req_abc123xyz"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`run_in_progress` (with `run_id`) or `decision_not_failed`",
+            "headers": {
+              "X-Request-ID": {
+                "description": "Unique request identifier for tracing and debugging",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "X-Response-Time": {
+                "description": "Server processing time in milliseconds",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "field": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "agent": {
+                      "type": "string"
+                    },
+                    "filename": {
+                      "type": "string"
+                    },
+                    "limit": {
+                      "type": "integer"
+                    },
+                    "run_id": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-aragora-stability": "experimental"
       }
     }
   },

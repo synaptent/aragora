@@ -365,6 +365,9 @@ DEFAULT_ROUTE_PERMISSIONS = [
         "decisions.read",
         1,
     ),
+    RoutePermission(
+        r"^/api/(?:v1/)?workspace/decisions/([^/]+)/rerun$", "POST", "decisions.update", 1
+    ),
     # Policies - governance management
     RoutePermission(r"^/api/v1/policies$", "GET", "policies.read"),
     RoutePermission(r"^/api/v1/policies$", "POST", "policies.create"),

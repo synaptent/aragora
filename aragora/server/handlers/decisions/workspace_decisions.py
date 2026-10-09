@@ -1,4 +1,4 @@
-"""Decision workspace API: intake, decisions, sources and passages.
+"""Decision workspace API: intake, decisions, sources, passages and reruns.
 
 Endpoints (all need a signed-in user with an org):
 - GET  /api/v1/workspace/agent-options
@@ -7,13 +7,16 @@ Endpoints (all need a signed-in user with an org):
 - GET  /api/v1/workspace/decisions/{decision_id}
 - GET  /api/v1/workspace/decisions/{decision_id}/sources
 - GET  /api/v1/workspace/decisions/{decision_id}/passages/{passage_id}
+- POST /api/v1/workspace/decisions/{decision_id}/rerun
 
 No user -> 401 ``auth_required``; a user without an org (or the static API
 token) -> 403 ``org_required``. Another org's decision, source or passage
 answers exactly like a missing one (404 ``not_found``). The owner of a new
 decision always comes from the auth context, never from the request body.
 A refused intake creates nothing: every check runs before the first write,
-and a failed write removes what was already written.
+and a failed write removes what was already written. Intake and rerun each
+start one run; a run that cannot be handed to the debate runner ends
+``failed`` with the reason, so the decision can be rerun.
 """
 
 from __future__ import annotations
@@ -23,7 +26,7 @@ import re
 from typing import Any
 
 from aragora.decision_workspace.config import agent_options, workspace_limits
-from aragora.decision_workspace.debate_hook import DebateStartRequest, start_decision_debate
+from aragora.decision_workspace.debate_hook import DebateStartRequest, launch_decision_run
 from aragora.decision_workspace.forms import (
     IntakeError,
     max_request_bytes,
@@ -43,7 +46,11 @@ from aragora.decision_workspace.store import (
     DEFAULT_LIST_LIMIT,
     MAX_LIST_LIMIT,
     DecisionRecord,
+    DecisionRows,
     PassageRecord,
+    RevisionRecord,
+    RunConflictError,
+    RunRecord,
     SourceRecord,
     WorkspaceStore,
     get_workspace_store,
@@ -72,6 +79,7 @@ _ROUTE_PATTERNS = (
         "passage",
         re.compile(r"^/decisions/(?P<decision_id>[^/]+)/passages/(?P<passage_id>[^/]+)$"),
     ),
+    ("rerun", re.compile(r"^/decisions/(?P<decision_id>[^/]+)/rerun$")),
 )
 _ALLOWED_METHODS = {
     "agent_options": "GET",
@@ -79,6 +87,7 @@ _ALLOWED_METHODS = {
     "decision": "GET",
     "sources": "GET",
     "passage": "GET",
+    "rerun": "POST",
 }
 
 
@@ -154,21 +163,29 @@ class WorkspaceDecisionsHandler(BaseHandler):
             return self._agent_options()
         if route == "decisions":
             return self._list_decisions(query_params, scope)
+        if route == "rerun":
+            return _method_not_allowed(route)
         decision = self._visible_decision(params["decision_id"], scope)
         if decision is None:
             return record_not_found("Decision")
         if route == "decision":
-            return json_response(_decision_body(decision))
+            return json_response(self._decision_detail(decision, scope))
         if route == "sources":
             return json_response(self._sources_body(decision, scope))
         return self._get_passage(decision, params["passage_id"], scope)
 
-    @handle_errors("workspace decision creation")
-    @scope_denial_first
-    @require_permission("decisions:create")
+    @handle_errors("workspace decision request")
     def handle_post(
         self, path: str, query_params: dict[str, Any], handler: Any
     ) -> HandlerResult | None:
+        matched = _match(path)
+        if matched is not None and matched[0] == "rerun":
+            return self._post_rerun(path, query_params, handler)
+        return self._post_create(path, query_params, handler)
+
+    @scope_denial_first
+    @require_permission("decisions:create")
+    def _post_create(self, path: str, query_params: dict[str, Any], handler: Any) -> HandlerResult:
         scope, err = require_org_scope(handler)
         if scope is None:
             return err
@@ -178,6 +195,17 @@ class WorkspaceDecisionsHandler(BaseHandler):
         if matched[0] != "decisions":
             return _method_not_allowed(matched[0])
         return self._create_decision(handler, scope)
+
+    @scope_denial_first
+    @require_permission("decisions:update")
+    def _post_rerun(self, path: str, query_params: dict[str, Any], handler: Any) -> HandlerResult:
+        scope, err = require_org_scope(handler)
+        if scope is None:
+            return err
+        matched = _match(path)
+        if matched is None:
+            return _not_found()
+        return self._rerun(matched[1]["decision_id"], scope)
 
     @handle_errors("workspace decision update")
     @scope_denial_first
@@ -335,22 +363,74 @@ class WorkspaceDecisionsHandler(BaseHandler):
                     "document_store_unavailable",
                     "File uploads are unavailable: the document store is not configured.",
                 )
-        decision = self._store_decision(prepared, scope)
-        start_decision_debate(
+        rows = self._store_decision(prepared, scope)
+        decision = rows.decision
+        if rows.run is not None:
+            launch_decision_run(
+                self._store(),
+                DebateStartRequest(
+                    plan_id=decision.plan_id,
+                    org_id=scope.org_id,
+                    user_id=scope.user_id,
+                    question=decision.question,
+                    agents=decision.agents,
+                    rounds=decision.rounds,
+                    run_id=rows.run.run_id,
+                ),
+            )
+        decision = self._visible_decision(decision.plan_id, scope) or decision
+        body_out = self._decision_detail(decision, scope)
+        body_out.update(self._sources_body(decision, scope))
+        return json_response(body_out, status=202)
+
+    # -- runs --------------------------------------------------------------
+
+    def _rerun(self, decision_id: str, scope: OrgScope) -> HandlerResult:
+        if not _SAFE_ID.match(decision_id):
+            return record_not_found("Decision")
+        store = self._store()
+        try:
+            run = store.start_run(decision_id, scope.org_id, scope.user_id)
+        except LookupError:
+            return record_not_found("Decision")
+        except RunConflictError as exc:
+            return _error(409, exc.code, str(exc), run_id=exc.run_id)
+        decision = store.get_decision(decision_id, scope.org_id)
+        if decision is None:
+            return record_not_found("Decision")
+        launch_decision_run(
+            store,
             DebateStartRequest(
                 plan_id=decision.plan_id,
                 org_id=scope.org_id,
                 user_id=scope.user_id,
                 question=decision.question,
-                agents=decision.agents,
-                rounds=decision.rounds,
-            )
+                agents=run.agents,
+                rounds=run.rounds,
+                run_id=run.run_id,
+            ),
         )
-        body_out = _decision_body(decision)
-        body_out.update(self._sources_body(decision, scope))
-        return json_response(body_out, status=202)
+        logger.info(
+            "Workspace decision %s rerun by %s as %s", decision_id, scope.user_id, run.run_id
+        )
+        decision = store.get_decision(decision_id, scope.org_id) or decision
+        return json_response(self._decision_detail(decision, scope), status=202)
 
-    def _store_decision(self, prepared: PreparedDecision, scope: OrgScope) -> DecisionRecord:
+    def _decision_detail(self, decision: DecisionRecord, scope: OrgScope) -> dict[str, Any]:
+        store = self._store()
+        runs = store.list_runs(decision.plan_id, scope.org_id)
+        current = (
+            store.get_revision(decision.plan_id, decision.current_revision_id, scope.org_id)
+            if decision.current_revision_id
+            else None
+        )
+        body = _decision_body(decision)
+        body["run"] = _run_body(runs[0], with_result=True) if runs else None
+        body["runs"] = [_run_body(run, with_result=False) for run in runs]
+        body["current_revision"] = _revision_body(current) if current is not None else None
+        return body
+
+    def _store_decision(self, prepared: PreparedDecision, scope: OrgScope) -> DecisionRows:
         """Store documents, the plan with its backbone run and the workspace rows.
 
         A failure part way removes everything already written.
@@ -424,7 +504,7 @@ class WorkspaceDecisionsHandler(BaseHandler):
             scope.org_id,
             len(rows.sources),
         )
-        return rows.decision
+        return rows
 
     @staticmethod
     def _undo(
@@ -484,6 +564,41 @@ def _decision_body(decision: DecisionRecord) -> dict[str, Any]:
         "cost_estimated_usd": decision.cost_estimated_usd,
         "source_count": decision.source_count,
         "passage_count": decision.passage_count,
+        "omitted_passage_count": decision.omitted_passage_count,
+    }
+
+
+def _run_body(run: RunRecord, *, with_result: bool) -> dict[str, Any]:
+    body: dict[str, Any] = {
+        "run_id": run.run_id,
+        "status": run.status,
+        "debate_id": run.debate_id,
+        "agents": list(run.agents),
+        "rounds": run.rounds,
+        "started_by": run.started_by,
+        "started_at": run.started_at,
+        "finished_at": run.finished_at,
+        "error": run.error,
+        "budget_usd": run.budget_usd,
+        "cost_actual_usd": run.cost_actual_usd,
+        "cost_estimated_usd": run.cost_estimated_usd,
+    }
+    if with_result:
+        body["result"] = run.result
+    return body
+
+
+def _revision_body(revision: RevisionRecord) -> dict[str, Any]:
+    return {
+        "revision_id": revision.revision_id,
+        "number": revision.number,
+        "parent_revision_id": revision.parent_revision_id,
+        "status": revision.status,
+        "origin": revision.origin,
+        "author_id": revision.author_id,
+        "content": revision.content,
+        "content_hash": revision.content_hash,
+        "created_at": revision.created_at,
     }
 
 

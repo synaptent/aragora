@@ -388,6 +388,11 @@ export class DecisionsAPI {
   async createWorkspaceDecision(body: WorkspaceDecisionRequest): Promise<WorkspaceCreatedDecision> {
     return this.client.request('POST', '/api/v1/workspace/decisions', { body });
   }
+
+  /** Start a new run of a failed workspace decision; earlier runs are kept. */
+  async rerunWorkspaceDecision(decisionId: string): Promise<WorkspaceDecision> {
+    return this.client.request('POST', `/api/v1/workspace/decisions/${decisionId}/rerun`);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -442,6 +447,75 @@ export interface WorkspaceDecision {
   cost_estimated_usd: number;
   source_count: number;
   passage_count: number;
+  omitted_passage_count: number;
+  /** The latest run with what it captured; null before the first run. */
+  run: WorkspaceLatestRun | null;
+  /** Every run, newest first. */
+  runs: WorkspaceRun[];
+  current_revision: WorkspaceRevision | null;
+}
+
+export type WorkspaceRunStatus =
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'interrupted'
+  | 'budget_exceeded';
+
+export interface WorkspaceRun {
+  run_id: string;
+  status: WorkspaceRunStatus;
+  debate_id: string | null;
+  agents: string[];
+  rounds: number;
+  started_by: string | null;
+  started_at: string;
+  finished_at: string | null;
+  error: string | null;
+  budget_usd: number | null;
+  cost_actual_usd: number;
+  cost_estimated_usd: number;
+}
+
+export interface WorkspaceLatestRun extends WorkspaceRun {
+  result: Record<string, unknown> | null;
+}
+
+/** Mechanical checks only; neither says the passage supports the claim. */
+export interface WorkspaceCheckedCitation {
+  claim: string;
+  passage_label: string;
+  quote: string | null;
+  passage_id: string | null;
+  passage_exists: boolean;
+  quote_provided: boolean;
+  quote_found: boolean;
+}
+
+export interface WorkspaceRevisionContent {
+  recommendation: string;
+  citations: WorkspaceCheckedCitation[];
+  alternatives: Array<{
+    title: string;
+    summary: string;
+    why_not_chosen: string;
+    citations: WorkspaceCheckedCitation[];
+  }>;
+  dissent: Array<{ agent: string | null; position: string; citations: WorkspaceCheckedCitation[] }>;
+  missing_evidence: Array<{ question: string; why_it_matters: string }>;
+  assumptions: Array<{ statement: string; basis: string }>;
+}
+
+export interface WorkspaceRevision {
+  revision_id: string;
+  number: number;
+  parent_revision_id: string | null;
+  status: 'draft' | 'current' | 'superseded';
+  origin: 'debate' | 'user_edit';
+  author_id: string | null;
+  content: WorkspaceRevisionContent;
+  content_hash: string;
+  created_at: string;
 }
 
 export interface WorkspacePassageSummary {
