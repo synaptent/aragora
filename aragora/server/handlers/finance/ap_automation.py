@@ -32,7 +32,7 @@ from __future__ import annotations
 import logging
 import re
 import threading
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -46,6 +46,7 @@ from aragora.server.handlers.base import (
 )
 from aragora.server.handlers.utils.decorators import require_permission
 from aragora.server.handlers.utils.rate_limit import rate_limit
+from aragora.server.validation.query_params import parse_date_range_params, parse_iso_datetime
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +96,51 @@ def get_ap_automation():
 # =============================================================================
 
 
+def _validate_invoice_vendor(vendor_id: Any, vendor_name: Any) -> tuple[str, str] | HandlerResult:
+    if not vendor_id:
+        return error_response("vendor_id is required", status=400)
+    if not isinstance(vendor_id, str) or not vendor_id.strip():
+        return error_response("vendor_id must be a non-empty string", status=400)
+
+    if not vendor_name:
+        return error_response("vendor_name is required", status=400)
+    if not isinstance(vendor_name, str) or not vendor_name.strip():
+        return error_response("vendor_name must be a non-empty string", status=400)
+    return vendor_id, vendor_name
+
+
+def _parse_invoice_amount(total_amount: Any) -> tuple[Decimal | None, HandlerResult | None]:
+    if total_amount is None:
+        return None, error_response("total_amount is required", status=400)
+
+    try:
+        amount_decimal = Decimal(str(total_amount))
+        if amount_decimal <= 0:
+            return None, error_response("total_amount must be positive", status=400)
+    except (ValueError, TypeError, ArithmeticError):
+        return None, error_response("total_amount must be a valid number", status=400)
+    return amount_decimal, None
+
+
+def _parse_invoice_dates(
+    data: dict[str, Any],
+) -> tuple[datetime | None, datetime | None, dict[str, int]]:
+    """Parse the optional invoice dates; a non-ISO value raises ``ValueError``."""
+    invoice_date: datetime | None = None
+    due_date: datetime | None = None
+    # The service derives the discount deadline from invoice_date + discount_days.
+    discount: dict[str, int] = {}
+
+    if data.get("invoice_date"):
+        invoice_date = parse_iso_datetime(data["invoice_date"])
+    if data.get("due_date"):
+        due_date = parse_iso_datetime(data["due_date"])
+    if data.get("discount_deadline"):
+        deadline = parse_iso_datetime(data["discount_deadline"])
+        discount["discount_days"] = (deadline - (invoice_date or datetime.now())).days
+    return invoice_date, due_date, discount
+
+
 @rate_limit(requests_per_minute=60)
 @require_permission("finance:write")
 async def handle_add_invoice(
@@ -116,8 +162,7 @@ async def handle_add_invoice(
         payment_terms: str (optional, default "Net 30"),
         early_pay_discount: float (optional, e.g. 0.02 for 2%),
         discount_deadline: str (optional, ISO format),
-        priority: str (optional - critical, high, normal, low, hold),
-        preferred_payment_method: str (optional - ach, wire, check, credit_card)
+        priority: str (optional - critical, high, normal, low, hold)
     }
     """
     # Validate required fields
@@ -125,40 +170,28 @@ async def handle_add_invoice(
     vendor_name = data.get("vendor_name")
     total_amount = data.get("total_amount")
 
-    if not vendor_id:
-        return error_response("vendor_id is required", status=400)
-    if not isinstance(vendor_id, str) or not vendor_id.strip():
-        return error_response("vendor_id must be a non-empty string", status=400)
-
-    if not vendor_name:
-        return error_response("vendor_name is required", status=400)
-    if not isinstance(vendor_name, str) or not vendor_name.strip():
-        return error_response("vendor_name must be a non-empty string", status=400)
-
-    if total_amount is None:
-        return error_response("total_amount is required", status=400)
+    vendor = _validate_invoice_vendor(vendor_id, vendor_name)
+    if not isinstance(vendor, tuple):
+        return vendor
+    vendor_id, vendor_name = vendor
+    amount_decimal, amount_error = _parse_invoice_amount(total_amount)
+    if amount_error is not None:
+        return amount_error
 
     try:
-        amount_decimal = Decimal(str(total_amount))
-        if amount_decimal <= 0:
-            return error_response("total_amount must be positive", status=400)
-    except (ValueError, TypeError, ArithmeticError):
-        return error_response("total_amount must be a valid number", status=400)
-
-    # Parse and validate dates
-    invoice_date = None
-    due_date = None
-    discount_deadline = None
-
-    try:
-        if data.get("invoice_date"):
-            invoice_date = datetime.fromisoformat(data["invoice_date"])
-        if data.get("due_date"):
-            due_date = datetime.fromisoformat(data["due_date"])
-        if data.get("discount_deadline"):
-            discount_deadline = datetime.fromisoformat(data["discount_deadline"])
+        invoice_date, due_date, discount = _parse_invoice_dates(data)
     except ValueError:
         return error_response("Dates must be in ISO format", status=400)
+    # The AP service adds up to 60 days of payment terms to invoice_date.
+    if invoice_date and invoice_date > datetime.max - timedelta(days=60):
+        return error_response("invoice_date is out of range", status=400)
+
+    from aragora.services.ap_automation import PaymentPriority
+
+    try:
+        priority = PaymentPriority(data.get("priority") or "normal")
+    except ValueError:
+        return error_response("Invalid payment priority", status=400)
 
     # Check circuit breaker before processing
     if not _ap_circuit_breaker.can_proceed():
@@ -181,9 +214,8 @@ async def handle_add_invoice(
                 total_amount=amount_decimal,
                 payment_terms=data.get("payment_terms", "Net 30"),
                 early_pay_discount=data.get("early_pay_discount", 0),
-                discount_deadline=discount_deadline,
-                priority=data.get("priority"),
-                preferred_payment_method=data.get("preferred_payment_method"),
+                priority=priority,
+                **discount,
             )
 
         return success_response(
@@ -246,16 +278,9 @@ async def handle_list_invoices(
         priority = PaymentPriority(data["priority"]) if data.get("priority") else None
     except ValueError:
         return error_response("Invalid payment priority", status=400)
-    start_date = None
-    end_date = None
-
-    try:
-        if data.get("start_date"):
-            start_date = datetime.fromisoformat(data["start_date"])
-        if data.get("end_date"):
-            end_date = datetime.fromisoformat(data["end_date"])
-    except (TypeError, ValueError):
-        return error_response("Dates must be in ISO format", status=400)
+    start_date, end_date, date_error = parse_date_range_params(data)
+    if date_error:
+        return error_response(date_error, status=400)
 
     try:
         limit = int(data.get("limit", 100))
@@ -374,9 +399,7 @@ async def handle_record_payment(
     POST /api/v1/accounting/ap/invoices/{invoice_id}/payment
     Body: {
         amount: float (required),
-        payment_date: str (optional, ISO format),
-        payment_method: str (optional),
-        reference: str (optional)
+        payment_date: str (optional, ISO format)
     }
     """
     # Validate invoice_id
@@ -423,8 +446,6 @@ async def handle_record_payment(
                 invoice_id=invoice_id,
                 amount=amount_decimal,
                 payment_date=payment_date,
-                payment_method=data.get("payment_method"),
-                reference=data.get("reference"),
             )
 
         return success_response(
@@ -460,8 +481,7 @@ async def handle_optimize_payments(
     POST /api/v1/accounting/ap/optimize
     Body: {
         invoice_ids: list[str] (optional, defaults to all unpaid),
-        available_cash: float (optional),
-        prioritize_discounts: bool (optional, default true)
+        available_cash: float (optional)
     }
     """
     # Validate available_cash if provided
@@ -476,7 +496,6 @@ async def handle_optimize_payments(
             return error_response("available_cash must be a valid number", status=400)
 
     invoice_ids = data.get("invoice_ids")
-    prioritize_discounts = data.get("prioritize_discounts", True)
 
     # Check circuit breaker before processing
     if not _ap_circuit_breaker.can_proceed():
@@ -498,8 +517,8 @@ async def handle_optimize_payments(
                     if inv:
                         invoices.append(inv)
             else:
-                # Get all unpaid invoices
-                invoices = await ap.list_invoices(status="unpaid")
+                # The service lists only invoices with an outstanding balance.
+                invoices = await ap.list_invoices()
 
             if not invoices:
                 return success_response(
@@ -512,7 +531,6 @@ async def handle_optimize_payments(
             schedule = await ap.optimize_payment_timing(
                 invoices=invoices,
                 available_cash=cash_decimal,
-                prioritize_discounts=prioritize_discounts,
             )
 
         return success_response(
@@ -563,6 +581,13 @@ async def handle_batch_payments(
         except ValueError:
             return error_response("payment_date must be in ISO format", status=400)
 
+    from aragora.services.ap_automation import PaymentMethod
+
+    try:
+        payment_method = PaymentMethod(data.get("payment_method") or "ach")
+    except ValueError:
+        return error_response("Invalid payment_method", status=400)
+
     # Check circuit breaker before processing
     if not _ap_circuit_breaker.can_proceed():
         remaining = _ap_circuit_breaker.cooldown_remaining()
@@ -587,7 +612,7 @@ async def handle_batch_payments(
             batch = await ap.batch_payments(
                 invoices=invoices,
                 payment_date=payment_date,
-                payment_method=data.get("payment_method"),
+                payment_method=payment_method,
             )
 
         return success_response(
@@ -705,6 +730,15 @@ async def handle_get_discounts(
         return error_response("Failed to retrieve discounts", status=500)
 
 
+async def _reject_invalid_body(permission: str, handler: Any) -> HandlerResult:
+    """Answer a malformed body with 400 only after the route permission passes."""
+
+    async def invalid(handler: Any = None) -> HandlerResult:
+        return error_response("Invalid JSON body", status=400)
+
+    return await require_permission(permission)(invalid)(handler=handler)
+
+
 # =============================================================================
 # Handler Registration
 # =============================================================================
@@ -738,6 +772,8 @@ class APAutomationHandler(BaseHandler):
         "GET /api/v1/accounting/ap/invoices/{invoice_id}": handle_get_invoice,
         "POST /api/v1/accounting/ap/invoices/{invoice_id}/payment": handle_record_payment,
     }
+    # The OpenAPI generator reads per-route verbs from _ROUTE_MAP, not DYNAMIC_ROUTES.
+    _ROUTE_MAP = {**_ROUTE_MAP, **DYNAMIC_ROUTES}
 
     def can_handle(self, path: str) -> bool:
         """Claim only AP routes, including single-segment dynamic IDs."""
@@ -765,7 +801,10 @@ class APAutomationHandler(BaseHandler):
         """Read the HTTP body and dispatch AP mutations."""
         data = self.read_json_body(handler)
         if data is None:
-            return error_response("Invalid JSON body", status=400)
+            approve = path.endswith(("/optimize", "/batch"))
+            return await _reject_invalid_body(
+                "finance:approve" if approve else "finance:write", handler
+            )
         if path == "/api/v1/accounting/ap/invoices":
             return await handle_add_invoice(data, handler=handler)
         if path == "/api/v1/accounting/ap/optimize":

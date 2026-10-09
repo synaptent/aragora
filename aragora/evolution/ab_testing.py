@@ -619,7 +619,9 @@ class ABTestManager(SQLiteStore):
             },
         )
 
-        logger.info(f"Concluded A/B test {test_id}: winner={winner}, confidence={confidence:.2f}")
+        logger.info(
+            "Concluded A/B test %s: winner=%s, confidence=%.2f", test_id, winner, confidence
+        )
         self._log_event(
             "ab_test_concluded",
             test,

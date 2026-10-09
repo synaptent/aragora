@@ -23,6 +23,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 from collections.abc import Sequence
 
+from aragora.knowledge.fact_store import OrgScopeRequiredError
 from aragora.knowledge.unified.types import (
     ConfidenceLevel,
     KnowledgeItem,
@@ -210,6 +211,8 @@ class KnowledgeMound:
         # Combine results
         all_items: list[KnowledgeItem] = []
         for i, query_result in enumerate(results):
+            if isinstance(query_result, OrgScopeRequiredError):
+                raise query_result
             if isinstance(query_result, BaseException):
                 logger.warning("Query to %s failed: %s", source_list[i], query_result)
             elif query_result:

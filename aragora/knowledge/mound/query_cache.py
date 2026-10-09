@@ -314,10 +314,11 @@ class RequestScopedCache:
         # Log stats if significant cache usage
         if self._stats.hits + self._stats.misses > 10:
             logger.debug(
-                f"Request cache stats: {self._stats.hits} hits, "
-                f"{self._stats.misses} misses, "
-                f"{self._stats.hit_rate:.1%} hit rate, "
-                f"{self._stats.compute_time_ms:.1f}ms compute time"
+                "Request cache stats: %s hits, %s misses, %.1f%% hit rate, %.1fms compute time",
+                self._stats.hits,
+                self._stats.misses,
+                self._stats.hit_rate * 100,
+                self._stats.compute_time_ms,
             )
 
         self.clear()

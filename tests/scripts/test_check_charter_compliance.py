@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
 
+import pytest
 import yaml
 
 
@@ -62,6 +64,12 @@ def _charters_payload() -> dict[str, Any]:
                 "registry_refs": ["CHR-E-004"],
             },
         ],
+        "package_states": {
+            "aragora/advocates": "UNMAPPED",
+            "aragora/control_plane": "MAPPED",
+            "aragora/queue": "MAPPED",
+            "aragora/server": "MAPPED",
+        },
         "registry": [
             {
                 "id": "CHR-P4A-004",
@@ -365,6 +373,232 @@ def test_cli_json_exits_nonzero_with_citable_ids(tmp_path: Path, capsys: Any) ->
     assert payload["ok"] is False
     assert payload["binding_violations"][0]["entry_id"] == "CHR-P4A-004"
     assert payload["binding_violations"][0]["authority_ids"] == ["ARCH-015"]
+
+
+def test_new_file_under_unmapped_package_is_proposed(tmp_path: Path) -> None:
+    charter_path = _write_charters(tmp_path, _charters_payload())
+    diff_text = """diff --git a/aragora/advocates/new_surface.py b/aragora/advocates/new_surface.py
+new file mode 100644
+--- /dev/null
++++ b/aragora/advocates/new_surface.py
+@@ -0,0 +1,2 @@
++def expand_architecture() -> None:
++    pass
+"""
+
+    result = checker.check_diff(diff_text, charter_path=charter_path)
+
+    assert result.ok is False
+    assert result.binding_violations == []
+    assert [violation.entry_id for violation in result.proposed_violations] == [
+        "APPENDIX-A:aragora/advocates"
+    ]
+    assert result.proposed_violations[0].state == "UNMAPPED"
+
+
+def test_empty_new_file_under_unmapped_package_is_proposed(tmp_path: Path) -> None:
+    charter_path = _write_charters(tmp_path, _charters_payload())
+    diff_text = """diff --git a/aragora/advocates/__init__.py b/aragora/advocates/__init__.py
+new file mode 100644
+index 0000000..e69de29
+"""
+
+    result = checker.check_diff(diff_text, charter_path=charter_path)
+
+    assert result.ok is False
+    assert [violation.entry_id for violation in result.proposed_violations] == [
+        "APPENDIX-A:aragora/advocates"
+    ]
+
+
+def test_new_top_level_module_absent_from_appendix_a_is_proposed(tmp_path: Path) -> None:
+    charter_path = _write_charters(tmp_path, _charters_payload())
+    diff_text = """diff --git a/aragora/new_architecture.py b/aragora/new_architecture.py
+new file mode 100644
+--- /dev/null
++++ b/aragora/new_architecture.py
+@@ -0,0 +1 @@
++NEW_SURFACE = True
+"""
+
+    result = checker.check_diff(diff_text, charter_path=charter_path)
+
+    assert result.ok is False
+    assert [violation.entry_id for violation in result.proposed_violations] == [
+        "APPENDIX-A:aragora/new_architecture"
+    ]
+    assert result.proposed_violations[0].reason == (
+        "adds a new Python module under a package absent from Appendix A"
+    )
+
+
+def test_renamed_destination_under_unmapped_package_is_proposed(tmp_path: Path) -> None:
+    charter_path = _write_charters(tmp_path, _charters_payload())
+    diff_text = """diff --git a/aragora/queue/old.py b/aragora/advocates/renamed.py
+similarity index 80%
+--- a/aragora/queue/old.py
++++ b/aragora/advocates/renamed.py
+@@ -1 +1 @@
+-OLD = True
++RENAMED = True
+"""
+
+    result = checker.check_diff(diff_text, charter_path=charter_path)
+
+    assert result.ok is False
+    assert [violation.entry_id for violation in result.proposed_violations] == [
+        "APPENDIX-A:aragora/advocates"
+    ]
+
+
+def test_copied_destination_under_unknown_package_is_proposed(tmp_path: Path) -> None:
+    charter_path = _write_charters(tmp_path, _charters_payload())
+    diff_text = """diff --git a/aragora/queue/source.py b/aragora/new_architecture/copied.py
+similarity index 100%
+copy from aragora/queue/source.py
+copy to aragora/new_architecture/copied.py
+"""
+
+    result = checker.check_diff(diff_text, charter_path=charter_path)
+
+    assert result.ok is False
+    assert [violation.entry_id for violation in result.proposed_violations] == [
+        "APPENDIX-A:aragora/new_architecture"
+    ]
+
+
+def test_renamed_destination_under_mapped_package_is_allowed(tmp_path: Path) -> None:
+    charter_path = _write_charters(tmp_path, _charters_payload())
+    diff_text = """diff --git a/aragora/advocates/old.py b/aragora/queue/renamed.py
+similarity index 100%
+rename from aragora/advocates/old.py
+rename to aragora/queue/renamed.py
+"""
+
+    result = checker.check_diff(diff_text, charter_path=charter_path)
+
+    assert result.ok is True
+    assert result.violations == []
+
+
+def test_empty_renamed_file_under_unmapped_package_is_proposed(tmp_path: Path) -> None:
+    charter_path = _write_charters(tmp_path, _charters_payload())
+    diff_text = """diff --git a/aragora/queue/empty.py b/aragora/advocates/empty.py
+similarity index 100%
+rename from aragora/queue/empty.py
+rename to aragora/advocates/empty.py
+"""
+
+    result = checker.check_diff(diff_text, charter_path=charter_path)
+
+    assert result.ok is False
+    assert [violation.entry_id for violation in result.proposed_violations] == [
+        "APPENDIX-A:aragora/advocates"
+    ]
+
+
+def test_existing_file_edit_under_unmapped_package_is_maintenance(tmp_path: Path) -> None:
+    charter_path = _write_charters(tmp_path, _charters_payload())
+    diff_text = """diff --git a/aragora/advocates/existing.py b/aragora/advocates/existing.py
+--- a/aragora/advocates/existing.py
++++ b/aragora/advocates/existing.py
+@@ -1,0 +2 @@
++MAINTENANCE_NOTE = "allowed"
+"""
+
+    result = checker.check_diff(diff_text, charter_path=charter_path)
+
+    assert result.ok is True
+    assert result.violations == []
+
+
+def test_new_file_under_mapped_package_is_allowed(tmp_path: Path) -> None:
+    charter_path = _write_charters(tmp_path, _charters_payload())
+    diff_text = """diff --git a/aragora/queue/new_surface.py b/aragora/queue/new_surface.py
+new file mode 100644
+--- /dev/null
++++ b/aragora/queue/new_surface.py
+@@ -0,0 +1 @@
++QUEUE_SURFACE = True
+"""
+
+    result = checker.check_diff(diff_text, charter_path=charter_path)
+
+    assert result.ok is True
+    assert result.violations == []
+
+
+def test_unknown_package_defaults_to_unmapped_fail_closed(tmp_path: Path) -> None:
+    charter_path = _write_charters(tmp_path, _charters_payload())
+    diff_text = """diff --git a/aragora/new_architecture/surface.py b/aragora/new_architecture/surface.py
+new file mode 100644
+--- /dev/null
++++ b/aragora/new_architecture/surface.py
+@@ -0,0 +1 @@
++NEW_SURFACE = True
+"""
+
+    result = checker.check_diff(diff_text, charter_path=charter_path)
+
+    assert result.ok is False
+    assert [violation.entry_id for violation in result.proposed_violations] == [
+        "APPENDIX-A:aragora/new_architecture"
+    ]
+
+
+def test_ratified_unmapped_package_growth_is_binding(tmp_path: Path) -> None:
+    payload = _charters_payload()
+    payload["meta"]["status"] = "RATIFIED"
+    charter_path = _write_charters(tmp_path, payload)
+    diff_text = """diff --git a/aragora/advocates/new_surface.py b/aragora/advocates/new_surface.py
+new file mode 100644
+--- /dev/null
++++ b/aragora/advocates/new_surface.py
+@@ -0,0 +1 @@
++NEW_SURFACE = True
+"""
+
+    result = checker.check_diff(diff_text, charter_path=charter_path)
+
+    assert result.ok is False
+    assert [violation.entry_id for violation in result.binding_violations] == [
+        "APPENDIX-A:aragora/advocates"
+    ]
+    assert result.proposed_violations == []
+
+
+def test_invalid_package_state_fails_closed(tmp_path: Path) -> None:
+    payload = _charters_payload()
+    payload["package_states"]["aragora/advocates"] = "UNKNOWN"
+    charter_path = _write_charters(tmp_path, payload)
+
+    with pytest.raises(ValueError, match="invalid package state"):
+        checker.load_package_states(charter_path)
+
+
+def test_main_package_states_match_appendix_a() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    charter_path = repo_root / "docs" / "architecture" / "charters.yaml"
+    architecture_path = repo_root / "docs" / "architecture" / "INTENDED_ARCHITECTURE.md"
+    package_states, status = checker.load_package_states(charter_path)
+    row_re = re.compile(r"^\| `(?P<path>aragora/[^`]+)` \| [^|]+ \| (?P<state>MAPPED|UNMAPPED) \|")
+    appendix_states = {
+        match.group("path"): match.group("state")
+        for line in architecture_path.read_text(encoding="utf-8").splitlines()
+        if (match := row_re.match(line))
+    }
+    live_package_dirs = {
+        path.relative_to(repo_root).as_posix()
+        for path in (repo_root / "aragora").iterdir()
+        if path.is_dir() and not path.name.startswith((".", "__"))
+    }
+
+    assert status == "DRAFT"
+    assert package_states == appendix_states
+    assert set(package_states) == live_package_dirs
+    assert len(package_states) == 144
+    assert sum(state == "MAPPED" for state in package_states.values()) == 63
+    assert sum(state == "UNMAPPED" for state in package_states.values()) == 81
 
 
 def _charters_payload_with_legacy_entries() -> dict[str, Any]:

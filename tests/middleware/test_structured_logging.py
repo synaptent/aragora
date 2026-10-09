@@ -1204,7 +1204,7 @@ class TestRequestLoggingMiddleware:
             mock_log.assert_called_once()
             call_args = mock_log.call_args
             assert call_args[0][0] == logging.INFO  # Level
-            assert "200" in call_args[0][1]  # Message contains status
+            assert "200" in call_args[0][1] % call_args[0][2:]  # Message contains status
             assert call_args[1]["extra"]["event"] == "request_end"
             assert call_args[1]["extra"]["status"] == 200
             assert "elapsed_ms" in call_args[1]["extra"]

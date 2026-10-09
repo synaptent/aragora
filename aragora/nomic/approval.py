@@ -412,7 +412,7 @@ class ApprovalWorkflow:
             if elapsed > timeout:
                 request.status = ApprovalStatus.TIMED_OUT
                 logger.warning(
-                    f"[{request.request_id}] Approval request timed out after {elapsed:.1f}s"
+                    "[%s] Approval request timed out after %.1fs", request.request_id, elapsed
                 )
                 break
 
