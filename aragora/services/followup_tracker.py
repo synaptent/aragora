@@ -229,6 +229,7 @@ class FollowUpTracker:
         user_id: str = "default",
         include_resolved: bool = False,
         sort_by: str = "expected_by",
+        only_ids: set[str] | None = None,
     ) -> list[FollowUpItem]:
         """
         Get all pending follow-ups for a user.
@@ -237,11 +238,14 @@ class FollowUpTracker:
             user_id: User ID
             include_resolved: Include resolved items
             sort_by: Sort field (expected_by, sent_at, priority)
+            only_ids: If given, only these follow-ups are returned and refreshed
 
         Returns:
             List of follow-up items
         """
         items = list(self._followups.values())
+        if only_ids is not None:
+            items = [i for i in items if i.id in only_ids]
 
         # Filter by status
         if not include_resolved:
@@ -271,12 +275,15 @@ class FollowUpTracker:
 
         return items
 
-    async def check_for_replies(self, thread_ids: list[str] | None = None) -> list[FollowUpItem]:
+    async def check_for_replies(
+        self, thread_ids: list[str] | None = None, only_ids: set[str] | None = None
+    ) -> list[FollowUpItem]:
         """
         Check if replies have been received for tracked threads.
 
         Args:
             thread_ids: Specific threads to check, or all if None
+            only_ids: If given, only these follow-ups are checked and updated
 
         Returns:
             List of items that received replies
@@ -303,6 +310,8 @@ class FollowUpTracker:
                 # Check for new messages after our sent email
                 followup_ids = self._by_thread[thread_id]
                 for followup_id in followup_ids:
+                    if only_ids is not None and followup_id not in only_ids:
+                        continue
                     item = self._followups.get(followup_id)
                     if not item or item.status not in [
                         FollowUpStatus.AWAITING,

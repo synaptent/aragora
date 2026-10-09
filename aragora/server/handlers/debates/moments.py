@@ -57,7 +57,7 @@ _moment_imports, MOMENT_DETECTOR_AVAILABLE = try_import(
 MomentDetector = _moment_imports["MomentDetector"]
 SignificantMoment = _moment_imports["SignificantMoment"]
 
-from aragora.server.errors import safe_error_message as _safe_error_message
+from aragora.api_errors import safe_error_message as _safe_error_message
 
 
 class MomentsHandler(SecureHandler):

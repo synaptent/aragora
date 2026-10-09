@@ -15,7 +15,7 @@ from collections.abc import Coroutine
 
 T = TypeVar("T")
 
-from aragora.server.errors import safe_error_message as _safe_error_message
+from aragora.api_errors import safe_error_message as _safe_error_message
 from aragora.server.http_utils import run_async
 from aragora.server.middleware.rate_limit import rate_limit
 
@@ -46,8 +46,13 @@ except ImportError:
 BroadcastPipeline: Any = None
 BroadcastOptions: Any = None
 try:
-    from aragora.broadcast.pipeline import BroadcastOptions, BroadcastPipeline
+    from aragora.broadcast.pipeline import (
+        BroadcastOptions as _BroadcastOptions,
+        BroadcastPipeline as _BroadcastPipeline,
+    )
 
+    BroadcastOptions = _BroadcastOptions
+    BroadcastPipeline = _BroadcastPipeline
     PIPELINE_AVAILABLE = True
 except ImportError:
     PIPELINE_AVAILABLE = False

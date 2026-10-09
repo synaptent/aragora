@@ -15,7 +15,7 @@ import re
 from typing import Any
 
 from aragora.audit.unified import audit_data
-from aragora.server.errors import safe_error_message
+from aragora.api_errors import safe_error_message
 from aragora.server.handlers.base import HandlerResult, error_response, json_response
 from aragora.server.handlers.utils.rate_limit import rate_limit
 
