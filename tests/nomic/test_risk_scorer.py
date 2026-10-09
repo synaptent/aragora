@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import ast
 import asyncio
+import importlib
+import inspect
 import types
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -945,3 +948,62 @@ class TestConstants:
         assert len(LOW_RISK_PATHS) > 0
         assert len(HIGH_RISK_PATHS) > 0
         assert len(CRITICAL_RISK_PATHS) > 0
+
+
+# ---------------------------------------------------------------------------
+# Modules split out of critical-path files
+# ---------------------------------------------------------------------------
+
+
+_CRITICAL_NOMIC_FACADES = [
+    ("aragora.nomic.self_improve", "SelfImprovePipeline"),
+    ("aragora.nomic.autonomous_orchestrator", "AutonomousOrchestrator"),
+]
+
+
+def _module_path(module_name: str) -> str:
+    return module_name.replace(".", "/") + ".py"
+
+
+def _file_scope_weight(path: str) -> float:
+    result = RiskScorer().score_goal("Tidy helper names", file_scope=[path])
+    return next(f.weight for f in result.factors if f.name == "file_scope")
+
+
+def _split_out_modules(module_name: str, class_name: str) -> set[str]:
+    """Sibling modules holding code split out of a critical facade.
+
+    Splits take two shapes here: a mixin the facade class inherits from, and a
+    top-level backward-compatibility re-export marked ``# noqa: F401``.
+    """
+    module = importlib.import_module(module_name)
+    found = {
+        base.__module__
+        for base in getattr(module, class_name).__mro__
+        if base.__module__.startswith("aragora.nomic.")
+    }
+    source = inspect.getsource(module)
+    lines = source.splitlines()
+    for node in ast.parse(source).body:
+        if (
+            isinstance(node, ast.ImportFrom)
+            and (node.module or "").startswith("aragora.nomic.")
+            and "noqa: F401" in lines[node.lineno - 1]
+        ):
+            found.add(node.module)
+    found.discard(module_name)
+    return found
+
+
+class TestSplitModulesKeepCriticalPathRisk:
+    @pytest.mark.parametrize(("module_name", "class_name"), _CRITICAL_NOMIC_FACADES)
+    def test_facade_is_a_critical_path(self, module_name, class_name):
+        assert any(c in _module_path(module_name) for c in CRITICAL_RISK_PATHS)
+
+    @pytest.mark.parametrize(("module_name", "class_name"), _CRITICAL_NOMIC_FACADES)
+    def test_split_out_modules_score_like_their_facade(self, module_name, class_name):
+        split_modules = sorted(_split_out_modules(module_name, class_name))
+        assert split_modules
+        facade_weight = _file_scope_weight(_module_path(module_name))
+        weights = {m: _file_scope_weight(_module_path(m)) for m in split_modules}
+        assert weights == pytest.approx(dict.fromkeys(split_modules, facade_weight))
