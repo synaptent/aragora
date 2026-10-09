@@ -450,6 +450,7 @@ class TestDebateFactoryCreateArena:
             "with_event_emitter",
             "with_loop_id",
             "with_strict_loop_scoping",
+            "with_receipt_owner",
             "with_enable_position_ledger",
             "with_agent_selection",
         ]
@@ -676,3 +677,41 @@ class TestDebateFactoryKnowledgeMound:
             # Should not raise
             arena = factory.create_arena(config)
             assert arena is not None
+
+
+class TestDebateFactoryContextOnly:
+    """context_only debates see only the given context and the given agents."""
+
+    def _arena(self, context_only):
+        import aragora.server.debate_factory as factory_module
+
+        resolve = Mock(return_value=Mock())
+        with (
+            patch.object(factory_module, "create_agent", side_effect=[Mock(), Mock()]),
+            patch.object(DebateFactory, "_resolve_knowledge_mound", resolve),
+        ):
+            arena = DebateFactory().create_arena(
+                DebateConfig(
+                    question="Test question",
+                    agents_str="anthropic-api,openai-api",
+                    rounds=1,
+                    auto_trim_unavailable=False,
+                    context_only=context_only,
+                )
+            )
+        return arena, resolve
+
+    def test_context_only_leaves_out_memory_knowledge_and_outside_synthesis(self):
+        arena, resolve = self._arena(context_only=True)
+        resolve.assert_not_called()
+        assert arena.knowledge_mound is None
+        assert arena.enable_knowledge_retrieval is False
+        assert arena.enable_knowledge_ingestion is False
+        assert arena.enable_cross_debate_memory is False
+        assert arena.protocol.enable_llm_synthesis is False
+
+    def test_default_debates_keep_knowledge_and_synthesis(self):
+        arena, resolve = self._arena(context_only=False)
+        resolve.assert_called_once()
+        assert arena.knowledge_mound is not None
+        assert arena.protocol.enable_llm_synthesis is True
