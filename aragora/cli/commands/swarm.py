@@ -34,8 +34,9 @@ from aragora.cli.commands.swarm_runner_payloads import (
     _build_runner_report_payload,
 )
 
-# Every helper is re-exported so existing imports and mock.patch targets on this
-# module keep resolving.
+# Every helper is re-exported so existing imports keep working. Patching a name
+# here only affects calls made from this module; helpers that are called inside
+# swarm_validation_audit (e.g. _probe_validation_command) must be patched there.
 from aragora.cli.commands.swarm_validation_audit import (  # noqa: F401
     _UNSAFE_VALIDATION_SHELL_FRAGMENTS,
     _audit_issue_validation_contract,
