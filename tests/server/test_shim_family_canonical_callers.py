@@ -1,4 +1,4 @@
-"""First-party callers use the canonical homes of the API-error, distributed-state and pool-loop shims."""
+"""First-party callers use the canonical homes of the API-error, distributed-state, pool-loop and debate-storage shims."""
 
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ LEGACY_IMPORTS = frozenset(
         "aragora.server.errors",
         "aragora.control_plane.leader.is_distributed_state_required",
         "aragora.storage.pool_manager.get_pool_event_loop",
+        "aragora.server.storage",
     }
 )
 
@@ -25,8 +26,34 @@ MIGRATED_CALLERS = (
     "aragora/control_plane/scheduler.py",
     "aragora/control_plane/shared_state.py",
     "aragora/integrations/email_reply_loop.py",
+    "aragora/rbac/cache.py",
     "aragora/server/debate_origin/registry.py",
     "aragora/server/handler_registry/core.py",
+    "aragora/server/handlers/admin/health/kubernetes.py",
+    "aragora/server/handlers/admin/health/probes.py",
+    "aragora/server/handlers/analytics_dashboard/_shared.py",
+    "aragora/server/handlers/auth/handler.py",
+    "aragora/server/handlers/auth/signup_handlers.py",
+    "aragora/server/handlers/auth/sso_handlers.py",
+    "aragora/server/handlers/base.py",
+    "aragora/server/handlers/bots/slack/events.py",
+    "aragora/server/handlers/bots/slack/interactions.py",
+    "aragora/server/handlers/catalog/template_marketplace.py",
+    "aragora/server/handlers/debates/auditing.py",
+    "aragora/server/handlers/debates/critique.py",
+    "aragora/server/handlers/debates/moments.py",
+    "aragora/server/handlers/evolution/genesis.py",
+    "aragora/server/handlers/features/audio.py",
+    "aragora/server/handlers/features/broadcast.py",
+    "aragora/server/handlers/integrations/cloud_storage.py",
+    "aragora/server/handlers/integrations/integration_management.py",
+    "aragora/server/handlers/payments/billing.py",
+    "aragora/server/handlers/social/_slack_impl/config.py",
+    "aragora/server/handlers/social/_slack_impl/events.py",
+    "aragora/server/handlers/social/_slack_impl/interactive.py",
+    "aragora/server/handlers/social/relationship.py",
+    "aragora/server/handlers/social/social_media.py",
+    "aragora/server/handlers/utils/responses.py",
     "aragora/server/middleware/abac.py",
     "aragora/server/middleware/approval_gate.py",
     "aragora/server/middleware/exception_handler.py",
@@ -106,6 +133,42 @@ def test_caller_does_not_import_legacy_shim(relative_path: str) -> None:
         (
             "aragora.server.stream",
             "_safe_error_message",
+            "aragora.api_errors",
+            "safe_error_message",
+        ),
+        (
+            "aragora.rbac.cache",
+            "is_distributed_state_required",
+            "aragora.config.distributed",
+            "is_distributed_state_required",
+        ),
+        (
+            "aragora.server.handlers.catalog.template_marketplace",
+            "is_distributed_state_required",
+            "aragora.config.distributed",
+            "is_distributed_state_required",
+        ),
+        (
+            "aragora.server.handlers.base",
+            "safe_error_message",
+            "aragora.api_errors",
+            "safe_error_message",
+        ),
+        (
+            "aragora.server.handlers.utils.responses",
+            "ErrorCode",
+            "aragora.api_errors",
+            "ErrorCode",
+        ),
+        (
+            "aragora.server.handlers.social.relationship",
+            "_safe_error_message",
+            "aragora.api_errors",
+            "safe_error_message",
+        ),
+        (
+            "aragora.server.handlers.auth.sso_handlers",
+            "safe_error_message",
             "aragora.api_errors",
             "safe_error_message",
         ),
