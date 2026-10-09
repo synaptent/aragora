@@ -433,6 +433,27 @@ def test_counts_above_their_ceiling_answer_400_not_500(registry_cls, services, f
     assert statuses == [200, 400, 400, 400]
 
 
+# Each instant leaves datetime's range when shifted to UTC or, for the naive last day,
+# when the default three-day reply window is added to it.
+EXTREME_DATES = [
+    (MARK, "sent_at", "9999-12-31T00:00:00", "sent_at is out of range"),
+    (MARK, "sent_at", "9999-12-31T23:59:59-12:00", "sent_at is out of range"),
+    (MARK, "sent_at", "0001-01-01T00:00:00+14:00", "sent_at is out of range"),
+    (SNOOZE, "snooze_until", "9999-12-31T23:59:59-12:00", "Invalid snooze_until format"),
+    (SNOOZE, "snooze_until", "0001-01-01T00:00:00+14:00", "Invalid snooze_until format"),
+]
+
+
+@pytest.mark.parametrize(("path", "field", "value", "message"), EXTREME_DATES)
+def test_extreme_dates_answer_400_not_500(
+    registry_cls, services, path: str, field: str, value: str, message: str
+) -> None:
+    body = {"email_id": "e-1", "thread_id": "t-1"} if path == MARK else {}
+    status, payload = _dispatch(registry_cls, "POST", path, body | {field: value}, **OWNER)
+    assert (status, message in json.dumps(payload)) == (400, True), payload
+    assert services._followups == {} and email_module._snoozed_emails == {}
+
+
 @pytest.mark.parametrize("env", ["development", "production"])
 def test_category_feedback_is_not_implemented_and_learns_nothing(
     registry_cls, services, monkeypatch, env
