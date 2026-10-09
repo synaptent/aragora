@@ -136,8 +136,15 @@ curl -X POST http://localhost:8080/api/admin/security/rotate-key \
 
 ### Option 3: Python API
 
+Register the audit provider first. The server and the `aragora security` CLI
+commands do this for you; a standalone script must do it itself, or the
+`key_rotation` audit event is dropped and only a warning is logged.
+
 ```python
+from aragora.ops.security_edge_adapters import register_security_migration_adapters
 from aragora.security.migration import rotate_encryption_key
+
+register_security_migration_adapters()
 
 # Dry run
 result = rotate_encryption_key(dry_run=True)

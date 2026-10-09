@@ -599,7 +599,7 @@ class TestMain:
 
         monkeypatch.setattr("aragora.cli.main._try_review_queue_fast_path", lambda _argv: None)
         monkeypatch.setattr(
-            "aragora.server.startup.event_subscribers.register_webhook_store",
+            "aragora.server.webhook_store_registration.register_webhook_store",
             lambda: order.append("webhook_store"),
         )
         monkeypatch.setattr(
@@ -616,7 +616,7 @@ class TestMain:
         """The lightweight review-queue path should remain registration-free."""
         register_webhook_store = Mock()
         monkeypatch.setattr(
-            "aragora.server.startup.event_subscribers.register_webhook_store",
+            "aragora.server.webhook_store_registration.register_webhook_store",
             register_webhook_store,
         )
         monkeypatch.setattr("aragora.cli.main._try_review_queue_fast_path", lambda _argv: 17)
@@ -677,7 +677,7 @@ class TestMain:
 
         monkeypatch.setattr("aragora.cli.main._try_review_queue_fast_path", lambda _argv: None)
         monkeypatch.setattr(
-            "aragora.server.startup.event_subscribers.register_webhook_store",
+            "aragora.server.webhook_store_registration.register_webhook_store",
             lambda: None,
         )
         monkeypatch.setattr("aragora.cli.parser.build_parser", lambda: fake_parser)

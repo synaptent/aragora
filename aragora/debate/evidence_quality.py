@@ -228,10 +228,12 @@ class EvidenceQualityAnalyzer:
         score.compute_overall()
 
         logger.debug(
-            f"evidence_quality agent={agent} round={round_num} "
-            f"overall={score.overall_quality:.2f} "
-            f"citations={score.citation_density:.2f} "
-            f"specificity={score.specificity_score:.2f}"
+            "evidence_quality agent=%s round=%s overall=%.2f citations=%.2f specificity=%.2f",
+            agent,
+            round_num,
+            score.overall_quality,
+            score.citation_density,
+            score.specificity_score,
         )
 
         return score
@@ -525,8 +527,10 @@ class HollowConsensusDetector:
 
         if detected:
             logger.warning(
-                f"hollow_consensus_detected severity={severity:.2f} "
-                f"avg_quality={avg_quality:.2f} convergence={convergence_similarity:.2f}"
+                "hollow_consensus_detected severity=%.2f avg_quality=%.2f convergence=%.2f",
+                severity,
+                avg_quality,
+                convergence_similarity,
             )
 
         return alert

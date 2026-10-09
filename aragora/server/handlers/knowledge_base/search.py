@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 try:
     from aragora.knowledge.mound.retrieval import KnowledgeMoundRetriever
 except ImportError:  # pragma: no cover - optional KM subsystem
-    KnowledgeMoundRetriever = None  # type: ignore[assignment]
+    KnowledgeMoundRetriever = None  # type: ignore[assignment,misc]
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +51,7 @@ def _extract_search_query(query_params: dict[str, Any]) -> str:
     query = get_bounded_string_param(query_params, "q", "", max_length=500)
     if query:
         return query
-    return get_bounded_string_param(query_params, "query", "", max_length=500)
+    return get_bounded_string_param(query_params, "query", "", max_length=500)  # type: ignore[return-value]
 
 
 def _normalize_search_result(result: Any) -> dict[str, Any]:
@@ -217,8 +217,14 @@ class SearchOperationsMixin:
     )
     @handle_errors("search chunks")
     @require_permission("knowledge:read")
-    def _handle_search(self: SearchHandlerProtocol, query_params: dict) -> HandlerResult:
-        """Handle GET /api/knowledge/search - Search chunks."""
+    def _handle_search(
+        self: SearchHandlerProtocol, query_params: dict, handler: Any = None
+    ) -> HandlerResult:
+        """Handle GET /api/knowledge/search - Search chunks.
+
+        ``handler`` is unused here; ``@require_permission`` reads the request's
+        authorization context from it.
+        """
 
         query = _extract_search_query(query_params)
         if not query:
@@ -265,7 +271,7 @@ class SearchOperationsMixin:
                 normalized = []
                 if retrieved is not None:
                     items = getattr(retrieved, "items", retrieved)
-                    normalized = [_normalize_search_result(item) for item in items]
+                    normalized = [_normalize_search_result(item) for item in items]  # type: ignore[union-attr]
                 normalized = _filter_normalized_results(
                     normalized,
                     min_confidence=min_confidence,
@@ -287,7 +293,7 @@ class SearchOperationsMixin:
         if not hasattr(engine, "search"):
             raise TypeError("Query engine does not support search")
         try:
-            results = _run_async(engine.search(query, workspace_id, limit))
+            results = _run_async(engine.search(query, workspace_id, limit))  # type: ignore[arg-type]
         except (KeyError, ValueError, OSError, TypeError, RuntimeError) as e:
             logger.error("Search failed: %s", e)
             return error_response("Search operation failed", 500)

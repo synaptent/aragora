@@ -504,6 +504,7 @@ CONTRACT_DRIFT_AUTHORITY_DEPENDENCY_PREFIXES: tuple[str, ...] = (
     "aragora/server/startup/validation.py",
     "aragora/server/startup/validation_runner.py",
     "aragora/server/startup/workers.py",
+    "aragora/server/webhook_store_registration.py",
     "aragora/swarm/__init__.py",
     "aragora/swarm/github_app_auth.py",
     "aragora/swarm/merge_quorum_io.py",

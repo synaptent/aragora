@@ -136,15 +136,17 @@ def fix_fstring_logging_in_file(filepath: Path, dry_run: bool = False) -> int:
     return fixes
 
 
-def _offset(source: str, node: ast.AST) -> int:
+def _offset(source: str, node: ast.expr) -> int:
     """Get byte offset of AST node in source."""
     lines = source.split("\n")
     offset = sum(len(line) + 1 for line in lines[: node.lineno - 1])
     return offset + node.col_offset
 
 
-def _end_offset(source: str, node: ast.AST) -> int:
+def _end_offset(source: str, node: ast.expr) -> int:
     """Get end byte offset of AST node in source."""
+    if node.end_lineno is None or node.end_col_offset is None:
+        raise ValueError(f"AST node at line {node.lineno} has no end position")
     lines = source.split("\n")
     offset = sum(len(line) + 1 for line in lines[: node.end_lineno - 1])
     return offset + node.end_col_offset

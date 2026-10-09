@@ -375,8 +375,10 @@ class PostgresScheduledDebateStore(PostgresStore):
 
         if updated:
             logger.info(
-                f"Finalized debate outcome: {debate_id} "
-                f"(consensus={consensus_reached}, confidence={confidence:.2f})"
+                "Finalized debate outcome: %s (consensus=%s, confidence=%.2f)",
+                debate_id,
+                consensus_reached,
+                confidence,
             )
         else:
             logger.warning("No scheduled debate found for debate_id: %s", debate_id)

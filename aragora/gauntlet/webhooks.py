@@ -327,8 +327,11 @@ class WebhookManager:
             if result.success:
                 self._record_success(config.url)
                 logger.debug(
-                    f"Webhook '{name}' delivered: {payload.event_type.value} "
-                    f"({result.attempts} attempts, {result.duration_ms:.0f}ms)"
+                    "Webhook '%s' delivered: %s (%s attempts, %.0fms)",
+                    name,
+                    payload.event_type.value,
+                    result.attempts,
+                    result.duration_ms,
                 )
             else:
                 self._record_failure(config.url)

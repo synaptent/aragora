@@ -11,6 +11,7 @@ Endpoints:
 from __future__ import annotations
 
 import logging
+import re
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -50,6 +51,28 @@ class CrossPollinationStatsHandler(BaseHandler):
         "/api/v1/cross-pollination/sync/status",
         "/api/v1/cross-pollination/sync/trigger",
     ]
+
+    _RESOLVE_CONFLICT_RE = re.compile(r"^/api/(?:v1/)?cross-pollination/conflicts/[^/]+/resolve$")
+
+    def handle_post(
+        self, path: str, query_params: dict[str, Any], handler: Any
+    ) -> HandlerResult | None:
+        """Answer conflict resolution, which has no implementation, after authorizing it."""
+        if not self._RESOLVE_CONFLICT_RE.match(path):
+            return None
+        _, perm_err = self.require_permission_or_error(handler, "cross_pollination:write")
+        if perm_err:
+            return perm_err
+        # Not error_response: in production it rewrites every 5xx message to "Internal server error".
+        return json_response(
+            {
+                "error": {
+                    "code": "not_implemented",
+                    "message": "Resolving cross-pollination conflicts is not implemented",
+                }
+            },
+            status=501,
+        )
 
     @require_permission("cross_pollination:read")
     async def get(self) -> HandlerResult:

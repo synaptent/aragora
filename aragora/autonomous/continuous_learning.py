@@ -158,8 +158,13 @@ class EloUpdater:
         self.set_rating(loser_id, new_loser)
 
         logger.debug(
-            f"ELO update: {winner_id} {winner_rating:.0f}->{new_winner:.0f}, "
-            f"{loser_id} {loser_rating:.0f}->{new_loser:.0f}"
+            "ELO update: %s %.0f->%.0f, %s %.0f->%.0f",
+            winner_id,
+            winner_rating,
+            new_winner,
+            loser_id,
+            loser_rating,
+            new_loser,
         )
 
         return new_winner, new_loser

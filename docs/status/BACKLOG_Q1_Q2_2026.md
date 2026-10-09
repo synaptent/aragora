@@ -81,7 +81,7 @@ Decision: consolidate on `@aragora/sdk` and keep `@aragora/client` deprecated on
 
 **Files:**
 - `sdk/typescript/README.md`
-- `aragora-js/README.md`
+- The legacy `aragora-js` package README (the package directory has since been removed from this repository)
 - `docs/SDK_TYPESCRIPT.md`
 
 ---

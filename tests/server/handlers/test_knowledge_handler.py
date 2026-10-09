@@ -13,6 +13,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from aragora.knowledge import InMemoryFactStore, ScopedFactStore
 from aragora.server.handlers.knowledge_base.handler import KnowledgeHandler
 
 
@@ -21,6 +22,9 @@ def knowledge_handler():
     """Create a knowledge handler with mocked dependencies."""
     ctx = {"storage": None, "elo_system": None, "nomic_dir": None}
     handler = KnowledgeHandler(ctx)
+    # Handler logic over an org-scoped store only: production _get_fact_store() builds an
+    # unscoped store, so reads answer 403 (tests/server/fastapi/test_knowledge_org_isolation.py).
+    handler._fact_store = ScopedFactStore(InMemoryFactStore(), "test-org-001")
     return handler
 
 
@@ -56,6 +60,8 @@ def create_request_body(data: dict) -> MagicMock:
 
 class MockAuthUser:
     """Mock authenticated user with permissions for knowledge handler tests."""
+
+    org_id = "test-org-001"
 
     def __init__(self, user_id: str = "test-user"):
         self.user_id = user_id
@@ -1050,34 +1056,32 @@ class TestKnowledgeMoundExport:
 
 
 class MockUserNoPermissions:
-    """Mock user with no knowledge permissions."""
+    """JWT-shaped user whose RBAC v2 role (viewer) grants no knowledge permission."""
 
     def __init__(self, user_id: str = "limited-user"):
         self.user_id = user_id
-        self.permissions = {"debates.read"}  # No knowledge permissions
-        self.roles = {"viewer"}
+        self.role = "viewer"
 
 
 class MockUserReadOnly:
-    """Mock user with only read permission."""
+    """JWT-shaped user whose RBAC v2 role (member) grants knowledge.read only."""
 
     def __init__(self, user_id: str = "readonly-user"):
         self.user_id = user_id
-        self.permissions = {"knowledge.read"}
-        self.roles = {"viewer"}
+        self.role = "member"
 
 
-class MockUserWriteOnly:
-    """Mock user with read and write but no delete."""
+class MockUserAdmin:
+    """JWT-shaped admin: RBAC v2 grants knowledge.read and knowledge.update, not write or delete."""
 
-    def __init__(self, user_id: str = "writer-user"):
+    def __init__(self, user_id: str = "admin-user"):
         self.user_id = user_id
-        self.permissions = {"knowledge.read", "knowledge.write"}
-        self.roles = {"member"}
+        self.role = "admin"
 
 
+@pytest.mark.no_auto_auth
 class TestKnowledgeHandlerRBACBoundaries:
-    """Test RBAC permission enforcement boundaries."""
+    """RBAC v2 boundaries, decided by the real permission checker from the user's role."""
 
     def test_list_facts_denied_without_read_permission(self, knowledge_handler, mock_http_handler):
         """Test listing facts fails without knowledge.read permission."""
@@ -1131,7 +1135,7 @@ class TestKnowledgeHandlerRBACBoundaries:
         handler.command = "DELETE"
 
         with patch.object(knowledge_handler, "require_auth_or_error") as mock_auth:
-            mock_auth.return_value = (MockUserWriteOnly(), None)  # Has write but not delete
+            mock_auth.return_value = (MockUserAdmin(), None)  # No knowledge.delete
             result = knowledge_handler.handle(f"/api/v1/knowledge/facts/{fact.id}", {}, handler)
 
         assert result is not None
@@ -1171,21 +1175,31 @@ class TestKnowledgeHandlerRBACBoundaries:
         assert result is not None
         assert result.status_code != 403
 
-    def test_admin_role_bypasses_permission_check(self, knowledge_handler):
-        """Test admin role can perform any operation."""
-
-        class AdminNoExplicitPerms:
-            user_id = "admin-user"
-            permissions = set()  # No explicit permissions
-            roles = {"admin"}
-
+    def test_admin_role_cannot_create_fact_without_knowledge_write(self, knowledge_handler):
+        """RBAC v2 does not grant admin knowledge.write, so admin gets no bypass."""
         handler = create_request_body({"statement": "Admin fact", "workspace_id": "default"})
 
         with patch.object(knowledge_handler, "require_auth_or_error") as mock_auth:
-            mock_auth.return_value = (AdminNoExplicitPerms(), None)
+            mock_auth.return_value = (MockUserAdmin(), None)
             result = knowledge_handler.handle("/api/v1/knowledge/facts", {}, handler)
 
-        # Admin should be able to create facts even without explicit permission
+        assert result is not None
+        assert result.status_code == 403
+
+    def test_owner_role_can_create_fact(self, knowledge_handler):
+        """RBAC v2 grants owner knowledge.write."""
+
+        class Owner:
+            user_id = "owner-user"
+            org_id = "test-org-001"
+            role = "owner"
+
+        handler = create_request_body({"statement": "Owner fact", "workspace_id": "default"})
+
+        with patch.object(knowledge_handler, "require_auth_or_error") as mock_auth:
+            mock_auth.return_value = (Owner(), None)
+            result = knowledge_handler.handle("/api/v1/knowledge/facts", {}, handler)
+
         assert result is not None
         assert result.status_code == 201
 

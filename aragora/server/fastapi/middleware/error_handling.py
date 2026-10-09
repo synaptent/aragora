@@ -85,6 +85,21 @@ def setup_exception_handlers(app: FastAPI) -> None:
             headers=headers,
         )
 
+    from aragora.knowledge.fact_store import OrgScopeRequiredError
+
+    @app.exception_handler(OrgScopeRequiredError)
+    async def fact_scope_error_handler(
+        request: Request, exc: OrgScopeRequiredError
+    ) -> JSONResponse:
+        """Fact routes that do not carry the caller's organization are closed."""
+        return JSONResponse(
+            status_code=403,
+            content={
+                "error": "Knowledge fact access is closed until it is organization-scoped",
+                "code": "knowledge_fact_access_closed",
+            },
+        )
+
     @app.exception_handler(ValidationError)
     async def validation_error_handler(request: Request, exc: ValidationError) -> JSONResponse:
         """Handle Pydantic validation errors."""
