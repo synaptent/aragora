@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import importlib
+import inspect
 import types
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -953,35 +955,55 @@ class TestConstants:
 # ---------------------------------------------------------------------------
 
 
+_CRITICAL_NOMIC_FACADES = [
+    ("aragora.nomic.self_improve", "SelfImprovePipeline"),
+    ("aragora.nomic.autonomous_orchestrator", "AutonomousOrchestrator"),
+]
+
+
+def _module_path(module_name: str) -> str:
+    return module_name.replace(".", "/") + ".py"
+
+
 def _file_scope_weight(path: str) -> float:
     result = RiskScorer().score_goal("Tidy helper names", file_scope=[path])
     return next(f.weight for f in result.factors if f.name == "file_scope")
 
 
-class TestSplitModulesKeepCriticalPathRisk:
-    @pytest.mark.parametrize(
-        ("facade", "split_module"),
-        [
-            ("aragora/nomic/self_improve.py", "aragora/nomic/self_improve_execution.py"),
-            ("aragora/nomic/autonomous_orchestrator.py", "aragora/nomic/autonomous_workflow.py"),
-        ],
-    )
-    def test_split_module_scores_like_its_facade(self, facade, split_module):
-        assert _file_scope_weight(split_module) == pytest.approx(_file_scope_weight(facade))
+def _split_out_modules(module_name: str, class_name: str) -> set[str]:
+    """Sibling modules holding code split out of a critical facade.
 
-    @pytest.mark.parametrize(
-        ("module_name", "class_name"),
-        [
-            ("aragora.nomic.self_improve", "SelfImprovePipeline"),
-            ("aragora.nomic.autonomous_orchestrator", "AutonomousOrchestrator"),
-        ],
-    )
-    def test_nomic_base_classes_live_in_critical_paths(self, module_name, class_name):
-        cls = getattr(importlib.import_module(module_name), class_name)
-        module_paths = [
-            base.__module__.replace(".", "/") + ".py"
-            for base in cls.__mro__
-            if base.__module__.startswith("aragora.nomic.")
-        ]
-        uncovered = [p for p in module_paths if not any(c in p for c in CRITICAL_RISK_PATHS)]
-        assert uncovered == []
+    Splits take two shapes here: a mixin the facade class inherits from, and a
+    top-level backward-compatibility re-export marked ``# noqa: F401``.
+    """
+    module = importlib.import_module(module_name)
+    found = {
+        base.__module__
+        for base in getattr(module, class_name).__mro__
+        if base.__module__.startswith("aragora.nomic.")
+    }
+    source = inspect.getsource(module)
+    lines = source.splitlines()
+    for node in ast.parse(source).body:
+        if (
+            isinstance(node, ast.ImportFrom)
+            and (node.module or "").startswith("aragora.nomic.")
+            and "noqa: F401" in lines[node.lineno - 1]
+        ):
+            found.add(node.module)
+    found.discard(module_name)
+    return found
+
+
+class TestSplitModulesKeepCriticalPathRisk:
+    @pytest.mark.parametrize(("module_name", "class_name"), _CRITICAL_NOMIC_FACADES)
+    def test_facade_is_a_critical_path(self, module_name, class_name):
+        assert any(c in _module_path(module_name) for c in CRITICAL_RISK_PATHS)
+
+    @pytest.mark.parametrize(("module_name", "class_name"), _CRITICAL_NOMIC_FACADES)
+    def test_split_out_modules_score_like_their_facade(self, module_name, class_name):
+        split_modules = sorted(_split_out_modules(module_name, class_name))
+        assert split_modules
+        facade_weight = _file_scope_weight(_module_path(module_name))
+        weights = {m: _file_scope_weight(_module_path(m)) for m in split_modules}
+        assert weights == pytest.approx(dict.fromkeys(split_modules, facade_weight))
