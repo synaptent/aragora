@@ -3,11 +3,20 @@
 from __future__ import annotations
 
 from aragora.decision_workspace.config import (
+    DEFAULT_CONTEXT_CHAR_BUDGET,
+    DEFAULT_DECISION_BUDGET_USD,
     DEFAULT_MAX_DOCUMENTS,
     DEFAULT_MAX_FILE_BYTES,
     DEFAULT_MAX_PASTED_CHARS,
+    DEFAULT_RUN_TIMEOUT_SECONDS,
     ENV_AGENTS,
+    ENV_CONTEXT_CHAR_BUDGET,
+    ENV_DECISION_BUDGET_USD,
+    ENV_RUN_TIMEOUT_SECONDS,
     agent_options,
+    context_char_budget,
+    decision_budget_usd,
+    run_timeout_seconds,
     workspace_limits,
 )
 
@@ -86,3 +95,34 @@ def test_unreadable_limits_fall_back_to_the_default_not_to_unlimited():
         assert limits.max_documents == DEFAULT_MAX_DOCUMENTS
         assert limits.max_file_bytes == DEFAULT_MAX_FILE_BYTES
         assert limits.max_pasted_chars == DEFAULT_MAX_PASTED_CHARS
+
+
+def test_run_settings_default_to_the_architecture_values():
+    assert context_char_budget({}) == DEFAULT_CONTEXT_CHAR_BUDGET == 24000
+    assert decision_budget_usd({}) == DEFAULT_DECISION_BUDGET_USD == 1.00
+    assert run_timeout_seconds({}) == DEFAULT_RUN_TIMEOUT_SECONDS == 600
+
+
+def test_run_settings_read_positive_values():
+    env = {
+        ENV_CONTEXT_CHAR_BUDGET: "5000",
+        ENV_DECISION_BUDGET_USD: " 0.25 ",
+        ENV_RUN_TIMEOUT_SECONDS: "120",
+    }
+    assert (context_char_budget(env), decision_budget_usd(env), run_timeout_seconds(env)) == (
+        5000,
+        0.25,
+        120,
+    )
+
+
+def test_unreadable_run_settings_fall_back_to_the_default_not_to_unlimited():
+    for bad in ("abc", "0", "-1", "nan", "inf"):
+        env = {
+            ENV_CONTEXT_CHAR_BUDGET: bad,
+            ENV_DECISION_BUDGET_USD: bad,
+            ENV_RUN_TIMEOUT_SECONDS: bad,
+        }
+        assert context_char_budget(env) == DEFAULT_CONTEXT_CHAR_BUDGET
+        assert decision_budget_usd(env) == DEFAULT_DECISION_BUDGET_USD
+        assert run_timeout_seconds(env) == DEFAULT_RUN_TIMEOUT_SECONDS

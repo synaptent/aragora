@@ -555,6 +555,9 @@ Read on every request by `/api/v1/workspace`. A missing, non-integer or non-posi
 | `ARAGORA_WORKSPACE_MAX_DOCUMENTS` | Optional | Maximum uploaded files per decision (pasted text is not counted) | `10` |
 | `ARAGORA_WORKSPACE_MAX_FILE_BYTES` | Optional | Maximum size of one uploaded `.md`/`.txt` file, in bytes | `1048576` |
 | `ARAGORA_WORKSPACE_MAX_PASTED_CHARS` | Optional | Maximum pasted-text length, in characters | `204800` |
+| `ARAGORA_WORKSPACE_CONTEXT_CHAR_BUDGET` | Optional | Characters of passage text a decision's debate receives. Over the budget, passages are ranked by relevance to the question and the top ones are kept in source order; the rest are marked not in context and counted. Read when a decision is created. | `24000` |
+| `ARAGORA_DECISION_BUDGET_USD` | Optional | Model spend cap per decision run (actual plus estimated cost), in USD. A run that passes it stops with status `budget_exceeded` and keeps what it captured. A non-positive or unreadable value falls back to the default. | `1.00` |
+| `ARAGORA_WORKSPACE_RUN_TIMEOUT_SECONDS` | Optional | Deadline for one decision run (debate plus synthesis), in seconds; a run that misses it ends `failed`. | `600` |
 
 ## Streaming Controls
 
