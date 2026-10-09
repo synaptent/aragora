@@ -49,10 +49,10 @@ import asyncio
 import inspect
 import logging
 import time
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from aragora.rbac.models import AuthorizationContext
 
@@ -62,6 +62,8 @@ from ..middleware.error_handling import APIError, NotFoundError
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v2/knowledge-base", tags=["Knowledge Base"])
+
+_WORKSPACE_ID_MAX_LENGTH = 100
 
 
 # =============================================================================
@@ -288,11 +290,32 @@ class ImportRequest(BaseModel):
     """Request body for POST /import."""
 
     facts: list[dict[str, Any]] = Field(..., description="List of fact dicts to import")
-    workspace_id: str = Field("default", max_length=100, description="Target workspace")
-    merge_strategy: str = Field(
-        "skip_existing",
-        description="How to handle duplicates: skip_existing, overwrite, merge",
+    workspace_id: str = Field(
+        "default", max_length=_WORKSPACE_ID_MAX_LENGTH, description="Target workspace"
     )
+    merge_strategy: Literal["skip_existing"] = Field(
+        "skip_existing",
+        description=(
+            "How to handle an entry that is already stored: only skip_existing is "
+            "supported (the entry is counted in skipped)"
+        ),
+    )
+
+    @field_validator("facts")
+    @classmethod
+    def _entry_workspace_is_a_short_string(
+        cls, facts: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        for index, fact in enumerate(facts):
+            if "workspace_id" not in fact:
+                continue
+            workspace_id = fact["workspace_id"]
+            if not isinstance(workspace_id, str) or len(workspace_id) > _WORKSPACE_ID_MAX_LENGTH:
+                raise ValueError(
+                    f"facts[{index}].workspace_id must be a string of at most "
+                    f"{_WORKSPACE_ID_MAX_LENGTH} characters"
+                )
+        return facts
 
 
 class ImportResponse(BaseModel):
@@ -1091,10 +1114,12 @@ async def import_knowledge_base(
     Import knowledge entries.
 
     Accepts a list of fact dictionaries and imports them into the knowledge
-    base. Supports merge strategies: ``skip_existing``, ``overwrite``, ``merge``.
-    Every fact is bound to the caller's organization. An entry whose statement
-    is already stored in that organization and workspace is counted in
-    ``skipped``, not ``imported``.
+    base. The only merge strategy is ``skip_existing`` (the default); any
+    other value answers 422 before the fact store is read or written.
+    Every fact is bound to the caller's organization. An entry whose ``id``
+    is already stored in that organization, or whose statement is already
+    stored in that organization and workspace, is counted in ``skipped``,
+    not ``imported``.
 
     Requires ``knowledge:write`` permission.
     """
@@ -1112,9 +1137,8 @@ async def import_knowledge_base(
                 details.append(f"Skipped entry without statement: {fact_data.get('id', 'unknown')}")
                 continue
 
-            # Check for existing fact by ID if merge strategy requires it
             fact_id = fact_data.get("id")
-            if fact_id and body.merge_strategy == "skip_existing":
+            if fact_id:
                 existing = await _call_store(store, "get_fact", fact_id, org_id=org_id)
                 if existing:
                     skipped += 1

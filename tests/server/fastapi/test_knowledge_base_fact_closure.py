@@ -283,8 +283,15 @@ def test_retried_create_returns_the_same_fact_and_never_another_orgs(
     assert seeded["inner"].get_statistics(org_id=ORG_C)["total_facts"] == 1
 
 
-def _import(client, facts: list[dict[str, Any]], headers: dict[str, str]):
-    body = {"facts": facts, "workspace_id": "default", "merge_strategy": "skip_existing"}
+def _import(
+    client,
+    facts: list[dict[str, Any]],
+    headers: dict[str, str],
+    merge_strategy: str | None = "skip_existing",
+):
+    body: dict[str, Any] = {"facts": facts, "workspace_id": "default"}
+    if merge_strategy is not None:
+        body["merge_strategy"] = merge_strategy
     return client.post(f"{PREFIX}/import", json=body, headers=headers)
 
 
@@ -358,3 +365,65 @@ def test_retried_import_counts_only_new_facts_and_never_another_orgs(
     assert len(ids_b) == len(ids_c) == 2
     assert not ids_b & ids_c and not (ids_b | ids_c) & seeded["org_a_ids"]
     assert seeded["inner"].get_statistics(org_id=ORG_A)["total_facts"] == 2
+
+
+@pytest.mark.parametrize("strategy", ("overwrite", "merge"))
+def test_import_rejects_merge_strategies_it_does_not_implement(
+    fastapi_client, seeded, strategy
+) -> None:
+    facts = [
+        {"id": seeded["fact_a"].id, "statement": ORG_A_STATEMENT},
+        {"statement": "Org renewal is due in March"},
+    ]
+
+    response = _import(fastapi_client, facts, _bearer("owner"), merge_strategy=strategy)
+
+    assert response.status_code == 422, response.text
+    assert "skip_existing" in response.json()["detail"][0]["msg"]
+    _assert_untouched(seeded)
+    assert _org_facts(seeded, ORG_B) == []
+
+
+def test_import_without_a_merge_strategy_skips_existing_facts(fastapi_client, seeded) -> None:
+    facts = [
+        {"statement": ORG_A_STATEMENT},
+        {"statement": "Org renewal is due in March"},
+        {"statement": ORG_A_STATEMENT},
+    ]
+
+    responses = [
+        _import(fastapi_client, facts, _bearer("owner"), merge_strategy=None) for _ in range(2)
+    ]
+
+    counts = [(r.status_code, r.json()["imported"], r.json()["skipped"]) for r in responses]
+    assert counts == [(201, 2, 1), (201, 0, 3)]
+    assert len(_org_facts(seeded, ORG_B)) == 2
+
+
+@pytest.mark.parametrize(
+    "workspace_id", (7, None, ["ws"], "w" * 101), ids=("int", "null", "list", "101-chars")
+)
+def test_import_rejects_an_entry_workspace_that_is_not_a_short_string(
+    fastapi_client, seeded, workspace_id
+) -> None:
+    facts = [
+        {"statement": "Org renewal is due in March"},
+        {"statement": "Org renewal is due in April", "workspace_id": workspace_id},
+    ]
+
+    response = _import(fastapi_client, facts, _bearer("owner"))
+
+    assert response.status_code == 422, response.text
+    assert "facts[1].workspace_id" in response.json()["detail"][0]["msg"]
+    _assert_untouched(seeded)
+    assert _org_facts(seeded, ORG_B) == []
+
+
+def test_import_accepts_an_entry_workspace_of_100_characters(fastapi_client, seeded) -> None:
+    facts = [{"statement": "Org renewal is due in March", "workspace_id": "w" * 100}]
+
+    response = _import(fastapi_client, facts, _bearer("owner"))
+
+    assert response.status_code == 201, response.text
+    assert response.json()["imported"] == 1
+    assert [f.workspace_id for f in _org_facts(seeded, ORG_B)] == ["w" * 100]

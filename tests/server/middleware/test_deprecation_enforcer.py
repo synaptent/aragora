@@ -620,11 +620,11 @@ class TestDefaultKnowledgeFactReplacements:
 
     @pytest.fixture(scope="class")
     def served_paths(self) -> set[str]:
-        from fastapi.routing import APIRoute
-
         from aragora.server.fastapi import create_app
 
-        return {route.path for route in create_app().routes if isinstance(route, APIRoute)}
+        # FastAPI 0.138+ keeps included routers behind an internal wrapper, so
+        # app.routes no longer lists their APIRoutes; the generated schema does.
+        return set(create_app().openapi()["paths"])
 
     @pytest.mark.parametrize(
         ("method", "path", "replacement"),
