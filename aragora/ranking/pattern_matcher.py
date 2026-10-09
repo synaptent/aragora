@@ -146,7 +146,7 @@ class TaskPatternMatcher:
 
     def __init__(
         self,
-        patterns: dict[str, list[str] | None] = None,
+        patterns: dict[str, list[str]] | None = None,
         min_samples_for_confidence: int = 5,
     ):
         """Initialize the pattern matcher.

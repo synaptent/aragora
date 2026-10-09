@@ -349,7 +349,10 @@ class SecurityHandler(SecureHandler):
             500: Rotation failed
         """
         try:
-            from aragora.security.migration import rotate_encryption_key
+            from aragora.security.migration import (
+                get_migration_audit_provider,
+                rotate_encryption_key,
+            )
             from aragora.security.encryption import get_encryption_service, CRYPTO_AVAILABLE
 
             if not CRYPTO_AVAILABLE:
@@ -370,6 +373,15 @@ class SecurityHandler(SecureHandler):
                             f"Key is only {age_days} days old. Use 'force: true' to rotate anyway.",
                             400,
                         )
+
+            # Server startup normally registers the provider, but an embedded
+            # handler can run without it; keep any provider the embedder injected.
+            if get_migration_audit_provider() is None:
+                from aragora.ops.security_edge_adapters import (
+                    register_security_migration_adapters,
+                )
+
+                register_security_migration_adapters()
 
             result = rotate_encryption_key(
                 stores=stores,

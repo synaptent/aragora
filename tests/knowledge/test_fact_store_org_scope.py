@@ -9,7 +9,8 @@ import pytest
 
 import aragora.knowledge.fact_store as fact_store_module
 from aragora.knowledge import FactFilters, FactRelationType, FactStore, InMemoryFactStore
-from aragora.knowledge.fact_store import ScopedFactStore
+from aragora.knowledge.fact_store import OrgScopeRequiredError, ScopedFactStore
+from tests.knowledge._legacy_rows import seed_relation, seed_unassigned
 
 LEGACY_STATEMENT = "The vendor contract renews every March"
 
@@ -80,10 +81,10 @@ class TestMigration:
         assert version == 2
         assert "org_id" in columns
         assert {"idx_facts_org_workspace", "idx_facts_org_scope_hash"} <= indexes
-        legacy = store.get_fact("fact_legacy1")
-        assert legacy is not None and legacy.org_id is None
-        assert len(store.list_facts()) == 2
-        assert "org_id" not in legacy.to_dict()
+        with sqlite3.connect(db) as conn:
+            assert conn.execute("SELECT org_id FROM facts").fetchall() == [(None,), (None,)]
+        with pytest.raises(OrgScopeRequiredError):
+            store.list_facts()
 
     def test_second_open_is_a_noop(self, tmp_path, monkeypatch):
         db = tmp_path / "knowledge.db"
@@ -94,10 +95,12 @@ class TestMigration:
             raise AssertionError("migration ran on an already-migrated file")
 
         monkeypatch.setattr(fact_store_module, "_add_org_scope", _fail)
-        store = FactStore(db_path=db)
+        FactStore(db_path=db)
 
         assert _schema_state(db)[0] == 2
-        assert {f.id for f in store.list_facts()} == {"fact_legacy1", "fact_legacy2"}
+        with sqlite3.connect(db) as conn:
+            ids = {row[0] for row in conn.execute("SELECT id FROM facts")}
+        assert ids == {"fact_legacy1", "fact_legacy2"}
 
     def test_interrupted_migration_completes(self, tmp_path):
         db = tmp_path / "knowledge.db"
@@ -142,9 +145,11 @@ class TestQuarantine:
         )
         stats = scoped.get_statistics()
         assert stats["total_facts"] == 0 and stats["total_relations"] == 0
-        assert legacy_store.get_fact("fact_legacy1").confidence == 0.9
-        assert len(legacy_store.query_facts(ALL)) == 2
-        assert len(legacy_store.get_relations("fact_legacy1")) == 1
+        with sqlite3.connect(legacy_store.db_path) as conn:
+            assert conn.execute("SELECT confidence FROM facts").fetchall() == [(0.9,), (0.9,)]
+            assert conn.execute("SELECT COUNT(*) FROM fact_relations").fetchone() == (1,)
+        with pytest.raises(OrgScopeRequiredError):
+            legacy_store.get_fact("fact_legacy1")
 
     def test_scoped_dedup_never_matches_a_legacy_row(self, legacy_store):
         created = ScopedFactStore(legacy_store, "org_a").add_fact(LEGACY_STATEMENT, "default")
@@ -163,8 +168,8 @@ class TestQuarantine:
         scoped_a = ScopedFactStore(legacy_store, "org_a")
         assert {f.id for f in scoped_a.list_facts()} == {"fact_legacy1", "fact_legacy2"}
         assert [r.id for r in scoped_a.get_relations("fact_legacy1")] == ["rel_legacy"]
-        assert legacy_store.get_fact(owned_b.id).org_id == "org_b"
-        with pytest.raises(ValueError):
+        assert legacy_store.get_fact(owned_b.id, org_id="org_b") is not None
+        with pytest.raises(OrgScopeRequiredError):
             legacy_store.assign_org("")
 
 
@@ -178,7 +183,7 @@ def store(request, tmp_path):
 class TestScopedView:
     def test_requires_a_non_empty_org(self, store):
         for bad in ("", "   ", None):
-            with pytest.raises(ValueError):
+            with pytest.raises(OrgScopeRequiredError):
                 ScopedFactStore(store, bad)  # type: ignore[arg-type]
 
     def test_rejects_a_different_org(self, store):
@@ -195,9 +200,9 @@ class TestScopedView:
         scoped_b = ScopedFactStore(store, "org_b")
         own = scoped_a.add_fact("Alpha pricing is tiered", "default", topics=["pricing"])
         foreign = scoped_b.add_fact("Alpha pricing is flat", "default", topics=["pricing"])
-        unassigned = store.add_fact("Alpha pricing is secret", "default")
+        unassigned = seed_unassigned(store, "Alpha pricing is secret")
 
-        assert own.org_id == "org_a" and store.get_fact(own.id).org_id == "org_a"
+        assert own.org_id == "org_a" and store.get_fact(own.id, org_id="org_a") is not None
         assert unassigned.org_id is None
         assert "org_id" not in own.to_dict()
         assert scoped_a.get_fact(foreign.id) is None
@@ -206,7 +211,8 @@ class TestScopedView:
         assert [f.id for f in scoped_a.query_facts(ALL)] == [own.id]
         assert {f.id for f in scoped_a.query_facts("pricing")} <= {own.id}
         assert [f.id for f in scoped_a.list_facts(FactFilters(workspace_id="default"))] == [own.id]
-        assert len(store.list_facts()) == 3
+        with pytest.raises(OrgScopeRequiredError):
+            store.list_facts()
 
     def test_writes_never_cross_orgs(self, store):
         scoped_a = ScopedFactStore(store, "org_a")
@@ -215,7 +221,7 @@ class TestScopedView:
 
         assert scoped_a.update_fact(foreign.id, confidence=0.99) is None
         assert scoped_a.delete_fact(foreign.id) is False
-        assert store.get_fact(foreign.id).confidence == 0.5
+        assert store.get_fact(foreign.id, org_id="org_b").confidence == 0.5
         with pytest.raises(ValueError):
             scoped_a.update_fact(own.id, superseded_by=foreign.id)
         with pytest.raises(ValueError):
@@ -228,7 +234,7 @@ class TestScopedView:
     def test_dedup_is_scoped_to_org_and_workspace(self, store):
         scoped_a = ScopedFactStore(store, "org_a")
         foreign = ScopedFactStore(store, "org_b").add_fact("Shared statement", "default")
-        unassigned = store.add_fact("Shared statement", "default")
+        unassigned = seed_unassigned(store, "Shared statement")
 
         first = scoped_a.add_fact("Shared statement", "default")
         again = scoped_a.add_fact("  shared   STATEMENT ", "default")
@@ -237,7 +243,8 @@ class TestScopedView:
         assert first.id not in (foreign.id, unassigned.id)
         assert again.id == first.id
         assert other_workspace.id != first.id
-        assert store.add_fact("Shared statement", "default").id == unassigned.id
+        with pytest.raises(OrgScopeRequiredError):
+            store.add_fact("Shared statement", "default")
 
     def test_dedup_keeps_the_oldest_duplicate(self, store):
         scoped = ScopedFactStore(store, "org_a")
@@ -257,7 +264,7 @@ class TestScopedView:
 
         assert scoped_a.add_relation(own_1.id, foreign.id, FactRelationType.SUPPORTS) is None
         assert scoped_a.add_relation(foreign.id, own_1.id, FactRelationType.SUPPORTS) is None
-        store.add_relation(own_1.id, foreign.id, FactRelationType.CONTRADICTS)
+        seed_relation(store, own_1.id, foreign.id)
         own_rel = scoped_a.add_relation(own_1.id, own_2.id, FactRelationType.CONTRADICTS)
 
         assert own_rel is not None
@@ -265,16 +272,17 @@ class TestScopedView:
         assert [f.id for f in scoped_a.get_contradictions(own_1.id)] == [own_2.id]
         assert ScopedFactStore(store, "org_b").get_relations(foreign.id) == []
         assert ScopedFactStore(store, "org_b").get_contradictions(foreign.id) == []
-        assert len(store.get_relations(own_1.id)) == 2
+        with pytest.raises(OrgScopeRequiredError):
+            store.get_relations(own_1.id)
 
     def test_statistics_are_scoped(self, store):
         scoped_a = ScopedFactStore(store, "org_a")
         own_1 = scoped_a.add_fact("Own one", "default", confidence=0.4)
         own_2 = scoped_a.add_fact("Own two", "ws_two", confidence=0.8)
         foreign = ScopedFactStore(store, "org_b").add_fact("Foreign", "default", confidence=0.1)
-        store.add_fact("Unassigned", "default")
+        seed_unassigned(store, "Unassigned")
         scoped_a.add_relation(own_1.id, own_2.id, FactRelationType.SUPPORTS)
-        store.add_relation(own_1.id, foreign.id, FactRelationType.SUPPORTS)
+        seed_relation(store, own_1.id, foreign.id)
 
         stats = scoped_a.get_statistics()
         assert stats["total_facts"] == 2
@@ -282,11 +290,11 @@ class TestScopedView:
         assert stats["total_relations"] == 1
         in_workspace = scoped_a.get_statistics("default")
         assert in_workspace["total_facts"] == 1 and in_workspace["total_relations"] == 0
-        assert store.get_statistics()["total_facts"] == 4
-        assert store.get_statistics()["total_relations"] == 2
+        with pytest.raises(OrgScopeRequiredError):
+            store.get_statistics()
 
     def test_assign_org_parity(self, store):
-        unassigned = store.add_fact("Legacy claim", "default")
+        unassigned = seed_unassigned(store, "Legacy claim")
         scoped = ScopedFactStore(store, "org_a")
         newer = scoped.add_fact("Legacy claim", "default")
 
@@ -294,4 +302,5 @@ class TestScopedView:
         assert store.assign_org("org_a", fact_ids=[unassigned.id]) == 0
         assert scoped.add_fact("Legacy claim", "default").id == unassigned.id
         assert {f.id for f in scoped.list_facts()} == {unassigned.id, newer.id}
-        assert store.add_fact("Legacy claim", "default").id not in (unassigned.id, newer.id)
+        with pytest.raises(OrgScopeRequiredError):
+            store.add_fact("Legacy claim", "default")

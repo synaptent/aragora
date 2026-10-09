@@ -14,13 +14,36 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import functools
 import json
 import os
+import sys
+from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from aragora.exceptions import AuthorizationError
+
 if TYPE_CHECKING:
     from argparse import Namespace, _SubParsersAction
+
+
+def _requires_org(command: Callable[[Namespace], int]) -> Callable[[Namespace], int]:
+    """Fail a fact-reading command closed: the CLI has no authenticated organization."""
+
+    @functools.wraps(command)
+    def run(args: Namespace) -> int:
+        try:
+            return command(args)
+        except AuthorizationError as e:
+            print(
+                f"Error: {e}. Knowledge facts belong to an organization and this CLI has "
+                "no authenticated organization, so fact commands are unavailable.",
+                file=sys.stderr,
+            )
+            return 2
+
+    return run
 
 
 def create_knowledge_parser(subparsers: _SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -166,6 +189,7 @@ def create_knowledge_parser(subparsers: _SubParsersAction[argparse.ArgumentParse
     knowledge_parser.set_defaults(func=lambda _: knowledge_parser.print_help())
 
 
+@_requires_org
 def cmd_query(args: Namespace) -> int:
     """Handle 'knowledge query' command."""
     try:
@@ -234,6 +258,7 @@ def cmd_query(args: Namespace) -> int:
     return 0
 
 
+@_requires_org
 def cmd_facts(args: Namespace) -> int:
     """Handle 'knowledge facts' command."""
     try:
@@ -299,7 +324,7 @@ def cmd_facts(args: Namespace) -> int:
             print("Error: fact_id required for 'show' action")
             return 1
 
-        fact = store.get_fact(args.fact_id)
+        fact = store.get_fact(args.fact_id)  # type: ignore[assignment]
         if not fact:
             print(f"Fact not found: {args.fact_id}")
             return 1
@@ -332,7 +357,7 @@ def cmd_facts(args: Namespace) -> int:
             return 1
 
         # Verify the fact exists first
-        fact = store.get_fact(args.fact_id)
+        fact = store.get_fact(args.fact_id)  # type: ignore[assignment]
         if not fact:
             print(f"Fact not found: {args.fact_id}")
             return 1
@@ -494,7 +519,7 @@ def cmd_jobs(args: Namespace) -> int:
             print("Error: job_id required for 'show' action")
             return 1
 
-        job = get_job_status(args.job_id)
+        job = get_job_status(args.job_id)  # type: ignore[assignment]
         if not job:
             print(f"Job not found: {args.job_id}")
             return 1
@@ -524,6 +549,7 @@ def cmd_jobs(args: Namespace) -> int:
     return 0
 
 
+@_requires_org
 def cmd_process(args: Namespace) -> int:
     """Handle 'knowledge process' command."""
     file_path = Path(args.file)
@@ -592,6 +618,7 @@ def cmd_process(args: Namespace) -> int:
     return 0
 
 
+@_requires_org
 def cmd_stats(args: Namespace) -> int:
     """Handle 'knowledge stats' command."""
     try:

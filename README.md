@@ -13,7 +13,7 @@ standalone verifier ([`pip install -U 'aragora-verify>=0.2.0'`](https://pypi.org
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 
 > **New here?** The [Quickstart](docs/quickstart.md) gets you a working debate in
-> under a minute. Auditors should start with the [Cold Reviewer Guide](docs/COLD_REVIEWER_GUIDE.md).
+> under a minute. Auditors should start with the [Cold Reviewer Guide](docs/guides/COLD_REVIEWER_GUIDE.md).
 
 | I want to… | Command |
 |------------|---------|
@@ -89,13 +89,13 @@ pip install ./aragora-verify
 ```
 
 > Use **0.2.0+** (`pip install -U 'aragora-verify>=0.2.0'`): it is the first
-> line that verifies ODR v0.2, the default output since Aragora 2.11.0 (0.1.x
+> line that verifies ODR v0.2, the default output since the 2.11.0 release (0.1.x
 > rejects v0.2 documents at `schema_conformance`), and it still verifies v0.1
 > receipts. Like 0.1.1, it binds each signature's recorded `key_id` to the key
 > you supply, so a relabeled signer fails as tampering. 0.1.0 lacks that
 > binding — upgrade if you have it.
 
-See the [full Action setup guide](docs/GITHUB_ACTION_SETUP.md#emitting-a-verifiable-decision-receipt)
+See the [full Action setup guide](docs/guides/GITHUB_ACTION_SETUP.md#emitting-a-verifiable-decision-receipt)
 for the receipt-specific inputs/outputs, secret-dependent limits (receipts are
 unsigned; reviewer defaults need reachable provider keys), and a committed
 example receipt you can verify right now without running any CI.
@@ -214,14 +214,14 @@ anchoring are in-flight. See the [proof ladder](#proof-ladder).
 ## Find your path
 
 - **Developer** — [Quickstart](docs/quickstart.md) → `aragora review-pr` → [CLI Reference](docs/CLI_REFERENCE.md) · [SDK Guide](docs/SDK_GUIDE.md)
-- **Auditor / reviewer** — [Cold Reviewer Guide](docs/COLD_REVIEWER_GUIDE.md) → [Open Decision Receipt spec](docs/specs/OPEN_DECISION_RECEIPT.md) → `aragora-verify`
+- **Auditor / reviewer** — [Cold Reviewer Guide](docs/guides/COLD_REVIEWER_GUIDE.md) → [Open Decision Receipt spec](docs/specs/OPEN_DECISION_RECEIPT.md) → `aragora-verify`
 - **Founder / operator** — the wedge above → [proof ladder](#proof-ladder) → [Full Vision](#full-vision)
 - **Compliance buyer** — [Enterprise features](docs/enterprise/ENTERPRISE_FEATURES.md) → EU AI Act / SOC 2 status in [honest current state](#honest-current-state)
 - **Agent / tool builder** — the [ODR](docs/specs/OPEN_DECISION_RECEIPT.md) as the external contract → MCP tools → [API Reference](docs/api/API_REFERENCE.md)
 
 ## Documentation
 
-- [Quickstart](docs/quickstart.md) · [Cold Reviewer Guide](docs/COLD_REVIEWER_GUIDE.md) · [CLI Reference](docs/CLI_REFERENCE.md)
+- [Quickstart](docs/quickstart.md) · [Cold Reviewer Guide](docs/guides/COLD_REVIEWER_GUIDE.md) · [CLI Reference](docs/CLI_REFERENCE.md)
 - [Open Decision Receipt spec](docs/specs/OPEN_DECISION_RECEIPT.md) · [SDK Guide](docs/SDK_GUIDE.md) · [API Reference](docs/api/API_REFERENCE.md)
 - [Feature status](docs/STATUS.md) · [Enterprise features](docs/enterprise/ENTERPRISE_FEATURES.md) · [Architecture deep-dive](docs/EXTENDED_README.md)
 - [Documentation index](docs/README.md) · [Import layers](docs/architecture/IMPORT_LAYERS.md)
@@ -233,7 +233,7 @@ Secrets load from AWS Secrets Manager in production (never standing env keys);
 local development uses a gitignored `.env`. See the
 [security overview](docs/enterprise/SECURITY.md),
 [compliance overview](docs/enterprise/COMPLIANCE.md), and
-[deployment guide](docs/deployment/DEPLOYMENT.md).
+[deployment guide](docs/DEPLOYMENT.md).
 
 ## Contributing & License
 
@@ -257,7 +257,7 @@ Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). MIT licensed
 > [commercial discipline](docs/COMMERCIAL_OVERVIEW.md), *external claims stay narrower
 > than this roadmap and tied to measured proof.* Canonical metrics live in
 > [`docs/METRICS.md`](docs/METRICS.md); the candid current-state ledger is
-> [`docs/HONEST_ASSESSMENT.md`](docs/HONEST_ASSESSMENT.md). Where a number is contested
+> [`docs/strategy/HONEST_ASSESSMENT.md`](docs/strategy/HONEST_ASSESSMENT.md). Where a number is contested
 > across docs it is rounded here on purpose. Every major claim below carries a proof
 > link, a status marker, or an explicit aspirational label — start with the proof ladder.
 
@@ -268,7 +268,7 @@ Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). MIT licensed
 | Claim class | Canonical source / gate |
 |---|---|
 | Scale & metrics | [`docs/METRICS.md`](docs/METRICS.md) — `python scripts/regenerate_metrics.py --check` fails CI on >0.5% drift |
-| What's real vs aspirational | [`docs/HONEST_ASSESSMENT.md`](docs/HONEST_ASSESSMENT.md) |
+| What's real vs aspirational | [`docs/strategy/HONEST_ASSESSMENT.md`](docs/strategy/HONEST_ASSESSMENT.md) |
 | Receipt format (the external contract) | [Open Decision Receipt spec](docs/specs/OPEN_DECISION_RECEIPT.md) |
 | Decision-semantics roadmap | ODR spine epic [#8223](https://github.com/synaptent/aragora/issues/8223); ODR-1..7 → [#8224](https://github.com/synaptent/aragora/issues/8224)/[#8225](https://github.com/synaptent/aragora/issues/8225)/[#8226](https://github.com/synaptent/aragora/issues/8226)/[#8227](https://github.com/synaptent/aragora/issues/8227)/[#8229](https://github.com/synaptent/aragora/issues/8229)/[#8230](https://github.com/synaptent/aragora/issues/8230)/[#8231](https://github.com/synaptent/aragora/issues/8231) |
 | Jul 2026 durability capture / outsider-verifiable claims | [Durable strategy capture](docs/strategy/2026-07-05-durable-strategy-capture.md); executable claims manifest [`outsider_verifiable_claims.yaml`](docs/status/claims/outsider_verifiable_claims.yaml); parent capture issue [#8856](https://github.com/synaptent/aragora/issues/8856) |
@@ -290,7 +290,7 @@ category from cooperative agent orchestration (LangGraph, CrewAI, AutoGen), from
 single-provider agent SDKs, and from post-hoc AI observability: those coordinate
 graphs or monitor behavior after the fact; Aragora improves decision *quality*
 before commit and produces the audit trail as a byproduct.
-*(docs/WHY_ARAGORA.md, docs/COMPARISON_MATRIX.md)*
+*(docs/WHY_ARAGORA.md, docs/strategy/COMPARISON_MATRIX.md)*
 
 **Why a single model isn't enough.** LLMs exhibit correlated failures (shared
 training data and RLHF biases), sycophantic agreement (confidence uncorrelated with
@@ -299,7 +299,7 @@ model as an *unreliable witness* and extract signal from where independent witne
 disagree. Clinical triage, financial risk, legal review, and architecture decisions
 cannot rest on "probably right." The moat: no funded competitor combines structured
 adversarial multi-agent debate with portable, verifiable decision receipts.
-*(docs/WHY_ARAGORA.md, docs/HONEST_ASSESSMENT.md)*
+*(docs/WHY_ARAGORA.md, docs/strategy/HONEST_ASSESSMENT.md)*
 
 **Why this is not generic orchestration:**
 
@@ -311,7 +311,7 @@ adversarial multi-agent debate with portable, verifiable decision receipts.
 | When evidence is thin | proceeds | stops truthfully; the receipt says so |
 | Delegation | open-ended | bounded; approval artifacts + sandboxed effectors |
 
-*(docs/strategy/BOUNDARIES_AND_SCOPE.md, docs/COMPARISON_MATRIX.md)*
+*(docs/strategy/BOUNDARIES_AND_SCOPE.md, docs/strategy/COMPARISON_MATRIX.md)*
 
 ### The Five Pillars *(product framing — docs/EXTENDED_README.md)*
 
@@ -353,7 +353,7 @@ proves. *(docs/CANONICAL_GOALS.md, docs/vision/MAXIMALIST_VISION.md)*
 > 35+ allowlisted agent types across 12+ providers · 42 Knowledge Mound adapter specs
 > (47 files) · 360+ RBAC permissions · Python + TypeScript SDKs · v2.11.1.**
 > (Practical real-time debate uses 2–6 agents; the value is *heterogeneity*, not raw
-> count — see docs/HONEST_ASSESSMENT.md.)
+> count — see docs/strategy/HONEST_ASSESSMENT.md.)
 <!-- metrics:end -->
 
 **Core debate (✅).** Arena engine orchestrates Propose/Critique/Revise/Vote phases,
@@ -394,7 +394,7 @@ backup/DR with drills.
 2026**); SOC 2 Type II controls implemented (🔄 ~98%; **blocker: external penetration test
 not yet commissioned** — *not certified*); GDPR DSAR/erasure/consent/retention (✅);
 HIPAA field encryption, Safe Harbor de-identification, breach-notification workflows (✅
-controls); SOX-oriented audit profiles (✅). *(docs/HONEST_ASSESSMENT.md, docs/GA_CHECKLIST.md)*
+controls); SOX-oriented audit profiles (✅). *(docs/strategy/HONEST_ASSESSMENT.md, docs/GA_CHECKLIST.md)*
 
 **Integrations & connectors (✅, 50+).** Chat: Slack, Discord, Teams, Google Chat,
 Telegram, WhatsApp (with TTS/voice). Streaming: Kafka, RabbitMQ (DLQ, bidirectional).
@@ -539,7 +539,7 @@ gate explicitly opens the upper tranche. *(docs/plans/ trust-compound + checkpoi
   synthesis (DIC-23..28), market-resolution mechanism, meta-improver for protocols.
 - **P5 — federation (🔮):** distributed debates across orgs, cross-org knowledge sync.
 
-### Focus strategy — depth over breadth *(docs/FOCUS.md)*
+### Focus strategy — depth over breadth *(docs/strategy/FOCUS.md)*
 
 The codebase is explicitly tiered for investment: **Tier 1 defensible core** (~17% of
 files, ~100% of unique value: debate engine, Gauntlet, Knowledge Mound, ELO/calibration,
@@ -554,7 +554,7 @@ lines with zero infra dependencies.
 
 <a id="honest-current-state"></a>
 
-### Honest current state *(docs/HONEST_ASSESSMENT.md, docs/GA_CHECKLIST.md)*
+### Honest current state *(docs/strategy/HONEST_ASSESSMENT.md, docs/GA_CHECKLIST.md)*
 
 **Real and working:** the debate engine (genuine multi-agent debates against live LLM
 APIs), multiple consensus modes, hollow-consensus detection, cryptographic receipts with

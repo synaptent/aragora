@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from aragora.agents.base import AgentType
 
 try:
-    from aragora.server.storage import get_debates_db
+    from aragora.storage.debate_storage import get_debates_db
 except ImportError:  # pragma: no cover - optional dependency for tests
     get_debates_db = None  # type: ignore[assignment]
 

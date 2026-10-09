@@ -168,12 +168,26 @@ _TRANCHES: dict[str, dict[str, tuple[str, ...]]] = {
             "work",
         ),
     },
+    "T4a": {
+        "application": (
+            "analytics",
+            "audit",
+            "control_plane",
+            "golden",
+            "inbox",
+            "marketplace",
+            "services",
+            "skills",
+            "stores",
+        ),
+    },
 }
 
 _SEAMS = {
     "aragora.exceptions -> aragora.connectors.exceptions",
     "aragora.exceptions -> aragora.server.handlers.exceptions",
     "aragora.utils.redis_cache -> aragora.caching.redis",
+    "aragora.exceptions -> aragora.control_plane.exceptions",
 }
 
 

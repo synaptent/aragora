@@ -510,8 +510,11 @@ class NotificationDispatcher:
             if attempt < retry_config.max_retries:
                 delay = retry_config.get_delay(attempt)
                 logger.info(
-                    f"Notification to {channel.value} failed, retrying in {delay:.1f}s "
-                    f"(attempt {attempt + 1}/{retry_config.max_retries})"
+                    "Notification to %s failed, retrying in %.1fs (attempt %s/%s)",
+                    channel.value,
+                    delay,
+                    attempt + 1,
+                    retry_config.max_retries,
                 )
                 self._metrics["total_retried"] += 1
 

@@ -40,6 +40,8 @@ def isolated_routes(monkeypatch):
     import aragora.workflow  # noqa: F401
 
     monkeypatch.setattr(hooks, "_route_targets", {})
+    # Treat the declared registrations as already run, so a miss stays a miss.
+    monkeypatch.setattr(hooks, "_declared_registrations_loaded", True)
     return hooks
 
 
@@ -142,6 +144,122 @@ def test_fresh_interpreter_registers_routes_only_through_upper_package_inits():
     assert out["reloaded"] == ["gauntlet", "workflow"]
 
 
+def test_pyproject_declares_the_server_registration_entry_point():
+    tomllib = pytest.importorskip("tomllib")
+    project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+
+    declared = project.get("entry-points", {}).get("aragora.decision_routes")
+
+    assert declared == {"server": "aragora.server.decision_routes:register_decision_routes"}
+
+
+def test_core_only_caller_routes_through_the_declared_registrations(tmp_path):
+    # The caller imports only aragora.core; the first lookup that finds nothing runs the
+    # registrations declared under the aragora.decision_routes entry-point group.
+    code = """
+        import asyncio, json, sys
+        from types import SimpleNamespace
+
+        from aragora.core import decision_route_hooks as hooks
+        from aragora.core.decision import (
+            DecisionConfig,
+            DecisionRequest,
+            DecisionRouter,
+            DecisionType,
+        )
+
+        UPPER = ("aragora.gauntlet", "aragora.pipeline", "aragora.server", "aragora.workflow")
+        upper_before = sorted(name for name in UPPER if name in sys.modules)
+
+        class StubArena:
+            def __init__(self, **_kwargs):
+                pass
+
+            async def run(self):
+                return SimpleNamespace(
+                    final_answer="Use LRU", consensus_reached=True, debate_id="debate-1"
+                )
+
+        async def run_gauntlet(config):
+            return SimpleNamespace(verdict=None, confidence=0.6)
+
+        def request(decision_type, **config):
+            return DecisionRequest(
+                content="Run the thing",
+                decision_type=decision_type,
+                config=DecisionConfig(**config),
+            )
+
+        def router(**engines):
+            return DecisionRouter(enable_caching=False, enable_deduplication=False, **engines)
+
+        async def main():
+            # No workflow id: the workflow target is reached and rejects the request.
+            workflow = await router(workflow_engine=object()).route(
+                request(DecisionType.WORKFLOW)
+            )
+            gauntlet = await router(
+                gauntlet_engine=SimpleNamespace(run=run_gauntlet)
+            ).route(request(DecisionType.GAUNTLET))
+            debate = await router(debate_engine=StubArena).route(
+                request(
+                    DecisionType.DEBATE,
+                    rounds=1,
+                    agents=[],
+                    decision_integrity={"include_plan": True},
+                )
+            )
+            return workflow, gauntlet, debate
+
+        workflow, gauntlet, debate = asyncio.run(main())
+        print(json.dumps({
+            "upper_before": upper_before,
+            "workflow": [workflow.success, workflow.error],
+            "gauntlet": [gauntlet.success, gauntlet.error],
+            "debate": [debate.success, debate.error, type(debate.decision_integrity).__name__],
+            "hooks": {
+                "workflow": hooks.get_route_target(hooks.ROUTE_WORKFLOW).__module__,
+                "gauntlet": hooks.get_route_target(hooks.ROUTE_GAUNTLET).__module__,
+                "integrity": hooks.get_decision_integrity_builder().__module__,
+                "tts": hooks.get_tts_bridge_factory().__module__,
+                "audit": type(hooks.get_decision_audit_sink()).__module__,
+            },
+        }))
+    """
+    env = {
+        **os.environ,
+        "PYTHONPATH": str(REPO_ROOT),
+        "ARAGORA_DATA_DIR": str(tmp_path / "data"),
+        "AWS_CONFIG_FILE": "/dev/null",
+        "AWS_SHARED_CREDENTIALS_FILE": "/dev/null",
+        "AWS_EC2_METADATA_DISABLED": "true",
+        "ARAGORA_SECRETS_STRICT": "false",
+    }
+    proc = subprocess.run(
+        [sys.executable, "-W", "ignore", "-c", textwrap.dedent(code)],
+        capture_output=True,
+        text=True,
+        cwd=str(tmp_path),
+        env=env,
+        timeout=300,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr[-4000:]
+    out = json.loads(proc.stdout.strip().splitlines()[-1])
+
+    assert out["upper_before"] == []
+    assert out["workflow"] == [False, "Decision routing failed: ValueError"]
+    assert out["gauntlet"] == [True, None]
+    assert out["debate"] == [True, None, "dict"]
+    assert out["hooks"] == {
+        "workflow": "aragora.workflow.decision_route",
+        "gauntlet": "aragora.gauntlet.decision_route",
+        "integrity": "aragora.pipeline.decision_integrity_utils",
+        "tts": "aragora.connectors.chat.tts_bridge",
+        "audit": "aragora.server.decision_routes",
+    }
+
+
 def test_upper_package_inits_register_their_targets():
     import aragora.gauntlet  # noqa: F401
     import aragora.workflow  # noqa: F401
@@ -211,7 +329,12 @@ async def test_router_fails_explicitly_when_a_route_is_not_registered(isolated_r
 
     result = await router.route(request)
     assert result.success is False
-    assert result.error == "Decision routing failed: DecisionRouteNotRegisteredError"
+    # The result names what to load, not only the exception type.
+    assert result.error.startswith(
+        "Decision routing failed: DecisionRouteNotRegisteredError: "
+        "No decision route registered for 'workflow'; the aragora.workflow package"
+    )
+    assert "aragora.decision_routes" in result.error
 
 
 # ---------------------------------------------------------------------------

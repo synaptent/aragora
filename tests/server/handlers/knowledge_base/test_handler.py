@@ -56,6 +56,7 @@ for _mod_name in (
             setattr(_m, _a, None)
         sys.modules[_mod_name] = _m
 
+from aragora.knowledge import InMemoryFactStore, ScopedFactStore
 from aragora.server.handlers.knowledge_base.handler import (
     KnowledgeHandler,
     _knowledge_limiter,
@@ -70,6 +71,8 @@ from aragora.server.handlers.base import error_response
 
 class MockAuthenticatedUser:
     """Mock authenticated user with full knowledge permissions."""
+
+    org_id = "test-org-001"
 
     def __init__(
         self,
@@ -89,21 +92,19 @@ class MockAuthenticatedUser:
 
 
 class MockReadOnlyUser:
-    """Mock user with only read permission."""
+    """JWT-shaped user whose RBAC v2 role (member) grants knowledge.read only."""
 
     def __init__(self, user_id: str = "readonly-user"):
         self.user_id = user_id
-        self.permissions = {"knowledge.read"}
-        self.roles = {"viewer"}
+        self.role = "member"
 
 
 class MockNoPermissionsUser:
-    """Mock user with no permissions."""
+    """JWT-shaped user whose RBAC v2 role (viewer) grants no knowledge permission."""
 
     def __init__(self, user_id: str = "restricted-user"):
         self.user_id = user_id
-        self.permissions: set[str] = set()
-        self.roles: set[str] = set()
+        self.role = "viewer"
 
 
 def make_http_handler(
@@ -228,7 +229,11 @@ def mock_server_context() -> dict[str, Any]:
 @pytest.fixture
 def handler(mock_server_context) -> KnowledgeHandler:
     """Create a KnowledgeHandler instance."""
-    return KnowledgeHandler(mock_server_context)
+    h = KnowledgeHandler(mock_server_context)
+    # Handler logic over an org-scoped store only: production _get_fact_store() builds an
+    # unscoped store, so reads answer 403 (tests/server/fastapi/test_knowledge_org_isolation.py).
+    h._fact_store = ScopedFactStore(InMemoryFactStore(), "test-org-001")  # type: ignore[assignment]
+    return h
 
 
 @pytest.fixture
@@ -289,9 +294,10 @@ class TestKnowledgeHandlerInitialization:
 
     def test_fact_store_lazy_initialization(self, handler):
         """Fact store is lazily initialized on first access."""
-        assert handler._fact_store is None
+        handler._fact_store = None
         store = handler._get_fact_store()
         assert store is not None
+        assert not isinstance(store, ScopedFactStore)
         assert handler._fact_store is store
 
     def test_query_engine_lazy_initialization(self, handler):
@@ -437,8 +443,9 @@ class TestRateLimiting:
 # =============================================================================
 
 
+@pytest.mark.no_auto_auth
 class TestRBACPermissions:
-    """Tests for RBAC permission enforcement."""
+    """RBAC v2 enforcement, decided by the real permission checker from the user's role."""
 
     def test_check_permission_requires_auth(self, handler, get_handler):
         """_check_permission returns 401 when user is not authenticated."""
@@ -451,19 +458,38 @@ class TestRBACPermissions:
             assert result is not None
             assert result.status_code == 401
 
-    def test_check_permission_allows_admin(self, handler, get_handler):
-        """_check_permission allows users with admin role."""
-        admin_user = MockAuthenticatedUser(roles={"admin"}, permissions=set())
+    def test_check_permission_allows_admin_read(self, handler, get_handler):
+        """_check_permission allows knowledge.read for the admin role."""
+        admin_user = MockReadOnlyUser()
+        admin_user.role = "admin"
         with patch.object(handler, "require_auth_or_error", return_value=(admin_user, None)):
             result = handler._check_permission(get_handler, "knowledge.read")
             assert result is None  # None means allowed
 
-    def test_check_permission_allows_matching_permission(self, handler, get_handler):
-        """_check_permission allows users with matching permission."""
-        user = MockAuthenticatedUser(roles=set(), permissions={"knowledge.read"})
+    def test_check_permission_allows_member_read(self, handler, get_handler):
+        """_check_permission allows knowledge.read for the member role."""
+        user = MockReadOnlyUser()
         with patch.object(handler, "require_auth_or_error", return_value=(user, None)):
             result = handler._check_permission(get_handler, "knowledge.read")
             assert result is None  # None means allowed
+
+    def test_check_permission_ignores_per_user_permission_lists(self, handler, get_handler):
+        """Only the RBAC v2 role counts; ad-hoc permissions/roles attributes grant nothing."""
+        user = MockAuthenticatedUser()  # permissions {"*", ...}, roles {"admin", "owner"}
+        user.role = "viewer"
+        with patch.object(handler, "require_auth_or_error", return_value=(user, None)):
+            result = handler._check_permission(get_handler, "knowledge.read")
+            assert result is not None
+            assert result.status_code == 403
+
+    def test_check_permission_denies_missing_role(self, handler, get_handler):
+        """A user without a role is denied rather than given a default role."""
+        user = MockNoPermissionsUser()
+        del user.role
+        with patch.object(handler, "require_auth_or_error", return_value=(user, None)):
+            result = handler._check_permission(get_handler, "knowledge.read")
+            assert result is not None
+            assert result.status_code == 403
 
     def test_check_permission_denies_missing_permission(self, handler, get_handler):
         """_check_permission denies users without required permission."""

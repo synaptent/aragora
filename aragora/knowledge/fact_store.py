@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, overload
 
 from aragora.config import resolve_db_path
+from aragora.exceptions import AuthorizationError
 
 from aragora.knowledge.types import (
     Fact,
@@ -33,16 +34,26 @@ from aragora.storage.schema import SchemaManager, safe_add_column
 logger = logging.getLogger(__name__)
 
 
+class OrgScopeRequiredError(AuthorizationError):
+    """A fact read or write had no owning organization.
+
+    Deliberately not a ValueError/RuntimeError/OSError/KeyError/TypeError/
+    AttributeError: callers catch those and turn them into empty results,
+    None or partial success, which would hide a missing organization.
+    """
+
+    def __init__(self, message: str = "Knowledge facts require an organization") -> None:
+        super().__init__(message)
+
+
 def _require_org(org_id: object) -> str:
     if not isinstance(org_id, str) or not org_id.strip():
-        raise ValueError("org_id must be a non-empty string")
+        raise OrgScopeRequiredError()
     return org_id
 
 
 def _org_clause(org_id: str | None, column: str = "org_id") -> tuple[str, tuple[str, ...]]:
-    """SQL suffix and params restricting rows to one org; empty when unscoped."""
-    if org_id is None:
-        return "", ()
+    """SQL suffix and params restricting rows to one org; raises without one."""
     return f" AND {column} = ?", (_require_org(org_id),)
 
 
@@ -179,13 +190,15 @@ class FactStore(SQLiteStore):
             deduplicate: If True, return the oldest existing fact with the same
                 statement, workspace and org (unassigned facts only match
                 unassigned facts)
-            org_id: Owning organization; None stores the fact unassigned
+            org_id: Owning organization (required)
 
         Returns:
             The created or existing Fact
+
+        Raises:
+            OrgScopeRequiredError: org_id is missing
         """
-        if org_id is not None:
-            _require_org(org_id)
+        _require_org(org_id)
         evidence_ids = evidence_ids or []
         source_documents = source_documents or []
         topics = topics or []
@@ -273,7 +286,7 @@ class FactStore(SQLiteStore):
 
         Args:
             fact_id: Fact ID
-            org_id: If given, only a fact owned by this org is returned
+            org_id: Only a fact owned by this org is returned (required)
 
         Returns:
             Fact or None if not found
@@ -314,17 +327,17 @@ class FactStore(SQLiteStore):
             topics: Updated topics
             metadata: Updated metadata
             superseded_by: ID of superseding fact
-            org_id: If given, only a fact owned by this org is updated, and
+            org_id: Only a fact owned by this org is updated (required), and
                 superseded_by must name a fact owned by the same org
 
         Returns:
             Updated Fact or None if not found
 
         Raises:
-            ValueError: org_id is given and superseded_by is not a fact of that org
+            ValueError: superseded_by is not a fact of that org
         """
         org_sql, org_params = _org_clause(org_id)
-        if org_id is not None and superseded_by is not None:
+        if superseded_by is not None:
             if self.get_fact(superseded_by, org_id=org_id) is None:
                 raise ValueError("superseded_by must reference a fact in the same org")
 
@@ -409,6 +422,7 @@ class FactStore(SQLiteStore):
             List of matching facts
         """
         filters = filters or FactFilters()
+        _require_org(filters.org_id)
         sanitized = sanitize_fts_query(query)
 
         if not sanitized:
@@ -531,15 +545,14 @@ class FactStore(SQLiteStore):
 
         Args:
             fact_id: Fact to find contradictions for
-            org_id: If given, the fact and every returned fact must belong to this org
+            org_id: The fact and every returned fact must belong to this org (required)
 
         Returns:
             List of contradicting facts
         """
         org_sql, org_params = _org_clause(org_id, "f.org_id")
-        if org_id is not None:
-            org_sql += " AND EXISTS (SELECT 1 FROM facts a WHERE a.id = ? AND a.org_id = ?)"
-            org_params += (fact_id, org_id)
+        org_sql += " AND EXISTS (SELECT 1 FROM facts a WHERE a.id = ? AND a.org_id = ?)"
+        org_params += (fact_id, _require_org(org_id))
         with self.connection() as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
@@ -606,22 +619,19 @@ class FactStore(SQLiteStore):
             confidence: Confidence in relation
             created_by: Who created this relation
             metadata: Additional data
-            org_id: If given, both facts must belong to this org
+            org_id: Both facts must belong to this org (required)
 
         Returns:
-            The created relation, or None when org_id is given and either fact
-            is missing or outside the org
+            The created relation, or None when either fact is missing or
+            outside the org
         """
         relation_id = f"rel_{uuid.uuid4().hex[:12]}"
         now = datetime.now()
-        scope_sql = ""
-        scope_params: tuple[str, ...] = ()
-        if org_id is not None:
-            scope_sql = (
-                " WHERE EXISTS (SELECT 1 FROM facts WHERE id = ? AND org_id = ?)"
-                " AND EXISTS (SELECT 1 FROM facts WHERE id = ? AND org_id = ?)"
-            )
-            scope_params = (source_fact_id, _require_org(org_id), target_fact_id, org_id)
+        scope_sql = (
+            " WHERE EXISTS (SELECT 1 FROM facts WHERE id = ? AND org_id = ?)"
+            " AND EXISTS (SELECT 1 FROM facts WHERE id = ? AND org_id = ?)"
+        )
+        scope_params = (source_fact_id, _require_org(org_id), target_fact_id, org_id)
 
         with self.connection() as conn:
             cursor = conn.cursor()
@@ -674,11 +684,12 @@ class FactStore(SQLiteStore):
             relation_type: Optional filter by type
             as_source: Include relations where fact is source
             as_target: Include relations where fact is target
-            org_id: If given, only relations whose both ends belong to this org
+            org_id: Only relations whose both ends belong to this org (required)
 
         Returns:
             List of relations
         """
+        _require_org(org_id)
         with self.connection() as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
@@ -702,15 +713,13 @@ class FactStore(SQLiteStore):
                 sql += " AND relation_type = ?"
                 params.append(relation_type.value)
 
-            if org_id is not None:
-                _require_org(org_id)
-                sql += (
-                    " AND EXISTS (SELECT 1 FROM facts s WHERE s.id = r.source_fact_id"
-                    " AND s.org_id = ?)"
-                    " AND EXISTS (SELECT 1 FROM facts t WHERE t.id = r.target_fact_id"
-                    " AND t.org_id = ?)"
-                )
-                params.extend([org_id, org_id])
+            sql += (
+                " AND EXISTS (SELECT 1 FROM facts s WHERE s.id = r.source_fact_id"
+                " AND s.org_id = ?)"
+                " AND EXISTS (SELECT 1 FROM facts t WHERE t.id = r.target_fact_id"
+                " AND t.org_id = ?)"
+            )
+            params.extend([org_id, org_id])
 
             cursor.execute(sql, params)
 
@@ -735,7 +744,7 @@ class FactStore(SQLiteStore):
 
         Args:
             fact_id: Fact to delete
-            org_id: If given, only a fact owned by this org is deleted
+            org_id: Only a fact owned by this org is deleted (required)
 
         Returns:
             True if deleted
@@ -747,8 +756,7 @@ class FactStore(SQLiteStore):
             # The fact row goes first so an org-scoped miss leaves the FTS
             # entry and relations of another org's fact untouched.
             cursor.execute(f"DELETE FROM facts WHERE id = ?{org_sql}", (fact_id, *org_params))  # noqa: S608 -- fixed clause, values bound
-            deleted = cursor.rowcount > 0
-            if not deleted and org_id is not None:
+            if cursor.rowcount == 0:
                 return False
 
             cursor.execute("DELETE FROM facts_fts WHERE fact_id = ?", (fact_id,))
@@ -757,7 +765,7 @@ class FactStore(SQLiteStore):
                 (fact_id, fact_id),
             )
 
-            return deleted
+            return True
 
     def assign_org(
         self,
@@ -804,8 +812,8 @@ class FactStore(SQLiteStore):
 
         Args:
             workspace_id: Optional workspace filter
-            org_id: If given, count only this org's facts, and only relations
-                whose both ends are counted facts
+            org_id: Count only this org's facts, and only relations whose
+                both ends are counted facts (required)
 
         Returns:
             Statistics dictionary
@@ -814,15 +822,12 @@ class FactStore(SQLiteStore):
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
 
-            conditions: list[str] = []
-            params: list[Any] = []
+            conditions: list[str] = ["org_id = ?"]
+            params: list[Any] = [_require_org(org_id)]
             if workspace_id:
                 conditions.append("workspace_id = ?")
                 params.append(workspace_id)
-            if org_id is not None:
-                conditions.append("org_id = ?")
-                params.append(_require_org(org_id))
-            where = f" WHERE {' AND '.join(conditions)}" if conditions else ""
+            where = f" WHERE {' AND '.join(conditions)}"
 
             # Total facts
             cursor.execute(f"SELECT COUNT(*) as count FROM facts{where}", params)  # noqa: S608 -- internal query construction
@@ -863,22 +868,16 @@ class FactStore(SQLiteStore):
             )
             verified = cursor.fetchone()["count"]
 
-            # Relations count (global unless org-scoped, as before org scoping)
-            if org_id is None:
-                cursor.execute("SELECT COUNT(*) as count FROM fact_relations")
-            else:
-                end_conditions = " AND ".join(
-                    f"{end}.{c}" for end in ("s", "t") for c in conditions
-                )
-                cursor.execute(
-                    f"""
-                    SELECT COUNT(*) as count FROM fact_relations r
-                    JOIN facts s ON s.id = r.source_fact_id
-                    JOIN facts t ON t.id = r.target_fact_id
-                    WHERE {end_conditions}
-                    """,  # noqa: S608 -- fixed clauses, values bound
-                    params + params,
-                )
+            end_conditions = " AND ".join(f"{end}.{c}" for end in ("s", "t") for c in conditions)
+            cursor.execute(
+                f"""
+                SELECT COUNT(*) as count FROM fact_relations r
+                JOIN facts s ON s.id = r.source_fact_id
+                JOIN facts t ON t.id = r.target_fact_id
+                WHERE {end_conditions}
+                """,  # noqa: S608 -- fixed clauses, values bound
+                params + params,
+            )
             relations = cursor.fetchone()["count"]
 
             return {
@@ -939,9 +938,8 @@ class InMemoryFactStore:
 
     @staticmethod
     def _in_org(fact: Fact | None, org_id: str | None) -> bool:
-        if fact is None:
-            return False
-        return org_id is None or fact.org_id == _require_org(org_id)
+        org = _require_org(org_id)
+        return fact is not None and fact.org_id == org
 
     def add_fact(
         self,
@@ -958,8 +956,7 @@ class InMemoryFactStore:
         org_id: str | None = None,
     ) -> Fact:
         """Add a fact to memory."""
-        if org_id is not None:
-            _require_org(org_id)
+        _require_org(org_id)
         stmt_hash = self._compute_hash(statement, workspace_id, org_id)
 
         if deduplicate and stmt_hash in self._statement_hashes:
@@ -1007,7 +1004,8 @@ class InMemoryFactStore:
         org_id: str | None = None,
     ) -> Fact | None:
         """Update a fact."""
-        if org_id is not None and superseded_by is not None:
+        _require_org(org_id)
+        if superseded_by is not None:
             if self.get_fact(superseded_by, org_id=org_id) is None:
                 raise ValueError("superseded_by must reference a fact in the same org")
         fact = self.get_fact(fact_id, org_id=org_id)
@@ -1039,6 +1037,7 @@ class InMemoryFactStore:
     ) -> list[Fact]:
         """Search facts by keyword."""
         filters = filters or FactFilters()
+        _require_org(filters.org_id)
         query_lower = query.lower()
 
         results = []
@@ -1066,6 +1065,7 @@ class InMemoryFactStore:
     def list_facts(self, filters: FactFilters | None = None) -> list[Fact]:
         """List facts."""
         filters = filters or FactFilters()
+        _require_org(filters.org_id)
 
         results = []
         for fact in self._facts.values():
@@ -1087,7 +1087,7 @@ class InMemoryFactStore:
 
     def get_contradictions(self, fact_id: str, *, org_id: str | None = None) -> list[Fact]:
         """Get contradicting facts."""
-        if org_id is not None and self.get_fact(fact_id, org_id=org_id) is None:
+        if self.get_fact(fact_id, org_id=org_id) is None:
             return []
         contradictions = []
         for rel in self._relations.values():
@@ -1140,8 +1140,8 @@ class InMemoryFactStore:
         *,
         org_id: str | None = None,
     ) -> FactRelation | None:
-        """Add a relation; with org_id, both facts must belong to that org."""
-        if org_id is not None and (
+        """Add a relation; both facts must belong to org_id."""
+        if (
             self.get_fact(source_fact_id, org_id=org_id) is None
             or self.get_fact(target_fact_id, org_id=org_id) is None
         ):
@@ -1169,12 +1169,13 @@ class InMemoryFactStore:
         *,
         org_id: str | None = None,
     ) -> list[FactRelation]:
-        """Get relations for a fact; with org_id, only those with both ends in that org."""
+        """Get relations for a fact whose both ends are in org_id."""
+        _require_org(org_id)
         results = []
         for rel in self._relations.values():
             if relation_type and rel.relation_type != relation_type:
                 continue
-            if org_id is not None and not (
+            if not (
                 self._in_org(self._facts.get(rel.source_fact_id), org_id)
                 and self._in_org(self._facts.get(rel.target_fact_id), org_id)
             ):
@@ -1239,18 +1240,16 @@ class InMemoryFactStore:
         self, workspace_id: str | None = None, *, org_id: str | None = None
     ) -> dict[str, Any]:
         """Get statistics."""
+        _require_org(org_id)
         facts = [f for f in self._facts.values() if self._in_org(f, org_id)]
         if workspace_id:
             facts = [f for f in facts if f.workspace_id == workspace_id]
-        if org_id is None:
-            relations = len(self._relations)
-        else:
-            counted = {f.id for f in facts}
-            relations = sum(
-                1
-                for r in self._relations.values()
-                if r.source_fact_id in counted and r.target_fact_id in counted
-            )
+        counted = {f.id for f in facts}
+        relations = sum(
+            1
+            for r in self._relations.values()
+            if r.source_fact_id in counted and r.target_fact_id in counted
+        )
 
         by_status: dict[str, int] = {}
         total_confidence = 0.0
