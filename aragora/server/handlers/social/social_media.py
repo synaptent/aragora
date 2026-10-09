@@ -21,7 +21,7 @@ from pathlib import Path
 
 from aragora.config.secrets import get_secret
 from aragora.rbac.decorators import require_permission
-from aragora.server.errors import safe_error_message as _safe_error_message
+from aragora.api_errors import safe_error_message as _safe_error_message
 from aragora.server.http_utils import run_async
 
 from ..base import (
@@ -329,14 +329,14 @@ class SocialMediaHandler(BaseHandler):
         # Twitter publishing
         if path.startswith("/api/v1/debates/") and path.endswith("/publish/twitter"):
             debate_id, err = self.extract_path_param(path, 4, "debate_id", SAFE_SLUG_PATTERN)
-            if err:
+            if err or debate_id is None:
                 return err
             return self._publish_to_twitter(debate_id, handler)
 
         # YouTube publishing
         if path.startswith("/api/v1/debates/") and path.endswith("/publish/youtube"):
             debate_id, err = self.extract_path_param(path, 4, "debate_id", SAFE_SLUG_PATTERN)
-            if err:
+            if err or debate_id is None:
                 return err
             return self._publish_to_youtube(debate_id, handler)
 
