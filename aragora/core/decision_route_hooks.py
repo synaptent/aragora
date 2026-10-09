@@ -13,7 +13,11 @@ lookup that finds nothing registered therefore runs, once per process, the
 registrations declared under the ``aragora.decision_routes`` entry-point group;
 aragora's own ``pyproject.toml`` declares the server registration there. The
 dependency stays declared by the upper package in packaging metadata, so this
-module names none of the packages it reaches.
+module names none of the packages it reaches. Those declared registrations only
+fill what is missing: an entry registered before they ran (for example a caller's
+own workflow target or audit sink) is kept, and when two declared registrations
+provide the same key, the one that runs first wins (entry-point order is not
+defined, so plugins should not rely on overriding each other).
 
 Every getter raises :class:`DecisionRouteNotRegisteredError` when nothing is
 registered after that. Registration is keyed, so registering again (for example
@@ -103,6 +107,8 @@ _HOOK_PROVIDERS = {
 
 _declared_registrations_loaded = False
 _declared_registrations_lock = threading.RLock()
+# Thread-local, so a registration another thread makes meanwhile still replaces.
+_declared_registrations_running = threading.local()
 _SOURCE_PYPROJECT = Path(__file__).resolve().parents[2] / "pyproject.toml"
 
 
@@ -154,7 +160,11 @@ def _load_declared_registrations() -> None:
             list(importlib.metadata.entry_points(group=DECISION_ROUTES_ENTRY_POINT_GROUP))
             or _source_checkout_registrations()
         )
-        _run_registrations(declared)
+        _declared_registrations_running.active = True
+        try:
+            _run_registrations(declared)
+        finally:
+            _declared_registrations_running.active = False
 
 
 def _run_registrations(entry_points: list[importlib.metadata.EntryPoint]) -> None:
@@ -172,9 +182,16 @@ def _run_registrations(entry_points: list[importlib.metadata.EntryPoint]) -> Non
         _run_registrations(rest)
 
 
+def _register(registry: dict[str, Any], key: str, value: Any) -> None:
+    if getattr(_declared_registrations_running, "active", False):
+        registry.setdefault(key, value)
+    else:
+        registry[key] = value
+
+
 def register_route_target(kind: str, target: DecisionRouteTarget) -> None:
     """Register ``target`` for the decision type named ``kind``."""
-    _route_targets[kind] = target
+    _register(_route_targets, kind, target)
 
 
 def get_route_target(kind: str) -> DecisionRouteTarget:
@@ -210,7 +227,7 @@ def _get_hook(name: str) -> Any:
 
 
 def register_decision_integrity_builder(builder: DecisionIntegrityBuilder) -> None:
-    _hooks[HOOK_DECISION_INTEGRITY] = builder
+    _register(_hooks, HOOK_DECISION_INTEGRITY, builder)
 
 
 def get_decision_integrity_builder() -> DecisionIntegrityBuilder:
@@ -218,7 +235,7 @@ def get_decision_integrity_builder() -> DecisionIntegrityBuilder:
 
 
 def register_tts_bridge_factory(factory: TTSBridgeFactory) -> None:
-    _hooks[HOOK_TTS_BRIDGE] = factory
+    _register(_hooks, HOOK_TTS_BRIDGE, factory)
 
 
 def get_tts_bridge_factory() -> TTSBridgeFactory:
@@ -226,7 +243,7 @@ def get_tts_bridge_factory() -> TTSBridgeFactory:
 
 
 def register_decision_audit_sink(sink: DecisionAuditSink) -> None:
-    _hooks[HOOK_AUDIT_SINK] = sink
+    _register(_hooks, HOOK_AUDIT_SINK, sink)
 
 
 def get_decision_audit_sink() -> DecisionAuditSink:
