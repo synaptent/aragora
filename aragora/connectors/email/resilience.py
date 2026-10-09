@@ -301,8 +301,12 @@ class RetryExecutor:
 
                 delay = self._calculate_delay(attempt)
                 logger.warning(
-                    f"[Retry] Attempt {attempt + 1}/{self.config.max_retries} "
-                    f"for {operation_name} failed: {e}. Retrying in {delay:.1f}s"
+                    "[Retry] Attempt %s/%s for %s failed: %s. Retrying in %.1fs",
+                    attempt + 1,
+                    self.config.max_retries,
+                    operation_name,
+                    e,
+                    delay,
                 )
                 await asyncio.sleep(delay)
 
@@ -669,7 +673,7 @@ class ResilientEmailClient:
                 oldest_in_window = min(self._request_times)
                 wait_time = (oldest_in_window + self._rate_limit_config.window_seconds) - now
                 if wait_time > 0:
-                    logger.warning(f"[RateLimit] Waiting {wait_time:.1f}s for rate limit")
+                    logger.warning("[RateLimit] Waiting %.1fs for rate limit", wait_time)
                     await asyncio.sleep(wait_time)
 
             self._request_times.append(time.time())

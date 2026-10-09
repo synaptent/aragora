@@ -46,8 +46,8 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 _bug_detector_imported = False
-_BugDetector = None
-_BugSeverity = None
+_BugDetector: Any = None
+_BugSeverity: Any = None
 
 
 def _import_bug_detector():
@@ -848,7 +848,7 @@ async def _perform_debate_review(
     """
     try:
         from aragora.debate.orchestrator import Arena
-        from aragora.debate.protocol import DebateProtocol
+        from aragora.protocols.debate import DebateProtocol
         from aragora.core import Environment
 
         # Build the review context

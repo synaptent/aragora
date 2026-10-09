@@ -185,7 +185,7 @@ def main() -> int:
     if fast_result is not None:
         return fast_result
 
-    from aragora.server.startup.event_subscribers import register_webhook_store
+    from aragora.server.webhook_store_registration import register_webhook_store
 
     register_webhook_store()
 

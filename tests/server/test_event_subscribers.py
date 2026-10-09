@@ -36,6 +36,7 @@ from aragora.server.event_subscribers import (
     get_server_event_subscriber,
     register,
 )
+from aragora.server.stream.gauntlet_emitter import GauntletStreamEmitter
 from aragora.storage import webhook_config_store
 from aragora.storage.webhook_config_store import SQLiteWebhookConfigStore
 
@@ -178,6 +179,88 @@ class TestServerEventSubscriberHandlers:
 
         mock_dispatch.assert_called_once()
         assert mock_dispatch.call_args[0][0] is mock_webhook
+
+
+class TestGauntletCompleteFindingsCount:
+    """GAUNTLET_COMPLETE findings-count contract between emitter and notification.
+
+    ``findings_count`` is the canonical field emitted by
+    ``GauntletStreamEmitter.emit_complete`` and read by the frontend;
+    ``total_findings`` is the legacy field still accepted as a fallback.
+    """
+
+    @pytest.mark.parametrize(
+        ("count_fields", "expected_total"),
+        [
+            pytest.param({"findings_count": 7}, 7, id="canonical-only"),
+            pytest.param({"total_findings": 5}, 5, id="legacy-only"),
+            pytest.param({"findings_count": 7, "total_findings": 5}, 7, id="canonical-wins"),
+            pytest.param({"findings_count": 0, "total_findings": 5}, 0, id="canonical-zero-wins"),
+            pytest.param({}, 0, id="missing-defaults-to-zero"),
+        ],
+    )
+    def test_notification_findings_count(self, count_fields: dict, expected_total: int):
+        subscriber = ServerEventSubscriber()
+        event = make_stream_event(
+            StreamEventType.GAUNTLET_COMPLETE,
+            data={
+                "gauntlet_id": "gauntlet-789",
+                "verdict": "fail",
+                "confidence": 0.6,
+                "critical_count": 2,
+                **count_fields,
+            },
+        )
+
+        with patch(
+            "aragora.notifications.service.notify_gauntlet_completed",
+            new_callable=AsyncMock,
+        ) as notify:
+            subscriber._handle_gauntlet_complete_to_notification(event)
+
+        notify.assert_awaited_once_with(
+            gauntlet_id="gauntlet-789",
+            verdict="fail",
+            confidence=0.6,
+            total_findings=expected_total,
+            critical_count=2,
+        )
+
+    @pytest.mark.asyncio
+    async def test_emitter_complete_payload_reaches_notification(self):
+        from aragora.server.startup.event_subscribers import bootstrap_event_subscribers
+
+        manager = bootstrap_event_subscribers()
+        broadcast: list[StreamEvent] = []
+
+        def broadcast_fn(event: StreamEvent) -> None:
+            broadcast.append(event)
+            manager._dispatch_event(event)
+
+        emitter = GauntletStreamEmitter(broadcast_fn=broadcast_fn)
+        with patch(
+            "aragora.notifications.service.notify_gauntlet_completed",
+            new_callable=AsyncMock,
+        ) as notify:
+            emitter.emit_complete(
+                gauntlet_id="gauntlet-e2e",
+                verdict="fail",
+                confidence=0.82,
+                findings_count=7,
+                duration_seconds=12.5,
+            )
+            await asyncio.sleep(0)
+
+        assert [event.type for event in broadcast] == [StreamEventType.GAUNTLET_COMPLETE]
+        assert broadcast[0].data["findings_count"] == 7
+        assert "total_findings" not in broadcast[0].data
+        notify.assert_awaited_once_with(
+            gauntlet_id="gauntlet-e2e",
+            verdict="fail",
+            confidence=0.82,
+            total_findings=7,
+            critical_count=0,
+        )
 
 
 class TestServerEventSubscriberRegistration:

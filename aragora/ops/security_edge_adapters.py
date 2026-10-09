@@ -13,6 +13,11 @@ from aragora.security.approval_enforcer import (
     register_approval_workflow_adapter,
     register_policy_evaluation_adapter,
 )
+from aragora.security.approval_mappings import (
+    approval_category_for_source,
+    convert_policy_action_type,
+    unknown_action_type_reason,
+)
 from aragora.security.migration import register_migration_audit_provider
 
 
@@ -21,18 +26,7 @@ def _to_policy_request(
     action_request_type: Any,
     action_types: Any,
 ) -> Any | None:
-    action_type_map = {
-        "shell": action_types.SHELL,
-        "file_read": action_types.FILE_READ,
-        "file_write": action_types.FILE_WRITE,
-        "file_delete": action_types.FILE_DELETE,
-        "browser": action_types.BROWSER,
-        "api": action_types.API,
-        "screenshot": action_types.SCREENSHOT,
-        "keyboard": action_types.KEYBOARD,
-        "mouse": action_types.MOUSE,
-    }
-    action_type = action_type_map.get(request.action_type)
+    action_type = convert_policy_action_type(request.action_type, action_types)
     if action_type is None:
         return None
 
@@ -63,7 +57,7 @@ class OpenClawPolicyEvaluationAdapter:
         if policy_request is None:
             return PolicyEvaluation(
                 result=EnforcementResult.ALLOWED,
-                reason=f"Unknown action type '{request.action_type}'; not policy-controlled",
+                reason=unknown_action_type_reason(request.action_type),
             )
 
         result = policy.evaluate(policy_request)
@@ -110,12 +104,7 @@ class ComputerUseApprovalWorkflowAdapter:
             ApprovalPriority,
         )
 
-        category_map = {
-            "gateway": ApprovalCategory.SYSTEM_MODIFICATION,
-            "device": ApprovalCategory.EXTERNAL_SYSTEM,
-            "computer_use": ApprovalCategory.DESTRUCTIVE_ACTION,
-        }
-        category = category_map.get(request.source, ApprovalCategory.UNKNOWN)
+        category = ApprovalCategory(approval_category_for_source(request.source))
         context = ApprovalContext(
             task_id=request.session_id or str(uuid.uuid4()),
             action_type=request.action_type,

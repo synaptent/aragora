@@ -1034,6 +1034,10 @@ class OrganizationInvitation:
     Invitations are sent to email addresses. When the user registers or
     logs in with that email, they can accept the invitation to join.
     Invitations expire after a configurable number of days.
+
+    ``expires_at`` is ``None`` only for legacy rows stored without an expiry.
+    Such invitations are treated as expired: they are never pending and
+    cannot be accepted, but they can still be revoked.
     """
 
     id: str = field(default_factory=lambda: str(uuid4()))
@@ -1044,7 +1048,7 @@ class OrganizationInvitation:
     invited_by: str | None = None  # User ID of inviter
     status: str = "pending"  # pending, accepted, expired, revoked
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    expires_at: datetime = field(
+    expires_at: datetime | None = field(
         default_factory=lambda: datetime.now(timezone.utc) + timedelta(days=7)
     )
     accepted_by: str | None = None  # User ID who accepted the invitation
@@ -1052,7 +1056,9 @@ class OrganizationInvitation:
 
     @property
     def is_expired(self) -> bool:
-        """Check if invitation has expired."""
+        """Check if invitation has expired (always True without an expiry)."""
+        if self.expires_at is None:
+            return True
         return datetime.now(timezone.utc) > self.expires_at
 
     @property
@@ -1095,7 +1101,7 @@ class OrganizationInvitation:
             "is_pending": self.is_pending,
             "is_expired": self.is_expired,
             "created_at": self.created_at.isoformat(),
-            "expires_at": self.expires_at.isoformat(),
+            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
             "accepted_at": self.accepted_at.isoformat() if self.accepted_at else None,
         }
         if include_token:
@@ -1114,6 +1120,10 @@ class OrganizationInvitation:
             invited_by=data.get("invited_by"),
             status=data.get("status", "pending"),
         )
+        # An explicit empty expiry must stay empty; replacing it with the
+        # seven-day default would revive a legacy invitation.
+        if "expires_at" in data and not data["expires_at"]:
+            inv.expires_at = None
         for field_name in ["created_at", "expires_at", "accepted_at"]:
             if field_name in data and data[field_name]:
                 value = data[field_name]

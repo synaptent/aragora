@@ -106,11 +106,7 @@ class BeliefSearchResult:
 
     belief: dict[str, Any]
     relevance_score: float = 0.0
-    matched_topics: list[str] = None
-
-    def __post_init__(self) -> None:
-        if self.matched_topics is None:
-            self.matched_topics = []
+    matched_topics: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -119,11 +115,7 @@ class CruxSearchResult:
 
     crux: dict[str, Any]
     relevance_score: float = 0.0
-    debate_ids: list[str] = None
-
-    def __post_init__(self) -> None:
-        if self.debate_ids is None:
-            self.debate_ids = []
+    debate_ids: list[str] = field(default_factory=list)
 
 
 class BeliefAdapter(FusionMixin, SemanticSearchMixin, KnowledgeMoundAdapter):
@@ -467,7 +459,7 @@ class BeliefAdapter(FusionMixin, SemanticSearchMixin, KnowledgeMoundAdapter):
 
     def store_converged_beliefs(
         self,
-        min_confidence: float = None,
+        min_confidence: float | None = None,
     ) -> list[str]:
         """
         Store all converged beliefs from the network above threshold.
