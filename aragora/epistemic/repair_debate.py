@@ -5,6 +5,8 @@ agent debate and produces a :class:`~aragora.epistemic.crux_receipt.CruxReceipt`
 
 Invariants:
 - Requires ``ARAGORA_REPAIR_PIPELINE_ENABLED`` (inherited from repair.py, default off).
+- Re-checks ``spec.repair_kind``: ``"live_swap"`` and unknown kinds raise
+  ``ValueError`` before any agent runs, including for hand-built specs.
 - No live Arena, no queue mutation, no issue creation.
 - Callers inject a :class:`RepairDebateAgent` protocol so tests run without
   API keys or network access.
@@ -25,7 +27,12 @@ from dataclasses import dataclass
 from typing import Any, Protocol, Sequence
 
 from aragora.epistemic.crux_receipt import CruxEntry, CruxReceipt
-from aragora.epistemic.repair import RepairSpec, repair_pipeline_enabled
+from aragora.epistemic.repair import (
+    _ALLOWED_KINDS,
+    _BLOCKED_KINDS,
+    RepairSpec,
+    repair_pipeline_enabled,
+)
 
 
 class RepairDebateAgent(Protocol):
@@ -89,7 +96,8 @@ def run_repair_debate(
     """Run a bounded debate over *spec* using *agents* and return a receipted result.
 
     Requires ``ARAGORA_REPAIR_PIPELINE_ENABLED=1``.  Raises :exc:`RuntimeError`
-    otherwise.  Raises :exc:`ValueError` when *agents* is empty.
+    otherwise.  Raises :exc:`ValueError` when ``spec.repair_kind`` is
+    ``"live_swap"`` or not a known kind, and when *agents* is empty.
 
     No live routing, no queue mutation, no issue creation.  The returned
     :class:`RepairDebateResult` is the sole side-effect; callers decide what
@@ -99,6 +107,18 @@ def run_repair_debate(
         raise RuntimeError(
             "run_repair_debate requires ARAGORA_REPAIR_PIPELINE_ENABLED=1; "
             "set the flag or keep repair_kind='report_only'"
+        )
+    # propose_repair enforces these kinds only for specs it builds; RepairSpec is
+    # a public dataclass, so a hand-built spec can carry any value here.
+    kind = spec.repair_kind
+    if isinstance(kind, str) and kind in _BLOCKED_KINDS:
+        raise ValueError(
+            f"repair_kind {kind!r} is permanently blocked; "
+            "run_repair_debate refuses live hot-swap specs"
+        )
+    if not isinstance(kind, str) or kind not in _ALLOWED_KINDS:
+        raise ValueError(
+            f"repair_kind {kind!r} is not a known kind; expected one of {sorted(_ALLOWED_KINDS)}"
         )
     if not agents:
         raise ValueError("run_repair_debate requires at least one agent")

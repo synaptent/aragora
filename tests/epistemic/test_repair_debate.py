@@ -8,6 +8,7 @@ All tests run without network access or real LLM keys.
 from __future__ import annotations
 
 import copy
+import dataclasses
 import hashlib
 import json
 
@@ -470,6 +471,32 @@ class TestNoHotswap:
     def test_spec_repair_kind_not_live_swap(self, monkeypatch: pytest.MonkeyPatch) -> None:
         spec = _spec(monkeypatch)
         assert spec.repair_kind != "live_swap"
+
+    def test_hand_built_live_swap_spec_is_refused(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # RepairSpec is a public dataclass, so a caller can bypass propose_repair.
+        spec = dataclasses.replace(_spec(monkeypatch), **{"repair_kind": "live_swap"})
+        recorder = _RecordingAgent()
+        with pytest.raises(ValueError, match="permanently blocked"):
+            run_repair_debate(spec, [_SupportAgent(), recorder])
+        assert recorder.seen_spec is None
+
+    @pytest.mark.parametrize("kind", ["hot_patch", "", "LIVE_SWAP", "Report_Only", None, 3])
+    def test_hand_built_unknown_kind_spec_is_refused(
+        self, monkeypatch: pytest.MonkeyPatch, kind: object
+    ) -> None:
+        spec = dataclasses.replace(_spec(monkeypatch), **{"repair_kind": kind})
+        recorder = _RecordingAgent()
+        with pytest.raises(ValueError, match="not a known kind"):
+            run_repair_debate(spec, [recorder, _SupportAgent()])
+        assert recorder.seen_spec is None
+
+    @pytest.mark.parametrize("kind", ["report_only", "shadow_candidate", "pr_candidate"])
+    def test_hand_built_allowed_kind_spec_is_accepted(
+        self, monkeypatch: pytest.MonkeyPatch, kind: str
+    ) -> None:
+        spec = dataclasses.replace(_spec(monkeypatch), **{"repair_kind": kind})
+        result = run_repair_debate(spec, [_SupportAgent()])
+        assert result.receipt.metadata["repair_kind"] == kind
 
 
 # ---------------------------------------------------------------------------
