@@ -32,6 +32,8 @@ WRITTEN_TABLES = (
     "workspace_decisions",
     "decision_sources",
     "decision_passages",
+    "decision_runs",
+    "decision_revisions",
 )
 
 
