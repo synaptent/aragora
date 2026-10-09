@@ -175,6 +175,11 @@ class DecisionResultStore:
         # Ids claimed for routing in this process (see claim()); eviction skips them.
         self._routing_ids: set[str] = set()
         self._routing_lock = threading.Lock()
+        # Held by claim() from its first statement until the id is pinned, and by an
+        # eviction from its pin snapshot through its DELETE, so an eviction never
+        # deletes a row pinned after its snapshot. Taken before _routing_lock, never
+        # while a write transaction is open or during _run_maintenance().
+        self._claim_evict_lock = threading.Lock()
 
         # ContextVar for per-async-context connection (async-safe replacement for threading.local)
         self._conn_var: contextvars.ContextVar[sqlite3.Connection | None] = contextvars.ContextVar(
@@ -470,30 +475,31 @@ class DecisionResultStore:
             DecisionOwnershipConflict: ``request_id`` belongs to another org or
                 to no org. Nothing is written.
         """
-        now = time.time()
-        self._execute_counted(self._DELETE_EXPIRED_ID_SQL, (request_id, now))
-        params = (
-            request_id,
-            data.get("status", "unknown"),
-            json.dumps(data.get("result", {})),
-            data.get("created_at", now),
-            data.get("completed_at"),
-            data.get("error"),
-            now + self._ttl_seconds,
-            org_id,
-            created_by,
-        )
-        self._execute_counted(self._CLAIM_SQL, params)
-        row = self._fetch_one(
-            "SELECT org_id, status FROM decision_results WHERE request_id = ?", (request_id,)
-        )
-        self._forget_cached(request_id)
-        if row is None or row[0] != org_id:
-            raise DecisionOwnershipConflict(
-                f"Decision result {request_id} belongs to another owner"
+        with self._claim_evict_lock:
+            now = time.time()
+            self._execute_counted(self._DELETE_EXPIRED_ID_SQL, (request_id, now))
+            params = (
+                request_id,
+                data.get("status", "unknown"),
+                json.dumps(data.get("result", {})),
+                data.get("created_at", now),
+                data.get("completed_at"),
+                data.get("error"),
+                now + self._ttl_seconds,
+                org_id,
+                created_by,
             )
-        with self._routing_lock:
-            self._routing_ids.add(request_id)
+            self._execute_counted(self._CLAIM_SQL, params)
+            row = self._fetch_one(
+                "SELECT org_id, status FROM decision_results WHERE request_id = ?", (request_id,)
+            )
+            self._forget_cached(request_id)
+            if row is None or row[0] != org_id:
+                raise DecisionOwnershipConflict(
+                    f"Decision result {request_id} belongs to another owner"
+                )
+            with self._routing_lock:
+                self._routing_ids.add(request_id)
         self._run_maintenance()
         return str(row[1])
 
@@ -874,9 +880,10 @@ class DecisionResultStore:
 
                 if count > self._max_entries:
                     excess = count - self._max_entries
-                    select, delete, params = self._eviction_statements(excess)
-                    evicted = self._backend.fetch_all(select, params)
-                    self._backend.execute_write(delete, params)
+                    with self._claim_evict_lock:
+                        select, delete, params = self._eviction_statements(excess)
+                        evicted = self._backend.fetch_all(select, params)
+                        self._backend.execute_write(delete, params)
                     self._forget_cached(*(row[0] for row in evicted))
                     logger.info(
                         "LRU evicted up to %s decision results (max: %s)",
@@ -893,10 +900,11 @@ class DecisionResultStore:
             count = cursor.fetchone()[0]
 
             if count > self._max_entries:
-                select, delete, params = self._eviction_statements(count - self._max_entries)
-                evicted = conn.execute(select, params).fetchall()
-                cursor = conn.execute(delete, params)
-                conn.commit()
+                with self._claim_evict_lock:
+                    select, delete, params = self._eviction_statements(count - self._max_entries)
+                    evicted = conn.execute(select, params).fetchall()
+                    cursor = conn.execute(delete, params)
+                    conn.commit()
                 self._forget_cached(*(row[0] for row in evicted))
                 logger.info(
                     "LRU evicted %s decision results (max: %s)", cursor.rowcount, self._max_entries

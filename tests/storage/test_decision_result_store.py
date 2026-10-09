@@ -12,6 +12,7 @@ Tests cover:
 import logging
 import pytest
 import sqlite3
+import threading
 import time
 from contextlib import closing, contextmanager
 from pathlib import Path
@@ -977,6 +978,166 @@ class TestRoutingPin:
         assert [row[0] for row in _durable_rows(db_path)] == ["theirs", "newer"]
 
 
+class _SignalOnContention:
+    """Wraps a lock and sets ``waiting`` when the ``waiter`` thread finds it held."""
+
+    def __init__(self, inner: Any, waiting: threading.Event) -> None:
+        self._inner = inner
+        self._waiting = waiting
+        self.waiter: threading.Thread | None = None
+
+    def __enter__(self) -> "_SignalOnContention":
+        if not self._inner.acquire(blocking=False):
+            if threading.current_thread() is self.waiter:
+                self._waiting.set()
+            self._inner.acquire()
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        self._inner.release()
+
+
+def _reclaim_during_eviction(store: DecisionResultStore, evict, reclaim) -> dict[str, Any]:
+    """Run ``evict`` and ``reclaim`` on two threads, the re-claim inside the eviction.
+
+    The first eviction on the ``evict`` thread pauses once it has built its
+    statements (its pin snapshot). Then ``reclaim`` starts, and the eviction
+    resumes when the re-claim has returned or is waiting for the store's
+    claim/eviction lock. Returns each callable's result; re-raises a thread's error.
+    """
+    prepared, resume, reclaim_progress = threading.Event(), threading.Event(), threading.Event()
+    results: dict[str, Any] = {}
+    errors: list[BaseException] = []
+    build = store._eviction_statements
+
+    def build_then_pause(excess: int) -> tuple[str, str, tuple]:
+        statements = build(excess)
+        if threading.current_thread() is evictor and not prepared.is_set():
+            prepared.set()
+            resume.wait(10)
+        return statements
+
+    def run(name: str, fn, done: threading.Event | None = None) -> None:
+        try:
+            results[name] = fn()
+        except BaseException as e:  # noqa: BLE001 - re-raised on the test thread
+            errors.append(e)
+        finally:
+            if done is not None:
+                done.set()
+
+    evictor = threading.Thread(target=run, args=("evict", evict), daemon=True)
+    reclaimer = threading.Thread(
+        target=run, args=("reclaim", reclaim, reclaim_progress), daemon=True
+    )
+    # getattr: a store without the lock (the pre-fix code) gets an unused stand-in.
+    lock = _SignalOnContention(
+        getattr(store, "_claim_evict_lock", threading.Lock()), reclaim_progress
+    )
+    lock.waiter = reclaimer
+    store._claim_evict_lock = lock  # type: ignore[assignment]
+    store._eviction_statements = build_then_pause  # type: ignore[method-assign]
+    try:
+        evictor.start()
+        assert prepared.wait(10), "the eviction never built its statements"
+        reclaimer.start()
+        assert reclaim_progress.wait(10), "the re-claim neither returned nor waited"
+    finally:
+        resume.set()
+        for thread in (evictor, reclaimer):
+            if thread.ident is not None:
+                thread.join(10)
+    assert not evictor.is_alive() and not reclaimer.is_alive()
+    if errors:
+        raise errors[0]
+    return results
+
+
+class TestClaimDuringEviction:
+    """A claim that pins a result while another thread's eviction runs never loses that result."""
+
+    @pytest.fixture
+    def db_path(self, tmp_path):
+        return tmp_path / "claim_during_eviction.db"
+
+    @pytest.mark.timeout(60)
+    @pytest.mark.parametrize("path", ["backend", "legacy"])
+    def test_a_result_reclaimed_after_the_pin_snapshot_survives_and_its_late_save_lands(
+        self, db_path, clock, path
+    ):
+        store = TestRoutingPin._store(db_path, path)
+        store.save("X", {"status": "completed", "result": {"answer": "v1"}}, org_id="org-a")
+        clock.now = 1001.0
+        store.save("Y", {"status": "completed"}, org_id="org-a")
+        clock.now = 1002.0
+
+        results = _reclaim_during_eviction(
+            store,
+            evict=lambda: store.claim("Z", {"status": "pending"}, org_id="org-a"),
+            reclaim=lambda: store.claim("X", {"status": "pending"}, org_id="org-a"),
+        )
+
+        assert results["evict"] == "pending"
+        reclaimed = results["reclaim"]
+        assert reclaimed in ("completed", "pending")
+        assert ("X", reclaimed) in _statuses(db_path)
+        assert store._routing_ids == {"X", "Z"}
+        assert store.save_if_status(
+            "X",
+            {"status": "completed", "result": {"answer": "v2"}},
+            org_id="org-a",
+            expected_status=reclaimed,
+        )
+        assert store.get_for_org("X", "org-a")["result"] == {"answer": "v2"}
+        assert _statuses(db_path) == [("X", "completed"), ("Z", "pending")]
+        assert store._routing_ids == {"Z"}
+
+    @pytest.mark.timeout(120)
+    @pytest.mark.parametrize("path", ["backend", "legacy"])
+    def test_concurrent_reclaims_and_evictions_neither_deadlock_nor_lose_a_pinned_result(
+        self, db_path, path
+    ):
+        store = TestRoutingPin._store(db_path, path)
+        store.save("hot", {"status": "completed"}, org_id="org-a")
+        lost: list[tuple[int, str]] = []
+        errors: list[BaseException] = []
+
+        def reclaim_hot() -> None:
+            for i in range(200):
+                status = store.claim("hot", {"status": "pending"}, org_id="org-a")
+                if not store.save_if_status(
+                    "hot",
+                    {"status": "completed", "result": {"answer": i}},
+                    org_id="org-a",
+                    expected_status=status,
+                ):
+                    lost.append((i, status))
+
+        def churn() -> None:
+            for i in range(200):
+                _create(store, f"churn-{i}")
+
+        def run(fn) -> None:
+            try:
+                fn()
+            except BaseException as e:  # noqa: BLE001 - asserted on the test thread
+                errors.append(e)
+
+        threads = [
+            threading.Thread(target=run, args=(fn,), daemon=True) for fn in (reclaim_hot, churn)
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(90)
+
+        assert not any(thread.is_alive() for thread in threads), "claim and eviction deadlocked"
+        assert errors == []
+        assert lost == []
+        assert store._routing_ids == set()
+        assert len(_durable_rows(db_path)) <= 2
+
+
 class _RecordingPostgreSQLBackend:
     """Stands in for PostgreSQLBackend: records each statement and answers the store's reads."""
 
@@ -1159,6 +1320,45 @@ class TestPostgreSQLMaintenance:
             pg_store.claim("req-2", {"status": "pending"}, org_id="org-a")
 
         assert self._maintenance(backend) == ([], [])
+
+    @pytest.mark.timeout(60)
+    def test_an_eviction_never_deletes_a_result_pinned_after_its_snapshot(self, pg_store, clock):
+        backend = pg_store._backend
+        pinned_at_delete: list[tuple[tuple, set[str]]] = []
+        execute_write = backend.execute_write
+
+        def record_pins_at_delete(sql: str, params: tuple = ()) -> None:
+            if sql.startswith("DELETE FROM decision_results WHERE request_id IN"):
+                with pg_store._routing_lock:
+                    pinned_at_delete.append((tuple(params), set(pg_store._routing_ids)))
+            execute_write(sql, params)
+
+        backend.execute_write = record_pins_at_delete
+
+        def reclaim_finished() -> str:
+            backend.owner = ("org-a", "completed")
+            return pg_store.claim("X", {"status": "pending"}, org_id="org-a")
+
+        _reclaim_during_eviction(
+            pg_store,
+            evict=lambda: pg_store.claim("Z", {"status": "pending"}, org_id="org-a"),
+            reclaim=reclaim_finished,
+        )
+
+        assert len(pinned_at_delete) == 2
+        for params, pinned in pinned_at_delete:
+            assert pinned <= set(params[4:-1])
+        evict_z_only = next(
+            i
+            for i, (sql, params) in enumerate(backend.statements)
+            if sql.startswith(_EVICT_PREFIX) and params[4:-1] == ("Z",)
+        )
+        claim_x = next(
+            i
+            for i, (sql, params) in enumerate(backend.statements)
+            if sql.startswith("INSERT INTO decision_results") and params[0] == "X"
+        )
+        assert evict_z_only < claim_x
 
 
 class TestGlobalStore:
