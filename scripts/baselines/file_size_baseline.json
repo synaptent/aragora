@@ -16,7 +16,7 @@
     "aragora/debate/team_selector.py": 2322,
     "aragora/gauntlet/receipt_models.py": 2344,
     "aragora/nomic/autonomous_orchestrator.py": 2944,
-    "aragora/nomic/dev_coordination/core.py": 4796,
+    "aragora/nomic/dev_coordination/core.py": 4387,
     "aragora/nomic/dev_receipts.py": 3262,
     "aragora/nomic/hardened_orchestrator.py": 2847,
     "aragora/nomic/meta_planner.py": 2563,
