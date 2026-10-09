@@ -723,6 +723,24 @@ class TestClaimLifecycleMaintenance:
 
         assert _statuses(db_path) == [("next", "completed")]
 
+    def test_an_evicted_result_is_not_served_from_the_read_cache(self, db_path, clock):
+        store = DecisionResultStore(
+            db_path=db_path, ttl_seconds=10_000, max_entries=2, cleanup_interval=5
+        )
+        store.save("saved", {"status": "completed"}, org_id="org-a")
+        _create(store, "created")
+        assert store.get("saved")["status"] == "completed"
+        assert store.get("created")["status"] == "completed"
+
+        for i in range(2):
+            clock.now = 1001.0 + i
+            _create(store, f"newer-{i}")
+
+        assert [row[0] for row in _durable_rows(db_path)] == ["newer-0", "newer-1"]
+        assert store.get("saved") is None
+        assert store.get_for_org("created", "org-a") is None
+        assert store.get("newer-1")["status"] == "completed"
+
     def test_cancel_during_routing_stays_cancelled_under_maintenance(self, db_path, clock):
         store = DecisionResultStore(
             db_path=db_path, ttl_seconds=10_000, max_entries=3, cleanup_interval=5
@@ -888,6 +906,7 @@ class _RecordingPostgreSQLBackend:
         self.rowcount = 1
         self.live_rows = 0
         self.expired_rows = 0
+        self.oldest_finished: list[tuple] = []
 
     @staticmethod
     def convert_placeholder(sql: str) -> str:
@@ -928,13 +947,15 @@ class _RecordingPostgreSQLBackend:
         return None
 
     def fetch_all(self, sql: str, params: tuple = ()) -> list[Any]:
-        return []
+        sql = self._record(sql, params)
+        return list(self.oldest_finished) if sql.startswith("SELECT request_id") else []
 
     def close(self) -> None:
         pass
 
 
 _PURGE_SQL = "DELETE FROM decision_results WHERE expires_at <= ?"
+_EVICT_PREFIX = "DELETE FROM decision_results WHERE request_id IN ( "
 
 
 class TestPostgreSQLMaintenance:
@@ -959,7 +980,11 @@ class TestPostgreSQLMaintenance:
     @staticmethod
     def _maintenance(backend) -> tuple[list[tuple], list[tuple]]:
         purges = [(s, p) for s, p in backend.statements if s == _PURGE_SQL]
-        evictions = [(s, p) for s, p in backend.statements if "ORDER BY created_at ASC" in s]
+        evictions = [
+            (s, p)
+            for s, p in backend.statements
+            if "ORDER BY created_at ASC" in s and s.startswith("DELETE")
+        ]
         return purges, evictions
 
     def _assert_maintained(self, backend) -> None:
@@ -970,6 +995,8 @@ class TestPostgreSQLMaintenance:
         assert sql.startswith("DELETE FROM decision_results WHERE request_id IN (")
         assert "status NOT IN (?, ?, ?)" in sql
         assert params[1:] == ("pending", "running", "processing", 1)
+        selected = [(s, p) for s, p in backend.statements if s.startswith("SELECT request_id")]
+        assert selected == [(sql.removeprefix(_EVICT_PREFIX).removesuffix(" )"), params)]
 
     def test_claim_and_conditional_save_issue_the_maintenance_sql(self, pg_store, clock):
         backend = pg_store._backend
@@ -984,6 +1011,21 @@ class TestPostgreSQLMaintenance:
             "req-1", {"status": "completed"}, org_id="org-a", expected_status="pending"
         )
         self._assert_maintained(backend)
+
+    def test_evicted_results_leave_the_read_cache(self, pg_store, clock):
+        pg_store._cache["old-1"] = DecisionResultEntry(
+            request_id="old-1", status="completed", result={}, org_id="org-a"
+        )
+        pg_store._cache["kept"] = DecisionResultEntry(
+            request_id="kept", status="completed", result={}, org_id="org-a"
+        )
+        assert pg_store.get("old-1")["status"] == "completed"
+        pg_store._backend.oldest_finished = [("old-1",)]
+
+        assert pg_store.claim("req-1", {"status": "pending"}, org_id="org-a") == "pending"
+
+        assert pg_store.get("old-1") is None
+        assert pg_store.get("kept")["status"] == "completed"
 
     def test_claim_first_deletes_only_an_expired_row_for_its_id(self, pg_store, clock):
         backend = pg_store._backend

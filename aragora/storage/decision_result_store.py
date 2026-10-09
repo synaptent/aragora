@@ -537,10 +537,11 @@ class DecisionResultStore:
         row = self._get_connection().execute(sql, params).fetchone()
         return None if row is None else tuple(row)
 
-    def _forget_cached(self, request_id: str) -> None:
-        """Drop the cached entry so the next read sees the database row."""
+    def _forget_cached(self, *request_ids: str) -> None:
+        """Drop the cached entries so the next read sees the database rows."""
         with self._cache_lock:
-            self._cache.pop(request_id, None)
+            for request_id in request_ids:
+                self._cache.pop(request_id, None)
 
     def get(self, request_id: str) -> dict[str, Any] | None:
         """
@@ -813,16 +814,16 @@ class DecisionResultStore:
 
     # Every live row counts toward max_entries, but only finished ones are evicted:
     # deleting an in-flight row would make its pending conditional save find nothing.
-    _EVICT_OLDEST_FINISHED_SQL = f"""
-        DELETE FROM decision_results
-        WHERE request_id IN (
-            SELECT request_id FROM decision_results
-            WHERE expires_at > ?
-              AND status NOT IN ({", ".join("?" for _ in _IN_FLIGHT_STATUSES)})
-            ORDER BY created_at ASC
-            LIMIT ?
-        )
+    _OLDEST_FINISHED_SQL = f"""
+        SELECT request_id FROM decision_results
+        WHERE expires_at > ?
+          AND status NOT IN ({", ".join("?" for _ in _IN_FLIGHT_STATUSES)})
+        ORDER BY created_at ASC
+        LIMIT ?
     """
+    _EVICT_OLDEST_FINISHED_SQL = (
+        f"DELETE FROM decision_results WHERE request_id IN ({_OLDEST_FINISHED_SQL})"
+    )
 
     def _enforce_max_entries(self) -> None:
         """Evict the oldest finished results while live results exceed ``max_entries``.
@@ -840,10 +841,10 @@ class DecisionResultStore:
 
                 if count > self._max_entries:
                     excess = count - self._max_entries
-                    self._backend.execute_write(
-                        self._EVICT_OLDEST_FINISHED_SQL,
-                        (time.time(), *_IN_FLIGHT_STATUSES, excess),
-                    )
+                    params = (time.time(), *_IN_FLIGHT_STATUSES, excess)
+                    evicted = self._backend.fetch_all(self._OLDEST_FINISHED_SQL, params)
+                    self._backend.execute_write(self._EVICT_OLDEST_FINISHED_SQL, params)
+                    self._forget_cached(*(row[0] for row in evicted))
                     logger.info(
                         "LRU evicted up to %s decision results (max: %s)",
                         excess,
@@ -860,11 +861,11 @@ class DecisionResultStore:
 
             if count > self._max_entries:
                 excess = count - self._max_entries
-                cursor = conn.execute(
-                    self._EVICT_OLDEST_FINISHED_SQL,
-                    (time.time(), *_IN_FLIGHT_STATUSES, excess),
-                )
+                params = (time.time(), *_IN_FLIGHT_STATUSES, excess)
+                evicted = conn.execute(self._OLDEST_FINISHED_SQL, params).fetchall()
+                cursor = conn.execute(self._EVICT_OLDEST_FINISHED_SQL, params)
                 conn.commit()
+                self._forget_cached(*(row[0] for row in evicted))
                 logger.info(
                     "LRU evicted %s decision results (max: %s)", cursor.rowcount, self._max_entries
                 )
