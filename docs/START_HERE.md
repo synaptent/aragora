@@ -1,6 +1,6 @@
 # Start Here
 
-**New to Aragora? This is the only page you need.** Pick the path that matches your goal and follow the 5-line quickstart.
+**New to Aragora? Pick the path that matches your goal and follow the 5-line quickstart.** This page is a sub-index of the [documentation index](README.md), which links every top-level page and every curated docs directory.
 
 ---
 
@@ -187,6 +187,8 @@ pytest tests/ -x -q --timeout=10  # Run a quick subset
 
 **Next:** [Developer quickstart](guides/DEVELOPER_QUICKSTART.md) | [CLAUDE.md](../CLAUDE.md) (architecture overview)
 
+**Set up and open a PR:** [Local development setup](guides/LOCAL_DEVELOPMENT.md) (virtual environment, API keys, server, tests and linting) | [First contribution guide](guides/FIRST_CONTRIBUTION.md) (suggested first issues and making your first PR)
+
 ---
 
 ## Comparison of packages
@@ -223,6 +225,6 @@ pytest tests/ -x -q --timeout=10  # Run a quick subset
 |----------|-------------|
 | [API Reference](api/API_REFERENCE.md) | REST API documentation |
 | [SDK Guide](SDK_GUIDE.md) | Comprehensive Python and TypeScript SDK guide |
-| [Feature Discovery](FEATURE_DISCOVERY.md) | Full catalog of 230+ features |
+| [Feature Discovery](status/FEATURE_DISCOVERY.md) | Full catalog of 230+ features |
 | [Enterprise Features](enterprise/ENTERPRISE_FEATURES.md) | SSO, RBAC, multi-tenancy, compliance |
 | [Status](STATUS.md) | Feature implementation status |

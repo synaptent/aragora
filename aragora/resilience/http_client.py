@@ -330,8 +330,12 @@ async def make_resilient_request(
                         delay = retry_after
 
                     logger.warning(
-                        f"[{connector_name}] Transient error (attempt {attempt + 1}/{config.max_retries}): {e}. "
-                        f"Retrying in {delay:.1f}s"
+                        "[%s] Transient error (attempt %s/%s): %s. Retrying in %.1fs",
+                        connector_name,
+                        attempt + 1,
+                        config.max_retries,
+                        e,
+                        delay,
                     )
 
                     if on_transient_error is not None:

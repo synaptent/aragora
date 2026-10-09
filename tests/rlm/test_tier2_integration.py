@@ -469,13 +469,13 @@ class TestLogToAudit:
         mock_audit_category.SYSTEM = "system"
 
         # Patch the import inside log_to_audit to match the new API:
-        # from aragora.audit.log import AuditCategory, AuditEvent, get_audit_log
+        # from aragora.observability.audit_log import AuditCategory, AuditEvent, get_audit_log
         mock_module = MagicMock(
             AuditCategory=mock_audit_category,
             AuditEvent=mock_audit_event,
             get_audit_log=MagicMock(return_value=mock_audit_instance),
         )
-        with patch.dict("sys.modules", {"aragora.audit.log": mock_module}):
+        with patch.dict("sys.modules", {"aragora.observability.audit_log": mock_module}):
             rlm.log_to_audit(result, query="test query", debate_id="d-1")
             mock_audit_instance.log.assert_called_once()
             call_args = mock_audit_instance.log.call_args

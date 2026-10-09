@@ -12,6 +12,7 @@ Tests cover:
 
 import pytest
 from datetime import datetime, timezone
+from unittest.mock import AsyncMock
 
 from aragora.control_plane.channels import (
     NotificationChannel,
@@ -238,6 +239,21 @@ class TestNotificationManager:
         """Test creating notification manager."""
         manager = NotificationManager()
         assert manager is not None
+
+    @pytest.mark.asyncio
+    async def test_remove_channel_async_skips_configs_without_id(self):
+        """Only configs with a persistence id are deleted from Redis."""
+        redis = AsyncMock()
+        manager = NotificationManager(redis_client=redis)
+        kept_id = ChannelConfig(channel_type=NotificationChannel.SLACK, slack_webhook_url="u1")
+        cleared_id = ChannelConfig(channel_type=NotificationChannel.SLACK, slack_webhook_url="u2")
+        cleared_id.config_id = None
+        manager._channels.extend([kept_id, cleared_id])
+
+        assert await manager.remove_channel_async(NotificationChannel.SLACK) is True
+
+        redis.hdel.assert_awaited_once_with(manager.REDIS_CHANNEL_KEY, kept_id.config_id)
+        assert manager.get_channels() == []
 
     def test_add_channel(self):
         """Test adding a channel."""

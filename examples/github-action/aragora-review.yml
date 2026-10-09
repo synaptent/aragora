@@ -8,7 +8,7 @@
 #      - OPENAI_API_KEY
 #   2. Ensure GITHUB_TOKEN has permission to comment on PRs (default for most repos)
 #
-# For full setup instructions, see: docs/GITHUB_ACTION_SETUP.md
+# For full setup instructions, see: docs/guides/GITHUB_ACTION_SETUP.md
 #
 # NOTE: this example predates emit-receipt (#8669); see receipt.yml for the
 # receipt-emitting variant.

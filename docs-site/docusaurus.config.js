@@ -32,7 +32,7 @@ if (posthogApiKey) {
 /** @type {import('@docusaurus/types').Config} */
 const config = {
   title: 'Aragora Documentation',
-  tagline: 'Auditable execution control plane for consequential AI-assisted work',
+  tagline: 'Auditable execution control plane for AI-assisted decisions',
   favicon: 'img/favicon.ico',
 
   // Production URL

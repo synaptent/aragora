@@ -642,8 +642,7 @@ class TestListInvoices:
         result = await handle_list_invoices({})
         body = _body(result)
         assert body["limit"] == 100
-        # safe_query_int clamps offset to min_val=1 (default) even when default=0
-        assert body["offset"] == 1
+        assert body["offset"] == 0
 
     @pytest.mark.asyncio
     async def test_custom_pagination(self, patch_processor):
@@ -669,11 +668,11 @@ class TestListInvoices:
         assert call_kwargs["end_date"] is not None
 
     @pytest.mark.asyncio
-    async def test_invalid_date_ignored(self, patch_processor):
+    async def test_invalid_date_rejected(self, patch_processor):
         result = await handle_list_invoices({"start_date": "not-a-date"})
-        assert _status(result) == 200
-        call_kwargs = patch_processor.list_invoices.call_args[1]
-        assert call_kwargs["start_date"] is None
+        assert _status(result) == 400
+        assert "start_date" in _error_msg(result)
+        patch_processor.list_invoices.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_processor_error_returns_500(self):
@@ -1003,12 +1002,11 @@ class TestScheduledPayments:
         assert call_kwargs["end_date"] is not None
 
     @pytest.mark.asyncio
-    async def test_invalid_dates_ignored(self, patch_processor):
+    async def test_invalid_dates_rejected(self, patch_processor):
         result = await handle_get_scheduled_payments({"start_date": "bad", "end_date": "worse"})
-        assert _status(result) == 200
-        call_kwargs = patch_processor.get_scheduled_payments.call_args[1]
-        assert call_kwargs["start_date"] is None
-        assert call_kwargs["end_date"] is None
+        assert _status(result) == 400
+        assert "start_date" in _error_msg(result)
+        patch_processor.get_scheduled_payments.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_empty_payments(self, patch_processor):

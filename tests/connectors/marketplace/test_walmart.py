@@ -1445,14 +1445,14 @@ class TestHelperFunctions:
         assert result is None
 
     def test_parse_datetime_invalid(self):
-        """Should return None for invalid format."""
-        result = _parse_datetime("not-a-date")
-        assert result is None
+        """Should raise ValueError for invalid format."""
+        with pytest.raises(ValueError, match="Unsupported Walmart datetime format"):
+            _parse_datetime("not-a-date")
 
     def test_parse_datetime_empty_string(self):
-        """Should return None for empty string."""
-        result = _parse_datetime("")
-        assert result is None
+        """Should raise ValueError for empty string (only None means absent)."""
+        with pytest.raises(ValueError, match="Unsupported Walmart datetime format"):
+            _parse_datetime("")
 
 
 # =============================================================================

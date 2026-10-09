@@ -25,10 +25,10 @@ thresholds:
 
 summary:
   core: 21
-  integrated: 93
-  experimental: 28
+  integrated: 95
+  experimental: 25
   deprecated: 3
-  total: 145
+  total: 144
 
 modules:
   # --- core (21) ---
@@ -148,7 +148,7 @@ modules:
     test_file_count: 169
     override_reason: "persistence layer"
 
-  # --- integrated (93) ---
+  # --- integrated (95) ---
   - name: analysis
     tier: integrated
     py_files: 29
@@ -415,6 +415,11 @@ modules:
     py_files: 3
     importer_count: 16
     test_file_count: 6
+  - name: moderation
+    tier: integrated
+    py_files: 9
+    importer_count: 14
+    test_file_count: 4
   - name: modes
     tier: integrated
     py_files: 20
@@ -535,6 +540,11 @@ modules:
     py_files: 44
     importer_count: 46
     test_file_count: 58
+  - name: shared
+    tier: integrated
+    py_files: 6
+    importer_count: 4
+    test_file_count: 5
   - name: skills
     tier: integrated
     py_files: 21
@@ -616,7 +626,7 @@ modules:
     importer_count: 16
     test_file_count: 11
 
-  # --- experimental (28) ---
+  # --- experimental (25) ---
   - name: advocates
     tier: experimental
     py_files: 2
@@ -657,11 +667,6 @@ modules:
     py_files: 2
     importer_count: 2
     test_file_count: 3
-  - name: moderation
-    tier: experimental
-    py_files: 2
-    importer_count: 6
-    test_file_count: 3
   - name: monitoring
     tier: experimental
     py_files: 2
@@ -697,21 +702,11 @@ modules:
     py_files: 2
     importer_count: 2
     test_file_count: 2
-  - name: shared
-    tier: experimental
-    py_files: 5
-    importer_count: 2
-    test_file_count: 4
   - name: sync
     tier: experimental
     py_files: 4
     importer_count: 0
     test_file_count: 2
-  - name: tasks
-    tier: experimental
-    py_files: 2
-    importer_count: 1
-    test_file_count: 4
   - name: telemetry
     tier: experimental
     py_files: 3

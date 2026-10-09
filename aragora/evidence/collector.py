@@ -802,7 +802,7 @@ class EvidenceCollector:
     async def collect_evidence(
         self,
         task: str,
-        enabled_connectors: list[str] = None,
+        enabled_connectors: list[str] | None = None,
         fetch_urls: bool | None = None,
         document_files: list[str | Path] | None = None,
     ) -> EvidencePack:
@@ -1362,7 +1362,7 @@ class EvidenceCollector:
     async def collect_for_claims(
         self,
         claims: list[str],
-        enabled_connectors: list[str] = None,
+        enabled_connectors: list[str] | None = None,
         max_per_claim: int = 2,
     ) -> EvidencePack:
         """Collect evidence specifically for a list of claims.
