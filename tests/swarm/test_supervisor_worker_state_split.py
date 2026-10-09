@@ -8,6 +8,7 @@ helpers live in ``aragora.swarm.supervisor_worker_state``.
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -16,44 +17,26 @@ from aragora.swarm import supervisor as supervisor_module
 from aragora.swarm import supervisor_worker_state, supervisor_workers
 from aragora.swarm.supervisor import SwarmSupervisor
 
-MOVED_HELPERS = (
-    "_persist_terminal_blocker_evidence",
-    "_dispatch_failure_reason",
-    "_worker_type_circuit_breaker_policy",
-    "_worker_type_circuit_breakers",
-    "_worker_type_circuit_breaker_metadata",
-    "_default_worker_type_circuit_breaker",
-    "_normalized_timestamp",
-    "_worker_type_circuit_breaker_is_open",
-    "_worker_type_circuit_breaker_detail",
-    "_record_worker_type_failure",
-    "_record_worker_type_success",
-    "_reset_worker_type_circuit_breaker_entry",
-    "_expire_worker_type_circuit_breakers",
-    "_mark_worker_type_blocked",
-    "_mark_dispatch_failed",
-    "_clear_stale_prelaunch_deliverable_state",
-    "_clear_stale_runtime_deliverable_state",
-    "_release_orphaned_conflict_leases",
-    "_orphaned_conflict_reason",
-    "_is_managed_worktree",
-    "_session_lock_state",
-    "_parse_session_lock_pids",
-    "_is_resource_constraint_error",
-    "_alternate_agent",
-    "_kill_worker",
-)
+MOVED_HELPERS = """
+    _persist_terminal_blocker_evidence _dispatch_failure_reason
+    _worker_type_circuit_breaker_policy _worker_type_circuit_breakers
+    _worker_type_circuit_breaker_metadata _default_worker_type_circuit_breaker
+    _normalized_timestamp _worker_type_circuit_breaker_is_open
+    _worker_type_circuit_breaker_detail _record_worker_type_failure
+    _record_worker_type_success _reset_worker_type_circuit_breaker_entry
+    _expire_worker_type_circuit_breakers _mark_worker_type_blocked _mark_dispatch_failed
+    _clear_stale_prelaunch_deliverable_state _clear_stale_runtime_deliverable_state
+    _release_orphaned_conflict_leases _orphaned_conflict_reason _is_managed_worktree
+    _session_lock_state _parse_session_lock_pids _is_resource_constraint_error
+    _alternate_agent _kill_worker
+""".split()
 
 
 @pytest.mark.parametrize("name", MOVED_HELPERS)
-def test_helper_is_defined_in_worker_state_module(name: str) -> None:
+def test_helper_is_defined_in_worker_state_and_reexported(name: str) -> None:
     helper = getattr(supervisor_worker_state, name)
     assert helper.__module__ == "aragora.swarm.supervisor_worker_state"
-
-
-@pytest.mark.parametrize("name", MOVED_HELPERS)
-def test_supervisor_workers_reexports_the_same_helper(name: str) -> None:
-    assert getattr(supervisor_workers, name) is getattr(supervisor_worker_state, name)
+    assert getattr(supervisor_workers, name) is helper
 
 
 def test_supervisor_workers_is_below_the_file_size_cap() -> None:
@@ -75,6 +58,7 @@ def test_worker_state_module_shares_supervisor_logger_and_constants() -> None:
 
 
 def test_breaker_opens_at_threshold_and_resets_through_supervisor(tmp_path: Path) -> None:
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=tmp_path, check=True)
     supervisor = SwarmSupervisor(repo_root=tmp_path)
     metadata = {
         supervisor_module.WORKER_TYPE_CIRCUIT_BREAKER_POLICY_KEY: {
