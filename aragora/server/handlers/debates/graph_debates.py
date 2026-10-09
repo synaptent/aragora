@@ -167,7 +167,10 @@ class GraphDebatesHandler(SecureHandler):
     def handle(
         self, path: str, query_params: dict[str, Any], handler: Any
     ) -> MaybeAsyncHandlerResult:
-        """Route GET requests through the async handler."""
+        """Route GET and HEAD requests through the async handler."""
+        # The registry falls through to handle() for DELETE/PUT/PATCH too.
+        if str(getattr(handler, "command", "GET") or "GET").upper() not in ("GET", "HEAD"):
+            return None
         return self.handle_get(handler, path, query_params)
 
     @api_endpoint(
