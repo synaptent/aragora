@@ -182,6 +182,18 @@ class TestGraphDebates:
             refused = await graph(USER_B, "GET", path)
             assert (refused.status_code, body_of(refused)) == (404, GRAPH_NOT_FOUND), path
 
+    async def test_only_get_and_head_reach_the_read_routes(self, graph):
+        storage = GraphStorage()
+        path = f"/api/v1/graph-debates/{GA}"
+        head = await graph(USER_A, "HEAD", path, storage=storage)
+        assert (head.status_code, body_of(head)["debate_id"]) == (200, GA), text_of(head)
+        records = deepcopy(storage.records)
+
+        for method in ("DELETE", "PUT", "PATCH"):
+            assert await graph(USER_A, method, path, {"task": "x"}, storage) is None, method
+        assert storage.records == records
+        assert storage.saved == []
+
     async def test_other_org_unknown_owner_and_missing_debates_get_one_404(self, graph):
         graph_debates._remember_graph_debate(graph_record(GA, ORG_A, USER_A.user_id))
         graph_debates._remember_graph_debate(graph_record(GN, None, None))
@@ -284,6 +296,44 @@ class TestThroughTheServer:
             assert status == 200, (path, payload)
         status, payload = dispatch(server, "GET", "/api/v1/debates/graph", token_a)
         assert [d["debate_id"] for d in payload["debates"]] == [GA]
+
+    def test_writes_on_a_graph_debate_change_nothing_and_show_nothing(self, server, orchestrators):
+        from tests.server.rbac_dispatch import dispatch, jwt
+
+        token_a = jwt(USER_A.user_id, ORG_A, "owner")
+        status, created = dispatch(
+            server, "POST", "/api/v1/graph-debates", token_a, body=_graph_body()
+        )
+        assert status == 200, created
+        debate_id = created["debate_id"]
+        stored = deepcopy(graph_debates._graph_debate_cache[debate_id])
+
+        for token in (token_a, jwt(USER_B.user_id, ORG_B, "owner"), None):
+            for method in ("DELETE", "PUT", "PATCH"):
+                for suffix in ("", "/branches", "/nodes"):
+                    path = f"/api/v1/graph-debates/{debate_id}{suffix}"
+                    result = dispatch(server, method, path, token, body={"task": "overwritten"})
+                    assert result == (500, _no_result(method, path)), (method, path)
+
+        assert graph_debates._graph_debate_cache[debate_id] == stored
+        path = f"/api/v1/graph-debates/{debate_id}"
+        status, payload = dispatch(server, "GET", path, token_a)
+        assert (status, payload["debate_id"], payload["task"]) == (200, debate_id, TASK)
+        other = jwt(USER_B.user_id, ORG_B, "owner")
+        assert dispatch(server, "GET", path, other) == (404, GRAPH_NOT_FOUND)
+        assert dispatch(server, "GET", path)[0] == 401
+
+
+def _no_result(method: str, path: str) -> dict[str, Any]:
+    """The server's answer when no handler serves ``method`` on a graph path."""
+    return {
+        "error": "Handler matched but returned no result",
+        "code": "handler_no_result",
+        "handler": "GraphDebatesHandler",
+        "result_type": "NoneType",
+        "method": method,
+        "path": path,
+    }
 
 
 def _server_requests() -> list[tuple[str, str, dict[str, Any] | None]]:
