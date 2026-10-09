@@ -47,7 +47,9 @@ def _require_enabled() -> None:
         raise RuntimeError(f"Prediction markets are disabled. Set {_ENV_FLAG}=1 to enable.")
 
 
-def _parse_datetime(value: str) -> datetime | None:
+def _parse_datetime(value: object) -> datetime | None:
+    if not isinstance(value, str):
+        return None
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:

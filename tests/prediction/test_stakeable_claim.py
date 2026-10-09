@@ -378,3 +378,16 @@ class TestMalformedExpiryQuarantine:
         assert "zombie-1" in expired
         assert claim.resolution_status == ResolutionStatus.EXPIRED
         assert any("malformed expiry" in rec.message for rec in caplog.records)
+
+    def test_non_string_expiry_is_quarantined_without_blocking_sweep(self):
+        store = InMemoryStakeableClaimStore()
+        bad = _make_claim("none-expiry")
+        bad.expiry = None  # type: ignore[assignment]
+        store.add(bad)
+        store.add(_make_claim("past-due", expiry=_past_expiry(2)))
+
+        expired = store.expire_stale()
+
+        assert sorted(expired) == ["none-expiry", "past-due"]
+        assert store.get("none-expiry").resolution_status == ResolutionStatus.EXPIRED
+        assert store.get("past-due").resolution_status == ResolutionStatus.EXPIRED

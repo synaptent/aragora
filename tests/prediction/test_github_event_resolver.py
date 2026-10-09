@@ -899,6 +899,103 @@ class TestRunAttemptFailClosed:
         assert result.resolved is False
         assert "lacks run_attempt" in result.evidence
 
+    @pytest.mark.parametrize("raw_attempt", [True, 1.0, 1.9, "1", " 1 "])
+    def test_non_int_run_attempt_is_not_first_run(self, raw_attempt):
+        r = GitHubEventResolver()
+        claim = _open_claim(question_type=QuestionType.CI_PASS, target_ref="a/b@main")
+        event = GitHubEventPayload(
+            event_type="workflow_run",
+            action="completed",
+            target_ref="a/b@main",
+            occurred_at=_NOW.isoformat(),
+            conclusion="success",
+            raw={"aggregate": True, "run_attempt": raw_attempt},
+        )
+        result = r.resolve_from_event(claim, event)
+        assert result.resolved is False
+        assert "first-run claims only resolve from run_attempt=1" in result.evidence
+
+
+def _aggregate_ci_event(conclusion: object, target_ref: str = "a/b@main") -> GitHubEventPayload:
+    return GitHubEventPayload(
+        event_type="workflow_run",
+        action="completed",
+        target_ref=target_ref,
+        occurred_at=_NOW.isoformat(),
+        conclusion=conclusion,  # type: ignore[arg-type]
+        raw={"aggregate": True, "run_attempt": 1},
+    )
+
+
+class TestCIConclusionClassification:
+    """A CI claim settles only on a definitive conclusion; anything else waits."""
+
+    @pytest.mark.parametrize("conclusion", ["success", "neutral", "skipped"])
+    def test_passing_conclusions_resolve_yes(self, conclusion):
+        r = GitHubEventResolver()
+        claim = _open_claim(question_type=QuestionType.CI_PASS, target_ref="a/b@main")
+        result = r.resolve_from_event(claim, _aggregate_ci_event(conclusion))
+        assert result.resolved is True
+        assert result.resolution_value is True
+        assert f"conclusion={conclusion!r}" in result.evidence
+
+    @pytest.mark.parametrize("conclusion", ["failure", "cancelled", "timed_out"])
+    def test_failing_conclusions_resolve_no(self, conclusion):
+        r = GitHubEventResolver()
+        claim = _open_claim(question_type=QuestionType.CI_PASS, target_ref="a/b@main")
+        result = r.resolve_from_event(claim, _aggregate_ci_event(conclusion))
+        assert result.resolved is True
+        assert result.resolution_value is False
+        assert f"conclusion={conclusion!r}" in result.evidence
+
+    @pytest.mark.parametrize(
+        "conclusion",
+        ["", "unknown", "SUCCESS", " success", "action_required", "stale", "startup_failure", None],
+    )
+    def test_missing_or_non_definitive_conclusion_waits(self, conclusion):
+        r = GitHubEventResolver()
+        claim = _open_claim(question_type=QuestionType.CI_PASS, target_ref="a/b@main")
+        result = r.resolve_from_event(claim, _aggregate_ci_event(conclusion))
+        assert result.resolved is False
+        assert result.resolution_value is False
+        assert "not a definitive" in result.evidence
+
+    def test_missing_conclusion_leaves_store_claim_open(self):
+        store = InMemoryStakeableClaimStore()
+        claim = _open_claim(
+            claim_id="ci-missing-conclusion",
+            question_type=QuestionType.CI_PASS,
+            target_ref="a/b@main",
+        )
+        store.add(claim)
+        r = GitHubEventResolver()
+        result = r.resolve_from_event(claim, _aggregate_ci_event(""))
+        if result.resolved:
+            store.resolve(claim.claim_id, result.resolution_value, result.evidence)
+        assert store.get("ci-missing-conclusion").resolution_status == ResolutionStatus.OPEN
+
+        later = r.resolve_from_event(claim, _aggregate_ci_event("success"))
+        assert later.resolved is True
+        store.resolve(claim.claim_id, later.resolution_value, later.evidence)
+        assert store.get("ci-missing-conclusion").resolution_status == ResolutionStatus.RESOLVED_YES
+
+
+class TestNonStringExpiry:
+    def test_resolver_fails_closed_on_none_expiry(self):
+        r = GitHubEventResolver()
+        claim = _open_claim(question_type=QuestionType.PR_MERGE, target_ref="a/b#50")
+        claim.expiry = None  # type: ignore[assignment]
+        event = GitHubEventPayload(
+            event_type="pull_request",
+            action="closed",
+            target_ref="a/b#50",
+            occurred_at=_EVENT_TIME,
+            merged=True,
+        )
+        result = r.resolve_from_event(claim, event)
+        assert result.resolved is False
+        assert "is invalid" in result.evidence
+
 
 class TestAdapterCompatibility:
     def test_resolve_method_exists_and_fails_closed_without_event(self):

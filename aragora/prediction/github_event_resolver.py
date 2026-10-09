@@ -55,7 +55,10 @@ class GitHubEventPayload:
         occurred_at: ISO-8601 UTC timestamp for when the event occurred.
         merged: For ``pull_request`` events: whether the PR was merged.
         conclusion: For ``check_run``/``workflow_run`` events: the final
-            conclusion (``"success"``, ``"failure"``, ``"cancelled"``, …).
+            conclusion. ``"success"``, ``"neutral"`` and ``"skipped"`` resolve
+            YES; ``"failure"``, ``"cancelled"`` and ``"timed_out"`` resolve NO;
+            any other value, including a missing one, leaves the claim
+            unresolved.
         raw: Arbitrary additional fields preserved for traceability.  ``CI_PASS``
             events resolve only when ``raw["aggregate"] is True``, which means
             the caller has already reduced all required checks for ``target_ref``
@@ -105,6 +108,15 @@ class GitHubEventResolver:
         QuestionType.ISSUE_CLOSE: frozenset({"issues"}),
         QuestionType.CI_PASS: frozenset({"check_run", "workflow_run"}),
     }
+
+    # Settlement is irreversible, so only definitive conclusions settle a CI
+    # claim. neutral/skipped pass, as for required status checks and in
+    # aragora.markets.resolver. Unlike that pull-based resolver, NO is not
+    # taken from action_required (a run awaiting approval can still run) or
+    # stale; those, startup_failure and unknown or missing values leave the
+    # claim OPEN for a later definitive event or the sweeper.
+    _CI_PASS_CONCLUSIONS: frozenset[str] = frozenset({"success", "neutral", "skipped"})
+    _CI_FAIL_CONCLUSIONS: frozenset[str] = frozenset({"failure", "cancelled", "timed_out"})
 
     @staticmethod
     def _normalize_target_ref(ref: str) -> str:
@@ -299,7 +311,9 @@ class GitHubEventResolver:
         return GitHubEventResolver._parse_datetime(raw_time)
 
     @staticmethod
-    def _parse_datetime(value: str) -> datetime | None:
+    def _parse_datetime(value: object) -> datetime | None:
+        if not isinstance(value, str):
+            return None
         try:
             parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
         except ValueError:
@@ -401,22 +415,34 @@ class GitHubEventResolver:
                     "metadata; cannot verify first run — failing closed."
                 ),
             )
-        try:
-            run_attempt = int(raw_attempt)
-        except (TypeError, ValueError):
-            run_attempt = 0
-        if run_attempt != 1:
+        # Strict int, matching the strict aggregate check: True, 1.9 and " 1 "
+        # must not pass as a first run.
+        if type(raw_attempt) is not int or raw_attempt != 1:
             return ResolutionResult(
                 claim_id=claim.claim_id,
                 resolved=False,
                 resolution_value=False,
                 evidence=(
                     f"{event.event_type} event for {claim.target_ref} is run_attempt="
-                    f"{event.raw.get('run_attempt')!r}; first-run claims only resolve from "
-                    "run_attempt=1."
+                    f"{raw_attempt!r}; first-run claims only resolve from run_attempt=1."
                 ),
             )
-        value = event.conclusion == "success"
+        conclusion = event.conclusion if isinstance(event.conclusion, str) else None
+        if conclusion in self._CI_PASS_CONCLUSIONS:
+            value = True
+        elif conclusion in self._CI_FAIL_CONCLUSIONS:
+            value = False
+        else:
+            return ResolutionResult(
+                claim_id=claim.claim_id,
+                resolved=False,
+                resolution_value=False,
+                evidence=(
+                    f"Aggregate CI {event.event_type} for {claim.target_ref} completed with "
+                    f"conclusion={event.conclusion!r}, which is not a definitive pass/fail "
+                    "verdict; waiting."
+                ),
+            )
         evidence = (
             f"Aggregate CI {event.event_type} for {claim.target_ref} completed with "
             f"conclusion={event.conclusion!r}; {'pass' if value else 'fail'}."

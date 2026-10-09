@@ -684,9 +684,9 @@ modules:
     test_file_count: 4
   - name: prediction
     tier: experimental
-    py_files: 2
+    py_files: 3
     importer_count: 0
-    test_file_count: 1
+    test_file_count: 2
   - name: prompts
     tier: experimental
     py_files: 2
