@@ -399,6 +399,10 @@ class HandlerRegistryMixin:
 
         attr_name, handler = route_match
 
+        # Initialized handlers have already loaded the RBAC package; importing it at
+        # module level would load it for every importer of this registry.
+        from aragora.rbac.decorators import PermissionDeniedError
+
         try:
             # Extract auth context and store on request handler for permission checks
             try:
@@ -568,10 +572,15 @@ class HandlerRegistryMixin:
             PermissionError,
             LookupError,
             TimeoutError,
+            PermissionDeniedError,
         ) as e:
             # Check for permission-related errors
             error_msg = str(e)
-            if "AuthorizationContext" in error_msg or "Permission" in error_msg:
+            if (
+                isinstance(e, PermissionDeniedError)
+                or "AuthorizationContext" in error_msg
+                or "Permission" in error_msg
+            ):
                 logger.warning(
                     "[handlers] Permission denied in %s: %s", handler.__class__.__name__, e
                 )

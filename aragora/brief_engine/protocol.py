@@ -799,7 +799,7 @@ def _severity_counts_from_slot_findings(
     rather than counted — the input is LLM-parsed and we never want
     ``{"high": 0, "medium": 0, "low": 0, "???": 3}`` polluting the UI.
     """
-    counts: dict[str, int] = {sev: 0 for sev in _VALID_SEVERITIES}
+    counts: dict[str, int] = dict.fromkeys(_VALID_SEVERITIES, 0)
     for resp in findings_by_slot.values():
         for finding in resp.top_findings:
             sev = (finding.severity or "").strip().lower()

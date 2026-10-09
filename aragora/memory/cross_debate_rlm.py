@@ -182,12 +182,12 @@ class CrossDebateConfig:
                 nomic_dir = get_nomic_dir()
                 self.storage_path = nomic_dir / "cross_debate_memory.json"
                 logging.getLogger(__name__).debug(
-                    f"CrossDebateConfig: Using default storage_path: {self.storage_path}"
+                    "CrossDebateConfig: Using default storage_path: %s", self.storage_path
                 )
             except (OSError, PermissionError, FileNotFoundError) as e:
                 # Expected errors: path resolution, permission, or missing directory
                 logging.getLogger(__name__).warning(
-                    f"CrossDebateConfig: Could not determine default storage path: {e}"
+                    "CrossDebateConfig: Could not determine default storage path: %s", e
                 )
                 warnings.warn(
                     "CrossDebateConfig: persist_to_disk=True but no storage_path and "
@@ -198,7 +198,7 @@ class CrossDebateConfig:
                 self.persist_to_disk = False
             except RuntimeError as e:
                 logging.getLogger(__name__).exception(
-                    f"CrossDebateConfig: Unexpected error determining storage path: {e}"
+                    "CrossDebateConfig: Unexpected error determining storage path: %s", e
                 )
                 warnings.warn(
                     "CrossDebateConfig: persist_to_disk=True but no storage_path and "

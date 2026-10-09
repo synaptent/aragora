@@ -1095,7 +1095,8 @@ class LinearConnector(EnterpriseConnector):
             evidence_id: Evidence ID (format: linear-{type}-{id})
 
         Returns:
-            Evidence object or None if not found
+            Evidence object, or None if not found. LinearError, ValueError and
+            KeyError are logged and also return None instead of raising.
         """
         try:
             parts = evidence_id.split("-")

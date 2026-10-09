@@ -304,8 +304,10 @@ class AirlockProxy:
                 self._metrics.total_latency_ms += elapsed_ms
 
                 logger.debug(
-                    f"airlock_success agent={self._agent.name} "
-                    f"op={operation} latency_ms={elapsed_ms:.0f}"
+                    "airlock_success agent=%s op=%s latency_ms=%.0f",
+                    self._agent.name,
+                    operation,
+                    elapsed_ms,
                 )
                 return result
 

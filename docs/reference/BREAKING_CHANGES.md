@@ -124,6 +124,17 @@ See [DEPRECATION_POLICY.md](./DEPRECATION_POLICY.md) for the full deprecation ti
 
 ### Python SDK
 
+#### Unreleased (2026-10-07)
+
+| Change | Before | After |
+|--------|--------|-------|
+| Unserved replay export removed | `client.replays.export(replay_id, format)` and `client.replays.export_async(replay_id, format)` (`ReplayAPI` in `aragora.client`) | Removed with no replacement; accessing either name raises `AttributeError`. `client.replays.get(replay_id)` still returns the full replay. |
+
+Both methods called `GET /api/replays/{replay_id}/export`, which no handler serves: the
+path is absent from the OpenAPI documents and `ReplaysHandler.can_handle` rejects it. The
+TypeScript SDK's `AragoraClient.exportReplay`, which called the same route, was already
+removed.
+
 #### v2.0.0
 
 | Change | Before | After |
@@ -196,4 +207,4 @@ Use the template at [templates/breaking_change_template.md](../templates/breakin
 
 ---
 
-*Last updated: 2026-01-31*
+*Last updated: 2026-10-07*

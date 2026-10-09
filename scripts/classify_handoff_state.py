@@ -90,7 +90,8 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _has_unsafe_state(payload: dict) -> bool:
-    github = payload.get("github") if isinstance(payload.get("github"), dict) else {}
+    raw_github = payload.get("github")
+    github = raw_github if isinstance(raw_github, dict) else {}
     if github.get("mode") in {"disabled", "partial"}:
         return True
     for item in payload.get("items") or []:

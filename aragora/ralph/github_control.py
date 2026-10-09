@@ -11,9 +11,13 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+from aragora.swarm.merge_halt import evaluate_merge_halt
+
 logger = logging.getLogger(__name__)
 
 _GITHUB_URL_RE = re.compile(r"https://github\.com/[^\s]+")
+_FULL_HEAD_SHA_RE = re.compile(r"[0-9a-f]{40}")
+_PR_NUMBER_RE = re.compile(r"^#?(\d+)$|/pull/(\d+)(?:[/?#].*)?$")
 
 
 class GitHubControlError(RuntimeError):
@@ -55,6 +59,9 @@ class GitHubGateSnapshot:
     required_checks_source: str | None
     disposition: str
     blocker_detail: str | None = None
+    # The head the required checks above were read for. merge_pr() merges only
+    # this head, so a PR that moves after the snapshot is refused, not merged.
+    head_sha: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -62,6 +69,7 @@ class GitHubGateSnapshot:
             "state": self.state,
             "draft": self.draft,
             "head_branch": self.head_branch,
+            "head_sha": self.head_sha,
             "base_branch": self.base_branch,
             "review_decision": self.review_decision,
             "merge_state_status": self.merge_state_status,
@@ -182,6 +190,7 @@ class GitHubControl:
         state = str(view.get("state", "")).strip().upper()
         draft = bool(view.get("isDraft", False))
         head_branch = _optional_text(view.get("headRefName"))
+        head_sha = _optional_text(view.get("headRefOid"))
         base_branch = _optional_text(view.get("baseRefName"))
         review_decision = _optional_text(view.get("reviewDecision"))
         merge_state_status = _optional_text(view.get("mergeStateStatus"))
@@ -239,6 +248,7 @@ class GitHubControl:
             required_checks_source=source,
             disposition=disposition,
             blocker_detail=blocker_detail,
+            head_sha=head_sha,
         )
 
     def merge_pr(
@@ -247,7 +257,15 @@ class GitHubControl:
         *,
         required_checks_green: bool,
         allow_admin: bool,
+        head_sha: str | None,
     ) -> GitHubMergeResult:
+        """Merge ``pr_ref`` at exactly ``head_sha``, the gate snapshot's head.
+
+        Resolving a head here would pair a stale gate result with a newer commit,
+        so a missing head blocks. Both the normal and the ``--admin`` attempt pin
+        ``--match-head-commit``; if the PR moved, GitHub rejects the merge and a
+        fresh snapshot is required.
+        """
         if not required_checks_green:
             return GitHubMergeResult(
                 merged=False,
@@ -255,8 +273,23 @@ class GitHubControl:
                 detail="Required checks are not green.",
             )
 
+        normalized_head = str(head_sha or "").strip().lower()
+        if not _FULL_HEAD_SHA_RE.fullmatch(normalized_head):
+            return GitHubMergeResult(
+                merged=False,
+                action="blocked",
+                detail="A full 40-character PR head SHA from the gate snapshot is required.",
+            )
+
+        # #9216: the main-red halt must authorize this exact head. An unparseable
+        # PR reference becomes #0, which no waiver can match.
+        halt = evaluate_merge_halt(_pr_number_from_ref(pr_ref), normalized_head)
+        if not halt.allowed:
+            return GitHubMergeResult(merged=False, action="blocked", detail=halt.reason)
+
+        pin = ["--match-head-commit", normalized_head]
         normal = self._run_gh(
-            ["pr", "merge", pr_ref, "--squash"],
+            ["pr", "merge", pr_ref, "--squash", *pin],
             raise_on_error=False,
             timeout=30,
         )
@@ -271,7 +304,7 @@ class GitHubControl:
         stderr = (normal.stderr or normal.stdout or "").strip()
         if allow_admin and _looks_like_admin_override_candidate(stderr):
             admin = self._run_gh(
-                ["pr", "merge", pr_ref, "--squash", "--admin"],
+                ["pr", "merge", pr_ref, "--squash", "--admin", *pin],
                 raise_on_error=False,
                 timeout=30,
             )
@@ -430,6 +463,7 @@ class GitHubControl:
                         "state",
                         "isDraft",
                         "headRefName",
+                        "headRefOid",
                         "baseRefName",
                         "reviewDecision",
                         "mergeStateStatus",
@@ -567,6 +601,13 @@ def _repo_slug_from_pr_ref(pr_ref: str) -> str | None:
     if len(parts) >= 4 and parts[2] == "pull":
         return f"{parts[0]}/{parts[1]}"
     return None
+
+
+def _pr_number_from_ref(pr_ref: str) -> int:
+    match = _PR_NUMBER_RE.search(str(pr_ref or "").strip())
+    if match is None:
+        return 0
+    return int(match.group(1) or match.group(2))
 
 
 def _looks_like_admin_override_candidate(detail: str) -> bool:

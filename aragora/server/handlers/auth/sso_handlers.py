@@ -25,7 +25,7 @@ import time
 from typing import Any
 
 from aragora.config import resolve_db_path
-from aragora.server.errors import safe_error_message
+from aragora.api_errors import safe_error_message
 from aragora.server.handlers.base import (
     HandlerResult,
     error_response,

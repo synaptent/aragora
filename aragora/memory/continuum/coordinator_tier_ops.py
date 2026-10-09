@@ -341,8 +341,11 @@ class CoordinatorTierOpsMixin:
             tm_current: MemoryTier = MemoryTier(current_tier.value)
             if not self._tier_manager.should_promote(tm_current, surprise_score, last_promotion):
                 logger.debug(
-                    f"[memory] Promotion denied for {id}: tier={current_tier.value}, "
-                    f"surprise={surprise_score:.3f}, last_promotion={last_promotion}"
+                    "[memory] Promotion denied for %s: tier=%s, surprise=%.3f, last_promotion=%s",
+                    id,
+                    current_tier.value,
+                    surprise_score,
+                    last_promotion,
                 )
                 return None
 
@@ -360,8 +363,11 @@ class CoordinatorTierOpsMixin:
             now: str = utc_now_iso_naive()
 
             logger.info(
-                f"[memory] Promoting {id}: {current_tier.value} -> {new_tier.value} "
-                f"(surprise={surprise_score:.3f})"
+                "[memory] Promoting %s: %s -> %s (surprise=%.3f)",
+                id,
+                current_tier.value,
+                new_tier.value,
+                surprise_score,
             )
 
             # Update tier
@@ -421,8 +427,11 @@ class CoordinatorTierOpsMixin:
             tm_current: MemoryTier = MemoryTier(current_tier.value)
             if not self._tier_manager.should_demote(tm_current, surprise_score, update_count):
                 logger.debug(
-                    f"[memory] Demotion denied for {id}: tier={current_tier.value}, "
-                    f"surprise={surprise_score:.3f}, updates={update_count}"
+                    "[memory] Demotion denied for %s: tier=%s, surprise=%.3f, updates=%s",
+                    id,
+                    current_tier.value,
+                    surprise_score,
+                    update_count,
                 )
                 return None
 
@@ -440,8 +449,12 @@ class CoordinatorTierOpsMixin:
             now: str = utc_now_iso_naive()
 
             logger.info(
-                f"[memory] Demoting {id}: {current_tier.value} -> {new_tier.value} "
-                f"(surprise={surprise_score:.3f}, updates={update_count})"
+                "[memory] Demoting %s: %s -> %s (surprise=%.3f, updates=%s)",
+                id,
+                current_tier.value,
+                new_tier.value,
+                surprise_score,
+                update_count,
             )
 
             # Update tier

@@ -945,7 +945,7 @@ class BugDetector:
 
         elapsed = (report.completed_at - start_time).total_seconds()
         logger.info(
-            f"[{scan_id}] Completed in {elapsed:.2f}s: {report.total_bugs} potential bugs found"
+            "[%s] Completed in %.2fs: %s potential bugs found", scan_id, elapsed, report.total_bugs
         )
 
         return report

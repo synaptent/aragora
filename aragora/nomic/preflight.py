@@ -190,8 +190,10 @@ class PreflightHealthCheck:
 
         result.total_duration_ms = (time.time() - start_time) * 1000
         logger.info(
-            f"preflight_complete passed={result.passed} "
-            f"agents={len(result.recommended_agents)} duration={result.total_duration_ms:.0f}ms"
+            "preflight_complete passed=%s agents=%s duration=%.0fms",
+            result.passed,
+            len(result.recommended_agents),
+            result.total_duration_ms,
         )
 
         return result

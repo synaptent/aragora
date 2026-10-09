@@ -868,8 +868,19 @@ class TeamsHandler(SecureEndpointMixin, BotHandlerMixin, SecureHandler):  # type
         """Route Teams requests with RBAC for status endpoint."""
         if path == "/api/v1/bots/teams/status":
             return await self.handle_status_request(handler)
+        if path == "/api/v1/teams" and getattr(handler, "command", "GET") == "GET":
+            return await self.handle_with_auth(
+                handler, self.bots_read_permission, self._list_teams_not_implemented
+            )
 
         return None
+
+    async def _list_teams_not_implemented(self, auth_context: Any = None) -> HandlerResult:
+        # Not error_response: in production it rewrites every 5xx message to "Internal server error".
+        return json_response(
+            {"error": {"code": "not_implemented", "message": "Listing teams is not implemented"}},
+            status=501,
+        )
 
     @handle_errors("teams creation")
     @rate_limit(requests_per_minute=60, limiter_name="teams_messages")

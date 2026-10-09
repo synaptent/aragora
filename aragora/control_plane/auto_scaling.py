@@ -273,8 +273,8 @@ class AutoScaler:
 
             except asyncio.CancelledError:
                 break
-            except (RuntimeError, ValueError, OSError) as e:
-                logger.error("Error in scaling loop iteration", exc_info=e)
+            except (RuntimeError, ValueError, OSError):
+                logger.error("Error in scaling loop iteration", exc_info=True)
 
     def _cooldown_passed(self) -> bool:
         """Check if cooldown period has passed since last scaling action."""

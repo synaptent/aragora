@@ -1432,7 +1432,7 @@ def _reset_lazy_globals_impl():
 
     # Reset unified audit logger singleton
     try:
-        import aragora.audit.unified as _unified_audit
+        import aragora.observability.unified_audit as _unified_audit
 
         _unified_audit._unified_logger = None
     except (ImportError, AttributeError):
@@ -1563,7 +1563,7 @@ def reset_lazy_globals():
     - aragora.observability.slo (3 SLO metric globals + _slo_metrics_initialized)
     - aragora.observability.otel (_initialized, _tracer_provider, _tracers)
     - aragora.events.dispatcher (_event_rate_limiter, _dispatcher)
-    - aragora.audit.unified._unified_logger (UnifiedAuditLogger singleton)
+    - aragora.observability.unified_audit._unified_logger (UnifiedAuditLogger singleton)
     - aragora.server.middleware.approval_gate (_pending_approvals, _last_cleanup_time)
     - aragora.observability.metrics.stores (_initialized flag for Prometheus re-registration)
     - aragora.gauntlet.signing._default_signer (ReceiptSigner singleton)
@@ -1780,3 +1780,22 @@ def _global_mock_pollution_guard():
 
     # Teardown: same repairs
     _repair_global_mock_pollution(sys)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_merge_halt_markers(monkeypatch):
+    """Keep tests off the real main-red halt marker (#9216).
+
+    The merge guard reads ``.aragora/merge_executor.halt`` in the primary
+    checkout, which is armed whenever main is red. Without this, every test that
+    drives a merge path would fail during a main-red incident, which is when
+    agents run them most. Tests that need an armed halt patch these themselves.
+    """
+    from pathlib import Path
+
+    import aragora.swarm.merge_halt as merge_halt
+
+    absent = Path("/nonexistent-aragora-test-merge-halt")
+    monkeypatch.setattr(merge_halt, "DEFAULT_HALT_FILE", absent / "merge_executor.halt")
+    monkeypatch.setattr(merge_halt, "DEFAULT_WAIVER_FILE", absent / "merge_executor.waiver")
+    monkeypatch.setattr(merge_halt, "SHARED_ROOT_ERROR", None)

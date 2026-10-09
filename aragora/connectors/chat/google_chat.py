@@ -406,7 +406,7 @@ class GoogleChatConnector(ChatPlatformConnector):
         self,
         title: str | None = None,
         body: str | None = None,
-        fields: list[tuple[str, str] | None] = None,
+        fields: list[tuple[str, str]] | None = None,
         actions: list[MessageButton] | None = None,
         **kwargs: Any,
     ) -> list[dict]:

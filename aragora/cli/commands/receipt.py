@@ -186,7 +186,7 @@ Examples:
     export_parser.add_argument(
         "--odr-version",
         choices=("0.1", "0.2"),
-        help="ODR profile version: flag > ARAGORA_ODR_PROFILE_VERSION > default (0.1). "
+        help="ODR profile version: flag > ARAGORA_ODR_PROFILE_VERSION > default (0.2). "
         "Applies only to --format odr; ignored for other formats.",
     )
     export_parser.add_argument(

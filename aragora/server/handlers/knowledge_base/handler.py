@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING, Any
+from functools import wraps
 
 from aragora.knowledge import (
     DatasetQueryEngine,
@@ -30,6 +31,7 @@ from aragora.knowledge import (
     InMemoryFactStore,
     SimpleQueryEngine,
 )
+from aragora.rbac import AuthorizationContext, PermissionDeniedError, get_permission_checker
 from aragora.rbac.decorators import require_permission
 
 from ..base import (
@@ -45,9 +47,82 @@ from .query import QueryOperationsMixin
 from .search import SearchOperationsMixin
 
 if TYPE_CHECKING:
-    pass
+    from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
+
+
+def _permission_denied_as_403(
+    func: Callable[..., HandlerResult | None],
+) -> Callable[..., HandlerResult | None]:
+    """Answer 401/403 when an RBAC decorator underneath rejects the request.
+
+    The handler registry does not recognize PermissionDeniedError and would
+    answer it with a 500 ``unexpected_exception``. The decorator raises without
+    a decision only when it finds no authorization context, which with auth
+    enabled means the request was not authenticated.
+    """
+
+    @wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> HandlerResult | None:
+        try:
+            return func(*args, **kwargs)
+        except PermissionDeniedError as exc:
+            if exc.decision is None:
+                logger.warning("Knowledge request without authorization context: %s", exc)
+                return error_response("Authentication required", 401)
+            logger.info("Knowledge request denied: %s", exc)
+            return error_response("Permission denied", 403)
+
+    return wrapper
+
+
+FACT_ACCESS_CLOSED_MESSAGE = "Knowledge fact access is disabled until org scoping is available"
+FACT_ACCESS_CLOSED_CODE = "knowledge_fact_access_closed"
+
+# POST /facts binds each new fact to the caller's organization. Until organization
+# scoping lands for the other fact routes, routes that return data derived from
+# stored facts or act on an existing fact are closed to every authenticated caller.
+_CLOSED_FACT_DATA_PATHS = frozenset(
+    {
+        "/api/v1/knowledge/query",
+        "/api/v1/knowledge/search",
+        "/api/v1/knowledge/stats",
+    }
+)
+
+
+def _is_fact_access_closed(path: str, method: str) -> bool:
+    """Return True when the (already alias-normalized) route touches stored facts.
+
+    Creating a fact (POST to the facts collection) stays open to RBAC v2.
+    """
+    if path in _CLOSED_FACT_DATA_PATHS:
+        return True
+    if path == "/api/v1/knowledge/facts":
+        return method != "POST"
+    return path.startswith("/api/v1/knowledge/facts/")
+
+
+def _closed_until_org_scoping(
+    func: Callable[..., HandlerResult | None],
+) -> Callable[..., HandlerResult | None]:
+    """Answer closed fact routes before any permission check: 401 anonymous, 403 otherwise."""
+
+    @wraps(func)
+    def wrapper(
+        self: KnowledgeHandler, path: str, query_params: dict, handler: Any
+    ) -> HandlerResult | None:
+        method = getattr(handler, "command", "GET")
+        if _is_fact_access_closed(self._normalize_facts_path(path), method):
+            _user, err = self.require_auth_or_error(handler)
+            if err:
+                return err
+            return error_response(FACT_ACCESS_CLOSED_MESSAGE, 403, code=FACT_ACCESS_CLOSED_CODE)
+        return func(self, path, query_params, handler)
+
+    return wrapper
+
 
 # Rate limiter for knowledge endpoints (60 requests per minute)
 _knowledge_limiter = RateLimiter(requests_per_minute=60)
@@ -169,18 +244,31 @@ class KnowledgeHandler(
         return path
 
     def _check_permission(self, handler: Any, permission: str) -> HandlerResult | None:
-        """Check RBAC permission and return error response if denied."""
+        """Check an RBAC v2 permission for the caller's role; return an error response if denied.
+
+        Uses the same checker and role -> permission mapping as the
+        ``@require_permission`` decorator on ``handle()``. The authenticated
+        user carries a single ``role`` (JWT claim or API-key user record); a
+        missing role grants nothing.
+        """
         user, err = self.require_auth_or_error(handler)
         if err:
             return err
 
-        # Check permission
-        permissions = getattr(user, "permissions", []) or []
-        roles = getattr(user, "roles", []) or []
-        if permission not in permissions and "admin" not in roles and "admin" not in permissions:
+        role = getattr(user, "role", None)
+        context = AuthorizationContext(
+            user_id=getattr(user, "user_id", None) or "",
+            user_email=getattr(user, "email", None),
+            org_id=getattr(user, "org_id", None),
+            roles={role} if isinstance(role, str) and role else set(),
+        )
+        decision = get_permission_checker().check_permission(context, permission)
+        if not decision.allowed:
             return error_response("Permission denied", 403)
         return None
 
+    @_closed_until_org_scoping
+    @_permission_denied_as_403
     @require_permission("knowledge:read")
     def handle(self, path: str, query_params: dict, handler: Any) -> HandlerResult | None:
         """Route knowledge requests to appropriate methods."""
@@ -225,11 +313,11 @@ class KnowledgeHandler(
             method = getattr(handler, "command", "GET")
             if method == "POST":
                 return self._handle_create_fact(handler)
-            return self._handle_list_facts(query_params)
+            return self._handle_list_facts(query_params, handler)
 
         # Search chunks
         if path == "/api/v1/knowledge/search":
-            return self._handle_search(query_params)
+            return self._handle_search(query_params, handler)
 
         # Statistics
         if path == "/api/v1/knowledge/stats":

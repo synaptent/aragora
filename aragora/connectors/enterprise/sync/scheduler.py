@@ -100,7 +100,7 @@ class RetryPolicy:
                 if attempt < self.max_retries:
                     delay = self.calculate_delay(attempt)
                     logger.warning(
-                        f"Retry {attempt + 1}/{self.max_retries} after {delay:.1f}s: {e}"
+                        "Retry %s/%s after %.1fs: %s", attempt + 1, self.max_retries, delay, e
                     )
                     if on_retry:
                         on_retry(attempt + 1, e)
@@ -482,9 +482,11 @@ class SyncScheduler:
                 job.consecutive_failures += 1
 
             logger.info(
-                f"Sync completed for {job.connector_id}: "
-                f"{result.items_synced}/{result.items_total} items "
-                f"({history.duration_seconds:.1f}s)"
+                "Sync completed for %s: %s/%s items (%.1fs)",
+                job.connector_id,
+                result.items_synced,
+                result.items_total,
+                history.duration_seconds,
             )
 
         except (OSError, RuntimeError, ValueError, TypeError, AttributeError) as e:
@@ -588,8 +590,10 @@ class SyncScheduler:
                 delay = error_backoff.calculate_delay(consecutive_errors - 1)
 
                 logger.error(
-                    f"Scheduler loop error (attempt {consecutive_errors}): {e}. "
-                    f"Retrying in {delay:.1f}s",
+                    "Scheduler loop error (attempt %s): %s. Retrying in %.1fs",
+                    consecutive_errors,
+                    e,
+                    delay,
                     exc_info=consecutive_errors <= 3,  # Full trace only for first few
                 )
 
