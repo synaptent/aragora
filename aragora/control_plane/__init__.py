@@ -207,6 +207,15 @@ from aragora.control_plane.region_router import (
     set_region_router,
     init_region_router,
 )
+from aragora.control_plane.event_registry import (
+    register_event_agent_registry,
+    register_task_event_dispatcher,
+)
+
+# The events layer cannot import the control plane, so the control plane hands
+# it the default task-event dispatcher and the agent-registry factory here.
+register_task_event_dispatcher()
+register_event_agent_registry()
 
 __all__ = [
     # Registry
@@ -316,6 +325,9 @@ __all__ = [
     "emit_task_timeout",
     "get_task_event_dispatcher",
     "set_task_event_dispatcher",
+    # Event hook registration
+    "register_event_agent_registry",
+    "register_task_event_dispatcher",
     # Policy
     "ControlPlanePolicy",
     "ControlPlanePolicyManager",

@@ -184,7 +184,7 @@ class TrainingEmitter:
             SFT training record or None if not suitable
         """
         result = ctx.result
-        if not result.final_answer:
+        if result is None or not result.final_answer:
             return None
 
         instruction = f"Debate task: {ctx.env.task}"
@@ -221,7 +221,7 @@ class TrainingEmitter:
         result = ctx.result
         records: list[dict[str, Any]] = []
 
-        if not result.winner or not result.messages:
+        if result is None or not result.winner or not result.messages:
             return records
 
         # Extract agent responses from messages
@@ -280,7 +280,7 @@ class TrainingEmitter:
         result = ctx.result
         records: list[dict[str, Any]] = []
 
-        if not result.votes or not result.winner:
+        if result is None or not result.votes or not result.winner:
             return records
 
         for vote in result.votes:
@@ -322,7 +322,7 @@ class TrainingEmitter:
             self.event_emitter.emit(
                 StreamEvent(
                     type=StreamEventType.TRAINING_DATA_EXPORTED,
-                    loop_id=self.loop_id,
+                    loop_id=self.loop_id or "",
                     data={
                         "debate_id": ctx.debate_id,
                         "records_exported": record_count,

@@ -413,8 +413,18 @@ def threat_env(
         enable_phishtank=False,
         enable_urlhaus=False,
         use_redis_cache=False,
+        enable_event_emission=False,
         cache_db_path=str(tmp_path / "threat-cache.db"),
     )
+    isolation_switches = {
+        "enable_virustotal": config.enable_virustotal,
+        "enable_abuseipdb": config.enable_abuseipdb,
+        "enable_phishtank": config.enable_phishtank,
+        "enable_urlhaus": config.enable_urlhaus,
+        "use_redis_cache": config.use_redis_cache,
+        "enable_event_emission": config.enable_event_emission,
+    }
+    assert isolation_switches == dict.fromkeys(isolation_switches, False)
     service = ThreatIntelligenceService(config=config)
     monkeypatch.setattr(module, "_threat_service", service)
     handler = module.ThreatIntelHandler()
@@ -431,6 +441,7 @@ def threat_env(
             "abuseipdb": config.enable_abuseipdb,
             "phishtank": config.enable_phishtank,
             "urlhaus": config.enable_urlhaus,
+            "event_emission": config.enable_event_emission,
             "has_keys": any(
                 (
                     config.virustotal_api_key,

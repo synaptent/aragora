@@ -245,18 +245,6 @@ export class PoliciesAPI {
   }
 
   /**
-   * Resolve a policy violation.
-   */
-  async resolveViolation(
-    violationId: string,
-    resolution: { notes?: string }
-  ): Promise<PolicyViolation> {
-    return this.client.request('POST', `/api/policies/violations/${violationId}/resolve`, {
-      json: resolution,
-    });
-  }
-
-  /**
    * Get compliance summary.
    */
   async getComplianceSummary(): Promise<ComplianceSummary> {

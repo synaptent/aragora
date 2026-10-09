@@ -119,7 +119,7 @@ def get_email_body(msg: email.message.Message) -> str:
             if content_type == "text/plain":
                 try:
                     payload = part.get_payload(decode=True)
-                    if payload:
+                    if isinstance(payload, bytes) and payload:
                         return payload.decode("utf-8", errors="ignore")
                 except Exception:
                     pass
@@ -128,14 +128,14 @@ def get_email_body(msg: email.message.Message) -> str:
             if part.get_content_maintype() == "text":
                 try:
                     payload = part.get_payload(decode=True)
-                    if payload:
+                    if isinstance(payload, bytes) and payload:
                         return payload.decode("utf-8", errors="ignore")
                 except Exception:
                     pass
     else:
         try:
             payload = msg.get_payload(decode=True)
-            if payload:
+            if isinstance(payload, bytes) and payload:
                 return payload.decode("utf-8", errors="ignore")
         except Exception:
             pass
@@ -226,7 +226,7 @@ def analyze_mbox(
     cutoff_date = datetime.now().astimezone() - __import__("datetime").timedelta(days=days_back)
 
     mbox = mailbox.mbox(mbox_path)
-    failures = []
+    failures: list[FailureEmail] = []
     total_scanned = 0
 
     print(f"Scanning for Aragora failure emails (last {days_back} days)...")

@@ -290,4 +290,4 @@ aragora_resilience_latency_seconds{name="openai", quantile="0.99"} 0.5
 
 - [AGENT_DEVELOPMENT.md](../debate/AGENT_DEVELOPMENT.md) - Agent implementation
 - [MONITORING_SETUP.md](../guides/MONITORING_SETUP.md) - Metrics and monitoring
-- [OPERATIONS.md](../OPERATIONS.md) - Operational procedures
+- [OPERATIONS.md](../operations/OPERATIONS.md) - Operational procedures

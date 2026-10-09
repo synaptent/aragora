@@ -170,9 +170,10 @@ class MLDelegationStrategy(DelegationStrategy):
             )
 
             logger.info(
-                f"ml_routing task_type={decision.task_type.value} "
-                f"confidence={decision.confidence:.2f} "
-                f"selected={decision.selected_agents[:3]}"
+                "ml_routing task_type=%s confidence=%.2f selected=%s",
+                decision.task_type.value,
+                decision.confidence,
+                decision.selected_agents[:3],
             )
 
             # Cache the decision
@@ -362,8 +363,10 @@ class QualityGate:
 
             if confidence >= self.min_confidence and quality < self.threshold:
                 logger.info(
-                    f"quality_gate_filtered agent={agent_id} "
-                    f"quality={quality:.2f} threshold={self.threshold}"
+                    "quality_gate_filtered agent=%s quality=%.2f threshold=%s",
+                    agent_id,
+                    quality,
+                    self.threshold,
                 )
                 continue
 
@@ -391,7 +394,7 @@ class QualityGate:
             quality, confidence = self.score_response(message.content, context)
 
             if confidence >= self.min_confidence and quality < self.threshold:
-                logger.info(f"quality_gate_filtered agent={message.agent} quality={quality:.2f}")
+                logger.info("quality_gate_filtered agent=%s quality=%.2f", message.agent, quality)
                 continue
 
             results.append((message, quality))

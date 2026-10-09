@@ -47,6 +47,7 @@ from aragora.server.handlers.base import (
 )
 from aragora.server.handlers.utils.decorators import require_permission
 from aragora.server.handlers.utils.rate_limit import rate_limit
+from aragora.server.validation.query_params import parse_date_range_params
 
 logger = logging.getLogger(__name__)
 
@@ -113,8 +114,7 @@ async def handle_create_invoice(
         customer_email: str (optional),
         line_items: list[{description, quantity, unit_price, amount}] (required),
         payment_terms: str (optional, default "Net 30"),
-        memo: str (optional),
-        tax_rate: float (optional, default 0)
+        memo: str (optional)
     }
     """
     # Check circuit breaker before processing
@@ -152,7 +152,6 @@ async def handle_create_invoice(
                 line_items=line_items,
                 payment_terms=data.get("payment_terms", "Net 30"),
                 memo=data.get("memo", ""),
-                tax_rate=data.get("tax_rate", 0),
             )
 
         return success_response(
@@ -211,16 +210,9 @@ async def handle_list_invoices(
             status = InvoiceStatus(data["status"]) if data.get("status") else None
         except ValueError:
             return error_response("Invalid invoice status", status=400)
-        start_date = None
-        end_date = None
-
-        try:
-            if data.get("start_date"):
-                start_date = datetime.fromisoformat(data["start_date"])
-            if data.get("end_date"):
-                end_date = datetime.fromisoformat(data["end_date"])
-        except (TypeError, ValueError):
-            return error_response("Invalid date format. Use ISO 8601.", status=400)
+        start_date, end_date, date_error = parse_date_range_params(data)
+        if date_error:
+            return error_response(date_error, status=400)
 
         try:
             limit = int(data.get("limit", 100))
@@ -620,10 +612,7 @@ async def handle_add_customer(
     Body: {
         customer_id: str (required),
         name: str (required),
-        email: str (optional),
-        phone: str (optional),
-        address: str (optional),
-        payment_terms: str (optional, default "Net 30")
+        email: str (optional)
     }
     """
     # Validate required fields before service call
@@ -656,7 +645,6 @@ async def handle_add_customer(
                 customer_id=customer_id.strip(),
                 name=name.strip(),
                 email=data.get("email"),
-                payment_terms=data.get("payment_terms", "Net 30"),
             )
 
         return success_response(
@@ -720,6 +708,15 @@ async def handle_get_customer_balance(
         return error_response("Failed to retrieve balance", status=500)
 
 
+async def _reject_invalid_body(permission: str, handler: Any) -> HandlerResult:
+    """Answer a malformed body with 400 only after the route permission passes."""
+
+    async def invalid(handler: Any = None) -> HandlerResult:
+        return error_response("Invalid JSON body", status=400)
+
+    return await require_permission(permission)(invalid)(handler=handler)
+
+
 # =============================================================================
 # Handler Registration
 # =============================================================================
@@ -754,6 +751,8 @@ class ARAutomationHandler(BaseHandler):
         "POST /api/v1/accounting/ar/invoices/{invoice_id}/payment": handle_record_payment,
         "GET /api/v1/accounting/ar/customers/{customer_id}/balance": handle_get_customer_balance,
     }
+    # The OpenAPI generator reads per-route verbs from _ROUTE_MAP, not DYNAMIC_ROUTES.
+    _ROUTE_MAP = {**_ROUTE_MAP, **DYNAMIC_ROUTES}
 
     def can_handle(self, path: str) -> bool:
         """Claim only AR routes, including single-segment dynamic IDs."""
@@ -786,7 +785,8 @@ class ARAutomationHandler(BaseHandler):
         """Read the HTTP body and dispatch AR mutations."""
         data = self.read_json_body(handler)
         if data is None:
-            return error_response("Invalid JSON body", status=400)
+            permission = "ar:read" if path.endswith("/reminder") else "finance:write"
+            return await _reject_invalid_body(permission, handler)
         if path == "/api/v1/accounting/ar/invoices":
             return await handle_create_invoice(data, handler=handler)
         if path == "/api/v1/accounting/ar/customers":

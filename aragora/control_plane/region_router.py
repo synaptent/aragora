@@ -352,8 +352,11 @@ class RegionRouter:
         self._record_routing_decision(task.id, decision)
 
         logger.info(
-            f"Region routing: task={task.id} -> {selected} "
-            f"(score={health_scores.get(selected or '', 0):.1f}, fallbacks={fallbacks})"
+            "Region routing: task=%s -> %s (score=%.1f, fallbacks=%s)",
+            task.id,
+            selected,
+            health_scores.get(selected or "", 0),
+            fallbacks,
         )
 
         return decision

@@ -1,7 +1,7 @@
 # Monitoring Setup Guide
 
 **Last Updated:** January 18, 2026
-**Version:** 1.1.0
+**Document version:** 1.1.0
 
 ---
 

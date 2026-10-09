@@ -123,7 +123,15 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Post a non-counting summary, editing the existing comment for this head.",
     )
+    parser.add_argument(
+        "--claude-review-checkout", help="Clean PR-head checkout for a read-only Claude review."
+    )
+    parser.add_argument(
+        "--claude-review-expected-head", help="40-hex SHA the pinned checkout must be at."
+    )
     args = parser.parse_args(argv)
+    if (args.claude_review_checkout is None) != (args.claude_review_expected_head is None):
+        parser.error("--claude-review-checkout and --claude-review-expected-head go together")
 
     captured: list[str] = []
     exit_code = run_collect_cli(
@@ -137,6 +145,8 @@ def main(argv: list[str] | None = None) -> int:
         prepared_json=args.prepared_json,
         reviewer_timeout_seconds=args.reviewer_timeout,
         overall_timeout_seconds=args.overall_timeout,
+        claude_review_checkout=args.claude_review_checkout,
+        claude_review_expected_head=args.claude_review_expected_head,
     )
     try:
         outcome = json.loads("\n".join(captured))
