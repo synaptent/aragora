@@ -167,7 +167,9 @@ CRITICAL_RISK_PATHS = [
     "Dockerfile",
     "scripts/nomic_loop.py",
     "aragora/nomic/self_improve.py",
+    "aragora/nomic/self_improve_execution.py",
     "aragora/nomic/autonomous_orchestrator.py",
+    "aragora/nomic/autonomous_workflow.py",
     "aragora/ops/",
     "aragora/backup/",
 ]
