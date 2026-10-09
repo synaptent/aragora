@@ -411,7 +411,9 @@ _EXPLICIT_REGISTRATION_CALLER = """
 """
 
 
-def _run_core_only_caller(scenario: str, tmp_path: Path) -> dict:
+def _run_core_only_caller(
+    scenario: str, tmp_path: Path, script: str = _EXPLICIT_REGISTRATION_CALLER
+) -> dict:
     env = {
         **os.environ,
         "PYTHONPATH": str(REPO_ROOT),
@@ -422,8 +424,7 @@ def _run_core_only_caller(scenario: str, tmp_path: Path) -> dict:
         "ARAGORA_SECRETS_STRICT": "false",
     }
     proc = subprocess.run(
-        [sys.executable, "-W", "ignore", "-c", textwrap.dedent(_EXPLICIT_REGISTRATION_CALLER)]
-        + [scenario],
+        [sys.executable, "-W", "ignore", "-c", textwrap.dedent(script), scenario],
         capture_output=True,
         text=True,
         cwd=str(tmp_path),
@@ -458,6 +459,126 @@ def test_core_only_caller_keeps_its_audit_sink_through_a_route_miss(tmp_path):
     assert out["gauntlet"] == "aragora.gauntlet.decision_route"
     assert out["audit"] == "caller"
     assert out["sink_events"] is True
+
+
+# ---------------------------------------------------------------------------
+# The server's middleware audit logger follows the same rule
+# ---------------------------------------------------------------------------
+
+
+def test_declared_registrations_running_is_true_only_inside_a_declared_registration(
+    undiscovered_hooks, monkeypatch
+):
+    seen = []
+    _declare(monkeypatch, lambda: seen.append(hooks.declared_registrations_running()))
+
+    assert hooks.declared_registrations_running() is False
+    with pytest.raises(hooks.DecisionRouteNotRegisteredError):
+        hooks.get_decision_audit_sink()
+    assert seen == [True]
+    assert hooks.declared_registrations_running() is False
+
+
+def test_registering_the_middleware_audit_logger_without_replace_keeps_the_first(monkeypatch):
+    from aragora.observability import unified_audit
+
+    first, second = MagicMock(), MagicMock()
+    monkeypatch.setattr(unified_audit, "_middleware_logger_factory", None)
+
+    unified_audit.register_middleware_audit_logger(first, replace=False)
+    unified_audit.register_middleware_audit_logger(second, replace=False)
+    assert unified_audit._middleware_logger_factory is first
+
+    unified_audit.register_middleware_audit_logger(second)
+    assert unified_audit._middleware_logger_factory is second
+
+
+def test_declared_server_registration_keeps_a_caller_middleware_audit_logger(
+    undiscovered_hooks, monkeypatch
+):
+    from aragora.observability import unified_audit
+    from aragora.server.decision_routes import register_decision_routes
+    from aragora.server.middleware.audit_logger import get_audit_logger
+
+    caller_factory = MagicMock()
+    monkeypatch.setattr(unified_audit, "_middleware_logger_factory", caller_factory)
+    _declare(monkeypatch, register_decision_routes)
+
+    hooks.get_route_target(hooks.ROUTE_GAUNTLET)
+    assert unified_audit._middleware_logger_factory is caller_factory
+
+    # Called explicitly (server startup), the registration still replaces it.
+    register_decision_routes()
+    assert unified_audit._middleware_logger_factory is get_audit_logger
+
+
+def test_declared_server_registration_fills_a_missing_middleware_audit_logger(
+    undiscovered_hooks, monkeypatch
+):
+    from aragora.observability import unified_audit
+    from aragora.server.decision_routes import register_decision_routes
+    from aragora.server.middleware.audit_logger import get_audit_logger
+
+    monkeypatch.setattr(unified_audit, "_middleware_logger_factory", None)
+    _declare(monkeypatch, register_decision_routes)
+
+    hooks.get_route_target(hooks.ROUTE_GAUNTLET)
+    assert unified_audit._middleware_logger_factory is get_audit_logger
+
+
+_MIDDLEWARE_LOGGER_CALLER = """
+    import json, sys
+
+    from aragora.core import decision_route_hooks as hooks
+    from aragora.core.decision import DecisionRouter  # noqa: F401
+    from aragora.observability import unified_audit
+
+    scenario = sys.argv[1]
+    caller_logger = object()
+
+    def caller_factory():
+        return caller_logger
+
+    def name(obj):
+        return f"{getattr(obj, '__module__', None)}.{getattr(obj, '__qualname__', None)}"
+
+    server_loaded_before = "aragora.server.decision_routes" in sys.modules
+    if scenario == "custom":
+        unified_audit.register_middleware_audit_logger(caller_factory)
+    # A route miss runs the declared registrations.
+    gauntlet = hooks.get_route_target(hooks.ROUTE_GAUNTLET)
+    factory = unified_audit._middleware_logger_factory
+    middleware = unified_audit.UnifiedAuditLogger(
+        enable_compliance=False, enable_privacy=False, enable_rbac=False, enable_immutable=False
+    )._get_middleware_logger()
+    print(json.dumps({
+        "server_loaded_before": server_loaded_before,
+        "server_loaded": "aragora.server.decision_routes" in sys.modules,
+        "gauntlet": gauntlet.__module__,
+        "factory": "caller" if factory is caller_factory else name(factory),
+        "middleware": "caller" if middleware is caller_logger else type(middleware).__module__,
+    }))
+"""
+
+
+def test_core_only_caller_keeps_its_middleware_audit_logger_through_a_route_miss(tmp_path):
+    out = _run_core_only_caller("custom", tmp_path, _MIDDLEWARE_LOGGER_CALLER)
+
+    assert out["server_loaded_before"] is False
+    assert out["server_loaded"] is True
+    assert out["gauntlet"] == "aragora.gauntlet.decision_route"
+    assert out["factory"] == "caller"
+    assert out["middleware"] == "caller"
+
+
+def test_core_only_caller_gets_the_server_middleware_audit_logger_from_discovery(tmp_path):
+    out = _run_core_only_caller("default", tmp_path, _MIDDLEWARE_LOGGER_CALLER)
+
+    assert out["server_loaded_before"] is False
+    assert out["server_loaded"] is True
+    assert out["gauntlet"] == "aragora.gauntlet.decision_route"
+    assert out["factory"] == "aragora.server.middleware.audit_logger.get_audit_logger"
+    assert out["middleware"] == "aragora.server.middleware.audit_logger"
 
 
 def _function_calls(path: Path, function_name: str) -> set[str]:

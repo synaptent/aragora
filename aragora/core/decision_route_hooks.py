@@ -182,8 +182,17 @@ def _run_registrations(entry_points: list[importlib.metadata.EntryPoint]) -> Non
         _run_registrations(rest)
 
 
+def declared_registrations_running() -> bool:
+    """Whether this thread is running the declared ``aragora.decision_routes`` registrations.
+
+    A declared registration that also sets state outside this module uses it to apply
+    the same rule there: only fill what is still missing.
+    """
+    return bool(getattr(_declared_registrations_running, "active", False))
+
+
 def _register(registry: dict[str, Any], key: str, value: Any) -> None:
-    if getattr(_declared_registrations_running, "active", False):
+    if declared_registrations_running():
         registry.setdefault(key, value)
     else:
         registry[key] = value
@@ -259,6 +268,7 @@ __all__ = [
     "ROUTE_GAUNTLET",
     "ROUTE_WORKFLOW",
     "TTSBridgeFactory",
+    "declared_registrations_running",
     "get_decision_audit_sink",
     "get_decision_integrity_builder",
     "get_registered_routes",
