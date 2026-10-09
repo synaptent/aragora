@@ -591,13 +591,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const data = await response.json();
       const newTokens = data.tokens;
 
-      setState(prev => {
-        const user = prev.user || getStoredUser();
-        if (user) {
-          storeAuth(user, newTokens);
-        }
-        return { ...prev, tokens: newTokens };
-      });
+      // The session this request renewed has ended (logout or a rejected refresh)
+      // or been replaced since it started; applying the pair would revive it.
+      if (getStoredTokens()?.refresh_token !== tokens.refresh_token) {
+        return false;
+      }
+
+      const user = getStoredUser();
+      if (user) {
+        storeAuth(user, newTokens);
+      }
+      setState(prev => ({ ...prev, tokens: newTokens }));
 
       return true;
     } catch {

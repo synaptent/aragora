@@ -454,6 +454,59 @@ describe('AuthContext', () => {
   });
 
   describe('Token Refresh', () => {
+    const refreshedTokens = {
+      access_token: 'refreshed-access-token',
+      refresh_token: 'refreshed-refresh-token',
+      expires_at: new Date(Date.now() + 3600000).toISOString(),
+    };
+
+    it('stores and applies the new token pair after a refresh', async () => {
+      routeAuthFetches(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ tokens: refreshedTokens }) }));
+      const { result } = await renderRestoredSession();
+
+      let refreshSuccess: boolean | undefined;
+      await act(async () => {
+        refreshSuccess = await result.current.refreshToken();
+      });
+
+      expect(refreshSuccess).toBe(true);
+      expect(result.current.tokens).toEqual(refreshedTokens);
+      expect(mockLocalStorage['aragora_tokens']).toBe(JSON.stringify(refreshedTokens));
+      expect(mockLocalStorage['aragora_user']).toBe(JSON.stringify(mockUser));
+      expect(result.current.isAuthenticated).toBe(true);
+      expect(mockHardNavigate).not.toHaveBeenCalled();
+    });
+
+    it('discards a refresh that succeeds after logout, for every caller sharing it', async () => {
+      const reply = deferred<FetchReply>();
+      routeAuthFetches(() => reply.promise);
+      const { result } = await renderRestoredSession();
+
+      let pending: Promise<boolean[]> | undefined;
+      act(() => {
+        pending = Promise.all([result.current.refreshToken(), result.current.refreshToken()]);
+      });
+      await act(async () => {
+        await result.current.logout();
+      });
+      expect(mockHardNavigate).toHaveBeenCalledTimes(1);
+
+      let results: boolean[] = [];
+      await act(async () => {
+        reply.resolve({ ok: true, json: () => Promise.resolve({ tokens: refreshedTokens }) });
+        results = await pending!;
+      });
+
+      expect(refreshCalls()).toHaveLength(1);
+      expect(results).toEqual([false, false]);
+      expect(result.current.tokens).toBeNull();
+      expect(result.current.isAuthenticated).toBe(false);
+      expect(result.current.user).toBeNull();
+      expect(Object.fromEntries(AUTH_KEYS.map((key) => [key, mockLocalStorage[key]]))).toEqual(CLEARED_STORAGE);
+      expect(mockHardNavigate).toHaveBeenCalledTimes(1);
+      expect(mockHardNavigate).toHaveBeenCalledWith('/auth/login');
+    });
+
     it('successfully refreshes expired token', async () => {
       const newTokens = {
         access_token: 'new-access-token',
