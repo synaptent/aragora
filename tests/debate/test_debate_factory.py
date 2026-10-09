@@ -361,6 +361,50 @@ class TestDebateFactoryCreateAgents:
             # Verify emit was called (error event emission)
             assert emitter.emit.called
 
+    @staticmethod
+    def _models_requested(specs):
+        import aragora.server.debate_factory as factory_module
+
+        calls = []
+
+        def _fake_create_agent(**kwargs):
+            calls.append(kwargs)
+            agent = Mock()
+            agent.api_key = "fake-key"
+            return agent
+
+        with patch.object(factory_module, "create_agent", side_effect=_fake_create_agent):
+            DebateFactory().create_agents(specs)
+        return [(call["model_type"], call["role"], call["model"]) for call in calls]
+
+    def test_non_anthropic_synthesizer_keeps_its_own_default_model(self):
+        """A grok synthesizer must not be asked for a Claude model."""
+        specs = [AgentSpec(provider="openai-api", model="gpt-5.5"), AgentSpec(provider="grok")]
+
+        assert self._models_requested(specs) == [
+            ("openai-api", "proposer", "gpt-5.5"),
+            ("grok", "synthesizer", None),
+        ]
+
+    def test_non_anthropic_judge_keeps_its_own_default_model(self):
+        specs = [AgentSpec(provider="grok", role="judge"), AgentSpec(provider="openai-api")]
+
+        assert self._models_requested(specs)[0] == ("grok", "judge", None)
+
+    def test_anthropic_synthesizer_without_a_model_gets_the_strongest_claude(self):
+        specs = [AgentSpec(provider="grok"), AgentSpec(provider="anthropic-api")]
+
+        assert self._models_requested(specs)[1] == (
+            "anthropic-api",
+            "synthesizer",
+            "claude-opus-4-7",
+        )
+
+    def test_explicit_synthesizer_model_is_kept(self):
+        specs = [AgentSpec(provider="grok"), AgentSpec(provider="anthropic-api", model="m")]
+
+        assert self._models_requested(specs)[1] == ("anthropic-api", "synthesizer", "m")
+
 
 class TestDebateFactoryCreateArena:
     """Tests for DebateFactory.create_arena method."""

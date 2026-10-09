@@ -84,6 +84,8 @@ if TYPE_CHECKING:
 # Import the unified AgentSpec from agents.spec (runtime, after TYPE_CHECKING)
 from aragora.agents.spec import AgentSpec  # noqa: E402
 
+_ANTHROPIC_PROVIDERS = frozenset({"anthropic-api", "claude"})
+
 
 @dataclass
 class AgentCreationResult:
@@ -306,10 +308,15 @@ class DebateFactory:
                 else:
                     role = "critic"
 
-            # Use the strongest model for synthesis/judgment when no
-            # explicit model was requested
+            # Use the strongest Claude model for synthesis/judgment when an
+            # Anthropic agent has no explicit model; other providers keep
+            # their own default (a Claude model id would fail there).
             model = spec.model
-            if model is None and role in ("synthesizer", "judge"):
+            if (
+                model is None
+                and role in ("synthesizer", "judge")
+                and spec.provider in _ANTHROPIC_PROVIDERS
+            ):
                 model = "claude-opus-4-7"
                 logger.info(
                     "Using %s for %s role (strongest available model)",
