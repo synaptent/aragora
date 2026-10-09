@@ -1,8 +1,7 @@
 """Old and new import paths for the data-directory and tenant-context seams.
 
-``aragora.persistence.db_config`` and ``aragora.tenancy.context`` re-export the
-primitives that now live in ``aragora.config`` so that the config layer no
-longer imports persistence or tenancy.
+``aragora.persistence.db_config`` and ``aragora.tenancy.context`` re-export the primitives
+that now live in ``aragora.config``, so the config layer no longer imports either of them.
 """
 
 from __future__ import annotations
@@ -32,9 +31,8 @@ TENANT_NAMES = (
     "_current_tenant _current_tenant_id get_current_tenant get_current_tenant_id set_tenant "
     "set_tenant_id"
 ).split()
-SHARED_NAMES = [(old_dd, new_dd, n) for n in DATA_DIR_NAMES] + [
-    (old_tc, new_tc, n) for n in TENANT_NAMES
-]
+SHARED_NAMES = [(old_dd, new_dd, n) for n in DATA_DIR_NAMES]
+SHARED_NAMES += [(old_tc, new_tc, n) for n in TENANT_NAMES]
 
 
 @pytest.fixture
