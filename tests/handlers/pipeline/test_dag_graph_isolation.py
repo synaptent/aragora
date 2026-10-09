@@ -1,4 +1,4 @@
-"""Org isolation of DAG operations (E5).
+"""Org isolation of DAG operations (E5) and the universal graph routes.
 
 Requests go through the handlers' public dispatch methods with a real graph
 store and the real RBAC checker. Org A owns ``graph-a`` (two ideas joined by an
@@ -19,7 +19,9 @@ import pytest
 from aragora.canvas.stages import PipelineStage, StageEdgeType
 from aragora.pipeline.graph_store import GraphStore
 from aragora.pipeline.universal_node import UniversalEdge, UniversalGraph, UniversalNode
+from aragora.server.handlers.pipeline import universal_graph as graph_module
 from aragora.server.handlers.pipeline.dag_operations import DAGOperationsHandler
+from aragora.server.handlers.pipeline.universal_graph import UniversalGraphHandler
 
 pytestmark = pytest.mark.no_auto_auth
 
@@ -35,6 +37,18 @@ DAG_POSTS = [
     *(f"/nodes/idea-a1/{op}" for op in ("execute", "find-precedents")),
     "/cluster-ideas",
     "/auto-flow",
+]
+GRAPH_GETS = ["", "/nodes", "/react-flow", "/integrity", "/provenance/idea-a1"]
+GRAPH_WRITES = [
+    ("post", "/nodes", {"id": "idea-new", "stage": "ideas", "label": "B idea"}),
+    ("post", "/edges", {"source_id": "idea-a1", "target_id": "idea-a2"}),
+    ("post", "/promote", {"node_ids": ["idea-a1"], "target_stage": "goals"}),
+    ("post", "/execute/idea-a1", {}),
+    ("put", "", {"name": "renamed"}),
+    ("patch", "/nodes/idea-a1", {"label": "renamed"}),
+    ("delete", "/nodes/idea-a2", None),
+    ("delete", "/edges/edge-a", None),
+    ("delete", "", None),
 ]
 
 
@@ -86,8 +100,11 @@ def store(tmp_path):
     )
     graphs.create(graph_b, org_id="org-b", created_by="user-b")
 
+    graph_module._store = None
+    graph_module._graph_limiter = graph_module.RateLimiter(requests_per_minute=600)
     with patch("aragora.pipeline.graph_store.get_graph_store", return_value=graphs):
         yield graphs
+    graph_module._store = None
 
 
 @pytest.fixture
@@ -126,6 +143,17 @@ def _dag_post(caller: Any, suffix: str, graph_id: str = GA) -> Any:
     request = _Request(caller, {"ideas": ["one", "two"], "agents": ["claude"]})
     path = f"/api/v1/pipeline/dag/{graph_id}{suffix}"
     return _resolve(DAGOperationsHandler().handle_post(path, {}, request))
+
+
+def _graph_call(method: str, caller: Any, suffix: str, body: Any, graph_id: str = GA) -> Any:
+    handler = UniversalGraphHandler()
+    path = f"/api/v1/pipeline/graphs/{graph_id}{suffix}"
+    request = _Request(caller)
+    if method in ("post", "put", "patch"):
+        return getattr(handler, f"handle_{method}")(path, body or {}, request)
+    if method == "delete":
+        return handler.handle_delete(path, {}, request)
+    return handler.handle(path, {}, request)
 
 
 class TestDagOperations:
@@ -168,3 +196,77 @@ class TestDagOperations:
     def test_checker_failure_denies_owner(self, store):
         with patch("aragora.rbac.checker.get_permission_checker", side_effect=RuntimeError):
             assert _dag_get(_Request(USER_A)).status_code == 403
+
+
+class TestUniversalGraph:
+    def test_list_shows_only_the_callers_org(self, store):
+        handler = UniversalGraphHandler()
+        for caller, expected in ((USER_A, [GA]), (USER_B, [GB])):
+            result = handler.handle("/api/v1/pipeline/graphs", {}, _Request(caller))
+            assert [g["id"] for g in _json(result)["graphs"]] == expected
+
+    @pytest.mark.parametrize("suffix", GRAPH_GETS)
+    def test_owner_reads(self, store, suffix):
+        assert _graph_call("get", USER_A, suffix, None).status_code == 200
+
+    @pytest.mark.parametrize("suffix", GRAPH_GETS)
+    def test_other_org_read_matches_missing_graph(self, store, suffix):
+        other = _graph_call("get", USER_B, suffix, None)
+        missing = _graph_call("get", USER_A, suffix, None, graph_id=MISSING)
+        assert (other.status_code, _json(other)) == (404, NOT_FOUND)
+        assert (missing.status_code, _json(missing)) == (404, NOT_FOUND)
+
+    @pytest.mark.parametrize(("method", "suffix", "body"), GRAPH_WRITES)
+    def test_owner_writes(self, store, coordinator, method, suffix, body):
+        result = _graph_call(method, USER_A, suffix, body)
+        assert result.status_code in (200, 201)
+
+    @pytest.mark.parametrize(("method", "suffix", "body"), GRAPH_WRITES)
+    def test_other_org_write_is_hidden_and_inert(self, store, coordinator, method, suffix, body):
+        before = _snapshot(store, GA)
+        result = _graph_call(method, USER_B, suffix, body)
+        assert (result.status_code, _json(result)) == (404, NOT_FOUND)
+        assert _snapshot(store, GA) == before
+        assert store.get_owner_org(GA) == "org-a"
+        coordinator.assert_not_called()
+
+    @pytest.mark.parametrize(
+        ("method", "suffix", "body"), [("get", s, None) for s in GRAPH_GETS] + GRAPH_WRITES
+    )
+    def test_anonymous_needs_auth(self, store, coordinator, method, suffix, body):
+        assert _graph_call(method, ANONYMOUS, suffix, body).status_code == 401
+        coordinator.assert_not_called()
+
+    def test_anonymous_list_and_create_need_auth(self, store):
+        handler = UniversalGraphHandler()
+        assert handler.handle("/api/v1/pipeline/graphs", {}, _Request(ANONYMOUS)).status_code == 401
+        result = handler.handle_post("/api/v1/pipeline/graphs", {}, _Request(ANONYMOUS))
+        assert result.status_code == 401
+
+    def test_create_belongs_to_the_creators_org(self, store):
+        handler = UniversalGraphHandler()
+        result = handler.handle_post("/api/v1/pipeline/graphs", {"name": "B new"}, _Request(USER_B))
+        assert result.status_code == 201
+        graph_id = _json(result)["id"]
+        assert store.get_owner_org(graph_id) == "org-b"
+        assert _graph_call("get", USER_A, "", None, graph_id=graph_id).status_code == 404
+
+    def test_create_cannot_reuse_another_orgs_graph_id(self, store):
+        before = _snapshot(store, GA)
+        result = UniversalGraphHandler().handle_post(
+            "/api/v1/pipeline/graphs", {"id": GA, "name": "taken"}, _Request(USER_B)
+        )
+        assert result.status_code == 409
+        assert _snapshot(store, GA) == before
+        assert store.get_owner_org(GA) == "org-a"
+
+    def test_add_node_cannot_reuse_another_orgs_node_id(self, store):
+        result = _graph_call(
+            "post", USER_B, "/nodes", {"id": "idea-a1", "label": "stolen"}, graph_id=GB
+        )
+        assert result.status_code == 409
+        assert store.node_graph_id("idea-a1") == GA
+
+    def test_checker_failure_denies_owner(self, store):
+        with patch("aragora.rbac.checker.get_permission_checker", side_effect=RuntimeError):
+            assert _graph_call("get", USER_A, "", None).status_code == 403

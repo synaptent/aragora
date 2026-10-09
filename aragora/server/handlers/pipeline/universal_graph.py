@@ -16,17 +16,26 @@ Provides CRUD and query endpoints for UniversalGraph objects:
   GET    /api/v1/pipeline/graphs/:id/provenance/:nid  Provenance chain
   GET    /api/v1/pipeline/graphs/:id/react-flow  React Flow export
   GET    /api/v1/pipeline/graphs/:id/integrity   Integrity hash
+
+Every route needs an org-scoped caller. Reads need ``canvas:read``, creating
+a graph ``canvas:create``, editing a graph or its nodes and edges
+``canvas:update``, executing a node ``canvas:run`` and deleting a graph
+``canvas:delete``. A graph belongs to the org that created it; the list
+shows only the caller's org's graphs, and every route on another org's graph
+answers the same 404 as a missing one.
 """
 
 from __future__ import annotations
 
+import functools
 import logging
 import uuid
-from typing import Any, cast
+from collections.abc import Callable
+from typing import Any, NamedTuple, TypeAlias, cast
 
 from aragora.server.versioning.compat import strip_version_prefix
-
-from aragora.rbac.decorators import require_permission
+from aragora.tenancy import pipeline_access
+from aragora.tenancy.record_scope import OrgScope, record_not_found
 
 from ..base import (
     SAFE_ID_PATTERN,
@@ -45,6 +54,8 @@ logger = logging.getLogger(__name__)
 
 _graph_limiter = RateLimiter(requests_per_minute=60)
 
+_GRAPH = "Graph"
+
 # Lazy-loaded store
 _store = None
 
@@ -56,6 +67,40 @@ def _get_store():
 
         _store = get_graph_store()
     return _store
+
+
+class _Route(NamedTuple):
+    """A matched route: the permission it needs, the graph it acts on and its call.
+
+    ``graph_id`` is None for the list and create routes, which act on no
+    existing graph.
+    """
+
+    permission: str
+    graph_id: str | None
+    call: Callable[[OrgScope], HandlerResult]
+    rate_limited: bool = True
+
+
+_Match: TypeAlias = _Route | HandlerResult | None
+
+
+def _graph_route(
+    permission: str,
+    graph_id: str,
+    call: Callable[[], HandlerResult],
+    rate_limited: bool = True,
+) -> _Route:
+    return _Route(permission, graph_id, lambda _scope: call(), rate_limited)
+
+
+def _invalid_ids(**ids: str) -> HandlerResult | None:
+    """The 400 response for the first path id that is not a safe id, else None."""
+    for name, value in ids.items():
+        ok, err = validate_path_segment(value, name, SAFE_ID_PATTERN)
+        if not ok:
+            return error_response(cast(str, err), 400)
+    return None
 
 
 class UniversalGraphHandler(BaseHandler):
@@ -72,218 +117,233 @@ class UniversalGraphHandler(BaseHandler):
 
     def handle(self, path: str, query_params: dict[str, Any], handler: Any) -> HandlerResult | None:
         """Route GET requests."""
-        cleaned = strip_version_prefix(path)
-        client_ip = get_client_ip(handler)
-        if not _graph_limiter.is_allowed(client_ip):
-            return error_response("Rate limit exceeded", 429)
-
-        # Parse path segments: /api/pipeline/graphs[/:id[/sub[/:sub_id]]]
-        parts = cleaned.split("/")
-        # parts[0]="" parts[1]="api" parts[2]="pipeline" parts[3]="graphs" ...
-
-        if len(parts) == 4 and parts[3] == "graphs":
-            return self._list_graphs(query_params)
-
-        if len(parts) >= 5:
-            graph_id = parts[4]
-            ok, err = validate_path_segment(graph_id, "graph_id", SAFE_ID_PATTERN)
-            if not ok:
-                return error_response(cast(str, err), 400)
-
-            if len(parts) == 5:
-                return self._get_graph(graph_id)
-
-            sub = parts[5] if len(parts) > 5 else ""
-
-            if sub == "nodes" and len(parts) == 6:
-                return self._query_nodes(graph_id, query_params)
-
-            if sub == "react-flow":
-                return self._react_flow(graph_id, query_params)
-
-            if sub == "integrity":
-                return self._integrity(graph_id)
-
-            if sub == "provenance" and len(parts) >= 7:
-                node_id = parts[6]
-                ok2, err2 = validate_path_segment(node_id, "node_id", SAFE_ID_PATTERN)
-                if not ok2:
-                    return error_response(cast(str, err2), 400)
-                return self._provenance_chain(graph_id, node_id)
-
-        return None
-
-    def _check_permission(self, handler: Any, permission: str) -> HandlerResult | None:
-        """Check RBAC permission and return error response if denied."""
-        try:
-            from aragora.billing.jwt_auth import extract_user_from_request
-            from aragora.rbac.checker import get_permission_checker
-            from aragora.rbac.models import AuthorizationContext
-
-            user_ctx = extract_user_from_request(handler, None)
-            if not user_ctx or not user_ctx.is_authenticated:
-                return error_response("Authentication required", 401)
-
-            auth_ctx = AuthorizationContext(
-                user_id=cast(str, user_ctx.user_id),
-                user_email=user_ctx.email,
-                org_id=user_ctx.org_id,
-                workspace_id=None,
-                roles={user_ctx.role} if user_ctx.role else {"member"},
-            )
-            checker = get_permission_checker()
-            decision = checker.check_permission(auth_ctx, permission)
-            if not decision.allowed:
-                logger.warning("Permission denied: %s", permission)
-                return error_response("Permission denied", 403)
-            return None
-        except (ImportError, AttributeError, ValueError) as e:
-            logger.debug("Permission check unavailable: %s", e)
-            return None
+        route = self._match_get(strip_version_prefix(path).split("/"), query_params)
+        if not isinstance(route, _Route):
+            return route
+        scope, denial = self._check_permission(handler, route.permission)
+        if scope is None:
+            return denial
+        return self._serve(route, scope, handler)
 
     @handle_errors("universal graph creation")
     def handle_post(self, path: str, body: dict[str, Any], handler: Any) -> HandlerResult | None:
         """Route POST requests."""
-        auth_error = self._check_permission(handler, "pipeline:write")
-        if auth_error:
-            return auth_error
-
-        cleaned = strip_version_prefix(path)
-        client_ip = get_client_ip(handler)
-        if not _graph_limiter.is_allowed(client_ip):
-            return error_response("Rate limit exceeded", 429)
-
-        parts = cleaned.split("/")
-
-        if len(parts) == 4 and parts[3] == "graphs":
-            return self._create_graph(body)
-
-        if len(parts) >= 6:
-            graph_id = parts[4]
-            ok, err = validate_path_segment(graph_id, "graph_id", SAFE_ID_PATTERN)
-            if not ok:
-                return error_response(cast(str, err), 400)
-
-            sub = parts[5]
-            if sub == "nodes":
-                return self._add_node(graph_id, body)
-            if sub == "edges":
-                return self._add_edge(graph_id, body)
-            if sub == "promote":
-                return self._promote(graph_id, body)
-            if sub == "execute" and len(parts) >= 7:
-                node_id = parts[6]
-                ok2, err2 = validate_path_segment(node_id, "node_id", SAFE_ID_PATTERN)
-                if not ok2:
-                    return error_response(cast(str, err2), 400)
-                return self._execute_node(graph_id, node_id, body)
-
-        return None
+        route = self._match_post(strip_version_prefix(path).split("/"), body)
+        if not isinstance(route, _Route):
+            return route
+        scope, denial = self._check_permission(handler, route.permission)
+        if scope is None:
+            return denial
+        return self._serve(route, scope, handler)
 
     @handle_errors("universal graph update")
     def handle_put(self, path: str, body: dict[str, Any], handler: Any) -> HandlerResult | None:
         """Route PUT requests."""
-        auth_error = self._check_permission(handler, "pipeline:write")
-        if auth_error:
-            return auth_error
-
-        cleaned = strip_version_prefix(path)
-        parts = cleaned.split("/")
-
-        if len(parts) == 5 and parts[3] == "graphs":
-            graph_id = parts[4]
-            ok, err = validate_path_segment(graph_id, "graph_id", SAFE_ID_PATTERN)
-            if not ok:
-                return error_response(cast(str, err), 400)
-            return self._update_graph(graph_id, body)
-
-        return None
+        route = self._match_put(strip_version_prefix(path).split("/"), body)
+        if not isinstance(route, _Route):
+            return route
+        scope, denial = self._check_permission(handler, route.permission)
+        if scope is None:
+            return denial
+        return self._serve(route, scope, handler)
 
     @handle_errors("universal graph node update")
     def handle_patch(self, path: str, body: dict[str, Any], handler: Any) -> HandlerResult | None:
         """Route PATCH requests for node updates (position, label, status)."""
-        auth_error = self._check_permission(handler, "pipeline:write")
-        if auth_error:
-            return auth_error
-
-        cleaned = strip_version_prefix(path)
-        parts = cleaned.split("/")
-
-        # PATCH /api/pipeline/graphs/:id/nodes/:node_id
-        if len(parts) >= 7 and parts[3] == "graphs" and parts[5] == "nodes":
-            graph_id = parts[4]
-            node_id = parts[6]
-            ok, err = validate_path_segment(graph_id, "graph_id", SAFE_ID_PATTERN)
-            if not ok:
-                return error_response(cast(str, err), 400)
-            ok2, err2 = validate_path_segment(node_id, "node_id", SAFE_ID_PATTERN)
-            if not ok2:
-                return error_response(cast(str, err2), 400)
-            return self._update_node(graph_id, node_id, body)
-
-        return None
+        route = self._match_patch(strip_version_prefix(path).split("/"), body)
+        if not isinstance(route, _Route):
+            return route
+        scope, denial = self._check_permission(handler, route.permission)
+        if scope is None:
+            return denial
+        return self._serve(route, scope, handler)
 
     @handle_errors("universal graph deletion")
     def handle_delete(
         self, path: str, query_params: dict[str, Any], handler: Any
     ) -> HandlerResult | None:
         """Route DELETE requests."""
-        auth_error = self._check_permission(handler, "pipeline:write")
-        if auth_error:
-            return auth_error
+        route = self._match_delete(strip_version_prefix(path).split("/"))
+        if not isinstance(route, _Route):
+            return route
+        scope, denial = self._check_permission(handler, route.permission)
+        if scope is None:
+            return denial
+        return self._serve(route, scope, handler)
 
-        cleaned = strip_version_prefix(path)
-        parts = cleaned.split("/")
+    @staticmethod
+    def _check_permission(
+        handler: Any, permission: str
+    ) -> tuple[OrgScope, None] | tuple[None, HandlerResult]:
+        """``(scope, None)`` when the caller has an org and ``permission``, else ``(None, error)``.
 
-        if len(parts) >= 5:
-            graph_id = parts[4]
-            ok, err = validate_path_segment(graph_id, "graph_id", SAFE_ID_PATTERN)
-            if not ok:
-                return error_response(cast(str, err), 400)
+        Fails closed: when the permission checker cannot be imported or raises,
+        the caller is denied.
+        """
+        return pipeline_access.authorize_pipeline_request(handler, permission)
 
-            if len(parts) == 5:
-                return self._delete_graph(graph_id)
+    @staticmethod
+    def _owns(graph_id: str, scope: OrgScope) -> bool:
+        return pipeline_access.graph_owned(graph_id, scope, store=_get_store())
 
-            sub = parts[5] if len(parts) > 5 else ""
+    def _serve(self, route: _Route, scope: OrgScope, handler: Any) -> HandlerResult:
+        """Run an authorized route once rate limiting and graph ownership allow it."""
+        if route.rate_limited and not _graph_limiter.is_allowed(get_client_ip(handler)):
+            return error_response("Rate limit exceeded", 429)
+        if route.graph_id is not None and not self._owns(route.graph_id, scope):
+            return record_not_found(_GRAPH)
+        return route.call(scope)
 
-            if sub == "nodes" and len(parts) >= 7:
-                node_id = parts[6]
-                ok2, err2 = validate_path_segment(node_id, "node_id", SAFE_ID_PATTERN)
-                if not ok2:
-                    return error_response(cast(str, err2), 400)
-                return self._remove_node(graph_id, node_id)
+    # -- Route matching -----------------------------------------------------
+    # parts: "", "api", "pipeline", "graphs"[, graph_id[, sub[, sub_id]]]. Each
+    # matcher answers a _Route, the 400 for a malformed path id, or None for a
+    # path this handler does not serve.
 
-            if sub == "edges" and len(parts) >= 7:
-                edge_id = parts[6]
-                ok3, err3 = validate_path_segment(edge_id, "edge_id", SAFE_ID_PATTERN)
-                if not ok3:
-                    return error_response(cast(str, err3), 400)
-                return self._remove_edge(graph_id, edge_id)
-
+    def _match_get(self, parts: list[str], query_params: dict[str, Any]) -> _Match:
+        read = pipeline_access.PIPELINE_READ
+        if len(parts) == 4 and parts[3] == "graphs":
+            return _Route(read, None, lambda scope: self._list_graphs(query_params, scope))
+        if len(parts) < 5:
+            return None
+        graph_id = parts[4]
+        sub = parts[5] if len(parts) > 5 else ""
+        invalid = _invalid_ids(graph_id=graph_id)
+        if invalid is not None:
+            return invalid
+        if len(parts) == 5:
+            return _graph_route(read, graph_id, lambda: self._get_graph(graph_id))
+        if sub == "nodes" and len(parts) == 6:
+            return _graph_route(read, graph_id, lambda: self._query_nodes(graph_id, query_params))
+        if sub == "react-flow":
+            return _graph_route(read, graph_id, lambda: self._react_flow(graph_id, query_params))
+        if sub == "integrity":
+            return _graph_route(read, graph_id, lambda: self._integrity(graph_id))
+        if sub == "provenance" and len(parts) >= 7:
+            node_id = parts[6]
+            invalid = _invalid_ids(node_id=node_id)
+            if invalid is not None:
+                return invalid
+            return _graph_route(read, graph_id, lambda: self._provenance_chain(graph_id, node_id))
         return None
+
+    def _match_post(self, parts: list[str], body: dict[str, Any]) -> _Match:
+        update = pipeline_access.PIPELINE_UPDATE
+        if len(parts) == 4 and parts[3] == "graphs":
+            create = pipeline_access.PIPELINE_CREATE
+            return _Route(create, None, lambda scope: self._create_graph(body, scope))
+        if len(parts) < 6:
+            return None
+        graph_id, sub = parts[4], parts[5]
+        invalid = _invalid_ids(graph_id=graph_id)
+        if invalid is not None:
+            return invalid
+        if sub == "nodes":
+            return _graph_route(update, graph_id, lambda: self._add_node(graph_id, body))
+        if sub == "edges":
+            return _graph_route(update, graph_id, lambda: self._add_edge(graph_id, body))
+        if sub == "promote":
+            return _graph_route(update, graph_id, lambda: self._promote(graph_id, body))
+        if sub == "execute" and len(parts) >= 7:
+            node_id = parts[6]
+            invalid = _invalid_ids(node_id=node_id)
+            if invalid is not None:
+                return invalid
+            return _graph_route(
+                pipeline_access.PIPELINE_RUN,
+                graph_id,
+                lambda: self._execute_node(graph_id, node_id, body),
+            )
+        return None
+
+    def _match_put(self, parts: list[str], body: dict[str, Any]) -> _Match:
+        if len(parts) != 5 or parts[3] != "graphs":
+            return None
+        graph_id = parts[4]
+        invalid = _invalid_ids(graph_id=graph_id)
+        if invalid is not None:
+            return invalid
+        return _graph_route(
+            pipeline_access.PIPELINE_UPDATE,
+            graph_id,
+            lambda: self._update_graph(graph_id, body),
+            rate_limited=False,
+        )
+
+    def _match_patch(self, parts: list[str], body: dict[str, Any]) -> _Match:
+        # PATCH /api/pipeline/graphs/:id/nodes/:node_id
+        if len(parts) < 7 or parts[3] != "graphs" or parts[5] != "nodes":
+            return None
+        graph_id, node_id = parts[4], parts[6]
+        invalid = _invalid_ids(graph_id=graph_id, node_id=node_id)
+        if invalid is not None:
+            return invalid
+        return _graph_route(
+            pipeline_access.PIPELINE_UPDATE,
+            graph_id,
+            lambda: self._update_node(graph_id, node_id, body),
+            rate_limited=False,
+        )
+
+    def _match_delete(self, parts: list[str]) -> _Match:
+        if len(parts) < 5:
+            return None
+        graph_id = parts[4]
+        invalid = _invalid_ids(graph_id=graph_id)
+        if invalid is not None:
+            return invalid
+        if len(parts) == 5:
+            return _graph_route(
+                pipeline_access.PIPELINE_DELETE,
+                graph_id,
+                lambda: self._delete_graph(graph_id),
+                rate_limited=False,
+            )
+        sub = parts[5]
+        if sub not in ("nodes", "edges") or len(parts) < 7:
+            return None
+        sub_id = parts[6]
+        if sub == "nodes":
+            invalid = _invalid_ids(node_id=sub_id)
+            call = functools.partial(self._remove_node, graph_id, sub_id)
+        else:
+            invalid = _invalid_ids(edge_id=sub_id)
+            call = functools.partial(self._remove_edge, graph_id, sub_id)
+        if invalid is not None:
+            return invalid
+        return _graph_route(pipeline_access.PIPELINE_UPDATE, graph_id, call, rate_limited=False)
 
     # -- Endpoint implementations -------------------------------------------
 
-    def _create_graph(self, body: dict[str, Any]) -> HandlerResult:
+    def _create_graph(self, body: dict[str, Any], scope: OrgScope) -> HandlerResult:
         from aragora.pipeline.universal_node import UniversalGraph
 
+        store = _get_store()
+        graph_id = body.get("id")
+        if graph_id is not None:
+            invalid = _invalid_ids(id=str(graph_id))
+            if invalid is not None:
+                return invalid
+            # Creating over an existing id would replace that graph's nodes and edges.
+            if store.get(str(graph_id)) is not None:
+                return error_response("Graph id is already in use", 409)
         graph = UniversalGraph(
-            id=body.get("id", f"graph-{uuid.uuid4().hex[:8]}"),
+            id=str(graph_id) if graph_id is not None else f"graph-{uuid.uuid4().hex[:8]}",
             name=body.get("name", "Untitled Pipeline"),
             owner_id=body.get("owner_id"),
             workspace_id=body.get("workspace_id"),
             metadata=body.get("metadata", {}),
         )
-        store = _get_store()
-        store.create(graph)
+        store.create(graph, org_id=scope.org_id, created_by=scope.user_id)
         return json_response(graph.to_dict(), status=201)
 
-    def _list_graphs(self, params: dict[str, Any]) -> HandlerResult:
+    def _list_graphs(self, params: dict[str, Any], scope: OrgScope) -> HandlerResult:
         store = _get_store()
         owner = get_string_param(params, "owner_id")
         workspace = get_string_param(params, "workspace_id")
         limit = get_int_param(params, "limit", 50)
-        graphs = store.list(owner_id=owner, workspace_id=workspace, limit=limit)
+        graphs = store.list(
+            owner_id=owner, workspace_id=workspace, limit=limit, org_id=scope.org_id
+        )
         return json_response({"graphs": graphs, "count": len(graphs)})
 
     def _get_graph(self, graph_id: str) -> HandlerResult:
@@ -312,7 +372,6 @@ class UniversalGraphHandler(BaseHandler):
         store.update(graph)
         return json_response(graph.to_dict())
 
-    @require_permission("pipeline:delete")
     def _delete_graph(self, graph_id: str) -> HandlerResult:
         store = _get_store()
         deleted = store.delete(graph_id)
@@ -347,7 +406,10 @@ class UniversalGraphHandler(BaseHandler):
             data=body.get("data", {}),
             metadata=body.get("metadata", {}),
         )
-        store.add_node(graph_id, node)
+        try:
+            store.add_node(graph_id, node)
+        except ValueError:
+            return error_response("Node id is already in use", 409)
         return json_response(node.to_dict(), status=201)
 
     def _remove_node(self, graph_id: str, node_id: str) -> HandlerResult:

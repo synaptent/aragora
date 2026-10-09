@@ -36,6 +36,9 @@ from aragora.canvas.stages import PipelineStage, StageEdgeType
 from aragora.pipeline.universal_node import UniversalEdge, UniversalGraph, UniversalNode
 import aragora.server.handlers.pipeline.universal_graph as universal_graph_module
 from aragora.server.handlers.pipeline.universal_graph import UniversalGraphHandler
+from aragora.tenancy.record_scope import OrgScope
+
+_SCOPE = OrgScope(org_id="test-org-001", user_id="test-user-001", role="admin")
 
 # Patch targets -- lazy imports inside method bodies use these source modules
 _GRAPH_CLS = "aragora.pipeline.universal_node.UniversalGraph"
@@ -189,8 +192,9 @@ def _bypass_check_permission(request, monkeypatch):
     monkeypatch.setattr(
         UniversalGraphHandler,
         "_check_permission",
-        lambda self, handler, permission: None,
+        staticmethod(lambda handler, permission: (_SCOPE, None)),
     )
+    monkeypatch.setattr("aragora.tenancy.pipeline_access.graph_owned", lambda *args, **kwargs: True)
 
 
 @pytest.fixture(autouse=True)
@@ -293,19 +297,25 @@ class TestListGraphs:
         h = _make_handler()
         http = _make_http_handler()
         h.handle("/api/v1/pipeline/graphs", {"owner_id": "user-1"}, http)
-        patched_store.list.assert_called_once_with(owner_id="user-1", workspace_id=None, limit=50)
+        patched_store.list.assert_called_once_with(
+            owner_id="user-1", workspace_id=None, limit=50, org_id="test-org-001"
+        )
 
     def test_list_with_workspace_filter(self, patched_store):
         h = _make_handler()
         http = _make_http_handler()
         h.handle("/api/v1/pipeline/graphs", {"workspace_id": "ws-1"}, http)
-        patched_store.list.assert_called_once_with(owner_id=None, workspace_id="ws-1", limit=50)
+        patched_store.list.assert_called_once_with(
+            owner_id=None, workspace_id="ws-1", limit=50, org_id="test-org-001"
+        )
 
     def test_list_with_custom_limit(self, patched_store):
         h = _make_handler()
         http = _make_http_handler()
         h.handle("/api/v1/pipeline/graphs", {"limit": "10"}, http)
-        patched_store.list.assert_called_once_with(owner_id=None, workspace_id=None, limit=10)
+        patched_store.list.assert_called_once_with(
+            owner_id=None, workspace_id=None, limit=10, org_id="test-org-001"
+        )
 
     def test_list_with_all_filters(self, patched_store):
         h = _make_handler()
@@ -315,7 +325,9 @@ class TestListGraphs:
             {"owner_id": "u1", "workspace_id": "ws-2", "limit": "5"},
             http,
         )
-        patched_store.list.assert_called_once_with(owner_id="u1", workspace_id="ws-2", limit=5)
+        patched_store.list.assert_called_once_with(
+            owner_id="u1", workspace_id="ws-2", limit=5, org_id="test-org-001"
+        )
 
 
 # ===========================================================================
@@ -1368,9 +1380,12 @@ class TestPermissionChecks:
         with patch.object(
             h,
             "_check_permission",
-            return_value=MagicMock(
-                status_code=401,
-                body=json.dumps({"error": "Authentication required"}).encode(),
+            return_value=(
+                None,
+                MagicMock(
+                    status_code=401,
+                    body=json.dumps({"error": "Authentication required"}).encode(),
+                ),
             ),
         ):
             result = h.handle_post("/api/v1/pipeline/graphs", {}, http)
@@ -1383,9 +1398,12 @@ class TestPermissionChecks:
         with patch.object(
             h,
             "_check_permission",
-            return_value=MagicMock(
-                status_code=403,
-                body=json.dumps({"error": "Permission denied"}).encode(),
+            return_value=(
+                None,
+                MagicMock(
+                    status_code=403,
+                    body=json.dumps({"error": "Permission denied"}).encode(),
+                ),
             ),
         ):
             result = h.handle_post("/api/v1/pipeline/graphs", {}, http)
@@ -1398,9 +1416,12 @@ class TestPermissionChecks:
         with patch.object(
             h,
             "_check_permission",
-            return_value=MagicMock(
-                status_code=401,
-                body=json.dumps({"error": "Authentication required"}).encode(),
+            return_value=(
+                None,
+                MagicMock(
+                    status_code=401,
+                    body=json.dumps({"error": "Authentication required"}).encode(),
+                ),
             ),
         ):
             result = h.handle_put("/api/v1/pipeline/graphs/graph-abc123", {}, http)
@@ -1413,9 +1434,12 @@ class TestPermissionChecks:
         with patch.object(
             h,
             "_check_permission",
-            return_value=MagicMock(
-                status_code=401,
-                body=json.dumps({"error": "Authentication required"}).encode(),
+            return_value=(
+                None,
+                MagicMock(
+                    status_code=401,
+                    body=json.dumps({"error": "Authentication required"}).encode(),
+                ),
             ),
         ):
             result = h.handle_delete("/api/v1/pipeline/graphs/graph-abc123", {}, http)

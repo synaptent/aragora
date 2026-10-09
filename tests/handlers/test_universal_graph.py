@@ -28,6 +28,10 @@ from aragora.server.handlers.pipeline.universal_graph import (
     UniversalGraphHandler,
     _get_store,
 )
+from aragora.tenancy.record_scope import OrgScope
+
+_SCOPE = OrgScope(org_id="test-org-001", user_id="test-user-001", role="admin")
+_real_check_permission = UniversalGraphHandler._check_permission
 
 
 # ---------------------------------------------------------------------------
@@ -98,8 +102,11 @@ def _reset_store():
 
 @pytest.fixture(autouse=True)
 def _bypass_rbac():
-    """Bypass RBAC permission checks for handler tests."""
-    with patch.object(UniversalGraphHandler, "_check_permission", return_value=None):
+    """Authorize every request as test-org-001, which owns every graph."""
+    with (
+        patch.object(UniversalGraphHandler, "_check_permission", return_value=(_SCOPE, None)),
+        patch("aragora.tenancy.pipeline_access.graph_owned", return_value=True),
+    ):
         yield
 
 
@@ -163,7 +170,9 @@ class TestListGraphs:
         h = UniversalGraphHandler()
         h.handle("/api/v1/pipeline/graphs", {"owner_id": "user-1"}, _mock_handler())
 
-        store.list.assert_called_once_with(owner_id="user-1", workspace_id=None, limit=50)
+        store.list.assert_called_once_with(
+            owner_id="user-1", workspace_id=None, limit=50, org_id="test-org-001"
+        )
 
     @patch("aragora.server.handlers.pipeline.universal_graph._get_store")
     def test_list_with_workspace_filter(self, mock_gs):
@@ -174,7 +183,9 @@ class TestListGraphs:
         h = UniversalGraphHandler()
         h.handle("/api/v1/pipeline/graphs", {"workspace_id": "ws-1"}, _mock_handler())
 
-        store.list.assert_called_once_with(owner_id=None, workspace_id="ws-1", limit=50)
+        store.list.assert_called_once_with(
+            owner_id=None, workspace_id="ws-1", limit=50, org_id="test-org-001"
+        )
 
     @patch("aragora.server.handlers.pipeline.universal_graph._get_store")
     def test_list_with_limit(self, mock_gs):
@@ -185,7 +196,9 @@ class TestListGraphs:
         h = UniversalGraphHandler()
         h.handle("/api/v1/pipeline/graphs", {"limit": "10"}, _mock_handler())
 
-        store.list.assert_called_once_with(owner_id=None, workspace_id=None, limit=10)
+        store.list.assert_called_once_with(
+            owner_id=None, workspace_id=None, limit=10, org_id="test-org-001"
+        )
 
 
 # =========================================================================
@@ -238,6 +251,7 @@ class TestCreateGraph:
     @patch("aragora.server.handlers.pipeline.universal_graph._get_store")
     def test_create_graph(self, mock_gs):
         store = MagicMock()
+        store.get.return_value = None
         mock_gs.return_value = store
 
         h = UniversalGraphHandler()
@@ -1007,39 +1021,51 @@ class TestUnmatchedRoutes:
 
 
 class TestRBACPermissions:
-    def test_post_checks_pipeline_write(self):
+    def test_create_checks_canvas_create(self):
         h = UniversalGraphHandler()
-        with patch.object(
-            h, "_check_permission", return_value={"status": 403, "body": "{}"}
-        ) as mock_check:
+        denial = {"status": 403, "body": "{}"}
+        with patch.object(h, "_check_permission", return_value=(None, denial)) as mock_check:
             handler = _mock_handler()
             result = h.handle_post("/api/v1/pipeline/graphs", {}, handler)
             assert result["status"] == 403
-            mock_check.assert_called_once_with(handler, "pipeline:write")
+            mock_check.assert_called_once_with(handler, "canvas:create")
 
-    def test_put_checks_pipeline_write(self):
+    def test_put_checks_canvas_update(self):
         h = UniversalGraphHandler()
-        with patch.object(
-            h, "_check_permission", return_value={"status": 403, "body": "{}"}
-        ) as mock_check:
-            result = h.handle_put("/api/v1/pipeline/graphs/g-1", {}, _mock_handler())
+        denial = {"status": 403, "body": "{}"}
+        with patch.object(h, "_check_permission", return_value=(None, denial)) as mock_check:
+            handler = _mock_handler()
+            result = h.handle_put("/api/v1/pipeline/graphs/g-1", {}, handler)
             assert result["status"] == 403
+            mock_check.assert_called_once_with(handler, "canvas:update")
 
-    def test_delete_checks_pipeline_write(self):
+    def test_delete_checks_canvas_delete(self):
         h = UniversalGraphHandler()
-        with patch.object(
-            h, "_check_permission", return_value={"status": 403, "body": "{}"}
-        ) as mock_check:
-            result = h.handle_delete("/api/v1/pipeline/graphs/g-1", {}, _mock_handler())
+        denial = {"status": 403, "body": "{}"}
+        with patch.object(h, "_check_permission", return_value=(None, denial)) as mock_check:
+            handler = _mock_handler()
+            result = h.handle_delete("/api/v1/pipeline/graphs/g-1", {}, handler)
             assert result["status"] == 403
+            mock_check.assert_called_once_with(handler, "canvas:delete")
 
-    def test_check_permission_import_failure_allows_access(self):
-        """When RBAC modules are unavailable, access is allowed (graceful degradation)."""
-        h = UniversalGraphHandler()
+    def test_check_permission_checker_failure_denies(self, monkeypatch):
+        """When the permission checker is unavailable, access is denied."""
+        from aragora.billing.auth.context import UserAuthContext
+
+        user = UserAuthContext(
+            authenticated=True,
+            user_id="test-user-001",
+            org_id="test-org-001",
+            role="admin",
+            token_type="access",
+        )
+        monkeypatch.setattr(
+            "aragora.billing.jwt_auth.extract_user_from_request",
+            lambda handler, user_store=None: user,
+        )
         with patch(
-            "aragora.server.handlers.pipeline.universal_graph.extract_user_from_request",
-            side_effect=ImportError("no module"),
-            create=True,
+            "aragora.rbac.checker.get_permission_checker", side_effect=ImportError("no module")
         ):
-            result = h._check_permission(_mock_handler(), "pipeline:write")
-            assert result is None  # access allowed
+            scope, denial = _real_check_permission(_mock_handler(), "canvas:update")
+        assert scope is None
+        assert denial.status_code == 403
