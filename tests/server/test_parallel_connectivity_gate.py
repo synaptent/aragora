@@ -173,7 +173,7 @@ class TestConnectivityGate:
         )
         with patch.dict("os.environ", {}, clear=True):
             with patch(
-                "aragora.control_plane.leader.is_distributed_state_required",
+                "aragora.config.distributed.is_distributed_state_required",
                 return_value=True,
             ):
                 assert initializer._check_connectivity_gate(phase1) is False
