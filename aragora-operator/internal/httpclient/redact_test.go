@@ -69,6 +69,54 @@ func TestRedactErrorKeepsTheErrorChain(t *testing.T) {
 	}
 }
 
+// TestRedactionKeepsNoTokenAfterQuotedQueryValues puts a request URL whose
+// raw query holds a token after a quoted or punctuated value (an
+// apostrophe-quoted one first) in every form in which retryablehttp and
+// net/http log or return it: the url field, the retry message, the giving-up
+// error with net/http's *url.Error inside, and that error flattened to text.
+// Go keeps such a query as is, so none of these characters may end the part
+// that is redacted.
+func TestRedactionKeepsNoTokenAfterQuotedQueryValues(t *testing.T) {
+	const token = "SYNTHETIC_QUERY_TOKEN_redact"
+	const label = "http://127.0.0.1:3140/api/control-plane/agents"
+	for _, value := range []string{`'all'`, `('all')`, `a!b*c`, `$a,b;c`, `~a@b:c`, `"all"`} {
+		t.Run(value, func(t *testing.T) {
+			raw := label + "?filter=" + value + "&token=" + token
+			masked := strings.Replace(raw, "http://", "http://synthetic-user:xxxxx@", 1)
+			urlErr := &url.Error{Op: "Get", URL: raw, Err: errors.New("connection refused")}
+			giveUp := fmt.Errorf("GET %s giving up after 4 attempt(s): %w", masked, urlErr)
+
+			values := redactLogValues([]interface{}{
+				"url", masked,
+				"request", "GET " + masked + " (status: 503)",
+				"error", urlErr,
+				"error", giveUp,
+				"error", errors.New(giveUp.Error()),
+			})
+			if values[1] != label {
+				t.Errorf("url value = %q, want the label %q", values[1], label)
+			}
+			for i := 1; i < len(values); i += 2 {
+				text := fmt.Sprint(values[i])
+				for _, secret := range []string{token, "synthetic-user", "filter="} {
+					if strings.Contains(text, secret) {
+						t.Errorf("redacted %s value %q still holds %q", values[i-1], text, secret)
+					}
+				}
+				if !strings.Contains(text, label) {
+					t.Errorf("redacted %s value %q lost the label %q", values[i-1], text, label)
+				}
+			}
+			for _, i := range []int{5, 7} {
+				var got *url.Error
+				if !errors.As(values[i].(error), &got) || got != urlErr {
+					t.Errorf("redacted error %d no longer wraps the *url.Error", i)
+				}
+			}
+		})
+	}
+}
+
 // TestRedactErrorHidesTheRawInputOfURLParseErrors covers url.Parse errors,
 // which quote the raw input. A space or quote in an unescaped password would
 // end a URL match in the message part way through the password.

@@ -82,12 +82,12 @@ func captureClientLogs(t *testing.T) func() string {
 const syntheticUser = "synthetic-user"
 
 // secretEndpoint is a control-plane endpoint that carries synthetic
-// credentials in its userinfo and query.
+// credentials in its userinfo. Endpoints with a query are refused (see
+// endpoint_test.go), so the userinfo is the only place for them.
 type secretEndpoint struct {
-	url        string
-	label      string // the credential-free breaker label it must be logged as
-	password   string
-	queryToken string
+	url      string
+	label    string // the credential-free breaker label it must be logged as
+	password string
 }
 
 func newSecretEndpoint(t *testing.T, serverURL string) secretEndpoint {
@@ -97,24 +97,20 @@ func newSecretEndpoint(t *testing.T, serverURL string) secretEndpoint {
 		t.Fatalf("parse %q: %v", serverURL, err)
 	}
 	ep := secretEndpoint{
-		label:      u.String(),
-		password:   "SYNTHETIC_PASSWORD_" + rand.Text(),
-		queryToken: "SYNTHETIC_QUERY_TOKEN_" + rand.Text(),
+		label:    u.String(),
+		password: "SYNTHETIC_PASSWORD_" + rand.Text(),
 	}
 	u.User = url.UserPassword(syntheticUser, ep.password)
-	u.RawQuery = url.Values{"token": {ep.queryToken}}.Encode()
 	ep.url = u.String()
 	return ep
 }
 
-// assertAbsent fails t if text contains the endpoint's password, username or
-// query token.
+// assertAbsent fails t if text contains the endpoint's password or username.
 func (ep secretEndpoint) assertAbsent(t *testing.T, what, text string) {
 	t.Helper()
 	for _, secret := range []struct{ name, value string }{
 		{"password", ep.password},
 		{"username", syntheticUser},
-		{"query token", ep.queryToken},
 	} {
 		if strings.Contains(text, secret.value) {
 			t.Errorf("the endpoint %s appears in %s:\n%s", secret.name, what, text)

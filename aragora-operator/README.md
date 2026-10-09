@@ -265,6 +265,9 @@ Both `-flag` and `--flag` spellings work.
 | `--zap-stacktrace-level` | from `--zap-devel` | Level from which stack traces are logged: `info`, `error`, or `panic` |
 | `--zap-time-encoding` | `epoch` | `epoch`, `millis`, `nano`, `iso8601`, `rfc3339`, or `rfc3339nano` |
 
+`--aragora-api-endpoint` must be an absolute `http` or `https` URL without a
+query or fragment; the operator exits at startup with an error otherwise.
+
 The Aragora control-plane API client retries connection errors, `429`, and
 `5xx` answers (except `501`) up to 3 times with 0.5 to 5 s exponential backoff,
 or the `Retry-After` delay of a `429` or `503` answer. Each attempt times out

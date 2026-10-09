@@ -39,17 +39,26 @@ type Client struct {
 	endpoint string
 	token    string
 	http     *httpclient.Client
+	// endpointErr is ValidateEndpoint's verdict on endpoint. When it is set,
+	// every call returns it without sending anything.
+	endpointErr error
 }
 
 // NewClient creates a new Aragora API client. Requests are retried with
 // backoff and pass through a circuit breaker shared by every Client for the
-// same endpoint, and they are traced when OpenTelemetry is enabled.
+// same endpoint, and they are traced when OpenTelemetry is enabled. If
+// ValidateEndpoint refuses endpoint, every call fails with its error and
+// sends nothing.
 func NewClient(endpoint, token string) *Client {
-	return newClient(endpoint, token, sharedHTTPClient(endpoint))
+	c := newClient(endpoint, token, nil)
+	if c.endpointErr == nil {
+		c.http = sharedHTTPClient(endpoint)
+	}
+	return c
 }
 
 func newClient(endpoint, token string, hc *httpclient.Client) *Client {
-	return &Client{endpoint: endpoint, token: token, http: hc}
+	return &Client{endpoint: endpoint, token: token, http: hc, endpointErr: ValidateEndpoint(endpoint)}
 }
 
 // The reconcilers build a Client for every call, so the HTTP client (and its
@@ -355,6 +364,9 @@ type ClusterMetrics struct {
 }
 
 func (c *Client) doRequest(ctx context.Context, method, path string, body []byte) (*http.Response, error) {
+	if c.endpointErr != nil {
+		return nil, c.endpointErr
+	}
 	url := c.endpoint + path
 
 	var bodyReader io.Reader

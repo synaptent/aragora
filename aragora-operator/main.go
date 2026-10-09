@@ -36,6 +36,7 @@ import (
 
 	aragorav1alpha1 "github.com/synaptent/aragora-operator/api/v1alpha1"
 	"github.com/synaptent/aragora-operator/controllers"
+	"github.com/synaptent/aragora-operator/internal/aragora"
 	"github.com/synaptent/aragora-operator/internal/httpclient"
 	"github.com/synaptent/aragora-operator/internal/metrics"
 	"github.com/synaptent/aragora-operator/internal/observability"
@@ -44,6 +45,13 @@ import (
 var (
 	scheme   = runtime.NewScheme()
 	setupLog = ctrl.Log.WithName("setup")
+)
+
+// Tests replace these: controller-runtime allows one signal handler per
+// process, and a test must not load the kubeconfig of the machine it runs on.
+var (
+	setupSignalHandler = ctrl.SetupSignalHandler
+	loadKubeConfig     = ctrl.GetConfig
 )
 
 const (
@@ -80,7 +88,7 @@ func bindFlags(fs *flag.FlagSet) *options {
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
 	fs.StringVar(&o.aragoraAPIEndpoint, "aragora-api-endpoint", "https://aragora-control-plane:8443",
-		"The Aragora control plane API endpoint.")
+		"The Aragora control plane API endpoint: an absolute http(s) URL without a query or fragment.")
 	fs.StringVar(&o.aragoraAPIToken, "aragora-api-token", "",
 		"The Aragora API token for authentication.")
 	fs.BoolVar(&o.allowInsecureControlPlane, "allow-insecure-control-plane", false,
@@ -103,13 +111,20 @@ func main() {
 func run(o *options) int {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&o.zap)))
 
+	endpointLabel := httpclient.EndpointLabel(o.aragoraAPIEndpoint, "(unparsable URL)")
 	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(o.aragoraAPIEndpoint)), "http://") && !o.allowInsecureControlPlane {
-		setupLog.Error(nil, "refusing insecure Aragora API endpoint without explicit opt-in",
-			"endpoint", httpclient.EndpointLabel(o.aragoraAPIEndpoint, "(unparsable URL)"))
+		setupLog.Error(nil, "refusing insecure Aragora API endpoint without explicit opt-in", "endpoint", endpointLabel)
 		return 1
 	}
+	// An empty endpoint turns control-plane calls off in every reconciler.
+	if o.aragoraAPIEndpoint != "" {
+		if err := aragora.ValidateEndpoint(o.aragoraAPIEndpoint); err != nil {
+			setupLog.Error(err, "refusing invalid Aragora API endpoint", "endpoint", endpointLabel)
+			return 1
+		}
+	}
 
-	ctx := ctrl.SetupSignalHandler()
+	ctx := setupSignalHandler()
 
 	if o.pprofAddr != "" {
 		if _, err := observability.StartPprof(o.pprofAddr, setupLog); err != nil {
@@ -121,7 +136,7 @@ func run(o *options) int {
 	stopTelemetry := setupTelemetry(ctx)
 	defer stopTelemetry()
 
-	cfg, err := waitForKubeConfig(ctx, ctrl.GetConfig, o.kubeconfigWait, kubeconfigRetryInterval)
+	cfg, err := waitForKubeConfig(ctx, loadKubeConfig, o.kubeconfigWait, kubeconfigRetryInterval)
 	if err != nil {
 		return fail(err, "unable to get kubeconfig")
 	}

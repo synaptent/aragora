@@ -80,3 +80,55 @@ func TestHTTPClientLogsAndErrorsOmitURLCredentials(t *testing.T) {
 		}
 	}
 }
+
+// TestHTTPClientLogsOmitTokenAfterQuotedQueryValue sends requests whose raw
+// query holds a token after an apostrophe-quoted value (filter='all'), which
+// Go keeps as is. A retried call makes retryablehttp log the URL in its url
+// field and its retry message; a call to a closed port also logs net/http's
+// *url.Error and returns the giving-up error. The token must not survive in
+// any of them.
+func TestHTTPClientLogsOmitTokenAfterQuotedQueryValue(t *testing.T) {
+	token := "SYNTHETIC_QUERY_TOKEN_" + rand.Text()
+	password := "SYNTHETIC_PASSWORD_" + rand.Text()
+	const path = "/api/control-plane/agents?filter='all'&token="
+
+	var logs bytes.Buffer
+	cfg := fastConfig(t)
+	cfg.Logger = zap.New(zap.UseDevMode(true), zap.WriteTo(&logs))
+	c := New(cfg)
+
+	retried := newScriptedServer(t, http.StatusServiceUnavailable, http.StatusOK)
+	resp, err := get(t, c, retried.URL+path+token)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("retried call: resp = %v, err = %v; want 200", resp, err)
+	}
+
+	down := httptest.NewServer(http.NotFoundHandler())
+	down.Close()
+	target, err := url.Parse(down.URL + path + token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	target.User = url.UserPassword("synthetic-user", password)
+	_, failed := get(t, c, target.String())
+	if failed == nil {
+		t.Fatal("call to a closed port succeeded")
+	}
+
+	text := logs.String()
+	for _, msg := range []string{"performing request", "retrying request", "request failed"} {
+		if !strings.Contains(text, msg) {
+			t.Errorf("no %q line in the logs:\n%s", msg, text)
+		}
+	}
+	if want := `"breaker": "` + cfg.Name + `"`; strings.Count(text, want) != strings.Count(text, "\n") {
+		t.Errorf("not every log line carries %s:\n%s", want, text)
+	}
+	for what, got := range map[string]string{"logs": text, "giving-up error": failed.Error()} {
+		for _, secret := range []string{token, password, "synthetic-user"} {
+			if strings.Contains(got, secret) {
+				t.Errorf("%q from the request URL appears in the %s:\n%s", secret, what, got)
+			}
+		}
+	}
+}

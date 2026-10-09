@@ -28,9 +28,18 @@ import (
 // its EndpointLabel.
 const unparsableURL = "[unparsable URL]"
 
+const urlScheme = `[A-Za-z][A-Za-z0-9+.-]*://`
+
 // urlInText matches URLs as net/http, retryablehttp and url.Parse put them in
-// messages, where they end at white space or a quote.
-var urlInText = regexp.MustCompile(`[A-Za-z][A-Za-z0-9+.-]*://[^\s"'<>]+`)
+// messages: Go-quoted ("..." with backslash escapes, as %q writes them) or
+// bare. A bare URL runs to the next white space, because Go keeps a raw
+// query as is and a query can hold quotes, apostrophes and other
+// punctuation.
+var urlInText = regexp.MustCompile(`"` + urlScheme + `(?:[^"\\]|\\.)*"|` + urlScheme + `\S+`)
+
+// wholeURL matches a log value that is a URL from its first character, such
+// as retryablehttp's url field. Such a value is labelled as a whole.
+var wholeURL = regexp.MustCompile(`^` + urlScheme)
 
 // EndpointLabel returns endpoint as scheme://host[:port]/path, a form that is
 // safe to log: the userinfo, query and fragment, which can carry credentials,
@@ -48,10 +57,18 @@ func safeURL(u *url.URL) string {
 	return (&url.URL{Scheme: u.Scheme, Host: u.Host, Path: u.Path, RawPath: u.RawPath}).String()
 }
 
-// redactURLs replaces every URL in s with its EndpointLabel.
+// redactURLs replaces every URL in s with its EndpointLabel, quoted again
+// when it was quoted.
 func redactURLs(s string) string {
-	return urlInText.ReplaceAllStringFunc(s, func(raw string) string {
-		return EndpointLabel(raw, unparsableURL)
+	return urlInText.ReplaceAllStringFunc(s, func(match string) string {
+		if match[0] != '"' {
+			return EndpointLabel(match, unparsableURL)
+		}
+		raw, err := strconv.Unquote(match)
+		if err != nil {
+			raw = match[1 : len(match)-1]
+		}
+		return strconv.Quote(EndpointLabel(raw, unparsableURL))
 	})
 }
 
@@ -66,7 +83,8 @@ func RedactError(err error) error {
 	var uerr *url.Error
 	if errors.As(err, &uerr) && uerr.URL != "" {
 		// url.Parse reports its raw input, which can hold characters that end
-		// a urlInText match early, such as a space in an unescaped password.
+		// a bare urlInText match early, such as a space in an unescaped
+		// password.
 		label := EndpointLabel(uerr.URL, unparsableURL)
 		quoted := strconv.Quote(uerr.URL)
 		msg = strings.ReplaceAll(msg, quoted[1:len(quoted)-1], label)
@@ -88,14 +106,19 @@ func (e *redactedError) Error() string { return e.msg }
 func (e *redactedError) Unwrap() error { return e.err }
 
 // redactLogValues returns a copy of keysAndValues in which the URLs in
-// string and error values are reduced to their EndpointLabel.
+// string and error values are reduced to their EndpointLabel. A string value
+// that starts with a URL is parsed and labelled as a whole.
 func redactLogValues(keysAndValues []interface{}) []interface{} {
 	out := make([]interface{}, len(keysAndValues))
 	copy(out, keysAndValues)
 	for i := 1; i < len(out); i += 2 {
 		switch v := out[i].(type) {
 		case string:
-			out[i] = redactURLs(v)
+			if wholeURL.MatchString(v) {
+				out[i] = EndpointLabel(v, unparsableURL)
+			} else {
+				out[i] = redactURLs(v)
+			}
 		case error:
 			out[i] = RedactError(v)
 		}
