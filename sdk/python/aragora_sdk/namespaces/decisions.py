@@ -386,6 +386,20 @@ class DecisionsAPI:
             "GET", "/api/v1/workspace/decisions", params={"limit": limit, "offset": offset}
         )
 
+    def get_workspace_decision(self, decision_id: str) -> dict[str, Any]:
+        """Get one workspace decision."""
+        return self._client._request("GET", f"/api/v1/workspace/decisions/{decision_id}")
+
+    def list_workspace_decision_sources(self, decision_id: str) -> dict[str, Any]:
+        """List a workspace decision's sources with their passage summaries."""
+        return self._client._request("GET", f"/api/v1/workspace/decisions/{decision_id}/sources")
+
+    def get_workspace_decision_passage(self, decision_id: str, passage_id: str) -> dict[str, Any]:
+        """Get the exact text, label and SHA-256 of one passage."""
+        return self._client._request(
+            "GET", f"/api/v1/workspace/decisions/{decision_id}/passages/{passage_id}"
+        )
+
 
 class AsyncDecisionsAPI:
     """Asynchronous decisions API."""
@@ -598,4 +612,22 @@ class AsyncDecisionsAPI:
         """List the caller's organization's workspace decisions, newest first."""
         return await self._client._request(
             "GET", "/api/v1/workspace/decisions", params={"limit": limit, "offset": offset}
+        )
+
+    async def get_workspace_decision(self, decision_id: str) -> dict[str, Any]:
+        """Get one workspace decision."""
+        return await self._client._request("GET", f"/api/v1/workspace/decisions/{decision_id}")
+
+    async def list_workspace_decision_sources(self, decision_id: str) -> dict[str, Any]:
+        """List a workspace decision's sources with their passage summaries."""
+        return await self._client._request(
+            "GET", f"/api/v1/workspace/decisions/{decision_id}/sources"
+        )
+
+    async def get_workspace_decision_passage(
+        self, decision_id: str, passage_id: str
+    ) -> dict[str, Any]:
+        """Get the exact text, label and SHA-256 of one passage."""
+        return await self._client._request(
+            "GET", f"/api/v1/workspace/decisions/{decision_id}/passages/{passage_id}"
         )

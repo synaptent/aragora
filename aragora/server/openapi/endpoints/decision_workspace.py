@@ -17,6 +17,21 @@ _ORG_NOTE = (
     "exactly like a missing one (404)."
 )
 
+_DECISION_ID = {
+    "name": "decision_id",
+    "in": "path",
+    "required": True,
+    "description": "Decision id (the id of its decision plan).",
+    "schema": {"type": "string"},
+}
+_PASSAGE_ID = {
+    "name": "passage_id",
+    "in": "path",
+    "required": True,
+    "description": "Passage id from the decision's sources.",
+    "schema": {"type": "string"},
+}
+
 _ERROR_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
@@ -29,6 +44,54 @@ _ERROR_SCHEMA: dict[str, Any] = {
     },
     "required": ["error", "code"],
 }
+
+_PASSAGE_SUMMARY: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "passage_id": {"type": "string"},
+        "label": {"type": "string", "description": "S<n>:P<m>"},
+        "seq": {"type": "integer"},
+        "heading": {"type": "string", "nullable": True},
+        "char_count": {"type": "integer"},
+        "sha256": {"type": "string", "description": "SHA-256 of the passage text"},
+        "in_context": {"type": "boolean"},
+    },
+}
+
+_SOURCE: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "source_id": {"type": "string"},
+        "label": {"type": "string", "description": "S1, S2, ... in intake order"},
+        "kind": {"type": "string", "enum": ["upload", "pasted"]},
+        "filename": {"type": "string", "nullable": True},
+        "document_id": {"type": "string", "nullable": True},
+        "content_sha256": {"type": "string"},
+        "char_count": {"type": "integer"},
+        "passage_count": {"type": "integer"},
+        "created_at": {"type": "string", "format": "date-time"},
+        "passages": {"type": "array", "items": _PASSAGE_SUMMARY},
+    },
+}
+
+_DECISION_PROPERTIES: dict[str, Any] = {
+    "id": {"type": "string"},
+    "question": {"type": "string"},
+    "status": {"type": "string", "enum": ["debating", "ready", "failed"]},
+    "agents": {"type": "array", "items": {"type": "string"}},
+    "rounds": {"type": "integer"},
+    "created_by": {"type": "string", "nullable": True},
+    "created_at": {"type": "string", "format": "date-time"},
+    "updated_at": {"type": "string", "format": "date-time"},
+    "current_revision_id": {"type": "string", "nullable": True},
+    "budget_usd": {"type": "number", "nullable": True},
+    "cost_actual_usd": {"type": "number"},
+    "cost_estimated_usd": {"type": "number"},
+    "source_count": {"type": "integer"},
+    "passage_count": {"type": "integer"},
+}
+
+_DECISION: dict[str, Any] = {"type": "object", "properties": _DECISION_PROPERTIES}
 
 
 def _error(status: str, description: str) -> dict[str, Any]:
@@ -149,6 +212,89 @@ DECISION_WORKSPACE_ENDPOINTS: dict[str, Any] = {
                 "403": STANDARD_ERRORS["403"],
             },
         },
+    },
+    "/api/v1/workspace/decisions/{decision_id}": {
+        "get": {
+            "tags": _TAGS,
+            "summary": "Get a workspace decision",
+            "operationId": "getWorkspaceDecision",
+            "description": "One decision with its status, agents and counts." + _ORG_NOTE,
+            "security": _SECURITY,
+            "parameters": [_DECISION_ID],
+            "responses": {
+                "200": _ok_response("Decision", _DECISION),
+                "401": STANDARD_ERRORS["401"],
+                "403": STANDARD_ERRORS["403"],
+                "404": STANDARD_ERRORS["404"],
+            },
+        }
+    },
+    "/api/v1/workspace/decisions/{decision_id}/sources": {
+        "get": {
+            "tags": _TAGS,
+            "summary": "List a decision's sources",
+            "operationId": "listWorkspaceDecisionSources",
+            "description": (
+                "The decision's sources in intake order with their passage counts and "
+                "passage summaries (labels, headings, hashes)." + _ORG_NOTE
+            ),
+            "security": _SECURITY,
+            "parameters": [_DECISION_ID],
+            "responses": {
+                "200": _ok_response(
+                    "Sources",
+                    {
+                        "type": "object",
+                        "properties": {
+                            "decision_id": {"type": "string"},
+                            "sources": {"type": "array", "items": _SOURCE},
+                        },
+                    },
+                ),
+                "401": STANDARD_ERRORS["401"],
+                "403": STANDARD_ERRORS["403"],
+                "404": STANDARD_ERRORS["404"],
+            },
+        }
+    },
+    "/api/v1/workspace/decisions/{decision_id}/passages/{passage_id}": {
+        "get": {
+            "tags": _TAGS,
+            "summary": "Get a passage",
+            "operationId": "getWorkspaceDecisionPassage",
+            "description": (
+                "The exact text of one passage, its label, heading, offsets in the "
+                "source and SHA-256. A passage of another decision answers 404." + _ORG_NOTE
+            ),
+            "security": _SECURITY,
+            "parameters": [_DECISION_ID, _PASSAGE_ID],
+            "responses": {
+                "200": _ok_response(
+                    "Passage",
+                    {
+                        "type": "object",
+                        "properties": {
+                            "passage_id": {"type": "string"},
+                            "decision_id": {"type": "string"},
+                            "source_id": {"type": "string"},
+                            "source_label": {"type": "string"},
+                            "label": {"type": "string"},
+                            "seq": {"type": "integer"},
+                            "heading": {"type": "string", "nullable": True},
+                            "start_char": {"type": "integer"},
+                            "end_char": {"type": "integer"},
+                            "text": {"type": "string"},
+                            "sha256": {"type": "string"},
+                            "in_context": {"type": "boolean"},
+                            "created_at": {"type": "string", "format": "date-time"},
+                        },
+                    },
+                ),
+                "401": STANDARD_ERRORS["401"],
+                "403": STANDARD_ERRORS["403"],
+                "404": STANDARD_ERRORS["404"],
+            },
+        }
     },
 }
 
