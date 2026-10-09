@@ -568,9 +568,9 @@ class TestTokenCostCalculation:
             input_tokens=1_000_000,
             output_tokens=1_000_000,
         )
-        # mistral-large input: $2/1M, output: $6/1M
-        assert input_cost == Decimal("2.00")
-        assert output_cost == Decimal("6.00")
+        # mistral-large-2512 live catalog 2026-09-04
+        assert input_cost == Decimal("0.50")
+        assert output_cost == Decimal("1.50")
 
     def test_known_model_mistral_codestral(self):
         """Test cost calculation for Codestral."""
@@ -2117,3 +2117,90 @@ class TestModuleExports:
         assert MODEL_PRICING is not None
         assert TIER_USAGE_CAPS is not None
         assert get_usage_meter is not None
+
+
+class TestSinglePricingImplementation:
+    """``UsageMeter._calculate_token_cost`` is the path that bills tenants.
+
+    It used to be a SECOND, independent pricing implementation: a flat
+    lookup in ``MODEL_PRICING`` keyed on the caller's provider label, unable
+    to express a documented long-context tier and quoting the $2/$8 default
+    for any label that missed the model's own bucket. It now delegates to
+    ``billing.usage.calculate_token_cost``, supplying its own historical rows
+    as data (``extra_prices``) rather than re-implementing the ladder
+    (2026-09-05 wave-2 re-review).
+    """
+
+    @staticmethod
+    def _meter():
+        from aragora.services.usage_metering import UsageMeter
+
+        return UsageMeter(db_path=Path("/tmp/test_single_pricing_impl.db"))
+
+    def test_halves_sum_to_the_canonical_total(self):
+        from aragora.billing.usage import calculate_token_cost
+        from aragora.services.metering_models import MODEL_PRICING
+
+        for provider, model in (
+            ("anthropic", "claude-fable-5-1"),
+            ("openai", "gpt-6-astra"),
+            ("anthropic", "claude-haiku-4"),
+            ("mistral", "codestral"),
+            ("anthropic", "unknown-model-xyz"),
+        ):
+            input_cost, output_cost = self._meter()._calculate_token_cost(
+                provider=provider,
+                model=model,
+                input_tokens=400_000,
+                output_tokens=10_000,
+            )
+            expected_total = calculate_token_cost(
+                provider, model, 400_000, 10_000, extra_prices=MODEL_PRICING
+            )
+            assert input_cost + output_cost == expected_total, (provider, model)
+
+    def test_long_context_tier_now_reaches_the_billing_path(self):
+        """The old flat lookup could not price a tier at all, so a tenant
+        was under-billed for every long-context request."""
+        # gpt-6-astra: threshold 272_000; flat $10/$50, long $20/$75.
+        input_cost, output_cost = self._meter()._calculate_token_cost(
+            provider="openai",
+            model="gpt-6-astra",
+            input_tokens=300_000,
+            output_tokens=10_000,
+        )
+        assert input_cost == Decimal("300000") / Decimal("1000000") * Decimal("20.00")
+        assert output_cost == Decimal("10000") / Decimal("1000000") * Decimal("75.00")
+
+    def test_an_unrecognised_label_still_bills_the_model_real_rate(self):
+        """A provider label is not information about a model's price."""
+        input_cost, output_cost = self._meter()._calculate_token_cost(
+            provider="some-new-label",
+            model="claude-fable-5-1",
+            input_tokens=1_000_000,
+            output_tokens=1_000_000,
+        )
+        assert input_cost == Decimal("10.00")
+        assert output_cost == Decimal("50.00")
+
+    def test_metering_only_historical_rows_still_price(self):
+        """Rows that live in MODEL_PRICING and nowhere else must survive the
+        delegation -- losing them would silently re-rate real tenant traffic
+        to the $2/$8 default."""
+        from aragora.billing.usage import PROVIDER_PRICING
+
+        for provider, model, expected_in, expected_out in (
+            ("anthropic", "claude-haiku-4", Decimal("0.25"), Decimal("1.25")),
+            ("openai", "o1", Decimal("15.00"), Decimal("60.00")),
+            ("mistral", "codestral", Decimal("0.20"), Decimal("0.60")),
+        ):
+            assert model not in PROVIDER_PRICING.get(provider, {}), (
+                f"{model} is now in the shared table; this test's premise moved"
+            )
+            input_cost, output_cost = self._meter()._calculate_token_cost(
+                provider=provider,
+                model=model,
+                input_tokens=1_000_000,
+                output_tokens=1_000_000,
+            )
+            assert (input_cost, output_cost) == (expected_in, expected_out), model

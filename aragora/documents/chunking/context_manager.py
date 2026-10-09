@@ -25,10 +25,51 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from aragora.config.model_pins import GPT6_ASTRA_DIRECT
 from aragora.documents.models import DocumentChunk, MODEL_TOKEN_LIMITS
 from aragora.documents.chunking.token_counter import TokenCounter, get_token_counter
+from aragora.models.catalog import CATALOG
+from aragora.models.pricing_mirror import per_mtok_rows
 
 logger = logging.getLogger(__name__)
+
+# Pricing in USD per 1M tokens, consulted by ``ContextManager.estimate_cost``.
+# The hand-written rows are HISTORICAL snapshots kept so a preview for an
+# archived document run still quotes the price that run was billed at; the
+# generated rows come from the catalog (one per spelling of every active
+# row) so a preview for a CURRENT model no longer falls back to the
+# module's $5/$15 guess. Module-level rather than function-local (where it
+# used to live) so the table is inspectable and testable, and the catalog
+# projection is built once instead of on every call.
+_LEGACY_PRICING: dict[str, dict[str, float]] = {
+    "gemini-3.1-pro-preview": {"input": 2.00, "output": 12.00},
+    "gemini-3-pro": {"input": 1.25, "output": 5.00},
+    "gemini-3-pro-preview": {"input": 1.25, "output": 5.00},
+    "gemini-3.1-pro": {"input": 1.25, "output": 5.00},
+    "gpt-4-turbo": {"input": 10.00, "output": 30.00},
+    "gpt-4o": {"input": 2.50, "output": 10.00},
+    "claude-3.5-sonnet": {"input": 3.00, "output": 15.00},
+    "claude-3-opus": {"input": 15.00, "output": 75.00},
+}
+
+PRICING: dict[str, dict[str, float]] = {**_LEGACY_PRICING, **per_mtok_rows()}
+
+# Context-window band boundaries, in tokens.
+LARGE_CONTEXT_TOKENS = 1_000_000
+MEDIUM_CONTEXT_TOKENS = 128_000
+
+
+def _catalog_context_models(low: int, high: int | None) -> set[str]:
+    """Every spelling of every ACTIVE catalog row whose ``context_window``
+    is at least ``low`` and (when ``high`` is given) below it."""
+    return {
+        spelling
+        for spec in CATALOG.values()
+        if not spec.retired
+        and spec.context_window >= low
+        and (high is None or spec.context_window < high)
+        for spelling in spec.all_ids()
+    }
 
 
 class ContextStrategy(str, Enum):
@@ -77,8 +118,12 @@ class ContextWindow:
 class ContextConfig:
     """Configuration for context building."""
 
-    # Target model (affects strategy selection)
-    model: str = "gpt-4-turbo"
+    # Target model (affects strategy selection). Pinned to the catalog's
+    # current OpenAI frontier: the previous default "gpt-4-turbo" is an
+    # UPGRADES key, so the config's model depended on the upgrade map to
+    # name anything live, and its 128K context limit under-sized every
+    # window this config built (2026-09-05 merge-gate addendum on #9989).
+    model: str = GPT6_ASTRA_DIRECT
 
     # Maximum tokens to use (None = use model's limit)
     max_tokens: int | None = None
@@ -109,16 +154,19 @@ class ContextManager:
     based on document size and model limits.
     """
 
-    # Models with large context windows (1M+ tokens)
+    # Models with large context windows (1M+ tokens). Historical spellings
+    # kept (they are the only rows for models the catalog no longer carries)
+    # plus every active catalog row whose context_window reaches 1M -- which
+    # is now most of the frontier, and none of which this set named before
+    # (2026-09-04 controller ruling, wave 3).
     LARGE_CONTEXT_MODELS = {
-        "gemini-3.1-pro-preview",
         "gemini-3-pro",
         "gemini-3-pro-preview",
         "gemini-3.1-pro",
         "gemini-1.5-pro",  # 2M tokens
-    }
+    } | _catalog_context_models(LARGE_CONTEXT_TOKENS, None)
 
-    # Models with medium context windows (128K-256K tokens)
+    # Models with context windows between 128K and 1M tokens.
     MEDIUM_CONTEXT_MODELS = {
         "gpt-4-turbo",
         "gpt-4-turbo-preview",
@@ -127,7 +175,7 @@ class ContextManager:
         "claude-3-sonnet",
         "claude-3-haiku",
         "claude-3.5-sonnet",
-    }
+    } | _catalog_context_models(MEDIUM_CONTEXT_TOKENS, LARGE_CONTEXT_TOKENS)
 
     def __init__(
         self,
@@ -549,18 +597,6 @@ class ContextManager:
         Returns:
             Cost estimate dictionary
         """
-        # Approximate pricing per 1M tokens (as of 2025)
-        PRICING = {
-            "gemini-3.1-pro-preview": {"input": 2.00, "output": 12.00},
-            "gemini-3-pro": {"input": 1.25, "output": 5.00},
-            "gemini-3-pro-preview": {"input": 1.25, "output": 5.00},
-            "gemini-3.1-pro": {"input": 1.25, "output": 5.00},
-            "gpt-4-turbo": {"input": 10.00, "output": 30.00},
-            "gpt-4o": {"input": 2.50, "output": 10.00},
-            "claude-3.5-sonnet": {"input": 3.00, "output": 15.00},
-            "claude-3-opus": {"input": 15.00, "output": 75.00},
-        }
-
         pricing = PRICING.get(model, {"input": 5.00, "output": 15.00})
         input_cost = (total_tokens / 1_000_000) * pricing["input"]
         # Estimate output as 20% of input

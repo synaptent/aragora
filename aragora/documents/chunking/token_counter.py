@@ -23,9 +23,12 @@ from __future__ import annotations
 
 import logging
 import re
+from datetime import date
 from functools import lru_cache
 from typing import Literal
 
+from aragora.config.model_pins import GPT6_ASTRA_DIRECT
+from aragora.models.catalog import CATALOG
 from aragora.utils.cache_registry import register_lru_cache
 
 logger = logging.getLogger(__name__)
@@ -38,8 +41,13 @@ except (ImportError, AttributeError):
     tiktoken = None
     TIKTOKEN_AVAILABLE = False
 
-# Model family to encoding mapping for tiktoken
-MODEL_ENCODINGS = {
+# Model spelling to tiktoken encoding.
+#
+# The hand-written rows are HISTORICAL and stay: they carry the two
+# different encodings OpenAI shipped across the GPT-4 line (``cl100k_base``
+# for gpt-4/gpt-4-turbo, ``o200k_base`` from gpt-4o on) plus the embedding
+# models, none of which the catalog carries a row for.
+_LEGACY_MODEL_ENCODINGS: dict[str, str] = {
     # OpenAI models
     "gpt-4": "cl100k_base",
     "gpt-4-turbo": "cl100k_base",
@@ -48,8 +56,49 @@ MODEL_ENCODINGS = {
     "text-embedding-ada-002": "cl100k_base",
     "text-embedding-3-small": "cl100k_base",
     "text-embedding-3-large": "cl100k_base",
+}
+
+_DEFAULT_ENCODING = "cl100k_base"
+_O200K_ENCODING = "o200k_base"
+
+# gpt-4o's release date. OpenAI switched to ``o200k_base`` with gpt-4o, so
+# every OpenAI model released on or after this date uses it. Written as a
+# constant rather than read from the catalog because the catalog carries no
+# gpt-4o row (it is a retired spelling that resolves forward through
+# UPGRADES), and this boundary is a tokenizer fact that must not move if
+# that row is ever added or removed.
+_O200K_FROM = date(2024, 5, 13)
+
+
+def _catalog_encoding_rows() -> dict[str, str]:
+    """One encoding row per spelling of every ACTIVE catalog model.
+
+    tiktoken only has real encodings for OpenAI's tokenizer, so the rule
+    (2026-09-04 controller ruling, wave 3) is: an OpenAI row newer than
+    gpt-4o gets ``o200k_base``; every other provider gets the module's
+    existing default. A non-OpenAI row never reaches this table at runtime
+    -- ``count()`` only consults it once ``_get_model_family`` has already
+    said "openai" -- but naming the whole active catalog here means a model
+    that later moves into the OpenAI family cannot silently inherit a
+    wrong encoding by omission.
+    """
+    return {
+        spelling: (
+            _O200K_ENCODING
+            if spec.provider == "openai" and spec.release_date >= _O200K_FROM
+            else _DEFAULT_ENCODING
+        )
+        for spec in CATALOG.values()
+        if not spec.retired
+        for spelling in spec.all_ids()
+    }
+
+
+MODEL_ENCODINGS: dict[str, str] = {
+    **_LEGACY_MODEL_ENCODINGS,
+    **_catalog_encoding_rows(),
     # Default
-    "default": "cl100k_base",
+    "default": _DEFAULT_ENCODING,
 }
 
 # Characters per token approximations for non-OpenAI models
@@ -111,12 +160,20 @@ class TokenCounter:
     approximations for other providers.
     """
 
-    def __init__(self, default_model: str = "gpt-4"):
+    def __init__(self, default_model: str = GPT6_ASTRA_DIRECT):
         """
         Initialize token counter.
 
         Args:
-            default_model: Default model to use for counting
+            default_model: Default model to use for counting. Defaults to
+                the catalog's current OpenAI frontier rather than the
+                retired "gpt-4" spelling it used to name: that literal is
+                an UPGRADES key, so the counter's default silently depended
+                on the upgrade map to reach an active row, and it selected
+                ``cl100k_base`` when every current OpenAI model tokenizes
+                with ``o200k_base`` (2026-09-05 merge-gate addendum on
+                #9989). The encoding follows from the catalog via
+                MODEL_ENCODINGS; no hand row is needed.
         """
         self.default_model = default_model
         self._cache: dict[tuple[str, str], int] = {}
@@ -337,7 +394,7 @@ def get_token_counter() -> TokenCounter:
     return _token_counter
 
 
-def count_tokens(text: str, model: str = "gpt-4") -> int:
+def count_tokens(text: str, model: str = GPT6_ASTRA_DIRECT) -> int:
     """Convenience function to count tokens."""
     return get_token_counter().count(text, model)
 

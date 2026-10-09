@@ -4,14 +4,34 @@ Grok agent for xAI's Grok API.
 
 from aragora.agents.api_agents.base import APIAgent
 from aragora.core_types import AgentRole
-from aragora.agents.api_agents.common import get_primary_api_key
+from aragora.agents.api_agents.common import get_primary_api_key, upgrade_retired_model_id
 from aragora.agents.api_agents.openai_compatible import OpenAICompatibleMixin
 from aragora.agents.registry import AgentRegistry
+from aragora.config.model_pins import GROK_46_DIRECT, GROK_46_VIA_OPENROUTER
+
+# Frontier pick for the Grok API agent (2026-09-04 frontier-model-refresh).
+DEFAULT_MODEL = GROK_46_DIRECT
+
+_GROK_DEFAULT_BASE_URL = "https://api.x.ai/v1"
+
+
+def _resolve_base_url(env_name: str, default: str) -> str:
+    """Resolve the API base URL from the environment (issue #9304).
+
+    Gateway values may omit the /v1 suffix the client paths expect; normalize
+    so both "https://gw.example" and "https://gw.example/v1" work.
+    """
+    import os
+
+    raw = os.environ.get(env_name, "").strip().rstrip("/")
+    if not raw:
+        return default
+    return raw if raw.endswith("/v1") else raw + "/v1"
 
 
 @AgentRegistry.register(
     "grok",
-    default_model="grok-4-latest",
+    default_model=DEFAULT_MODEL,
     agent_type="API",
     env_vars="XAI_API_KEY or GROK_API_KEY",
     accepts_api_key=True,
@@ -27,30 +47,35 @@ class GrokAgent(OpenAICompatibleMixin, APIAgent):
     Uses OpenAICompatibleMixin for standard OpenAI-compatible API implementation.
     """
 
-    OPENROUTER_MODEL_MAP = {
-        "grok-4.2": "x-ai/grok-4.5",  # invalid legacy id; use the live frontier route
-        "grok-4-2": "x-ai/grok-4.5",
-        "grok-4-1-fast": "x-ai/grok-4.1-fast",
-        "grok-4-1-fast-reasoning": "x-ai/grok-4.1-fast",
-        "grok-4-latest": "x-ai/grok-4.5",
-        "grok-4": "x-ai/grok-4.5",
-        "grok-4-fast": "x-ai/grok-4-fast",
-        "grok-3": "x-ai/grok-3",
-        "grok-2": "x-ai/grok-2-1212",
-        "grok-2-1212": "x-ai/grok-2-1212",
-        "grok-beta": "x-ai/grok-beta",
-    }
-    DEFAULT_FALLBACK_MODEL = "x-ai/grok-4.5"
+    # No static OPENROUTER_MODEL_MAP: QuotaFallbackMixin.get_fallback_model()
+    # (aragora/agents/fallback.py) resolves the current model through the
+    # catalog/upgrade-map instead, so every legacy or retired Grok spelling
+    # (not just a hand-enumerated subset) transparently upgrades to its
+    # frontier via OpenRouter.
+    DEFAULT_FALLBACK_MODEL = GROK_46_VIA_OPENROUTER
 
     def __init__(
         self,
         name: str = "grok",
-        model: str = "grok-4-latest",
+        model: str = DEFAULT_MODEL,
         role: AgentRole = "proposer",
         timeout: int = 120,
         api_key: str | None = None,
         enable_fallback: bool | None = None,  # None = use config setting
     ) -> None:
+        # A retired or known-dead explicit id is upgraded before it can be
+        # sent to the native endpoint (finding O-P2a); active and unknown
+        # ids pass through untouched. See upgrade_retired_model_id. Skipped
+        # for a custom XAI_BASE_URL (BYOK gateway/proxy, issue #9304): that
+        # endpoint may serve ids under names the public catalog does not
+        # recognize, so rewriting them would silently target the wrong
+        # model on someone else's endpoint. Compared against the RESOLVED
+        # (normalized) URL rather than raw env-var presence, so an env var
+        # set to a spelling of the same official endpoint (e.g. missing the
+        # /v1 suffix) still counts as official.
+        resolved_base_url = _resolve_base_url("XAI_BASE_URL", _GROK_DEFAULT_BASE_URL)
+        if resolved_base_url == _GROK_DEFAULT_BASE_URL:
+            model = upgrade_retired_model_id(model)
         super().__init__(
             name=name,
             model=model,
@@ -62,7 +87,9 @@ class GrokAgent(OpenAICompatibleMixin, APIAgent):
                 "GROK_API_KEY",
                 allow_openrouter_fallback=True,
             ),
-            base_url="https://api.x.ai/v1",
+            # XAI_BASE_URL supports BYOK gateways/proxies (LiteLLM,
+            # enterprise API gateways, local proxies) — issue #9304.
+            base_url=resolved_base_url,
         )
         self.agent_type = "grok"
         # Use config setting if not explicitly provided

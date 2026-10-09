@@ -31,7 +31,9 @@ class TestPersonaToAgentMapping:
 
     def test_openrouter_personas_use_registered_types(self):
         """OpenRouter personas should use registered agent types."""
-        openrouter_personas = ["qwen", "qwen-max", "yi", "deepseek", "deepseek-r1", "kimi"]
+        # "yi" was removed with the YiAgent registration (frontier-model-
+        # refresh, 2026-09-04): 01-ai/yi-large is gone from OpenRouter.
+        openrouter_personas = ["qwen", "qwen-max", "deepseek", "deepseek-r1", "kimi"]
 
         for persona in openrouter_personas:
             agent_type = PERSONA_TO_AGENT.get(persona)
@@ -78,7 +80,7 @@ class TestGetAgentString:
         classification = QuestionClassification(
             category="technical",
             complexity="complex",
-            recommended_personas=["qwen", "deepseek", "yi", "kimi"],
+            recommended_personas=["qwen", "deepseek", "kimi"],
         )
 
         result = classifier.get_agent_string(classification)

@@ -25,6 +25,7 @@ import logging
 import os
 from typing import Any, Callable
 
+from aragora.config.model_pins import FABLE_51_DIRECT
 from aragora.models import CATALOG
 from aragora.pdb.panel_config import PDBPanelConfig, load_panel_config
 from aragora.pdb.protocol import ProviderInvoker
@@ -73,8 +74,20 @@ KIMI_MODEL_ENV = "ARAGORA_PDB_KIMI_MODEL"
 QWEN_MODEL_ENV = "ARAGORA_PDB_QWEN_MODEL"
 MISTRAL_MODEL_ENV = "ARAGORA_PDB_MISTRAL_MODEL"
 
-CLAUDE_MODEL_DEFAULT = "claude-sonnet-4-6"
-OPENAI_MODEL_DEFAULT = "gpt-5.5"
+# Same class as OPENAI_MODEL_DEFAULT below: "claude-sonnet-4-6" is an
+# UPGRADES key, so AnthropicAPIAgent rewrote the PDB Claude slot at
+# construction and the slot's identity (and its price, ~3x) depended on that
+# rewrite rather than on what this constant says (finding C-P3 on #9989).
+# Pinned explicitly to the canonical Claude frontier -- Fable everywhere
+# Claude is used, per the frontier-model-refresh founder decision -- so the
+# slot names the model it actually runs.
+CLAUDE_MODEL_DEFAULT = FABLE_51_DIRECT
+# Same class as DEEPSEEK_MODEL_DEFAULT below: "gpt-5.5" is a RETIRED catalog
+# row, so pinning it here made the gpt_core slot depend on
+# OpenAIAPIAgent's construction-time upgrade to stay callable at all, and
+# priced the slot at the retired row's rate. Derived from the catalog's
+# current OpenAI frontier instead (finding C-P2 on #9989, same wave).
+OPENAI_MODEL_DEFAULT = CATALOG["gpt-6-astra"].direct_id
 GEMINI_MODEL_DEFAULT = "gemini-3.1-pro-preview"
 # Grok default pins the reasoning-capable 4.20 snapshot. The prior default
 # ``grok-4.2`` was never a valid xAI model id and every Mode 3 brief that
@@ -84,9 +97,15 @@ GEMINI_MODEL_DEFAULT = "gemini-3.1-pro-preview"
 # the panel's role — the heterodox slot does adversarial code review.
 GROK_MODEL_DEFAULT = "grok-4.20-0309-reasoning"
 # The mission brief anchors these to specific provider model ids.
-DEEPSEEK_MODEL_DEFAULT = "deepseek/deepseek-v4-pro"
+# Derived from the catalog rather than written as a literal: the bare
+# "deepseek/deepseek-v4-pro" spelling this used to carry is an UPGRADES key
+# (i.e. a slug this repo declares dead), OpenRouterAgent does no
+# retired-id upgrade at construction, and the fallback table had no entry
+# for it -- so the PDB DeepSeek slot sent a dead slug and, on retry
+# exhaustion, raised instead of falling back (finding C-P2 on #9989).
+DEEPSEEK_MODEL_DEFAULT = CATALOG["deepseek-v4-pro-0813"].openrouter_id
 KIMI_MODEL_DEFAULT = CATALOG["kimi-k3"].openrouter_id
-QWEN_MODEL_DEFAULT = CATALOG["qwen3.8-max"].openrouter_id
+QWEN_MODEL_DEFAULT = CATALOG["qwen3.8-2.4t-a95b"].openrouter_id
 MISTRAL_MODEL_DEFAULT = "mistral-large-2512"
 
 

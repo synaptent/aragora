@@ -67,18 +67,33 @@ from aragora.agents.transports.vibeproxy import (  # noqa: E402
     VibeProxyTimeoutError,
     VibeProxyUnavailableError,
 )
+from aragora.config.model_pins import (  # noqa: E402
+    FABLE_51_DIRECT,
+    FABLE_51_VIA_OPENROUTER,
+    OPUS_5_DIRECT,
+)
 
-DEFAULT_MODEL = "claude-fable-5"
-FALLBACK_MODEL = "claude-opus-5"
+DEFAULT_MODEL = FABLE_51_DIRECT
+FALLBACK_MODEL = OPUS_5_DIRECT
 DEFAULT_TIMEOUT_SECONDS = 600
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 DEFAULT_OPENROUTER_MODEL = os.environ.get(
     "ARAGORA_CONSULT_OPENROUTER_MODEL",
-    os.environ.get("OPENROUTER_FABLE_MODEL", "anthropic/claude-opus-4.1"),
+    os.environ.get("OPENROUTER_FABLE_MODEL", FABLE_51_VIA_OPENROUTER),
 )
 API_MAX_TOKENS = 8192
 MAX_API_RESPONSE_BYTES = 4 * 1024 * 1024
+# Model ids the direct Messages API is known NOT to serve, so the API
+# backend skips them rather than burning an attempt on a certain refusal.
+# The CLI backend still runs them -- that is the whole point of the set.
+#
+# claude-fable-5-1 was removed on 2026-09-05 (merge-gate ruling on finding
+# C-P3 of #9989): the Claude API reference lists claude-fable-5-1 as a
+# direct Messages API model, and this same PR makes it the default direct-API
+# model on every other surface, so keeping it here contradicted the rest of
+# the branch. claude-fable-5 stays: it has been observed refusing on this
+# path and nothing in the API reference or this branch re-verifies it.
 API_UNSUPPORTED_MODELS = {"claude-fable-5"}
 MAX_PROMPT_BYTES = 512 * 1024
 API_RESPONSE_READ_CHUNK_BYTES = 64 * 1024

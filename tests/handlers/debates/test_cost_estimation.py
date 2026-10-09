@@ -462,6 +462,106 @@ class TestEstimateDebateCostModelProviderMap:
                 f"{model}: provider {provider} not in PROVIDER_PRICING"
             )
 
+    def test_default_models_map_to_their_own_provider(self):
+        """Each DEFAULT_MODELS entry must resolve to its own real billing
+        provider, not the "openrouter" catch-all (frontier-model-refresh,
+        2026-09-04 review fix round 1, item 2): claude-fable-5-1 is
+        anthropic, gpt-6-astra is openai, gemini-3.1-pro-preview is google.
+        """
+        expected = {
+            "claude-fable-5-1": "anthropic",
+            "gpt-6-astra": "openai",
+            "gemini-3.1-pro-preview": "google",
+        }
+        assert set(DEFAULT_MODELS) == set(expected), (
+            "DEFAULT_MODELS changed; update this test's expectations"
+        )
+        for model in DEFAULT_MODELS:
+            provider, _ = MODEL_PROVIDER_MAP[model]
+            assert provider == expected[model], (
+                f"{model}: expected provider {expected[model]!r}, got {provider!r}"
+            )
+            assert provider != "openrouter", f"{model} incorrectly fell back to openrouter"
+
+
+class TestEstimateDebateCostDefaultModelsUseCatalogRates:
+    """Regression (frontier-model-refresh Task 6): PROVIDER_PRICING used to
+    carry no claude-fable-5-1 / gpt-6-astra rows at all, so
+    calculate_token_cost() silently fell through to its hardcoded $2/$8
+    default bucket for two of the three DEFAULT_MODELS -- underpricing them
+    ~6x. The aragora.models.pricing_mirror generator now merges catalog
+    rows into PROVIDER_PRICING, so every DEFAULT_MODELS entry must price
+    off its own catalog input/output rate.
+    """
+
+    def _catalog_subtotal(self, model: str, num_rounds: int) -> float:
+        from aragora.models.catalog import CATALOG, by_any_id
+
+        spec = by_any_id(model) or CATALOG[model]
+        input_tokens = SYSTEM_PROMPT_TOKENS + AVG_INPUT_TOKENS_PER_ROUND * num_rounds
+        output_tokens = AVG_OUTPUT_TOKENS_PER_ROUND * num_rounds
+        cost = (Decimal(input_tokens) / Decimal("1000000")) * Decimal(str(spec.input_per_mtok)) + (
+            Decimal(output_tokens) / Decimal("1000000")
+        ) * Decimal(str(spec.output_per_mtok))
+        return float(round(cost, 6))
+
+    def _default_bucket_subtotal(self, num_rounds: int) -> float:
+        """The $2/$8 fallback calculate_token_cost() applies when a model
+        has no PROVIDER_PRICING row at all -- what every DEFAULT_MODELS
+        entry used to silently price at before this table was wired to the
+        catalog."""
+        input_tokens = SYSTEM_PROMPT_TOKENS + AVG_INPUT_TOKENS_PER_ROUND * num_rounds
+        output_tokens = AVG_OUTPUT_TOKENS_PER_ROUND * num_rounds
+        cost = (Decimal(input_tokens) / Decimal("1000000")) * Decimal("2.00") + (
+            Decimal(output_tokens) / Decimal("1000000")
+        ) * Decimal("8.00")
+        return float(round(cost, 6))
+
+    def test_default_models_price_off_catalog_rates_not_default_bucket(self):
+        """Every DEFAULT_MODELS subtotal must equal catalog-rate arithmetic
+        and must differ from the $2/$8 default-bucket result."""
+        num_rounds = 9
+        result = estimate_debate_cost(
+            num_agents=len(DEFAULT_MODELS), num_rounds=num_rounds, model_types=DEFAULT_MODELS
+        )
+        default_subtotal = self._default_bucket_subtotal(num_rounds)
+        breakdown = {entry["model"]: entry for entry in result["breakdown_by_model"]}
+        assert set(breakdown) == set(DEFAULT_MODELS)
+        for model in DEFAULT_MODELS:
+            expected = self._catalog_subtotal(model, num_rounds)
+            subtotal = breakdown[model]["subtotal_usd"]
+            assert subtotal == expected, (
+                f"{model}: subtotal {subtotal} != catalog-rate arithmetic {expected}"
+            )
+            assert subtotal != default_subtotal, (
+                f"{model}: subtotal {subtotal} equals the $2/$8 default-bucket result "
+                f"{default_subtotal} -- it fell through to the default rate instead of "
+                "the catalog rate"
+            )
+
+    def test_fable_5_1_and_astra_use_10_50_arithmetic(self):
+        """Fable 5.1 and gpt-6-astra are both $10/$50 per MTok in the
+        catalog (frontier-model-refresh) -- pin the exact numbers so a
+        future PROVIDER_PRICING regression is caught even if the catalog
+        rate itself later changes for one but not the other."""
+        num_rounds = 9
+        result = estimate_debate_cost(
+            num_agents=2,
+            num_rounds=num_rounds,
+            model_types=["claude-fable-5-1", "gpt-6-astra"],
+        )
+        input_tokens = SYSTEM_PROMPT_TOKENS + AVG_INPUT_TOKENS_PER_ROUND * num_rounds
+        output_tokens = AVG_OUTPUT_TOKENS_PER_ROUND * num_rounds
+        expected = float(
+            round(
+                (Decimal(input_tokens) / Decimal("1000000")) * Decimal("10.00")
+                + (Decimal(output_tokens) / Decimal("1000000")) * Decimal("50.00"),
+                6,
+            )
+        )
+        for entry in result["breakdown_by_model"]:
+            assert entry["subtotal_usd"] == expected
+
 
 # ===========================================================================
 # Tests for handle_estimate_cost()
@@ -722,3 +822,66 @@ class TestModuleConstants:
 
         assert "estimate_debate_cost" in cost_estimation.__all__
         assert "handle_estimate_cost" in cost_estimation.__all__
+
+
+class TestBreakdownSumsToSubtotal:
+    """``input_cost_usd + output_cost_usd`` must equal ``subtotal_usd``.
+
+    Finding O-P2 on #9989: the breakdown re-derived the two halves from the
+    flat ``PROVIDER_PRICING`` rows while the subtotal came from the
+    tier-aware pricer, so past a model's documented long-context threshold
+    the user-facing breakdown contradicted its own total -- 150 rounds of
+    ``gpt-6-astra`` reported a 15.01 subtotal against a 9.005 breakdown.
+    """
+
+    @staticmethod
+    def _assert_identity(result: dict) -> None:
+        for row in result["breakdown_by_model"]:
+            assert row["input_cost_usd"] + row["output_cost_usd"] == pytest.approx(
+                row["subtotal_usd"], abs=1e-6
+            ), row
+
+    def test_long_context_tier_breakdown_sums(self):
+        """The exact case from the finding: past gpt-6-astra's 272k input
+        threshold, where the tiered rate and the flat row diverge."""
+        from aragora.server.handlers.debates.cost_estimation import estimate_debate_cost
+
+        result = estimate_debate_cost(num_agents=1, num_rounds=150, model_types=["gpt-6-astra"])
+        row = result["breakdown_by_model"][0]
+        # The tier really is engaged here -- otherwise this proves nothing.
+        flat_input_cost = row["estimated_input_tokens"] / 1_000_000 * 10.0
+        assert row["input_cost_usd"] > flat_input_cost
+        self._assert_identity(result)
+
+    def test_short_debate_breakdown_sums(self):
+        from aragora.server.handlers.debates.cost_estimation import estimate_debate_cost
+
+        self._assert_identity(estimate_debate_cost(num_agents=3, num_rounds=3))
+
+    def test_every_default_model_breakdown_sums(self):
+        from aragora.server.handlers.debates.cost_estimation import (
+            DEFAULT_MODELS,
+            estimate_debate_cost,
+        )
+
+        for model in DEFAULT_MODELS:
+            for rounds in (1, 9, 150):
+                self._assert_identity(
+                    estimate_debate_cost(num_agents=1, num_rounds=rounds, model_types=[model])
+                )
+
+    def test_unknown_model_breakdown_sums(self):
+        """The openrouter/default fallback path holds the identity too."""
+        from aragora.server.handlers.debates.cost_estimation import estimate_debate_cost
+
+        self._assert_identity(
+            estimate_debate_cost(num_agents=1, num_rounds=9, model_types=["not-a-real-model"])
+        )
+
+    def test_total_equals_the_sum_of_the_subtotals(self):
+        from aragora.server.handlers.debates.cost_estimation import estimate_debate_cost
+
+        result = estimate_debate_cost(num_agents=3, num_rounds=150)
+        assert sum(r["subtotal_usd"] for r in result["breakdown_by_model"]) == pytest.approx(
+            result["total_estimated_cost_usd"], abs=1e-3
+        )

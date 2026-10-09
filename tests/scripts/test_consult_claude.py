@@ -448,7 +448,12 @@ def test_consult_required_budget_excludes_unreachable_fallbacks(monkeypatch) -> 
     ]
 
 
-def test_consult_api_fallback_skips_cli_only_model(monkeypatch) -> None:
+def _record_backends(monkeypatch) -> tuple[list[str], list[str]]:
+    """Patch both backends to record the models they are asked for.
+
+    The CLI backend always fails, so the API leg runs; the API backend
+    succeeds only for FALLBACK_MODEL.
+    """
     cli_models: list[str] = []
     api_models: list[str] = []
 
@@ -465,13 +470,42 @@ def test_consult_api_fallback_skips_cli_only_model(monkeypatch) -> None:
 
     monkeypatch.setattr(consult_claude, "_run_cli", fake_cli)
     monkeypatch.setattr(consult_claude, "_run_api", fake_api)
+    return cli_models, api_models
 
-    result = consult_claude.consult("question", api_fallback=True)
+
+def test_consult_api_fallback_skips_cli_only_model(monkeypatch) -> None:
+    """A model in API_UNSUPPORTED_MODELS runs on the CLI and is skipped by
+    the API leg -- the mechanism itself, still live."""
+    cli_only = "claude-fable-5"
+    assert cli_only in consult_claude.API_UNSUPPORTED_MODELS
+    cli_models, api_models = _record_backends(monkeypatch)
+
+    result = consult_claude.consult("question", model=cli_only, api_fallback=True)
 
     assert result["ok"] is True
     assert result["model"] == consult_claude.FALLBACK_MODEL
-    assert cli_models == [consult_claude.DEFAULT_MODEL, consult_claude.FALLBACK_MODEL]
+    assert cli_models == [cli_only, consult_claude.FALLBACK_MODEL]
     assert api_models == [consult_claude.FALLBACK_MODEL]
+
+
+def test_fable_5_1_reaches_the_direct_api(monkeypatch) -> None:
+    """claude-fable-5-1 is a direct Messages API model (Claude API reference,
+    2026-09-05 merge-gate ruling on finding C-P3 of #9989).
+
+    It used to sit in API_UNSUPPORTED_MODELS while the same branch made it
+    the default direct-API model everywhere else, so --api-fallback silently
+    dropped the default model's API attempt.
+    """
+    assert consult_claude.DEFAULT_MODEL == "claude-fable-5-1"
+    assert "claude-fable-5-1" not in consult_claude.API_UNSUPPORTED_MODELS
+    assert consult_claude._api_models("claude-fable-5-1", None) == ["claude-fable-5-1"]
+
+    cli_models, api_models = _record_backends(monkeypatch)
+    result = consult_claude.consult("question", api_fallback=True)
+
+    assert result["ok"] is True
+    assert api_models == [consult_claude.DEFAULT_MODEL, consult_claude.FALLBACK_MODEL]
+    assert cli_models == [consult_claude.DEFAULT_MODEL, consult_claude.FALLBACK_MODEL]
 
 
 def test_consult_openrouter_fallback_is_explicit(monkeypatch) -> None:
@@ -770,7 +804,10 @@ def test_run_api_read1_timeout_after_single_socket_read(monkeypatch) -> None:
 
 def test_consult_enforces_overall_timeout_before_fallbacks(monkeypatch) -> None:
     cli_models: list[str] = []
-    monotonic_values = iter([0.0, 0.0, 10.0, 10.0])
+    # One clock read per planned attempt plus the start: the API leg is two
+    # attempts now that claude-fable-5-1 is served by the direct API
+    # (2026-09-05 ruling on finding C-P3 of #9989).
+    monotonic_values = iter([0.0, 0.0, 10.0, 10.0, 10.0])
 
     def fake_cli(_prompt: str, model: str, _timeout: float) -> dict:
         cli_models.append(model)
@@ -793,6 +830,7 @@ def test_consult_enforces_overall_timeout_before_fallbacks(monkeypatch) -> None:
     assert [attempt["backend"] for attempt in result["attempts"]] == [
         "cli",
         "cli",
+        "api",
         "api",
     ]
     assert result["attempts"][0]["timed_out"] is True
@@ -900,7 +938,7 @@ def test_unavailable_proxy_does_not_mask_cli_timeouts(monkeypatch) -> None:
 
 def test_consult_explicit_api_fallback_has_budget_for_supported_models(monkeypatch) -> None:
     attempt_timeouts: list[float] = []
-    monotonic_values = iter([0.0, 0.0, 10.0, 20.0])
+    monotonic_values = iter([0.0, 0.0, 10.0, 20.0, 30.0])
 
     def fake_cli(_prompt: str, model: str, timeout: float) -> dict:
         attempt_timeouts.append(timeout)
@@ -932,9 +970,12 @@ def test_consult_explicit_api_fallback_has_budget_for_supported_models(monkeypat
     assert [attempt["model"] for attempt in result["attempts"]] == [
         consult_claude.DEFAULT_MODEL,
         consult_claude.FALLBACK_MODEL,
+        # The API leg now runs the default model too: it is no longer in
+        # API_UNSUPPORTED_MODELS (2026-09-05 ruling on finding C-P3, #9989).
+        consult_claude.DEFAULT_MODEL,
         consult_claude.FALLBACK_MODEL,
     ]
-    assert attempt_timeouts == [10, 10, 10]
+    assert attempt_timeouts == [10, 10, 10, 10]
 
 
 def test_consult_explicit_openrouter_fallback_has_budget(monkeypatch) -> None:

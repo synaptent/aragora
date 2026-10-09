@@ -240,7 +240,14 @@ class AutonomicExecutor:
                 return
 
             provider = getattr(agent, "provider", "unknown") or "unknown"
-            model = getattr(agent, "model", "unknown") or "unknown"
+            # Price against the model that ACTUALLY answered: a call a
+            # server-side refusal fallback served produced its tokens at the
+            # fallback model's rate, not the requested model's (finding C-P3
+            # on #9989). ``billing_model`` is ``self.model`` for every agent
+            # that cannot tell the difference.
+            model = (
+                getattr(agent, "billing_model", None) or getattr(agent, "model", None) or "unknown"
+            )
             agent_name = getattr(agent, "name", str(agent))
 
             self._debate_cost_tracker.record_agent_call(
@@ -625,6 +632,11 @@ class AutonomicExecutor:
         # Progress monitoring task for immune system transparency
         progress_task = None
         if self.immune_system:
+            # Bind the narrowed reference the closure actually uses: reading
+            # ``self.immune_system`` from inside the task would re-widen it to
+            # ``... | None`` (the attribute is reassignable), and the task can
+            # outlive any later reassignment.
+            immune_system = self.immune_system
 
             async def _report_progress() -> None:
                 """Periodically report agent progress to immune system."""
@@ -632,7 +644,7 @@ class AutonomicExecutor:
                     while True:
                         await asyncio.sleep(5)
                         elapsed = time.time() - start_time
-                        self.immune_system.agent_progress(agent.name, elapsed)
+                        immune_system.agent_progress(agent.name, elapsed)
                 except asyncio.CancelledError:
                     pass
 

@@ -34,9 +34,19 @@ from aragora.agents.errors import (
 )
 from aragora.agents.registry import AgentRegistry
 from aragora.config import get_api_key
-from aragora.config.model_pins import GEMINI_31_PRO_VIA_OPENROUTER
+from aragora.config.model_pins import (
+    FABLE_51_DIRECT,
+    FABLE_51_VIA_OPENROUTER,
+    GEMINI_31_PRO_DIRECT,
+    GEMINI_31_PRO_VIA_OPENROUTER,
+    GEMINI_38_FLASH_DIRECT,
+    GPT6_ASTRA_DIRECT,
+    GROK_46_DIRECT,
+)
 from aragora.core import Agent, Critique, Message
 from aragora.core_types import AgentRole
+from aragora.models.catalog import frontier_for, spec_or_none
+from aragora.models.upgrade_map import resolve_model_id
 from aragora.resilience import BaseCircuitBreaker, get_v2_circuit_breaker as get_circuit_breaker
 
 if TYPE_CHECKING:
@@ -228,58 +238,63 @@ class CLIAgent(CritiqueMixin, Agent):
     secret provider; disable with ARAGORA_OPENROUTER_FALLBACK_ENABLED=false.
     """
 
-    # Map CLI agent models to OpenRouter model identifiers
-    OPENROUTER_MODEL_MAP: dict[str, str] = {
-        # Claude models
-        "claude": "anthropic/claude-opus-5",  # Default claude CLI
-        "claude-fable-5": "anthropic/claude-fable-5",
-        "claude-opus-5": "anthropic/claude-opus-5",
-        "claude-opus-4-8": "anthropic/claude-opus-5",
-        "claude-opus-4-7": "anthropic/claude-opus-5",
-        "claude-sonnet-4-6": "anthropic/claude-opus-5",
-        "claude-opus-4-5-20251101": "anthropic/claude-opus-5",
-        "claude-sonnet-4-20250514": "anthropic/claude-opus-5",
-        "claude-3-opus-20240229": "anthropic/claude-opus-5",
-        "claude-3-sonnet-20240229": "anthropic/claude-opus-5",
-        # OpenAI/Codex models
-        "gpt-5.5": "openai/gpt-5.5",
-        "gpt-5.4": "openai/gpt-5.5",
-        "gpt-5.3": "openai/gpt-5.5",
-        "gpt-5.3-codex": "openai/gpt-5.5",
-        "gpt-5.3-chat-latest": "openai/gpt-5.5",
-        "gpt-4.1-codex": "openai/gpt-5.5",
-        "gpt-4.1": "openai/gpt-5.5",
-        "gpt-4.1-mini": "openai/gpt-5.5",
-        "gpt-4o": "openai/gpt-5.5",
-        "gpt-4-turbo": "openai/gpt-5.5",
-        "gpt-4": "openai/gpt-5.5",
-        # Gemini models
-        "gemini-3.1-pro-preview": GEMINI_31_PRO_VIA_OPENROUTER,
-        "gemini-3.1-pro": GEMINI_31_PRO_VIA_OPENROUTER,
-        "gemini-3-pro-preview": GEMINI_31_PRO_VIA_OPENROUTER,
-        "gemini-3-pro": GEMINI_31_PRO_VIA_OPENROUTER,
-        "gemini-3-flash-preview": "google/gemini-3-flash-preview",
-        "gemini-3-flash": "google/gemini-3-flash-preview",
-        "gemini-2.0-flash": "google/gemini-2.0-flash-001",
-        "gemini-1.5-pro": "google/gemini-pro-1.5",
-        # Grok models
-        "grok-4-1-fast": "x-ai/grok-4.1-fast",
-        "grok-4-latest": "x-ai/grok-4.5",
-        "grok-4": "x-ai/grok-4.5",
-        "grok-3": "x-ai/grok-4.5",
-        "grok-2": "x-ai/grok-4.5",
-        # Deepseek models
-        "deepseek-coder": "deepseek/deepseek-v4-pro",
-        "deepseek-v3": "deepseek/deepseek-v4-pro",
-        "deepseek-v4-pro": "deepseek/deepseek-v4-pro",
-        "deepseek-v3.2": "deepseek/deepseek-v4-pro",
-        # Qwen models
-        "qwen-2.5-coder": "qwen/qwen-2.5-coder-32b-instruct",
-        "qwen3-coder": "qwen/qwen3-coder-next",
-        "qwen3-max": "qwen/qwen3-max",
-        # Mistral models
-        "mistral-large-2512": "mistralai/mistral-large-2512",
-    }
+    # No static OPENROUTER_MODEL_MAP: _get_fallback_agent() below resolves
+    # the current model through the catalog/upgrade-map instead (see
+    # resolve_model_id()/spec_or_none() there), so every legacy or retired
+    # CLI model spelling (not just a hand-enumerated subset) transparently
+    # upgrades to its frontier via OpenRouter.
+
+    # Catalog family this CLI's provider belongs to ("openai", "anthropic",
+    # "google", "xai", "moonshot", "qwen", "deepseek", ...). Used as the LAST
+    # resort in _get_fallback_agent(): a bare model spelling the catalog and
+    # the upgrade map both miss falls back to THIS family's frontier rather
+    # than cross-family to Anthropic. A subclass that genuinely has no single
+    # family (kilocode, which brokers several providers) leaves it empty.
+    MODEL_FAMILY: str = ""
+
+    # Does this class put ``self.model`` on the CLI's command line?
+    #
+    # Defaults to FALSE, and each subclass that really sends the model sets
+    # it True next to the code that does. The claim this flag licenses is a
+    # receipt naming the model that made a decision, so the default has to be
+    # the one that is safe when nobody thought about it: a new CLI subclass
+    # -- in this package or out of tree -- that never puts self.model on its
+    # command line would otherwise inherit True and have its output
+    # attributed to a model the CLI never received (wave-6 re-review, minor
+    # 4). ``tests/agents/test_cli_model_pinning.py`` asserts the True set
+    # against every CLIAgent subclass in the package, so adding one without
+    # deciding is a test failure rather than a silent wrong receipt.
+    #
+    # False for every CLI this PR does not pin, for three different reasons:
+    #
+    #   qwen-cli       ``qwen --help`` DOES document ``-m/--model`` (verified
+    #                  2026-09-05), but the id recorded for this agent,
+    #                  "qwen3-coder", is a RETIRED spelling with no native
+    #                  successor -- the catalog's current qwen row is an
+    #                  OpenRouter row, so there is no native code to upgrade
+    #                  it to (see replacement() in
+    #                  scripts/refresh_model_literals.py). Sending it would
+    #                  pin the CLI to a retired model in place of its own
+    #                  current default, so the recorded id stays a routing
+    #                  hint, not a claim about the wire.
+    #   deepseek-cli,  neither CLI is installed on the machine this branch was
+    #   kimi-cli       built on, so no model flag could be verified rather
+    #                  than guessed (kimi-cli is additionally ACP-based and
+    #                  registered only under ARAGORA_ENABLE_KIMI_CLI).
+    #   grok-build,    their registry "model" is not a model id at all: it
+    #   kilocode       names the CLI product, or a broker's provider id sent
+    #                  under --model instead of self.model.
+    #
+    # Such an agent still CARRIES its
+    # requested model -- pricing, fallback and the registry all need it --
+    # but the CLI answers from its own default, so nothing may attribute the
+    # output to that id. Recorded per instance as
+    # ``metadata["model_pinned_on_wire"]`` and read by
+    # ``aragora.debate.orchestrator_runner.collect_served_models``, which
+    # reports the served model as "unknown (CLI default)" rather than letting
+    # a receipt claim a model the CLI never received (wave-6 ruling, agents,
+    # on #9989).
+    SENDS_MODEL_ON_WIRE: bool = False
 
     def __init__(
         self,
@@ -294,6 +309,10 @@ class CLIAgent(CritiqueMixin, Agent):
     ):
         super().__init__(name, model, role)
         self.timeout = timeout
+        # Agent-level metadata other subsystems read by duck-typing (see
+        # aragora/debate/team_selector.py). ``model_pinned_on_wire`` says
+        # whether ``self.model`` reached the CLI -- see SENDS_MODEL_ON_WIRE.
+        self.metadata: dict[str, Any] = {"model_pinned_on_wire": self.SENDS_MODEL_ON_WIRE}
         # Use config setting if not explicitly provided
         if enable_fallback is None:
             from aragora.agents.fallback import get_default_fallback_enabled
@@ -332,6 +351,25 @@ class CLIAgent(CritiqueMixin, Agent):
             return False
         return not self._circuit_breaker.can_execute()
 
+    def _family_frontier_openrouter_id(self) -> str:
+        """OpenRouter id of this agent class's own family frontier.
+
+        Falls back to the Anthropic frontier only when the class declares no
+        family, or when the declared family has no active catalog row.
+        """
+        family = getattr(self, "MODEL_FAMILY", "") or ""
+        if family:
+            try:
+                return frontier_for(family).openrouter_id
+            except (KeyError, ValueError):
+                logger.warning(
+                    "[%s] no active catalog row for family %r; using %s",
+                    self.name,
+                    family,
+                    FABLE_51_VIA_OPENROUTER,
+                )
+        return FABLE_51_VIA_OPENROUTER
+
     def _get_fallback_agent(self) -> OpenRouterAgent | None:
         """Get or create the OpenRouter fallback agent.
 
@@ -352,17 +390,26 @@ class CLIAgent(CritiqueMixin, Agent):
             # Import here to avoid circular dependency
             from aragora.agents.api_agents import OpenRouterAgent
 
-            # Map the model to OpenRouter format
-            openrouter_model = self.OPENROUTER_MODEL_MAP.get(self.model)
-            if not openrouter_model:
-                # If already in provider/model form, normalize for OpenRouter
-                if "/" in self.model:
-                    if self.model.startswith("openrouter/"):
-                        openrouter_model = self.model.split("/", 1)[1]
-                    else:
-                        openrouter_model = self.model
+            # Map the model to OpenRouter format: resolve any legacy/retired
+            # spelling to its current catalog row first, then use that row's
+            # OpenRouter-format id.
+            spec = spec_or_none(resolve_model_id(self.model))
+            if spec is not None:
+                openrouter_model = spec.openrouter_id
+            # If already in provider/model form, normalize for OpenRouter
+            elif "/" in self.model:
+                if self.model.startswith("openrouter/"):
+                    openrouter_model = self.model.split("/", 1)[1]
                 else:
-                    openrouter_model = "anthropic/claude-opus-5"  # Default fallback model
+                    openrouter_model = self.model
+            else:
+                # Last resort: this agent class's OWN family frontier. Sending
+                # an unrecognised OpenAI/Grok/DeepSeek spelling to Anthropic
+                # silently changes provider, which is exactly what an explicit
+                # model pin was asking us not to do. Only a class with no
+                # single family (or one whose family has no active row) lands
+                # on Fable.
+                openrouter_model = self._family_frontier_openrouter_id()
 
             self._fallback_agent = OpenRouterAgent(
                 name=f"{self.name}_fallback",
@@ -727,7 +774,7 @@ Provide structured feedback:
 
 @AgentRegistry.register(
     "codex",
-    default_model="gpt-5.5",
+    default_model=GPT6_ASTRA_DIRECT,
     agent_type="CLI",
     requires="codex CLI (npm install -g @openai/codex)",
 )
@@ -736,6 +783,12 @@ class CodexAgent(CLIAgent):
 
     Falls back to OpenRouter (OpenAI GPT-5.5) on CLI failures if enabled.
     """
+
+    MODEL_FAMILY = "openai"
+
+    # `codex -m <id>`: self.model DOES reach the CLI, so a receipt may
+    # attribute the answer to it -- see SENDS_MODEL_ON_WIRE.
+    SENDS_MODEL_ON_WIRE = True
 
     _CODEX_WARNING_PREFIXES: tuple[str, ...] = (
         "`collab` is deprecated.",
@@ -790,17 +843,24 @@ class CodexAgent(CLIAgent):
         (argument list too long).
         """
         full_prompt = self._build_full_prompt(prompt, context)
+        # Pin the CLI to the registered model. `codex exec` takes `-m/--model
+        # <MODEL>` (verified against `codex exec --help`); without it the CLI
+        # runs whatever ~/.codex/config.toml defaults to while receipts claim
+        # self.model (finding O-P2b on #9989).
+        base_command = ["codex", "exec", "--skip-git-repo-check"]
+        if self.model:
+            base_command += ["-m", self.model]
         # Use stdin for large prompts to avoid E2BIG (arg list too long)
         if self._is_prompt_too_large_for_argv(full_prompt):
             return await self._generate_with_fallback(
-                ["codex", "exec", "--skip-git-repo-check", "-"],
+                [*base_command, "-"],
                 prompt,
                 context,
                 input_text=full_prompt,
                 response_extractor=self._extract_codex_response,
             )
         return await self._generate_with_fallback(
-            ["codex", "exec", "--skip-git-repo-check", full_prompt],
+            [*base_command, full_prompt],
             prompt,
             context,
             response_extractor=self._extract_codex_response,
@@ -826,7 +886,7 @@ Be constructive but thorough. Identify both technical and conceptual issues."""
 
 @AgentRegistry.register(
     "claude",
-    default_model="claude-fable-5",
+    default_model=FABLE_51_DIRECT,
     agent_type="CLI",
     requires="claude CLI (npm install -g @anthropic-ai/claude-code)",
 )
@@ -835,6 +895,12 @@ class ClaudeAgent(CLIAgent):
 
     Falls back to OpenRouter (Anthropic Claude) on CLI failures if enabled.
     """
+
+    MODEL_FAMILY = "anthropic"
+
+    # `claude --model <id>`: self.model DOES reach the CLI, so a receipt may
+    # attribute the answer to it -- see SENDS_MODEL_ON_WIRE.
+    SENDS_MODEL_ON_WIRE = True
 
     async def generate(self, prompt: str, context: list[Message] | None = None) -> str:
         """Generate a response using claude CLI via stdin.
@@ -867,7 +933,7 @@ class ClaudeAgent(CLIAgent):
 
 @AgentRegistry.register(
     "gemini-cli",
-    default_model="gemini-3.1-pro-preview",
+    default_model=GEMINI_31_PRO_DIRECT,
     agent_type="CLI",
     requires="gemini CLI (npm install -g @google/gemini-cli)",
 )
@@ -876,6 +942,12 @@ class GeminiCLIAgent(CLIAgent):
 
     Falls back to OpenRouter (Google Gemini) on CLI failures if enabled.
     """
+
+    MODEL_FAMILY = "google"
+
+    # `gemini -m <id>`: self.model DOES reach the CLI, so a receipt may
+    # attribute the answer to it -- see SENDS_MODEL_ON_WIRE.
+    SENDS_MODEL_ON_WIRE = True
 
     def _extract_gemini_response(self, result: str) -> str:
         """Filter out YOLO mode message from gemini output."""
@@ -889,20 +961,26 @@ class GeminiCLIAgent(CLIAgent):
         For large prompts (>100KB), uses stdin to avoid OS E2BIG error.
         """
         full_prompt = self._build_full_prompt(prompt, context)
+        # Pin the CLI to the registered model: `gemini` takes `-m/--model`
+        # (verified against `gemini --help`, v0.22+). See ClaudeAgent above
+        # for why an unpinned CLI makes the receipt's model claim false.
+        base_command = ["gemini", "--yolo", "-o", "text"]
+        if self.model:
+            base_command += ["-m", self.model]
         # Use stdin for large prompts to avoid E2BIG (arg list too long)
         if self._is_prompt_too_large_for_argv(full_prompt):
             logger.debug(
                 "[%s] Using stdin for large prompt (%s chars)", self.name, len(full_prompt)
             )
             return await self._generate_with_fallback(
-                ["gemini", "--yolo", "-o", "text", "-"],
+                [*base_command, "-"],
                 prompt,
                 context,
                 input_text=full_prompt,
                 response_extractor=self._extract_gemini_response,
             )
         return await self._generate_with_fallback(
-            ["gemini", "--yolo", "-o", "text", full_prompt],
+            [*base_command, full_prompt],
             prompt,
             context,
             response_extractor=self._extract_gemini_response,
@@ -991,6 +1069,9 @@ class KiloCodeAgent(CLIAgent):
                 continue
         return "\n\n".join(responses) if responses else output
 
+    # self.model never reaches this CLI -- see SENDS_MODEL_ON_WIRE.
+    SENDS_MODEL_ON_WIRE = False
+
     async def generate(self, prompt: str, context: list[Message] | None = None) -> str:
         """Generate a response using kilocode CLI with codebase access.
 
@@ -1043,7 +1124,7 @@ class KiloCodeAgent(CLIAgent):
 
 @AgentRegistry.register(
     "grok-cli",
-    default_model="grok-4-latest",
+    default_model=GROK_46_DIRECT,
     agent_type="CLI",
     requires="grok CLI (npm install -g grok-cli)",
 )
@@ -1052,6 +1133,12 @@ class GrokCLIAgent(CLIAgent):
 
     Falls back to OpenRouter (xAI Grok) on CLI failures if enabled.
     """
+
+    MODEL_FAMILY = "xai"
+
+    # `grok -m <id>`: self.model DOES reach the CLI, so a receipt may
+    # attribute the answer to it -- see SENDS_MODEL_ON_WIRE.
+    SENDS_MODEL_ON_WIRE = True
 
     def _extract_grok_response(self, output: str) -> str:
         """Extract the final assistant response from Grok CLI JSON output."""
@@ -1079,20 +1166,28 @@ class GrokCLIAgent(CLIAgent):
         For large prompts (>100KB), uses stdin to avoid OS E2BIG error.
         """
         full_prompt = self._build_full_prompt(prompt, context)
+        # Pin the CLI to the registered model: the `grok` binary this agent
+        # invokes takes `-m/--model <MODEL>` alongside the `-p/--single`
+        # single-turn flag already used here (verified against `grok --help`,
+        # v1.0.4). Unpinned, xAI's own CLI default answers while the receipt
+        # claims self.model (finding O-P2b on #9989).
+        base_command = ["grok"]
+        if self.model:
+            base_command += ["-m", self.model]
         # Use stdin for large prompts to avoid E2BIG (arg list too long)
         if self._is_prompt_too_large_for_argv(full_prompt):
             logger.debug(
                 "[%s] Using stdin for large prompt (%s chars)", self.name, len(full_prompt)
             )
             return await self._generate_with_fallback(
-                ["grok", "-p", "-"],
+                [*base_command, "-p", "-"],
                 prompt,
                 context,
                 input_text=full_prompt,
                 response_extractor=self._extract_grok_response,
             )
         return await self._generate_with_fallback(
-            ["grok", "-p", full_prompt],
+            [*base_command, "-p", full_prompt],
             prompt,
             context,
             response_extractor=self._extract_grok_response,
@@ -1136,6 +1231,40 @@ def _resolve_antigravity_bin() -> str:
     return resolved
 
 
+# `agy --model <id>` requires a companion `--effort` flag (low|medium|high) --
+# without it every antigravity invocation errors and silently falls back to
+# OpenRouter. "medium" is the conventional default; surfaced as an env
+# override (mirrors ARAGORA_ANTIGRAVITY_BIN above) so operators can trade
+# cost for quality without a code change.
+ANTIGRAVITY_DEFAULT_EFFORT = "medium"
+ANTIGRAVITY_EFFORT_LEVELS = ("low", "medium", "high")
+
+
+def _resolve_antigravity_effort() -> str:
+    """Resolve the Antigravity CLI's ``--effort`` value (low|medium|high).
+
+    An unrecognised override is REJECTED, with a warning, in favour of the
+    default. ``agy`` accepts exactly these three levels, so passing anything
+    else through made every antigravity call error out and fall back to
+    OpenRouter -- the same silent failure the flag was added to prevent, now
+    triggered by a typo in an env var instead of a missing flag (wave-6
+    re-review, minor 3). Warning rather than raising: a bad env var must not
+    take the agent out of service when the documented default works.
+    """
+    override = os.environ.get("ARAGORA_ANTIGRAVITY_EFFORT", "").strip()
+    if not override:
+        return ANTIGRAVITY_DEFAULT_EFFORT
+    if override.lower() in ANTIGRAVITY_EFFORT_LEVELS:
+        return override.lower()
+    logger.warning(
+        "ARAGORA_ANTIGRAVITY_EFFORT=%r is not one of %s; using %r",
+        override,
+        "/".join(ANTIGRAVITY_EFFORT_LEVELS),
+        ANTIGRAVITY_DEFAULT_EFFORT,
+    )
+    return ANTIGRAVITY_DEFAULT_EFFORT
+
+
 @AgentRegistry.register(
     "grok-build",
     default_model="grok-build",
@@ -1151,6 +1280,11 @@ class GrokBuildAgent(CLIAgent):
     unrelated legacy ``grok`` on ``PATH``. Falls back to OpenRouter (xAI) on CLI
     failure if enabled.
     """
+
+    MODEL_FAMILY = "xai"
+
+    # self.model never reaches this CLI -- see SENDS_MODEL_ON_WIRE.
+    SENDS_MODEL_ON_WIRE = False
 
     async def generate(self, prompt: str, context: list[Message] | None = None) -> str:
         """Generate a response via the Grok Build CLI (``--no-plan`` headless single-shot)."""
@@ -1173,7 +1307,7 @@ class GrokBuildAgent(CLIAgent):
 
 @AgentRegistry.register(
     "antigravity",
-    default_model="gemini-3.5-flash",
+    default_model=GEMINI_38_FLASH_DIRECT,
     agent_type="CLI",
     requires="Antigravity CLI (agy; install: curl -fsSL https://antigravity.google/cli/install.sh | bash; Google AI Ultra)",
 )
@@ -1186,19 +1320,35 @@ class AntigravityAgent(CLIAgent):
     enabled.
     """
 
+    MODEL_FAMILY = "google"
+
+    # `agy --model <id> --effort <level>`: self.model DOES reach the CLI, so a receipt may
+    # attribute the answer to it -- see SENDS_MODEL_ON_WIRE.
+    SENDS_MODEL_ON_WIRE = True
+
     async def generate(self, prompt: str, context: list[Message] | None = None) -> str:
         """Generate a response via the Antigravity CLI (``agy -p`` headless print mode)."""
         full_prompt = self._build_full_prompt(prompt, context)
         agy_bin = _resolve_antigravity_bin()
+        # Pin the CLI to the registered model. `agy` spells the flag
+        # `--model` with NO short form (verified against `agy --help`), so
+        # this is deliberately not the `-m` the gemini/codex/grok CLIs take.
+        base_command = [agy_bin]
+        if self.model:
+            base_command += ["--model", self.model]
+            # `agy --model <id>` requires `--effort` alongside it (verified
+            # against `agy --help`); omitting it makes every antigravity call
+            # error and fall back to OpenRouter.
+            base_command += ["--effort", _resolve_antigravity_effort()]
         if self._is_prompt_too_large_for_argv(full_prompt):
             return await self._generate_with_fallback(
-                [agy_bin, "-p", "-"],
+                [*base_command, "-p", "-"],
                 prompt,
                 context,
                 input_text=full_prompt,
             )
         return await self._generate_with_fallback(
-            [agy_bin, "-p", full_prompt],
+            [*base_command, "-p", full_prompt],
             prompt,
             context,
         )
@@ -1217,6 +1367,11 @@ class KimiCLIAgent(CLIAgent):
     ``kimi`` model family. Falls back to OpenRouter (Kimi) on CLI failure.
     """
 
+    MODEL_FAMILY = "moonshot"
+
+    # self.model never reaches this CLI -- see SENDS_MODEL_ON_WIRE.
+    SENDS_MODEL_ON_WIRE = False
+
     async def generate(self, prompt: str, context: list[Message] | None = None) -> str:
         """Generate a response via the Kimi CLI (invocation unverified — see class docstring)."""
         full_prompt = self._build_full_prompt(prompt, context)
@@ -1234,12 +1389,25 @@ class KimiCLIAgent(CLIAgent):
         )
 
 
+# Native Moonshot model code the Kimi CLI is pinned to, kept at its
+# pre-refresh value. Deliberately NOT CATALOG["kimi-k3"].direct_id: the
+# kimi-k3 row is reached through OpenRouter, its ``direct_id`` is an
+# OpenRouter naming convention rather than a code Moonshot's own endpoint is
+# known to accept, and this same PR argues exactly that in
+# aragora/agents/api_agents/openrouter.py when it keeps "moonshot-v1-8k" for
+# KimiLegacyAgent (finding C-P3 on #9989 -- same class as the qwen-cli and
+# deepseek-cli defaults below). Cost accounting is unaffected: this spelling
+# resolves through the upgrade map to the active, priced kimi-k3 row
+# (tests/models/test_reachable_defaults.py). Module-level so the reverse
+# completeness test can read it without setting ARAGORA_ENABLE_KIMI_CLI.
+KIMI_CLI_DEFAULT_MODEL = "kimi-k2"
+
 # Gate Kimi registration behind an explicit opt-in: the headless CLI contract is
 # unverified (kimi-cli is ACP, not `-p`), so it must not be a default agent.
 if os.environ.get("ARAGORA_ENABLE_KIMI_CLI", "").strip():
     AgentRegistry.register(
         "kimi-cli",
-        default_model="kimi-k2",
+        default_model=KIMI_CLI_DEFAULT_MODEL,
         agent_type="CLI",
         requires="Kimi CLI (pip install kimi-cli); ACP-based, headless `-p` unverified",
     )(KimiCLIAgent)
@@ -1247,6 +1415,18 @@ if os.environ.get("ARAGORA_ENABLE_KIMI_CLI", "").strip():
 
 @AgentRegistry.register(
     "qwen-cli",
+    # Native Qwen Code CLI model code, kept at its pre-refresh value: the
+    # catalog's qwen3.8-2.4t-a95b row is an OpenRouter row whose ``direct_id``
+    # is an OpenRouter naming convention (a parameter-count slug), not a model
+    # code this CLI would accept. See ModelSpec.direct_id's docstring note.
+    #
+    # Because this default was NOT refreshed, generate() below deliberately
+    # leaves it off the wire and the CLI's own configured model answers --
+    # the same holds for deepseek-cli and the opt-in kimi-cli. The four
+    # agents whose defaults the frontier refresh DID change now pin the
+    # model with their CLI's real flag (finding O-P2b on #9989); the
+    # boundary between the two sets is pinned by
+    # tests/agents/test_cli_agents.py::TestRefreshedCLIAgentsPinTheirModel.
     default_model="qwen3-coder",
     agent_type="CLI",
     requires="qwen CLI (npm install -g @qwen-code/qwen-code)",
@@ -1256,6 +1436,11 @@ class QwenCLIAgent(CLIAgent):
 
     Falls back to OpenRouter (Qwen) on CLI failures if enabled.
     """
+
+    MODEL_FAMILY = "qwen"
+
+    # self.model never reaches this CLI -- see SENDS_MODEL_ON_WIRE.
+    SENDS_MODEL_ON_WIRE = False
 
     async def generate(self, prompt: str, context: list[Message] | None = None) -> str:
         """Generate a response using qwen CLI.
@@ -1283,6 +1468,8 @@ class QwenCLIAgent(CLIAgent):
 
 @AgentRegistry.register(
     "deepseek-cli",
+    # Native DeepSeek CLI model code, kept at its pre-refresh value for the
+    # same reason as qwen-cli above: deepseek-v4-pro-0813 is an OpenRouter row.
     default_model="deepseek-v4-pro",
     agent_type="CLI",
     requires="deepseek CLI (pip install deepseek-cli)",
@@ -1293,6 +1480,11 @@ class DeepseekCLIAgent(CLIAgent):
 
     Falls back to OpenRouter (Deepseek) on CLI failures if enabled.
     """
+
+    MODEL_FAMILY = "deepseek"
+
+    # self.model never reaches this CLI -- see SENDS_MODEL_ON_WIRE.
+    SENDS_MODEL_ON_WIRE = False
 
     async def generate(self, prompt: str, context: list[Message] | None = None) -> str:
         """Generate a response using deepseek CLI.
@@ -1320,7 +1512,7 @@ class DeepseekCLIAgent(CLIAgent):
 
 @AgentRegistry.register(
     "openai",
-    default_model="gpt-5.5",
+    default_model=GPT6_ASTRA_DIRECT,
     agent_type="CLI",
     requires="openai CLI (pip install openai)",
     env_vars="OPENAI_API_KEY",
@@ -1331,8 +1523,18 @@ class OpenAIAgent(CLIAgent):
     Falls back to OpenRouter (OpenAI GPT) on CLI failures if enabled.
     """
 
+    MODEL_FAMILY = "openai"
+
+    # `openai api chat.completions.create -m <id>`: self.model DOES reach the CLI, so a receipt may
+    # attribute the answer to it -- see SENDS_MODEL_ON_WIRE.
+    SENDS_MODEL_ON_WIRE = True
+
     def __init__(
-        self, name: str, model: str = "gpt-5.5", role: AgentRole = "proposer", timeout: int = 120
+        self,
+        name: str,
+        model: str = GPT6_ASTRA_DIRECT,
+        role: AgentRole = "proposer",
+        timeout: int = 120,
     ) -> None:
         super().__init__(name, model, role, timeout)
 
@@ -1419,10 +1621,15 @@ def get_default_agents() -> list[Agent]:
     Returns:
         List of Agent instances (ClaudeAgent, CodexAgent, GeminiCLIAgent, etc.)
     """
+    # Exactly three entries (frontier-model-refresh, 2026-09-04 review fix
+    # round 1, item 6: the plan's four-entry text is withdrawn).
+    # aragora/server/commands/handlers.py consumes get_default_agents()
+    # UNSLICED for the Slack/Teams /debate command path, so adding a fourth
+    # agent here would silently spawn an extra participant on that path.
     agents: list[Agent] = [
-        ClaudeAgent(name="claude", model="claude-sonnet-4-6"),
-        CodexAgent(name="codex", model="gpt-5.5"),
-        GeminiCLIAgent(name="gemini-cli", model="gemini-3.1-pro-preview"),
+        ClaudeAgent(name="claude", model=FABLE_51_DIRECT),
+        CodexAgent(name="codex", model=GPT6_ASTRA_DIRECT),
+        GeminiCLIAgent(name="gemini-cli", model=GEMINI_31_PRO_DIRECT),
     ]
     return agents
 

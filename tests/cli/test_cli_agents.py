@@ -935,9 +935,9 @@ class TestOpenAIAgent:
     """Tests for OpenAIAgent."""
 
     def test_initialization_with_default_model(self):
-        """Should use gpt-5.5 as default model."""
+        """Should use the current OpenAI frontier as default model."""
         agent = OpenAIAgent(name="openai")
-        assert agent.model == "gpt-5.5"
+        assert agent.model == "gpt-6-astra"
 
     def test_initialization_with_custom_model(self):
         """Should accept custom model."""
@@ -1222,8 +1222,11 @@ class TestCLIAgentGetFallbackAgent:
 
     @pytest.fixture
     def agent(self):
-        # Enable fallback for testing fallback functionality
-        return CodexAgent(name="test", model="gpt-4.1-codex", enable_fallback=True)
+        # Enable fallback for testing fallback functionality. "gpt-5.5" is a
+        # legacy OpenAI spelling covered by the shared upgrade map (unlike
+        # the CLI-specific "gpt-4.1-codex" spelling), so it exercises the
+        # resolve_model_id() upgrade path in _get_fallback_agent().
+        return CodexAgent(name="test", model="gpt-5.5", enable_fallback=True)
 
     def test_returns_none_when_disabled(self, agent):
         """Should return None when fallback is disabled."""
@@ -1261,8 +1264,9 @@ class TestCLIAgentGetFallbackAgent:
                 agent._get_fallback_agent()
 
                 call_kwargs = mock_or.call_args[1]
-                # Legacy Codex models upgrade to the current OpenAI frontier.
-                assert call_kwargs["model"] == "openai/gpt-5.5"
+                # Legacy Codex models upgrade to the current OpenAI frontier
+                # (frontier-model-refresh, 2026-09-04).
+                assert call_kwargs["model"] == "openai/gpt-6-astra"
                 # Should not pass api_key (OpenRouterAgent reads from env)
                 assert "api_key" not in call_kwargs
 
@@ -1419,44 +1423,69 @@ class TestCLIAgentFallbackIntegration:
 
 
 class TestCLIAgentModelMapping:
-    """Tests for model mapping to OpenRouter."""
+    """Tests for model mapping to OpenRouter.
+
+    CLIAgent no longer carries a static OPENROUTER_MODEL_MAP: instead
+    _get_fallback_agent() resolves the current model through the catalog
+    and upgrade map (frontier-model-refresh, 2026-09-04), so every legacy
+    or retired CLI model spelling upgrades to the frontier, not just a
+    hand-enumerated subset. Each test below exercises _get_fallback_agent()
+    directly rather than inspecting a removed class attribute.
+    """
+
+    @staticmethod
+    def _fallback_model(agent):
+        with patch.dict("os.environ", {"OPENROUTER_API_KEY": "test-key"}):
+            with patch("aragora.agents.api_agents.OpenRouterAgent") as mock_or:
+                mock_or.return_value = MagicMock()
+                agent._get_fallback_agent()
+                return mock_or.call_args[1]["model"]
 
     def test_claude_model_mapping(self):
-        """Should map Claude models correctly."""
-        agent = ClaudeAgent(name="test", model="claude-opus-4-8")
-        assert agent.OPENROUTER_MODEL_MAP.get("claude-opus-4-8") == "anthropic/claude-opus-5"
-        assert agent.OPENROUTER_MODEL_MAP.get("claude-opus-4-7") == "anthropic/claude-opus-5"
+        """A still-served Claude id keeps its own identity (no forced
+        upgrade); a retired/legacy spelling upgrades to the Claude
+        frontier."""
+        served = ClaudeAgent(name="test", model="claude-opus-4-8", enable_fallback=True)
+        assert self._fallback_model(served) == "anthropic/claude-opus-4.8"
+
+        legacy = ClaudeAgent(name="test", model="claude-opus-4-7", enable_fallback=True)
+        assert self._fallback_model(legacy) == "anthropic/claude-fable-5.1"
 
     def test_codex_model_mapping(self):
-        """Should map Codex models correctly."""
-        agent = CodexAgent(name="test", model="gpt-4.1-codex")
-        assert agent.OPENROUTER_MODEL_MAP.get("gpt-4.1-codex") == "openai/gpt-5.5"
+        """A legacy OpenAI spelling should upgrade to the current OpenAI
+        frontier."""
+        agent = CodexAgent(name="test", model="gpt-5.5", enable_fallback=True)
+        assert self._fallback_model(agent) == "openai/gpt-6-astra"
 
     def test_gemini_model_mapping(self):
         """Should map Gemini models to the LIVE catalog slug (#9073: the
         unsuffixed google/gemini-3.1-pro id does not exist on OpenRouter)."""
-        agent = GeminiCLIAgent(name="test", model="gemini-3-pro")
-        assert agent.OPENROUTER_MODEL_MAP.get("gemini-3-pro") == "google/gemini-3.1-pro-preview"
+        agent = GeminiCLIAgent(name="test", model="gemini-3-pro", enable_fallback=True)
+        assert self._fallback_model(agent) == "google/gemini-3.1-pro-preview"
 
     def test_grok_model_mapping(self):
         """Should map Grok models correctly."""
-        agent = GrokCLIAgent(name="test", model="grok-3")
-        assert agent.OPENROUTER_MODEL_MAP.get("grok-3") == "x-ai/grok-4.5"
+        agent = GrokCLIAgent(name="test", model="grok-3", enable_fallback=True)
+        assert self._fallback_model(agent) == "x-ai/grok-4.6"
 
     def test_deepseek_model_mapping(self):
         """Should map Deepseek models correctly."""
-        agent = DeepseekCLIAgent(name="test", model="deepseek-v4-pro")
-        assert agent.OPENROUTER_MODEL_MAP.get("deepseek-v4-pro") == "deepseek/deepseek-v4-pro"
+        agent = DeepseekCLIAgent(name="test", model="deepseek-v4-pro", enable_fallback=True)
+        assert self._fallback_model(agent) == "deepseek/deepseek-v4-pro-0813"
 
     def test_qwen_model_mapping(self):
-        """Should map Qwen models correctly."""
-        agent = QwenCLIAgent(name="test", model="qwen-2.5-coder")
-        assert (
-            agent.OPENROUTER_MODEL_MAP.get("qwen-2.5-coder") == "qwen/qwen-2.5-coder-32b-instruct"
-        )
+        """A legacy Qwen spelling should upgrade to the current Qwen
+        frontier."""
+        agent = QwenCLIAgent(name="test", model="qwen3-coder", enable_fallback=True)
+        assert self._fallback_model(agent) == "qwen/qwen3.8-2.4t-a95b"
 
-    def test_unknown_model_uses_default(self):
-        """Unknown models should use default fallback model."""
+    def test_unknown_model_uses_own_family_frontier(self):
+        """An unrecognised spelling must stay inside the agent's own family.
+
+        Falling back to one Anthropic constant silently changed provider on
+        exactly the case an explicit model pin exists for (frontier-model-
+        refresh final review #4).
+        """
         agent = CodexAgent(name="test", model="unknown-model-xyz", enable_fallback=True)
 
         with patch.dict("os.environ", {"OPENROUTER_API_KEY": "test-key"}):
@@ -1466,8 +1495,26 @@ class TestCLIAgentModelMapping:
                 agent._get_fallback_agent()
 
                 call_kwargs = mock_or.call_args[1]
-                # Should default to the current frontier Claude model.
-                assert call_kwargs["model"] == "anthropic/claude-opus-5"
+                # Codex is an OpenAI-family CLI, so the OpenAI frontier.
+                assert call_kwargs["model"] == "openai/gpt-6-astra"
+
+    def test_unknown_model_on_a_familyless_agent_uses_fable(self):
+        """Only a class that declares no family lands on the Anthropic
+        frontier (kilocode brokers several providers)."""
+        from aragora.agents.cli_agents import KiloCodeAgent
+
+        # KiloCodeAgent narrows __init__ and does not forward enable_fallback.
+        agent = KiloCodeAgent(name="test", model="unknown-model-xyz")
+        agent.enable_fallback = True
+        assert agent.MODEL_FAMILY == ""
+
+        with patch.dict("os.environ", {"OPENROUTER_API_KEY": "test-key"}):
+            with patch("aragora.agents.api_agents.OpenRouterAgent") as mock_or:
+                mock_or.return_value = MagicMock()
+
+                agent._get_fallback_agent()
+
+                assert mock_or.call_args[1]["model"] == "anthropic/claude-fable-5.1"
 
 
 # =============================================================================

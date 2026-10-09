@@ -47,7 +47,6 @@ from aragora.agents.api_agents.openrouter import (
     QwenAgent,
     QwenMaxAgent,
     SonarAgent,
-    YiAgent,
 )
 from aragora.agents.api_agents.openclaw import OpenClawAgent, OpenClawConfig
 from aragora.agents.api_agents.rate_limiter import (
@@ -87,7 +86,6 @@ __all__ = [
     "MistralAgent",
     "QwenAgent",
     "QwenMaxAgent",
-    "YiAgent",
     "KimiK2Agent",
     "KimiK3Agent",
     "KimiThinkingAgent",

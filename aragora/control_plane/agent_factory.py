@@ -63,7 +63,13 @@ PROVIDER_TO_AGENT_TYPE: dict[str, str] = {
     "meta": "llama",
     "llama": "llama",
     "qwen": "qwen",
-    "yi": "yi",
+    # NOTE (frontier-model-refresh, 2026-09-05): no "yi" row. The "yi"
+    # agent registration, allowlist entry and credential row were removed
+    # with the Yi Large retirement (no catalog row), so mapping the
+    # provider here would resolve cleanly and then fail deep inside
+    # create_agent() with an unknown-agent-type error. Leaving it out makes
+    # resolve_agent_type() return None and create_from_info() report
+    # "Cannot resolve provider 'yi' to agent type" at the boundary instead.
     "kimi": "kimi",
     "openrouter": "openrouter",
     # CLI-based

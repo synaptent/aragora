@@ -19,13 +19,14 @@ from decimal import Decimal
 from typing import Any
 
 from aragora.billing.usage import calculate_token_cost
+from aragora.models.pricing_mirror import debate_cost_rows
 
 logger = logging.getLogger(__name__)
 
 
 # Default provider rates per 1M tokens (input / output).
 # These mirror PROVIDER_PRICING from usage.py but can be overridden per-instance.
-DEFAULT_PROVIDER_RATES: dict[str, dict[str, tuple[Decimal, Decimal]]] = {
+_LEGACY_PROVIDER_RATES: dict[str, dict[str, tuple[Decimal, Decimal]]] = {
     "anthropic": {
         "claude-fable-5": (Decimal("10.00"), Decimal("50.00")),
         "claude-opus-5": (Decimal("5.00"), Decimal("25.00")),
@@ -57,8 +58,10 @@ DEFAULT_PROVIDER_RATES: dict[str, dict[str, tuple[Decimal, Decimal]]] = {
         "gemini-pro": (Decimal("1.25"), Decimal("5.00")),
     },
     "mistral": {
-        "mistral-large-3": (Decimal("2.00"), Decimal("6.00")),
-        "mistral-large": (Decimal("2.00"), Decimal("6.00")),
+        # Live catalog 2026-09-04 (frontier-model-refresh): mistral-large is
+        # $0.50/$1.50 per MTok, not the pre-refresh $2.00/$6.00 legacy price.
+        "mistral-large-3": (Decimal("0.50"), Decimal("1.50")),
+        "mistral-large": (Decimal("0.50"), Decimal("1.50")),
         "codestral": (Decimal("0.30"), Decimal("0.90")),
     },
     "xai": {
@@ -79,7 +82,7 @@ DEFAULT_PROVIDER_RATES: dict[str, dict[str, tuple[Decimal, Decimal]]] = {
         "qwen/qwen3.8-max": (Decimal("2.00"), Decimal("6.00")),
         "qwen/qwen3.7-max": (Decimal("1.475"), Decimal("4.425")),
         "moonshotai/kimi-k3": (Decimal("3.00"), Decimal("15.00")),
-        "moonshotai/kimi-k2.7-code": (Decimal("0.71"), Decimal("3.50")),
+        "moonshotai/kimi-k2.7-code": (Decimal("0.66"), Decimal("3.40")),
         "perplexity/sonar-reasoning-pro": (Decimal("2.00"), Decimal("8.00")),
         "cohere/command-a": (Decimal("2.50"), Decimal("10.00")),
         "ai21/jamba-large-1.7": (Decimal("2.00"), Decimal("8.00")),
@@ -96,6 +99,18 @@ DEFAULT_PROVIDER_RATES: dict[str, dict[str, tuple[Decimal, Decimal]]] = {
             Decimal("5.00"),
         ),
     },
+}
+
+# Catalog-generated rows win on a key collision with the legacy hand-written
+# dict above (aragora.models.pricing_mirror is the single source of truth
+# for catalog-known models); hand rows for models the catalog doesn't know
+# about are preserved unchanged.
+DEFAULT_PROVIDER_RATES: dict[str, dict[str, tuple[Decimal, Decimal]]] = {
+    prov: {**_LEGACY_PROVIDER_RATES.get(prov, {}), **rows}
+    for prov, rows in {
+        **{p: {} for p in _LEGACY_PROVIDER_RATES},
+        **debate_cost_rows(),
+    }.items()
 }
 
 

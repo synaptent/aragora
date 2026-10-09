@@ -33,6 +33,34 @@ class MockAgentInfo:
 class TestProviderMapping:
     """Test provider name resolution."""
 
+    def test_retired_yi_provider_fails_at_resolution_not_creation(self):
+        """2026-09-05 merge-gate fix wave, finding O-P2b on #9989.
+
+        The PR removed the "yi" agent registration/allowlist/credential row
+        but left ``PROVIDER_TO_AGENT_TYPE["yi"] = "yi"``, so an existing
+        ``AgentInfo(provider="yi")`` resolved cleanly and then failed deep
+        inside ``create_agent()`` with an unknown-agent-type error. It must
+        fail at the resolution boundary with a message naming the provider.
+        """
+        assert "yi" not in PROVIDER_TO_AGENT_TYPE
+        factory = AgentFactory()
+        info = MockAgentInfo(
+            agent_id="yi-1",
+            capabilities={"debate"},
+            provider="yi",
+            model="yi-large",
+        )
+        assert factory.resolve_agent_type(info) is None
+
+        result = factory.create_from_info(info)
+        assert result.success is False
+        assert result.agent is None
+        assert result.error is not None
+        assert "yi" in result.error
+        assert "Cannot resolve provider" in result.error
+        # Not a credentials problem: the provider itself is gone.
+        assert result.credentials_missing is False
+
     def test_anthropic_provider(self):
         """Anthropic provider should map to anthropic-api."""
         factory = AgentFactory()
@@ -490,7 +518,6 @@ class TestProviderToAgentTypeMapping:
             "deepseek",
             "llama",
             "qwen",
-            "yi",
             "kimi",
             "openrouter",
             "claude",

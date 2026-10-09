@@ -831,7 +831,7 @@ class TestNewFamilyCostTracking:
                 tokens_in=1_000_000,
                 tokens_out=1_000_000,
             )
-            == pytest.approx(4.21)  # 0.71 + 3.50 (k2.7-code, live catalog 2026-08-16)
+            == pytest.approx(4.06)  # 0.66 + 3.40 (k2.7-code, live catalog 2026-09-04)
         )
 
     def test_kimi_k3_cost(self) -> None:
@@ -858,7 +858,7 @@ class TestNewFamilyCostTracking:
                 tokens_in=1_000_000,
                 tokens_out=1_000_000,
             )
-            == pytest.approx(8.0)  # 2.00 + 6.00
+            == pytest.approx(2.0)  # 0.50 + 1.50 (mistral-large-2512, live catalog 2026-09-04)
         )
 
 

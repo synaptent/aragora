@@ -463,7 +463,11 @@ class TestQuotaFallbackMixin:
         assert agent.is_quota_error(500, "internal server error") is False
 
     def test_get_fallback_model_with_mapping(self):
-        """Should use model mapping when available."""
+        """get_fallback_model() resolves the current model through the
+        catalog/upgrade map (frontier-model-refresh, 2026-09-04 review fix
+        round 1, item 3), not the (vestigial) OPENROUTER_MODEL_MAP class
+        attribute: "gpt-4o" is a legacy OpenAI spelling that upgrades to
+        the current frontier."""
         from aragora.agents.fallback import QuotaFallbackMixin
 
         class TestAgent(QuotaFallbackMixin):
@@ -475,7 +479,11 @@ class TestQuotaFallbackMixin:
             model = "gpt-4o"
 
         agent = TestAgent()
-        assert agent.get_fallback_model() == "openai/gpt-4o"
+        # Terra, not Astra: the GPT-4 line is value-tier by price
+        # (gpt-4o listed at $2.50/$10), so it preserves tier rather than
+        # over-paying for the $10/$50 flagship -- round-4 re-review of
+        # finding C-P3 on #9989.
+        assert agent.get_fallback_model() == "openai/gpt-5.6-terra"
 
     def test_get_fallback_model_uses_default(self):
         """Should use default model when no mapping exists."""

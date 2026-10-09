@@ -45,11 +45,64 @@ class TestModelProfiles:
     def test_claude_profile_has_expected_properties(self):
         """Verify Claude profile has correct properties."""
         claude = MODEL_PROFILES["claude"]
-        assert claude.model_id == "claude-sonnet-4-6"
-        assert claude.display_name == "Claude Sonnet 4.6"
+        # frontier-model-refresh, 2026-09-04: claude-sonnet-4-6 is retired;
+        # "claude" now points at the Fable 5.1 flagship.
+        assert claude.model_id == "claude-fable-5-1"
+        assert claude.display_name == "Claude Fable 5.1"
         assert claude.provider == "anthropic"
-        assert claude.max_context_tokens == 200000
+        assert claude.max_context_tokens == 1_000_000
         assert claude.supports_vision is True
+
+    def test_anthropic_value_tier_profiles_are_selectable(self):
+        """A cheap Anthropic option must exist, or every Anthropic request
+        routes to the $10/$50 flagship.
+
+        Both rows are ENFORCED catalog models, so the earlier removal of
+        "claude-haiku" -- on the grounds that the catalog carried no cheap
+        Anthropic row -- no longer describes the catalog (2026-09-05
+        merge-gate round 5 advisory on #9989).
+        """
+        from aragora.models.catalog import CATALOG, ENFORCED_MODELS
+
+        haiku = MODEL_PROFILES["claude-haiku"]
+        sonnet = MODEL_PROFILES["claude-sonnet"]
+        flagship = MODEL_PROFILES["claude"]
+
+        assert haiku.model_id == "claude-haiku-4-5-20251001"
+        assert sonnet.model_id == "claude-sonnet-5"
+        assert haiku.provider == sonnet.provider == "anthropic"
+        assert haiku.model_id in ENFORCED_MODELS
+        assert sonnet.model_id in ENFORCED_MODELS
+        assert CATALOG[haiku.model_id].tier == "value"
+        assert CATALOG[sonnet.model_id].tier == "value"
+
+        # Cheaper than the flagship, and Haiku cheaper than Sonnet.
+        assert haiku.cost_input_per_1k < sonnet.cost_input_per_1k < flagship.cost_input_per_1k
+        assert haiku.cost_output_per_1k < sonnet.cost_output_per_1k < flagship.cost_output_per_1k
+        # ... and scored below it on capability, the way the other value-tier
+        # profiles are, so the selector trades quality for price knowingly.
+        for capability, flagship_score in flagship.capabilities.items():
+            assert haiku.capabilities[capability] < flagship_score, capability
+            assert sonnet.capabilities[capability] <= flagship_score, capability
+            assert haiku.capabilities[capability] <= sonnet.capabilities[capability], capability
+
+    def test_no_two_profiles_share_a_model_id_with_different_scores(self):
+        """#9990: two keys on one model id with different capability scores
+        make the selector's answer depend on which key it happened to reach.
+
+        Asserted against the KNOWN pairs so the wave-6 additions cannot grow
+        the set; fixing the pre-existing ones is #9990's own scope.
+        """
+        known_shared = {"claude-fable-5-1", "gpt-5.6-terra", "deepseek-v4-pro-0813"}
+        by_id: dict[str, list[str]] = {}
+        for name, profile in MODEL_PROFILES.items():
+            by_id.setdefault(profile.model_id, []).append(name)
+        shared = {model_id for model_id, names in by_id.items() if len(names) > 1}
+        assert shared == known_shared, (
+            f"model ids shared by several profiles changed: {sorted(shared)}"
+        )
+        for value_tier in ("claude-haiku", "claude-sonnet"):
+            assert MODEL_PROFILES[value_tier].model_id not in shared
 
     def test_kimi_profile_tracks_k3_runtime_metadata(self):
         kimi = MODEL_PROFILES["kimi"]
@@ -62,13 +115,15 @@ class TestModelProfiles:
         assert (kimi.cost_input_per_1k, kimi.cost_output_per_1k) == (0.003, 0.015)
         assert kimi.supports_vision is True
 
-    def test_qwen_profile_tracks_qwen38_max_runtime_metadata(self):
+    def test_qwen_profile_tracks_qwen38_runtime_metadata(self):
         qwen = MODEL_PROFILES["qwen"]
 
-        assert qwen.model_id == "qwen3.8-max"
-        assert qwen.display_name == "Qwen 3.8 Max"
+        # qwen3.8-max is superseded by qwen3.8-2.4t-a95b (kept resolvable as
+        # a catalog alias); frontier-model-refresh, 2026-09-04.
+        assert qwen.model_id == "qwen3.8-2.4t-a95b"
+        assert qwen.display_name == "Qwen 3.8"
         assert qwen.provider == "alibaba"
-        assert qwen.max_context_tokens == 1_000_000
+        assert qwen.max_context_tokens == 1_048_576
         assert qwen.max_output_tokens == 131_072
         assert (qwen.cost_input_per_1k, qwen.cost_output_per_1k) == (0.002, 0.006)
 
@@ -88,6 +143,25 @@ class TestModelProfiles:
             assert len(profile.capabilities) > 0, f"{name} has no capabilities"
             for cap, score in profile.capabilities.items():
                 assert 0.0 <= score <= 1.0, f"{name} has invalid {cap} score: {score}"
+
+    def test_all_profiles_match_catalog_pricing(self):
+        """Every MODEL_PROFILES entry's model_id must resolve to a catalog
+        row, and its cost fields must equal that row's pricing (per 1k,
+        i.e. per-MTok / 1000) -- frontier-model-refresh, 2026-09-04 review
+        fix round 1, item 4."""
+        from aragora.models.catalog import by_any_id
+
+        for name, profile in MODEL_PROFILES.items():
+            spec = by_any_id(profile.model_id)
+            assert spec is not None, f"{name}: model_id {profile.model_id!r} has no catalog row"
+            assert profile.cost_input_per_1k == pytest.approx(spec.input_per_mtok / 1000), (
+                f"{name}: cost_input_per_1k {profile.cost_input_per_1k} != "
+                f"catalog {spec.input_per_mtok / 1000}"
+            )
+            assert profile.cost_output_per_1k == pytest.approx(spec.output_per_mtok / 1000), (
+                f"{name}: cost_output_per_1k {profile.cost_output_per_1k} != "
+                f"catalog {spec.output_per_mtok / 1000}"
+            )
 
 
 class TestModelCapabilityEnum:

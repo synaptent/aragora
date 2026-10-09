@@ -29,12 +29,16 @@ from aragora.agents.api_agents.common import (
     get_stream_buffer_size,
     handle_agent_errors,
     iter_chunks_with_timeout,
+    native_model_id,
 )
 from aragora.agents.fallback import QuotaFallbackMixin
 from aragora.agents.registry import AgentRegistry
-from aragora.config.model_pins import GEMINI_31_PRO_VIA_OPENROUTER
+from aragora.config.model_pins import GEMINI_31_PRO_DIRECT, GEMINI_31_PRO_VIA_OPENROUTER
 
 logger = logging.getLogger(__name__)
+
+# Frontier pick for the Gemini API agent (2026-09-04 frontier-model-refresh).
+DEFAULT_MODEL = GEMINI_31_PRO_DIRECT
 
 # Patterns that indicate web search would be helpful
 WEB_SEARCH_INDICATORS = [
@@ -51,51 +55,10 @@ WEB_SEARCH_INDICATORS = [
     r"\barticle\b",  # Articles
 ]
 
-# Model name normalization: Map legacy/short names to current valid API names
-# Google Gemini API requires specific versioned model names
-GEMINI_MODEL_ALIASES = {
-    # Legacy names -> current valid names
-    "gemini-1.5-flash": "gemini-1.5-flash",
-    "gemini-1.5-pro": "gemini-1.5-pro",
-    "gemini-pro": "gemini-1.5-pro",
-    "gemini-flash": "gemini-3-flash-preview",
-    # Keep versioned names as-is
-    "gemini-1.5-flash-latest": "gemini-1.5-flash",
-    "gemini-1.5-flash-001": "gemini-1.5-flash-001",
-    "gemini-1.5-flash-002": "gemini-1.5-flash-002",
-    "gemini-1.5-pro-latest": "gemini-1.5-pro",
-    "gemini-1.5-pro-001": "gemini-1.5-pro-001",
-    "gemini-1.5-pro-002": "gemini-1.5-pro-002",
-    "gemini-2.0-flash": "gemini-2.0-flash",
-    "gemini-2.0-flash-001": "gemini-2.0-flash-001",
-    # Gemini 2.5 series -> upgraded to 3.1
-    "gemini-2.5-pro": "gemini-3.1-pro-preview",
-    "gemini-2.5-flash": "gemini-3-flash-preview",
-    # Gemini 3 series
-    "gemini-3-pro": "gemini-3.1-pro-preview",  # Upgraded to 3.1
-    "gemini-3-pro-preview": "gemini-3.1-pro-preview",  # Upgraded to 3.1
-    "gemini-3.1-pro": "gemini-3.1-pro-preview",
-    "gemini-3.1-pro-preview": "gemini-3.1-pro-preview",
-    "gemini-3-flash": "gemini-3-flash-preview",
-    "gemini-3-flash-preview": "gemini-3-flash-preview",
-}
-
-
-def _normalize_gemini_model(model: str) -> str:
-    """Normalize Gemini model names to valid API names.
-
-    Args:
-        model: User-provided model name (may be legacy/short name)
-
-    Returns:
-        Valid Google Gemini API model name
-    """
-    return GEMINI_MODEL_ALIASES.get(model, model)
-
 
 @AgentRegistry.register(
     "gemini",
-    default_model="gemini-3.1-pro-preview",
+    default_model=DEFAULT_MODEL,
     agent_type="API",
     env_vars="GEMINI_API_KEY or GOOGLE_API_KEY",
     accepts_api_key=True,
@@ -112,38 +75,30 @@ class GeminiAgent(QuotaFallbackMixin, APIAgent):
     Uses QuotaFallbackMixin for shared quota detection and fallback logic.
     """
 
-    # Model mapping from Gemini to OpenRouter format (used by QuotaFallbackMixin)
-    OPENROUTER_MODEL_MAP = {
-        # Every Gemini ID maps to Gemini 3.1 Pro via OpenRouter so weaker
-        # historical models are transparently upgraded and a missing
-        # GEMINI_API_KEY / GOOGLE_API_KEY never blocks a debate.
-        "gemini-3.1-pro-preview": GEMINI_31_PRO_VIA_OPENROUTER,
-        "gemini-3.1-pro": GEMINI_31_PRO_VIA_OPENROUTER,
-        "gemini-3-flash-preview": GEMINI_31_PRO_VIA_OPENROUTER,
-        "gemini-3-flash": GEMINI_31_PRO_VIA_OPENROUTER,
-        "gemini-3-pro-preview": GEMINI_31_PRO_VIA_OPENROUTER,
-        "gemini-3-pro": GEMINI_31_PRO_VIA_OPENROUTER,
-        "gemini-2.5-pro": GEMINI_31_PRO_VIA_OPENROUTER,
-        "gemini-2.5-flash": GEMINI_31_PRO_VIA_OPENROUTER,
-        "gemini-2.0-flash": GEMINI_31_PRO_VIA_OPENROUTER,
-        "gemini-2.0-flash-001": GEMINI_31_PRO_VIA_OPENROUTER,
-        "gemini-1.5-pro": GEMINI_31_PRO_VIA_OPENROUTER,
-        "gemini-1.5-flash": GEMINI_31_PRO_VIA_OPENROUTER,
-        "gemini-pro": GEMINI_31_PRO_VIA_OPENROUTER,
-    }
+    # No OPENROUTER_MODEL_MAP: QuotaFallbackMixin.get_fallback_model()
+    # resolves the current model through the catalog/upgrade-map instead
+    # (frontier-model-refresh, 2026-09-04), so every legacy or retired
+    # Gemini spelling upgrades to its family frontier, not just a
+    # hand-enumerated subset. A map here would be read by nothing.
     DEFAULT_FALLBACK_MODEL = GEMINI_31_PRO_VIA_OPENROUTER
 
     def __init__(
         self,
         name: str = "gemini",
-        model: str = "gemini-3.1-pro-preview",  # Gemini 3.1 Pro Preview - frontier model
+        model: str = DEFAULT_MODEL,  # Gemini 3.1 Pro Preview - frontier model
         role: AgentRole = "proposer",
         timeout: int = 120,
         api_key: str | None = None,
         enable_fallback: bool | None = None,  # None = use config setting
     ) -> None:
-        # Normalize model name to handle legacy/short names
-        normalized_model = _normalize_gemini_model(model)
+        # Normalize legacy/short names via the shared catalog + upgrade map
+        # (frontier-model-refresh, 2026-09-04) instead of a hand-maintained
+        # GEMINI_MODEL_ALIASES dict. ``native_model_id`` (not the bare
+        # ``resolve_model_id``) because this value is the WIRE id for
+        # generativelanguage.googleapis.com: the catalog's ``canonical_id``
+        # is an internal name that is not guaranteed to be a code the
+        # provider accepts (finding C-P3 on #9989).
+        normalized_model = native_model_id(model)
         super().__init__(
             name=name,
             model=normalized_model,

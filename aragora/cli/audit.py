@@ -23,6 +23,8 @@ import os
 from datetime import datetime, timezone
 from typing import Any
 
+from aragora.config.model_pins import GEMINI_38_FLASH_DIRECT
+
 # Default API URL from environment or localhost fallback
 DEFAULT_API_URL = os.environ.get("ARAGORA_API_URL", "http://localhost:8080")
 DEFAULT_API_KEY = os.environ.get("ARAGORA_API_KEY")
@@ -117,7 +119,7 @@ def create_audit_parser(subparsers: argparse._SubParsersAction) -> None:
         help="Use a preset configuration (overrides --types if specified)",
     )
     create_parser.add_argument("--name", default=None, help="Session name")
-    create_parser.add_argument("--model", default="gemini-1.5-flash", help="Model for analysis")
+    create_parser.add_argument("--model", default=GEMINI_38_FLASH_DIRECT, help="Model for analysis")
 
     # Start command
     start_parser = audit_subparsers.add_parser("start", help="Start an audit session")

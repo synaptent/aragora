@@ -180,7 +180,10 @@ class TestAgentAttributes:
         with patch.dict("os.environ", {"GEMINI_API_KEY": "test"}):
             agent = GeminiAgent(model="gemini-2.0-flash")
 
-        assert agent.model == "gemini-2.0-flash"
+        # "gemini-2.0-flash" has no catalog row of its own; resolve_model_id
+        # upgrades it to the current Google value-tier frontier
+        # (frontier-model-refresh, 2026-09-04).
+        assert agent.model == "gemini-3.8-flash"
 
     def test_agent_has_role(self):
         """Test agent has role attribute."""

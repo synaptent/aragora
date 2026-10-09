@@ -1558,20 +1558,41 @@ class CostHandler:
             model = body.get("model", "claude-opus-4")
             provider = body.get("provider", "anthropic")
 
-            # Use canonical pricing from billing module
+            # Use canonical pricing from billing module. Both the breakdown
+            # and the per-1M figures are derived FROM the same
+            # calculate_token_cost answer rather than re-derived from a
+            # PROVIDER_PRICING bucket, so all three agree by construction.
+            #
+            # Re-deriving them was wrong two ways (2026-09-05 wave-2
+            # re-review): the flat bucket rate cannot express a documented
+            # long-context tier, so input_cost + output_cost stopped summing
+            # to the total above the threshold; and the bucket lookup used
+            # the caller's provider LABEL, so an unrecognised label reported
+            # the $2/$8 default while calculate_token_cost correctly charged
+            # the model's real rate.
             total_cost = calculate_token_cost(provider, model, tokens_input, tokens_output)
+            input_cost = float(calculate_token_cost(provider, model, tokens_input, 0))
+            output_cost = float(total_cost) - input_cost
 
-            # Get per-unit prices for breakdown
+            # EFFECTIVE per-1M rates: what this request is actually billed
+            # at, including any long-context tier. With no tokens on a side
+            # there is no effective rate to report, so fall back to the
+            # bucket's list price for that side.
             provider_prices = PROVIDER_PRICING.get(provider, PROVIDER_PRICING["openrouter"])
             input_key = model if model in provider_prices else "default"
             output_key = (
                 f"{model}-output" if f"{model}-output" in provider_prices else "default-output"
             )
-            input_price = float(provider_prices.get(input_key, Decimal("2.00")))
-            output_price = float(provider_prices.get(output_key, Decimal("8.00")))
-
-            input_cost = (tokens_input / 1_000_000) * input_price
-            output_cost = (tokens_output / 1_000_000) * output_price
+            input_price = (
+                input_cost * 1_000_000 / tokens_input
+                if tokens_input
+                else float(provider_prices.get(input_key, Decimal("2.00")))
+            )
+            output_price = (
+                output_cost * 1_000_000 / tokens_output
+                if tokens_output
+                else float(provider_prices.get(output_key, Decimal("8.00")))
+            )
 
             return web.json_response(
                 {

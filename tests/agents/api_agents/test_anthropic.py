@@ -32,7 +32,8 @@ class TestAnthropicAgentInitialization:
         agent = AnthropicAPIAgent()
 
         assert agent.name == "claude-api"
-        assert agent.model == "claude-opus-5"
+        # frontier-model-refresh, 2026-09-04: claude-opus-5 is superseded.
+        assert agent.model == "claude-fable-5-1"
         assert agent.role == "proposer"
         assert agent.timeout == 120
         assert agent.agent_type == "anthropic"
@@ -45,16 +46,21 @@ class TestAnthropicAgentInitialization:
         """Should initialize with custom configuration."""
         from aragora.agents.api_agents.anthropic import AnthropicAPIAgent
 
+        # An ACTIVE non-default catalog id: a retired one (the old
+        # "claude-sonnet-4-20250514") is now upgraded at construction time,
+        # which is its own behaviour (see
+        # tests/agents/test_retired_model_id_upgrade.py) and would make this
+        # test about upgrading rather than about honouring custom config.
         agent = AnthropicAPIAgent(
             name="custom-claude",
-            model="claude-sonnet-4-20250514",
+            model="claude-opus-4-8",
             role="critic",
             timeout=60,
             enable_fallback=False,
         )
 
         assert agent.name == "custom-claude"
-        assert agent.model == "claude-sonnet-4-20250514"
+        assert agent.model == "claude-opus-4-8"
         assert agent.role == "critic"
         assert agent.timeout == 60
         assert agent.enable_fallback is False
@@ -74,7 +80,7 @@ class TestAnthropicAgentInitialization:
         spec = AgentRegistry.get_spec("anthropic-api")
 
         assert spec is not None
-        assert spec.default_model == "claude-opus-5"
+        assert spec.default_model == "claude-fable-5-1"
         assert spec.agent_type == "API"
 
 

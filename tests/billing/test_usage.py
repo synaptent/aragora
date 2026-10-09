@@ -150,6 +150,39 @@ class TestProviderPricing:
 # =============================================================================
 
 
+# Registered agents whose DEFAULT model is a native provider model code the
+# catalog carries no row for (the same gap ``_NATIVE_ID_EXEMPT`` names in
+# tests/models/test_reachable_defaults.py: the catalog reaches these families
+# only through OpenRouter). Their spelling therefore has no rate of its own,
+# and ``calculate_token_cost`` no longer borrows their family frontier's --
+# pricing a spelling at its successor's rate is the upgrade leg the #9989
+# round-2 ruling deleted. Each entry records the price they DO get at 1M/1M
+# and why, and self-removes the day the catalog gains a native row.
+_NO_NATIVE_CATALOG_ROW: dict[str, tuple[Decimal, str]] = {
+    "qwen-cli": (
+        Decimal("10.00"),
+        "qwen3-coder: Alibaba's own CLI model code; no catalog row, no bucket "
+        "row, so the documented $2/$8 unknown-model default applies",
+    ),
+    "deepseek-cli": (
+        Decimal("5.22"),
+        "deepseek-v4-pro: no catalog row, but the hand-written 'deepseek' "
+        "bucket carries the spelling at $1.74/$3.48, which is its own price "
+        "rather than deepseek-v4-pro-0813's",
+    ),
+    "kimi-legacy": (
+        Decimal("10.00"),
+        "moonshot-v1-8k: api.moonshot.cn's own model code; no catalog row, no "
+        "bucket row, so the documented default applies",
+    ),
+    "tinker": (
+        Decimal("10.00"),
+        "llama-3.3-70b: a retired Llama spelling with no catalog row and no "
+        "bucket row, so the documented default applies",
+    ),
+}
+
+
 class TestCalculateTokenCost:
     """Tests for calculate_token_cost function."""
 
@@ -195,12 +228,249 @@ class TestCalculateTokenCost:
         expected = Decimal("1.74") + Decimal("3.48")
         assert cost == expected
 
+    def test_kimi_provider_matches_moonshot_bucket(self):
+        """ "kimi" is the live provider label OpenRouterAgent.agent_type uses
+        for the Kimi agent classes (aragora/agents/api_agents/openrouter.py),
+        while the catalog rows carry family "moonshot" (kimi-k3's own
+        ``provider`` is "openrouter" -- that row is reached only through
+        OpenRouter). Without a dedicated "kimi" bucket
+        (aragora/models/pricing_mirror.py::_bucketed), this silently fell
+        back to the openrouter default rate.
+
+        "kimi-k3" now ALSO resolves correctly under any other provider
+        label via calculate_token_cost's catalog fallback (the 2026-09-05
+        C-P1 fix), so the true default is asserted here against a model
+        with no catalog row at all, not merely a different provider
+        string."""
+        kimi_cost = calculate_token_cost("kimi", "kimi-k3", 1_000_000, 1_000_000)
+        moonshot_cost = calculate_token_cost("moonshot", "kimi-k3", 1_000_000, 1_000_000)
+        default_cost = calculate_token_cost(
+            "unknown_provider", "totally-unknown-model-xyz", 1_000_000, 1_000_000
+        )
+        assert kimi_cost == moonshot_cost == Decimal("18.00")
+        assert kimi_cost != default_cost
+
+    def test_retired_mistral_large_2411_prices_at_its_own_rate(self):
+        """C-P3 (#9989 merge-gate, round 2): with no catalog row of its own,
+        the retired 2411 SKU resolved through the upgrade map and priced at
+        its SUCCESSOR's ($0.50/$1.50) rate -- 2.00 against a true 8.00 -- so
+        every historical receipt naming it re-priced at 25% of what was
+        actually charged. It is now a RETIRED catalog row at its own
+        published $2.00/$6.00, while UPGRADES still routes LIVE requests to
+        mistral-large-2512."""
+        from aragora.models.upgrade_map import resolve_model_id
+
+        assert calculate_token_cost(
+            "mistral", "mistral-large-2411", 1_000_000, 1_000_000
+        ) == Decimal("8.00")
+        # The successor's own rate is different, so the assertion above
+        # cannot pass by coincidence.
+        assert calculate_token_cost(
+            "mistral", "mistral-large-2512", 1_000_000, 1_000_000
+        ) == Decimal("2.00")
+        # Live requests still upgrade.
+        assert resolve_model_id("mistral-large-2411") == "mistral-large-2512"
+
+    # Legacy spellings with a bucket row but NO catalog row of their own.
+    # Before the #9989 round-2 ruling these fell through the bucket lookup
+    # (whenever the caller's label was not the bucket that carries them) into
+    # ``_catalog_token_price``'s upgrade leg and priced at their SUCCESSOR's
+    # rate -- ``gpt-4o`` at gpt-6-astra's $60, ``grok-4`` at grok-4.6's $8,
+    # ``claude-haiku-3`` at fable-5.1's $60. Each value below is the sum of
+    # the spelling's own two bucket rows.
+    _LABEL_INDEPENDENT_LEGACY_PRICES = [
+        ("claude-haiku-3", Decimal("1.50")),
+        ("claude-opus-4", Decimal("30.00")),
+        ("claude-opus-4-7", Decimal("30.00")),
+        ("claude-opus-4.7", Decimal("30.00")),
+        ("claude-sonnet-4", Decimal("18.00")),
+        ("claude-sonnet-4.6", Decimal("18.00")),
+        ("deepseek-r1", Decimal("0.70")),
+        ("deepseek-v3", Decimal("0.70")),
+        ("deepseek-v3.2", Decimal("0.70")),
+        ("deepseek-v4-pro", Decimal("5.22")),
+        ("gemini-3-flash", Decimal("3.50")),
+        ("gemini-3.5-flash", Decimal("10.50")),
+        ("gemini-pro", Decimal("6.25")),
+        ("gpt-4.1", Decimal("10.00")),
+        ("gpt-4.1-mini", Decimal("2.00")),
+        ("gpt-4o", Decimal("12.50")),
+        ("gpt-4o-mini", Decimal("0.75")),
+        ("grok-4", Decimal("18.00")),
+        ("mistral-large-3", Decimal("2.00")),
+    ]
+
+    @pytest.mark.parametrize(
+        ("model", "expected"),
+        _LABEL_INDEPENDENT_LEGACY_PRICES,
+        ids=[m for m, _ in _LABEL_INDEPENDENT_LEGACY_PRICES],
+    )
+    def test_legacy_spelling_prices_the_same_under_every_label(
+        self, model: str, expected: Decimal
+    ) -> None:
+        """A spelling has ONE price; the provider LABEL a caller passes is
+        not information about it (``CLIAgent`` never sets ``agent_type``, so
+        every CLI agent passes ``"unknown"``; several API agents pass a label
+        matching neither their model's provider nor its family).
+
+        The label the row's own bucket is keyed under is included, so the
+        expectation is anchored to a real table entry rather than to whatever
+        the fallback happens to produce."""
+        from aragora.models.catalog import spec_or_none
+
+        assert spec_or_none(model) is None, (
+            f"{model!r} now has a catalog row of its own; move it out of this "
+            "table (its catalog rate, not the bucket rate, becomes correct)"
+        )
+        for label in ("unknown", "openrouter", "anthropic", "openai", "xai", "google", "deepseek"):
+            assert calculate_token_cost(label, model, 1_000_000, 1_000_000) == expected, (
+                f"{model!r} priced differently under label {label!r}"
+            )
+
     def test_unknown_provider_uses_openrouter_default(self):
         """Test unknown provider falls back to OpenRouter pricing."""
         cost = calculate_token_cost("unknown_provider", "unknown_model", 1_000_000, 1_000_000)
         # Default: $2/1M input, $8/1M output
         expected = Decimal("2.00") + Decimal("8.00")
         assert cost == expected
+
+    def test_gemini_and_grok_labels_price_via_family_alias(self):
+        """C-P1 (2026-09-05 read-only recheck at the gate-fix wave's head):
+        GeminiAgent.agent_type is "gemini" for a catalog row whose
+        provider/family are both "google"; GrokAgent.agent_type is "grok"
+        for a row whose provider/family are both "xai". Neither label ever
+        reached rule 1 (own provider bucket) or rule 3 (family bucket) in
+        pricing_mirror._bucketed, so both silently priced at the
+        openrouter-bucket default. aragora.models.pricing_mirror
+        ._LABEL_ALIASES now gives both their own bucket."""
+        assert calculate_token_cost(
+            "gemini", "gemini-3.1-pro-preview", 1_000_000, 1_000_000
+        ) == Decimal("14.00")
+        assert calculate_token_cost("gemini", "gemini-3.8-flash", 1_000_000, 1_000_000) == (
+            Decimal("4.50")
+        )
+        # grok-4.6 carries a documented long-context tier at 200k prompt
+        # tokens, so 1M in bills every token at $4/$12, not the flat $2/$6
+        # (finding O-P2b on #9989). Both sides of that threshold are asserted
+        # so a regression to flat-only pricing cannot hide here.
+        assert calculate_token_cost("grok", "grok-4.6", 199_999, 1_000_000) == Decimal("6.399998")
+        assert calculate_token_cost("grok", "grok-4.6", 1_000_000, 1_000_000) == Decimal("16.00")
+
+    def test_catalog_fallback_resolves_before_hardcoded_default(self):
+        """calculate_token_cost's bucket lookup stays authoritative when it
+        hits; only a provider/model pair that misses EVERY bucket now
+        additionally tries the catalog directly before the $2/$8 default.
+        This is the mechanism that fixes every CLI agent's billing too:
+        CLIAgent never sets self.agent_type, so it inherits the base
+        Agent.agent_type default of "unknown" -- a label no bucket, alias
+        table entry, or family name will ever match."""
+        # "unknown" (the CLI-agent shape) + a real catalog id -> real price.
+        assert calculate_token_cost("unknown", "claude-fable-5-1", 1_000_000, 1_000_000) == Decimal(
+            "60.00"
+        )
+        # A bare spelling with no catalog row of its own is priced by the
+        # generated/legacy BUCKETS, label-independently -- never by its
+        # successor's catalog row. "deepseek-v4-pro" does have a bucket row
+        # (the hand-written "deepseek" bucket, $1.74/$3.48), and that is its
+        # own price; deepseek-v4-pro-0813's 4.4827 would be the successor's
+        # rate, which the #9989 round-2 ruling removed from this path.
+        assert calculate_token_cost("unknown", "deepseek-v4-pro", 1_000_000, 1_000_000) == Decimal(
+            "5.22"
+        )
+        # A truly unrecognised model, under any provider label, still hits
+        # the genuine hardcoded default -- the catalog fallback must not
+        # invent a price for something it cannot resolve at all.
+        assert calculate_token_cost(
+            "unknown", "totally-unknown-model-xyz", 1_000_000, 1_000_000
+        ) == Decimal("10.00")
+
+    def test_every_registered_agent_with_a_catalog_row_prices_correctly(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Enumerate every agent type AgentRegistry knows about; for every
+        one whose default model resolves to a real catalog row (directly,
+        or via the upgrade map), construct it and assert
+        calculate_token_cost(instance.agent_type, instance.model, ...)
+        prices at the row's EXACT rate -- never the $2/$8 default, and
+        never a stale/wrong rate from a bucket mismatch.
+
+        A handful of registered types are skipped, each for a documented,
+        pre-existing reason unrelated to this pricing fix:
+        - no default model at all, or a placeholder spelling with no
+          catalog row (frameworks like autogen/crewai/langgraph, local
+          runtimes like ollama/lm-studio, OpenRouter-only endpoints with
+          no catalog entry like sonar/command-r/jamba/fusion, and
+          codestral -- see aragora/models/upgrade_map.py's own note on why
+          "codestral-latest" has no catalog row);
+        - "tinker-llama"/"tinker-deepseek": TinkerAgent's constructor
+          raises ``TypeError: got multiple values for keyword argument
+          'model'`` when created through AgentRegistry.create() with an
+          explicit default model, a pre-existing bug unrelated to pricing.
+
+        Four more agents run a NATIVE model code the catalog carries no row
+        for (``_NO_NATIVE_CATALOG_ROW``). They are checked against the price
+        they really get rather than against their family frontier's rate:
+        pricing a spelling at its successor's rate is exactly the upgrade leg
+        the #9989 round-2 ruling removed from ``calculate_token_cost``.
+        """
+        from aragora.agents.registry import AgentRegistry
+        from aragora.models.catalog import spec_or_none
+        from aragora.models.pricing_mirror import dec
+        from aragora.models.upgrade_map import resolve_model_id
+
+        # Agents wired only through OpenRouter/Moonshot need a key present
+        # to construct at all; a fake one is fine, generate() is never
+        # called.
+        monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+        monkeypatch.setenv("KIMI_API_KEY", "test-key")
+
+        _KNOWN_CONSTRUCTOR_BUGS = {"tinker-llama", "tinker-deepseek"}
+
+        checked = []
+        for type_name, meta in AgentRegistry.list_all().items():
+            if type_name in _KNOWN_CONSTRUCTOR_BUGS:
+                continue
+            default_model = meta["default_model"]
+            if not default_model:
+                continue
+            spec = spec_or_none(default_model)
+            if spec is None:
+                resolved = resolve_model_id(default_model)
+                if resolved and resolved != default_model:
+                    spec = spec_or_none(resolved)
+            if spec is None:
+                continue  # nothing cataloged to check pricing against
+
+            agent = AgentRegistry.create(type_name, name=f"test-{type_name}", api_key="test-key")
+            cost = calculate_token_cost(agent.agent_type, agent.model, 1_000_000, 1_000_000)
+            if type_name in _NO_NATIVE_CATALOG_ROW:
+                documented, why = _NO_NATIVE_CATALOG_ROW[type_name]
+                assert spec_or_none(agent.model) is None, (
+                    f"{type_name!r}: {agent.model!r} now has a catalog row of "
+                    f"its own -- drop it from _NO_NATIVE_CATALOG_ROW ({why})"
+                )
+                assert cost == documented, (
+                    f"{type_name!r} (model={agent.model!r}) priced {cost}, "
+                    f"documented {documented} ({why})"
+                )
+                checked.append(type_name)
+                continue
+            # Tier-aware: at 1M prompt tokens a row with a documented
+            # long-context threshold bills every token at the higher rate
+            # (finding O-P2b on #9989), so the flat fields would be the
+            # wrong expectation for exactly the rows the tier exists for.
+            in_rate, out_rate = spec.rates_for(1_000_000)
+            expected = dec(in_rate) + dec(out_rate)
+            assert cost == expected, (
+                f"{type_name!r} (agent_type={agent.agent_type!r}, model={agent.model!r}) "
+                f"priced {cost}, expected {expected} from catalog row {spec.canonical_id!r}"
+            )
+            checked.append(type_name)
+
+        # Sanity: the loop actually exercised a meaningful number of real
+        # agents rather than skipping everything (a regression in the
+        # skip conditions above would silently make this test vacuous).
+        assert len(checked) >= 20, f"only checked {checked!r}"
 
     def test_unknown_model_uses_default(self):
         """Test unknown model falls back to default pricing."""
@@ -1355,3 +1625,239 @@ class TestModuleExports:
         assert UsageTracker is not None
         assert calculate_token_cost is not None
         assert PROVIDER_PRICING is not None
+
+
+class TestCrossBucketPriceConsistency:
+    """One spelling, one price -- across every generated bucket.
+
+    ``_any_bucket_token_price`` consults EVERY ``PROVIDER_PRICING`` bucket on
+    a miss, on the stated ground that buckets are emitted per label from the
+    same catalog row and so cannot disagree. Its docstring cited this test as
+    the proof; the test did not exist (2026-09-05 wave-2 re-review), so the
+    invariant the fallback rests on was unverified.
+    """
+
+    def test_no_spelling_is_priced_two_different_ways_across_buckets(self):
+        from aragora.billing.usage import PROVIDER_PRICING
+
+        seen: dict[str, tuple[str, Decimal]] = {}
+        conflicts: list[str] = []
+        for bucket, rows in PROVIDER_PRICING.items():
+            for spelling, rate in rows.items():
+                prior = seen.get(spelling)
+                if prior is None:
+                    seen[spelling] = (bucket, rate)
+                elif prior[1] != rate:
+                    conflicts.append(f"{spelling!r}: {prior[0]}={prior[1]} vs {bucket}={rate}")
+        assert not conflicts, (
+            "a spelling is priced differently in different buckets, so "
+            "_any_bucket_token_price's answer depends on dict order:\n"
+            + "\n".join(sorted(conflicts))
+        )
+
+    def test_metering_extra_prices_never_disagree_with_the_shared_table(self):
+        """The tenant-billing path passes its own table as ``extra_prices``.
+
+        ``services.usage_metering`` carried ``deepseek-v3`` at 0.14/0.28
+        while ``PROVIDER_PRICING`` priced the same spelling at 0.28/0.42
+        (DeepSeek's current list price), and ``extra_prices`` won the exact
+        same-provider hit -- so that one spelling billed at a rate no other
+        caller used (2026-09-05 merge-gate addendum on #9989).
+        """
+        from aragora.billing.usage import PROVIDER_PRICING
+        from aragora.services.metering_models import MODEL_PRICING
+
+        shared: dict[str, tuple[str, Decimal]] = {}
+        for bucket, rows in PROVIDER_PRICING.items():
+            for spelling, rate in rows.items():
+                shared.setdefault(spelling, (bucket, rate))
+
+        conflicts: list[str] = []
+        for bucket, rows in MODEL_PRICING.items():
+            for spelling, rate in rows.items():
+                if spelling in ("default", "default-output"):
+                    continue
+                prior = shared.get(spelling)
+                if prior is not None and prior[1] != rate:
+                    conflicts.append(
+                        f"{spelling!r}: PROVIDER_PRICING[{prior[0]}]={prior[1]} vs "
+                        f"MODEL_PRICING[{bucket}]={rate}"
+                    )
+        assert not conflicts, (
+            "the metering table restates a spelling the shared table already "
+            "prices, at a different rate:\n" + "\n".join(sorted(conflicts))
+        )
+
+    def test_extra_prices_cannot_override_a_shared_spelling(self):
+        """Even a hand-built extra_prices row loses to the shared table."""
+        from aragora.billing.usage import PROVIDER_PRICING
+
+        rogue = {
+            "deepseek": {
+                "deepseek-v3": Decimal("0.14"),
+                "deepseek-v3-output": Decimal("0.28"),
+            }
+        }
+        cost = calculate_token_cost(
+            "deepseek", "deepseek-v3", 1_000_000, 1_000_000, extra_prices=rogue
+        )
+        shared = PROVIDER_PRICING["deepseek"]
+        assert cost == shared["deepseek-v3"] + shared["deepseek-v3-output"]
+        assert cost == Decimal("0.28") + Decimal("0.42")
+
+    def test_extra_prices_still_supplies_spellings_the_shared_table_lacks(self):
+        """The guard must not turn extra_prices into dead weight."""
+        from aragora.billing.usage import _SHARED_PRICED_SPELLINGS
+
+        spelling = "totally-uncataloged-model-xyz"
+        assert spelling not in _SHARED_PRICED_SPELLINGS
+        extra = {
+            "deepseek": {
+                spelling: Decimal("3.00"),
+                f"{spelling}-output": Decimal("9.00"),
+            }
+        }
+        cost = calculate_token_cost("deepseek", spelling, 1_000_000, 1_000_000, extra_prices=extra)
+        assert cost == Decimal("12.00")
+
+    def test_extra_prices_default_row_is_still_honoured(self):
+        """Default rows are per-provider fallbacks, not model spellings."""
+        extra = {
+            "deepseek": {
+                "default": Decimal("7.00"),
+                "default-output": Decimal("11.00"),
+            }
+        }
+        cost = calculate_token_cost(
+            "deepseek", "no-such-model-at-all", 1_000_000, 1_000_000, extra_prices=extra
+        )
+        assert cost == Decimal("18.00")
+
+    def test_the_invariant_covers_more_than_a_handful_of_shared_spellings(self):
+        """Guards against the test above passing vacuously if bucketing ever
+        stopped emitting a spelling under more than one label."""
+        from aragora.billing.usage import PROVIDER_PRICING
+
+        counts: dict[str, int] = {}
+        for rows in PROVIDER_PRICING.values():
+            for spelling in rows:
+                counts[spelling] = counts.get(spelling, 0) + 1
+        shared = [s for s, n in counts.items() if n > 1]
+        assert len(shared) >= 20, f"only {len(shared)} spellings appear in >1 bucket"
+
+
+class TestLongContextThresholdCountsCachedInput:
+    """A provider tiers on the FULL prompt it receives.
+
+    The threshold was evaluated against ``tokens_in`` alone, so a
+    long-context request served mostly from cache dropped back to the flat
+    rate even though the provider saw a long prompt (2026-09-05 wave-2
+    re-review). Only the threshold decision is under test here; what the
+    cached tokens themselves are billed at is
+    ``TestCachedInputUsesTheDocumentedCacheReadRate`` below.
+    """
+
+    def test_mostly_cached_long_prompt_crosses_the_threshold(self):
+        # gpt-6-astra: threshold 272_000; flat $10/$50, long $20/$75, and a
+        # documented cache-read rate of $1.00 with no tiered counterpart.
+        fresh, cached, out = 20_000, 300_000, 1_000
+        cost = calculate_token_cost("openai", "gpt-6-astra", fresh, out, tokens_cached=cached)
+        expected = (
+            Decimal(fresh) / Decimal("1000000") * Decimal("20.00")
+            + Decimal(out) / Decimal("1000000") * Decimal("75.00")
+            + Decimal(cached) / Decimal("1000000") * Decimal("1.00")
+        )
+        assert cost == expected
+
+    def test_below_the_threshold_even_with_cache_stays_flat(self):
+        fresh, cached, out = 20_000, 20_000, 1_000
+        cost = calculate_token_cost("openai", "gpt-6-astra", fresh, out, tokens_cached=cached)
+        expected = (
+            Decimal(fresh) / Decimal("1000000") * Decimal("10.00")
+            + Decimal(out) / Decimal("1000000") * Decimal("50.00")
+            + Decimal(cached) / Decimal("1000000") * Decimal("1.00")
+        )
+        assert cost == expected
+
+    def test_uncached_behaviour_is_unchanged(self):
+        """The fix must not move any answer for a request with no cache."""
+        assert calculate_token_cost("openai", "gpt-6-astra", 300_000, 10_000) == Decimal("6.7500")
+        assert calculate_token_cost("openai", "gpt-6-astra", 1_000, 1_000) == Decimal("0.060")
+
+
+class TestCachedInputUsesTheDocumentedCacheReadRate:
+    """A cached prompt token bills at the rate the provider DOCUMENTS.
+
+    ``calculate_token_cost`` hard-coded ``input_price * 0.1`` while the
+    catalog already carried ``cache_read_per_mtok`` -- claude-fable-5-1
+    documents $0.25/MTok against a $10.00 input rate, so a cached Fable
+    prompt billed at $1.00/MTok, 4x the real rate (finding O-P2a on
+    #9989). The heuristic survives only where nothing documents a rate.
+    """
+
+    def test_fable_cached_million_tokens_bills_the_catalog_rate(self):
+        cost = calculate_token_cost("anthropic", "claude-fable-5-1", 0, 0, tokens_cached=1_000_000)
+        assert cost == Decimal("0.25")
+        # What the old heuristic would have charged, for contrast.
+        assert cost != Decimal("1.00")
+
+    def test_every_spelling_of_the_row_bills_the_same_cache_rate(self):
+        """Alias/openrouter spellings resolve through the same catalog row."""
+        for spelling in ("claude-fable-5.1", "anthropic/claude-fable-5-1"):
+            assert calculate_token_cost(
+                "anthropic", spelling, 0, 0, tokens_cached=1_000_000
+            ) == Decimal("0.25"), spelling
+
+    def test_row_without_a_documented_rate_keeps_the_heuristic(self):
+        """grok-4.6 has no ``cache_read_per_mtok``; nothing invents one."""
+        from aragora.models.catalog import CATALOG
+
+        spec = CATALOG["grok-4.6"]
+        assert spec.cache_read_per_mtok is None
+        cached = 10_000
+        cost = calculate_token_cost("xai", "grok-4.6", 0, 0, tokens_cached=cached)
+        expected = (
+            Decimal(cached)
+            / Decimal("1000000")
+            * Decimal(str(spec.input_per_mtok))
+            * Decimal("0.1")
+        )
+        assert cost == expected
+
+    def test_uncataloged_spelling_keeps_the_heuristic(self):
+        """No catalog row, no bucket column -> the rule of thumb stands."""
+        cached = 1_000_000
+        cost = calculate_token_cost("openrouter", "not-a-real-model", 0, 0, tokens_cached=cached)
+        assert cost == Decimal("2.00") * Decimal("0.1")
+
+    def test_extra_prices_may_document_a_cache_rate_for_its_own_spelling(self):
+        """The ``extra_prices`` table can carry the column for a spelling the
+        shared tables have never heard of."""
+        extra = {
+            "anthropic": {
+                "byok-model-x": Decimal("6.00"),
+                "byok-model-x-output": Decimal("18.00"),
+                "byok-model-x-cache-read": Decimal("0.05"),
+            }
+        }
+        cost = calculate_token_cost(
+            "anthropic", "byok-model-x", 0, 0, tokens_cached=1_000_000, extra_prices=extra
+        )
+        assert cost == Decimal("0.05")
+        # Without the column the same table falls back to the heuristic.
+        no_column = {"anthropic": {k: v for k, v in extra["anthropic"].items() if "cache" not in k}}
+        assert calculate_token_cost(
+            "anthropic", "byok-model-x", 0, 0, tokens_cached=1_000_000, extra_prices=no_column
+        ) == Decimal("6.00") * Decimal("0.1")
+
+    def test_generated_buckets_publish_the_cache_read_column(self):
+        """The consumer reads it off ``PROVIDER_PRICING``; only rows with a
+        documented rate emit it."""
+        from aragora.billing.usage import PROVIDER_PRICING
+        from aragora.models.catalog import CATALOG
+
+        assert PROVIDER_PRICING["anthropic"]["claude-fable-5-1-cache-read"] == Decimal("0.25")
+        assert "grok-4.6-cache-read" not in PROVIDER_PRICING["xai"]
+        for spelling in CATALOG["claude-sonnet-5"].all_ids():
+            bucket = "openrouter" if "/" in spelling else "anthropic"
+            assert PROVIDER_PRICING[bucket][f"{spelling}-cache-read"] == Decimal("0.20")

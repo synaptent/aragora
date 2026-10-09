@@ -43,7 +43,9 @@ class TestAliasesMatchFrontier:
         assert model_pins.GEMINI_3_1_PRO == model_pins.GEMINI_31_PRO_DIRECT
 
     def test_grok_openrouter_pin_uses_live_soaked_frontier(self) -> None:
-        assert model_pins.GROK_4_VIA_OPENROUTER == "x-ai/grok-4.5"
+        # Re-pinned by the 2026-09-04 frontier-model-refresh: grok-4.6
+        # supersedes grok-4.5 as the devil's-advocate frontier.
+        assert model_pins.GROK_4_VIA_OPENROUTER == "x-ai/grok-4.6"
 
 
 class TestAliasesInAll:
@@ -72,3 +74,48 @@ class TestCanonicalMetricsRegex:
 
     def test_check_regex_matches_gemini_3_1_pro(self) -> None:
         assert self._matches("GEMINI_3_1_PRO")
+
+
+class TestPinsDerivedFromCatalog:
+    """Frontier-model-refresh (2026-09-04): pins are derived from
+    ``aragora.models.catalog.CATALOG`` instead of hand-copied literals, and
+    every role is re-pinned to the current per-family frontier."""
+
+    def test_pins_come_from_catalog(self) -> None:
+        from aragora.models.catalog import CATALOG
+
+        assert model_pins.FABLE_51_DIRECT == CATALOG["claude-fable-5-1"].direct_id
+        assert model_pins.FABLE_51_VIA_OPENROUTER == CATALOG["claude-fable-5-1"].openrouter_id
+        assert model_pins.GPT6_ASTRA_DIRECT == "gpt-6-astra"
+        assert model_pins.GEMINI_31_PRO_DIRECT == "gemini-3.1-pro-preview"  # real Gemini API code
+        assert model_pins.GROK_46_DIRECT == "grok-4.6"
+        assert model_pins.GROK_46_VIA_OPENROUTER == "x-ai/grok-4.6"
+
+    def test_legacy_constant_names_still_exported(self) -> None:
+        for name in (
+            "OPUS_4_7",
+            "GPT_5_4",
+            "GEMINI_3_1_PRO",
+            "FABLE_5_DIRECT",
+            "GPT56_SOL_DIRECT",
+            "GPT55_DIRECT",
+            "GROK_4_DIRECT",
+        ):
+            assert hasattr(model_pins, name), name
+
+    def test_every_role_pins_fable_or_astra_or_family_frontier(self) -> None:
+        for role in (
+            "proposer",
+            "critic",
+            "synthesizer",
+            "quality_reviewer",
+            "security_auditor",
+            "compliance_auditor",
+            "judge",
+            "default",
+        ):
+            assert model_pins.direct_model_for_role(role) == "claude-fable-5-1", role
+        assert model_pins.direct_model_for_role("reviewer") == "gpt-6-astra"
+        assert model_pins.direct_model_for_role("devils_advocate") == "grok-4.6"
+        assert model_pins.direct_model_for_role("researcher") == "gemini-3.1-pro-preview"
+        assert model_pins.openrouter_alias_for_role("reviewer") == "openai/gpt-6-astra"

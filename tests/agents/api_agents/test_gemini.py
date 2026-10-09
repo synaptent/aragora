@@ -55,7 +55,10 @@ class TestGeminiAgentInitialization:
         )
 
         assert agent.name == "custom-gemini"
-        assert agent.model == "gemini-2.0-flash"
+        # "gemini-2.0-flash" has no catalog row of its own; resolve_model_id
+        # upgrades it to the current Google value-tier frontier
+        # (frontier-model-refresh, 2026-09-04).
+        assert agent.model == "gemini-3.8-flash"
         assert agent.role == "critic"
         assert agent.timeout == 60
         assert agent.enable_fallback is False
@@ -94,11 +97,14 @@ class TestGeminiAgentInitialization:
         """
         from aragora.agents.api_agents.gemini import GeminiAgent
 
-        agent = GeminiAgent()
-
-        assert hasattr(GeminiAgent, "OPENROUTER_MODEL_MAP")
-        assert "gemini-3.1-pro-preview" in GeminiAgent.OPENROUTER_MODEL_MAP
-        assert "gemini-2.0-flash" in GeminiAgent.OPENROUTER_MODEL_MAP
+        assert (
+            GeminiAgent(model="gemini-3.1-pro-preview").get_fallback_model()
+            == "google/gemini-3.1-pro-preview"
+        )
+        # Tier-aware, unlike the removed hand map: flash upgrades to flash.
+        assert (
+            GeminiAgent(model="gemini-2.0-flash").get_fallback_model() == "google/gemini-3.8-flash"
+        )
         assert GeminiAgent.DEFAULT_FALLBACK_MODEL == "google/gemini-3.1-pro-preview"
 
 
@@ -414,6 +420,29 @@ class TestGeminiQuotaFallback:
                 result = await agent.generate("Test prompt")
 
                 assert mock_fallback.called
+
+
+class TestGeminiModelMapping:
+    """Tests for OpenRouter fallback resolution (frontier-model-refresh,
+    2026-09-04 review fix round 1, item 3): get_fallback_model()
+    (QuotaFallbackMixin, aragora/agents/fallback.py) resolves the current
+    model through the catalog and upgrade map."""
+
+    def test_default_model_fallback_is_current_slug(self, mock_env_with_api_keys):
+        """Using the agent's own default model, the fallback target is the
+        current frontier's OpenRouter slug."""
+        from aragora.agents.api_agents.gemini import GeminiAgent
+
+        agent = GeminiAgent()
+        assert agent.get_fallback_model() == "google/gemini-3.1-pro-preview"
+
+    def test_retired_id_maps_to_current_slug(self, mock_env_with_api_keys):
+        """A retired/legacy Gemini spelling resolves to the current
+        frontier."""
+        from aragora.agents.api_agents.gemini import GeminiAgent
+
+        agent = GeminiAgent(model="gemini-2.5-pro")
+        assert agent.get_fallback_model() == "google/gemini-3.1-pro-preview"
 
 
 class TestGeminiCritique:

@@ -46,6 +46,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from aragora.agents.transports.vibeproxy import TransportMode  # noqa: E402
+from aragora.config.model_pins import FABLE_51_DIRECT  # noqa: E402
 from scripts.consult_claude import FALLBACK_MODEL as CONSULT_FALLBACK_MODEL  # noqa: E402
 
 DEFAULT_TIMEOUT_SECONDS = 900
@@ -61,7 +62,7 @@ SAFE_CONTEXT_SUBDIRS = (
     Path(".aragora") / "operator-context",
 )
 DEFAULT_OUTPUT_DIR = ".aragora/goal_cycles"
-DEFAULT_MODEL = "claude-fable-5"
+DEFAULT_MODEL = FABLE_51_DIRECT
 MODEL_TRANSPORT_MODES = frozenset(mode.value for mode in TransportMode)
 MAX_ACTIVE_PROCESS_LINES = 40
 ACTIVE_PROCESS_SCRIPT_NAMES = frozenset(

@@ -1798,13 +1798,70 @@ class TestEstimateCost:
         assert _body(resp)["operation"] == "debate"
 
     @pytest.mark.asyncio
-    async def test_unknown_provider_uses_openrouter(self, handler):
-        body = {"tokens_input": 1_000_000, "tokens_output": 1_000_000, "provider": "xyzzy"}
+    async def test_unknown_provider_and_model_uses_openrouter_default(self, handler):
+        """The $2/$8 default is reached only when the MODEL has no row
+        anywhere -- not merely when the provider label is unrecognised.
+
+        This test used to omit ``model``, so it exercised the default
+        ``claude-opus-4``, which has a real priced row that
+        ``calculate_token_cost`` finds by exact spelling regardless of the
+        label; it therefore charged $30 and had been failing on main. Naming
+        a genuinely uncataloged model tests what the name claims.
+        """
+        body = {
+            "tokens_input": 1_000_000,
+            "tokens_output": 1_000_000,
+            "provider": "xyzzy",
+            "model": "totally-unknown-model-v0",
+        }
         with _patch_parse_body(body):
             resp = await handler.handle_estimate_cost(_req("POST", body=body))
         d = _body(resp)
         # openrouter default: $2/M in + $8/M out = $10
         assert d["estimated_cost_usd"] == pytest.approx(10.0, abs=0.1)
+        assert d["pricing"]["input_per_1m"] == pytest.approx(2.0)
+        assert d["pricing"]["output_per_1m"] == pytest.approx(8.0)
+
+    @pytest.mark.asyncio
+    async def test_unrecognised_label_still_bills_the_model_real_rate(self, handler):
+        """A provider label is not information about a model's price."""
+        body = {
+            "tokens_input": 1_000_000,
+            "tokens_output": 1_000_000,
+            "provider": "xyzzy",
+            "model": "claude-opus-4",
+        }
+        with _patch_parse_body(body):
+            resp = await handler.handle_estimate_cost(_req("POST", body=body))
+        d = _body(resp)
+        assert d["estimated_cost_usd"] == pytest.approx(30.0)
+        # The reported per-1M figures are the EFFECTIVE rates actually
+        # charged, so they can no longer contradict the total.
+        assert d["pricing"]["input_per_1m"] == pytest.approx(5.0)
+        assert d["pricing"]["output_per_1m"] == pytest.approx(25.0)
+
+    @pytest.mark.asyncio
+    async def test_breakdown_sums_to_the_total_at_a_long_context_input(self, handler):
+        """Above a documented long-context threshold the two halves used to
+        be quoted at the FLAT rate and stopped adding up (gpt-6-astra, 300k
+        in / 10k out: 6.00 + 0.50 against a real 6.75)."""
+        body = {
+            "tokens_input": 300_000,
+            "tokens_output": 10_000,
+            "provider": "openai",
+            "model": "gpt-6-astra",
+        }
+        with _patch_parse_body(body):
+            resp = await handler.handle_estimate_cost(_req("POST", body=body))
+        d = _body(resp)
+        total = d["estimated_cost_usd"]
+        assert total == pytest.approx(6.75)
+        assert d["breakdown"]["input_cost_usd"] + d["breakdown"]["output_cost_usd"] == (
+            pytest.approx(total, abs=1e-6)
+        )
+        # And the reported rates are the tiered ones actually applied.
+        assert d["pricing"]["input_per_1m"] == pytest.approx(20.0)
+        assert d["pricing"]["output_per_1m"] == pytest.approx(75.0)
 
     @pytest.mark.asyncio
     async def test_breakdown_present(self, handler):
