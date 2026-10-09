@@ -426,6 +426,119 @@ class TestDecisionResultOwnership:
         assert fresh.count_for_org("org-a") == 1
 
 
+class TestDecisionResultClaimAndConditionalSave:
+    """A claim never overwrites a stored result; a conditional save only lands on an unchanged one."""
+
+    @pytest.fixture
+    def temp_db(self, tmp_path):
+        return tmp_path / "claims.db"
+
+    @pytest.fixture
+    def store(self, temp_db):
+        return DecisionResultStore(db_path=temp_db, ttl_seconds=3600)
+
+    def test_claim_of_a_new_id_stores_it(self, store, temp_db):
+        claimed = store.claim(
+            "req-1",
+            {"status": "pending", "result": {"request": {"content": "Q"}}},
+            org_id="org-a",
+            created_by="u1",
+        )
+
+        assert claimed == "pending"
+        for reader in (store, DecisionResultStore(db_path=temp_db)):
+            saved = reader.get("req-1")
+            assert (saved["status"], saved["result"]) == ("pending", {"request": {"content": "Q"}})
+            assert (saved["org_id"], saved["created_by"]) == ("org-a", "u1")
+
+    def test_claim_keeps_the_owners_existing_result(self, store, temp_db):
+        store.save(
+            "req-1",
+            {"status": "completed", "result": {"answer": "a"}},
+            org_id="org-a",
+            created_by="u1",
+        )
+
+        claimed = store.claim("req-1", {"status": "pending"}, org_id="org-a", created_by="u2")
+
+        assert claimed == "completed"
+        for reader in (store, DecisionResultStore(db_path=temp_db)):
+            kept = reader.get("req-1")
+            assert (kept["status"], kept["result"]) == ("completed", {"answer": "a"})
+            assert kept["created_by"] == "u1"
+
+    @pytest.mark.parametrize("owner", ["org-b", None])
+    def test_claim_of_an_id_owned_elsewhere_is_rejected(self, store, temp_db, owner):
+        store.save("req-1", {"status": "completed", "result": {"answer": "theirs"}}, org_id=owner)
+
+        with pytest.raises(DecisionOwnershipConflict):
+            store.claim("req-1", {"status": "pending"}, org_id="org-a", created_by="u1")
+
+        kept = DecisionResultStore(db_path=temp_db).get("req-1")
+        assert (kept["status"], kept["result"], kept["org_id"]) == (
+            "completed",
+            {"answer": "theirs"},
+            owner,
+        )
+
+    def test_save_if_status_applies_while_the_status_is_unchanged(self, store, temp_db):
+        store.claim("req-1", {"status": "pending"}, org_id="org-a", created_by="u1")
+
+        saved = store.save_if_status(
+            "req-1",
+            {"status": "completed", "result": {"answer": "a"}, "completed_at": "done-at"},
+            org_id="org-a",
+            expected_status="pending",
+        )
+
+        assert saved is True
+        for reader in (store, DecisionResultStore(db_path=temp_db)):
+            stored = reader.get("req-1")
+            assert (stored["status"], stored["result"]) == ("completed", {"answer": "a"})
+            assert (stored["completed_at"], stored["created_by"]) == ("done-at", "u1")
+
+    def test_save_if_status_leaves_a_changed_result_alone(self, store, temp_db):
+        store.claim("req-1", {"status": "pending"}, org_id="org-a", created_by="u1")
+        DecisionResultStore(db_path=temp_db).save(
+            "req-1", {"status": "cancelled"}, org_id="org-a", created_by="u1"
+        )
+
+        saved = store.save_if_status(
+            "req-1",
+            {"status": "completed", "result": {"answer": "late"}},
+            org_id="org-a",
+            expected_status="pending",
+        )
+
+        assert saved is False
+        for reader in (store, DecisionResultStore(db_path=temp_db)):
+            kept = reader.get("req-1")
+            assert (kept["status"], kept["result"]) == ("cancelled", {})
+
+    @pytest.mark.parametrize("writer_org", ["org-b", None])
+    def test_save_if_status_never_writes_another_orgs_result(self, store, temp_db, writer_org):
+        store.claim("req-1", {"status": "pending"}, org_id="org-a", created_by="u1")
+
+        saved = store.save_if_status(
+            "req-1",
+            {"status": "completed", "result": {"answer": "b"}},
+            org_id=writer_org,
+            expected_status="pending",
+        )
+
+        assert saved is False
+        kept = DecisionResultStore(db_path=temp_db).get("req-1")
+        assert (kept["status"], kept["org_id"]) == ("pending", "org-a")
+
+    def test_save_if_status_of_a_missing_id_writes_nothing(self, store):
+        saved = store.save_if_status(
+            "missing", {"status": "completed"}, org_id="org-a", expected_status="pending"
+        )
+
+        assert saved is False
+        assert store.get("missing") is None
+
+
 class TestGlobalStore:
     """Tests for global store functions."""
 

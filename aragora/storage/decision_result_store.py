@@ -427,6 +427,114 @@ class DecisionResultStore:
         # Enforce max entries with LRU eviction
         self._enforce_max_entries()
 
+    _CLAIM_SQL = """
+        INSERT INTO decision_results
+        (request_id, status, result_json, created_at, completed_at, error, expires_at,
+         org_id, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT (request_id) DO NOTHING
+    """
+
+    _SAVE_IF_STATUS_SQL = """
+        UPDATE decision_results
+        SET status = ?, result_json = ?, completed_at = ?, error = ?, expires_at = ?
+        WHERE request_id = ? AND org_id = ? AND status = ?
+    """
+
+    def claim(
+        self,
+        request_id: str,
+        data: dict[str, Any],
+        *,
+        org_id: str,
+        created_by: str | None = None,
+    ) -> str:
+        """Store ``data`` for a new ``request_id``; leave an existing result unchanged.
+
+        Returns the stored status afterwards: ``data``'s status for a new id,
+        or the existing status when ``org_id`` already owns the id.
+
+        Raises:
+            DecisionOwnershipConflict: ``request_id`` belongs to another org or
+                to no org. Nothing is written.
+        """
+        now = time.time()
+        params = (
+            request_id,
+            data.get("status", "unknown"),
+            json.dumps(data.get("result", {})),
+            data.get("created_at", now),
+            data.get("completed_at"),
+            data.get("error"),
+            now + self._ttl_seconds,
+            org_id,
+            created_by,
+        )
+        self._execute_counted(self._CLAIM_SQL, params)
+        row = self._fetch_one(
+            "SELECT org_id, status FROM decision_results WHERE request_id = ?", (request_id,)
+        )
+        self._forget_cached(request_id)
+        if row is None or row[0] != org_id:
+            raise DecisionOwnershipConflict(
+                f"Decision result {request_id} belongs to another owner"
+            )
+        return str(row[1])
+
+    def save_if_status(
+        self,
+        request_id: str,
+        data: dict[str, Any],
+        *,
+        org_id: str,
+        expected_status: str,
+    ) -> bool:
+        """Save ``data`` over ``org_id``'s result only while its status is ``expected_status``.
+
+        The check and the write are one statement, so a concurrent change (for
+        example a cancel) is never overwritten. Returns False, writing nothing,
+        when the result is missing, owned elsewhere, or no longer in that status.
+        """
+        params = (
+            data.get("status", "unknown"),
+            json.dumps(data.get("result", {})),
+            data.get("completed_at"),
+            data.get("error"),
+            time.time() + self._ttl_seconds,
+            request_id,
+            org_id,
+            expected_status,
+        )
+        saved = self._execute_counted(self._SAVE_IF_STATUS_SQL, params) > 0
+        self._forget_cached(request_id)
+        return saved
+
+    def _execute_counted(self, sql: str, params: tuple) -> int:
+        """Run one write and return how many rows it changed."""
+        if isinstance(self._backend, PostgreSQLBackend):
+            with self._backend.connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute(self._backend.convert_placeholder(sql), params)
+                    return int(cursor.rowcount)
+        if self._backend is not None:
+            with self._backend.connection() as conn:
+                return int(conn.execute(sql, params).rowcount)
+        conn = self._get_connection()
+        cursor = conn.execute(sql, params)
+        conn.commit()
+        return int(cursor.rowcount)
+
+    def _fetch_one(self, sql: str, params: tuple) -> tuple | None:
+        if self._backend is not None:
+            return self._backend.fetch_one(sql, params)
+        row = self._get_connection().execute(sql, params).fetchone()
+        return None if row is None else tuple(row)
+
+    def _forget_cached(self, request_id: str) -> None:
+        """Drop the cached entry so the next read sees the database row."""
+        with self._cache_lock:
+            self._cache.pop(request_id, None)
+
     def get(self, request_id: str) -> dict[str, Any] | None:
         """
         Get a decision result by request ID.
