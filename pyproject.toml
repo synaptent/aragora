@@ -101,6 +101,8 @@ test = [
     "PyYAML>=6.0.3,<7.0",
     "pytest>=9.1.1,<10.0",
     "pytest-asyncio>=1.4.0,<2.0",
+    "pytest-timeout>=2.4.0,<3.0",
+    "pytest-xdist>=3.8.0,<4.0",
     "setuptools>=83.0.0,<84.0",
     "twine>=6.2.0,<8.0",
     "uv>=0.11.19,<0.12",
@@ -219,6 +221,19 @@ constraint-dependencies = [
     "urllib3>=2.8.0",
     "virtualenv>=21.7.13",
 ]
+
+# uv workspace: the in-repo sub-packages resolve into the single root uv.lock so
+# `uv lock --check`, `uv sync --all-packages` and `uv run --package <member>`
+# cover them. Members keep their own build backends and publish workflows
+# (they build from their own directories); the root distribution's metadata
+# does not depend on them.
+[tool.uv.workspace]
+members = ["aragora-debate", "aragora-verify", "sdk/python"]
+
+[tool.uv.sources]
+aragora-debate = { workspace = true }
+aragora-verify = { workspace = true }
+aragora-sdk = { workspace = true }
 
 [tool.setuptools.packages.find]
 where = ["."]
