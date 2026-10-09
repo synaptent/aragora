@@ -7,6 +7,7 @@ an unreadable limit falls back to its default rather than to "unlimited".
 from __future__ import annotations
 
 import logging
+import math
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -17,10 +18,16 @@ ENV_AGENTS = "ARAGORA_WORKSPACE_AGENTS"
 ENV_MAX_DOCUMENTS = "ARAGORA_WORKSPACE_MAX_DOCUMENTS"
 ENV_MAX_FILE_BYTES = "ARAGORA_WORKSPACE_MAX_FILE_BYTES"
 ENV_MAX_PASTED_CHARS = "ARAGORA_WORKSPACE_MAX_PASTED_CHARS"
+ENV_CONTEXT_CHAR_BUDGET = "ARAGORA_WORKSPACE_CONTEXT_CHAR_BUDGET"
+ENV_DECISION_BUDGET_USD = "ARAGORA_DECISION_BUDGET_USD"
+ENV_RUN_TIMEOUT_SECONDS = "ARAGORA_WORKSPACE_RUN_TIMEOUT_SECONDS"
 
 DEFAULT_MAX_DOCUMENTS = 10
 DEFAULT_MAX_FILE_BYTES = 1_048_576
 DEFAULT_MAX_PASTED_CHARS = 204_800
+DEFAULT_CONTEXT_CHAR_BUDGET = 24_000
+DEFAULT_DECISION_BUDGET_USD = 1.00
+DEFAULT_RUN_TIMEOUT_SECONDS = 600
 
 AGENTS_NOT_CONFIGURED_MESSAGE = (
     f"No agents are configured for the decision workspace. Set {ENV_AGENTS} to a "
@@ -114,6 +121,41 @@ def workspace_limits(env: Mapping[str, str] | None = None) -> WorkspaceLimits:
     )
 
 
+def context_char_budget(env: Mapping[str, str] | None = None) -> int:
+    """Characters of passage text a decision's debate may receive."""
+    source = os.environ if env is None else env
+    return _positive_int(source, ENV_CONTEXT_CHAR_BUDGET, DEFAULT_CONTEXT_CHAR_BUDGET)
+
+
+def decision_budget_usd(env: Mapping[str, str] | None = None) -> float:
+    """Model spend cap per decision (actual plus estimated), in USD."""
+    source = os.environ if env is None else env
+    raw = (source.get(ENV_DECISION_BUDGET_USD, "") or "").strip()
+    if not raw:
+        return DEFAULT_DECISION_BUDGET_USD
+    try:
+        value = float(raw)
+    except ValueError:
+        value = 0.0
+    if not math.isfinite(value) or value <= 0:
+        _warn_once(
+            ENV_DECISION_BUDGET_USD,
+            raw,
+            "%s=%r is not a positive amount; using %.2f",
+            ENV_DECISION_BUDGET_USD,
+            raw,
+            DEFAULT_DECISION_BUDGET_USD,
+        )
+        return DEFAULT_DECISION_BUDGET_USD
+    return value
+
+
+def run_timeout_seconds(env: Mapping[str, str] | None = None) -> int:
+    """Deadline for one decision run (debate plus synthesis), in seconds."""
+    source = os.environ if env is None else env
+    return _positive_int(source, ENV_RUN_TIMEOUT_SECONDS, DEFAULT_RUN_TIMEOUT_SECONDS)
+
+
 def _positive_int(source: Mapping[str, str], name: str, default: int) -> int:
     raw = (source.get(name, "") or "").strip()
     if not raw:
@@ -140,14 +182,23 @@ __all__ = [
     "AGENTS_NOT_CONFIGURED_MESSAGE",
     "AgentOption",
     "AgentOptions",
+    "DEFAULT_CONTEXT_CHAR_BUDGET",
+    "DEFAULT_DECISION_BUDGET_USD",
     "DEFAULT_MAX_DOCUMENTS",
     "DEFAULT_MAX_FILE_BYTES",
     "DEFAULT_MAX_PASTED_CHARS",
+    "DEFAULT_RUN_TIMEOUT_SECONDS",
     "ENV_AGENTS",
+    "ENV_CONTEXT_CHAR_BUDGET",
+    "ENV_DECISION_BUDGET_USD",
     "ENV_MAX_DOCUMENTS",
     "ENV_MAX_FILE_BYTES",
     "ENV_MAX_PASTED_CHARS",
+    "ENV_RUN_TIMEOUT_SECONDS",
     "WorkspaceLimits",
     "agent_options",
+    "context_char_budget",
+    "decision_budget_usd",
+    "run_timeout_seconds",
     "workspace_limits",
 ]
