@@ -597,6 +597,8 @@ class SpectateStreamHandler(BaseHandler):
     @handle_errors("spectate")
     def handle(self, path: str, query_params: dict[str, Any], handler: Any) -> HandlerResult | None:
         """Route GET requests to the appropriate sub-handler."""
+        # The registry's prefix match also sends ``/recent/`` and friends here.
+        path = path.rstrip("/") or path
         if not path.startswith("/api/v1/spectate"):
             return None
 
@@ -614,6 +616,7 @@ class SpectateStreamHandler(BaseHandler):
         self, path: str, query_params: dict[str, Any], handler: Any
     ) -> HandlerResult | None:
         """POST /api/v1/spectate/emit — inject events for a debate of the caller's org."""
+        path = path.rstrip("/") or path
         if path != "/api/v1/spectate/emit":
             return None
         body = self.read_json_body(handler) if handler else {}

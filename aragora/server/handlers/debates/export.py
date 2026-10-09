@@ -112,6 +112,14 @@ _batch_export_events: dict[str, asyncio.Queue] = {}
 _EXPORT_NOT_FOUND = "Debate not found"
 _export_tasks: set[asyncio.Task[None]] = set()
 
+_BATCH_EXPORT_FINISHED = (
+    BatchExportStatus.COMPLETED,
+    BatchExportStatus.FAILED,
+    BatchExportStatus.CANCELLED,
+)
+# How long EventSource clients wait before reconnecting for the next snapshot.
+_BATCH_EXPORT_SSE_RETRY_MS = 3000
+
 
 def _run_in_background(coro: Coroutine[Any, Any, None]) -> None:
     """Run an export job without blocking the request.
@@ -133,6 +141,22 @@ def _run_in_background(coro: Coroutine[Any, Any, None]) -> None:
 
 def _job_visible(job: BatchExportJob | None, org_id: str | None) -> bool:
     return job is not None and bool(job.org_id) and job.org_id == org_id
+
+
+def _job_status_payload(job: BatchExportJob) -> dict[str, Any]:
+    """The body of the job's status route."""
+    return {
+        **job.to_dict(),
+        "items": [
+            {
+                "debate_id": item.debate_id,
+                "status": item.status.value,
+                "error": item.error,
+                "has_result": item.result is not None,
+            }
+            for item in job.items
+        ],
+    }
 
 
 class _DebatesHandlerProtocol(Protocol):
@@ -530,9 +554,41 @@ class ExportOperationsMixin:
             logger.warning("SSE stream error for %s: %s", job_id, e)
             yield f"data: {json.dumps({'type': 'error', 'message': 'Stream error'})}\n\n"
 
-    def _batch_export_visible(self: _DebatesHandlerProtocol, job_id: str, org_id: str) -> bool:
-        """Whether ``job_id`` is one of ``org_id``'s batch export jobs."""
-        return _job_visible(_batch_export_jobs.get(job_id), org_id)
+    def _get_batch_export_stream(
+        self: _DebatesHandlerProtocol, job_id: str, *, org_id: str
+    ) -> HandlerResult:
+        """The current state of one of ``org_id``'s batch export jobs as finite SSE.
+
+        The legacy server writes a handler's body in one piece, so this route
+        cannot push progress as it happens. It sends a ``connected`` frame, a
+        ``status`` frame with the status route's payload and, once the job has
+        finished, a final frame named after how it ended. The ``retry`` field
+        makes EventSource clients reconnect for a fresh snapshot.
+        """
+        job = _batch_export_jobs.get(job_id)
+        if job is None or not _job_visible(job, org_id):
+            return record_not_found("Export job")
+
+        summary = job.to_dict()
+        frames: list[dict[str, Any]] = [
+            {"type": "connected", **summary},
+            {"type": "status", **_job_status_payload(job)},
+        ]
+        if job.status in _BATCH_EXPORT_FINISHED:
+            final: dict[str, Any] = {"type": job.status.value, **summary}
+            if job.status == BatchExportStatus.COMPLETED:
+                final["results_url"] = f"/api/v1/debates/export/batch/{job_id}/results"
+            frames.append(final)
+
+        body = f"retry: {_BATCH_EXPORT_SSE_RETRY_MS}\n" + "".join(
+            f"data: {json.dumps(frame)}\n\n" for frame in frames
+        )
+        return HandlerResult(
+            status_code=200,
+            content_type="text/event-stream",
+            body=body.encode("utf-8"),
+            headers={"Cache-Control": "no-cache"},
+        )
 
     def _list_batch_exports(
         self: _DebatesHandlerProtocol, limit: int = 50, *, org_id: str

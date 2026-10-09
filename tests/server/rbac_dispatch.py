@@ -110,6 +110,20 @@ def dispatch(
     query: dict[str, str] | None = None,
 ) -> tuple[int, dict[str, Any]]:
     """Send one request through ``_do_<METHOD>_internal``; return (status, JSON body)."""
+    status, _, payload = dispatch_raw(server, method, path, authorization, body=body, query=query)
+    return status, json.loads(payload) if payload else {}
+
+
+def dispatch_raw(
+    server: SimpleNamespace,
+    method: str,
+    path: str,
+    authorization: str | None = None,
+    *,
+    body: dict[str, Any] | None = None,
+    query: dict[str, str] | None = None,
+) -> tuple[int, dict[str, str], bytes]:
+    """Like ``dispatch``, but return (status, response headers, raw body)."""
     raw = json.dumps(body if body is not None else {}).encode()
     request_cls = type("_Request", (server.cls,), {"user_store": MFAEnrolledUsers()})
     request = request_cls.__new__(request_cls)
@@ -144,7 +158,6 @@ def dispatch(
 
     if request.send_response.call_args is None:
         assert request.send_error.call_args is not None, f"no response for {method} {path}"
-        return request.send_error.call_args.args[0], {}
-    status = request.send_response.call_args.args[0]
-    payload = request.wfile.getvalue()
-    return status, json.loads(payload) if payload else {}
+        return request.send_error.call_args.args[0], {}, b""
+    headers = {call.args[0]: call.args[1] for call in request.send_header.call_args_list}
+    return request.send_response.call_args.args[0], headers, request.wfile.getvalue()

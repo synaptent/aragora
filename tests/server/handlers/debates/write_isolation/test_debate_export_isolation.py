@@ -7,6 +7,7 @@ other id is reported as not found. Another org's job answers like a missing one.
 from __future__ import annotations
 
 import asyncio
+import json
 import threading
 
 import pytest
@@ -77,9 +78,124 @@ def test_other_org_gets_the_missing_job_404(send, route):
 
     assert (other.status_code, body_of(other)) == (404, JOB_NOT_FOUND)
     assert (missing.status_code, body_of(missing)) == (404, JOB_NOT_FOUND)
-    if route != "stream":
-        owner = send(USER_A, "GET", f"/api/v1/debates/export/batch/{job_id}/{route}")
-        assert owner.status_code == 200, text_of(owner)
+    owner = send(USER_A, "GET", f"/api/v1/debates/export/batch/{job_id}/{route}")
+    assert owner.status_code == 200, text_of(owner)
+
+
+def _sse(raw: bytes) -> tuple[list[str], list[dict]]:
+    """The field lines that are not ``data:`` and the JSON payload of each frame."""
+    others, frames = [], []
+    for block in raw.decode("utf-8").split("\n\n"):
+        for line in block.splitlines():
+            if line.startswith("data: "):
+                frames.append(json.loads(line.removeprefix("data: ")))
+            elif line:
+                others.append(line)
+    return others, frames
+
+
+def _stream_of(send, job_id):
+    result = send(USER_A, "GET", f"/api/v1/debates/export/batch/{job_id}/stream")
+    assert result.status_code == 200, text_of(result)
+    assert result.content_type == "text/event-stream"
+    assert isinstance(result.body, bytes)
+    return result
+
+
+def test_owner_stream_is_a_snapshot_of_the_finished_job(send):
+    from aragora.server.handlers.debates import export
+
+    job_id = _start(send, USER_A, [DA, DB])
+    queue = export._batch_export_events[job_id]
+    queued = queue.qsize()
+    status = body_of(send(USER_A, "GET", f"/api/v1/debates/export/batch/{job_id}/status"))
+
+    result = _stream_of(send, job_id)
+
+    others, frames = _sse(result.body)
+    assert others == ["retry: 3000"]
+    assert result.body.startswith(b"retry: 3000\n")
+    assert result.headers.get("Cache-Control") == "no-cache"
+    summary = export._batch_export_jobs[job_id].to_dict()
+    assert frames == [
+        {"type": "connected", **summary},
+        {"type": "status", **status},
+        {
+            "type": "completed",
+            **summary,
+            "results_url": f"/api/v1/debates/export/batch/{job_id}/results",
+        },
+    ]
+    assert (summary["success_count"], summary["error_count"]) == (1, 1)
+    assert DA_TASK not in text_of(result) and DB_TASK not in text_of(result)
+    # The live event queue belongs to the progress generator; the snapshot leaves it alone.
+    assert export._batch_export_events[job_id] is queue and queue.qsize() == queued
+
+
+def test_owner_stream_of_an_unfinished_job_has_no_final_frame(send, monkeypatch):
+    from aragora.server.handlers.debates import export
+
+    monkeypatch.setattr(export, "_run_in_background", lambda coro: coro.close())
+    job_id = _start(send, USER_A, [DA])
+
+    _, frames = _sse(_stream_of(send, job_id).body)
+
+    assert [frame["type"] for frame in frames] == ["connected", "status"]
+    assert frames[1]["status"] == "pending" and frames[1]["processed_count"] == 0
+    assert frames[1]["items"] == [
+        {"debate_id": DA, "status": "pending", "error": None, "has_result": False}
+    ]
+
+
+@pytest.mark.parametrize("end", ["failed", "cancelled"])
+def test_owner_stream_names_how_an_unsuccessful_job_ended(send, monkeypatch, end):
+    from aragora.server.handlers.debates import export
+
+    monkeypatch.setattr(export, "_run_in_background", lambda coro: coro.close())
+    job_id = _start(send, USER_A, [DA])
+    export._batch_export_jobs[job_id].status = export.BatchExportStatus(end)
+
+    _, frames = _sse(_stream_of(send, job_id).body)
+
+    assert [frame["type"] for frame in frames] == ["connected", "status", end]
+    assert "results_url" not in frames[-1]
+
+
+@pytest.mark.no_auto_auth
+@pytest.mark.parametrize("server", [None], indirect=True)
+def test_stream_through_the_legacy_server_dispatch(server):
+    """The registry writes the snapshot as the response body; denials are unchanged."""
+    from tests.server.rbac_dispatch import ORG_REQUIRED_BODY, dispatch, dispatch_raw, jwt
+
+    owner = jwt("user-a", ORG_A, "owner")
+    status, started = dispatch(
+        server, "POST", "/api/v1/debates/export/batch", owner, body={"debate_ids": [DA]}
+    )
+    assert status == 200, started
+    stream = f"/api/v1/debates/export/batch/{started['job_id']}/stream"
+
+    status, headers, raw = dispatch_raw(server, "GET", stream, owner)
+
+    assert status == 200, raw
+    assert headers["Content-Type"] == "text/event-stream"
+    assert headers["Content-Length"] == str(len(raw))
+    others, frames = _sse(raw)
+    assert others == ["retry: 3000"]
+    assert [frame["type"] for frame in frames] == ["connected", "status", "completed"]
+    assert {frame["job_id"] for frame in frames} == {started["job_id"]}
+    assert DA_TASK.encode() not in raw
+
+    missing = "/api/v1/debates/export/batch/export_000000000000/stream"
+    for path in (stream, missing):
+        assert dispatch(server, "GET", path, jwt("user-b", "org-b", "owner")) == (
+            404,
+            JOB_NOT_FOUND,
+        )
+    assert dispatch(server, "GET", stream, None)[0] == 401
+    assert dispatch(server, "GET", stream, jwt("user-no-org", None, "owner")) == (
+        403,
+        ORG_REQUIRED_BODY,
+    )
 
 
 def test_job_list_shows_only_the_callers_jobs(send):
