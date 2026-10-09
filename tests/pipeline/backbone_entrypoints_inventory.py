@@ -277,7 +277,7 @@ INTERNAL_BACKBONE_HELPERS: Final[dict[str, str]] = {
     "aragora/cli/commands/decide.py::_seed_cli_backbone_run": (
         "internal CLI helper for run-ledger seeding and receipt sync"
     ),
-    "aragora/debate/post_debate_persistence.py::PostDebatePersistenceMixin._seed_backbone_run": (
+    "aragora/debate/post_debate_coordinator.py::PostDebateCoordinator._seed_backbone_run": (
         "internal post-debate helper that seeds the backbone run before pipeline execution"
     ),
 }

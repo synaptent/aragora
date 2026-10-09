@@ -378,6 +378,103 @@ class PostDebateCoordinator(PostDebatePersistenceMixin):
 
         return result
 
+    def _seed_backbone_run(
+        self,
+        debate_id: str,
+        debate_result: Any,
+        task: str,
+    ) -> str | None:
+        """Ensure post-debate processing has a RunLedger anchor."""
+        runtime = self._get_backbone_runtime()
+        if runtime is None:
+            return None
+
+        metadata = getattr(debate_result, "metadata", None)
+        if not isinstance(metadata, dict):
+            metadata = {}
+            try:
+                setattr(debate_result, "metadata", metadata)
+            except (AttributeError, TypeError):
+                pass
+
+        existing_run_id = str(metadata.get("backbone_run_id", "") or "").strip()
+        if existing_run_id:
+            metadata.setdefault("backbone_entrypoint", "post_debate_coordinator.run")
+            return existing_run_id
+
+        if not hasattr(runtime, "create_run"):
+            self._backbone_failure(
+                "Post-debate backbone runtime does not support run creation for seeded ledgers"
+            )
+            return None
+
+        try:
+            from aragora.pipeline.backbone_contracts import (
+                DeliberationBundle,
+                IntakeBundle,
+                RunLedger,
+            )
+
+            resolved_task = str(task or getattr(debate_result, "task", "") or "").strip()
+            intake = IntakeBundle(
+                source_kind="post_debate_coordinator",
+                raw_intent=resolved_task,
+                context_refs=[{"kind": "debate", "id": debate_id}] if debate_id else [],
+                trust_tiers=["service-authored"],
+                origin_metadata={"debate_id": debate_id},
+            )
+            try:
+                deliberation = DeliberationBundle.from_debate_result(debate_result)
+            except (ValueError, TypeError, AttributeError):
+                deliberation = DeliberationBundle(
+                    debate_id=debate_id,
+                    verdict=self._debate_final_answer(debate_result),
+                    confidence=float(getattr(debate_result, "confidence", 0.0) or 0.0),
+                    consensus_reached=self._debate_consensus_reached(debate_result),
+                )
+
+            run_id = f"run-{uuid.uuid4().hex[:12]}"
+            runtime.create_run(
+                RunLedger(
+                    run_id=run_id,
+                    entrypoint="post_debate_coordinator.run",
+                    status="deliberation_completed",
+                    intake_bundle=intake,
+                    deliberation_bundle=deliberation,
+                    debate_id=debate_id,
+                    taint_flags=list(intake.taint_flags) + list(deliberation.taint_flags),
+                    metadata={
+                        "source_surface": "post_debate_coordinator",
+                        "execution_mode": self.config.execution_mode.value,
+                    },
+                )
+            )
+            if hasattr(runtime, "append_stage_event"):
+                self._ensure_backbone_write(
+                    runtime.append_stage_event(
+                        run_id,
+                        "intake",
+                        status="completed",
+                        artifact_ref=debate_id,
+                    ),
+                    "Post-debate intake stage was not persisted",
+                )
+                self._ensure_backbone_write(
+                    runtime.append_stage_event(
+                        run_id,
+                        "deliberation",
+                        status="completed",
+                        artifact_ref=debate_id,
+                    ),
+                    "Post-debate deliberation stage was not persisted",
+                )
+            metadata["backbone_run_id"] = run_id
+            metadata["backbone_entrypoint"] = "post_debate_coordinator.run"
+            return run_id
+        except (ValueError, TypeError, AttributeError, RuntimeError, OSError) as e:
+            self._backbone_failure(f"Post-debate backbone seed failed for {debate_id}", e)
+            return None
+
     def _is_execution_blocked(self, gate: dict[str, Any] | None) -> bool:
         """Return True when execution gate exists and denies auto-execution."""
         if not gate:

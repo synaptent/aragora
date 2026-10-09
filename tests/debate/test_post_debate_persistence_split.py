@@ -3,8 +3,9 @@
 The RunLedger (backbone) mirroring helpers and the receipt/outcome Knowledge Mound
 payload and writeback helpers live on ``PostDebatePersistenceMixin`` in
 ``aragora.debate.post_debate_persistence``. ``PostDebateCoordinator`` inherits them,
-so ``coordinator._seed_backbone_run(...)`` and ``patch.object(PostDebateCoordinator,
-...)`` keep working, and the pipeline steps stay on the coordinator.
+so ``coordinator._record_backbone_plan(...)`` and ``patch.object(PostDebateCoordinator,
+...)`` keep working. The pipeline steps and ``_seed_backbone_run`` (keyed by path in
+``tests/pipeline/backbone_entrypoints_inventory.py``) stay on the coordinator.
 """
 
 from __future__ import annotations
@@ -29,7 +30,6 @@ MOVED_METHODS = [
     "_plan_object",
     "_plan_id",
     "_current_run_id",
-    "_seed_backbone_run",
     "_record_backbone_plan",
     "_record_backbone_receipt",
     "_record_backbone_execution",
@@ -56,8 +56,14 @@ def test_moved_method_is_defined_once_on_the_mixin(name: str) -> None:
 
 
 def test_pipeline_steps_stay_on_the_coordinator() -> None:
-    for name in ("run", "_step_persist_receipt", "_step_persist_signed_receipt"):
+    for name in (
+        "run",
+        "_step_persist_receipt",
+        "_step_persist_signed_receipt",
+        "_seed_backbone_run",
+    ):
         assert name in PostDebateCoordinator.__dict__
+        assert name not in PostDebatePersistenceMixin.__dict__
 
 
 def test_coordinator_module_is_under_the_size_limit() -> None:
