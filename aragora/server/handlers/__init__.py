@@ -422,6 +422,7 @@ if TYPE_CHECKING:
     from .pipeline.transitions import PipelineTransitionsHandler
     from .pipeline.universal_graph import UniversalGraphHandler
     from .decisions.plans import PlansHandler
+    from .decisions.workspace_decisions import WorkspaceDecisionsHandler
     from .catalog.playbooks import PlaybookHandler
     from .demo.playground import PlaygroundHandler
     from .governance.policy import PolicyHandler
@@ -943,6 +944,7 @@ __all__ = [
     "ModerationAnalyticsHandler",
     "PartnerHandler",
     "PlansHandler",
+    "WorkspaceDecisionsHandler",
     "PlaybookHandler",
     "PlaygroundHandler",
     "ReceiptExportHandler",

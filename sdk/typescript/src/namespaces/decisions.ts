@@ -344,6 +344,61 @@ export class DecisionsAPI {
   async retry(decisionId: string): Promise<DecisionResult> {
     return this.client.request('POST', `/api/v1/decisions/${decisionId}/retry`);
   }
+
+  // -------------------------------------------------------------------------
+  // Decision workspace
+  // -------------------------------------------------------------------------
+
+  /** Agents a workspace decision can use, the intake limits and accepted file types. */
+  async getWorkspaceAgentOptions(): Promise<WorkspaceAgentOptions> {
+    return this.client.get('/api/v1/workspace/agent-options');
+  }
+
+  /** List the caller's organization's workspace decisions, newest first. */
+  async listWorkspaceDecisions(options?: {
+    limit?: number;
+    offset?: number;
+  }): Promise<WorkspaceDecisionList> {
+    return this.client.request('GET', '/api/v1/workspace/decisions', { params: options });
+  }
+
+}
+
+// ---------------------------------------------------------------------------
+// Decision workspace types
+// ---------------------------------------------------------------------------
+
+export type WorkspaceDecisionStatus = 'debating' | 'ready' | 'failed';
+
+export interface WorkspaceAgentOption {
+  spec: string;
+  provider: string;
+  model: string | null;
+}
+
+export interface WorkspaceAgentOptions {
+  configured: boolean;
+  agents: WorkspaceAgentOption[];
+  message: string | null;
+  limits: { max_documents: number; max_file_bytes: number; max_pasted_chars: number };
+  accepted_extensions: string[];
+  rounds: { min: number; max: number; default: number };
+}
+
+export interface WorkspaceDecisionSummary {
+  id: string;
+  question: string;
+  status: WorkspaceDecisionStatus;
+  source_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkspaceDecisionList {
+  decisions: WorkspaceDecisionSummary[];
+  total: number;
+  limit: number;
+  offset: number;
 }
 
 // ---------------------------------------------------------------------------
