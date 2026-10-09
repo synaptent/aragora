@@ -362,6 +362,24 @@ export class DecisionsAPI {
     return this.client.request('GET', '/api/v1/workspace/decisions', { params: options });
   }
 
+  /** Get one workspace decision. */
+  async getWorkspaceDecision(decisionId: string): Promise<WorkspaceDecision> {
+    return this.client.get(`/api/v1/workspace/decisions/${decisionId}`);
+  }
+
+  /** List a workspace decision's sources with their passage summaries. */
+  async listWorkspaceDecisionSources(decisionId: string): Promise<WorkspaceDecisionSources> {
+    return this.client.get(`/api/v1/workspace/decisions/${decisionId}/sources`);
+  }
+
+  /** Get the exact text, label and SHA-256 of one passage. */
+  async getWorkspaceDecisionPassage(
+    decisionId: string,
+    passageId: string
+  ): Promise<WorkspacePassage> {
+    return this.client.get(`/api/v1/workspace/decisions/${decisionId}/passages/${passageId}`);
+  }
+
 }
 
 // ---------------------------------------------------------------------------
@@ -399,6 +417,67 @@ export interface WorkspaceDecisionList {
   total: number;
   limit: number;
   offset: number;
+}
+
+export interface WorkspaceDecision {
+  id: string;
+  question: string;
+  status: WorkspaceDecisionStatus;
+  agents: string[];
+  rounds: number;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  current_revision_id: string | null;
+  budget_usd: number | null;
+  cost_actual_usd: number;
+  cost_estimated_usd: number;
+  source_count: number;
+  passage_count: number;
+}
+
+export interface WorkspacePassageSummary {
+  passage_id: string;
+  label: string;
+  seq: number;
+  heading: string | null;
+  char_count: number;
+  sha256: string;
+  in_context: boolean;
+}
+
+export interface WorkspaceSource {
+  source_id: string;
+  label: string;
+  kind: 'upload' | 'pasted';
+  filename: string | null;
+  document_id: string | null;
+  content_sha256: string;
+  char_count: number;
+  passage_count: number;
+  created_at: string;
+  passages: WorkspacePassageSummary[];
+}
+
+export interface WorkspaceDecisionSources {
+  decision_id: string;
+  sources: WorkspaceSource[];
+}
+
+export interface WorkspacePassage {
+  passage_id: string;
+  decision_id: string;
+  source_id: string;
+  source_label: string;
+  label: string;
+  seq: number;
+  heading: string | null;
+  start_char: number;
+  end_char: number;
+  text: string;
+  sha256: string;
+  in_context: boolean;
+  created_at: string;
 }
 
 // ---------------------------------------------------------------------------
