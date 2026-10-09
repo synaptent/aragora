@@ -7,8 +7,10 @@ Tests automatic detection, migration, and startup migration functionality.
 import ast
 import asyncio
 import logging
+import sqlite3
 import sys
 import threading
+from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
@@ -1061,6 +1063,43 @@ class TestDirectSyncMigration:
         assert len(private_stores) == 1
         assert private_stores[0].closed is True
         assert len(private_stores[0].call_loops) == 1
+
+    def test_migrate_sync_store_called_inside_a_running_loop(self, sync_backend):
+        sync_backend.add_connector("connector-1", {"api_key": "plaintext-secret"})
+
+        async def call_from_async_handler():
+            return migrate_sync_store(dry_run=False), asyncio.get_running_loop()
+
+        result, caller_loop = asyncio.run(call_from_async_handler())
+
+        assert result.success is True
+        assert result.migrated_records == 1
+        assert sync_backend.only_private_store().loop is not caller_loop
+
+    def test_migrate_sync_store_real_sqlite_leaves_live_jobs_running(self, tmp_path, monkeypatch):
+        from aragora.storage.sync_store import SyncStore
+
+        db_path = tmp_path / "connectors.db"
+        monkeypatch.setenv("ARAGORA_SYNC_DATABASE_URL", f"sqlite:///{db_path}")
+        monkeypatch.setattr(async_utils, "_pool_event_loop_provider", None)
+
+        async def seed_live_owner() -> None:
+            owner = SyncStore(use_encryption=False)
+            await owner.initialize()
+            await owner.save_connector("connector-1", "github", "GitHub", {"api_key": "plain"})
+            await owner.record_sync_start("connector-1")
+            await owner.close()
+
+        asyncio.run(seed_live_owner())
+
+        result = migrate_sync_store(dry_run=True)
+
+        assert result.errors == []
+        assert result.total_records == 1
+        assert result.migrated_records == 1
+        with closing(sqlite3.connect(db_path)) as conn:
+            statuses = [row[0] for row in conn.execute("SELECT status FROM sync_jobs")]
+        assert statuses == ["running"]
 
     def test_migrate_sync_store_keeps_shared_pool_store_on_its_loop(
         self, sync_backend, shared_pool_loop

@@ -13,14 +13,22 @@ Features:
 
 from __future__ import annotations
 
+import asyncio
+import concurrent.futures
 import logging
 import os
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, cast
-from collections.abc import Callable
+from typing import Any, TypeVar, cast
+from collections.abc import Callable, Coroutine
 
 logger = logging.getLogger(__name__)
+
+T = TypeVar("T")
+
+_SYNC_STORE_CALL_TIMEOUT = 30.0
+_SYNC_STORE_LOOP_GRACE = 5.0
 
 MigrationAuditProvider = Callable[..., Any]
 
@@ -362,6 +370,109 @@ def migrate_gmail_token_store(dry_run: bool = False) -> MigrationResult:
         )
 
 
+def _run_private_loop(loop: asyncio.AbstractEventLoop) -> None:
+    asyncio.set_event_loop(loop)
+    try:
+        loop.run_forever()
+    finally:
+        try:
+            pending = asyncio.all_tasks(loop)
+            for task in pending:
+                task.cancel()
+            if pending:
+                loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+            loop.run_until_complete(loop.shutdown_asyncgens())
+        finally:
+            asyncio.set_event_loop(None)
+            loop.close()
+
+
+class _SyncStoreSession:
+    """A sync store plus the one event loop that every call on it runs on.
+
+    Database connections belong to the loop that opened them, so a store must
+    never be opened on one temporary loop and used from another. When the shared
+    pool loop is running, the process-wide store lives there and calls are
+    dispatched to it. Otherwise a private store is opened on a private loop
+    thread and closed together with that loop.
+    """
+
+    def __init__(self) -> None:
+        from aragora.utils.async_utils import get_pool_event_loop
+
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._thread: threading.Thread | None = None
+        self._closed = False
+        self.store: Any = None
+
+        pool_loop = get_pool_event_loop()
+        if pool_loop is not None and pool_loop.is_running():
+            from aragora.storage.sync_store import get_sync_store
+
+            self.store = self.run(get_sync_store())
+            return
+
+        from aragora.storage.sync_store import SyncStore
+
+        loop = asyncio.new_event_loop()
+        self._loop = loop
+        self._thread = threading.Thread(
+            target=_run_private_loop,
+            args=(loop,),
+            name="security-migration-sync-store",
+            daemon=True,
+        )
+        self._thread.start()
+        try:
+            # Job recovery belongs to the process that runs the jobs; a store
+            # opened only to re-save connectors must not interrupt live syncs.
+            self.store = SyncStore(recover_jobs_on_init=False)
+            self.run(self.store.initialize())
+        except BaseException:
+            self.close()
+            raise
+
+    def run(self, coro: Coroutine[Any, Any, T]) -> T:
+        """Run ``coro`` on this session's loop and return its result."""
+        if self._loop is None:
+            from aragora.utils.async_utils import run_async
+
+            return run_async(coro, timeout=_SYNC_STORE_CALL_TIMEOUT)
+        if self._closed:
+            coro.close()
+            raise RuntimeError("Sync store session is closed")
+        future = asyncio.run_coroutine_threadsafe(
+            asyncio.wait_for(coro, timeout=_SYNC_STORE_CALL_TIMEOUT), self._loop
+        )
+        try:
+            return future.result(timeout=_SYNC_STORE_CALL_TIMEOUT + _SYNC_STORE_LOOP_GRACE)
+        except (asyncio.TimeoutError, concurrent.futures.TimeoutError) as e:
+            # Normalise to the builtin, which is an OSError on every supported
+            # Python, so per-record handlers count a timeout as a failed record.
+            future.cancel()
+            raise TimeoutError(
+                f"Sync store call timed out after {_SYNC_STORE_CALL_TIMEOUT:.1f}s"
+            ) from e
+
+    def close(self) -> None:
+        """Close a private store and its loop. The shared process-wide store stays open."""
+        loop, thread = self._loop, self._thread
+        if self._closed or loop is None or thread is None:
+            self._closed = True
+            return
+        try:
+            if self.store is not None:
+                self.run(self.store.close())
+        except Exception as e:  # noqa: BLE001 - driver errors (sqlite3, asyncpg) are not builtins
+            logger.warning("Failed to close migration sync store: %s", e)
+        finally:
+            self._closed = True
+            loop.call_soon_threadsafe(loop.stop)
+            thread.join(timeout=_SYNC_STORE_CALL_TIMEOUT)
+            if thread.is_alive():
+                logger.warning("Migration sync store loop did not stop within the timeout")
+
+
 def migrate_sync_store(dry_run: bool = False) -> MigrationResult:
     """Migrate connector sync store secrets."""
     result = MigrationResult(store_name="sync_store")
@@ -374,12 +485,11 @@ def migrate_sync_store(dry_run: bool = False) -> MigrationResult:
         "secret",
     ]
 
+    session: _SyncStoreSession | None = None
     try:
-        from aragora.storage.sync_store import get_sync_store
-        from aragora.utils.async_utils import run_async
-
-        store = run_async(get_sync_store())
-        connectors = run_async(store.list_connectors())
+        session = _SyncStoreSession()
+        store = session.store
+        connectors = session.run(store.list_connectors())
         result.total_records = len(connectors)
 
         for connector in connectors:
@@ -389,7 +499,7 @@ def migrate_sync_store(dry_run: bool = False) -> MigrationResult:
                     continue
 
                 if not dry_run:
-                    run_async(
+                    session.run(
                         store.save_connector(
                             connector.id,
                             connector.connector_type,
@@ -405,6 +515,9 @@ def migrate_sync_store(dry_run: bool = False) -> MigrationResult:
     except (ImportError, RuntimeError, ValueError, TypeError, OSError) as e:
         logger.warning("Sync store not available: %s", e)
         result.errors.append("Sync store not available")
+    finally:
+        if session is not None:
+            session.close()
 
     result.completed_at = datetime.now(timezone.utc)
     result.duration_seconds = (result.completed_at - result.started_at).total_seconds()
@@ -770,6 +883,7 @@ def rotate_encryption_key(
             if not config_fn:
                 logger.warning("Unknown store for key rotation: %s", store_name)
                 continue
+            config: dict[str, Any] | None = None
             try:
                 config = config_fn()
                 if config is None:
@@ -798,6 +912,10 @@ def rotate_encryption_key(
                 if store_name == "sync":
                     result.failed_records += 1
                 logger.error("Key rotation failed for store %s: %s", store_name, e)
+            finally:
+                close_fn = config.get("close_fn") if config else None
+                if close_fn is not None:
+                    close_fn()
 
         result.completed_at = datetime.now(timezone.utc)
         result.duration_seconds = (result.completed_at - result.started_at).total_seconds()
@@ -862,16 +980,17 @@ def _get_gmail_store_config() -> dict[str, Any] | None:
 
 
 def _get_sync_store_config() -> dict[str, Any] | None:
-    """Get configuration for sync store re-encryption."""
-    try:
-        from aragora.storage.sync_store import get_sync_store
-        from aragora.utils.async_utils import run_async
+    """Get configuration for sync store re-encryption.
 
-        store = run_async(get_sync_store())
+    The returned ``close_fn`` must be called once the store has been processed.
+    """
+    try:
+        session = _SyncStoreSession()
+        store = session.store
         connectors_by_id: dict[str, Any] = {}
 
         def list_connectors() -> list[dict[str, Any]]:
-            connectors = run_async(store.list_connectors())
+            connectors = session.run(store.list_connectors())
             connectors_by_id.clear()
             records: list[dict[str, Any]] = []
             for connector in connectors:
@@ -882,7 +1001,7 @@ def _get_sync_store_config() -> dict[str, Any] | None:
         def save_connector(connector_id: str, record: dict[str, Any]) -> bool:
             connector = connectors_by_id[connector_id]
             config = {key: value for key, value in record.items() if key != "__sync_connector_id__"}
-            run_async(
+            session.run(
                 store.save_connector(
                     connector.id,
                     connector.connector_type,
@@ -895,6 +1014,7 @@ def _get_sync_store_config() -> dict[str, Any] | None:
         return {
             "list_fn": list_connectors,
             "save_fn": save_connector,
+            "close_fn": session.close,
             "sensitive_fields": [
                 "api_key",
                 "api_secret",
