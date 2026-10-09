@@ -83,6 +83,11 @@ _decision_results_fallback: dict[str, dict[str, Any]] = {}
 # must be one step, or two orgs could both claim a new id.
 _decision_results_fallback_lock = threading.Lock()
 
+# Request ids this process is routing (a create, or a retry of that id). Cancel
+# does not stop routing, so a cancelled id stays here until its run returns.
+_routing_request_ids: set[str] = set()
+_routing_request_ids_lock = threading.Lock()
+
 _REPLAYED_FIELDS = (
     "content",
     "decision_type",
@@ -148,6 +153,112 @@ def _save_result(
         entry = {**data, "org_id": owner_org, "created_by": creator}
         _decision_results_fallback[request_id] = entry
     return True
+
+
+def _claim_result(
+    request_id: str,
+    data: dict[str, Any],
+    *,
+    org_id: str,
+    created_by: str | None,
+) -> str | None:
+    """Claim ``request_id`` for ``org_id``, storing ``data`` only when the id is new.
+
+    Returns the stored status afterwards (an existing result of ``org_id`` is
+    kept as it is), or None, writing nothing, when the id belongs to another
+    org or to no org.
+    """
+    store = _decision_result_store.get()
+    if store:
+        from aragora.storage.decision_result_store import DecisionOwnershipConflict
+
+        try:
+            return store.claim(request_id, data, org_id=org_id, created_by=created_by)
+        except DecisionOwnershipConflict:
+            return None
+        except (KeyError, ValueError, OSError, TypeError) as e:
+            logger.warning("Failed to persist claim, using fallback: %s", e)
+    with _decision_results_fallback_lock:
+        previous = _decision_results_fallback.get(request_id)
+        if previous is not None:
+            if previous.get("org_id") != org_id:
+                return None
+            return str(previous.get("status", "unknown"))
+        _decision_results_fallback[request_id] = {
+            **data,
+            "org_id": org_id,
+            "created_by": created_by,
+        }
+    return str(data.get("status", "unknown"))
+
+
+def _save_result_if_status(
+    request_id: str,
+    data: dict[str, Any],
+    *,
+    org_id: str,
+    expected_status: str,
+) -> bool:
+    """Save ``data`` over ``org_id``'s result only while its status is ``expected_status``.
+
+    Returns False, writing nothing, when the result changed meanwhile (for
+    example it was cancelled), is missing, or belongs to another org.
+    """
+    store = _decision_result_store.get()
+    if store:
+        try:
+            if store.save_if_status(
+                request_id, data, org_id=org_id, expected_status=expected_status
+            ):
+                return True
+        except (KeyError, ValueError, OSError, TypeError) as e:
+            logger.warning("Failed to persist result, using fallback: %s", e)
+    # The claim may have gone to the fallback while the store was failing.
+    with _decision_results_fallback_lock:
+        previous = _decision_results_fallback.get(request_id)
+        if (
+            previous is None
+            or previous.get("org_id") != org_id
+            or previous.get("status", "unknown") != expected_status
+        ):
+            return False
+        _decision_results_fallback[request_id] = {
+            **data,
+            "org_id": org_id,
+            "created_by": previous.get("created_by"),
+        }
+    return True
+
+
+def _start_routing(request_id: str) -> bool:
+    """Mark ``request_id`` as routing; False when this process is already routing it."""
+    with _routing_request_ids_lock:
+        if request_id in _routing_request_ids:
+            return False
+        _routing_request_ids.add(request_id)
+        return True
+
+
+def _finish_routing(request_id: str) -> None:
+    with _routing_request_ids_lock:
+        _routing_request_ids.discard(request_id)
+
+
+def _discarded_result_response(request_id: str, scope: OrgScope) -> HandlerResult:
+    """Response for a routing result dropped because the stored decision changed."""
+    current = _get_result(request_id, scope.org_id)
+    if current is None:
+        return record_not_found("Decision")
+    status = current.get("status", "unknown")
+    return json_response(
+        {
+            "request_id": request_id,
+            "status": status,
+            "error": f"Decision changed to '{status}' while it was running; "
+            "its result was discarded",
+        },
+        status=409,
+    )
 
 
 def _get_result(request_id: str, org_id: str | None) -> dict[str, Any] | None:
@@ -317,41 +428,58 @@ class DecisionHandler(BaseHandler):
             return error_response("Decision router not available", 503)
 
         replay = _replay_body(body)
+        request_id = request.request_id
 
         # Claim the request id for the caller's org before routing, which can
         # already store attachments: a request_id that belongs to another org
-        # (or to none) is refused, like a missing one, with no side effect.
-        if not _save_result(
-            request.request_id,
-            {"request_id": request.request_id, "status": "pending", "result": {"request": replay}},
+        # (or to none) is refused, like a missing one, with no side effect. A
+        # result the caller's org already has under this id stays as it is
+        # until the new result replaces it.
+        claimed_status = _claim_result(
+            request_id,
+            {"request_id": request_id, "status": "pending", "result": {"request": replay}},
             org_id=scope.org_id,
             created_by=scope.user_id,
-        ):
+        )
+        if claimed_status is None:
             return record_not_found("Decision")
+        if not _start_routing(request_id):
+            return error_response("Decision is already running", 409)
 
-        # Route the decision
+        def save_outcome(outcome: dict[str, Any]) -> bool:
+            # Lands only while the stored record is as the claim left it: a
+            # decision cancelled during routing stays cancelled.
+            saved = _save_result_if_status(
+                request_id,
+                {"request_id": request_id, **outcome},
+                org_id=scope.org_id,
+                expected_status=claimed_status,
+            )
+            if not saved:
+                logger.warning(
+                    "Decision %s changed while routing; discarding its late %s result",
+                    request_id,
+                    outcome["status"],
+                )
+            return saved
+
         try:
             result = await router.route(request)
+            status = "completed" if result.success else "failed"
 
-            # Cache result for polling (persistent). A request_id that already
-            # belongs to another org (or to none) is reported like a missing one.
-            if not _save_result(
-                request.request_id,
+            if not save_outcome(
                 {
-                    "request_id": request.request_id,
-                    "status": "completed" if result.success else "failed",
+                    "status": status,
                     "result": {**result.to_dict(), "request": replay},
                     "completed_at": datetime.now(timezone.utc).isoformat(),
-                },
-                org_id=scope.org_id,
-                created_by=scope.user_id,
+                }
             ):
-                return record_not_found("Decision")
+                return _discarded_result_response(request_id, scope)
 
             return json_response(
                 {
-                    "request_id": request.request_id,
-                    "status": "completed" if result.success else "failed",
+                    "request_id": request_id,
+                    "status": status,
                     "decision_type": result.decision_type.value,
                     "answer": result.answer,
                     "confidence": result.confidence,
@@ -364,53 +492,44 @@ class DecisionHandler(BaseHandler):
             )
 
         except asyncio.TimeoutError:
-            # Save as pending for async polling
-            if not _save_result(
-                request.request_id,
-                {
-                    "request_id": request.request_id,
-                    "status": "timeout",
-                    "result": {"request": replay},
-                    "error": "Decision timed out",
-                },
-                org_id=scope.org_id,
-                created_by=scope.user_id,
+            if not save_outcome(
+                {"status": "timeout", "result": {"request": replay}, "error": "Decision timed out"}
             ):
-                return record_not_found("Decision")
+                return _discarded_result_response(request_id, scope)
             return error_response("Decision request timed out", 408)
 
         except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError) as e:
             logger.exception("Decision routing failed: %s", e)
-            if not _save_result(
-                request.request_id,
+            if not save_outcome(
                 {
-                    "request_id": request.request_id,
                     "status": "failed",
                     "result": {"request": replay},
                     "error": "Decision processing failed",
-                },
-                org_id=scope.org_id,
-                created_by=scope.user_id,
+                }
             ):
-                return record_not_found("Decision")
+                return _discarded_result_response(request_id, scope)
             logger.warning("Handler error: %s", e)
             return error_response("Decision processing failed", 500)
 
         except BaseException:
-            # Any other error, or cancellation, must not leave the claim pending:
-            # only failed decisions can be retried.
-            _save_result(
-                request.request_id,
-                {
-                    "request_id": request.request_id,
-                    "status": "failed",
-                    "result": {"request": replay},
-                    "error": "Decision processing failed",
-                },
-                org_id=scope.org_id,
-                created_by=scope.user_id,
-            )
+            # Any other error, or cancellation, must not leave a new claim
+            # pending: only failed decisions can be retried. An earlier result
+            # kept by the claim stays as it was.
+            if claimed_status == "pending":
+                try:
+                    save_outcome(
+                        {
+                            "status": "failed",
+                            "result": {"request": replay},
+                            "error": "Decision processing failed",
+                        }
+                    )
+                except Exception:  # noqa: BLE001 - the original error must propagate
+                    logger.exception("Could not record decision %s as failed", request_id)
             raise
+
+        finally:
+            _finish_routing(request_id)
 
     def _get_decision(self, request_id: str, scope: OrgScope) -> HandlerResult:
         """Get a decision result by ID."""
@@ -474,7 +593,8 @@ class DecisionHandler(BaseHandler):
         """
         Cancel a pending or running decision.
 
-        Only decisions in PENDING or RUNNING status can be cancelled.
+        Only decisions in PENDING or RUNNING status can be cancelled. Routing
+        that is already running is not stopped; its late result is discarded.
         """
         # Get current result
         result = _get_result(request_id, scope.org_id)
@@ -509,13 +629,22 @@ class DecisionHandler(BaseHandler):
         if reason:
             result["cancellation_reason"] = reason
 
-        if not _save_result(
+        # Only while the decision is still in the status read above: routing
+        # may have saved its result since then.
+        if not _save_result_if_status(
             request_id,
             result,
             org_id=scope.org_id,
-            created_by=result.get("created_by") or scope.user_id,
+            expected_status=current_status,
         ):
-            return record_not_found("Decision")
+            current = _get_result(request_id, scope.org_id)
+            if current is None:
+                return record_not_found("Decision")
+            return error_response(
+                f"Cannot cancel decision in '{current.get('status', 'unknown')}' status. "
+                f"Only decisions in {cancellable_statuses} can be cancelled.",
+                409,
+            )
 
         logger.info(
             "Decision %s cancelled by user. Reason: %s", request_id, reason or "not provided"
@@ -599,6 +728,12 @@ class DecisionHandler(BaseHandler):
             logger.warning("Failed to build retry request: %s", e)
             return error_response("Retry request creation failed", 400)
 
+        # A cancelled decision can still be routing (cancel does not stop it).
+        # Holding its id while the retry runs also keeps two retries of the
+        # same decision from running at once.
+        if not _start_routing(request_id):
+            return error_response("Decision is still running; retry it after it stops", 409)
+
         # Route the new decision
         try:
             result = await router.route(request)
@@ -662,6 +797,9 @@ class DecisionHandler(BaseHandler):
             )
             logger.warning("Handler error: %s", e)
             return error_response("Decision retry failed", 500)
+
+        finally:
+            _finish_routing(request_id)
 
 
 __all__ = ["DecisionHandler"]
