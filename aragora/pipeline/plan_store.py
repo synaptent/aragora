@@ -209,6 +209,11 @@ class PlanStore:
         self._ensure_dir()
         self._ensure_table()
 
+    @property
+    def db_path(self) -> str:
+        """Path of the SQLite file (shared by the decision workspace tables)."""
+        return self._db_path
+
     def _ensure_dir(self) -> None:
         """Create parent directory if needed."""
         parent = Path(self._db_path).parent
