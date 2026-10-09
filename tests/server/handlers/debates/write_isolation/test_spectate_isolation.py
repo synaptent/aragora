@@ -52,7 +52,11 @@ SURFACES = (
     ("/api/v1/spectate/recent", {}),
     ("/api/v1/spectate/stream", {}),
     ("/api/v1/spectate/stream", {"format": "sse"}),
+    ("/api/v1/spectate/recent/", {}),
+    ("/api/v1/spectate/stream/", {}),
+    ("/api/v1/spectate/stream/", {"format": "sse"}),
 )
+EMIT_PATHS = ("/api/v1/spectate/emit", "/api/v1/spectate/emit/")
 
 
 def _event(debate_id: str | None, details: str = "", *, now: bool = False) -> SpectateEvent:
@@ -181,14 +185,15 @@ def test_named_debate_is_served_only_when_visible(
         assert "events" not in body_of(result)
 
 
+@pytest.mark.parametrize("path", ["/api/v1/spectate/status", "/api/v1/spectate/status/"])
 @pytest.mark.parametrize(
     ("user", "live"),
     [(USER_A, {DA, DP}), (USER_B, {DB, DP}), (ADMIN_B, {DB, DP}), (ANON, {DP})],
 )
-def test_status_names_only_visible_live_debates(monkeypatch, spectate, seeded, user, live):
+def test_status_names_only_visible_live_debates(monkeypatch, spectate, seeded, user, live, path):
     seeded.start()
 
-    body = body_of(_get(monkeypatch, spectate, user, "/api/v1/spectate/status", {}))
+    body = body_of(_get(monkeypatch, spectate, user, path, {}))
 
     assert set(body["live_debate_ids"]) == live
     assert {item["debate_id"] for item in body["live_debates"]} == live
@@ -290,11 +295,12 @@ def test_live_server_answers_before_any_200_header(monkeypatch, storage, user, d
     assert DENIALS[status].items() <= sent[0].items()
 
 
-def _emit(monkeypatch, spectate, user, body: dict[str, Any]):
+def _emit(monkeypatch, spectate, user, body: dict[str, Any], path: str = EMIT_PATHS[0]):
     act_as(monkeypatch, user)
-    return spectate.handle_post("/api/v1/spectate/emit", {}, Request("POST", user, body))
+    return spectate.handle_post(path, {}, Request("POST", user, body))
 
 
+@pytest.mark.parametrize("path", EMIT_PATHS)
 @pytest.mark.parametrize(
     ("user", "debate_id", "status"),
     [
@@ -308,11 +314,12 @@ def _emit(monkeypatch, spectate, user, body: dict[str, Any]):
     ],
 )
 def test_emit_refuses_debates_outside_the_callers_org(
-    monkeypatch, spectate, bridge, user, debate_id, status
+    monkeypatch, spectate, bridge, user, debate_id, status, path
 ):
     bridge.start()
 
-    result = _emit(monkeypatch, spectate, user, {"debate_id": debate_id, "details": "injected"})
+    body = {"debate_id": debate_id, "details": "injected"}
+    result = _emit(monkeypatch, spectate, user, body, path)
 
     assert result.status_code == status
     if status == 404:
@@ -320,7 +327,8 @@ def test_emit_refuses_debates_outside_the_callers_org(
     assert bridge.get_recent_events(50) == []
 
 
-def test_emit_for_own_debate_is_bound_to_that_debate(monkeypatch, spectate, bridge):
+@pytest.mark.parametrize("path", EMIT_PATHS)
+def test_emit_for_own_debate_is_bound_to_that_debate(monkeypatch, spectate, bridge, path):
     bridge.start()
     smuggled = json.dumps({"debate_id": DB, "details": "aimed at B"})
 
@@ -329,6 +337,7 @@ def test_emit_for_own_debate_is_bound_to_that_debate(monkeypatch, spectate, brid
         spectate,
         USER_A,
         {"debate_id": DA, "events": [{"event_type": "critique", "details": smuggled}]},
+        path,
     )
 
     assert result.status_code == 200

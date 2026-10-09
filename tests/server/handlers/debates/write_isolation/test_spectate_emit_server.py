@@ -3,6 +3,10 @@
 The path stays exempt from the server's token gate, so the handler is what
 refuses: anonymous 401, no org (or the bare static token) 403, another org's
 debate the 404 of a missing one. Nothing reaches the spectate bridge.
+
+The registry's prefix match also routes the trailing-slash forms of the
+spectate paths to the handler; on a server without an API token they answer
+exactly like the canonical paths.
 """
 
 from __future__ import annotations
@@ -40,9 +44,11 @@ def emit_server(server, storage):
 
 @pytest.mark.no_auto_auth
 @pytest.mark.parametrize(
-    ("server", "static_token_status"), [(None, 401), (STATIC_TOKEN, 403)], indirect=["server"]
+    ("server", "static_token_status", "path"),
+    [(None, 401, EMIT), (None, 401, EMIT + "/"), (STATIC_TOKEN, 403, EMIT)],
+    indirect=["server"],
 )
-def test_only_the_owner_org_can_emit(emit_server, bridge, static_token_status):
+def test_only_the_owner_org_can_emit(emit_server, bridge, static_token_status, path):
     refused = [
         (None, 401, None),
         (jwt("user-no-org", None, "owner"), 403, ORG_REQUIRED_BODY),
@@ -52,12 +58,30 @@ def test_only_the_owner_org_can_emit(emit_server, bridge, static_token_status):
     for debate_id in (DA, DP):
         body = {"debate_id": debate_id, "details": "injected"}
         for token, status, expected in refused:
-            got, payload = dispatch(emit_server, "POST", EMIT, token, body=body)
+            got, payload = dispatch(emit_server, "POST", path, token, body=body)
             assert got == status, (debate_id, payload)
             assert expected is None or payload == expected, (debate_id, payload)
     assert bridge.get_recent_events(50) == []
 
     token_a = jwt("user-a", ORG_A, "owner")
-    status, payload = dispatch(emit_server, "POST", EMIT, token_a, body={"debate_id": DA})
+    status, payload = dispatch(emit_server, "POST", path, token_a, body={"debate_id": DA})
     assert (status, payload) == (200, {"emitted": 1, "debate_id": DA})
     assert [event.debate_id for event in bridge.get_recent_events(50)] == [DA]
+
+
+@pytest.mark.no_auto_auth
+@pytest.mark.parametrize("server", [None], indirect=True)
+@pytest.mark.parametrize("route", ["recent", "status", "stream"])
+def test_slash_reads_answer_like_the_canonical_path(emit_server, bridge, route):
+    canonical = f"/api/v1/spectate/{route}"
+    callers = [
+        (None, {}),
+        (jwt("user-a", ORG_A, "owner"), {}),
+        (jwt("user-b", "org-b", "owner"), {"debate_id": DA}),
+        (None, {"debate_id": DA}),
+    ]
+    for token, query in callers:
+        expected = dispatch(emit_server, "GET", canonical, token, query=query)
+        assert expected[0] != 500, expected
+        got = dispatch(emit_server, "GET", canonical + "/", token, query=query)
+        assert got == expected, (token, query)
