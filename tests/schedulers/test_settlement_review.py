@@ -19,6 +19,9 @@ from aragora.scheduler.settlement_review import (
 )
 
 
+_ORG = "org-a"
+
+
 @dataclass
 class _StoredReceiptStub:
     data: dict
@@ -26,6 +29,20 @@ class _StoredReceiptStub:
     debate_id: str | None = None
     org_id: str | None = None
     created_by: str | None = None
+    receipt_id: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.receipt_id:
+            self.receipt_id = str(self.data.get("receipt_id") or "")
+
+
+def _single_tenant_store(receipt: _StoredReceiptStub) -> MagicMock:
+    """A mock store whose only owned receipt is ``receipt``, owned by ``_ORG``."""
+    receipt.org_id = _ORG
+    store = MagicMock()
+    store.list_owner_org_ids.return_value = [_ORG]
+    store.list_for_org.side_effect = [[receipt], []]
+    return store
 
 
 def _iso(dt: datetime) -> str:
@@ -38,8 +55,14 @@ class _InMemoryReceiptStore:
     def __init__(self) -> None:
         self._items: list[_StoredReceiptStub] = []
 
-    def list(self, *, limit: int, offset: int, order: str = "desc") -> list[_StoredReceiptStub]:
-        items = self._items[::-1] if order == "desc" else self._items[:]
+    def list_owner_org_ids(self) -> list[str]:
+        return sorted({item.org_id for item in self._items if item.org_id})
+
+    def list_for_org(
+        self, org_id: str, *, limit: int, offset: int, order: str = "desc"
+    ) -> list[_StoredReceiptStub]:
+        owned = [item for item in self._items if item.org_id == org_id]
+        items = owned[::-1] if order == "desc" else owned
         return items[offset : offset + limit]
 
     def save(self, data: dict, *, org_id: str | None = None, created_by: str | None = None) -> str:
@@ -114,9 +137,7 @@ class TestSettlementReviewScheduler:
             debate_id="debate-r1",
         )
 
-        store = MagicMock()
-        store.list.side_effect = [[receipt], []]
-        store.save = MagicMock()
+        store = _single_tenant_store(receipt)
 
         scheduler = SettlementReviewScheduler(store, max_receipts_per_run=10)
         (
@@ -162,9 +183,7 @@ class TestSettlementReviewScheduler:
             created_at=old.timestamp(),
             debate_id="debate-r1b",
         )
-        store = MagicMock()
-        store.list.side_effect = [[receipt], []]
-        store.save = MagicMock()
+        store = _single_tenant_store(receipt)
 
         scheduler = SettlementReviewScheduler(store, max_receipts_per_run=10)
         (
@@ -212,9 +231,7 @@ class TestSettlementReviewScheduler:
             debate_id="debate-r2det",
         )
 
-        store = MagicMock()
-        store.list.side_effect = [[receipt], []]
-        store.save = MagicMock()
+        store = _single_tenant_store(receipt)
         scheduler = SettlementReviewScheduler(store, max_receipts_per_run=10)
         tracker = MagicMock()
         scheduler._calibration_tracker = tracker
@@ -282,9 +299,7 @@ class TestSettlementReviewScheduler:
             debate_id="debate-r2or",
         )
 
-        store = MagicMock()
-        store.list.side_effect = [[receipt], []]
-        store.save = MagicMock()
+        store = _single_tenant_store(receipt)
         scheduler = SettlementReviewScheduler(store, max_receipts_per_run=10)
         tracker = MagicMock()
         scheduler._calibration_tracker = tracker
@@ -334,9 +349,7 @@ class TestSettlementReviewScheduler:
             debate_id="debate-r2",
         )
 
-        store = MagicMock()
-        store.list.side_effect = [[receipt], []]
-        store.save = MagicMock()
+        store = _single_tenant_store(receipt)
 
         scheduler = SettlementReviewScheduler(store, max_receipts_per_run=10)
         tracker = MagicMock()
@@ -388,9 +401,7 @@ class TestSettlementReviewScheduler:
             debate_id="debate-r2b",
         )
 
-        store = MagicMock()
-        store.list.side_effect = [[receipt], []]
-        store.save = MagicMock()
+        store = _single_tenant_store(receipt)
 
         scheduler = SettlementReviewScheduler(store, max_receipts_per_run=10)
         tracker = MagicMock()
@@ -437,9 +448,7 @@ class TestSettlementReviewScheduler:
             debate_id="debate-r2c",
         )
 
-        store = MagicMock()
-        store.list.side_effect = [[receipt], []]
-        store.save = MagicMock()
+        store = _single_tenant_store(receipt)
 
         scheduler = SettlementReviewScheduler(store, max_receipts_per_run=10)
         tracker = MagicMock()
@@ -482,9 +491,7 @@ class TestSettlementReviewScheduler:
             created_at=recent.timestamp(),
             debate_id="debate-r3",
         )
-        store = MagicMock()
-        store.list.side_effect = [[receipt], []]
-        store.save = MagicMock()
+        store = _single_tenant_store(receipt)
 
         scheduler = SettlementReviewScheduler(store, max_receipts_per_run=10)
         (
@@ -505,7 +512,7 @@ class TestSettlementReviewScheduler:
     @pytest.mark.asyncio
     async def test_start_stop_scheduler(self) -> None:
         store = MagicMock()
-        store.list.return_value = []
+        store.list_owner_org_ids.return_value = []
         scheduler = SettlementReviewScheduler(
             store,
             interval_hours=1,
@@ -522,7 +529,7 @@ class TestSettlementReviewScheduler:
     @pytest.mark.asyncio
     async def test_review_due_receipts_handles_exceptions(self) -> None:
         store = MagicMock()
-        store.list.side_effect = RuntimeError("boom")
+        store.list_owner_org_ids.side_effect = RuntimeError("boom")
         scheduler = SettlementReviewScheduler(store, max_receipts_per_run=10)
 
         result = await scheduler.review_due_receipts()
@@ -541,6 +548,8 @@ class TestSettlementReviewScheduler:
         )
 
         config = MagicMock()
+        config.org_id = _ORG
+        config.created_by = "user-a"
         config.question = "Should we enable feature flag rollout?"
         config.agents_str = "claude,gpt-5"
         config.rounds = 2
@@ -629,6 +638,8 @@ class TestSettlementReviewScheduler:
         )
 
         config = MagicMock()
+        config.org_id = _ORG
+        config.created_by = "user-a"
         config.question = "Should we enable a staged rollout?"
         config.agents_str = "claude,gpt-5"
         config.rounds = 2

@@ -1192,6 +1192,23 @@ class ReceiptStore:
         )
         return row[0] if row else 0
 
+    def list_owner_org_ids(self) -> builtins.list[str]:
+        """Distinct orgs that own at least one database receipt, sorted.
+
+        Lets background jobs walk receipts one tenant at a time with
+        :meth:`list_for_org`; unowned rows and file receipts never appear.
+        """
+        if self._backend is None:
+            return []
+        rows = self._backend.fetch_all(
+            """
+            SELECT DISTINCT org_id FROM receipts
+            WHERE org_id IS NOT NULL AND TRIM(org_id) != ''
+            ORDER BY org_id
+            """
+        )
+        return [str(row[0]) for row in rows]
+
     @staticmethod
     def _filter_conditions(
         *,
