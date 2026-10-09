@@ -1113,6 +1113,39 @@ class TestDirectSyncMigration:
         assert [saved[0] for saved in sync_backend.saved] == ["connector-1"]
         _assert_used_shared_store(sync_backend, shared_pool_loop)
 
+    def test_migrate_sync_store_closes_private_loop_when_thread_start_fails(
+        self, sync_backend, monkeypatch
+    ):
+        sync_backend.add_connector("connector-1", {"api_key": "plaintext-secret"})
+        loops: list[asyncio.AbstractEventLoop] = []
+
+        class _UnstartableThread(threading.Thread):
+            def __init__(self, *args: Any, **kwargs: Any) -> None:
+                super().__init__(*args, **kwargs)
+                loops.append(kwargs["args"][0])
+
+            def start(self) -> None:
+                raise RuntimeError("can't start new thread")
+
+        monkeypatch.setattr(
+            migration_module, "threading", SimpleNamespace(Thread=_UnstartableThread)
+        )
+
+        result = migrate_sync_store(dry_run=False)
+
+        assert result.errors == ["Sync store not available"]
+        assert sync_backend.stores == []
+        assert len(loops) == 1
+        assert loops[0].is_closed()
+
+    def test_closed_shared_pool_session_refuses_new_calls(self, sync_backend, shared_pool_loop):
+        session = migration_module._SyncStoreSession()
+        session.close()
+
+        with pytest.raises(RuntimeError, match="session is closed"):
+            session.run(session.store.list_connectors())
+        _assert_used_shared_store(sync_backend, shared_pool_loop)
+
 
 class TestStartupMigrationConfig:
     """Tests for startup migration configuration."""

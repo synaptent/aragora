@@ -422,7 +422,12 @@ class _SyncStoreSession:
             name="security-migration-sync-store",
             daemon=True,
         )
-        self._thread.start()
+        try:
+            self._thread.start()
+        except BaseException:
+            self._closed = True
+            loop.close()
+            raise
         try:
             # Job recovery belongs to the process that runs the jobs; a store
             # opened only to re-save connectors must not interrupt live syncs.
@@ -434,13 +439,13 @@ class _SyncStoreSession:
 
     def run(self, coro: Coroutine[Any, Any, T]) -> T:
         """Run ``coro`` on this session's loop and return its result."""
+        if self._closed:
+            coro.close()
+            raise RuntimeError("Sync store session is closed")
         if self._loop is None:
             from aragora.utils.async_utils import run_async
 
             return run_async(coro, timeout=_SYNC_STORE_CALL_TIMEOUT)
-        if self._closed:
-            coro.close()
-            raise RuntimeError("Sync store session is closed")
         future = asyncio.run_coroutine_threadsafe(
             asyncio.wait_for(coro, timeout=_SYNC_STORE_CALL_TIMEOUT), self._loop
         )
@@ -448,7 +453,8 @@ class _SyncStoreSession:
             return future.result(timeout=_SYNC_STORE_CALL_TIMEOUT + _SYNC_STORE_LOOP_GRACE)
         except (asyncio.TimeoutError, concurrent.futures.TimeoutError) as e:
             # Normalise to the builtin, which is an OSError on every supported
-            # Python, so per-record handlers count a timeout as a failed record.
+            # Python, so per-record handlers count a private-loop timeout as a
+            # failed record. Shared-pool calls keep run_async's timeout type.
             future.cancel()
             raise TimeoutError(
                 f"Sync store call timed out after {_SYNC_STORE_CALL_TIMEOUT:.1f}s"
