@@ -462,6 +462,9 @@ TaskQueueHandler = _safe_import("aragora.server.handlers.tasks.queue", "TaskQueu
 
 # Decision plans
 PlansHandler = _safe_import("aragora.server.handlers.decisions.plans", "PlansHandler")
+WorkspaceDecisionsHandler = _safe_import(
+    "aragora.server.handlers.decisions.workspace_decisions", "WorkspaceDecisionsHandler"
+)
 
 # Base handler result (for backward compatibility)
 HandlerResult = _safe_import("aragora.server.handlers", "HandlerResult")
@@ -680,6 +683,7 @@ ADMIN_HANDLER_REGISTRY: list[tuple[str, object]] = [
     ("_task_queue_handler", TaskQueueHandler),
     # Decision plans
     ("_plans_handler", PlansHandler),
+    ("_workspace_decisions_handler", WorkspaceDecisionsHandler),
     # Playground (public demo)
     ("_playground_handler", PlaygroundHandler),
     # Marketplace browsing
@@ -875,6 +879,7 @@ __all__ = [
     "TaskQueueHandler",
     # Decision plans
     "PlansHandler",
+    "WorkspaceDecisionsHandler",
     # Playground
     "PlaygroundHandler",
     # Marketplace browsing

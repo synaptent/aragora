@@ -608,6 +608,7 @@ class RouteIndex:
                 "/api/classify",
                 "/api/audit/",
             ],
+            "_workspace_decisions_handler": ["/api/v1/workspace/"],
             "_email_handler": [
                 "/api/email/",
             ],

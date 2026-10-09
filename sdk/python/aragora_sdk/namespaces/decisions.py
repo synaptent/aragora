@@ -374,6 +374,18 @@ class DecisionsAPI:
         """
         return self._client._request("GET", f"/api/v1/decisions/{decision_id}/outcomes")
 
+    # -- Decision workspace -------------------------------------------------
+
+    def get_workspace_agent_options(self) -> dict[str, Any]:
+        """Agents a workspace decision can use, the intake limits and accepted file types."""
+        return self._client._request("GET", "/api/v1/workspace/agent-options")
+
+    def list_workspace_decisions(self, limit: int = 50, offset: int = 0) -> dict[str, Any]:
+        """List the caller's organization's workspace decisions, newest first."""
+        return self._client._request(
+            "GET", "/api/v1/workspace/decisions", params={"limit": limit, "offset": offset}
+        )
+
 
 class AsyncDecisionsAPI:
     """Asynchronous decisions API."""
@@ -575,3 +587,15 @@ class AsyncDecisionsAPI:
     async def list_outcomes(self, decision_id: str) -> dict[str, Any]:
         """List all outcomes for a decision."""
         return await self._client._request("GET", f"/api/v1/decisions/{decision_id}/outcomes")
+
+    # -- Decision workspace -------------------------------------------------
+
+    async def get_workspace_agent_options(self) -> dict[str, Any]:
+        """Agents a workspace decision can use, the intake limits and accepted file types."""
+        return await self._client._request("GET", "/api/v1/workspace/agent-options")
+
+    async def list_workspace_decisions(self, limit: int = 50, offset: int = 0) -> dict[str, Any]:
+        """List the caller's organization's workspace decisions, newest first."""
+        return await self._client._request(
+            "GET", "/api/v1/workspace/decisions", params={"limit": limit, "offset": offset}
+        )

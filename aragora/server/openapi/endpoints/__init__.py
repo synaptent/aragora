@@ -32,6 +32,7 @@ from aragora.server.openapi.endpoints.explainability import EXPLAINABILITY_ENDPO
 from aragora.server.openapi.endpoints.workflow_templates import WORKFLOW_TEMPLATES_ENDPOINTS
 from aragora.server.openapi.endpoints.control_plane import CONTROL_PLANE_ENDPOINTS
 from aragora.server.openapi.endpoints.decisions import DECISION_ENDPOINTS
+from aragora.server.openapi.endpoints.decision_workspace import DECISION_WORKSPACE_ENDPOINTS
 from aragora.server.openapi.endpoints.codebase_security import CODEBASE_SECURITY_ENDPOINTS
 from aragora.server.openapi.endpoints.codebase_metrics import CODEBASE_METRICS_ENDPOINTS
 from aragora.server.openapi.endpoints.codebase_intelligence import (
@@ -146,6 +147,7 @@ ALL_ENDPOINTS = {
     **WORKFLOW_TEMPLATES_ENDPOINTS,
     **CONTROL_PLANE_ENDPOINTS,
     **DECISION_ENDPOINTS,
+    **DECISION_WORKSPACE_ENDPOINTS,
     **CODEBASE_SECURITY_ENDPOINTS,
     **CODEBASE_METRICS_ENDPOINTS,
     **CODEBASE_INTELLIGENCE_ENDPOINTS,
@@ -243,6 +245,7 @@ __all__ = [
     "EXPLAINABILITY_ENDPOINTS",
     "WORKFLOW_TEMPLATES_ENDPOINTS",
     "CONTROL_PLANE_ENDPOINTS",
+    "DECISION_WORKSPACE_ENDPOINTS",
     "DECISION_ENDPOINTS",
     "CODEBASE_SECURITY_ENDPOINTS",
     "CODEBASE_METRICS_ENDPOINTS",
