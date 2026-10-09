@@ -545,6 +545,17 @@ second server on the same host, move all of them, for example
 | `ARAGORA_DEFAULT_AGENTS` | Optional | Default agent list when none specified | `grok,anthropic-api,openai-api,deepseek,mistral,gemini,qwen,kimi` |
 | `ARAGORA_STREAMING_AGENTS` | Optional | Agents allowed for streaming responses | `grok,anthropic-api,openai-api,mistral` |
 
+## Decision Workspace
+
+Read on every request by `/api/v1/workspace`. A missing, non-integer or non-positive limit falls back to its default.
+
+| Variable | Required | Description | Default |
+|----------|----------|-------------|---------|
+| `ARAGORA_WORKSPACE_AGENTS` | Required for workspace intake | Comma-separated agent specs offered by `GET /api/v1/workspace/agent-options` (`provider`, or `provider\|model\|persona\|role`, e.g. `openai-api\|gpt-5.5,grok`). Empty means intake is refused with `agents_not_configured`; one invalid entry disables the whole list. | (none) |
+| `ARAGORA_WORKSPACE_MAX_DOCUMENTS` | Optional | Maximum uploaded files per decision (pasted text is not counted) | `10` |
+| `ARAGORA_WORKSPACE_MAX_FILE_BYTES` | Optional | Maximum size of one uploaded `.md`/`.txt` file, in bytes | `1048576` |
+| `ARAGORA_WORKSPACE_MAX_PASTED_CHARS` | Optional | Maximum pasted-text length, in characters | `204800` |
+
 ## Streaming Controls
 
 | Variable | Required | Description | Default |
