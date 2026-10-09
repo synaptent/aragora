@@ -41,6 +41,7 @@ _ERROR_SCHEMA: dict[str, Any] = {
         "agent": {"type": "string"},
         "filename": {"type": "string"},
         "limit": {"type": "integer"},
+        "run_id": {"type": "string", "nullable": True},
     },
     "required": ["error", "code"],
 }
@@ -89,14 +90,164 @@ _DECISION_PROPERTIES: dict[str, Any] = {
     "cost_estimated_usd": {"type": "number"},
     "source_count": {"type": "integer"},
     "passage_count": {"type": "integer"},
+    "omitted_passage_count": {
+        "type": "integer",
+        "description": "Passages left out of the debate context by the context budget.",
+    },
 }
 
-_DECISION: dict[str, Any] = {"type": "object", "properties": _DECISION_PROPERTIES}
+_RUN_STATUS = {
+    "type": "string",
+    "enum": ["running", "completed", "failed", "interrupted", "budget_exceeded"],
+}
+
+_RUN_PROPERTIES: dict[str, Any] = {
+    "run_id": {"type": "string"},
+    "status": _RUN_STATUS,
+    "debate_id": {"type": "string", "nullable": True},
+    "agents": {"type": "array", "items": {"type": "string"}},
+    "rounds": {"type": "integer"},
+    "started_by": {"type": "string", "nullable": True},
+    "started_at": {"type": "string", "format": "date-time"},
+    "finished_at": {"type": "string", "format": "date-time", "nullable": True},
+    "error": {"type": "string", "nullable": True},
+    "budget_usd": {"type": "number", "nullable": True},
+    "cost_actual_usd": {
+        "type": "number",
+        "description": "Cost reported by providers billed directly (for example grok).",
+    },
+    "cost_estimated_usd": {
+        "type": "number",
+        "description": "Cost estimated from token counts for agents routed through a proxy.",
+    },
+}
+
+_RUN_SUMMARY: dict[str, Any] = {"type": "object", "properties": _RUN_PROPERTIES}
+
+_LATEST_RUN: dict[str, Any] = {
+    "type": "object",
+    "nullable": True,
+    "properties": {
+        **_RUN_PROPERTIES,
+        "result": {
+            "type": "object",
+            "nullable": True,
+            "description": (
+                "What the run captured, kept when it fails: context counts, the debate "
+                "record (final answer, proposals, dissenting views, cruxes, evidence "
+                "suggestions, transcript), per-agent costs and the synthesis attempts."
+            ),
+        },
+    },
+}
+
+_CHECKED_CITATION: dict[str, Any] = {
+    "type": "object",
+    "description": (
+        "Mechanical checks only: whether the passage exists and whether the quote "
+        "appears in it. Neither says the passage supports the claim."
+    ),
+    "properties": {
+        "claim": {"type": "string"},
+        "passage_label": {"type": "string"},
+        "quote": {"type": "string", "nullable": True},
+        "passage_id": {"type": "string", "nullable": True},
+        "passage_exists": {"type": "boolean"},
+        "quote_provided": {"type": "boolean"},
+        "quote_found": {"type": "boolean"},
+    },
+}
+
+_CITATIONS = {"type": "array", "items": _CHECKED_CITATION}
+
+_REVISION: dict[str, Any] = {
+    "type": "object",
+    "nullable": True,
+    "properties": {
+        "revision_id": {"type": "string"},
+        "number": {"type": "integer"},
+        "parent_revision_id": {"type": "string", "nullable": True},
+        "status": {"type": "string", "enum": ["draft", "current", "superseded"]},
+        "origin": {"type": "string", "enum": ["debate", "user_edit"]},
+        "author_id": {"type": "string", "nullable": True},
+        "content": {
+            "type": "object",
+            "properties": {
+                "recommendation": {"type": "string"},
+                "citations": _CITATIONS,
+                "alternatives": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "title": {"type": "string"},
+                            "summary": {"type": "string"},
+                            "why_not_chosen": {"type": "string"},
+                            "citations": _CITATIONS,
+                        },
+                    },
+                },
+                "dissent": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "agent": {"type": "string", "nullable": True},
+                            "position": {"type": "string"},
+                            "citations": _CITATIONS,
+                        },
+                    },
+                },
+                "missing_evidence": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "question": {"type": "string"},
+                            "why_it_matters": {"type": "string"},
+                        },
+                    },
+                },
+                "assumptions": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "statement": {"type": "string"},
+                            "basis": {"type": "string"},
+                        },
+                    },
+                },
+            },
+        },
+        "content_hash": {
+            "type": "string",
+            "description": (
+                "SHA-256 of the RFC 8785 (JCS) canonical JSON of the decision id, "
+                "revision number, parent revision id and `content`"
+            ),
+        },
+        "created_at": {"type": "string", "format": "date-time"},
+    },
+}
+
+_DETAIL_PROPERTIES: dict[str, Any] = {
+    **_DECISION_PROPERTIES,
+    "run": _LATEST_RUN,
+    "runs": {
+        "type": "array",
+        "items": _RUN_SUMMARY,
+        "description": "Every run of the decision, newest first.",
+    },
+    "current_revision": _REVISION,
+}
+
+_DECISION: dict[str, Any] = {"type": "object", "properties": _DETAIL_PROPERTIES}
 
 _CREATED_DECISION: dict[str, Any] = {
     "type": "object",
     "properties": {
-        **_DECISION_PROPERTIES,
+        **_DETAIL_PROPERTIES,
         "decision_id": {"type": "string"},
         "sources": {"type": "array", "items": _SOURCE},
     },
@@ -240,7 +391,9 @@ DECISION_WORKSPACE_ENDPOINTS: dict[str, Any] = {
                 "selected offered agents. Sources are labelled S1, S2, ... in intake "
                 "order and split into passages S1:P1, ... with SHA-256 hashes. Any "
                 "refused field answers 400/413/415 naming the field and creates nothing. "
-                "Returns 202 with status `debating`. JSON bodies are accepted for "
+                "Returns 202 with status `debating` and the started run; when the debate "
+                "cannot be started the run and the decision are already `failed` with the "
+                "reason, and the decision can be rerun. JSON bodies are accepted for "
                 "decisions without files." + _ORG_NOTE
             ),
             "security": _SECURITY,
@@ -295,7 +448,11 @@ DECISION_WORKSPACE_ENDPOINTS: dict[str, Any] = {
             "tags": _TAGS,
             "summary": "Get a workspace decision",
             "operationId": "getWorkspaceDecision",
-            "description": "One decision with its status, agents and counts." + _ORG_NOTE,
+            "description": (
+                "One decision with its status, agents and counts, its runs (the latest "
+                "with what it captured, kept when it fails) and the current revision "
+                "with the structured result and its citation checks." + _ORG_NOTE
+            ),
             "security": _SECURITY,
             "parameters": [_DECISION_ID],
             "responses": {
@@ -303,6 +460,32 @@ DECISION_WORKSPACE_ENDPOINTS: dict[str, Any] = {
                 "401": STANDARD_ERRORS["401"],
                 "403": STANDARD_ERRORS["403"],
                 "404": STANDARD_ERRORS["404"],
+            },
+        }
+    },
+    "/api/v1/workspace/decisions/{decision_id}/rerun": {
+        "post": {
+            "tags": _TAGS,
+            "summary": "Rerun a failed decision",
+            "operationId": "rerunWorkspaceDecision",
+            "description": (
+                "Start a new run of a `failed` decision with the same agents and rounds; "
+                "earlier runs are kept. Returns 202 with the decision back in `debating`. "
+                "A decision that is not `failed`, or already has a run in progress, "
+                "answers 409, so a double submit starts only one run. Needs "
+                "`decisions:update`." + _ORG_NOTE
+            ),
+            "security": _SECURITY,
+            "parameters": [_DECISION_ID],
+            "responses": {
+                "202": _ok_response("Rerun started", _DECISION),
+                "401": STANDARD_ERRORS["401"],
+                "403": STANDARD_ERRORS["403"],
+                "404": STANDARD_ERRORS["404"],
+                "409": _error(
+                    "409",
+                    "`run_in_progress` (with `run_id`) or `decision_not_failed`",
+                ),
             },
         }
     },

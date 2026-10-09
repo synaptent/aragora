@@ -136827,7 +136827,7 @@ paths:
           headers: *id1030
           content:
             application/json:
-              schema: &id1036
+              schema: &id1049
                 type: object
                 properties:
                   error:
@@ -136843,10 +136843,13 @@ paths:
                     type: string
                   limit:
                     type: integer
+                  run_id:
+                    type: string
+                    nullable: true
                 required:
                 - error
                 - code
-        '401': &id1037
+        '401': &id1050
           description: Unauthorized - Authentication required or token invalid
           headers: *id1030
           content:
@@ -136866,7 +136869,7 @@ paths:
                     error: Invalid or expired authentication token
                     code: INVALID_TOKEN
                     trace_id: req_abc123xyz
-        '403': &id1038
+        '403': &id1051
           description: Forbidden - Insufficient permissions for this operation
           headers: *id1030
           content:
@@ -136896,9 +136899,10 @@ paths:
       description: Create a decision from a question, optional pasted text and up to `ARAGORA_WORKSPACE_MAX_DOCUMENTS` `.md`/`.txt`
         files, debated by the selected offered agents. Sources are labelled S1, S2, ... in intake order and split into passages
         S1:P1, ... with SHA-256 hashes. Any refused field answers 400/413/415 naming the field and creates nothing. Returns
-        202 with status `debating`. JSON bodies are accepted for decisions without files. Requires a signed-in user with an
-        organization (401 without a user, 403 `org_required` without an org). Another organization's decision answers exactly
-        like a missing one (404).
+        202 with status `debating` and the started run; when the debate cannot be started the run and the decision are already
+        `failed` with the reason, and the decision can be rerun. JSON bodies are accepted for decisions without files. Requires
+        a signed-in user with an organization (401 without a user, 403 `org_required` without an org). Another organization's
+        decision answers exactly like a missing one (404).
       security: *id1032
       requestBody:
         required: true
@@ -136994,6 +136998,179 @@ paths:
                     type: integer
                   passage_count:
                     type: integer
+                  omitted_passage_count:
+                    type: integer
+                    description: Passages left out of the debate context by the context budget.
+                  run:
+                    type: object
+                    nullable: true
+                    properties:
+                      run_id: &id1036
+                        type: string
+                      status: &id1037
+                        type: string
+                        enum:
+                        - running
+                        - completed
+                        - failed
+                        - interrupted
+                        - budget_exceeded
+                      debate_id: &id1038
+                        type: string
+                        nullable: true
+                      agents: &id1039
+                        type: array
+                        items:
+                          type: string
+                      rounds: &id1040
+                        type: integer
+                      started_by: &id1041
+                        type: string
+                        nullable: true
+                      started_at: &id1042
+                        type: string
+                        format: date-time
+                      finished_at: &id1043
+                        type: string
+                        format: date-time
+                        nullable: true
+                      error: &id1044
+                        type: string
+                        nullable: true
+                      budget_usd: &id1045
+                        type: number
+                        nullable: true
+                      cost_actual_usd: &id1046
+                        type: number
+                        description: Cost reported by providers billed directly (for example grok).
+                      cost_estimated_usd: &id1047
+                        type: number
+                        description: Cost estimated from token counts for agents routed through a proxy.
+                      result:
+                        type: object
+                        nullable: true
+                        description: 'What the run captured, kept when it fails: context counts, the debate record (final
+                          answer, proposals, dissenting views, cruxes, evidence suggestions, transcript), per-agent costs
+                          and the synthesis attempts.'
+                  runs:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        run_id: *id1036
+                        status: *id1037
+                        debate_id: *id1038
+                        agents: *id1039
+                        rounds: *id1040
+                        started_by: *id1041
+                        started_at: *id1042
+                        finished_at: *id1043
+                        error: *id1044
+                        budget_usd: *id1045
+                        cost_actual_usd: *id1046
+                        cost_estimated_usd: *id1047
+                    description: Every run of the decision, newest first.
+                  current_revision:
+                    type: object
+                    nullable: true
+                    properties:
+                      revision_id:
+                        type: string
+                      number:
+                        type: integer
+                      parent_revision_id:
+                        type: string
+                        nullable: true
+                      status:
+                        type: string
+                        enum:
+                        - draft
+                        - current
+                        - superseded
+                      origin:
+                        type: string
+                        enum:
+                        - debate
+                        - user_edit
+                      author_id:
+                        type: string
+                        nullable: true
+                      content:
+                        type: object
+                        properties:
+                          recommendation:
+                            type: string
+                          citations: &id1048
+                            type: array
+                            items:
+                              type: object
+                              description: 'Mechanical checks only: whether the passage exists and whether the quote appears
+                                in it. Neither says the passage supports the claim.'
+                              properties:
+                                claim:
+                                  type: string
+                                passage_label:
+                                  type: string
+                                quote:
+                                  type: string
+                                  nullable: true
+                                passage_id:
+                                  type: string
+                                  nullable: true
+                                passage_exists:
+                                  type: boolean
+                                quote_provided:
+                                  type: boolean
+                                quote_found:
+                                  type: boolean
+                          alternatives:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                title:
+                                  type: string
+                                summary:
+                                  type: string
+                                why_not_chosen:
+                                  type: string
+                                citations: *id1048
+                          dissent:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                agent:
+                                  type: string
+                                  nullable: true
+                                position:
+                                  type: string
+                                citations: *id1048
+                          missing_evidence:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                question:
+                                  type: string
+                                why_it_matters:
+                                  type: string
+                          assumptions:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                statement:
+                                  type: string
+                                basis:
+                                  type: string
+                      content_hash:
+                        type: string
+                        description: SHA-256 of the RFC 8785 (JCS) canonical JSON of the decision id, revision number, parent
+                          revision id and `content`
+                      created_at:
+                        type: string
+                        format: date-time
                   decision_id:
                     type: string
                   sources:
@@ -137053,33 +137230,33 @@ paths:
           headers: *id1030
           content:
             application/json:
-              schema: *id1036
-        '401': *id1037
-        '403': *id1038
+              schema: *id1049
+        '401': *id1050
+        '403': *id1051
         '411':
           description: Content-Length is required
           headers: *id1030
           content:
             application/json:
-              schema: *id1036
+              schema: *id1049
         '413':
           description: A file, the pasted text or the request is too large
           headers: *id1030
           content:
             application/json:
-              schema: *id1036
+              schema: *id1049
         '415':
           description: Unsupported request content type
           headers: *id1030
           content:
             application/json:
-              schema: *id1036
+              schema: *id1049
         '503':
           description: File uploads are unavailable
           headers: *id1030
           content:
             application/json:
-              schema: *id1036
+              schema: *id1049
       x-aragora-stability: experimental
   /api/v1/workspace/decisions/{decision_id}:
     get:
@@ -137087,8 +137264,10 @@ paths:
       - Decision Workspace
       summary: Get a workspace decision
       operationId: getWorkspaceDecision
-      description: One decision with its status, agents and counts. Requires a signed-in user with an organization (401 without
-        a user, 403 `org_required` without an org). Another organization's decision answers exactly like a missing one (404).
+      description: One decision with its status, agents and counts, its runs (the latest with what it captured, kept when
+        it fails) and the current revision with the structured result and its citation checks. Requires a signed-in user with
+        an organization (401 without a user, 403 `org_required` without an org). Another organization's decision answers exactly
+        like a missing one (404).
       security:
       - bearerAuth: []
       parameters:
@@ -137101,7 +137280,7 @@ paths:
       responses:
         '200':
           description: Decision
-          headers: &id1039
+          headers: &id1065
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -137155,9 +137334,182 @@ paths:
                     type: integer
                   passage_count:
                     type: integer
+                  omitted_passage_count:
+                    type: integer
+                    description: Passages left out of the debate context by the context budget.
+                  run:
+                    type: object
+                    nullable: true
+                    properties:
+                      run_id: &id1052
+                        type: string
+                      status: &id1053
+                        type: string
+                        enum:
+                        - running
+                        - completed
+                        - failed
+                        - interrupted
+                        - budget_exceeded
+                      debate_id: &id1054
+                        type: string
+                        nullable: true
+                      agents: &id1055
+                        type: array
+                        items:
+                          type: string
+                      rounds: &id1056
+                        type: integer
+                      started_by: &id1057
+                        type: string
+                        nullable: true
+                      started_at: &id1058
+                        type: string
+                        format: date-time
+                      finished_at: &id1059
+                        type: string
+                        format: date-time
+                        nullable: true
+                      error: &id1060
+                        type: string
+                        nullable: true
+                      budget_usd: &id1061
+                        type: number
+                        nullable: true
+                      cost_actual_usd: &id1062
+                        type: number
+                        description: Cost reported by providers billed directly (for example grok).
+                      cost_estimated_usd: &id1063
+                        type: number
+                        description: Cost estimated from token counts for agents routed through a proxy.
+                      result:
+                        type: object
+                        nullable: true
+                        description: 'What the run captured, kept when it fails: context counts, the debate record (final
+                          answer, proposals, dissenting views, cruxes, evidence suggestions, transcript), per-agent costs
+                          and the synthesis attempts.'
+                  runs:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        run_id: *id1052
+                        status: *id1053
+                        debate_id: *id1054
+                        agents: *id1055
+                        rounds: *id1056
+                        started_by: *id1057
+                        started_at: *id1058
+                        finished_at: *id1059
+                        error: *id1060
+                        budget_usd: *id1061
+                        cost_actual_usd: *id1062
+                        cost_estimated_usd: *id1063
+                    description: Every run of the decision, newest first.
+                  current_revision:
+                    type: object
+                    nullable: true
+                    properties:
+                      revision_id:
+                        type: string
+                      number:
+                        type: integer
+                      parent_revision_id:
+                        type: string
+                        nullable: true
+                      status:
+                        type: string
+                        enum:
+                        - draft
+                        - current
+                        - superseded
+                      origin:
+                        type: string
+                        enum:
+                        - debate
+                        - user_edit
+                      author_id:
+                        type: string
+                        nullable: true
+                      content:
+                        type: object
+                        properties:
+                          recommendation:
+                            type: string
+                          citations: &id1064
+                            type: array
+                            items:
+                              type: object
+                              description: 'Mechanical checks only: whether the passage exists and whether the quote appears
+                                in it. Neither says the passage supports the claim.'
+                              properties:
+                                claim:
+                                  type: string
+                                passage_label:
+                                  type: string
+                                quote:
+                                  type: string
+                                  nullable: true
+                                passage_id:
+                                  type: string
+                                  nullable: true
+                                passage_exists:
+                                  type: boolean
+                                quote_provided:
+                                  type: boolean
+                                quote_found:
+                                  type: boolean
+                          alternatives:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                title:
+                                  type: string
+                                summary:
+                                  type: string
+                                why_not_chosen:
+                                  type: string
+                                citations: *id1064
+                          dissent:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                agent:
+                                  type: string
+                                  nullable: true
+                                position:
+                                  type: string
+                                citations: *id1064
+                          missing_evidence:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                question:
+                                  type: string
+                                why_it_matters:
+                                  type: string
+                          assumptions:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                statement:
+                                  type: string
+                                basis:
+                                  type: string
+                      content_hash:
+                        type: string
+                        description: SHA-256 of the RFC 8785 (JCS) canonical JSON of the decision id, revision number, parent
+                          revision id and `content`
+                      created_at:
+                        type: string
+                        format: date-time
         '401':
           description: Unauthorized - Authentication required or token invalid
-          headers: *id1039
+          headers: *id1065
           content:
             application/json:
               schema:
@@ -137177,7 +137529,7 @@ paths:
                     trace_id: req_abc123xyz
         '403':
           description: Forbidden - Insufficient permissions for this operation
-          headers: *id1039
+          headers: *id1065
           content:
             application/json:
               schema:
@@ -137199,7 +137551,7 @@ paths:
                     trace_id: req_abc123xyz
         '404':
           description: Not found - The requested resource does not exist
-          headers: *id1039
+          headers: *id1065
           content:
             application/json:
               schema:
@@ -137241,7 +137593,7 @@ paths:
       responses:
         '200':
           description: Passage
-          headers: &id1040
+          headers: &id1066
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -137286,7 +137638,7 @@ paths:
                     format: date-time
         '401':
           description: Unauthorized - Authentication required or token invalid
-          headers: *id1040
+          headers: *id1066
           content:
             application/json:
               schema:
@@ -137306,7 +137658,7 @@ paths:
                     trace_id: req_abc123xyz
         '403':
           description: Forbidden - Insufficient permissions for this operation
-          headers: *id1040
+          headers: *id1066
           content:
             application/json:
               schema:
@@ -137328,7 +137680,7 @@ paths:
                     trace_id: req_abc123xyz
         '404':
           description: Not found - The requested resource does not exist
-          headers: *id1040
+          headers: *id1066
           content:
             application/json:
               schema:
@@ -137342,6 +137694,342 @@ paths:
                     resource_type: debate
                     resource_id: deb_abc123
                     trace_id: req_abc123xyz
+      x-aragora-stability: experimental
+  /api/v1/workspace/decisions/{decision_id}/rerun:
+    post:
+      tags:
+      - Decision Workspace
+      summary: Rerun a failed decision
+      operationId: rerunWorkspaceDecision
+      description: Start a new run of a `failed` decision with the same agents and rounds; earlier runs are kept. Returns
+        202 with the decision back in `debating`. A decision that is not `failed`, or already has a run in progress, answers
+        409, so a double submit starts only one run. Needs `decisions:update`. Requires a signed-in user with an organization
+        (401 without a user, 403 `org_required` without an org). Another organization's decision answers exactly like a missing
+        one (404).
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: decision_id
+        in: path
+        required: true
+        description: Decision id (the id of its decision plan).
+        schema:
+          type: string
+      responses:
+        '202':
+          description: Rerun started
+          headers: &id1080
+            X-Request-ID:
+              description: Unique request identifier for tracing and debugging
+              schema:
+                type: string
+                format: uuid
+            X-Response-Time:
+              description: Server processing time in milliseconds
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  question:
+                    type: string
+                  status:
+                    type: string
+                    enum:
+                    - debating
+                    - ready
+                    - failed
+                  agents:
+                    type: array
+                    items:
+                      type: string
+                  rounds:
+                    type: integer
+                  created_by:
+                    type: string
+                    nullable: true
+                  created_at:
+                    type: string
+                    format: date-time
+                  updated_at:
+                    type: string
+                    format: date-time
+                  current_revision_id:
+                    type: string
+                    nullable: true
+                  budget_usd:
+                    type: number
+                    nullable: true
+                  cost_actual_usd:
+                    type: number
+                  cost_estimated_usd:
+                    type: number
+                  source_count:
+                    type: integer
+                  passage_count:
+                    type: integer
+                  omitted_passage_count:
+                    type: integer
+                    description: Passages left out of the debate context by the context budget.
+                  run:
+                    type: object
+                    nullable: true
+                    properties:
+                      run_id: &id1067
+                        type: string
+                      status: &id1068
+                        type: string
+                        enum:
+                        - running
+                        - completed
+                        - failed
+                        - interrupted
+                        - budget_exceeded
+                      debate_id: &id1069
+                        type: string
+                        nullable: true
+                      agents: &id1070
+                        type: array
+                        items:
+                          type: string
+                      rounds: &id1071
+                        type: integer
+                      started_by: &id1072
+                        type: string
+                        nullable: true
+                      started_at: &id1073
+                        type: string
+                        format: date-time
+                      finished_at: &id1074
+                        type: string
+                        format: date-time
+                        nullable: true
+                      error: &id1075
+                        type: string
+                        nullable: true
+                      budget_usd: &id1076
+                        type: number
+                        nullable: true
+                      cost_actual_usd: &id1077
+                        type: number
+                        description: Cost reported by providers billed directly (for example grok).
+                      cost_estimated_usd: &id1078
+                        type: number
+                        description: Cost estimated from token counts for agents routed through a proxy.
+                      result:
+                        type: object
+                        nullable: true
+                        description: 'What the run captured, kept when it fails: context counts, the debate record (final
+                          answer, proposals, dissenting views, cruxes, evidence suggestions, transcript), per-agent costs
+                          and the synthesis attempts.'
+                  runs:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        run_id: *id1067
+                        status: *id1068
+                        debate_id: *id1069
+                        agents: *id1070
+                        rounds: *id1071
+                        started_by: *id1072
+                        started_at: *id1073
+                        finished_at: *id1074
+                        error: *id1075
+                        budget_usd: *id1076
+                        cost_actual_usd: *id1077
+                        cost_estimated_usd: *id1078
+                    description: Every run of the decision, newest first.
+                  current_revision:
+                    type: object
+                    nullable: true
+                    properties:
+                      revision_id:
+                        type: string
+                      number:
+                        type: integer
+                      parent_revision_id:
+                        type: string
+                        nullable: true
+                      status:
+                        type: string
+                        enum:
+                        - draft
+                        - current
+                        - superseded
+                      origin:
+                        type: string
+                        enum:
+                        - debate
+                        - user_edit
+                      author_id:
+                        type: string
+                        nullable: true
+                      content:
+                        type: object
+                        properties:
+                          recommendation:
+                            type: string
+                          citations: &id1079
+                            type: array
+                            items:
+                              type: object
+                              description: 'Mechanical checks only: whether the passage exists and whether the quote appears
+                                in it. Neither says the passage supports the claim.'
+                              properties:
+                                claim:
+                                  type: string
+                                passage_label:
+                                  type: string
+                                quote:
+                                  type: string
+                                  nullable: true
+                                passage_id:
+                                  type: string
+                                  nullable: true
+                                passage_exists:
+                                  type: boolean
+                                quote_provided:
+                                  type: boolean
+                                quote_found:
+                                  type: boolean
+                          alternatives:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                title:
+                                  type: string
+                                summary:
+                                  type: string
+                                why_not_chosen:
+                                  type: string
+                                citations: *id1079
+                          dissent:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                agent:
+                                  type: string
+                                  nullable: true
+                                position:
+                                  type: string
+                                citations: *id1079
+                          missing_evidence:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                question:
+                                  type: string
+                                why_it_matters:
+                                  type: string
+                          assumptions:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                statement:
+                                  type: string
+                                basis:
+                                  type: string
+                      content_hash:
+                        type: string
+                        description: SHA-256 of the RFC 8785 (JCS) canonical JSON of the decision id, revision number, parent
+                          revision id and `content`
+                      created_at:
+                        type: string
+                        format: date-time
+        '401':
+          description: Unauthorized - Authentication required or token invalid
+          headers: *id1080
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missing_token:
+                  summary: No authentication token
+                  value:
+                    error: Authentication required
+                    code: AUTH_REQUIRED
+                    trace_id: req_abc123xyz
+                invalid_token:
+                  summary: Invalid or expired token
+                  value:
+                    error: Invalid or expired authentication token
+                    code: INVALID_TOKEN
+                    trace_id: req_abc123xyz
+        '403':
+          description: Forbidden - Insufficient permissions for this operation
+          headers: *id1080
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                insufficient_permissions:
+                  summary: Insufficient permissions
+                  value:
+                    error: You do not have permission to access this resource
+                    code: FORBIDDEN
+                    required_role: admin
+                    trace_id: req_abc123xyz
+                resource_owner:
+                  summary: Not resource owner
+                  value:
+                    error: You do not have permission to modify this debate
+                    code: NOT_OWNER
+                    resource_type: debate
+                    trace_id: req_abc123xyz
+        '404':
+          description: Not found - The requested resource does not exist
+          headers: *id1080
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                not_found:
+                  summary: Resource not found
+                  value:
+                    error: Debate not found
+                    code: NOT_FOUND
+                    resource_type: debate
+                    resource_id: deb_abc123
+                    trace_id: req_abc123xyz
+        '409':
+          description: '`run_in_progress` (with `run_id`) or `decision_not_failed`'
+          headers: *id1080
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  code:
+                    type: string
+                  field:
+                    type: string
+                    nullable: true
+                  agent:
+                    type: string
+                  filename:
+                    type: string
+                  limit:
+                    type: integer
+                  run_id:
+                    type: string
+                    nullable: true
+                required:
+                - error
+                - code
       x-aragora-stability: experimental
   /api/v1/workspace/decisions/{decision_id}/sources:
     get:
@@ -137364,7 +138052,7 @@ paths:
       responses:
         '200':
           description: Sources
-          headers: &id1041
+          headers: &id1081
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -137435,7 +138123,7 @@ paths:
                                 type: boolean
         '401':
           description: Unauthorized - Authentication required or token invalid
-          headers: *id1041
+          headers: *id1081
           content:
             application/json:
               schema:
@@ -137455,7 +138143,7 @@ paths:
                     trace_id: req_abc123xyz
         '403':
           description: Forbidden - Insufficient permissions for this operation
-          headers: *id1041
+          headers: *id1081
           content:
             application/json:
               schema:
@@ -137477,7 +138165,7 @@ paths:
                     trace_id: req_abc123xyz
         '404':
           description: Not found - The requested resource does not exist
-          headers: *id1041
+          headers: *id1081
           content:
             application/json:
               schema:
@@ -137516,7 +138204,7 @@ paths:
       responses:
         '200':
           description: List of workspaces
-          headers: &id1042
+          headers: &id1082
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -137530,9 +138218,9 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkspaceList'
-        '401': &id1043
+        '401': &id1083
           description: Unauthorized - Authentication required or token invalid
-          headers: *id1042
+          headers: *id1082
           content:
             application/json:
               schema:
@@ -137587,14 +138275,14 @@ paths:
       responses:
         '201':
           description: Workspace created
-          headers: *id1042
+          headers: *id1082
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Workspace'
         '400':
           description: Bad request - Invalid input or malformed JSON
-          headers: *id1042
+          headers: *id1082
           content:
             application/json:
               schema:
@@ -137620,10 +138308,10 @@ paths:
                     code: INVALID_VALUE
                     field: rounds
                     trace_id: req_abc123xyz
-        '401': *id1043
+        '401': *id1083
         '403':
           description: Forbidden - Insufficient permissions for this operation
-          headers: *id1042
+          headers: *id1082
           content:
             application/json:
               schema:
@@ -137668,7 +138356,7 @@ paths:
       responses:
         '200':
           description: Available RBAC profiles with role details
-          headers: &id1044
+          headers: &id1084
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -137696,7 +138384,7 @@ paths:
                             type: string
         '401':
           description: Unauthorized - Authentication required or token invalid
-          headers: *id1044
+          headers: *id1084
           content:
             application/json:
               schema:
@@ -137733,7 +138421,7 @@ paths:
       responses:
         '200':
           description: Workspace details
-          headers: &id1045
+          headers: &id1085
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -137747,9 +138435,9 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Workspace'
-        '401': &id1046
+        '401': &id1086
           description: Unauthorized - Authentication required or token invalid
-          headers: *id1045
+          headers: *id1085
           content:
             application/json:
               schema:
@@ -137767,9 +138455,9 @@ paths:
                     error: Invalid or expired authentication token
                     code: INVALID_TOKEN
                     trace_id: req_abc123xyz
-        '403': &id1047
+        '403': &id1087
           description: Forbidden - Insufficient permissions for this operation
-          headers: *id1045
+          headers: *id1085
           content:
             application/json:
               schema:
@@ -137789,9 +138477,9 @@ paths:
                     code: NOT_OWNER
                     resource_type: debate
                     trace_id: req_abc123xyz
-        '404': &id1048
+        '404': &id1088
           description: Not found - The requested resource does not exist
-          headers: *id1045
+          headers: *id1085
           content:
             application/json:
               schema:
@@ -137823,7 +138511,7 @@ paths:
       responses:
         '200':
           description: Workspace deleted
-          headers: *id1045
+          headers: *id1085
           content:
             application/json:
               schema:
@@ -137833,9 +138521,9 @@ paths:
                     type: boolean
                   workspace_id:
                     type: string
-        '401': *id1046
-        '403': *id1047
-        '404': *id1048
+        '401': *id1086
+        '403': *id1087
+        '404': *id1088
       x-aragora-stability: stable
   /api/v1/workspaces/{workspace_id}/activity:
     get:
@@ -138048,7 +138736,7 @@ paths:
       responses:
         '200':
           description: Member added
-          headers: &id1049
+          headers: &id1089
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -138071,7 +138759,7 @@ paths:
                     type: string
         '400':
           description: Bad request - Invalid input or malformed JSON
-          headers: *id1049
+          headers: *id1089
           content:
             application/json:
               schema:
@@ -138099,7 +138787,7 @@ paths:
                     trace_id: req_abc123xyz
         '401':
           description: Unauthorized - Authentication required or token invalid
-          headers: *id1049
+          headers: *id1089
           content:
             application/json:
               schema:
@@ -138119,7 +138807,7 @@ paths:
                     trace_id: req_abc123xyz
         '403':
           description: Forbidden - Insufficient permissions for this operation
-          headers: *id1049
+          headers: *id1089
           content:
             application/json:
               schema:
@@ -138255,7 +138943,7 @@ paths:
       responses:
         '200':
           description: Role updated successfully
-          headers: &id1050
+          headers: &id1090
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -138278,7 +138966,7 @@ paths:
                     type: string
         '400':
           description: Bad request - Invalid input or malformed JSON
-          headers: *id1050
+          headers: *id1090
           content:
             application/json:
               schema:
@@ -138306,7 +138994,7 @@ paths:
                     trace_id: req_abc123xyz
         '401':
           description: Unauthorized - Authentication required or token invalid
-          headers: *id1050
+          headers: *id1090
           content:
             application/json:
               schema:
@@ -138326,7 +139014,7 @@ paths:
                     trace_id: req_abc123xyz
         '403':
           description: Forbidden - Insufficient permissions for this operation
-          headers: *id1050
+          headers: *id1090
           content:
             application/json:
               schema:
@@ -138348,7 +139036,7 @@ paths:
                     trace_id: req_abc123xyz
         '404':
           description: Not found - The requested resource does not exist
-          headers: *id1050
+          headers: *id1090
           content:
             application/json:
               schema:
@@ -138400,7 +139088,7 @@ paths:
       responses:
         '200':
           description: Workspace roles with assignment permissions
-          headers: &id1051
+          headers: &id1091
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -138427,7 +139115,7 @@ paths:
                     type: string
         '401':
           description: Unauthorized - Authentication required or token invalid
-          headers: *id1051
+          headers: *id1091
           content:
             application/json:
               schema:
@@ -138447,7 +139135,7 @@ paths:
                     trace_id: req_abc123xyz
         '403':
           description: Forbidden - Insufficient permissions for this operation
-          headers: *id1051
+          headers: *id1091
           content:
             application/json:
               schema:
@@ -138469,7 +139157,7 @@ paths:
                     trace_id: req_abc123xyz
         '404':
           description: Not found - The requested resource does not exist
-          headers: *id1051
+          headers: *id1091
           content:
             application/json:
               schema:
@@ -138655,9 +139343,9 @@ paths:
                           type: integer
                   total:
                     type: integer
-        '401': &id1053
+        '401': &id1093
           description: Unauthorized - Authentication required or token invalid
-          headers: &id1052
+          headers: &id1092
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -138684,9 +139372,9 @@ paths:
                     error: Invalid or expired authentication token
                     code: INVALID_TOKEN
                     trace_id: req_abc123xyz
-        '403': &id1054
+        '403': &id1094
           description: Forbidden - Insufficient permissions for this operation
-          headers: *id1052
+          headers: *id1092
           content:
             application/json:
               schema:
@@ -138706,9 +139394,9 @@ paths:
                     code: NOT_OWNER
                     resource_type: debate
                     trace_id: req_abc123xyz
-        '500': &id1055
+        '500': &id1095
           description: Internal server error - Unexpected error occurred
-          headers: *id1052
+          headers: *id1092
           content:
             application/json:
               schema:
@@ -138781,7 +139469,7 @@ paths:
                     type: string
         '400':
           description: Bad request - Invalid input or malformed JSON
-          headers: *id1052
+          headers: *id1092
           content:
             application/json:
               schema:
@@ -138807,15 +139495,15 @@ paths:
                     code: INVALID_VALUE
                     field: rounds
                     trace_id: req_abc123xyz
-        '401': *id1053
-        '403': *id1054
+        '401': *id1093
+        '403': *id1094
         '409':
           description: Another backup is already in progress
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-        '500': *id1055
+        '500': *id1095
       security:
       - bearerAuth: []
       x-aragora-stability: stable
@@ -138882,9 +139570,9 @@ paths:
                   expires_at:
                     type: string
                     format: date-time
-        '401': &id1057
+        '401': &id1097
           description: Unauthorized - Authentication required or token invalid
-          headers: &id1056
+          headers: &id1096
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -138911,9 +139599,9 @@ paths:
                     error: Invalid or expired authentication token
                     code: INVALID_TOKEN
                     trace_id: req_abc123xyz
-        '403': &id1058
+        '403': &id1098
           description: Forbidden - Insufficient permissions for this operation
-          headers: *id1056
+          headers: *id1096
           content:
             application/json:
               schema:
@@ -138933,9 +139621,9 @@ paths:
                     code: NOT_OWNER
                     resource_type: debate
                     trace_id: req_abc123xyz
-        '404': &id1059
+        '404': &id1099
           description: Not found - The requested resource does not exist
-          headers: *id1056
+          headers: *id1096
           content:
             application/json:
               schema:
@@ -138949,9 +139637,9 @@ paths:
                     resource_type: debate
                     resource_id: deb_abc123
                     trace_id: req_abc123xyz
-        '500': &id1060
+        '500': &id1100
           description: Internal server error - Unexpected error occurred
-          headers: *id1056
+          headers: *id1096
           content:
             application/json:
               schema:
@@ -138993,16 +139681,16 @@ paths:
                     type: boolean
                   backup_id:
                     type: string
-        '401': *id1057
-        '403': *id1058
-        '404': *id1059
+        '401': *id1097
+        '403': *id1098
+        '404': *id1099
         '409':
           description: Cannot delete an in-progress backup
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-        '500': *id1060
+        '500': *id1100
       security:
       - bearerAuth: []
       x-aragora-stability: stable
@@ -139071,7 +139759,7 @@ paths:
                     format: date-time
         '401':
           description: Unauthorized - Authentication required or token invalid
-          headers: &id1061
+          headers: &id1101
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -139100,7 +139788,7 @@ paths:
                     trace_id: req_abc123xyz
         '403':
           description: Forbidden - Insufficient permissions for this operation
-          headers: *id1061
+          headers: *id1101
           content:
             application/json:
               schema:
@@ -139122,7 +139810,7 @@ paths:
                     trace_id: req_abc123xyz
         '500':
           description: Internal server error - Unexpected error occurred
-          headers: *id1061
+          headers: *id1101
           content:
             application/json:
               schema:
@@ -139201,7 +139889,7 @@ paths:
                     format: date-time
         '401':
           description: Unauthorized - Authentication required or token invalid
-          headers: &id1062
+          headers: &id1102
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -139230,7 +139918,7 @@ paths:
                     trace_id: req_abc123xyz
         '403':
           description: Forbidden - Insufficient permissions for this operation
-          headers: *id1062
+          headers: *id1102
           content:
             application/json:
               schema:
@@ -139252,7 +139940,7 @@ paths:
                     trace_id: req_abc123xyz
         '404':
           description: Not found - The requested resource does not exist
-          headers: *id1062
+          headers: *id1102
           content:
             application/json:
               schema:
@@ -139268,7 +139956,7 @@ paths:
                     trace_id: req_abc123xyz
         '500':
           description: Internal server error - Unexpected error occurred
-          headers: *id1062
+          headers: *id1102
           content:
             application/json:
               schema:
@@ -139353,7 +140041,7 @@ paths:
                     format: date-time
         '401':
           description: Unauthorized - Authentication required or token invalid
-          headers: &id1063
+          headers: &id1103
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -139382,7 +140070,7 @@ paths:
                     trace_id: req_abc123xyz
         '403':
           description: Forbidden - Insufficient permissions for this operation
-          headers: *id1063
+          headers: *id1103
           content:
             application/json:
               schema:
@@ -139404,7 +140092,7 @@ paths:
                     trace_id: req_abc123xyz
         '500':
           description: Internal server error - Unexpected error occurred
-          headers: *id1063
+          headers: *id1103
           content:
             application/json:
               schema:
@@ -139497,9 +140185,9 @@ paths:
                   updated_at:
                     type: string
                     format: date-time
-        '401': &id1065
+        '401': &id1105
           description: Unauthorized - Authentication required or token invalid
-          headers: &id1064
+          headers: &id1104
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -139526,9 +140214,9 @@ paths:
                     error: Invalid or expired authentication token
                     code: INVALID_TOKEN
                     trace_id: req_abc123xyz
-        '403': &id1066
+        '403': &id1106
           description: Forbidden - Insufficient permissions for this operation
-          headers: *id1064
+          headers: *id1104
           content:
             application/json:
               schema:
@@ -139548,9 +140236,9 @@ paths:
                     code: NOT_OWNER
                     resource_type: debate
                     trace_id: req_abc123xyz
-        '404': &id1067
+        '404': &id1107
           description: Not found - The requested resource does not exist
-          headers: *id1064
+          headers: *id1104
           content:
             application/json:
               schema:
@@ -139564,9 +140252,9 @@ paths:
                     resource_type: debate
                     resource_id: deb_abc123
                     trace_id: req_abc123xyz
-        '500': &id1068
+        '500': &id1108
           description: Internal server error - Unexpected error occurred
-          headers: *id1064
+          headers: *id1104
           content:
             application/json:
               schema:
@@ -139646,7 +140334,7 @@ paths:
                     type: string
         '400':
           description: Bad request - Invalid input or malformed JSON
-          headers: *id1064
+          headers: *id1104
           content:
             application/json:
               schema:
@@ -139672,16 +140360,16 @@ paths:
                     code: INVALID_VALUE
                     field: rounds
                     trace_id: req_abc123xyz
-        '401': *id1065
-        '403': *id1066
-        '404': *id1067
+        '401': *id1105
+        '403': *id1106
+        '404': *id1107
         '409':
           description: Another DR execution is already in progress
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-        '500': *id1068
+        '500': *id1108
       security:
       - bearerAuth: []
       x-aragora-stability: experimental
@@ -139765,7 +140453,7 @@ paths:
                         type: boolean
         '401':
           description: Unauthorized - Authentication required or token invalid
-          headers: &id1069
+          headers: &id1109
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -139794,7 +140482,7 @@ paths:
                     trace_id: req_abc123xyz
         '500':
           description: Internal server error - Unexpected error occurred
-          headers: *id1069
+          headers: *id1109
           content:
             application/json:
               schema:
@@ -139847,7 +140535,7 @@ paths:
                     format: date-time
         '401':
           description: Unauthorized - Authentication required or token invalid
-          headers: &id1070
+          headers: &id1110
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -139876,7 +140564,7 @@ paths:
                     trace_id: req_abc123xyz
         '500':
           description: Internal server error - Unexpected error occurred
-          headers: *id1070
+          headers: *id1110
           content:
             application/json:
               schema:
@@ -139913,7 +140601,7 @@ paths:
                     format: date-time
         '401':
           description: Unauthorized - Authentication required or token invalid
-          headers: &id1071
+          headers: &id1111
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -139942,7 +140630,7 @@ paths:
                     trace_id: req_abc123xyz
         '500':
           description: Internal server error - Unexpected error occurred
-          headers: *id1071
+          headers: *id1111
           content:
             application/json:
               schema:
@@ -139994,7 +140682,7 @@ paths:
                     type: integer
         '401':
           description: Unauthorized - Authentication required or token invalid
-          headers: &id1072
+          headers: &id1112
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -140023,7 +140711,7 @@ paths:
                     trace_id: req_abc123xyz
         '500':
           description: Internal server error - Unexpected error occurred
-          headers: *id1072
+          headers: *id1112
           content:
             application/json:
               schema:
@@ -140064,7 +140752,7 @@ paths:
                     format: date-time
         '401':
           description: Unauthorized - Authentication required or token invalid
-          headers: &id1073
+          headers: &id1113
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -140093,7 +140781,7 @@ paths:
                     trace_id: req_abc123xyz
         '500':
           description: Internal server error - Unexpected error occurred
-          headers: *id1073
+          headers: *id1113
           content:
             application/json:
               schema:
@@ -140150,7 +140838,7 @@ paths:
                       type: string
         '400':
           description: Bad request - Invalid input or malformed JSON
-          headers: &id1074
+          headers: &id1114
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -140187,7 +140875,7 @@ paths:
                     trace_id: req_abc123xyz
         '401':
           description: Unauthorized - Authentication required or token invalid
-          headers: *id1074
+          headers: *id1114
           content:
             application/json:
               schema:
@@ -140207,7 +140895,7 @@ paths:
                     trace_id: req_abc123xyz
         '500':
           description: Internal server error - Unexpected error occurred
-          headers: *id1074
+          headers: *id1114
           content:
             application/json:
               schema:
@@ -140289,9 +140977,9 @@ paths:
                       type: object
                   health:
                     type: object
-        '400': &id1076
+        '400': &id1116
           description: Bad request - Invalid input or malformed JSON
-          headers: &id1075
+          headers: &id1115
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -140326,9 +141014,9 @@ paths:
                     code: INVALID_VALUE
                     field: rounds
                     trace_id: req_abc123xyz
-        '401': &id1077
+        '401': &id1117
           description: Unauthorized - Authentication required or token invalid
-          headers: *id1075
+          headers: *id1115
           content:
             application/json:
               schema:
@@ -140346,9 +141034,9 @@ paths:
                     error: Invalid or expired authentication token
                     code: INVALID_TOKEN
                     trace_id: req_abc123xyz
-        '404': &id1078
+        '404': &id1118
           description: Not found - The requested resource does not exist
-          headers: *id1075
+          headers: *id1115
           content:
             application/json:
               schema:
@@ -140362,9 +141050,9 @@ paths:
                     resource_type: debate
                     resource_id: deb_abc123
                     trace_id: req_abc123xyz
-        '500': &id1079
+        '500': &id1119
           description: Internal server error - Unexpected error occurred
-          headers: *id1075
+          headers: *id1115
           content:
             application/json:
               schema:
@@ -140422,10 +141110,10 @@ paths:
                     type: string
                   workspace_id:
                     type: string
-        '400': *id1076
-        '401': *id1077
-        '404': *id1078
-        '500': *id1079
+        '400': *id1116
+        '401': *id1117
+        '404': *id1118
+        '500': *id1119
       x-aragora-stability: stable
   /api/v2/integrations/{type}/health:
     get:
@@ -140497,7 +141185,7 @@ paths:
                 - healthy
         '400':
           description: Bad request - Invalid input or malformed JSON
-          headers: &id1080
+          headers: &id1120
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -140534,7 +141222,7 @@ paths:
                     trace_id: req_abc123xyz
         '401':
           description: Unauthorized - Authentication required or token invalid
-          headers: *id1080
+          headers: *id1120
           content:
             application/json:
               schema:
@@ -140554,7 +141242,7 @@ paths:
                     trace_id: req_abc123xyz
         '404':
           description: Not found - The requested resource does not exist
-          headers: *id1080
+          headers: *id1120
           content:
             application/json:
               schema:
@@ -140570,7 +141258,7 @@ paths:
                     trace_id: req_abc123xyz
         '500':
           description: Internal server error - Unexpected error occurred
-          headers: *id1080
+          headers: *id1120
           content:
             application/json:
               schema:
@@ -140638,7 +141326,7 @@ paths:
                     format: date-time
         '400':
           description: Bad request - Invalid input or malformed JSON
-          headers: &id1081
+          headers: &id1121
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -140675,7 +141363,7 @@ paths:
                     trace_id: req_abc123xyz
         '401':
           description: Unauthorized - Authentication required or token invalid
-          headers: *id1081
+          headers: *id1121
           content:
             application/json:
               schema:
@@ -140695,7 +141383,7 @@ paths:
                     trace_id: req_abc123xyz
         '404':
           description: Not found - The requested resource does not exist
-          headers: *id1081
+          headers: *id1121
           content:
             application/json:
               schema:
@@ -140711,7 +141399,7 @@ paths:
                     trace_id: req_abc123xyz
         '500':
           description: Internal server error - Unexpected error occurred
-          headers: *id1081
+          headers: *id1121
           content:
             application/json:
               schema:
@@ -141008,7 +141696,7 @@ paths:
       responses:
         '200':
           description: Marketplace categories.
-          headers: &id1082
+          headers: &id1122
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -141029,7 +141717,7 @@ paths:
                       type: string
         '500':
           description: Internal server error - Unexpected error occurred
-          headers: *id1082
+          headers: *id1122
           content:
             application/json:
               schema:
@@ -141124,7 +141812,7 @@ paths:
       responses:
         '200':
           description: Marketplace templates.
-          headers: &id1083
+          headers: &id1123
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -141149,9 +141837,9 @@ paths:
                     type: integer
                   offset:
                     type: integer
-        '400': &id1084
+        '400': &id1124
           description: Bad request - Invalid input or malformed JSON
-          headers: *id1083
+          headers: *id1123
           content:
             application/json:
               schema:
@@ -141177,9 +141865,9 @@ paths:
                     code: INVALID_VALUE
                     field: rounds
                     trace_id: req_abc123xyz
-        '500': &id1085
+        '500': &id1125
           description: Internal server error - Unexpected error occurred
-          headers: *id1083
+          headers: *id1123
           content:
             application/json:
               schema:
@@ -141233,7 +141921,7 @@ paths:
       responses:
         '201':
           description: Template created.
-          headers: *id1083
+          headers: *id1123
           content:
             application/json:
               schema:
@@ -141243,10 +141931,10 @@ paths:
                     type: string
                   success:
                     type: boolean
-        '400': *id1084
+        '400': *id1124
         '401':
           description: Unauthorized - Authentication required or token invalid
-          headers: *id1083
+          headers: *id1123
           content:
             application/json:
               schema:
@@ -141266,7 +141954,7 @@ paths:
                     trace_id: req_abc123xyz
         '403':
           description: Forbidden - Insufficient permissions for this operation
-          headers: *id1083
+          headers: *id1123
           content:
             application/json:
               schema:
@@ -141286,7 +141974,7 @@ paths:
                     code: NOT_OWNER
                     resource_type: debate
                     trace_id: req_abc123xyz
-        '500': *id1085
+        '500': *id1125
       x-aragora-stability: experimental
   /api/v2/marketplace/templates/import:
     post:
@@ -141329,7 +142017,7 @@ paths:
       responses:
         '201':
           description: Template imported.
-          headers: &id1086
+          headers: &id1126
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -141350,7 +142038,7 @@ paths:
                     type: boolean
         '400':
           description: Bad request - Invalid input or malformed JSON
-          headers: *id1086
+          headers: *id1126
           content:
             application/json:
               schema:
@@ -141378,7 +142066,7 @@ paths:
                     trace_id: req_abc123xyz
         '401':
           description: Unauthorized - Authentication required or token invalid
-          headers: *id1086
+          headers: *id1126
           content:
             application/json:
               schema:
@@ -141398,7 +142086,7 @@ paths:
                     trace_id: req_abc123xyz
         '403':
           description: Forbidden - Insufficient permissions for this operation
-          headers: *id1086
+          headers: *id1126
           content:
             application/json:
               schema:
@@ -141420,7 +142108,7 @@ paths:
                     trace_id: req_abc123xyz
         '500':
           description: Internal server error - Unexpected error occurred
-          headers: *id1086
+          headers: *id1126
           content:
             application/json:
               schema:
@@ -141446,13 +142134,13 @@ paths:
       - name: template_id
         in: path
         required: true
-        schema: &id1088
+        schema: &id1128
           type: string
         description: Marketplace template ID.
       responses:
         '200':
           description: Template details.
-          headers: &id1087
+          headers: &id1127
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -141487,9 +142175,9 @@ paths:
                     type: integer
                   average_rating:
                     type: number
-        '400': &id1089
+        '400': &id1129
           description: Bad request - Invalid input or malformed JSON
-          headers: *id1087
+          headers: *id1127
           content:
             application/json:
               schema:
@@ -141515,9 +142203,9 @@ paths:
                     code: INVALID_VALUE
                     field: rounds
                     trace_id: req_abc123xyz
-        '404': &id1090
+        '404': &id1130
           description: Not found - The requested resource does not exist
-          headers: *id1087
+          headers: *id1127
           content:
             application/json:
               schema:
@@ -141531,9 +142219,9 @@ paths:
                     resource_type: debate
                     resource_id: deb_abc123
                     trace_id: req_abc123xyz
-        '500': &id1091
+        '500': &id1131
           description: Internal server error - Unexpected error occurred
-          headers: *id1087
+          headers: *id1127
           content:
             application/json:
               schema:
@@ -141559,12 +142247,12 @@ paths:
       - name: template_id
         in: path
         required: true
-        schema: *id1088
+        schema: *id1128
         description: Marketplace template ID.
       responses:
         '200':
           description: Template deleted.
-          headers: *id1087
+          headers: *id1127
           content:
             application/json:
               schema:
@@ -141574,10 +142262,10 @@ paths:
                     type: boolean
                   deleted:
                     type: string
-        '400': *id1089
+        '400': *id1129
         '401':
           description: Unauthorized - Authentication required or token invalid
-          headers: *id1087
+          headers: *id1127
           content:
             application/json:
               schema:
@@ -141597,7 +142285,7 @@ paths:
                     trace_id: req_abc123xyz
         '403':
           description: Forbidden - Insufficient permissions for this operation
-          headers: *id1087
+          headers: *id1127
           content:
             application/json:
               schema:
@@ -141617,8 +142305,8 @@ paths:
                     code: NOT_OWNER
                     resource_type: debate
                     trace_id: req_abc123xyz
-        '404': *id1090
-        '500': *id1091
+        '404': *id1130
+        '500': *id1131
       x-aragora-stability: experimental
   /api/v2/marketplace/templates/{template_id}/export:
     get:
@@ -141644,7 +142332,7 @@ paths:
                 type: object
         '400':
           description: Bad request - Invalid input or malformed JSON
-          headers: &id1092
+          headers: &id1132
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -141681,7 +142369,7 @@ paths:
                     trace_id: req_abc123xyz
         '404':
           description: Not found - The requested resource does not exist
-          headers: *id1092
+          headers: *id1132
           content:
             application/json:
               schema:
@@ -141697,7 +142385,7 @@ paths:
                     trace_id: req_abc123xyz
         '500':
           description: Internal server error - Unexpected error occurred
-          headers: *id1092
+          headers: *id1132
           content:
             application/json:
               schema:
@@ -141723,13 +142411,13 @@ paths:
       - name: template_id
         in: path
         required: true
-        schema: &id1094
+        schema: &id1134
           type: string
         description: Marketplace template ID.
       responses:
         '200':
           description: Template ratings.
-          headers: &id1093
+          headers: &id1133
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -141762,9 +142450,9 @@ paths:
                     type: number
                   count:
                     type: integer
-        '400': &id1095
+        '400': &id1135
           description: Bad request - Invalid input or malformed JSON
-          headers: *id1093
+          headers: *id1133
           content:
             application/json:
               schema:
@@ -141790,9 +142478,9 @@ paths:
                     code: INVALID_VALUE
                     field: rounds
                     trace_id: req_abc123xyz
-        '404': &id1096
+        '404': &id1136
           description: Not found - The requested resource does not exist
-          headers: *id1093
+          headers: *id1133
           content:
             application/json:
               schema:
@@ -141806,9 +142494,9 @@ paths:
                     resource_type: debate
                     resource_id: deb_abc123
                     trace_id: req_abc123xyz
-        '500': &id1097
+        '500': &id1137
           description: Internal server error - Unexpected error occurred
-          headers: *id1093
+          headers: *id1133
           content:
             application/json:
               schema:
@@ -141834,7 +142522,7 @@ paths:
       - name: template_id
         in: path
         required: true
-        schema: *id1094
+        schema: *id1134
         description: Marketplace template ID.
       requestBody:
         required: true
@@ -141855,7 +142543,7 @@ paths:
       responses:
         '200':
           description: Template rating saved.
-          headers: *id1093
+          headers: *id1133
           content:
             application/json:
               schema:
@@ -141865,10 +142553,10 @@ paths:
                     type: boolean
                   average_rating:
                     type: number
-        '400': *id1095
+        '400': *id1135
         '401':
           description: Unauthorized - Authentication required or token invalid
-          headers: *id1093
+          headers: *id1133
           content:
             application/json:
               schema:
@@ -141888,7 +142576,7 @@ paths:
                     trace_id: req_abc123xyz
         '403':
           description: Forbidden - Insufficient permissions for this operation
-          headers: *id1093
+          headers: *id1133
           content:
             application/json:
               schema:
@@ -141908,8 +142596,8 @@ paths:
                     code: NOT_OWNER
                     resource_type: debate
                     trace_id: req_abc123xyz
-        '404': *id1096
-        '500': *id1097
+        '404': *id1136
+        '500': *id1137
       x-aragora-stability: experimental
   /api/v2/marketplace/templates/{template_id}/star:
     post:
@@ -141930,7 +142618,7 @@ paths:
       responses:
         '200':
           description: Template starred.
-          headers: &id1098
+          headers: &id1138
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -141951,7 +142639,7 @@ paths:
                     type: integer
         '400':
           description: Bad request - Invalid input or malformed JSON
-          headers: *id1098
+          headers: *id1138
           content:
             application/json:
               schema:
@@ -141979,7 +142667,7 @@ paths:
                     trace_id: req_abc123xyz
         '401':
           description: Unauthorized - Authentication required or token invalid
-          headers: *id1098
+          headers: *id1138
           content:
             application/json:
               schema:
@@ -141999,7 +142687,7 @@ paths:
                     trace_id: req_abc123xyz
         '403':
           description: Forbidden - Insufficient permissions for this operation
-          headers: *id1098
+          headers: *id1138
           content:
             application/json:
               schema:
@@ -142021,7 +142709,7 @@ paths:
                     trace_id: req_abc123xyz
         '404':
           description: Not found - The requested resource does not exist
-          headers: *id1098
+          headers: *id1138
           content:
             application/json:
               schema:
@@ -142037,7 +142725,7 @@ paths:
                     trace_id: req_abc123xyz
         '500':
           description: Internal server error - Unexpected error occurred
-          headers: *id1098
+          headers: *id1138
           content:
             application/json:
               schema:
@@ -142205,7 +142893,7 @@ paths:
                       type: number
         '400':
           description: Bad request - Invalid input or malformed JSON
-          headers: &id1099
+          headers: &id1139
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -142242,7 +142930,7 @@ paths:
                     trace_id: req_abc123xyz
         '401':
           description: Unauthorized - Authentication required or token invalid
-          headers: *id1099
+          headers: *id1139
           content:
             application/json:
               schema:
@@ -142262,7 +142950,7 @@ paths:
                     trace_id: req_abc123xyz
         '403':
           description: Forbidden - Insufficient permissions for this operation
-          headers: *id1099
+          headers: *id1139
           content:
             application/json:
               schema:
@@ -142284,7 +142972,7 @@ paths:
                     trace_id: req_abc123xyz
         '500':
           description: Internal server error - Unexpected error occurred
-          headers: *id1099
+          headers: *id1139
           content:
             application/json:
               schema:
@@ -142442,7 +143130,7 @@ paths:
                       type: string
         '400':
           description: Bad request - Invalid input or malformed JSON
-          headers: &id1100
+          headers: &id1140
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -142479,7 +143167,7 @@ paths:
                     trace_id: req_abc123xyz
         '401':
           description: Unauthorized - Authentication required or token invalid
-          headers: *id1100
+          headers: *id1140
           content:
             application/json:
               schema:
@@ -142499,7 +143187,7 @@ paths:
                     trace_id: req_abc123xyz
         '403':
           description: Forbidden - Insufficient permissions for this operation
-          headers: *id1100
+          headers: *id1140
           content:
             application/json:
               schema:
@@ -142521,7 +143209,7 @@ paths:
                     trace_id: req_abc123xyz
         '500':
           description: Internal server error - Unexpected error occurred
-          headers: *id1100
+          headers: *id1140
           content:
             application/json:
               schema:
@@ -142554,7 +143242,7 @@ paths:
       responses:
         '200':
           description: Deliberation status.
-          headers: &id1101
+          headers: &id1141
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -142613,7 +143301,7 @@ paths:
                         type: number
         '401':
           description: Unauthorized - Authentication required or token invalid
-          headers: *id1101
+          headers: *id1141
           content:
             application/json:
               schema:
@@ -142633,7 +143321,7 @@ paths:
                     trace_id: req_abc123xyz
         '403':
           description: Forbidden - Insufficient permissions for this operation
-          headers: *id1101
+          headers: *id1141
           content:
             application/json:
               schema:
@@ -142655,7 +143343,7 @@ paths:
                     trace_id: req_abc123xyz
         '404':
           description: Not found - The requested resource does not exist
-          headers: *id1101
+          headers: *id1141
           content:
             application/json:
               schema:
@@ -142671,7 +143359,7 @@ paths:
                     trace_id: req_abc123xyz
         '500':
           description: Internal server error - Unexpected error occurred
-          headers: *id1101
+          headers: *id1141
           content:
             application/json:
               schema:
@@ -142728,7 +143416,7 @@ paths:
       responses:
         '200':
           description: Orchestration template list.
-          headers: &id1102
+          headers: &id1142
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -142774,7 +143462,7 @@ paths:
                     type: integer
         '401':
           description: Unauthorized - Authentication required or token invalid
-          headers: *id1102
+          headers: *id1142
           content:
             application/json:
               schema:
@@ -142794,7 +143482,7 @@ paths:
                     trace_id: req_abc123xyz
         '403':
           description: Forbidden - Insufficient permissions for this operation
-          headers: *id1102
+          headers: *id1142
           content:
             application/json:
               schema:
@@ -142816,7 +143504,7 @@ paths:
                     trace_id: req_abc123xyz
         '500':
           description: Internal server error - Unexpected error occurred
-          headers: *id1102
+          headers: *id1142
           content:
             application/json:
               schema:
@@ -142842,7 +143530,7 @@ paths:
       responses:
         '200':
           description: Receipt list
-          headers: &id1103
+          headers: &id1143
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -142877,7 +143565,7 @@ paths:
                     type: integer
         '401':
           description: Unauthorized - Authentication required or token invalid
-          headers: *id1103
+          headers: *id1143
           content:
             application/json:
               schema:
@@ -142897,7 +143585,7 @@ paths:
                     trace_id: req_abc123xyz
         '500':
           description: Internal server error - Unexpected error occurred
-          headers: *id1103
+          headers: *id1143
           content:
             application/json:
               schema:
@@ -142924,7 +143612,7 @@ paths:
       responses:
         '200':
           description: Search results
-          headers: &id1104
+          headers: &id1144
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -142949,7 +143637,7 @@ paths:
                     type: string
         '401':
           description: Unauthorized - Authentication required or token invalid
-          headers: *id1104
+          headers: *id1144
           content:
             application/json:
               schema:
@@ -142969,7 +143657,7 @@ paths:
                     trace_id: req_abc123xyz
         '500':
           description: Internal server error - Unexpected error occurred
-          headers: *id1104
+          headers: *id1144
           content:
             application/json:
               schema:
@@ -143008,7 +143696,7 @@ paths:
       responses:
         '200':
           description: Shared receipt payload
-          headers: &id1105
+          headers: &id1145
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -143031,7 +143719,7 @@ paths:
                     type: integer
         '404':
           description: Not found - The requested resource does not exist
-          headers: *id1105
+          headers: *id1145
           content:
             application/json:
               schema:
@@ -143049,7 +143737,7 @@ paths:
           description: Share link expired or access limit reached
         '500':
           description: Internal server error - Unexpected error occurred
-          headers: *id1105
+          headers: *id1145
           content:
             application/json:
               schema:
@@ -143076,7 +143764,7 @@ paths:
       responses:
         '200':
           description: Signing public key
-          headers: &id1106
+          headers: &id1146
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -143099,7 +143787,7 @@ paths:
                     type: string
         '404':
           description: Not found - The requested resource does not exist
-          headers: *id1106
+          headers: *id1146
           content:
             application/json:
               schema:
@@ -143115,7 +143803,7 @@ paths:
                     trace_id: req_abc123xyz
         '500':
           description: Internal server error - Unexpected error occurred
-          headers: *id1106
+          headers: *id1146
           content:
             application/json:
               schema:
@@ -143142,7 +143830,7 @@ paths:
       responses:
         '200':
           description: Receipt stats
-          headers: &id1107
+          headers: &id1147
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -143172,7 +143860,7 @@ paths:
                     format: date-time
         '401':
           description: Unauthorized - Authentication required or token invalid
-          headers: *id1107
+          headers: *id1147
           content:
             application/json:
               schema:
@@ -143192,7 +143880,7 @@ paths:
                     trace_id: req_abc123xyz
         '500':
           description: Internal server error - Unexpected error occurred
-          headers: *id1107
+          headers: *id1147
           content:
             application/json:
               schema:
@@ -143310,7 +143998,7 @@ paths:
       responses:
         '200':
           description: Receipt details
-          headers: &id1108
+          headers: &id1148
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -143340,7 +144028,7 @@ paths:
                     type: object
         '401':
           description: Unauthorized - Authentication required or token invalid
-          headers: *id1108
+          headers: *id1148
           content:
             application/json:
               schema:
@@ -143360,7 +144048,7 @@ paths:
                     trace_id: req_abc123xyz
         '404':
           description: Not found - The requested resource does not exist
-          headers: *id1108
+          headers: *id1148
           content:
             application/json:
               schema:
@@ -143376,7 +144064,7 @@ paths:
                     trace_id: req_abc123xyz
         '500':
           description: Internal server error - Unexpected error occurred
-          headers: *id1108
+          headers: *id1148
           content:
             application/json:
               schema:
@@ -143421,12 +144109,12 @@ paths:
         '200':
           description: Exported receipt
           headers:
-            X-Request-ID: &id1109
+            X-Request-ID: &id1149
               description: Unique request identifier for tracing and debugging
               schema:
                 type: string
                 format: uuid
-            X-Response-Time: &id1110
+            X-Response-Time: &id1150
               description: Server processing time in milliseconds
               schema:
                 type: integer
@@ -143447,9 +144135,9 @@ paths:
                     type: string
         '401':
           description: Unauthorized - Authentication required or token invalid
-          headers: &id1111
-            X-Request-ID: *id1109
-            X-Response-Time: *id1110
+          headers: &id1151
+            X-Request-ID: *id1149
+            X-Response-Time: *id1150
           content:
             application/json:
               schema:
@@ -143469,7 +144157,7 @@ paths:
                     trace_id: req_abc123xyz
         '404':
           description: Not found - The requested resource does not exist
-          headers: *id1111
+          headers: *id1151
           content:
             application/json:
               schema:
@@ -143485,7 +144173,7 @@ paths:
                     trace_id: req_abc123xyz
         '500':
           description: Internal server error - Unexpected error occurred
-          headers: *id1111
+          headers: *id1151
           content:
             application/json:
               schema:
@@ -143548,7 +144236,7 @@ paths:
                     description: Channel-specific formatted content
         '400':
           description: Bad request - Invalid input or malformed JSON
-          headers: &id1112
+          headers: &id1152
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -143585,7 +144273,7 @@ paths:
                     trace_id: req_abc123xyz
         '401':
           description: Unauthorized - Authentication required or token invalid
-          headers: *id1112
+          headers: *id1152
           content:
             application/json:
               schema:
@@ -143605,7 +144293,7 @@ paths:
                     trace_id: req_abc123xyz
         '404':
           description: Not found - The requested resource does not exist
-          headers: *id1112
+          headers: *id1152
           content:
             application/json:
               schema:
@@ -143621,7 +144309,7 @@ paths:
                     trace_id: req_abc123xyz
         '500':
           description: Internal server error - Unexpected error occurred
-          headers: *id1112
+          headers: *id1152
           content:
             application/json:
               schema:
@@ -143703,7 +144391,7 @@ paths:
                     type: string
         '400':
           description: Bad request - Invalid input or malformed JSON
-          headers: &id1113
+          headers: &id1153
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -143740,7 +144428,7 @@ paths:
                     trace_id: req_abc123xyz
         '401':
           description: Unauthorized - Authentication required or token invalid
-          headers: *id1113
+          headers: *id1153
           content:
             application/json:
               schema:
@@ -143760,7 +144448,7 @@ paths:
                     trace_id: req_abc123xyz
         '404':
           description: Not found - The requested resource does not exist
-          headers: *id1113
+          headers: *id1153
           content:
             application/json:
               schema:
@@ -143776,7 +144464,7 @@ paths:
                     trace_id: req_abc123xyz
         '500':
           description: Internal server error - Unexpected error occurred
-          headers: *id1113
+          headers: *id1153
           content:
             application/json:
               schema:
@@ -143817,7 +144505,7 @@ paths:
       responses:
         '200':
           description: Receipt shared
-          headers: &id1114
+          headers: &id1154
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -143849,7 +144537,7 @@ paths:
                     - type: 'null'
         '401':
           description: Unauthorized - Authentication required or token invalid
-          headers: *id1114
+          headers: *id1154
           content:
             application/json:
               schema:
@@ -143869,7 +144557,7 @@ paths:
                     trace_id: req_abc123xyz
         '403':
           description: Forbidden - Insufficient permissions for this operation
-          headers: *id1114
+          headers: *id1154
           content:
             application/json:
               schema:
@@ -143891,7 +144579,7 @@ paths:
                     trace_id: req_abc123xyz
         '404':
           description: Not found - The requested resource does not exist
-          headers: *id1114
+          headers: *id1154
           content:
             application/json:
               schema:
@@ -143907,7 +144595,7 @@ paths:
                     trace_id: req_abc123xyz
         '500':
           description: Internal server error - Unexpected error occurred
-          headers: *id1114
+          headers: *id1154
           content:
             application/json:
               schema:
@@ -143929,7 +144617,7 @@ paths:
       summary: Verify receipt
       operationId: verifyReceiptById
       description: Verify receipt integrity.
-      security: &id1116
+      security: &id1156
       - bearerAuth: []
       parameters:
       - name: receipt_id
@@ -143940,7 +144628,7 @@ paths:
       responses:
         '200':
           description: Verification result
-          headers: &id1115
+          headers: &id1155
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -143964,9 +144652,9 @@ paths:
                   verified_at:
                     type: string
                     format: date-time
-        '401': &id1117
+        '401': &id1157
           description: Unauthorized - Authentication required or token invalid
-          headers: *id1115
+          headers: *id1155
           content:
             application/json:
               schema:
@@ -143984,9 +144672,9 @@ paths:
                     error: Invalid or expired authentication token
                     code: INVALID_TOKEN
                     trace_id: req_abc123xyz
-        '404': &id1118
+        '404': &id1158
           description: Not found - The requested resource does not exist
-          headers: *id1115
+          headers: *id1155
           content:
             application/json:
               schema:
@@ -144000,9 +144688,9 @@ paths:
                     resource_type: debate
                     resource_id: deb_abc123
                     trace_id: req_abc123xyz
-        '500': &id1119
+        '500': &id1159
           description: Internal server error - Unexpected error occurred
-          headers: *id1115
+          headers: *id1155
           content:
             application/json:
               schema:
@@ -144023,7 +144711,7 @@ paths:
       summary: Verify receipt integrity
       operationId: verifyReceiptIntegrity
       description: Verify receipt integrity with payload.
-      security: *id1116
+      security: *id1156
       parameters:
       - name: receipt_id
         in: path
@@ -144033,7 +144721,7 @@ paths:
       responses:
         '200':
           description: Integrity verification result
-          headers: *id1115
+          headers: *id1155
           content:
             application/json:
               schema:
@@ -144045,9 +144733,9 @@ paths:
                     type: boolean
                   integrity_verified:
                     type: boolean
-        '401': *id1117
-        '404': *id1118
-        '500': *id1119
+        '401': *id1157
+        '404': *id1158
+        '500': *id1159
       x-aragora-stability: experimental
   /api/v2/receipts/{receipt_id}/verify-signature:
     post:
@@ -144068,7 +144756,7 @@ paths:
       responses:
         '200':
           description: Signature verification result
-          headers: &id1120
+          headers: &id1160
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -144093,7 +144781,7 @@ paths:
                     type: string
         '401':
           description: Unauthorized - Authentication required or token invalid
-          headers: *id1120
+          headers: *id1160
           content:
             application/json:
               schema:
@@ -144113,7 +144801,7 @@ paths:
                     trace_id: req_abc123xyz
         '404':
           description: Not found - The requested resource does not exist
-          headers: *id1120
+          headers: *id1160
           content:
             application/json:
               schema:
@@ -144129,7 +144817,7 @@ paths:
                     trace_id: req_abc123xyz
         '500':
           description: Internal server error - Unexpected error occurred
-          headers: *id1120
+          headers: *id1160
           content:
             application/json:
               schema:
@@ -144769,9 +145457,9 @@ paths:
                   updated_at:
                     type: string
                     format: date-time
-        '404': &id1122
+        '404': &id1162
           description: Not found - The requested resource does not exist
-          headers: &id1121
+          headers: &id1161
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -144832,7 +145520,7 @@ paths:
       responses:
         '200':
           description: Vertical configuration updated
-          headers: *id1121
+          headers: *id1161
           content:
             application/json:
               schema:
@@ -144844,7 +145532,7 @@ paths:
                     type: string
         '400':
           description: Bad request - Invalid input or malformed JSON
-          headers: *id1121
+          headers: *id1161
           content:
             application/json:
               schema:
@@ -144870,7 +145558,7 @@ paths:
                     code: INVALID_VALUE
                     field: rounds
                     trace_id: req_abc123xyz
-        '404': *id1122
+        '404': *id1162
       security:
       - bearerAuth: []
       deprecated: true
@@ -144974,7 +145662,7 @@ paths:
       responses:
         '200':
           description: List of pending approvals
-          headers: &id1123
+          headers: &id1163
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -144997,7 +145685,7 @@ paths:
                     type: integer
         '401':
           description: Unauthorized - Authentication required or token invalid
-          headers: *id1123
+          headers: *id1163
           content:
             application/json:
               schema:
@@ -145050,7 +145738,7 @@ paths:
       responses:
         '200':
           description: Approval submitted
-          headers: &id1124
+          headers: &id1164
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -145073,7 +145761,7 @@ paths:
                     type: string
         '400':
           description: Bad request - Invalid input or malformed JSON
-          headers: *id1124
+          headers: *id1164
           content:
             application/json:
               schema:
@@ -145101,7 +145789,7 @@ paths:
                     trace_id: req_abc123xyz
         '401':
           description: Unauthorized - Authentication required or token invalid
-          headers: *id1124
+          headers: *id1164
           content:
             application/json:
               schema:
@@ -145121,7 +145809,7 @@ paths:
                     trace_id: req_abc123xyz
         '404':
           description: Not found - The requested resource does not exist
-          headers: *id1124
+          headers: *id1164
           content:
             application/json:
               schema:
@@ -145199,7 +145887,7 @@ paths:
       responses:
         '200':
           description: Execution details with step progress
-          headers: &id1125
+          headers: &id1165
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -145226,9 +145914,9 @@ paths:
                     type: array
                     items:
                       type: object
-        '404': &id1126
+        '404': &id1166
           description: Not found - The requested resource does not exist
-          headers: *id1125
+          headers: *id1165
           content:
             application/json:
               schema:
@@ -145258,7 +145946,7 @@ paths:
       responses:
         '200':
           description: Execution cancelled
-          headers: *id1125
+          headers: *id1165
           content:
             application/json:
               schema:
@@ -145270,7 +145958,7 @@ paths:
                     type: string
         '400':
           description: Bad request - Invalid input or malformed JSON
-          headers: *id1125
+          headers: *id1165
           content:
             application/json:
               schema:
@@ -145296,7 +145984,7 @@ paths:
                     code: INVALID_VALUE
                     field: rounds
                     trace_id: req_abc123xyz
-        '404': *id1126
+        '404': *id1166
       deprecated: true
       x-aragora-stability: deprecated
   /api/workflow-templates:
@@ -145345,7 +146033,7 @@ paths:
       responses:
         '200':
           description: Workflow template
-          headers: &id1127
+          headers: &id1167
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -145361,7 +146049,7 @@ paths:
                 $ref: '#/components/schemas/WorkflowTemplate'
         '404':
           description: Not found - The requested resource does not exist
-          headers: *id1127
+          headers: *id1167
           content:
             application/json:
               schema:
@@ -145480,7 +146168,7 @@ paths:
       responses:
         '201':
           description: Created template instance
-          headers: &id1128
+          headers: &id1168
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -145496,7 +146184,7 @@ paths:
                 $ref: '#/components/schemas/WorkflowTemplate'
         '400':
           description: Bad request - Invalid input or malformed JSON
-          headers: *id1128
+          headers: *id1168
           content:
             application/json:
               schema:
@@ -145524,7 +146212,7 @@ paths:
                     trace_id: req_abc123xyz
         '404':
           description: Not found - The requested resource does not exist
-          headers: *id1128
+          headers: *id1168
           content:
             application/json:
               schema:
@@ -145620,7 +146308,7 @@ paths:
       responses:
         '200':
           description: Workflow template details
-          headers: &id1129
+          headers: &id1169
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -145636,7 +146324,7 @@ paths:
                 $ref: '#/components/schemas/WorkflowTemplate'
         '404':
           description: Not found - The requested resource does not exist
-          headers: *id1129
+          headers: *id1169
           content:
             application/json:
               schema:
@@ -145818,7 +146506,7 @@ paths:
                     type: string
         '400':
           description: Bad request - Invalid input or malformed JSON
-          headers: &id1130
+          headers: &id1170
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -145855,7 +146543,7 @@ paths:
                     trace_id: req_abc123xyz
         '404':
           description: Not found - The requested resource does not exist
-          headers: *id1130
+          headers: *id1170
           content:
             application/json:
               schema:
@@ -145912,7 +146600,7 @@ paths:
       responses:
         '200':
           description: List of workflows with pagination
-          headers: &id1131
+          headers: &id1171
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -145973,14 +146661,14 @@ paths:
       responses:
         '201':
           description: Workflow created
-          headers: *id1131
+          headers: *id1171
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Workflow'
         '400':
           description: Bad request - Invalid input or malformed JSON
-          headers: *id1131
+          headers: *id1171
           content:
             application/json:
               schema:
@@ -146023,7 +146711,7 @@ paths:
       responses:
         '200':
           description: Workflow definition
-          headers: &id1132
+          headers: &id1172
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -146037,9 +146725,9 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Workflow'
-        '404': &id1133
+        '404': &id1173
           description: Not found - The requested resource does not exist
-          headers: *id1132
+          headers: *id1172
           content:
             application/json:
               schema:
@@ -146075,14 +146763,14 @@ paths:
       responses:
         '200':
           description: Workflow updated
-          headers: *id1132
+          headers: *id1172
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Workflow'
         '400':
           description: Bad request - Invalid input or malformed JSON
-          headers: *id1132
+          headers: *id1172
           content:
             application/json:
               schema:
@@ -146108,7 +146796,7 @@ paths:
                     code: INVALID_VALUE
                     field: rounds
                     trace_id: req_abc123xyz
-        '404': *id1133
+        '404': *id1173
       deprecated: true
       x-aragora-stability: deprecated
     delete:
@@ -146125,7 +146813,7 @@ paths:
       responses:
         '200':
           description: Workflow deleted
-          headers: *id1132
+          headers: *id1172
           content:
             application/json:
               schema:
@@ -146135,7 +146823,7 @@ paths:
                     type: boolean
                   workflow_id:
                     type: string
-        '404': *id1133
+        '404': *id1173
       deprecated: true
       x-aragora-stability: deprecated
   /api/workflows/{workflow_id}/execute:
@@ -146167,7 +146855,7 @@ paths:
       responses:
         '200':
           description: Workflow execution result or execution ID
-          headers: &id1134
+          headers: &id1174
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -146190,7 +146878,7 @@ paths:
                     type: object
         '400':
           description: Bad request - Invalid input or malformed JSON
-          headers: *id1134
+          headers: *id1174
           content:
             application/json:
               schema:
@@ -146218,7 +146906,7 @@ paths:
                     trace_id: req_abc123xyz
         '404':
           description: Not found - The requested resource does not exist
-          headers: *id1134
+          headers: *id1174
           content:
             application/json:
               schema:
@@ -146234,7 +146922,7 @@ paths:
                     trace_id: req_abc123xyz
         '500':
           description: Internal server error - Unexpected error occurred
-          headers: *id1134
+          headers: *id1174
           content:
             application/json:
               schema:
@@ -146269,7 +146957,7 @@ paths:
       responses:
         '200':
           description: List of workflow versions
-          headers: &id1135
+          headers: &id1175
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -146292,7 +146980,7 @@ paths:
                     type: integer
         '404':
           description: Not found - The requested resource does not exist
-          headers: *id1135
+          headers: *id1175
           content:
             application/json:
               schema:
@@ -146331,7 +147019,7 @@ paths:
       responses:
         '200':
           description: List of workspaces
-          headers: &id1136
+          headers: &id1176
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -146345,9 +147033,9 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkspaceList'
-        '401': &id1137
+        '401': &id1177
           description: Unauthorized - Authentication required or token invalid
-          headers: *id1136
+          headers: *id1176
           content:
             application/json:
               schema:
@@ -146402,14 +147090,14 @@ paths:
       responses:
         '201':
           description: Workspace created
-          headers: *id1136
+          headers: *id1176
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Workspace'
         '400':
           description: Bad request - Invalid input or malformed JSON
-          headers: *id1136
+          headers: *id1176
           content:
             application/json:
               schema:
@@ -146435,10 +147123,10 @@ paths:
                     code: INVALID_VALUE
                     field: rounds
                     trace_id: req_abc123xyz
-        '401': *id1137
+        '401': *id1177
         '403':
           description: Forbidden - Insufficient permissions for this operation
-          headers: *id1136
+          headers: *id1176
           content:
             application/json:
               schema:
@@ -146483,7 +147171,7 @@ paths:
       responses:
         '200':
           description: Available RBAC profiles with role details
-          headers: &id1138
+          headers: &id1178
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -146511,7 +147199,7 @@ paths:
                             type: string
         '401':
           description: Unauthorized - Authentication required or token invalid
-          headers: *id1138
+          headers: *id1178
           content:
             application/json:
               schema:
@@ -146548,7 +147236,7 @@ paths:
       responses:
         '200':
           description: Workspace details
-          headers: &id1139
+          headers: &id1179
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -146562,9 +147250,9 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Workspace'
-        '401': &id1140
+        '401': &id1180
           description: Unauthorized - Authentication required or token invalid
-          headers: *id1139
+          headers: *id1179
           content:
             application/json:
               schema:
@@ -146582,9 +147270,9 @@ paths:
                     error: Invalid or expired authentication token
                     code: INVALID_TOKEN
                     trace_id: req_abc123xyz
-        '403': &id1141
+        '403': &id1181
           description: Forbidden - Insufficient permissions for this operation
-          headers: *id1139
+          headers: *id1179
           content:
             application/json:
               schema:
@@ -146604,9 +147292,9 @@ paths:
                     code: NOT_OWNER
                     resource_type: debate
                     trace_id: req_abc123xyz
-        '404': &id1142
+        '404': &id1182
           description: Not found - The requested resource does not exist
-          headers: *id1139
+          headers: *id1179
           content:
             application/json:
               schema:
@@ -146638,7 +147326,7 @@ paths:
       responses:
         '200':
           description: Workspace deleted
-          headers: *id1139
+          headers: *id1179
           content:
             application/json:
               schema:
@@ -146648,9 +147336,9 @@ paths:
                     type: boolean
                   workspace_id:
                     type: string
-        '401': *id1140
-        '403': *id1141
-        '404': *id1142
+        '401': *id1180
+        '403': *id1181
+        '404': *id1182
       deprecated: true
       x-aragora-stability: deprecated
   /api/workspaces/{workspace_id}/members:
@@ -146688,7 +147376,7 @@ paths:
       responses:
         '200':
           description: Member added
-          headers: &id1143
+          headers: &id1183
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -146711,7 +147399,7 @@ paths:
                     type: string
         '400':
           description: Bad request - Invalid input or malformed JSON
-          headers: *id1143
+          headers: *id1183
           content:
             application/json:
               schema:
@@ -146739,7 +147427,7 @@ paths:
                     trace_id: req_abc123xyz
         '401':
           description: Unauthorized - Authentication required or token invalid
-          headers: *id1143
+          headers: *id1183
           content:
             application/json:
               schema:
@@ -146759,7 +147447,7 @@ paths:
                     trace_id: req_abc123xyz
         '403':
           description: Forbidden - Insufficient permissions for this operation
-          headers: *id1143
+          headers: *id1183
           content:
             application/json:
               schema:
@@ -146844,7 +147532,7 @@ paths:
       responses:
         '200':
           description: Role updated successfully
-          headers: &id1144
+          headers: &id1184
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -146867,7 +147555,7 @@ paths:
                     type: string
         '400':
           description: Bad request - Invalid input or malformed JSON
-          headers: *id1144
+          headers: *id1184
           content:
             application/json:
               schema:
@@ -146895,7 +147583,7 @@ paths:
                     trace_id: req_abc123xyz
         '401':
           description: Unauthorized - Authentication required or token invalid
-          headers: *id1144
+          headers: *id1184
           content:
             application/json:
               schema:
@@ -146915,7 +147603,7 @@ paths:
                     trace_id: req_abc123xyz
         '403':
           description: Forbidden - Insufficient permissions for this operation
-          headers: *id1144
+          headers: *id1184
           content:
             application/json:
               schema:
@@ -146937,7 +147625,7 @@ paths:
                     trace_id: req_abc123xyz
         '404':
           description: Not found - The requested resource does not exist
-          headers: *id1144
+          headers: *id1184
           content:
             application/json:
               schema:
@@ -146989,7 +147677,7 @@ paths:
       responses:
         '200':
           description: Workspace roles with assignment permissions
-          headers: &id1145
+          headers: &id1185
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -147016,7 +147704,7 @@ paths:
                     type: string
         '401':
           description: Unauthorized - Authentication required or token invalid
-          headers: *id1145
+          headers: *id1185
           content:
             application/json:
               schema:
@@ -147036,7 +147724,7 @@ paths:
                     trace_id: req_abc123xyz
         '403':
           description: Forbidden - Insufficient permissions for this operation
-          headers: *id1145
+          headers: *id1185
           content:
             application/json:
               schema:
@@ -147058,7 +147746,7 @@ paths:
                     trace_id: req_abc123xyz
         '404':
           description: Not found - The requested resource does not exist
-          headers: *id1145
+          headers: *id1185
           content:
             application/json:
               schema:
@@ -147650,9 +148338,9 @@ paths:
                         format: date-time
                       location:
                         type: string
-        '401': &id1147
+        '401': &id1187
           description: Unauthorized - Authentication required or token invalid
-          headers: &id1146
+          headers: &id1186
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -147679,9 +148367,9 @@ paths:
                     error: Invalid or expired authentication token
                     code: INVALID_TOKEN
                     trace_id: req_abc123xyz
-        '403': &id1148
+        '403': &id1188
           description: Forbidden - Insufficient permissions for this operation
-          headers: *id1146
+          headers: *id1186
           content:
             application/json:
               schema:
@@ -147701,9 +148389,9 @@ paths:
                     code: NOT_OWNER
                     resource_type: debate
                     trace_id: req_abc123xyz
-        '404': &id1149
+        '404': &id1189
           description: Not found - The requested resource does not exist
-          headers: *id1146
+          headers: *id1186
           content:
             application/json:
               schema:
@@ -147774,9 +148462,9 @@ paths:
                     type: string
                   displayName:
                     type: string
-        '400': &id1150
+        '400': &id1190
           description: Bad request - Invalid input or malformed JSON
-          headers: *id1146
+          headers: *id1186
           content:
             application/json:
               schema:
@@ -147802,9 +148490,9 @@ paths:
                     code: INVALID_VALUE
                     field: rounds
                     trace_id: req_abc123xyz
-        '401': *id1147
-        '403': *id1148
-        '404': *id1149
+        '401': *id1187
+        '403': *id1188
+        '404': *id1189
       security:
       - bearerAuth: []
       x-aragora-stability: stable
@@ -147867,10 +148555,10 @@ paths:
                     type: string
                   displayName:
                     type: string
-        '400': *id1150
-        '401': *id1147
-        '403': *id1148
-        '404': *id1149
+        '400': *id1190
+        '401': *id1187
+        '403': *id1188
+        '404': *id1189
       security:
       - bearerAuth: []
       x-aragora-stability: stable
@@ -147890,9 +148578,9 @@ paths:
       responses:
         '204':
           description: Group deleted successfully
-        '401': *id1147
-        '403': *id1148
-        '404': *id1149
+        '401': *id1187
+        '403': *id1188
+        '404': *id1189
       security:
       - bearerAuth: []
       x-aragora-stability: stable
@@ -148014,9 +148702,9 @@ paths:
                         format: date-time
                       location:
                         type: string
-        '401': &id1152
+        '401': &id1192
           description: Unauthorized - Authentication required or token invalid
-          headers: &id1151
+          headers: &id1191
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
               schema:
@@ -148043,9 +148731,9 @@ paths:
                     error: Invalid or expired authentication token
                     code: INVALID_TOKEN
                     trace_id: req_abc123xyz
-        '403': &id1153
+        '403': &id1193
           description: Forbidden - Insufficient permissions for this operation
-          headers: *id1151
+          headers: *id1191
           content:
             application/json:
               schema:
@@ -148065,9 +148753,9 @@ paths:
                     code: NOT_OWNER
                     resource_type: debate
                     trace_id: req_abc123xyz
-        '404': &id1154
+        '404': &id1194
           description: Not found - The requested resource does not exist
-          headers: *id1151
+          headers: *id1191
           content:
             application/json:
               schema:
@@ -148152,9 +148840,9 @@ paths:
                     type: string
                   active:
                     type: boolean
-        '400': &id1155
+        '400': &id1195
           description: Bad request - Invalid input or malformed JSON
-          headers: *id1151
+          headers: *id1191
           content:
             application/json:
               schema:
@@ -148180,9 +148868,9 @@ paths:
                     code: INVALID_VALUE
                     field: rounds
                     trace_id: req_abc123xyz
-        '401': *id1152
-        '403': *id1153
-        '404': *id1154
+        '401': *id1192
+        '403': *id1193
+        '404': *id1194
       security:
       - bearerAuth: []
       x-aragora-stability: stable
@@ -148247,10 +148935,10 @@ paths:
                     type: string
                   active:
                     type: boolean
-        '400': *id1155
-        '401': *id1152
-        '403': *id1153
-        '404': *id1154
+        '400': *id1195
+        '401': *id1192
+        '403': *id1193
+        '404': *id1194
       security:
       - bearerAuth: []
       x-aragora-stability: stable
@@ -148270,9 +148958,9 @@ paths:
       responses:
         '204':
           description: User deleted successfully
-        '401': *id1152
-        '403': *id1153
-        '404': *id1154
+        '401': *id1192
+        '403': *id1193
+        '404': *id1194
       security:
       - bearerAuth: []
       x-aragora-stability: stable

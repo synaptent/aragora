@@ -49,8 +49,11 @@ DEFAULT_FILES = [("files[]", "brief.md", MARKDOWN), ("files[]", "interviews.txt"
 
 
 @pytest.fixture(autouse=True)
-def no_debate_starter(monkeypatch):
-    monkeypatch.setattr(debate_hook, "_starter", None)
+def started(monkeypatch):
+    """A starter that accepts every run without debating, so decisions stay debating."""
+    requests: list[debate_hook.DebateStartRequest] = []
+    monkeypatch.setattr(debate_hook, "_starter", requests.append)
+    return requests
 
 
 def _create(server, authorization, fields=None, files=None, content_type=None):
@@ -136,21 +139,45 @@ def test_a_failed_write_removes_everything_already_written(server, users, env, m
     assert counts(env) == before
 
 
-def test_new_decision_is_handed_to_the_debate_hook(server, users, env, mode):
-    started: list[debate_hook.DebateStartRequest] = []
-    debate_hook.set_decision_debate_starter(started.append)
+def test_new_decision_is_handed_to_the_debate_hook(server, users, env, mode, started):
     status, body = _create(server, users.a)
     assert status == 202
     assert [(r.plan_id, r.org_id, r.user_id, r.question, r.agents, r.rounds) for r in started] == [
         (body["id"], ORG_A, "user-a", QUESTION, ("openai-api|gpt-5.5", "grok"), 1)
     ]
+    assert started[0].run_id == body["run"]["run_id"]
+    assert (body["status"], body["run"]["status"]) == ("debating", "running")
 
 
-def test_without_a_debate_runner_the_decision_stays_debating(server, users, env, mode):
+def _assert_failed_with_rerun_available(server, users, body, error_fragment):
+    assert (body["status"], body["run"]["status"]) == ("failed", "failed"), body
+    assert error_fragment in body["run"]["error"]
+    detail = dispatch(server, "GET", f"{BASE}/decisions/{body['id']}", users.a)[1]
+    assert (detail["status"], detail["run"]["error"]) == ("failed", body["run"]["error"])
+    workspace = workspace_store.get_workspace_store(plan_store_module.get_plan_store().db_path)
+    rerun = workspace.start_run(body["id"], ORG_A, "user-a")
+    assert rerun.status == "running"
+
+
+def test_without_a_debate_runner_the_decision_fails_with_rerun_available(
+    server, users, env, mode, monkeypatch
+):
+    monkeypatch.setattr(debate_hook, "_starter", None)
     status, body = _create(server, users.a)
     assert status == 202
-    detail = dispatch(server, "GET", f"{BASE}/decisions/{body['id']}", users.a)[1]
-    assert detail["status"] == "debating"
+    _assert_failed_with_rerun_available(server, users, body, "debate runner is not available")
+
+
+def test_a_runner_that_cannot_start_the_run_fails_the_decision(
+    server, users, env, mode, monkeypatch
+):
+    def refuse(request):
+        raise RuntimeError("no worker threads left")
+
+    monkeypatch.setattr(debate_hook, "_starter", refuse)
+    status, body = _create(server, users.a)
+    assert status == 202
+    _assert_failed_with_rerun_available(server, users, body, "RuntimeError: no worker threads left")
 
 
 def test_member_can_create(server, users, env, mode):

@@ -428,6 +428,10 @@ class DecisionsAPI:
             data["rounds"] = rounds
         return self._client._request("POST", "/api/v1/workspace/decisions", json=data)
 
+    def rerun_workspace_decision(self, decision_id: str) -> dict[str, Any]:
+        """Start a new run of a failed workspace decision; earlier runs are kept."""
+        return self._client._request("POST", f"/api/v1/workspace/decisions/{decision_id}/rerun")
+
 
 class AsyncDecisionsAPI:
     """Asynchronous decisions API."""
@@ -674,3 +678,9 @@ class AsyncDecisionsAPI:
         if rounds is not None:
             data["rounds"] = rounds
         return await self._client._request("POST", "/api/v1/workspace/decisions", json=data)
+
+    async def rerun_workspace_decision(self, decision_id: str) -> dict[str, Any]:
+        """Start a new run of a failed workspace decision; earlier runs are kept."""
+        return await self._client._request(
+            "POST", f"/api/v1/workspace/decisions/{decision_id}/rerun"
+        )
