@@ -1,9 +1,10 @@
 """Scan-mode prioritization for ``MetaPlanner``.
 
 ``MetaPlanner`` (``aragora.nomic.meta_planner``) inherits these methods: with
-``MetaPlannerConfig.scan_mode`` it ranks goals from local codebase signals (git log,
-untested modules, past regressions, pytest failures, lint, TODO comments, user feedback
-and the improvement queue) without any LLM call. Import the planner from
+``MetaPlannerConfig.scan_mode`` it ranks goals from local signals (recent git changes,
+untested modules, past regressions, pytest failures, lint, TODO comments, user feedback,
+the improvement queue, the strategic scanner, approved Goal Canvas goals, queued
+feedback goals and ``NextStepsRunner``) without any LLM call. Import the planner from
 ``aragora.nomic.meta_planner``.
 """
 
