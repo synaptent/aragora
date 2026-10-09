@@ -13,7 +13,6 @@
     "aragora/debate/orchestrator_runner.py": 2158,
     "aragora/debate/phases/feedback_phase.py": 2033,
     "aragora/debate/post_debate_coordinator.py": 2339,
-    "aragora/debate/team_selector.py": 2322,
     "aragora/gauntlet/receipt_models.py": 2344,
     "aragora/nomic/autonomous_orchestrator.py": 2944,
     "aragora/nomic/dev_coordination/core.py": 4387,
