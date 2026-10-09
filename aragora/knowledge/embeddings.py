@@ -7,14 +7,38 @@ using Weaviate as the vector database.
 
 from __future__ import annotations
 
+import json
 import logging
 import warnings
 from dataclasses import dataclass, field
 from typing import Any
 
+from aragora.knowledge.fact_store import OrgScopeRequiredError
 from aragora.knowledge.search.bm25 import BM25Index, HybridSearcher
 
 logger = logging.getLogger(__name__)
+
+_ORG_CHUNK_PREFIX = "org-scoped:"
+
+
+def chunk_namespace(workspace_id: str, org_id: str | None, *, require_org: bool = False) -> str:
+    """Return the key under which a workspace's chunks are stored and searched.
+
+    Organizations share one embedding store, so an organization's chunks are
+    keyed by (organization, workspace) inside the existing ``workspace_id``
+    property; the JSON pair keeps distinct pairs distinct. Writers without an
+    organization keep the bare workspace id, which may not use the reserved
+    prefix and so never equals an organization key. Readers pass
+    ``require_org`` and fail closed without an organization.
+    """
+    if org_id:
+        return _ORG_CHUNK_PREFIX + json.dumps([org_id, workspace_id])
+    if require_org:
+        raise OrgScopeRequiredError()
+    if workspace_id.startswith(_ORG_CHUNK_PREFIX):
+        raise ValueError("workspace id uses the reserved organization chunk prefix")
+    return workspace_id
+
 
 # Optional Weaviate import
 WeaviateConnectionError: type[Exception]

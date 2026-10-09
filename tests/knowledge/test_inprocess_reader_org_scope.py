@@ -12,6 +12,7 @@ from collections.abc import AsyncIterator, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -23,6 +24,11 @@ from aragora.audit.document_auditor import (
 )
 from aragora.audit.knowledge_adapter import AuditKnowledgeAdapter, KnowledgeAuditConfig
 from aragora.knowledge import integration
+from aragora.knowledge.embeddings import (
+    InMemoryEmbeddingService,
+    WeaviateEmbeddingService,
+    chunk_namespace,
+)
 from aragora.knowledge.fact_store import (
     FactStore,
     InMemoryFactStore,
@@ -144,6 +150,71 @@ class TestPipelineOrgScope:
                 await pipeline.get_facts()
         finally:
             await pipeline.stop()
+
+
+def _chunk_pipeline(org_id: str | None, service: Any) -> KnowledgePipeline:
+    config = PipelineConfig(workspace_id=WS, org_id=org_id, extract_facts=False)
+    return KnowledgePipeline(config, fact_store=InMemoryFactStore(), embedding_service=service)
+
+
+class TestChunkOrgScope:
+    """Two organizations share one embedding store and one workspace id."""
+
+    @pytest.mark.asyncio
+    async def test_search_returns_only_its_orgs_chunks(self) -> None:
+        shared = InMemoryEmbeddingService()
+        org_a, org_b = _chunk_pipeline("org-a", shared), _chunk_pipeline("org-b", shared)
+        a_doc = (await org_a.process_text(A_FACT, "a.txt")).document_id
+        try:
+            assert [m.document_id for m in await org_a.search("invoices")] == [a_doc]
+            assert [m.workspace_id for m in await org_a.search("invoices")] == [WS]
+            assert await org_b.search("invoices") == []
+            assert (await org_b.query("invoices")).evidence_ids == []
+            assert org_b.get_stats()["embedding_stats"]["total_chunks"] == 0
+        finally:
+            await org_a.stop()
+            await org_b.stop()
+
+    @pytest.mark.asyncio
+    async def test_search_without_org_fails_closed(self) -> None:
+        shared = InMemoryEmbeddingService()
+        writer, reader = _chunk_pipeline(None, shared), _chunk_pipeline("", shared)
+        org_a = _chunk_pipeline("org-a", shared)
+        await writer.process_text(NULL_FACT, "legacy.txt")
+        try:
+            with pytest.raises(OrgScopeRequiredError):
+                await reader.search("invoices")
+            with pytest.raises(OrgScopeRequiredError):
+                await reader.query("invoices")
+            assert await org_a.search("invoices") == []
+        finally:
+            for pipeline in (writer, reader, org_a):
+                await pipeline.stop()
+
+    @pytest.mark.asyncio
+    async def test_weaviate_writes_and_filters_by_the_org_key(self) -> None:
+        service = MagicMock(spec=WeaviateEmbeddingService)
+        service.embed_chunks = AsyncMock(return_value=1)
+        service.hybrid_search = AsyncMock(return_value=[])
+        keys = []
+        for org in ("org-a", "org-b"):
+            pipeline = _chunk_pipeline(org, service)
+            await pipeline.process_text(A_FACT, "a.txt")
+            await pipeline.search("invoices")
+            await pipeline.stop()
+            written = service.embed_chunks.await_args.args[1]
+            assert service.hybrid_search.await_args.args[1] == written
+            keys.append(written)
+        assert len({*keys, WS}) == 3
+
+    def test_chunk_keys_keep_every_pair_distinct(self) -> None:
+        pairs = [("a", "b/c"), ("a/b", "c"), ("a", "b"), ("b", "a")]
+        assert len({chunk_namespace(ws, org) for org, ws in pairs}) == len(pairs)
+        assert chunk_namespace(WS, None) == WS
+        with pytest.raises(ValueError, match="reserved"):
+            chunk_namespace(chunk_namespace(WS, "org-a"), None)
+        with pytest.raises(OrgScopeRequiredError):
+            chunk_namespace(WS, "", require_org=True)
 
 
 @pytest.fixture
@@ -289,6 +360,24 @@ class TestAuditAdapterOrgScope:
         assert [f["statement"] for f in enriched[0].related_facts] == [A_FACT]
         assert [r["statement"] for r in refs if r["type"] == "fact"] == [A_FACT]
         assert [f["statement"] for f in validation["supporting_facts"]] == [A_FACT]
+
+    @pytest.mark.asyncio
+    async def test_chunk_reads_stay_in_the_callers_org(
+        self, adapter: AuditKnowledgeAdapter
+    ) -> None:
+        chunk = {"chunk_id": "a1", "document_id": "doc-other", "content": FINDING.description}
+        assert adapter._embedding_service is not None
+        await adapter._embedding_service.embed_chunks([chunk], chunk_namespace(WS, "org-a"))
+
+        refs = {
+            org: [
+                r["chunk_id"]
+                for r in await adapter.query_for_cross_references(FINDING, org_id=org)
+                if r["type"] == "chunk"
+            ]
+            for org in ("org-a", "org-b")
+        }
+        assert refs == {"org-a": ["a1"], "org-b": []}
 
     @pytest.mark.asyncio
     async def test_reads_without_org_fail_closed(self, adapter: AuditKnowledgeAdapter) -> None:

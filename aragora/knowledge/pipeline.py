@@ -68,6 +68,7 @@ from aragora.knowledge.embeddings import (
     EmbeddingConfig,
     InMemoryEmbeddingService,
     WeaviateEmbeddingService,
+    chunk_namespace,
 )
 from aragora.knowledge.fact_store import FactStore, InMemoryFactStore, ScopedFactStore
 from aragora.knowledge.query_engine import DatasetQueryEngine, QueryOptions, SimpleQueryEngine
@@ -232,6 +233,13 @@ class KnowledgePipeline:
     @property
     def _org_id(self) -> str | None:
         return self.config.org_id or None
+
+    def _chunk_key(self, *, require_org: bool) -> str:
+        # A caller-built ScopedFactStore is the same trusted org boundary as config.org_id.
+        org_id = self._org_id
+        if org_id is None and isinstance(self._fact_store, ScopedFactStore):
+            org_id = self._fact_store.org_id
+        return chunk_namespace(self.config.workspace_id, org_id, require_org=require_org)
 
     def set_progress_callback(self, callback: Callable[[str, float, str], None]) -> None:
         """Set progress callback: callback(document_id, progress, message)."""
@@ -735,10 +743,11 @@ class KnowledgePipeline:
         # Embed in batches
         total_embedded = 0
         batch_size = self.config.embedding_batch_size
+        key = self._chunk_key(require_org=False)
 
         for i in range(0, len(chunk_data), batch_size):
             batch = chunk_data[i : i + batch_size]
-            count = await self._embedding_service.embed_chunks(batch, self.config.workspace_id)
+            count = await self._embedding_service.embed_chunks(batch, key)
             total_embedded += count
 
         return total_embedded
@@ -1007,15 +1016,22 @@ Include dates, numbers, names, and specific claims where possible."""
             limit: Maximum results
 
         Returns:
-            List of matching chunks
+            List of matching chunks of this pipeline's organization
+
+        Raises:
+            OrgScopeRequiredError: the pipeline has no organization
         """
         if not self._running:
             await self.start()
 
+        key = self._chunk_key(require_org=True)
         if not self._embedding_service:
             return []
 
-        return await self._embedding_service.hybrid_search(query, self.config.workspace_id, limit)
+        matches = await self._embedding_service.hybrid_search(query, key, limit)
+        for match in matches:
+            match.workspace_id = self.config.workspace_id
+        return matches
 
     async def get_facts(
         self,
@@ -1058,7 +1074,9 @@ Include dates, numbers, names, and specific claims where possible."""
         """Get pipeline statistics."""
         embedding_stats = {}
         if self._embedding_service:
-            embedding_stats = self._embedding_service.get_statistics(self.config.workspace_id)
+            embedding_stats = self._embedding_service.get_statistics(
+                self._chunk_key(require_org=True)
+            )
 
         fact_stats = {}
         if self._fact_store:

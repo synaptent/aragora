@@ -125,6 +125,8 @@ class AuditKnowledgeAdapter:
                 for c in chunks
             ]
 
+        from aragora.knowledge.embeddings import chunk_namespace
+
         workspace = workspace_id or self.config.workspace_id
         enriched = []
 
@@ -139,7 +141,7 @@ class AuditKnowledgeAdapter:
                     raise RuntimeError("Embedding service not initialized")
                 related = await self._embedding_service.hybrid_search(
                     query=chunk_content[:500],  # First 500 chars for query
-                    workspace_id=workspace,
+                    workspace_id=chunk_namespace(workspace, org_id, require_org=True),
                     limit=5,
                 )
 
@@ -318,6 +320,8 @@ class AuditKnowledgeAdapter:
         if not self._initialized or not self.config.enable_cross_reference:
             return []
 
+        from aragora.knowledge.embeddings import chunk_namespace
+
         workspace = workspace_id or self.config.workspace_id
         references: list[dict[str, Any]] = []
 
@@ -328,7 +332,7 @@ class AuditKnowledgeAdapter:
                 raise RuntimeError("Embedding service not initialized")
             results = await self._embedding_service.hybrid_search(
                 query=query,
-                workspace_id=workspace,
+                workspace_id=chunk_namespace(workspace, org_id, require_org=True),
                 limit=5,
             )
 

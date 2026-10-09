@@ -21,6 +21,7 @@ from aragora.knowledge.embeddings import (
     ChunkMatch,
     InMemoryEmbeddingService,
     WeaviateEmbeddingService,
+    chunk_namespace,
 )
 from aragora.knowledge.fact_store import FactStore, InMemoryFactStore, ScopedFactStore
 from aragora.knowledge.types import (
@@ -710,17 +711,21 @@ class SimpleQueryEngine:
     ) -> QueryResult:
         """Simple query that returns search results without agent analysis.
 
-        For basic search when agents aren't available. With org_id, facts are
-        read only within that org.
+        For basic search when agents aren't available. Facts and chunks are read
+        only within org_id, or the scoped fact store's org; without either the
+        query raises OrgScopeRequiredError.
         """
         options = options or QueryOptions()
         start_time = time.time()
 
-        # Search for relevant chunks
-        chunks = await self.search(question, workspace_id, options.max_chunks)
-
-        # Get relevant facts
+        # Facts first: a missing or mismatched org fails before any chunk is read.
         facts = await self.get_facts(question, workspace_id, limit=10, org_id=org_id)
+
+        scope = org_id
+        if scope is None and isinstance(self._fact_store, ScopedFactStore):
+            scope = self._fact_store.org_id
+        chunk_key = chunk_namespace(workspace_id, scope, require_org=True)
+        chunks = await self.search(question, chunk_key, options.max_chunks)
 
         # Build simple answer from chunks
         if chunks:

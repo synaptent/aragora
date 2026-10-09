@@ -730,7 +730,7 @@ class TestKnowledgePipelineIntegration:
     @pytest.mark.asyncio
     async def test_pipeline_search(self, pipeline_config):
         """Test searching through pipeline."""
-        pipeline = KnowledgePipeline(config=pipeline_config)
+        pipeline = KnowledgePipeline(config=pipeline_config, fact_store=_scoped_store())
         await pipeline.start()
 
         try:
