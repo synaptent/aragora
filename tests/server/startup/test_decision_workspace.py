@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -83,3 +84,31 @@ def test_a_failing_sweep_still_registers_the_runner(workspace, tmp_path, monkeyp
     monkeypatch.setattr(workspace_store.WorkspaceStore, "sweep_after_restart", broken)
     status = init_decision_workspace(tmp_path)
     assert (status["runner"], status["sweep_error"]) == (True, "OSError")
+
+
+async def test_parallel_startup_runs_the_workspace_init_with_the_nomic_dir(tmp_path, monkeypatch):
+    import aragora.server.startup.decision_workspace as startup_module
+    import aragora.server.startup.workers as workers
+    from aragora.server.startup.parallel import ParallelInitializer
+
+    for name in (
+        "init_workflow_checkpoint_persistence",
+        "init_webhook_dispatcher",
+        "init_slo_webhooks",
+        "init_gauntlet_run_recovery",
+    ):
+        monkeypatch.setattr(workers, name, MagicMock(return_value=0))
+    for name in (
+        "init_durable_job_queue_recovery",
+        "init_gauntlet_worker",
+        "init_backup_scheduler",
+        "init_notification_worker",
+    ):
+        monkeypatch.setattr(workers, name, AsyncMock(return_value=False))
+    init = MagicMock(return_value={"runner": True})
+    monkeypatch.setattr(startup_module, "init_decision_workspace", init)
+
+    results = await ParallelInitializer(nomic_dir=tmp_path)._init_workers()
+
+    init.assert_called_once_with(tmp_path)
+    assert results["decision_workspace"] == {"runner": True}

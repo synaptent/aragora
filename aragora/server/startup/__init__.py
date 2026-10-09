@@ -547,6 +547,9 @@ async def _init_all_components(
 
     # Recovery
     status["gauntlet_runs_recovered"] = init_gauntlet_run_recovery()
+    from aragora.server.startup.decision_workspace import init_decision_workspace
+
+    status["decision_workspace"] = init_decision_workspace(nomic_dir)
     status["durable_jobs_recovered"] = await init_durable_job_queue_recovery()
 
     # Workers and schedulers

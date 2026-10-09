@@ -681,6 +681,9 @@ class ParallelInitializer:
         results["webhook_dispatcher"] = init_webhook_dispatcher()
         results["slo_webhooks"] = init_slo_webhooks()
         results["gauntlet_runs_recovered"] = init_gauntlet_run_recovery()
+        from aragora.server.startup.decision_workspace import init_decision_workspace
+
+        results["decision_workspace"] = init_decision_workspace(self.nomic_dir)
 
         # Async initializers in parallel
         async_results = await asyncio.gather(
