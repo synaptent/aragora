@@ -194,6 +194,9 @@ class MockDecisionResultStore:
             return False
         return self.save(request_id, data, org_id=org_id)
 
+    def release_routing(self, request_id: str) -> None:
+        """Nothing to unpin: this store never evicts."""
+
     def get(self, request_id: str) -> dict[str, Any] | None:
         return self._results.get(request_id)
 

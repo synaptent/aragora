@@ -242,6 +242,13 @@ def _start_routing(request_id: str) -> bool:
 def _finish_routing(request_id: str) -> None:
     with _routing_request_ids_lock:
         _routing_request_ids.discard(request_id)
+    # The claim pinned the stored result against capacity eviction. A route that
+    # ends without a conditional save (a re-submit that was cancelled or raised)
+    # is unpinned only here. Unpinning after the discard means a same-id create
+    # answered 409 in between does not leave its pin behind.
+    store = _decision_result_store.get()
+    if store:
+        store.release_routing(request_id)
 
 
 def _discarded_result_response(request_id: str, scope: OrgScope) -> HandlerResult:
