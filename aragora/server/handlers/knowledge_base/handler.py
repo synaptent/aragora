@@ -144,7 +144,9 @@ _INDEX_ROUTE_METHODS = {
     "/api/v1/index/embed-batch": "POST",
     "/api/v1/index/search": "POST",
 }
-_MAX_EMBED_BATCH_TEXTS = 1000
+# The /api/v1/ml/embed limit. It also bounds the response, which is built in
+# memory: 100 vectors of 1,536 floats serialize to about 3.2 MB of JSON.
+_MAX_EMBED_BATCH_TEXTS = 100
 _MAX_EMBED_BATCH_SIZE = 100
 # About 2,048 tokens of English text: the input limit of the Gemini backend's
 # text-embedding-004 (OpenAI's text-embedding-3-small allows 8,191), so an

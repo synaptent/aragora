@@ -203,10 +203,30 @@ def test_embed_batch_caps_each_text_at_8192_characters(
         get_service.assert_not_called()
 
 
-@pytest.mark.parametrize(("count", "status"), [(125, 200), (126, 400)])
-def test_embed_batch_caps_the_request_at_one_million_characters(
+@pytest.mark.parametrize(("count", "status"), [(100, 200), (101, 400)])
+def test_embed_batch_caps_the_request_at_100_texts(
     registry_cls, hash_service, count: int, status: int
 ) -> None:
+    payload = {"texts": [f"text {i}" for i in range(count)]}
+    with patch(
+        "aragora.core.embeddings.service.get_embedding_service", return_value=hash_service
+    ) as get_service:
+        got, body = _dispatch(registry_cls, "POST", "/api/v1/index/embed-batch", payload)
+    assert got == status, body
+    if status == 200:
+        assert body["count"] == 100
+    else:
+        assert body["error"] == "At most 100 texts per request"
+        get_service.assert_not_called()
+
+
+@pytest.mark.parametrize(("count", "status"), [(125, 200), (126, 400)])
+def test_embed_batch_caps_the_request_at_one_million_characters(
+    registry_cls, hash_service, monkeypatch, count: int, status: int
+) -> None:
+    # 100 texts of at most 8,192 characters cannot reach the total, so lift the
+    # count cap to reach the total-characters check behind it.
+    monkeypatch.setattr(handler_module, "_MAX_EMBED_BATCH_TEXTS", 1000)
     # 125 x 8000 is exactly 1,000,000 characters; every text is under the per-text cap.
     payload = {"texts": [f"{i:08d}" + "y" * 7992 for i in range(count)]}
     with patch(
