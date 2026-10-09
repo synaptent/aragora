@@ -2812,10 +2812,78 @@ class TestStoreCapacityOnCreate:
         assert type(store)(db_path=tmp_path / "decision_results.db").count() == 3
 
     @pytest.mark.asyncio
+    async def test_resubmit_of_a_completed_id_under_capacity_pressure_keeps_its_result(
+        self, handler, tmp_path, monkeypatch
+    ):
+        import aragora.server.handlers.decision as mod
+
+        store = _capped_store(monkeypatch, tmp_path, max_entries=2)
+        assert mod._save_result(
+            "dec_reuse",
+            {"request_id": "dec_reuse", "status": "completed", "result": {"answer": "first"}},
+            org_id=ORG,
+            created_by=USER,
+        )
+        during = []
+
+        async def same_id_again_then_other_creates():
+            for request_id in ("dec_reuse", "dec_other_0", "dec_other_1"):
+                during.append((await _post_with_attachment(handler, request_id))[0])
+                assert ("dec_reuse", "completed") in _durable_statuses(tmp_path)
+
+        result, _doc_store, runs = await _post_with_attachment(
+            handler, "dec_reuse", same_id_again_then_other_creates
+        )
+
+        assert [_status(r) for r in during] == [409, 200, 200]
+        assert len(runs) == 1
+        assert (_status(result), _body(result)["status"]) == (200, "completed")
+        stored = store.get_for_org("dec_reuse", ORG)
+        assert stored["result"]["answer"] == _body(result)["answer"] != "first"
+        assert _durable_statuses(tmp_path) == [
+            ("dec_reuse", "completed"),
+            ("dec_other_1", "completed"),
+        ]
+        assert store._routing_ids == set()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "error",
+        [asyncio.CancelledError(), LookupError("boom"), RuntimeError("provider down")],
+        ids=["cancelled", "unexpected-error", "routing-error"],
+    )
+    @pytest.mark.parametrize("stored_status", ["completed", None], ids=["resubmit", "new-id"])
+    async def test_a_cancelled_or_failed_route_leaves_no_pin(
+        self, handler, tmp_path, monkeypatch, error, stored_status
+    ):
+        import aragora.server.handlers.decision as mod
+
+        store = _capped_store(monkeypatch, tmp_path, max_entries=2)
+        if stored_status:
+            record = {"request_id": "dec_pin", "status": stored_status}
+            assert mod._save_result("dec_pin", record, org_id=ORG, created_by=USER)
+        mock_router = MagicMock()
+        mock_router.route = AsyncMock(side_effect=error)
+
+        with (
+            patch(f"{_HANDLER}._get_decision_router", return_value=mock_router),
+            patch(f"{_HANDLER}.DecisionHandler.require_permission_or_error", return_value=_ALLOWED),
+            patch("aragora.core.decision.DecisionRequest") as mock_dr_cls,
+        ):
+            mock_dr_cls.from_http.return_value = _MockDecisionRequest(request_id="dec_pin")
+            with suppress(asyncio.CancelledError, LookupError):
+                await handler.handle_post(
+                    "/api/v1/decisions", {}, _make_http_handler({"content": "Q?"})
+                )
+
+        mock_router.route.assert_awaited_once()
+        assert store._routing_ids == set()
+
+    @pytest.mark.asyncio
     async def test_cancel_during_routing_still_answers_409_under_capacity_pressure(
         self, handler, tmp_path, monkeypatch
     ):
-        _capped_store(monkeypatch, tmp_path, max_entries=1)
+        store = _capped_store(monkeypatch, tmp_path, max_entries=1)
         during = []
 
         async def another_create_then_cancel():
@@ -2832,6 +2900,7 @@ class TestStoreCapacityOnCreate:
         assert _status(result) == 409
         assert (_body(result)["request_id"], _body(result)["status"]) == ("dec_cancel", "cancelled")
         assert _durable_statuses(tmp_path) == [("dec_cancel", "cancelled")]
+        assert store._routing_ids == set()
 
 
 # ---------------------------------------------------------------------------

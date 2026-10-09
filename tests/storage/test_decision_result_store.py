@@ -897,6 +897,86 @@ class TestClaimOfAnExpiredResult:
         assert _durable_rows(db_path)[0][2] == "org-b"
 
 
+class TestRoutingPin:
+    """A claimed result survives capacity eviction until its route saves or ends, whatever its status."""
+
+    @pytest.fixture
+    def db_path(self, tmp_path):
+        return tmp_path / "routing_pin.db"
+
+    @staticmethod
+    def _store(db_path: Path, path: str = "backend") -> DecisionResultStore:
+        store = DecisionResultStore(
+            db_path=db_path, ttl_seconds=10_000, max_entries=2, cleanup_interval=5
+        )
+        if path == "legacy":
+            store._backend = None  # the store's own-connection code path
+        return store
+
+    @pytest.mark.parametrize("path", ["backend", "legacy"])
+    def test_reclaimed_finished_result_survives_eviction_and_its_late_save_lands(
+        self, db_path, clock, path
+    ):
+        store = self._store(db_path, path)
+        store.save("reuse", {"status": "completed", "result": {"answer": "v1"}}, org_id="org-a")
+        clock.now = 1001.0
+        assert store.claim("reuse", {"status": "pending"}, org_id="org-a") == "completed"
+        assert store.get("reuse")["result"] == {"answer": "v1"}
+
+        with patch.object(store, "_forget_cached", wraps=store._forget_cached) as forget:
+            for i in range(2):
+                clock.now = 1002.0 + i
+                _create(store, f"other-{i}")
+                assert ("reuse", "completed") in _statuses(db_path)
+        assert all("reuse" not in c.args for c in forget.call_args_list)
+
+        clock.now = 1010.0
+        assert store.save_if_status(
+            "reuse",
+            {"status": "completed", "result": {"answer": "v2"}},
+            org_id="org-a",
+            expected_status="completed",
+        )
+        assert _statuses(db_path) == [("reuse", "completed"), ("other-1", "completed")]
+        assert store.get_for_org("reuse", "org-a")["result"] == {"answer": "v2"}
+        assert store._routing_ids == set()
+
+    @pytest.mark.parametrize("expected", ["completed", "cancelled"], ids=["saved", "mismatched"])
+    def test_a_conditional_save_releases_the_pin_whatever_its_result(
+        self, db_path, clock, expected
+    ):
+        store = self._store(db_path)
+        store.save("reuse", {"status": "completed"}, org_id="org-a")
+        assert store.claim("reuse", {"status": "pending"}, org_id="org-a") == "completed"
+        assert store.claim("new", {"status": "pending"}, org_id="org-a") == "pending"
+        assert store._routing_ids == {"reuse", "new"}
+
+        saved = store.save_if_status(
+            "reuse", {"status": "failed"}, org_id="org-a", expected_status=expected
+        )
+
+        assert saved is (expected == "completed")
+        assert store._routing_ids == {"new"}
+
+    def test_released_or_conflicting_claims_leave_no_pin(self, db_path, clock):
+        store = self._store(db_path)
+        store.save("reuse", {"status": "completed"}, org_id="org-a")
+        clock.now = 1000.5
+        store.save("theirs", {"status": "completed"}, org_id="org-b")
+        assert store.claim("reuse", {"status": "pending"}, org_id="org-a") == "completed"
+        with pytest.raises(DecisionOwnershipConflict):
+            store.claim("theirs", {"status": "pending"}, org_id="org-a")
+
+        for _ in range(2):
+            store.release_routing("reuse")
+        store.release_routing("never-claimed")
+
+        assert store._routing_ids == set()
+        clock.now = 1001.0
+        _create(store, "newer")
+        assert [row[0] for row in _durable_rows(db_path)] == ["theirs", "newer"]
+
+
 class _RecordingPostgreSQLBackend:
     """Stands in for PostgreSQLBackend: records each statement and answers the store's reads."""
 
@@ -987,14 +1067,16 @@ class TestPostgreSQLMaintenance:
         ]
         return purges, evictions
 
-    def _assert_maintained(self, backend) -> None:
+    def _assert_maintained(self, backend, pinned: tuple[str, ...] = ()) -> None:
         purges, evictions = self._maintenance(backend)
         assert len(purges) == 1
         assert len(evictions) == 1
         sql, params = evictions[0]
         assert sql.startswith("DELETE FROM decision_results WHERE request_id IN (")
-        assert "status NOT IN (?, ?, ?)" in sql
-        assert params[1:] == ("pending", "running", "processing", 1)
+        unpinned = f" AND request_id NOT IN ({', '.join('?' for _ in pinned)})" if pinned else ""
+        assert f"status NOT IN (?, ?, ?){unpinned} ORDER BY" in sql
+        assert params[1:] == ("pending", "running", "processing", *pinned, 1)
+        # The SELECT that picks the ids to drop from the read cache has the same predicate.
         selected = [(s, p) for s, p in backend.statements if s.startswith("SELECT request_id")]
         assert selected == [(sql.removeprefix(_EVICT_PREFIX).removesuffix(" )"), params)]
 
@@ -1003,12 +1085,33 @@ class TestPostgreSQLMaintenance:
 
         clock.now += 10
         assert pg_store.claim("req-1", {"status": "pending"}, org_id="org-a") == "pending"
-        self._assert_maintained(backend)
+        self._assert_maintained(backend, pinned=("req-1",))
 
         backend.statements.clear()
         clock.now += 10
         assert pg_store.save_if_status(
             "req-1", {"status": "completed"}, org_id="org-a", expected_status="pending"
+        )
+        self._assert_maintained(backend)
+
+    def test_reclaimed_results_are_never_selected_for_eviction(self, pg_store, clock):
+        backend = pg_store._backend
+        backend.owner = ("org-a", "completed")
+        clock.now += 10
+        assert pg_store.claim("reuse", {"status": "pending"}, org_id="org-a") == "completed"
+        self._assert_maintained(backend, pinned=("reuse",))
+
+        backend.statements.clear()
+        backend.owner = ("org-a", "pending")
+        clock.now += 10
+        assert pg_store.claim("other", {"status": "pending"}, org_id="org-a") == "pending"
+        self._assert_maintained(backend, pinned=("other", "reuse"))
+
+        backend.statements.clear()
+        pg_store.release_routing("other")
+        clock.now += 10
+        assert pg_store.save_if_status(
+            "reuse", {"status": "completed"}, org_id="org-a", expected_status="completed"
         )
         self._assert_maintained(backend)
 

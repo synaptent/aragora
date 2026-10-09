@@ -172,6 +172,10 @@ class DecisionResultStore:
         self._cache: OrderedDict[str, DecisionResultEntry] = OrderedDict()
         self._cache_lock = threading.Lock()
 
+        # Ids claimed for routing in this process (see claim()); eviction skips them.
+        self._routing_ids: set[str] = set()
+        self._routing_lock = threading.Lock()
+
         # ContextVar for per-async-context connection (async-safe replacement for threading.local)
         self._conn_var: contextvars.ContextVar[sqlite3.Connection | None] = contextvars.ContextVar(
             f"decisionresult_conn_{id(self)}", default=None
@@ -457,6 +461,11 @@ class DecisionResultStore:
         result counts as absent, as in ``get()``: it is deleted first, whichever
         org owned it, and the id is claimed fresh.
 
+        The claimed id stays pinned in this process until ``save_if_status()``
+        or ``release_routing()`` for it. Capacity eviction skips pinned results,
+        so a re-submitted result that is already finished is not evicted
+        before the routing saves its new outcome.
+
         Raises:
             DecisionOwnershipConflict: ``request_id`` belongs to another org or
                 to no org. Nothing is written.
@@ -483,8 +492,15 @@ class DecisionResultStore:
             raise DecisionOwnershipConflict(
                 f"Decision result {request_id} belongs to another owner"
             )
+        with self._routing_lock:
+            self._routing_ids.add(request_id)
         self._run_maintenance()
         return str(row[1])
+
+    def release_routing(self, request_id: str) -> None:
+        """Unpin ``request_id`` after its routing ends; a no-op when it is not pinned."""
+        with self._routing_lock:
+            self._routing_ids.discard(request_id)
 
     def save_if_status(
         self,
@@ -499,6 +515,7 @@ class DecisionResultStore:
         The check and the write are one statement, so a concurrent change (for
         example a cancel) is never overwritten. Returns False, writing nothing,
         when the result is missing, owned elsewhere, or no longer in that status.
+        Either way the id is unpinned (see ``claim()``).
         """
         params = (
             data.get("status", "unknown"),
@@ -510,7 +527,10 @@ class DecisionResultStore:
             org_id,
             expected_status,
         )
-        saved = self._execute_counted(self._SAVE_IF_STATUS_SQL, params) > 0
+        try:
+            saved = self._execute_counted(self._SAVE_IF_STATUS_SQL, params) > 0
+        finally:
+            self.release_routing(request_id)
         self._forget_cached(request_id)
         if saved:
             self._run_maintenance()
@@ -812,24 +832,37 @@ class DecisionResultStore:
         except (OSError, RuntimeError, sqlite3.Error) as e:
             logger.warning("Failed to cleanup expired results: %s", e)
 
-    # Every live row counts toward max_entries, but only finished ones are evicted:
-    # deleting an in-flight row would make its pending conditional save find nothing.
-    _OLDEST_FINISHED_SQL = f"""
+    # Every live row counts toward max_entries, but in-flight rows and rows pinned
+    # by a route in this process are never evicted: deleting one would make its
+    # pending conditional save find nothing.
+    _OLDEST_EVICTABLE_SQL = """
         SELECT request_id FROM decision_results
         WHERE expires_at > ?
-          AND status NOT IN ({", ".join("?" for _ in _IN_FLIGHT_STATUSES)})
+          AND status NOT IN ({in_flight}){unpinned}
         ORDER BY created_at ASC
         LIMIT ?
     """
-    _EVICT_OLDEST_FINISHED_SQL = (
-        f"DELETE FROM decision_results WHERE request_id IN ({_OLDEST_FINISHED_SQL})"
-    )
+
+    def _eviction_statements(self, excess: int) -> tuple[str, str, tuple]:
+        """The SELECT and the DELETE of the ``excess`` oldest evictable results, and their params.
+
+        Both use one predicate, so the ids dropped from the read cache are the deleted ones.
+        """
+        with self._routing_lock:
+            pinned = tuple(sorted(self._routing_ids))
+        select = self._OLDEST_EVICTABLE_SQL.format(
+            in_flight=", ".join("?" for _ in _IN_FLIGHT_STATUSES),
+            unpinned=f" AND request_id NOT IN ({', '.join('?' for _ in pinned)})" if pinned else "",
+        )
+        delete = f"DELETE FROM decision_results WHERE request_id IN ({select})"
+        return select, delete, (time.time(), *_IN_FLIGHT_STATUSES, *pinned, excess)
 
     def _enforce_max_entries(self) -> None:
         """Evict the oldest finished results while live results exceed ``max_entries``.
 
-        Results in ``_IN_FLIGHT_STATUSES`` are never evicted, so the store can hold
-        more than ``max_entries`` rows while that many decisions are in flight.
+        Results in ``_IN_FLIGHT_STATUSES`` and ids pinned by ``claim()`` are never
+        evicted, so the store can hold more than ``max_entries`` rows while that
+        many decisions are routing.
         """
         try:
             if self._backend is not None:
@@ -841,9 +874,9 @@ class DecisionResultStore:
 
                 if count > self._max_entries:
                     excess = count - self._max_entries
-                    params = (time.time(), *_IN_FLIGHT_STATUSES, excess)
-                    evicted = self._backend.fetch_all(self._OLDEST_FINISHED_SQL, params)
-                    self._backend.execute_write(self._EVICT_OLDEST_FINISHED_SQL, params)
+                    select, delete, params = self._eviction_statements(excess)
+                    evicted = self._backend.fetch_all(select, params)
+                    self._backend.execute_write(delete, params)
                     self._forget_cached(*(row[0] for row in evicted))
                     logger.info(
                         "LRU evicted up to %s decision results (max: %s)",
@@ -860,10 +893,9 @@ class DecisionResultStore:
             count = cursor.fetchone()[0]
 
             if count > self._max_entries:
-                excess = count - self._max_entries
-                params = (time.time(), *_IN_FLIGHT_STATUSES, excess)
-                evicted = conn.execute(self._OLDEST_FINISHED_SQL, params).fetchall()
-                cursor = conn.execute(self._EVICT_OLDEST_FINISHED_SQL, params)
+                select, delete, params = self._eviction_statements(count - self._max_entries)
+                evicted = conn.execute(select, params).fetchall()
+                cursor = conn.execute(delete, params)
                 conn.commit()
                 self._forget_cached(*(row[0] for row in evicted))
                 logger.info(
