@@ -40,7 +40,7 @@ _critique_limiter = RateLimiter(requests_per_minute=60)
 # Check if CritiqueStore is available
 CRITIQUE_STORE_AVAILABLE = is_critique_store_available()
 
-from aragora.server.errors import safe_error_message as _safe_error_message
+from aragora.api_errors import safe_error_message as _safe_error_message
 
 
 class CritiqueHandler(BaseHandler):

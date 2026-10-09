@@ -52,7 +52,7 @@ RelationshipTracker: type[RelationshipTrackerType] | None = _relationship_import
 ]
 AgentRelationship: type[AgentRelationshipType] | None = _relationship_imports["AgentRelationship"]
 
-from aragora.server.errors import safe_error_message as _safe_error_message
+from aragora.api_errors import safe_error_message as _safe_error_message
 
 # =============================================================================
 # Score Computation Utilities
@@ -244,7 +244,7 @@ class RelationshipHandler(BaseHandler):
                     (5, "agent_b", SAFE_AGENT_PATTERN),
                 ],
             )
-            if err:
+            if err or params is None:
                 return err
             return self._get_pair_detail(nomic_dir, params["agent_a"], params["agent_b"])
 
@@ -252,7 +252,7 @@ class RelationshipHandler(BaseHandler):
 
     def _get_tracker(self, nomic_dir: Path | None) -> RelationshipTrackerType | None:
         """Get or create a RelationshipTracker instance."""
-        if not RELATIONSHIP_TRACKER_AVAILABLE:
+        if not RELATIONSHIP_TRACKER_AVAILABLE or RelationshipTracker is None:
             return None
         try:
             # Use the positions DB if nomic_dir is set
@@ -389,7 +389,7 @@ class RelationshipHandler(BaseHandler):
             most_connected = None
             if agent_relationship_counts:
                 most_connected_name = max(
-                    agent_relationship_counts, key=agent_relationship_counts.get
+                    agent_relationship_counts, key=agent_relationship_counts.__getitem__
                 )
                 most_connected = {
                     "name": most_connected_name,
