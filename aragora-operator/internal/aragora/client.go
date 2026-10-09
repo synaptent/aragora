@@ -65,7 +65,9 @@ func sharedHTTPClient(endpoint string) *httpclient.Client {
 	if hc, ok := sharedHTTPClients[endpoint]; ok {
 		return hc
 	}
-	cfg := httpclient.DefaultConfig("aragora-api " + endpoint)
+	// The breaker label is logged with every request, so it must not carry
+	// the credentials an endpoint URL can hold.
+	cfg := httpclient.DefaultConfig(httpclient.EndpointLabel(endpoint, "aragora-api"))
 	cfg.Transport = observability.WrapTransport(nil)
 	cfg.Logger = logf.Log.WithName("aragora-client")
 	hc := httpclient.New(cfg)
@@ -362,7 +364,7 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body []byte
 
 	req, err := http.NewRequestWithContext(ctx, method, url, bodyReader)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, fmt.Errorf("failed to create request: %w", httpclient.RedactError(err))
 	}
 
 	req.Header.Set("Content-Type", "application/json")

@@ -157,3 +157,30 @@ func TestWaitForKubeConfigStopsOnCancel(t *testing.T) {
 		t.Fatalf("waitForKubeConfig ignored cancellation for %s", elapsed)
 	}
 }
+
+// TestRunRefusesInsecureEndpointWithoutLoggingCredentials runs the operator
+// with an http:// endpoint that carries synthetic credentials. run installs
+// the process-wide logger, which controller-runtime accepts only once, so no
+// other test in this package may call run.
+func TestRunRefusesInsecureEndpointWithoutLoggingCredentials(t *testing.T) {
+	const password, queryToken = "SYNTHETIC_PASSWORD_main_8d1f", "SYNTHETIC_QUERY_TOKEN_main_8d1f"
+	o := bindFlags(flag.NewFlagSet("aragora-operator", flag.ContinueOnError))
+	var logs bytes.Buffer
+	o.zap.DestWriter = &logs
+	o.aragoraAPIEndpoint = "http://synthetic-user:" + password + "@control-plane.invalid:8080/base?token=" + queryToken
+
+	if code := run(o); code != 1 {
+		t.Fatalf("run with an insecure endpoint = %d, want 1", code)
+	}
+	text := logs.String()
+	for _, want := range []string{"refusing insecure Aragora API endpoint", `"endpoint": "http://control-plane.invalid:8080/base"`} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the startup log lacks %s:\n%s", want, text)
+		}
+	}
+	for _, secret := range []string{password, "synthetic-user", queryToken} {
+		if strings.Contains(text, secret) {
+			t.Errorf("the startup log reveals %q from the endpoint:\n%s", secret, text)
+		}
+	}
+}

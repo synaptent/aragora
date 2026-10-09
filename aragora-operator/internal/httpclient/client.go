@@ -33,7 +33,8 @@ import (
 // Config tunes a Client. DefaultConfig returns the operator's production
 // values.
 type Config struct {
-	// Name identifies the breaker in logs.
+	// Name identifies the breaker in logs. It is logged as is, so it must not
+	// hold credentials; EndpointLabel derives a safe name from a URL.
 	Name string
 	// Timeout bounds each attempt, not the whole call.
 	Timeout time.Duration
@@ -114,7 +115,8 @@ func New(cfg Config) *Client {
 // 5xx answers other than 501). Any other answer, including 4xx, is returned
 // as is. A call that still fails after its retries returns an error and
 // counts against the breaker; while the breaker is open, Do returns an error
-// wrapping gobreaker.ErrOpenState without sending anything.
+// wrapping gobreaker.ErrOpenState without sending anything. URLs in returned
+// errors and in log messages are reduced to their EndpointLabel.
 func (c *Client) Do(req *http.Request) (*http.Response, error) {
 	rreq, err := retryablehttp.FromRequest(req)
 	if err != nil {
@@ -128,9 +130,9 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 		return resp, err
 	})
 	if errors.Is(err, gobreaker.ErrOpenState) || errors.Is(err, gobreaker.ErrTooManyRequests) {
-		return nil, fmt.Errorf("%s %s: %w", req.Method, req.URL.Redacted(), err)
+		return nil, fmt.Errorf("%s %s: %w", req.Method, safeURL(req.URL), err)
 	}
-	return resp, err
+	return resp, RedactError(err)
 }
 
 // State reports the breaker state.
@@ -150,22 +152,24 @@ func (e *callerGoneError) Unwrap() error { return e.err }
 
 // leveledLogger adapts logr to retryablehttp.LeveledLogger. Per-request
 // chatter goes to V(1); a failed attempt is logged at the default level.
+// retryablehttp masks only the password in the URLs it logs, so the username
+// and query are removed here.
 type leveledLogger struct {
 	log logr.Logger
 }
 
 func (l leveledLogger) Error(msg string, keysAndValues ...interface{}) {
-	l.log.Info(msg, keysAndValues...)
+	l.log.Info(msg, redactLogValues(keysAndValues)...)
 }
 
 func (l leveledLogger) Warn(msg string, keysAndValues ...interface{}) {
-	l.log.Info(msg, keysAndValues...)
+	l.log.Info(msg, redactLogValues(keysAndValues)...)
 }
 
 func (l leveledLogger) Info(msg string, keysAndValues ...interface{}) {
-	l.log.V(1).Info(msg, keysAndValues...)
+	l.log.V(1).Info(msg, redactLogValues(keysAndValues)...)
 }
 
 func (l leveledLogger) Debug(msg string, keysAndValues ...interface{}) {
-	l.log.V(1).Info(msg, keysAndValues...)
+	l.log.V(1).Info(msg, redactLogValues(keysAndValues)...)
 }

@@ -36,6 +36,7 @@ import (
 
 	aragorav1alpha1 "github.com/synaptent/aragora-operator/api/v1alpha1"
 	"github.com/synaptent/aragora-operator/controllers"
+	"github.com/synaptent/aragora-operator/internal/httpclient"
 	"github.com/synaptent/aragora-operator/internal/metrics"
 	"github.com/synaptent/aragora-operator/internal/observability"
 )
@@ -103,7 +104,8 @@ func run(o *options) int {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&o.zap)))
 
 	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(o.aragoraAPIEndpoint)), "http://") && !o.allowInsecureControlPlane {
-		setupLog.Error(nil, "refusing insecure Aragora API endpoint without explicit opt-in", "endpoint", o.aragoraAPIEndpoint)
+		setupLog.Error(nil, "refusing insecure Aragora API endpoint without explicit opt-in",
+			"endpoint", httpclient.EndpointLabel(o.aragoraAPIEndpoint, "(unparsable URL)"))
 		return 1
 	}
 
