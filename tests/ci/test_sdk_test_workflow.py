@@ -18,7 +18,7 @@ def test_sdk_integration_installs_typescript_deps_before_pytest() -> None:
     setup_steps = steps[:pytest_index]
 
     assert any(
-        step.get("uses") == "actions/setup-node@v4"
+        step.get("uses") == "actions/setup-node@v7"
         and step.get("with", {}).get("cache") == "npm"
         and step.get("with", {}).get("cache-dependency-path") == "sdk/typescript/package-lock.json"
         for step in setup_steps

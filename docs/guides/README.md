@@ -128,6 +128,7 @@ patterns; the other three pages cover the `aragora/rlm/` module.
 | [OPERATOR_QUESTIONS](./OPERATOR_QUESTIONS.md) | Asking questions that make agent fleets investigate and act well |
 | [ISSUE_TRIAGE](./ISSUE_TRIAGE.md) | Calibration-only multi-model triage of the GitHub issue backlog |
 | [CLAUDE_MAX_POOL](./CLAUDE_MAX_POOL.md) | Running a pool of Claude Max plans for reviews |
+| [CLAUDE_CAPACITY_INVENTORY](./CLAUDE_CAPACITY_INVENTORY.md) | Read-only report of Claude credential identities and quota windows; diagnostic only, it grants no reviewer capacity |
 | [VIBEPROXY](./VIBEPROXY.md) | Using a local VibeProxy as an opt-in model transport |
 | [NOMIC_LOOP_TROUBLESHOOTING](./NOMIC_LOOP_TROUBLESHOOTING.md) | Troubleshooting the Nomic Loop |
 

@@ -2251,7 +2251,7 @@ class TestSlashCommandRecent:
             ),
             patch("aragora.connectors.chat.webhook_security.verify_slack_signature") as mock_verify,
             patch(
-                "aragora.server.storage.get_debates_db",
+                "aragora.server.handlers.social._slack_impl.commands.get_debates_db",
                 return_value=mock_db,
             ),
         ):
@@ -2303,7 +2303,7 @@ class TestSlashCommandRecent:
             ),
             patch("aragora.connectors.chat.webhook_security.verify_slack_signature") as mock_verify,
             patch(
-                "aragora.server.storage.get_debates_db",
+                "aragora.server.handlers.social._slack_impl.commands.get_debates_db",
                 return_value=mock_db,
             ),
             patch(

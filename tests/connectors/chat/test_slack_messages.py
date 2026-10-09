@@ -851,6 +851,32 @@ class TestDownloadFile:
         assert result.size == len(b"file content here")
 
     @pytest.mark.asyncio
+    async def test_download_file_uses_resilient_http_request(self, connector):
+        """The mixin's type-only declaration must not shadow HTTPResilienceMixin._http_request."""
+        from aragora.connectors.chat.http_resilience import HTTPResilienceMixin
+
+        connector._slack_api_request = AsyncMock(
+            return_value=(
+                True,
+                {
+                    "file": {
+                        "id": "F9",
+                        "name": "real.txt",
+                        "mimetype": "text/plain",
+                        "size": 4,
+                        "url_private_download": "https://files.slack.com/dl/real.txt",
+                    }
+                },
+                None,
+            )
+        )
+        http_request = AsyncMock(return_value=(True, b"real", None))
+        with patch.object(HTTPResilienceMixin, "_http_request", http_request):
+            result = await connector.download_file("F9")
+        http_request.assert_awaited_once()
+        assert result.content == b"real"
+
+    @pytest.mark.asyncio
     async def test_download_file_no_url(self, connector):
         """Should return FileAttachment without content when no URL available."""
         connector._slack_api_request = AsyncMock(

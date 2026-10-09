@@ -256,6 +256,34 @@ def advisory_dissent_settle_enabled(env: dict[str, str] | None = None) -> bool:
     )
 
 
+# Hard "never post" control for prepare-only missions. When active — via the
+# ``never_post`` kwarg (threaded from the ``--never-post`` CLI flag) or via this
+# environment variable (which also covers the ``review-queue collect-evidence``
+# path without a CLI change) — no collector run posts, so a prepare-only mission
+# no longer depends on every worker remembering to omit ``--apply``. The control
+# acts at two levels:
+# - :func:`run_collect_cli`, behind both the script and ``review-queue
+#   collect-evidence``, refuses ``apply=True`` under the control (kwarg or this
+#   variable) with a loud error before any collection work. A CLI run that
+#   passes ``--apply`` while the variable is exported therefore exits 1 with no
+#   prepared artifact; it is not downgraded to a prepare-only run.
+# - :func:`decide_action` forces ``"prepare"`` at EVERY tier, including Tier 0-2
+#   with ``apply=True``. That downgrade is reached by direct library calls of
+#   :func:`collect_evidence` / :func:`apply_prepared_evidence` and by their
+#   pre-post recheck, not by either CLI entry point.
+# The control is monotonic: an explicit ``never_post=False`` cannot switch the
+# environment variable back off.
+_NEVER_POST_ENV = "ARAGORA_EVIDENCE_NEVER_POST"
+_NEVER_POST_TRUE = frozenset(("1", "true", "yes", "on"))
+
+
+def never_post_enabled(env: dict[str, str] | None = None) -> bool:
+    """Whether the hard never-post control is active via the environment.
+    Default OFF; see :data:`_NEVER_POST_ENV`."""
+    source = os.environ if env is None else env
+    return str(source.get(_NEVER_POST_ENV, "")).strip().lower() in _NEVER_POST_TRUE
+
+
 def _coerce_relaxed_flag(value: Any) -> bool:
     """Coerce a serialized gate-regime flag (``severity_gated`` / ``tiered_gate``) to
     bool, fail-closed. A real bool passes through; a string counts as relaxed ONLY for
@@ -1010,6 +1038,8 @@ class CollectOutcome:
     timed_out_families: list[str] = field(default_factory=list)
     overall_timeout_seconds: float | None = None
     adjudication: dict[str, Any] | None = None
+    live_evidence_head_sha: str = ""
+    live_counting_families: list[str] = field(default_factory=list)
     # Captured ONCE at construction (not re-read from os.environ per property
     # access) so a security-relevant gate decision stays deterministic within a
     # single settlement flow even if the process env mutates mid-run.
@@ -1022,6 +1052,25 @@ class CollectOutcome:
     @property
     def supportive_families(self) -> list[str]:
         return [item.family for item in self.items if item.supportive]
+
+    @property
+    def _head_bound_live_families(self) -> list[str]:
+        # A rehydrated artifact keeps its live families after the branch moves;
+        # they only count while they were read at this outcome's own head.
+        head = (self.head_sha or "").strip()
+        if head and self.live_evidence_head_sha.strip() == head:
+            return list(self.live_counting_families)
+        return []
+
+    @property
+    def combined_counting_families(self) -> list[str]:
+        """Distinct prepared plus same-head live comment families."""
+        return sorted({*self.counting_families, *self._head_bound_live_families})
+
+    @property
+    def combined_supportive_families(self) -> list[str]:
+        """Supportive prepared families plus canonical live countable families."""
+        return sorted({*self.supportive_families, *self._head_bound_live_families})
 
     @property
     def dissenting_families(self) -> list[str]:
@@ -1038,7 +1087,7 @@ class CollectOutcome:
         unknown/None tier, fail-safe) need two distinct WESTERN families.
         """
         rule = tier_quorum_rule(self.tier, tiered_gate=self.tiered_gate)
-        return rule.is_satisfied_by(self.supportive_families)
+        return rule.is_satisfied_by(self.combined_supportive_families)
 
     @property
     def incomplete_quorum_reason(self) -> str:
@@ -1049,7 +1098,7 @@ class CollectOutcome:
         rather than a misleading ``(n/2)`` distinct-family denominator.
         """
         rule = tier_quorum_rule(self.tier, tiered_gate=self.tiered_gate)
-        supportive = {str(f).strip().lower() for f in self.supportive_families}
+        supportive = {str(f).strip().lower() for f in self.combined_supportive_families}
         counted = rule.counted_families(supportive)
         if rule.requires_western_frontier and not (counted & WESTERN_FRONTIER_FAMILIES):
             return (
@@ -1086,6 +1135,9 @@ class CollectOutcome:
             "action": self.action,
             "action_reason": self.action_reason,
             "counting_families": self.counting_families,
+            "live_evidence_head_sha": self.live_evidence_head_sha,
+            "live_counting_families": list(self.live_counting_families),
+            "combined_counting_families": self.combined_counting_families,
             "supportive_families": self.supportive_families,
             "dissenting_families": self.dissenting_families,
             "has_supportive_quorum": self.has_supportive_quorum,
@@ -1164,6 +1216,9 @@ class CollectPreflightTransportError(RuntimeError):
                 "GitHub transport blocked before reviewer execution; prepared evidence only"
             ),
             "counting_families": [],
+            "live_evidence_head_sha": "",
+            "live_counting_families": [],
+            "combined_counting_families": [],
             "supportive_families": [],
             "dissenting_families": [],
             "has_supportive_quorum": False,
@@ -1322,6 +1377,8 @@ def collect_outcome_from_dict(data: dict[str, Any]) -> CollectOutcome:
         failures=[_reviewer_result_from_dict(failure) for failure in data.get("failures") or []],
         posted=_string_list(data.get("posted_families")),
         post_errors=_string_list(data.get("post_errors")),
+        live_evidence_head_sha=str(data.get("live_evidence_head_sha") or ""),
+        live_counting_families=_string_list(data.get("live_counting_families")),
         quorum_rerun=data.get("quorum_rerun")
         if isinstance(data.get("quorum_rerun"), dict)
         else None,
@@ -1337,14 +1394,21 @@ def load_prepared_outcome(path: Path) -> CollectOutcome:
     return collect_outcome_from_dict(json.loads(path.read_text(encoding="utf-8")))
 
 
-def decide_action(tier: int | None, apply: bool) -> tuple[str, str]:
+def decide_action(tier: int | None, apply: bool, *, never_post: bool = False) -> tuple[str, str]:
     """Return ``(action, reason)`` where action is ``"post"`` or ``"prepare"``.
 
     Tier 3+ (and unknown tier) always ``prepare`` — high-tier merge authority is
     only ever settled by an operator on the exact head, so this collector refuses
     to post there regardless of ``apply``. Tier 0-2 posts only when ``apply`` is
-    set; otherwise it is a dry run.
+    set; otherwise it is a dry run. The never-post control (``never_post=True``
+    or :data:`_NEVER_POST_ENV`) dominates everything: it forces ``prepare`` at
+    every tier, and the environment variable cannot be switched off per-call.
     """
+    if never_post or never_post_enabled():
+        return (
+            "prepare",
+            "never-post control active; preparing evidence only at every tier",
+        )
     if tier is None or tier < 0:
         return ("prepare", "tier unknown; preparing evidence only (fail-safe)")
     if tier >= SETTLEMENT_TIER_FLOOR:
@@ -3105,7 +3169,9 @@ def _record_review_adjudication_if_applicable(outcome: CollectOutcome) -> None:
         return
     if outcome.action != "prepare":
         return
-    if not outcome.supportive_families or not outcome.dissenting_families:
+    if not outcome.supportive_families:
+        return
+    if not any(item.verdict == "changes_requested" for item in outcome.items):
         return
 
     try:
@@ -3128,6 +3194,7 @@ def collect_evidence(
     families: Sequence[str],
     author: str,
     apply: bool,
+    never_post: bool = False,
     context_fetcher: Callable[[str, int], dict[str, Any]] = merge_quorum_io.fetch_pr_context,
     tier_fetcher: Callable[[str, int], int | None] = merge_quorum_io.fetch_pr_tier,
     prompt_builder: Callable[[str, int, dict[str, Any]], str] = default_prompt_builder,
@@ -3155,7 +3222,7 @@ def collect_evidence(
             raise ValueError(f"PR #{pr} head {head_sha} is not the expected head {pinned_head}")
 
     tier = tier_fetcher(repo, pr)
-    action, action_reason = decide_action(tier, apply)
+    action, action_reason = decide_action(tier, apply, never_post=never_post)
 
     outcome = CollectOutcome(
         repo=repo,
@@ -3305,14 +3372,14 @@ def collect_evidence(
         try:
             recheck_head = str((context_fetcher(repo, pr) or {}).get("head_sha") or "").strip()
             recheck_tier = tier_fetcher(repo, pr)
-        except Exception as exc:
+        except (RuntimeError, OSError, ValueError, subprocess.SubprocessError) as exc:
             outcome.action = "prepare"
             outcome.action_reason = (
                 f"could not re-verify head/tier before posting ({str(exc)[:120]}); prepared only"
             )
             _record_review_adjudication_if_applicable(outcome)
             return outcome
-        recheck_action, recheck_reason = decide_action(recheck_tier, apply)
+        recheck_action, recheck_reason = decide_action(recheck_tier, apply, never_post=never_post)
         if recheck_head != head_sha or recheck_action != "post":
             outcome.action = "prepare"
             outcome.action_reason = (
@@ -3781,12 +3848,16 @@ def apply_prepared_evidence(
     prepared_json: Path,
     author: str,
     apply: bool,
+    never_post: bool = False,
     families: Sequence[str] | None = None,
     context_fetcher: Callable[[str, int], dict[str, Any]] = merge_quorum_io.fetch_pr_context,
     tier_fetcher: Callable[[str, int], int | None] = merge_quorum_io.fetch_pr_tier,
     linter: Callable[..., dict[str, Any]] = default_linter,
     poster: Callable[[str, int, str], None] = default_poster,
     quorum_reconciler: Callable[[str, int], dict[str, Any] | None] | None = None,
+    live_evidence_fetcher: Callable[[str, int, str, str], dict[str, Any]] = (
+        merge_quorum_io.fetch_live_evidence_state
+    ),
     env: dict[str, str] | None = None,
 ) -> CollectOutcome:
     """Post an exact-head prepared artifact without re-running reviewers.
@@ -3845,7 +3916,7 @@ def apply_prepared_evidence(
     live_severity_gated = severity_gated_dissent_enabled()
 
     tier = tier_fetcher(repo, pr)
-    action, action_reason = decide_action(tier, apply)
+    action, action_reason = decide_action(tier, apply, never_post=never_post)
     outcome = CollectOutcome(
         repo=repo,
         pr=pr,
@@ -3923,24 +3994,89 @@ def apply_prepared_evidence(
         )
         _record_review_adjudication_if_applicable(outcome)
         return outcome
+    used_live_quorum = False
     if not outcome.has_supportive_quorum:
-        outcome.action = "prepare"
-        outcome.action_reason = outcome.incomplete_quorum_reason
-        _record_review_adjudication_if_applicable(outcome)
-        return outcome
+        try:
+            live_state = live_evidence_fetcher(repo, pr, head_sha, head_committed_at) or {}
+        except (RuntimeError, OSError, ValueError, subprocess.SubprocessError) as exc:
+            outcome.action = "prepare"
+            outcome.action_reason = (
+                f"{outcome.incomplete_quorum_reason}; live current-head evidence "
+                f"could not be verified ({str(exc)[:120]})"
+            )
+            _record_review_adjudication_if_applicable(outcome)
+            return outcome
 
+        live_head = str(live_state.get("head_sha") or "").strip()
+        raw_live_families = live_state.get("counting_families")
+        if live_head != head_sha or not isinstance(raw_live_families, list):
+            outcome.action = "prepare"
+            outcome.action_reason = (
+                "live evidence state does not match the current head or family schema; "
+                "prepared evidence only"
+            )
+            _record_review_adjudication_if_applicable(outcome)
+            return outcome
+        dissent_state = live_state.get("unresolved_dissent")
+        if dissent_state is not False:
+            outcome.action = "prepare"
+            if dissent_state is True:
+                outcome.action_reason = (
+                    "live current-head blocking dissent present; prepared evidence only"
+                )
+            else:
+                outcome.action_reason = (
+                    "live current-head dissent state could not be verified; prepared evidence only"
+                )
+            _record_review_adjudication_if_applicable(outcome)
+            return outcome
+
+        live_families: set[str] = set()
+        for raw_family in raw_live_families:
+            family = canonical_family(str(raw_family))
+            if family not in FAMILY_PROVIDERS:
+                outcome.action = "prepare"
+                outcome.action_reason = (
+                    f"live evidence reported unsupported reviewer family {family or 'empty'}; "
+                    "prepared evidence only"
+                )
+                _record_review_adjudication_if_applicable(outcome)
+                return outcome
+            live_families.add(family)
+        outcome.live_evidence_head_sha = live_head
+        outcome.live_counting_families = sorted(live_families)
+
+        if not outcome.has_supportive_quorum:
+            outcome.action = "prepare"
+            outcome.action_reason = outcome.incomplete_quorum_reason
+            _record_review_adjudication_if_applicable(outcome)
+            return outcome
+        if not (set(outcome.supportive_families) - live_families):
+            outcome.action = "prepare"
+            outcome.action_reason = (
+                "all supportive prepared families already count on the current head; "
+                "nothing new to post"
+            )
+            _record_review_adjudication_if_applicable(outcome)
+            return outcome
+        used_live_quorum = True
+
+    # Keep this as the last network-backed guard before posting. In the
+    # live-plus-prepared path, the comment and packet reads above may take long
+    # enough for the branch to move; evidence for the old head must then remain
+    # prepared-only.
     try:
         recheck_context = context_fetcher(repo, pr) or {}
         recheck_head = str(recheck_context.get("head_sha") or "").strip()
         recheck_tier = tier_fetcher(repo, pr)
-    except Exception as exc:
+    except (RuntimeError, OSError, ValueError, subprocess.SubprocessError) as exc:
         outcome.action = "prepare"
         outcome.action_reason = (
             f"could not re-verify head/tier before posting ({str(exc)[:120]}); prepared only"
         )
         _record_review_adjudication_if_applicable(outcome)
         return outcome
-    recheck_action, recheck_reason = decide_action(recheck_tier, apply)
+    recheck_action, recheck_reason = decide_action(recheck_tier, apply, never_post=never_post)
     recheck_stability_problem = _settlement_stability_problem(recheck_context)
     if recheck_head != head_sha or recheck_action != "post" or recheck_stability_problem:
         outcome.action = "prepare"
@@ -3953,11 +4089,18 @@ def apply_prepared_evidence(
         _record_review_adjudication_if_applicable(outcome)
         return outcome
 
-    outcome.action_reason = (
-        "prepared exact-head evidence artifact; posting without reviewer regeneration"
-    )
+    if used_live_quorum:
+        outcome.action_reason = (
+            "prepared exact-head evidence plus live current-head families satisfies quorum; "
+            "posting only missing families without reviewer regeneration"
+        )
+    else:
+        outcome.action_reason = (
+            "prepared exact-head evidence artifact; posting without reviewer regeneration"
+        )
+    live_families = set(outcome.live_counting_families)
     for item in outcome.items:
-        if not item.supportive:
+        if not item.supportive or item.family in live_families:
             continue
         try:
             poster(repo, pr, item.body)
@@ -3980,6 +4123,8 @@ def _render_outcome(outcome: CollectOutcome) -> str:
         f"  head: {outcome.head_sha[:10]}  tier: {outcome.tier}",
         f"  action: {outcome.action} ({outcome.action_reason})",
         f"  counting families: {', '.join(outcome.counting_families) or 'none'}",
+        f"  live counting families: {', '.join(outcome.live_counting_families) or 'none'}",
+        f"  combined counting families: {', '.join(outcome.combined_counting_families) or 'none'}",
         f"  supportive families: {', '.join(outcome.supportive_families) or 'none'}",
         f"  dissenting families: {', '.join(outcome.dissenting_families) or 'none'}",
     ]
@@ -4066,6 +4211,7 @@ def run_collect_cli(
     author: str | None,
     apply: bool,
     json_output: bool,
+    never_post: bool = False,
     prepared_json: Path | None = None,
     reviewer_timeout_seconds: float | None = None,
     overall_timeout_seconds: float | None = None,
@@ -4085,10 +4231,22 @@ def run_collect_cli(
     still exit 2 (quorum is enforced as N-of-M elsewhere). Inspect
     ``posted_families`` in the JSON output rather than treating a non-zero exit
     as "nothing posted".
+
+    ``never_post`` (or :data:`_NEVER_POST_ENV`) is the hard prepare-only
+    control: it forces ``action=prepare`` / ``posted_families=[]`` at every
+    tier and conflicts loudly with ``apply`` (exit 1 before any collection
+    work, for the kwarg and the environment variable alike) instead of
+    silently overriding it.
     """
     fams = tuple(families) if families else DEFAULT_FAMILIES
     resolved_author = author or resolve_author()
     try:
+        if apply and (never_post or never_post_enabled()):
+            raise ValueError(
+                f"--never-post (or {_NEVER_POST_ENV}=1) conflicts with --apply: the "
+                "never-post control forbids posting at any tier; drop --apply or "
+                "clear the control"
+            )
         overall_timeout_seconds = _positive_timeout_seconds(
             overall_timeout_seconds, "overall_timeout_seconds"
         )
@@ -4108,6 +4266,7 @@ def run_collect_cli(
                     families=fams,
                     author=resolved_author,
                     apply=apply,
+                    never_post=never_post,
                     env=merge_quorum_io.aragora_env(),
                     quorum_reconciler=default_quorum_reconciler if apply else None,
                     overall_timeout_seconds=overall_timeout_seconds,
@@ -4119,6 +4278,7 @@ def run_collect_cli(
                     prepared_json=prepared_json,
                     author=resolved_author,
                     apply=apply,
+                    never_post=never_post,
                     families=fams,
                     env=merge_quorum_io.aragora_env(),
                     quorum_reconciler=default_quorum_reconciler if apply else None,

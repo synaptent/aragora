@@ -110,9 +110,9 @@ def _make_degraded_module(
     return mod
 
 
-def _make_leader_module(distributed_required: bool = False):
-    """Create a fake aragora.control_plane.leader module."""
-    mod = types.ModuleType("aragora.control_plane.leader")
+def _make_distributed_module(distributed_required: bool = False):
+    """Create a fake aragora.config.distributed module."""
+    mod = types.ModuleType("aragora.config.distributed")
     mod.is_distributed_state_required = lambda: distributed_required
     return mod
 
@@ -146,13 +146,13 @@ def _remove_degraded():
     return patch.dict(sys.modules, {"aragora.server.degraded_mode": None})
 
 
-def _patch_leader(distributed_required=False):
-    mod = _make_leader_module(distributed_required)
-    return patch.dict(sys.modules, {"aragora.control_plane.leader": mod})
+def _patch_distributed(distributed_required=False):
+    mod = _make_distributed_module(distributed_required)
+    return patch.dict(sys.modules, {"aragora.config.distributed": mod})
 
 
-def _remove_leader():
-    return patch.dict(sys.modules, {"aragora.control_plane.leader": None})
+def _remove_distributed():
+    return patch.dict(sys.modules, {"aragora.config.distributed": None})
 
 
 def _patch_startup(redis_result=(True, "OK"), db_result=(True, "OK")):
@@ -472,7 +472,7 @@ class TestReadinessProbeCached:
         cache_get = lambda key: None
         cache_set = MagicMock()
 
-        with _remove_degraded(), _remove_leader(), _remove_startup():
+        with _remove_degraded(), _remove_distributed(), _remove_startup():
             result = probe.readiness_probe(cache_get, cache_set)
         assert _status(result) == 200
         cache_set.assert_called_once()
@@ -530,7 +530,7 @@ class TestReadinessProbeDegraded:
         cache_get = lambda key: None
         cache_set = MagicMock()
 
-        with _remove_degraded(), _remove_leader(), _remove_startup():
+        with _remove_degraded(), _remove_distributed(), _remove_startup():
             result = probe.readiness_probe(cache_get, cache_set)
         assert _status(result) == 200
 
@@ -544,7 +544,7 @@ class TestReadinessProbe:
         cache_get = lambda key: None
         cache_set = MagicMock()
 
-        with _remove_degraded(), _remove_leader(), _remove_startup():
+        with _remove_degraded(), _remove_distributed(), _remove_startup():
             return probe.readiness_probe(cache_get, cache_set), cache_set
 
     def test_returns_200_when_all_pass(self):
@@ -589,7 +589,7 @@ class TestReadinessProbeStorage:
     def _run(self, probe):
         cache_get = lambda key: None
         cache_set = MagicMock()
-        with _remove_degraded(), _remove_leader(), _remove_startup():
+        with _remove_degraded(), _remove_distributed(), _remove_startup():
             return probe.readiness_probe(cache_get, cache_set)
 
     def test_storage_present_is_true(self):
@@ -638,7 +638,7 @@ class TestReadinessProbeElo:
     def _run(self, probe):
         cache_get = lambda key: None
         cache_set = MagicMock()
-        with _remove_degraded(), _remove_leader(), _remove_startup():
+        with _remove_degraded(), _remove_distributed(), _remove_startup():
             return probe.readiness_probe(cache_get, cache_set)
 
     def test_elo_present_is_true(self):
@@ -686,7 +686,7 @@ class TestReadinessMultipleFailures:
     def _run(self, probe):
         cache_get = lambda key: None
         cache_set = MagicMock()
-        with _remove_degraded(), _remove_leader(), _remove_startup():
+        with _remove_degraded(), _remove_distributed(), _remove_startup():
             return probe.readiness_probe(cache_get, cache_set)
 
     def test_both_storage_and_elo_fail(self):
@@ -732,7 +732,7 @@ class TestCheckRedisReadiness:
         monkeypatch.setenv("REDIS_URL", "redis://localhost:6379")
 
         with (
-            _patch_leader(distributed_required=True),
+            _patch_distributed(distributed_required=True),
             _patch_startup(redis_result=(True, "Connected")),
             patch(
                 "aragora.server.handlers.admin.health.probes.asyncio.get_running_loop",
@@ -753,7 +753,7 @@ class TestCheckRedisReadiness:
         monkeypatch.setenv("REDIS_URL", "redis://localhost:6379")
 
         with (
-            _patch_leader(distributed_required=True),
+            _patch_distributed(distributed_required=True),
             _patch_startup(redis_result=(False, "Connection refused")),
             patch(
                 "aragora.server.handlers.admin.health.probes.asyncio.get_running_loop",
@@ -773,7 +773,7 @@ class TestCheckRedisReadiness:
         monkeypatch.setenv("REDIS_URL", "redis://localhost:6379")
 
         with (
-            _patch_leader(distributed_required=False),
+            _patch_distributed(distributed_required=False),
             _patch_startup(),
         ):
             ready, checks = probe._check_redis_readiness(True, {})
@@ -785,7 +785,7 @@ class TestCheckRedisReadiness:
         probe = _make_probe()
 
         with (
-            _patch_leader(distributed_required=False),
+            _patch_distributed(distributed_required=False),
             _patch_startup(),
         ):
             ready, checks = probe._check_redis_readiness(True, {})
@@ -797,7 +797,7 @@ class TestCheckRedisReadiness:
         monkeypatch.setenv("ARAGORA_REDIS_URL", "redis://localhost:6379")
 
         with (
-            _patch_leader(distributed_required=True),
+            _patch_distributed(distributed_required=True),
             _patch_startup(redis_result=(True, "OK")),
             patch(
                 "aragora.server.handlers.admin.health.probes.asyncio.get_running_loop",
@@ -821,7 +821,7 @@ class TestCheckRedisReadiness:
         mock_future.result.return_value = (True, "Connected via thread")
 
         with (
-            _patch_leader(distributed_required=True),
+            _patch_distributed(distributed_required=True),
             _patch_startup(redis_result=(True, "Connected via thread")),
             patch(
                 "aragora.server.handlers.admin.health.probes.asyncio.get_running_loop",
@@ -847,7 +847,7 @@ class TestCheckRedisReadiness:
         monkeypatch.setenv("REDIS_URL", "redis://localhost:6379")
 
         with (
-            _patch_leader(distributed_required=False),
+            _patch_distributed(distributed_required=False),
             _patch_startup(),
         ):
             ready, checks = probe._check_redis_readiness(False, {})
@@ -860,7 +860,7 @@ class TestCheckRedisImportError:
 
     def test_import_error_skips_check(self):
         probe = _make_probe()
-        with _remove_leader(), _remove_startup():
+        with _remove_distributed(), _remove_startup():
             ready, checks = probe._check_redis_readiness(True, {})
         assert ready is True
         assert checks["redis"]["status"] == "check_skipped"
@@ -874,7 +874,7 @@ class TestCheckRedisConnError:
         monkeypatch.setenv("REDIS_URL", "redis://localhost:6379")
 
         with (
-            _patch_leader(distributed_required=True),
+            _patch_distributed(distributed_required=True),
             _patch_startup(),
             patch(
                 "aragora.server.handlers.admin.health.probes.asyncio.get_running_loop",
@@ -895,7 +895,7 @@ class TestCheckRedisConnError:
         monkeypatch.setenv("REDIS_URL", "redis://localhost:6379")
 
         with (
-            _patch_leader(distributed_required=False),
+            _patch_distributed(distributed_required=False),
             _patch_startup(),
         ):
             ready, checks = probe._check_redis_readiness(True, {})
@@ -908,7 +908,7 @@ class TestCheckRedisConnError:
         monkeypatch.setenv("REDIS_URL", "redis://localhost:6379")
 
         with (
-            _patch_leader(distributed_required=True),
+            _patch_distributed(distributed_required=True),
             _patch_startup(),
             patch(
                 "aragora.server.handlers.admin.health.probes.asyncio.get_running_loop",
@@ -928,7 +928,7 @@ class TestCheckRedisConnError:
         monkeypatch.setenv("REDIS_URL", "redis://localhost:6379")
 
         with (
-            _patch_leader(distributed_required=True),
+            _patch_distributed(distributed_required=True),
             _patch_startup(),
             patch(
                 "aragora.server.handlers.admin.health.probes.asyncio.get_running_loop",
@@ -952,7 +952,7 @@ class TestCheckRedisTimeout:
         monkeypatch.setenv("REDIS_URL", "redis://localhost:6379")
 
         with (
-            _patch_leader(distributed_required=True),
+            _patch_distributed(distributed_required=True),
             _patch_startup(),
             patch(
                 "aragora.server.handlers.admin.health.probes.asyncio.get_running_loop",
@@ -974,7 +974,7 @@ class TestCheckRedisTimeout:
         monkeypatch.setenv("REDIS_URL", "redis://localhost:6379")
 
         with (
-            _patch_leader(distributed_required=True),
+            _patch_distributed(distributed_required=True),
             _patch_startup(),
             patch(
                 "aragora.server.handlers.admin.health.probes.asyncio.get_running_loop",
@@ -994,7 +994,7 @@ class TestCheckRedisTimeout:
         monkeypatch.setenv("REDIS_URL", "redis://localhost:6379")
 
         with (
-            _patch_leader(distributed_required=False),
+            _patch_distributed(distributed_required=False),
             _patch_startup(),
             patch(
                 "aragora.server.handlers.admin.health.probes.asyncio.get_running_loop",
@@ -1017,7 +1017,7 @@ class TestCheckRedisRuntimeError:
         monkeypatch.setenv("REDIS_URL", "redis://localhost:6379")
 
         with (
-            _patch_leader(distributed_required=True),
+            _patch_distributed(distributed_required=True),
             _patch_startup(),
             patch(
                 "aragora.server.handlers.admin.health.probes.asyncio.get_running_loop",
@@ -1037,7 +1037,7 @@ class TestCheckRedisRuntimeError:
         monkeypatch.setenv("REDIS_URL", "redis://localhost:6379")
 
         with (
-            _patch_leader(distributed_required=True),
+            _patch_distributed(distributed_required=True),
             _patch_startup(),
             patch(
                 "aragora.server.handlers.admin.health.probes.asyncio.get_running_loop",
@@ -1057,7 +1057,7 @@ class TestCheckRedisRuntimeError:
         monkeypatch.setenv("REDIS_URL", "redis://localhost:6379")
 
         with (
-            _patch_leader(distributed_required=True),
+            _patch_distributed(distributed_required=True),
             _patch_startup(),
             patch(
                 "aragora.server.handlers.admin.health.probes.asyncio.get_running_loop",
@@ -1078,7 +1078,7 @@ class TestCheckRedisRuntimeError:
         monkeypatch.setenv("REDIS_URL", "redis://localhost:6379")
 
         with (
-            _patch_leader(distributed_required=False),
+            _patch_distributed(distributed_required=False),
             _patch_startup(),
         ):
             ready, checks = probe._check_redis_readiness(True, {})
@@ -1086,14 +1086,14 @@ class TestCheckRedisRuntimeError:
         assert checks["redis"]["configured"] is True
         assert checks["redis"]["required"] is False
 
-    def test_runtime_error_leader_import_fails(self, monkeypatch):
-        """If leader module also fails to import during error handling, still record error."""
+    def test_runtime_error_distributed_import_fails(self, monkeypatch):
+        """If the distributed-policy module also fails to import during error handling, still record error."""
         probe = _make_probe()
         monkeypatch.setenv("REDIS_URL", "redis://localhost:6379")
 
-        # Create a leader module that works initially but raises during error recovery
-        leader_mod = types.ModuleType("aragora.control_plane.leader")
-        leader_mod.is_distributed_state_required = lambda: True
+        # Create a distributed-policy module that works initially but raises during error recovery
+        distributed_mod = types.ModuleType("aragora.config.distributed")
+        distributed_mod.is_distributed_state_required = lambda: True
 
         startup_mod = _make_startup_module()
 
@@ -1101,7 +1101,7 @@ class TestCheckRedisRuntimeError:
             patch.dict(
                 sys.modules,
                 {
-                    "aragora.control_plane.leader": leader_mod,
+                    "aragora.config.distributed": distributed_mod,
                     "aragora.server.startup": startup_mod,
                 },
             ),

@@ -994,7 +994,8 @@ class TestUnmatchedPaths:
         assert result is None
 
     def test_unmatched_reputation_subpath_returns_none(self, handler, mock_http_handler):
-        result = handler.handle("/api/reputation/unknown", {}, mock_http_handler)
+        # /api/reputation/{name} is served; deeper paths are not.
+        result = handler.handle("/api/reputation/unknown/extra", {}, mock_http_handler)
 
         assert result is None
 

@@ -1269,7 +1269,12 @@ def test_main_rejects_scorecard_latest_pointer_payload_divergence(tmp_path: Path
     assert not output_path.exists()
 
 
-def test_agent_bridge_classifies_benchmark_truth_renderer_process() -> None:
+def test_agent_bridge_classifies_benchmark_truth_renderer_process(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Other tests/scripts modules can drop scripts/ from sys.path after this
+    # module's import-time insert, so re-add it for this lazy import.
+    monkeypatch.syspath_prepend(_scripts_dir)
     import agent_bridge as bridge
 
     assert (

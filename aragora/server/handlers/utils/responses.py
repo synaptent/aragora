@@ -24,7 +24,7 @@ import os
 from dataclasses import dataclass
 from typing import Any
 
-from aragora.server.errors import ErrorCode
+from aragora.api_errors import ErrorCode
 
 _logger = logging.getLogger(__name__)
 

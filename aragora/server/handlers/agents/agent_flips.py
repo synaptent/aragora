@@ -18,6 +18,7 @@ from aragora.persistence.db_config import DatabaseType, get_db_path
 
 from ..base import (
     HandlerResult,
+    error_response,
     handle_errors,
     json_response,
     ttl_cache,
@@ -110,6 +111,27 @@ class AgentFlipsMixin:
                 "count": 0,
             }
         )
+
+    @api_endpoint(
+        method="GET",
+        path="/api/v1/flips/{flip_id}",
+        summary="Get a detected flip by ID",
+        tags=["Agents"],
+    )
+    @handle_errors("flip detail")
+    def _get_flip(self, flip_id: str) -> HandlerResult:
+        """Get one detected flip in the same shape as the recent-flips entries."""
+        from aragora.insights.flip_detector import FlipDetector
+
+        nomic_dir = self.get_nomic_dir()
+        if not nomic_dir:
+            return error_response("Flip detection not available", 503)
+
+        detector = FlipDetector(str(get_db_path(DatabaseType.POSITIONS, nomic_dir)))
+        flip = detector.get_flip(flip_id)
+        if flip is None:
+            return error_response("Flip not found", 404)
+        return json_response(flip.to_dict())
 
     @api_endpoint(
         method="GET",

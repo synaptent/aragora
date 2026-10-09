@@ -183,7 +183,7 @@ def test_metering_models_matches_catalog(canonical_id: str) -> None:
         f"metering MODEL_PRICING has no row for {canonical_id} — "
         "UsageMeter._calculate_token_cost falls back to provider/default rates "
         "for missing rows, silently mis-billing live usage; add the row to "
-        "aragora/services/metering_models.py from the catalog"
+        "aragora/billing/metering_models.py from the catalog"
     )
 
 

@@ -30,6 +30,7 @@ import argparse
 import json
 import subprocess
 import sys
+from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
@@ -198,7 +199,7 @@ def _resolve_owner(pr: int) -> tuple[int, str | None]:
     return pr, owner
 
 
-def fetch_live_claims(repo: str, candidates: list[dict[str, Any]]) -> dict[int, str]:
+def fetch_live_claims(repo: str, candidates: Sequence[dict[str, Any]]) -> dict[int, str]:
     """Map each candidate PR with a LIVE owner to that owner_session.
 
     Probes run concurrently (bounded by ``_OWNER_PROBE_CONCURRENCY``) so one slow
@@ -249,7 +250,7 @@ def main(argv: list[str] | None = None) -> int:
     root = Path(args.root).resolve()
 
     if args.launch_workers:
-        result = run_cycle(
+        cycle = run_cycle(
             repo=args.repo,
             root=root,
             fetch_candidates=fetch_candidates,
@@ -264,18 +265,18 @@ def main(argv: list[str] | None = None) -> int:
         )
 
         if args.json_output:
-            print(json.dumps(result.to_dict(), indent=2))
+            print(json.dumps(cycle.to_dict(), indent=2))
         else:
-            print(result.reason)
-            for wo in result.conductor.work_orders:
+            print(cycle.reason)
+            for wo in cycle.conductor.work_orders:
                 print(f"  -> PR #{wo.pr} ({wo.branch}) :: {wo.owner_session} [{wo.target_agent}]")
-            for path in result.conductor.dispatched:
+            for path in cycle.conductor.dispatched:
                 print(f"  dispatched: {path}")
-            for wo_id in result.supervisor.launched:
+            for wo_id in cycle.supervisor.launched:
                 print(f"  launched: {wo_id}")
-            for failure in result.supervisor.failed:
+            for failure in cycle.supervisor.failed:
                 print(f"  FAILED: {failure['work_order_id']} -- {failure['error']}")
-            for wo_id in result.supervisor.deferred:
+            for wo_id in cycle.supervisor.deferred:
                 print(f"  deferred: {wo_id}")
         return 0
 

@@ -69,8 +69,8 @@ if TYPE_CHECKING:
     from aragora.memory.cross_debate_rlm import CrossDebateMemory
     from aragora.memory.store import CritiqueStore
     from aragora.ranking.elo import EloSystem
-    from aragora.server.storage import DebateStorage
     from aragora.server.stream.ws_manager import WebSocketManager
+    from aragora.storage.debate_storage import DebateStorage
     from aragora.storage.documents import DocumentStore
     from aragora.storage.webhooks import WebhookStore
     from aragora.users.store import UserStore
@@ -161,7 +161,7 @@ class ServerContext(TypedDict, total=False):
 # =============================================================================
 
 # Error handling
-from aragora.server.errors import safe_error_message
+from aragora.api_errors import safe_error_message
 
 # Cache utilities
 from aragora.server.handlers.admin.cache import (
@@ -592,7 +592,7 @@ def safe_error_response(
         except Exception as e:
             return safe_error_response(e, "debate creation", 500, handler)
     """
-    from aragora.server.errors import ErrorFormatter
+    from aragora.api_errors import ErrorFormatter
 
     # Generate or extract trace ID
     trace_id = None

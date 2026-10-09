@@ -44,12 +44,11 @@ class MockAuthUser:
 
 
 class MockRestrictedUser:
-    """Mock user with no permissions."""
+    """JWT-shaped user whose RBAC v2 role (viewer) grants no knowledge permission."""
 
     def __init__(self, user_id: str = "restricted-user"):
         self.user_id = user_id
-        self.permissions: set[str] = set()
-        self.roles: set[str] = set()
+        self.role = "viewer"
 
 
 def _make_http_handler(method: str = "GET", body: dict | None = None) -> MagicMock:
@@ -459,6 +458,7 @@ class TestStats:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.no_auto_auth
 class TestPermissions:
     def test_write_permission_denied(self, handler):
         """POST to create fact should fail when user lacks write permission."""
