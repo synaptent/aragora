@@ -178,6 +178,9 @@ def test_embed_batch_returns_service_embeddings(
         {"texts": ["ok", ""]},
         {"texts": ["a"], "batch_size": 0},
         {"texts": ["a"], "batch_size": True},
+        {"texts": ["a"], "batch_size": 101},
+        {"texts": ["a"], "batch_size": "4"},
+        {"texts": ["a"], "batch_size": 4.0},
         {"texts": ["a"] * 1001},
         {"texts": ["a"], "model": "some-other-model"},
     ],
@@ -188,18 +191,35 @@ def test_embed_batch_rejects_invalid_payload(registry_cls, hash_service, payload
     assert status == 400, body
 
 
-@pytest.mark.parametrize(("length", "status"), [(8192, 200), (8193, 400)])
-def test_embed_batch_caps_each_text_at_8192_characters(
-    registry_cls, hash_service, length: int, status: int
+@pytest.mark.parametrize(
+    ("text", "status"),
+    [
+        pytest.param("x" * 2000, 200, id="ascii-at-cap"),
+        pytest.param("x" * 2001, 400, id="ascii-over"),
+        # Two-byte "é": 1,000 characters are 2,000 bytes; 1,001 characters are 2,001.
+        pytest.param("\u00e9" * 1000, 200, id="two-byte-at-cap"),
+        pytest.param("\u00e9" * 1000 + "x", 400, id="two-byte-over"),
+        # Three-byte CJK: 667 characters are 2,001 bytes, far under 2,000 characters.
+        pytest.param("\u4e2d" * 666 + "xx", 200, id="cjk-at-cap"),
+        pytest.param("\u4e2d" * 667, 400, id="cjk-over"),
+        # A lone surrogate (JSON "\ud800") counts three bytes and must not raise.
+        pytest.param("\ud800" * 667, 400, id="lone-surrogate-over"),
+    ],
+)
+def test_embed_batch_caps_each_text_at_2000_utf8_bytes(
+    registry_cls, hash_service, text: str, status: int
 ) -> None:
-    payload = {"texts": ["short", "x" * length]}
+    assert len(text.encode("utf-8", "surrogatepass")) == (2000 if status == 200 else 2001)
+    payload = {"texts": ["short", text]}
     with patch(
         "aragora.core.embeddings.service.get_embedding_service", return_value=hash_service
     ) as get_service:
         got, body = _dispatch(registry_cls, "POST", "/api/v1/index/embed-batch", payload)
     assert got == status, body
-    if status == 400:
-        assert "8192 characters" in body["error"]
+    if status == 200:
+        assert body["count"] == 2
+    else:
+        assert body["error"] == "Each text may be at most 2000 bytes of UTF-8"
         get_service.assert_not_called()
 
 
@@ -217,25 +237,6 @@ def test_embed_batch_caps_the_request_at_100_texts(
         assert body["count"] == 100
     else:
         assert body["error"] == "At most 100 texts per request"
-        get_service.assert_not_called()
-
-
-@pytest.mark.parametrize(("count", "status"), [(125, 200), (126, 400)])
-def test_embed_batch_caps_the_request_at_one_million_characters(
-    registry_cls, hash_service, monkeypatch, count: int, status: int
-) -> None:
-    # 100 texts of at most 8,192 characters cannot reach the total, so lift the
-    # count cap to reach the total-characters check behind it.
-    monkeypatch.setattr(handler_module, "_MAX_EMBED_BATCH_TEXTS", 1000)
-    # 125 x 8000 is exactly 1,000,000 characters; every text is under the per-text cap.
-    payload = {"texts": [f"{i:08d}" + "y" * 7992 for i in range(count)]}
-    with patch(
-        "aragora.core.embeddings.service.get_embedding_service", return_value=hash_service
-    ) as get_service:
-        got, body = _dispatch(registry_cls, "POST", "/api/v1/index/embed-batch", payload)
-    assert got == status, body
-    if status == 400:
-        assert "1000000 characters" in body["error"]
         get_service.assert_not_called()
 
 

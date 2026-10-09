@@ -148,12 +148,14 @@ _INDEX_ROUTE_METHODS = {
 # memory: 100 vectors of 1,536 floats serialize to about 3.2 MB of JSON.
 _MAX_EMBED_BATCH_TEXTS = 100
 _MAX_EMBED_BATCH_SIZE = 100
-# About 2,048 tokens of English text: the input limit of the Gemini backend's
-# text-embedding-004 (OpenAI's text-embedding-3-small allows 8,191), so an
-# over-long text answers 400 here instead of a provider error that surfaces as 503.
-_MAX_EMBED_TEXT_CHARS = 8192
-# Bounds the provider work one request can buy; the 10 MB body limit alone does not.
-_MAX_EMBED_BATCH_TOTAL_CHARS = 1_000_000
+# Under the smallest input limit of any backend the service can select: 2,048 tokens
+# for Gemini text-embedding-004 and Ollama nomic-embed-text (OpenAI
+# text-embedding-3-small allows 8,192). A token never covers less than one byte, so
+# 2,000 bytes stay under 2,048 tokens with room for the [CLS]/[SEP] a BERT tokenizer
+# adds: no accepted text can draw a provider length error, which the backends count
+# toward the process-wide embedding circuit breaker. With the 100-text cap this also
+# bounds the provider work of one request.
+_MAX_EMBED_TEXT_BYTES = 2000
 # Shared by every backend call of one embed-batch request, so small batch sizes
 # cannot turn one request into many sequential 30 s waits.
 _EMBED_BATCH_BUDGET_SECONDS = 30.0
@@ -399,14 +401,11 @@ class KnowledgeHandler(
             return error_response("'texts' must be a non-empty list of non-empty strings", 400)
         if len(texts) > _MAX_EMBED_BATCH_TEXTS:
             return error_response(f"At most {_MAX_EMBED_BATCH_TEXTS} texts per request", 400)
-        if any(len(t) > _MAX_EMBED_TEXT_CHARS for t in texts):
+        # "surrogatepass": a lone surrogate from a JSON \ud800 escape has no UTF-8 form;
+        # it counts 3 bytes, like the U+FFFD a provider substitutes, instead of raising.
+        if any(len(t.encode("utf-8", "surrogatepass")) > _MAX_EMBED_TEXT_BYTES for t in texts):
             return error_response(
-                f"Each text may have at most {_MAX_EMBED_TEXT_CHARS} characters", 400
-            )
-        if sum(len(t) for t in texts) > _MAX_EMBED_BATCH_TOTAL_CHARS:
-            return error_response(
-                f"Texts may total at most {_MAX_EMBED_BATCH_TOTAL_CHARS} characters per request",
-                400,
+                f"Each text may be at most {_MAX_EMBED_TEXT_BYTES} bytes of UTF-8", 400
             )
         batch_size = data.get("batch_size", _MAX_EMBED_BATCH_SIZE)
         if (
