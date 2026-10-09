@@ -247,13 +247,15 @@ async def handle_mark_followup(
 
         # Parse sent_at
         sent_at = datetime.now()
-        if sent_at_str:
-            try:
-                sent_at = _naive_local(sent_at_str)
-            except ValueError:
-                pass
-
-        expected_by = sent_at + timedelta(days=expected_days)
+        try:
+            if sent_at_str:
+                try:
+                    sent_at = _naive_local(sent_at_str)
+                except ValueError:
+                    pass
+            expected_by = sent_at + timedelta(days=expected_days)
+        except OverflowError:
+            return error_response("sent_at is out of range", status=400)
 
         followup = await tracker.mark_awaiting_reply(
             email_id=email_id,
@@ -636,7 +638,7 @@ async def handle_apply_snooze(
 
         try:
             snooze_until = _naive_local(snooze_until_str)
-        except ValueError:
+        except (ValueError, OverflowError):
             return error_response("Invalid snooze_until format", status=400)
 
         label = data.get("label", "Snoozed")
