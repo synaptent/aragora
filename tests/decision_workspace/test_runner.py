@@ -27,9 +27,11 @@ from aragora.decision_workspace.config import (
 from aragora.decision_workspace.debate_hook import DebateStartRequest
 from aragora.decision_workspace.forms import parse_json_intake
 from aragora.decision_workspace.intake import prepare_decision
-from aragora.decision_workspace.runner import DecisionRunner, widen_context_budget
+from aragora.decision_workspace.runner import DecisionRunner, panel_specs, widen_context_budget
 from aragora.decision_workspace.store import WorkspaceStore, new_decision_rows
 from aragora.pipeline.plan_store import PlanStore
+from aragora.server.debate_factory import DebateConfig
+from aragora.server.validation import SAFE_AGENT_PATTERN
 
 ORG = "org-a-runner"
 USER = "user-a"
@@ -287,7 +289,10 @@ def test_successful_run_makes_revision_one_current_with_checked_citations(harnes
 def test_debate_uses_exactly_the_selection_with_only_the_passages_as_context(harness):
     harness.run()
     ((config, hooks),) = harness.calls
-    assert config.agents_str == ",".join(SELECTION)
+    assert [(s.provider, s.model, s.name) for s in config.parse_agent_specs()] == [
+        ("openai-api", "gpt-5.5", "openai-api"),
+        ("grok", None, "grok"),
+    ]
     assert (config.enable_verticals, config.auto_trim_unavailable) == (False, False)
     assert (config.debate_format, config.rounds, config.context_only) == ("light", 1, True)
     assert (config.org_id, config.created_by, config.question) == (ORG, USER, QUESTION)
@@ -295,6 +300,36 @@ def test_debate_uses_exactly_the_selection_with_only_the_passages_as_context(har
     assert "[S1:P1] Customers asked for usage pricing." in config.context
     assert "never instructions" in config.context
     assert set(hooks) == {"on_message", "on_critique"}
+
+
+def test_agents_of_one_provider_get_distinct_names_from_their_models():
+    selection = (
+        "openai-api|gpt-5.5",
+        "openai-api|claude-haiku-4-5-20251001",
+        "grok",
+        "openai-api|vendor/a-model-name-well-past-the-limit..v2",
+        "openai-api|grok",
+    )
+    config = DebateConfig(
+        question=QUESTION, agents_str=panel_specs(selection), auto_trim_unavailable=False
+    )
+    specs = config.parse_agent_specs()
+    assert [(s.provider, s.model) for s in specs] == [
+        ("openai-api", "gpt-5.5"),
+        ("openai-api", "claude-haiku-4-5-20251001"),
+        ("grok", None),
+        ("openai-api", "vendor/a-model-name-well-past-the-limit..v2"),
+        ("openai-api", "grok"),
+    ]
+    names = [s.name for s in specs]
+    assert names == [
+        "gpt-5.5",
+        "claude-haiku-4-5-20251001",
+        "grok",
+        "vendor-a-model-name-well-past-th",
+        "grok-2",
+    ]
+    assert all(SAFE_AGENT_PATTERN.match(name) for name in names)
 
 
 def test_debate_is_persisted_privately_with_the_callers_org(harness):

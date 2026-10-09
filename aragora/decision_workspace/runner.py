@@ -15,8 +15,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import time
 import uuid
+from collections import Counter
 from collections.abc import Callable, Coroutine, Mapping, Sequence
 from datetime import datetime
 from decimal import Decimal
@@ -52,6 +54,7 @@ DEBATE_SOURCE = "decision_workspace"
 MAX_TRANSCRIPT_ENTRIES = 200
 MAX_ENTRY_CHARS = 8000
 CONTEXT_TOKEN_MARGIN = 1000
+MAX_AGENT_NAME_CHARS = 32
 
 ArenaFactory = Callable[[Any, dict[str, Callable[..., None]]], Any]
 Spawner = Callable[[Coroutine[Any, Any, Any], str], object]
@@ -76,6 +79,46 @@ def default_spawn(coro: Coroutine[Any, Any, Any], name: str) -> object:
     from aragora.pipeline.canonical_execution import schedule_coroutine
 
     return schedule_coroutine(coro, name=name)
+
+
+def panel_specs(selection: Sequence[str]) -> str:
+    """The selection as explicit agent specs (JSON) whose names are all distinct.
+
+    Agents are named after their provider, so two VibeProxy models (both
+    ``openai-api``) would share a name, and the arena keys proposals,
+    critiques and votes by name: one agent's work would be lost. Agents whose
+    default names clash are named after their model instead, within the
+    agent-name rules (``SAFE_AGENT_PATTERN``).
+    """
+    from aragora.agents.spec import AgentSpec
+
+    specs = [AgentSpec.parse(entry, _warn=False) for entry in selection]
+    counts = Counter(str(spec.name) for spec in specs)
+    taken = {name for name, count in counts.items() if count == 1}
+    panel: list[dict[str, str | None]] = []
+    for spec in specs:
+        name = str(spec.name)
+        if counts[name] > 1:
+            label = spec.model or spec.provider
+            name, number = _agent_name(label), 2
+            while name in taken:
+                name, number = _agent_name(label, f"-{number}"), number + 1
+            taken.add(name)
+        panel.append(
+            {
+                "provider": spec.provider,
+                "model": spec.model,
+                "persona": spec.persona,
+                "role": spec.role,
+                "name": name,
+            }
+        )
+    return json.dumps(panel)
+
+
+def _agent_name(label: str, suffix: str = "") -> str:
+    name = re.sub(r"\.{2,}", ".", re.sub(r"[^A-Za-z0-9._-]+", "-", label)).strip(".")
+    return (name or "agent")[: MAX_AGENT_NAME_CHARS - len(suffix)].rstrip(".") + suffix
 
 
 def default_cost_tracker() -> Any | None:
@@ -301,7 +344,7 @@ class DecisionRunner:
         watch = _DebateWatch(budget)
         config = DebateConfig(
             question=request.question,
-            agents_str=",".join(request.agents),
+            agents_str=panel_specs(request.agents),
             rounds=request.rounds,
             debate_format="light",
             debate_id=debate_id,
