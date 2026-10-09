@@ -600,6 +600,46 @@ describe('AuthContext', () => {
       expect(result.current.user).toBeNull();
     });
 
+    /** Rejects this tab's refresh after `otherTab` has changed the shared storage. */
+    async function rejectRefreshAfter(otherTab: () => void, status = 401) {
+      const reply = deferred<FetchReply>();
+      routeAuthFetches(() => reply.promise);
+      const { result } = await renderRestoredSession();
+      const pending = result.current.refreshToken();
+      otherTab();
+      let refreshed: boolean | undefined;
+      await act(async () => {
+        reply.resolve({ ok: false, status, json: () => Promise.resolve({ error: 'rejected' }) });
+        refreshed = await pending;
+      });
+      return { result, refreshed };
+    }
+
+    it.each([401, 403])('adopts the session another tab stored while a refresh rejected with %i was in flight', async (status) => {
+      const otherUser = { ...mockUser, id: 'user-456', email: 'other@example.com' };
+      const expired = jest.fn();
+      window.addEventListener('auth:session-expired', expired);
+      const { result, refreshed } = await rejectRefreshAfter(() => {
+        mockLocalStorage['aragora_tokens'] = JSON.stringify(refreshedTokens);
+        mockLocalStorage['aragora_user'] = JSON.stringify(otherUser);
+      }, status);
+      window.removeEventListener('auth:session-expired', expired);
+
+      expect(refreshed).toBe(true);
+      expect(mockLocalStorage['aragora_tokens']).toBe(JSON.stringify(refreshedTokens));
+      expect(result.current).toMatchObject({ tokens: refreshedTokens, user: otherUser, isAuthenticated: true });
+      expect(expired).not.toHaveBeenCalled();
+      expect(mockHardNavigate).not.toHaveBeenCalled();
+    });
+
+    it('still clears and navigates when the session was signed out elsewhere during a rejected refresh', async () => {
+      const { result, refreshed } = await rejectRefreshAfter(() => AUTH_KEYS.forEach((key) => delete mockLocalStorage[key]));
+
+      expect(refreshed).toBe(false);
+      expect(result.current.isAuthenticated).toBe(false);
+      expect(mockHardNavigate).toHaveBeenCalledWith('/auth/login');
+    });
+
     it('navigates to /auth/login when the automatic refresh before expiry is rejected', async () => {
       const seen = recordStorageAtNavigation();
       routeAuthFetches(() => Promise.resolve({ ok: false, status: 401, json: () => Promise.resolve({ error: 'rejected' }) }));
@@ -722,6 +762,32 @@ describe('AuthContext', () => {
       // After restoration, should be authenticated
       expect(result.current.user).toBeTruthy();
       expect(result.current.tokens).toBeTruthy();
+    });
+
+    it.each([
+      ['clears the session', mockTokens, false],
+      ['keeps a session another tab stored meanwhile', { ...mockTokens, access_token: 'access-token-other' }, true],
+    ])('%s when the restored session fails validation', async (_label, storedAfter, kept) => {
+      const me = deferred<FetchReply>();
+      routeAuthFetches(() => Promise.reject(new Error('unexpected refresh')), () => me.promise);
+      mockLocalStorage['aragora_tokens'] = JSON.stringify(mockTokens);
+      mockLocalStorage['aragora_user'] = JSON.stringify(mockUser);
+      const expired = jest.fn();
+      window.addEventListener('auth:session-expired', expired);
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await waitFor(() => expect(result.current.isAuthenticated).toBe(true));
+      mockLocalStorage['aragora_tokens'] = JSON.stringify(storedAfter);
+
+      await act(async () => {
+        me.resolve({ ok: false, status: 401, json: () => Promise.resolve({ error: 'invalid' }) });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      window.removeEventListener('auth:session-expired', expired);
+
+      expect(mockLocalStorage['aragora_tokens']).toBe(kept ? JSON.stringify(storedAfter) : undefined);
+      expect(result.current.isAuthenticated).toBe(kept);
+      expect(expired).toHaveBeenCalledTimes(kept ? 0 : 1);
+      expect(mockHardNavigate).not.toHaveBeenCalled();
     });
 
     it('clears expired tokens from localStorage', async () => {

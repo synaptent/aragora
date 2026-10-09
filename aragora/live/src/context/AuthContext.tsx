@@ -379,6 +379,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           logger.warn('[AuthContext] Session validation timed out, keeping cached session');
           // Timeout: backend unreachable — keep optimistic auth, don't lock user out
         } else {
+          // Another tab signed in or renewed the session meanwhile; this failure concerns the old one.
+          const current = getStoredTokens();
+          if (current?.access_token && current.access_token !== tokens.access_token) return;
           logger.warn('[AuthContext] Stored session invalid, clearing auth');
           clearAuth();
           window.dispatchEvent(new CustomEvent('auth:session-expired', {
@@ -567,6 +570,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!response.ok) {
         // Only clear auth on definitive rejection (401/403), not transient errors
         if (response.status === 401 || response.status === 403) {
+          // Refresh tokens are single-use: if another tab renewed the session or signed in
+          // meanwhile, this rejection is stale and the stored session is the current one.
+          const current = getStoredTokens();
+          if (current?.refresh_token && current.refresh_token !== tokens.refresh_token) {
+            setState(prev => ({
+              ...prev,
+              user: getStoredUser(),
+              organization: getStoredActiveOrg(),
+              organizations: getStoredUserOrgs(),
+              tokens: current,
+              isAuthenticated: true,
+            }));
+            return true;
+          }
           clearAuth();
           setState({
             user: null,
