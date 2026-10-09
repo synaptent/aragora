@@ -80,6 +80,25 @@ def _normalize_ip(ip_value: str) -> str:
         return ip_value.strip()
 
 
+def is_trusted_proxy_address(ip: str) -> bool:
+    """Check an exact peer address against the parsed ARAGORA_TRUSTED_PROXIES set.
+
+    Matches listed IPs and CIDR ranges (``localhost`` is listed as 127.0.0.1
+    and ::1). An IPv4-mapped IPv6 address such as ``::ffff:127.0.0.1`` is
+    checked as its IPv4 address. Unlike ``_normalize_ip``, IPv6 addresses are
+    not grouped by /64 here, so a listed ``::1`` matches.
+    """
+    try:
+        addr = ipaddress.ip_address(str(ip).strip())
+    except ValueError:
+        return False
+    if type(addr) is ipaddress.IPv6Address and addr.ipv4_mapped is not None:
+        addr = addr.ipv4_mapped
+    if str(addr) in _TRUSTED_PROXY_IPS:
+        return True
+    return any(addr in net for net in _TRUSTED_PROXY_NETS)
+
+
 def _is_trusted_proxy(ip: str) -> bool:
     """Check if IP is a trusted proxy for XFF header processing.
 
@@ -89,20 +108,7 @@ def _is_trusted_proxy(ip: str) -> bool:
     if not ip:
         return False
 
-    normalized = _normalize_ip(ip)
-    if normalized in _TRUSTED_PROXY_IPS:
-        return True
-
-    if _TRUSTED_PROXY_NETS:
-        try:
-            addr = ipaddress.ip_address(normalized)
-            for net in _TRUSTED_PROXY_NETS:
-                if addr in net:
-                    return True
-        except ValueError:
-            logger.debug("Could not parse IP address for trusted proxy check: %s", normalized)
-
-    return False
+    return is_trusted_proxy_address(_normalize_ip(ip))
 
 
 def _extract_client_ip(
@@ -209,6 +215,7 @@ __all__ = [
     "BURST_MULTIPLIER",
     "TRUSTED_PROXIES",
     "_normalize_ip",
+    "is_trusted_proxy_address",
     "_is_trusted_proxy",
     "_extract_client_ip",
     "sanitize_rate_limit_key_component",

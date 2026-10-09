@@ -62,6 +62,7 @@ from aragora.server.middleware.rate_limit import (
 from aragora.server.middleware.rate_limit import (
     get_rate_limiter as get_middleware_limiter,
 )
+from aragora.server.middleware.rate_limit.base import is_trusted_proxy_address
 from aragora.server.middleware.rate_limit.distributed import (
     get_distributed_limiter,
     DistributedRateLimiter,
@@ -305,6 +306,9 @@ RATE_LIMITING_DISABLED = os.environ.get("ARAGORA_DISABLE_ALL_RATE_LIMITS", "").l
     "yes",
 )
 
+# Raw entries, kept for importers. get_client_ip matches peers against the
+# middleware's parsed set instead, because exact string membership never
+# matches a CIDR entry or an IPv4-mapped peer.
 TRUSTED_PROXIES = frozenset(
     p.strip()
     for p in os.getenv("ARAGORA_TRUSTED_PROXIES", "127.0.0.1,::1,localhost").split(",")
@@ -327,8 +331,17 @@ def get_client_ip(handler: Any) -> str:
     """Extract client IP from request handler.
 
     Forwarding headers (Cloudflare's CF-Connecting-IP / True-Client-IP with
-    CF-RAY, X-Forwarded-For, X-Real-IP) are honoured only when the direct peer
-    is in TRUSTED_PROXIES; otherwise the peer address is the client IP.
+    CF-RAY, then the first X-Forwarded-For entry, then X-Real-IP) are honoured
+    only when the direct peer is a trusted proxy: an IP or CIDR range listed in
+    ARAGORA_TRUSTED_PROXIES (``localhost`` means 127.0.0.1 and ::1; an
+    IPv4-mapped peer such as ``::ffff:127.0.0.1`` counts as its IPv4 address).
+    Any other peer is keyed on its own address.
+
+    Trust contract: a listed proxy must overwrite or strip client-supplied
+    CF-*, True-Client-IP, X-Forwarded-For and X-Real-IP headers, because this
+    function believes whatever a trusted peer forwards. Cloudflare's edge
+    overwrites CF-Connecting-IP; a proxy that passes these headers through
+    unchanged lets the client choose its key.
 
     Args:
         handler: HTTP request handler with headers
@@ -350,7 +363,7 @@ def get_client_ip(handler: Any) -> str:
     # chose unless the sender is a proxy we trust, so a client that reaches
     # the origin directly must not be able to pick its own rate-limit key.
     headers = getattr(handler, "headers", None)
-    if remote_ip in TRUSTED_PROXIES and headers and hasattr(headers, "get"):
+    if is_trusted_proxy_address(remote_ip) and headers and hasattr(headers, "get"):
         try:
             # Cloudflare: also requires the CF-RAY marker header
             cf_ray = headers.get("CF-RAY") or headers.get("cf-ray")

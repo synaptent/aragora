@@ -538,12 +538,9 @@ class TestGetClientIpCloudflareTrust:
         assert get_client_ip(handler) == expected
 
     def test_cloudflare_headers_from_configured_proxy_honoured(self, monkeypatch):
-        import sys
-
         from aragora.server.handlers.utils.rate_limit import get_client_ip
 
-        rl_module = sys.modules["aragora.server.handlers.utils.rate_limit"]
-        monkeypatch.setattr(rl_module, "TRUSTED_PROXIES", frozenset({"172.18.0.1"}))
+        _trust_proxies(monkeypatch, "172.18.0.1")
         handler = FakeHandler(
             client_address=("172.18.0.1", 52000),
             headers={"CF-RAY": "8a1b2c3d4e5f-AMS", "CF-Connecting-IP": "198.51.100.42"},
@@ -575,6 +572,95 @@ class TestGetClientIpCloudflareTrust:
             headers={"CF-Connecting-IP": "198.51.100.42", "X-Forwarded-For": "198.51.100.43"},
         )
         assert get_client_ip(handler) == expected
+
+
+def _trust_proxies(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    """Apply ``ARAGORA_TRUSTED_PROXIES=value`` to the raw and the parsed trusted-proxy sets."""
+    import ipaddress
+    import sys
+
+    from aragora.server.middleware.rate_limit import base as rl_base
+
+    entries = [p.strip() for p in value.split(",") if p.strip()]
+    ips: set[str] = set()
+    nets: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
+    for entry in entries:
+        if entry == "localhost":
+            ips |= {"127.0.0.1", "::1"}
+        elif "/" in entry:
+            nets.append(ipaddress.ip_network(entry, strict=False))
+        else:
+            ips.add(str(ipaddress.ip_address(entry)))
+    rl_module = sys.modules["aragora.server.handlers.utils.rate_limit"]
+    monkeypatch.setattr(rl_module, "TRUSTED_PROXIES", frozenset(entries))
+    monkeypatch.setattr(rl_base, "_TRUSTED_PROXY_IPS", ips)
+    monkeypatch.setattr(rl_base, "_TRUSTED_PROXY_NETS", nets)
+
+
+class TestGetClientIpParsedTrustedProxies:
+    """Trust follows the parsed ARAGORA_TRUSTED_PROXIES set: IPs, CIDR ranges, localhost."""
+
+    TUNNEL = "127.0.0.1,::1,localhost,172.16.0.0/12"
+    CF = {"CF-RAY": "8a1b2c3d4e5f-AMS", "CF-Connecting-IP": "198.51.100.42"}
+    FORGED = {
+        **CF,
+        "True-Client-IP": "198.51.100.45",
+        "X-Forwarded-For": "198.51.100.43",
+        "X-Real-IP": "198.51.100.44",
+    }
+
+    @staticmethod
+    def _ip(peer: str, headers: dict[str, str]) -> str:
+        from aragora.server.handlers.utils.rate_limit import get_client_ip
+
+        return get_client_ip(FakeHandler(client_address=(peer, 52000), headers=dict(headers)))
+
+    def test_cidr_listed_peer_cloudflare_headers_honoured(self, monkeypatch):
+        _trust_proxies(monkeypatch, self.TUNNEL)
+        assert self._ip("172.18.0.1", self.CF) == "198.51.100.42"
+
+    @pytest.mark.parametrize(
+        ("header", "value", "expected"),
+        [
+            ("X-Forwarded-For", "198.51.100.43, 172.18.0.1", "198.51.100.43"),
+            ("X-Real-IP", "198.51.100.44", "198.51.100.44"),
+        ],
+    )
+    def test_cidr_listed_peer_forwarded_headers_honoured(
+        self, monkeypatch, header, value, expected
+    ):
+        _trust_proxies(monkeypatch, self.TUNNEL)
+        assert self._ip("172.18.0.1", {header: value}) == expected
+
+    @pytest.mark.parametrize("peer", ["::ffff:127.0.0.1", "::ffff:172.18.0.1"])
+    def test_ipv4_mapped_peer_is_trusted(self, monkeypatch, peer):
+        _trust_proxies(monkeypatch, self.TUNNEL)
+        assert self._ip(peer, self.CF) == "198.51.100.42"
+        assert self._ip(peer, {"X-Forwarded-For": "198.51.100.43"}) == "198.51.100.43"
+
+    @pytest.mark.parametrize(
+        "peer", ["203.0.113.9", "10.0.0.1", "::ffff:203.0.113.9", "2001:db8::9"]
+    )
+    def test_untrusted_peer_forged_headers_key_on_peer(self, monkeypatch, peer):
+        import ipaddress
+
+        _trust_proxies(monkeypatch, self.TUNNEL)
+        assert self._ip(peer, self.FORGED) == str(ipaddress.ip_address(peer))
+
+    @pytest.mark.parametrize(
+        ("peer", "headers", "expected"),
+        [
+            ("127.0.0.1", CF, "198.51.100.42"),
+            ("::1", CF, "198.51.100.42"),
+            ("::1", {"X-Forwarded-For": "198.51.100.43"}, "198.51.100.43"),
+            ("127.0.0.1", {"X-Real-IP": "198.51.100.44"}, "198.51.100.44"),
+            ("10.0.0.1", FORGED, "10.0.0.1"),
+            ("172.18.0.1", FORGED, "172.18.0.1"),
+        ],
+    )
+    def test_default_list_unchanged(self, monkeypatch, peer, headers, expected):
+        _trust_proxies(monkeypatch, "127.0.0.1,::1,localhost")
+        assert self._ip(peer, headers) == expected
 
 
 # ===========================================================================
