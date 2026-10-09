@@ -84,6 +84,8 @@ if TYPE_CHECKING:
 # Import the unified AgentSpec from agents.spec (runtime, after TYPE_CHECKING)
 from aragora.agents.spec import AgentSpec  # noqa: E402
 
+_ANTHROPIC_PROVIDERS = frozenset({"anthropic-api", "claude"})
+
 
 @dataclass
 class AgentCreationResult:
@@ -136,6 +138,9 @@ class DebateConfig:
     quality_pipeline: dict | None = None  # Post-consensus quality pipeline config
     org_id: str | None = None  # Owning org, from the authenticated creator
     created_by: str | None = None  # Authenticated creator's user id
+    # Debate only the given context with the given agents: no Knowledge Mound,
+    # cross-debate memory, or synthesis model outside the panel.
+    context_only: bool = False
 
     @property
     def model_comparison(self) -> dict | None:
@@ -306,10 +311,15 @@ class DebateFactory:
                 else:
                     role = "critic"
 
-            # Use the strongest model for synthesis/judgment when no
-            # explicit model was requested
+            # Use the strongest Claude model for synthesis/judgment when an
+            # Anthropic agent has no explicit model; other providers keep
+            # their own default (a Claude model id would fail there).
             model = spec.model
-            if model is None and role in ("synthesizer", "judge"):
+            if (
+                model is None
+                and role in ("synthesizer", "judge")
+                and spec.provider in _ANTHROPIC_PROVIDERS
+            ):
                 model = "claude-opus-4-7"
                 logger.info(
                     "Using %s for %s role (strongest available model)",
@@ -609,6 +619,7 @@ class DebateFactory:
             enable_content_moderation=True,
             enable_context_trust_tiering=True,
             detect_context_taint=True,
+            enable_llm_synthesis=not config.context_only,
         )
 
         # Enable epistemic hygiene flags when mode is set
@@ -709,11 +720,18 @@ class DebateFactory:
         if self.evidence_store:
             builder = builder.with_evidence_store(self.evidence_store)
 
-        # Wire Knowledge Mound for debate context enrichment and outcome ingestion.
-        # Use explicitly provided instance, or attempt to resolve the singleton.
-        km = self._resolve_knowledge_mound()
-        if km is not None:
-            builder = builder.with_knowledge_mound(km)
+        if config.context_only:
+            builder = builder.with_memory_options(
+                enable_knowledge_retrieval=False,
+                enable_knowledge_ingestion=False,
+                enable_cross_debate_memory=False,
+            )
+        else:
+            # Wire Knowledge Mound for debate context enrichment and outcome ingestion.
+            # Use explicitly provided instance, or attempt to resolve the singleton.
+            km = self._resolve_knowledge_mound()
+            if km is not None:
+                builder = builder.with_knowledge_mound(km)
 
         # Enable position ledger auto-creation for truth grounding
         builder = builder.with_enable_position_ledger(True)

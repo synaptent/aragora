@@ -361,6 +361,50 @@ class TestDebateFactoryCreateAgents:
             # Verify emit was called (error event emission)
             assert emitter.emit.called
 
+    @staticmethod
+    def _models_requested(specs):
+        import aragora.server.debate_factory as factory_module
+
+        calls = []
+
+        def _fake_create_agent(**kwargs):
+            calls.append(kwargs)
+            agent = Mock()
+            agent.api_key = "fake-key"
+            return agent
+
+        with patch.object(factory_module, "create_agent", side_effect=_fake_create_agent):
+            DebateFactory().create_agents(specs)
+        return [(call["model_type"], call["role"], call["model"]) for call in calls]
+
+    def test_non_anthropic_synthesizer_keeps_its_own_default_model(self):
+        """A grok synthesizer must not be asked for a Claude model."""
+        specs = [AgentSpec(provider="openai-api", model="gpt-5.5"), AgentSpec(provider="grok")]
+
+        assert self._models_requested(specs) == [
+            ("openai-api", "proposer", "gpt-5.5"),
+            ("grok", "synthesizer", None),
+        ]
+
+    def test_non_anthropic_judge_keeps_its_own_default_model(self):
+        specs = [AgentSpec(provider="grok", role="judge"), AgentSpec(provider="openai-api")]
+
+        assert self._models_requested(specs)[0] == ("grok", "judge", None)
+
+    def test_anthropic_synthesizer_without_a_model_gets_the_strongest_claude(self):
+        specs = [AgentSpec(provider="grok"), AgentSpec(provider="anthropic-api")]
+
+        assert self._models_requested(specs)[1] == (
+            "anthropic-api",
+            "synthesizer",
+            "claude-opus-4-7",
+        )
+
+    def test_explicit_synthesizer_model_is_kept(self):
+        specs = [AgentSpec(provider="grok"), AgentSpec(provider="anthropic-api", model="m")]
+
+        assert self._models_requested(specs)[1] == ("anthropic-api", "synthesizer", "m")
+
 
 class TestDebateFactoryCreateArena:
     """Tests for DebateFactory.create_arena method."""
@@ -406,6 +450,7 @@ class TestDebateFactoryCreateArena:
             "with_event_emitter",
             "with_loop_id",
             "with_strict_loop_scoping",
+            "with_receipt_owner",
             "with_enable_position_ledger",
             "with_agent_selection",
         ]
@@ -632,3 +677,41 @@ class TestDebateFactoryKnowledgeMound:
             # Should not raise
             arena = factory.create_arena(config)
             assert arena is not None
+
+
+class TestDebateFactoryContextOnly:
+    """context_only debates see only the given context and the given agents."""
+
+    def _arena(self, context_only):
+        import aragora.server.debate_factory as factory_module
+
+        resolve = Mock(return_value=Mock())
+        with (
+            patch.object(factory_module, "create_agent", side_effect=[Mock(), Mock()]),
+            patch.object(DebateFactory, "_resolve_knowledge_mound", resolve),
+        ):
+            arena = DebateFactory().create_arena(
+                DebateConfig(
+                    question="Test question",
+                    agents_str="anthropic-api,openai-api",
+                    rounds=1,
+                    auto_trim_unavailable=False,
+                    context_only=context_only,
+                )
+            )
+        return arena, resolve
+
+    def test_context_only_leaves_out_memory_knowledge_and_outside_synthesis(self):
+        arena, resolve = self._arena(context_only=True)
+        resolve.assert_not_called()
+        assert arena.knowledge_mound is None
+        assert arena.enable_knowledge_retrieval is False
+        assert arena.enable_knowledge_ingestion is False
+        assert arena.enable_cross_debate_memory is False
+        assert arena.protocol.enable_llm_synthesis is False
+
+    def test_default_debates_keep_knowledge_and_synthesis(self):
+        arena, resolve = self._arena(context_only=False)
+        resolve.assert_called_once()
+        assert arena.knowledge_mound is not None
+        assert arena.protocol.enable_llm_synthesis is True

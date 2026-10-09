@@ -635,3 +635,51 @@ class TestGrokAgentGenerationParams:
         params = agent.get_generation_params()
 
         assert "temperature" not in params or params.get("temperature") is not None
+
+
+class TestGrokAgentPenaltyParameters:
+    """xAI rejects penalty parameters for grok-4 models with HTTP 400."""
+
+    def test_grok_persona_payload_omits_penalties(self, mock_env_with_api_keys):
+        from aragora.agents.api_agents.grok import GrokAgent
+        from aragora.agents.personas import apply_persona_to_agent
+
+        agent = GrokAgent()
+        assert apply_persona_to_agent(agent, "grok")
+        assert agent.frequency_penalty == 0.1
+        agent.presence_penalty = 0.2
+
+        payload = agent._build_payload([{"role": "user", "content": "Hi"}])
+
+        assert "frequency_penalty" not in payload
+        assert "presence_penalty" not in payload
+        assert payload["temperature"] == 0.9
+
+    @pytest.mark.asyncio
+    async def test_grok_persona_request_sent_to_xai_omits_penalties(
+        self, mock_env_with_api_keys, mock_grok_response
+    ):
+        from aragora.agents.api_agents.grok import GrokAgent
+        from aragora.agents.personas import apply_persona_to_agent
+
+        agent = GrokAgent()
+        apply_persona_to_agent(agent, "grok")
+
+        with patch("aiohttp.ClientSession") as mock_session_class:
+            mock_session = MagicMock()
+            mock_response = MagicMock()
+            mock_response.status = 200
+            mock_response.json = AsyncMock(return_value=mock_grok_response)
+            mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+            mock_response.__aexit__ = AsyncMock(return_value=None)
+            mock_session.post = MagicMock(return_value=mock_response)
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+            mock_session_class.return_value = mock_session
+
+            await agent.generate("Test prompt")
+
+        sent = mock_session.post.call_args.kwargs["json"]
+        assert "frequency_penalty" not in sent
+        assert "presence_penalty" not in sent
+        assert sent["temperature"] == 0.9

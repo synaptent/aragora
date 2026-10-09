@@ -74,6 +74,14 @@ class GrokAgent(OpenAICompatibleMixin, APIAgent):
             self.enable_fallback = enable_fallback
         self._fallback_agent = None
 
+    def _build_payload(self, messages: list[dict], stream: bool = False) -> dict:
+        payload = super()._build_payload(messages, stream=stream)
+        # xAI answers 400 "does not support parameter frequencyPenalty" for grok-4
+        # models, which turns every persona-bearing grok call into a failure.
+        payload.pop("frequency_penalty", None)
+        payload.pop("presence_penalty", None)
+        return payload
+
     def is_quota_error(self, status_code: int, error_text: str) -> bool:
         """Treat xAI live-search deprecation as a fallback-triggering provider error."""
         error_lower = (error_text or "").lower()
