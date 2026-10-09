@@ -891,10 +891,10 @@ class TestMigrationAuditProvider:
     def test_live_sync_rotation_save_timeout_fails_closed_and_closes_store(
         self, encryption_service, sync_backend, monkeypatch
     ):
-        monkeypatch.setattr(migration_module, "_SYNC_STORE_CALL_TIMEOUT", 0.2)
+        monkeypatch.setattr(migration_module, "_SYNC_STORE_CALL_TIMEOUT", 1.0)
         sync_backend.add_connector("connector-1", {"api_key": "slow-secret"})
         sync_backend.add_connector("connector-2", {"api_key": "fast-secret"})
-        sync_backend.save_delays["connector-1"] = 5.0
+        sync_backend.save_delays["connector-1"] = 60.0
 
         result = self._rotate_sync(encryption_service)
 
