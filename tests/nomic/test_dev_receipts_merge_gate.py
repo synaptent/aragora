@@ -37,6 +37,12 @@ def test_function_is_defined_in_the_merge_gate_module(name: str) -> None:
     assert getattr(dev_receipts, name) is func
 
 
+def test_directly_imported_helper_is_the_one_core_uses() -> None:
+    from aragora.nomic.dev_coordination import core
+
+    assert merge_gate._canonical_verification_command is core._canonical_verification_command
+
+
 @pytest.mark.parametrize(
     "name",
     [

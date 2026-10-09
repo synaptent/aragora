@@ -9,6 +9,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+# Imported from its leaf module rather than through ``_dev``: mypy cannot infer
+# the type of this alias when it resolves the dev_coordination import cycle.
+from .dev_coordination_verification import _canonical_verification_command
+
 if TYPE_CHECKING:
     from .dev_coordination import core as _dev
 else:
@@ -18,7 +22,6 @@ else:
     from . import dev_coordination as _dev
 
 _backfill_work_order_blocker_metadata = _dev._backfill_work_order_blocker_metadata
-_canonical_verification_command = _dev._canonical_verification_command
 _default_blocking_question_for_reason = _dev._default_blocking_question_for_reason
 _docs_only_replay_commands_for_work_order = _dev._docs_only_replay_commands_for_work_order
 _find_work_order = _dev._find_work_order
