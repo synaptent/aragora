@@ -199,6 +199,14 @@ ENTRYPOINT_INVENTORY: Final[tuple[BackboneEntrypoint, ...]] = (
         signals=("execute_decision_plan_with_backbone",),
     ),
     BackboneEntrypoint(
+        file_path="aragora/server/handlers/decisions/workspace_decisions.py",
+        qualname="WorkspaceDecisionsHandler._store_decision",
+        lifecycle="create",
+        coverage="green",
+        wiring_mode="manual_seed",
+        signals=("decision_plan_ctor", "ensure_decision_plan_backbone_run", "plan_store_create"),
+    ),
+    BackboneEntrypoint(
         file_path="aragora/cli/commands/decide.py",
         qualname="run_decide",
         lifecycle="mixed",

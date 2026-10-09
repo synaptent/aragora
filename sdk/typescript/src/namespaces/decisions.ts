@@ -380,6 +380,14 @@ export class DecisionsAPI {
     return this.client.get(`/api/v1/workspace/decisions/${decisionId}/passages/${passageId}`);
   }
 
+  /**
+   * Start a workspace decision from a question and pasted text.
+   *
+   * File uploads use multipart/form-data, which this client does not send.
+   */
+  async createWorkspaceDecision(body: WorkspaceDecisionRequest): Promise<WorkspaceCreatedDecision> {
+    return this.client.request('POST', '/api/v1/workspace/decisions', { body });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -479,6 +487,15 @@ export interface WorkspacePassage {
   in_context: boolean;
   created_at: string;
 }
+
+export interface WorkspaceDecisionRequest {
+  question: string;
+  agents: string[];
+  pasted_text?: string;
+  rounds?: number;
+}
+
+export interface WorkspaceCreatedDecision extends WorkspaceDecision, WorkspaceDecisionSources {}
 
 // ---------------------------------------------------------------------------
 // DecisionPlan types

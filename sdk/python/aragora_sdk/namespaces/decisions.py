@@ -400,6 +400,34 @@ class DecisionsAPI:
             "GET", f"/api/v1/workspace/decisions/{decision_id}/passages/{passage_id}"
         )
 
+    def create_workspace_decision(
+        self,
+        question: str,
+        agents: builtins.list[str],
+        pasted_text: str | None = None,
+        rounds: int | None = None,
+    ) -> dict[str, Any]:
+        """Start a workspace decision from a question and pasted text.
+
+        Files are uploaded with multipart/form-data, which this client does not
+        send; use the HTTP API directly for file uploads.
+
+        Args:
+            question: The question to decide.
+            agents: Offered agent specs (see ``get_workspace_agent_options``).
+            pasted_text: Optional pasted evidence.
+            rounds: Debate rounds (1 or 2, default 1).
+
+        Returns:
+            The new decision (status ``debating``) with its sources and passages.
+        """
+        data: dict[str, Any] = {"question": question, "agents": agents}
+        if pasted_text is not None:
+            data["pasted_text"] = pasted_text
+        if rounds is not None:
+            data["rounds"] = rounds
+        return self._client._request("POST", "/api/v1/workspace/decisions", json=data)
+
 
 class AsyncDecisionsAPI:
     """Asynchronous decisions API."""
@@ -631,3 +659,18 @@ class AsyncDecisionsAPI:
         return await self._client._request(
             "GET", f"/api/v1/workspace/decisions/{decision_id}/passages/{passage_id}"
         )
+
+    async def create_workspace_decision(
+        self,
+        question: str,
+        agents: builtins.list[str],
+        pasted_text: str | None = None,
+        rounds: int | None = None,
+    ) -> dict[str, Any]:
+        """Start a workspace decision from a question and pasted text (no files)."""
+        data: dict[str, Any] = {"question": question, "agents": agents}
+        if pasted_text is not None:
+            data["pasted_text"] = pasted_text
+        if rounds is not None:
+            data["rounds"] = rounds
+        return await self._client._request("POST", "/api/v1/workspace/decisions", json=data)

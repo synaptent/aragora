@@ -93,6 +93,24 @@ _DECISION_PROPERTIES: dict[str, Any] = {
 
 _DECISION: dict[str, Any] = {"type": "object", "properties": _DECISION_PROPERTIES}
 
+_CREATED_DECISION: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        **_DECISION_PROPERTIES,
+        "decision_id": {"type": "string"},
+        "sources": {"type": "array", "items": _SOURCE},
+    },
+}
+
+_INTAKE_FIELDS: dict[str, Any] = {
+    "question": {"type": "string", "description": "The question to decide (required)."},
+    "pasted_text": {
+        "type": "string",
+        "description": "Optional pasted evidence (source kind `pasted`).",
+    },
+    "rounds": {"type": "integer", "minimum": 1, "maximum": 2, "default": 1},
+}
+
 
 def _error(status: str, description: str) -> dict[str, Any]:
     response = _error_response(status, description)
@@ -210,6 +228,65 @@ DECISION_WORKSPACE_ENDPOINTS: dict[str, Any] = {
                 "400": _error("400", "Invalid limit or offset"),
                 "401": STANDARD_ERRORS["401"],
                 "403": STANDARD_ERRORS["403"],
+            },
+        },
+        "post": {
+            "tags": _TAGS,
+            "summary": "Start a workspace decision",
+            "operationId": "createWorkspaceDecision",
+            "description": (
+                "Create a decision from a question, optional pasted text and up to "
+                "`ARAGORA_WORKSPACE_MAX_DOCUMENTS` `.md`/`.txt` files, debated by the "
+                "selected offered agents. Sources are labelled S1, S2, ... in intake "
+                "order and split into passages S1:P1, ... with SHA-256 hashes. Any "
+                "refused field answers 400/413/415 naming the field and creates nothing. "
+                "Returns 202 with status `debating`. JSON bodies are accepted for "
+                "decisions without files." + _ORG_NOTE
+            ),
+            "security": _SECURITY,
+            "requestBody": {
+                "required": True,
+                "content": {
+                    "multipart/form-data": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                **_INTAKE_FIELDS,
+                                "agents[]": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                    "description": "Offered agent specs (at least one).",
+                                },
+                                "files[]": {
+                                    "type": "array",
+                                    "items": {"type": "string", "format": "binary"},
+                                    "description": "`.md` or `.txt` files.",
+                                },
+                            },
+                            "required": ["question", "agents[]"],
+                        }
+                    },
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                **_INTAKE_FIELDS,
+                                "agents": {"type": "array", "items": {"type": "string"}},
+                            },
+                            "required": ["question", "agents"],
+                        }
+                    },
+                },
+            },
+            "responses": {
+                "202": _ok_response("Decision created; the debate is starting", _CREATED_DECISION),
+                "400": _error("400", "A field was refused (see `field` and `code`)"),
+                "401": STANDARD_ERRORS["401"],
+                "403": STANDARD_ERRORS["403"],
+                "411": _error("411", "Content-Length is required"),
+                "413": _error("413", "A file, the pasted text or the request is too large"),
+                "415": _error("415", "Unsupported request content type"),
+                "503": _error("503", "File uploads are unavailable"),
             },
         },
     },

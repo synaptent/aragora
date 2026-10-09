@@ -354,6 +354,7 @@ DEFAULT_ROUTE_PERMISSIONS = [
     # Decision workspace (records are scoped to the caller's org by the handler)
     RoutePermission(r"^/api/(?:v1/)?workspace/agent-options$", "GET", "decisions.read"),
     RoutePermission(r"^/api/(?:v1/)?workspace/decisions$", "GET", "decisions.read"),
+    RoutePermission(r"^/api/(?:v1/)?workspace/decisions$", "POST", "decisions.create"),
     RoutePermission(r"^/api/(?:v1/)?workspace/decisions/([^/]+)$", "GET", "decisions.read", 1),
     RoutePermission(
         r"^/api/(?:v1/)?workspace/decisions/([^/]+)/sources$", "GET", "decisions.read", 1
