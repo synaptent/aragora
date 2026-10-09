@@ -189,7 +189,7 @@ class TestGetClientIp:
 
     def test_cloudflare_ip(self):
         handler = self._make_handler(
-            remote_ip="172.71.0.1",
+            remote_ip="127.0.0.1",
             headers={
                 "CF-RAY": "abc123",
                 "CF-Connecting-IP": "198.51.100.42",
@@ -200,7 +200,7 @@ class TestGetClientIp:
 
     def test_cloudflare_true_client_ip(self):
         handler = self._make_handler(
-            remote_ip="172.71.0.1",
+            remote_ip="127.0.0.1",
             headers={
                 "CF-RAY": "abc123",
                 "True-Client-IP": "198.51.100.42",

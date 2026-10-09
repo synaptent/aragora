@@ -396,7 +396,7 @@ class TestGetClientIp:
         from aragora.server.handlers.utils.rate_limit import get_client_ip
 
         handler = FakeHandler(
-            client_address=("172.16.0.1", 80),
+            client_address=("127.0.0.1", 80),
             headers={
                 "CF-RAY": "abc123",
                 "CF-Connecting-IP": "198.51.100.42",
@@ -408,7 +408,7 @@ class TestGetClientIp:
         from aragora.server.handlers.utils.rate_limit import get_client_ip
 
         handler = FakeHandler(
-            client_address=("172.16.0.1", 80),
+            client_address=("127.0.0.1", 80),
             headers={
                 "CF-RAY": "abc123",
                 "True-Client-IP": "198.51.100.43",
@@ -469,6 +469,112 @@ class TestGetClientIp:
             headers={"X-Forwarded-For": "203.0.113.1"},
         )
         assert get_client_ip(handler) == "203.0.113.1"
+
+
+class TestGetClientIpCloudflareTrust:
+    """Cloudflare client-IP headers count only when the direct peer is a trusted proxy."""
+
+    UNTRUSTED_PEER = "203.0.113.9"
+
+    @pytest.mark.parametrize(
+        "client_header",
+        ["CF-Connecting-IP", "cf-connecting-ip", "True-Client-IP", "true-client-ip"],
+    )
+    def test_forged_cloudflare_headers_from_untrusted_peer_key_on_peer(self, client_header):
+        from aragora.server.handlers.utils.rate_limit import get_client_ip
+
+        handler = FakeHandler(
+            client_address=(self.UNTRUSTED_PEER, 443),
+            headers={"CF-RAY": "8a1b2c3d4e5f-AMS", client_header: "198.51.100.42"},
+        )
+        assert get_client_ip(handler) == self.UNTRUSTED_PEER
+
+    def test_forged_cloudflare_headers_do_not_bypass_xff_rule(self):
+        from aragora.server.handlers.utils.rate_limit import get_client_ip
+
+        handler = FakeHandler(
+            client_address=(self.UNTRUSTED_PEER, 443),
+            headers={
+                "CF-RAY": "8a1b2c3d4e5f-AMS",
+                "CF-Connecting-IP": "198.51.100.42",
+                "X-Forwarded-For": "198.51.100.43",
+            },
+        )
+        assert get_client_ip(handler) == self.UNTRUSTED_PEER
+
+    def test_rotating_forged_cf_ip_shares_one_rate_limit_bucket(self, monkeypatch):
+        import sys
+
+        from aragora.server.handlers.utils.rate_limit import RateLimiter, get_client_ip
+
+        # The package re-exports a `rate_limit` decorator that shadows the submodule name.
+        rl_module = sys.modules["aragora.server.handlers.utils.rate_limit"]
+        monkeypatch.setattr(rl_module, "RATE_LIMITING_DISABLED", False)
+        limiter = RateLimiter(requests_per_minute=2)
+        allowed = [
+            limiter.is_allowed(
+                get_client_ip(
+                    FakeHandler(
+                        client_address=(self.UNTRUSTED_PEER, 443),
+                        headers={"CF-RAY": "x", "CF-Connecting-IP": f"198.51.100.{n}"},
+                    )
+                )
+            )
+            for n in range(1, 6)
+        ]
+        assert allowed == [True, True, False, False, False]
+
+    @pytest.mark.parametrize(
+        ("client_header", "expected"),
+        [("CF-Connecting-IP", "198.51.100.42"), ("True-Client-IP", "198.51.100.43")],
+    )
+    def test_cloudflare_headers_from_loopback_proxy_honoured(self, client_header, expected):
+        from aragora.server.handlers.utils.rate_limit import get_client_ip
+
+        handler = FakeHandler(
+            client_address=("127.0.0.1", 52000),
+            headers={"CF-RAY": "8a1b2c3d4e5f-AMS", client_header: expected},
+        )
+        assert get_client_ip(handler) == expected
+
+    def test_cloudflare_headers_from_configured_proxy_honoured(self, monkeypatch):
+        import sys
+
+        from aragora.server.handlers.utils.rate_limit import get_client_ip
+
+        rl_module = sys.modules["aragora.server.handlers.utils.rate_limit"]
+        monkeypatch.setattr(rl_module, "TRUSTED_PROXIES", frozenset({"172.18.0.1"}))
+        handler = FakeHandler(
+            client_address=("172.18.0.1", 52000),
+            headers={"CF-RAY": "8a1b2c3d4e5f-AMS", "CF-Connecting-IP": "198.51.100.42"},
+        )
+        assert get_client_ip(handler) == "198.51.100.42"
+
+    def test_cf_connecting_ip_preferred_over_xff_from_trusted_proxy(self):
+        from aragora.server.handlers.utils.rate_limit import get_client_ip
+
+        handler = FakeHandler(
+            client_address=("127.0.0.1", 52000),
+            headers={
+                "CF-RAY": "8a1b2c3d4e5f-AMS",
+                "CF-Connecting-IP": "198.51.100.42",
+                "X-Forwarded-For": "198.51.100.43, 172.70.1.1",
+            },
+        )
+        assert get_client_ip(handler) == "198.51.100.42"
+
+    @pytest.mark.parametrize(
+        ("peer", "expected"),
+        [("127.0.0.1", "198.51.100.43"), ("203.0.113.9", "203.0.113.9")],
+    )
+    def test_xff_without_cf_ray_unchanged(self, peer, expected):
+        from aragora.server.handlers.utils.rate_limit import get_client_ip
+
+        handler = FakeHandler(
+            client_address=(peer, 52000),
+            headers={"CF-Connecting-IP": "198.51.100.42", "X-Forwarded-For": "198.51.100.43"},
+        )
+        assert get_client_ip(handler) == expected
 
 
 # ===========================================================================

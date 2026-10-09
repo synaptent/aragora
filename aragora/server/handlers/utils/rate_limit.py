@@ -326,7 +326,9 @@ def _normalize_ip(ip_value: str) -> str:
 def get_client_ip(handler: Any) -> str:
     """Extract client IP from request handler.
 
-    Only trusts X-Forwarded-For when the direct IP is a trusted proxy.
+    Forwarding headers (Cloudflare's CF-Connecting-IP / True-Client-IP with
+    CF-RAY, X-Forwarded-For, X-Real-IP) are honoured only when the direct peer
+    is in TRUSTED_PROXIES; otherwise the peer address is the client IP.
 
     Args:
         handler: HTTP request handler with headers
@@ -344,11 +346,13 @@ def get_client_ip(handler: Any) -> str:
 
     remote_ip = _normalize_ip(remote_ip)
 
-    # Check for proxy headers
+    # Every forwarding header, Cloudflare's included, is whatever the sender
+    # chose unless the sender is a proxy we trust, so a client that reaches
+    # the origin directly must not be able to pick its own rate-limit key.
     headers = getattr(handler, "headers", None)
-    if headers and hasattr(headers, "get"):
+    if remote_ip in TRUSTED_PROXIES and headers and hasattr(headers, "get"):
         try:
-            # Cloudflare: trust only when a CF marker header is present
+            # Cloudflare: also requires the CF-RAY marker header
             cf_ray = headers.get("CF-RAY") or headers.get("cf-ray")
             cf_ip = headers.get("CF-Connecting-IP") or headers.get("cf-connecting-ip")
             if cf_ray and cf_ip and type(cf_ip) is str:
@@ -358,19 +362,18 @@ def get_client_ip(handler: Any) -> str:
             if cf_ray and true_client_ip and type(true_client_ip) is str:
                 return _normalize_ip(true_client_ip.strip())
 
-            if remote_ip in TRUSTED_PROXIES:
-                # X-Forwarded-For can contain multiple IPs: "client, proxy1, proxy2"
-                forwarded = headers.get("X-Forwarded-For") or headers.get("x-forwarded-for") or ""
-                if forwarded and type(forwarded) is str:
-                    # Take the first (original client) IP
-                    candidate = forwarded.split(",")[0].strip()
-                    if candidate:
-                        return _normalize_ip(candidate)
+            # X-Forwarded-For can contain multiple IPs: "client, proxy1, proxy2"
+            forwarded = headers.get("X-Forwarded-For") or headers.get("x-forwarded-for") or ""
+            if forwarded and type(forwarded) is str:
+                # Take the first (original client) IP
+                candidate = forwarded.split(",")[0].strip()
+                if candidate:
+                    return _normalize_ip(candidate)
 
-                # Also check X-Real-IP (used by nginx)
-                real_ip = headers.get("X-Real-IP") or headers.get("x-real-ip") or ""
-                if real_ip and type(real_ip) is str:
-                    return _normalize_ip(real_ip.strip())
+            # Also check X-Real-IP (used by nginx)
+            real_ip = headers.get("X-Real-IP") or headers.get("x-real-ip") or ""
+            if real_ip and type(real_ip) is str:
+                return _normalize_ip(real_ip.strip())
         except (TypeError, AttributeError):
             # Handle mock objects or unusual header types
             pass
