@@ -68,8 +68,15 @@ def test_tables_live_in_plans_db_next_to_plans(db_path):
         }
     finally:
         conn.close()
-    assert {"plans", "workspace_decisions", "decision_sources", "decision_passages"} <= tables
-    assert version == (1,)
+    assert {
+        "plans",
+        "workspace_decisions",
+        "decision_sources",
+        "decision_passages",
+        "decision_runs",
+        "decision_revisions",
+    } <= tables
+    assert version == (2,)
     for table, cols in columns.items():
         assert cols["org_id"][3] == 1, f"{table}.org_id must be NOT NULL"
     assert set(columns["workspace_decisions"]) >= {
