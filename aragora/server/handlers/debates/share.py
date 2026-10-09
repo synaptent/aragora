@@ -397,7 +397,9 @@ async def public_spectate_sse_generator(
             try:
                 event = await asyncio.wait_for(queue.get(), timeout=heartbeat_interval)
                 event_type = event.get("type", "event")
-                if event_type == "share_revoked":
+                # The unshare's notice queues behind earlier events, or is lost on a
+                # full queue, so each queued event is checked again before it is sent.
+                if event_type == "share_revoked" or not is_publicly_shared(debate_id):
                     yield _sse_frame("share_revoked", {"debate_id": debate_id})
                     break
                 yield _sse_frame(event_type, event)
