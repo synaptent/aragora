@@ -59,6 +59,8 @@ MIGRATED_CALLERS = (
     "aragora/server/middleware/exception_handler.py",
     "aragora/server/middleware/token_revocation.py",
     "aragora/server/session_store.py",
+    "aragora/server/startup/__init__.py",
+    "aragora/server/startup/parallel.py",
     "aragora/server/stream/__init__.py",
     "aragora/server/stream/arena_hooks.py",
 )
