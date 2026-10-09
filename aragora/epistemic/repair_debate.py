@@ -232,7 +232,7 @@ def _score_or_default(candidate: dict[str, Any], key: str, default: float = 0.5)
         return default
     try:
         score = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return default
     if not math.isfinite(score):
         return default

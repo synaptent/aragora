@@ -360,6 +360,25 @@ class TestCruxPropagation:
         assert shared.load_bearing_score == expected
         json.dumps(result.receipt.to_dict(), allow_nan=False)
 
+    @pytest.mark.parametrize(
+        "scores",
+        [
+            json.loads('{"load_bearing_score": 1' + "0" * 400 + "}"),
+            {"uncertainty_score": -(10**400)},
+            {"resolution_impact": 10**309},
+        ],
+    )
+    def test_scores_too_large_for_float_default(
+        self, monkeypatch: pytest.MonkeyPatch, scores: dict[str, int]
+    ) -> None:
+        spec = _spec(monkeypatch)
+        result = run_repair_debate(spec, [_NamedCruxAgent("agent-a", **scores)])
+        shared = next(crux for crux in result.receipt.cruxes if crux.crux_id == "crux.shared")
+        assert shared.load_bearing_score == 0.5
+        assert shared.uncertainty_score == 0.5
+        assert shared.resolution_impact == 0.5
+        json.dumps(result.receipt.to_dict(), allow_nan=False)
+
     @pytest.mark.parametrize("candidates", [None, "not-a-list", ["not-a-dict"]])
     def test_malformed_crux_candidates_are_treated_as_empty(
         self, monkeypatch: pytest.MonkeyPatch, candidates
