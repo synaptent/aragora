@@ -246,6 +246,25 @@ class TestScopedView:
         with pytest.raises(OrgScopeRequiredError):
             store.add_fact("Shared statement", "default")
 
+    def test_find_duplicate_names_the_fact_add_fact_would_reuse(self, store):
+        scoped_a = ScopedFactStore(store, "org_a")
+        foreign = ScopedFactStore(store, "org_b").add_fact("Shared statement", "default")
+        seed_unassigned(store, "Shared statement")
+
+        assert scoped_a.find_duplicate("Shared statement", "default") is None
+        first = scoped_a.add_fact("Shared statement", "default")
+        scoped_a.add_fact("Shared statement", "default", deduplicate=False)
+
+        found = scoped_a.find_duplicate("  shared   STATEMENT ", "default")
+        assert found is not None and found.id == first.id
+        assert scoped_a.find_duplicate("Shared statement", "ws_other") is None
+        in_b = store.find_duplicate("Shared statement", "default", org_id="org_b")
+        assert in_b is not None and in_b.id == foreign.id
+        with pytest.raises(ValueError):
+            scoped_a.find_duplicate("Shared statement", "default", org_id="org_b")
+        with pytest.raises(OrgScopeRequiredError):
+            store.find_duplicate("Shared statement", "default")
+
     def test_dedup_keeps_the_oldest_duplicate(self, store):
         scoped = ScopedFactStore(store, "org_a")
         fact_a = scoped.add_fact("Repeated claim", "default")

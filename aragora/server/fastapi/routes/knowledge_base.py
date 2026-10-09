@@ -35,11 +35,12 @@ Migration Notes:
     covers the lower-level FactStore API (facts, relations, queries, search).
 
 Organization scoping:
-    POST /facts binds each new fact to the caller's organization. Until
-    organization scoping lands for the other fact routes, every route that
-    reads or changes stored facts (everything except POST /facts and
-    GET /sync-status) answers 401 to anonymous callers and 403
-    ``knowledge_fact_access_closed`` to every authenticated caller.
+    POST /facts and POST /import bind each new fact to the caller's
+    organization; a caller without one gets 403 ``knowledge_org_required``.
+    Until organization scoping lands for the other fact routes, every route
+    that reads or changes stored facts (everything except POST /facts,
+    POST /import and GET /sync-status) answers 401 to anonymous callers and
+    403 ``knowledge_fact_access_closed`` to every authenticated caller.
 """
 
 from __future__ import annotations
@@ -1080,12 +1081,7 @@ async def export_knowledge_base(
         raise HTTPException(status_code=500, detail="Failed to export knowledge base")
 
 
-@router.post(
-    "/import",
-    response_model=ImportResponse,
-    status_code=201,
-    dependencies=_CLOSED_UNTIL_ORG_SCOPING,
-)
+@router.post("/import", response_model=ImportResponse, status_code=201)
 async def import_knowledge_base(
     body: ImportRequest,
     auth: AuthorizationContext = Depends(require_permission("knowledge:write")),
@@ -1096,6 +1092,9 @@ async def import_knowledge_base(
 
     Accepts a list of fact dictionaries and imports them into the knowledge
     base. Supports merge strategies: ``skip_existing``, ``overwrite``, ``merge``.
+    Every fact is bound to the caller's organization. An entry whose statement
+    is already stored in that organization and workspace is counted in
+    ``skipped``, not ``imported``.
 
     Requires ``knowledge:write`` permission.
     """
@@ -1121,11 +1120,16 @@ async def import_knowledge_base(
                     skipped += 1
                     continue
 
+            workspace_id = fact_data.get("workspace_id", body.workspace_id)
+            if await _call_store(store, "find_duplicate", statement, workspace_id, org_id=org_id):
+                skipped += 1
+                continue
+
             await _call_store(
                 store,
                 "add_fact",
                 statement=statement,
-                workspace_id=fact_data.get("workspace_id", body.workspace_id),
+                workspace_id=workspace_id,
                 evidence_ids=fact_data.get("evidence_ids", []),
                 source_documents=fact_data.get("source_documents", []),
                 confidence=fact_data.get("confidence", 0.5),

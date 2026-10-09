@@ -5,9 +5,10 @@ Requests go through the real FastAPI app (``create_app``) with access tokens fro
 context a real login produces. One organization's fact is seeded; every caller below
 belongs to another organization.
 
-Every route that reads or changes stored facts answers 401 to anonymous callers and the
-closure 403 to every authenticated role, before the fact store or the query engine is
-touched. Creating a fact stays open to ``knowledge:write`` and never hands back a fact
+Every route that reads or changes stored facts without organization scoping answers 401 to
+anonymous callers and the closure 403 to every authenticated role, before the fact store or
+the query engine is touched. Creating and importing facts stay open to ``knowledge:write``:
+both write only into the caller's organization and never match, return or change a fact
 that another organization stored.
 """
 
@@ -18,9 +19,12 @@ from typing import Any
 import pytest
 
 from aragora.billing.jwt_auth import create_access_token
-from aragora.knowledge import InMemoryEmbeddingService, InMemoryFactStore, SimpleQueryEngine
-from aragora.rbac.models import AuthorizationContext
-from aragora.server.fastapi.routes import knowledge_base
+from aragora.knowledge import (
+    FactFilters,
+    InMemoryEmbeddingService,
+    InMemoryFactStore,
+    SimpleQueryEngine,
+)
 
 PREFIX = "/api/v2/knowledge-base"
 ROLES = ("owner", "admin", "member", "analyst", "viewer")
@@ -60,11 +64,6 @@ CLOSED_ROUTES: list[tuple[str, str, dict[str, Any] | None]] = [
     ("GET", "/search?q=Northwind", None),
     ("GET", "/stats", None),
     ("GET", "/export", None),
-    (
-        "POST",
-        "/import",
-        {"facts": [{"id": FACT_ID, "statement": "probe"}], "merge_strategy": "skip_existing"},
-    ),
 ]
 ROUTE_IDS = [f"{method} {path}" for method, path, _ in CLOSED_ROUTES]
 
@@ -133,7 +132,7 @@ def seeded(fastapi_app) -> dict[str, Any]:
     }
 
 
-def _bearer(role: str, org_id: str = "org-b") -> dict[str, str]:
+def _bearer(role: str, org_id: str | None = "org-b") -> dict[str, str]:
     token = create_access_token(f"user-{org_id}-{role}", f"{role}@{org_id}.example", org_id, role)
     return {"Authorization": f"Bearer {token}"}
 
@@ -284,26 +283,78 @@ def test_retried_create_returns_the_same_fact_and_never_another_orgs(
     assert seeded["inner"].get_statistics(org_id=ORG_C)["total_facts"] == 1
 
 
-async def test_retried_import_stores_each_statement_once_per_org() -> None:
-    store = InMemoryFactStore()
-    body = knowledge_base.ImportRequest(
-        facts=[{"statement": ORG_A_STATEMENT}],
-        workspace_id="default",
-        merge_strategy="skip_existing",
-    )
+def _import(client, facts: list[dict[str, Any]], headers: dict[str, str]):
+    body = {"facts": facts, "workspace_id": "default", "merge_strategy": "skip_existing"}
+    return client.post(f"{PREFIX}/import", json=body, headers=headers)
 
-    for org_id in (ORG_B, ORG_B, ORG_C):
-        result = await knowledge_base.import_knowledge_base(
-            body=body,
-            auth=AuthorizationContext(user_id=f"user-{org_id}-owner", org_id=org_id),
-            store=store,
-        )
-        assert result.errors == 0
 
-    def ids(org_id: str) -> set[str]:
-        filters = knowledge_base.FactFilters(limit=10, org_id=org_id)
-        return {fact.id for fact in store.list_facts(filters)}
+def _org_facts(seeded, org_id: str) -> list[Any]:
+    return seeded["inner"].list_facts(FactFilters(limit=100, org_id=org_id))
 
-    assert len(ids(ORG_B)) == 1
-    assert len(ids(ORG_C)) == 1
-    assert ids(ORG_B) != ids(ORG_C)
+
+def test_import_binds_the_callers_org_and_never_matches_another_orgs_fact(
+    fastapi_client, seeded
+) -> None:
+    facts = [
+        {"id": seeded["fact_a"].id, "statement": ORG_A_STATEMENT, "workspace_id": ORG_A_WORKSPACE},
+        {"statement": ORG_A_STATEMENT},
+    ]
+
+    response = _import(fastapi_client, facts, _bearer("owner"))
+
+    assert response.status_code == 201, response.text
+    assert response.json() == {"imported": 2, "skipped": 0, "errors": 0, "total": 2, "details": []}
+    org_b = _org_facts(seeded, ORG_B)
+    assert sorted((f.workspace_id, f.org_id) for f in org_b) == [
+        ("default", ORG_B),
+        (ORG_A_WORKSPACE, ORG_B),
+    ]
+    assert not {f.id for f in org_b} & seeded["org_a_ids"]
+    assert seeded["inner"].get_statistics(org_id=ORG_A)["total_facts"] == 2
+    assert seeded["inner"].get_fact(seeded["fact_a"].id, org_id=ORG_A).confidence == 0.5
+
+
+@pytest.mark.parametrize("role", ("admin", "member", "analyst", "viewer"))
+def test_import_requires_knowledge_write(fastapi_client, seeded, role) -> None:
+    response = _import(fastapi_client, [{"statement": ORG_A_STATEMENT}], _bearer(role))
+
+    assert response.status_code == 403
+    assert response.json() == {"detail": "Permission denied: knowledge:write"}
+    _assert_untouched(seeded)
+
+
+def test_import_answers_401_to_anonymous(fastapi_client, seeded) -> None:
+    response = _import(fastapi_client, [{"statement": ORG_A_STATEMENT}], {})
+
+    assert response.status_code == 401
+    _assert_untouched(seeded)
+
+
+def test_import_without_an_org_answers_knowledge_org_required(fastapi_client, seeded) -> None:
+    response = _import(fastapi_client, [{"statement": ORG_A_STATEMENT}], _bearer("owner", None))
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "knowledge_org_required"
+    _assert_untouched(seeded)
+
+
+def test_retried_import_counts_only_new_facts_and_never_another_orgs(
+    fastapi_client, seeded
+) -> None:
+    facts = [
+        {"statement": ORG_A_STATEMENT},
+        {"statement": "Org renewal is due in March"},
+        {"statement": ORG_A_STATEMENT},
+    ]
+
+    responses = [
+        _import(fastapi_client, facts, _bearer("owner", org_id)) for org_id in (ORG_B, ORG_B, ORG_C)
+    ]
+
+    counts = [(r.status_code, r.json()["imported"], r.json()["skipped"]) for r in responses]
+    assert counts == [(201, 2, 1), (201, 0, 3), (201, 2, 1)]
+    ids_b = {f.id for f in _org_facts(seeded, ORG_B)}
+    ids_c = {f.id for f in _org_facts(seeded, ORG_C)}
+    assert len(ids_b) == len(ids_c) == 2
+    assert not ids_b & ids_c and not (ids_b | ids_c) & seeded["org_a_ids"]
+    assert seeded["inner"].get_statistics(org_id=ORG_A)["total_facts"] == 2

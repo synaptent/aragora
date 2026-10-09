@@ -163,16 +163,13 @@ def test_callers_without_an_org_get_403_and_no_row(world) -> None:
     assert r.status_code == 403 and r.json()["code"] == "knowledge_org_required"
     items = [{"statement": "Orphan import", "workspace_id": "default"}]
     r = client.post(V2 + "/import", json={"facts": items}, headers=hdr)
-    assert r.status_code == 403 and r.json()["code"] == "knowledge_fact_access_closed"
+    assert r.status_code == 403 and r.json()["code"] == "knowledge_org_required"
     result = _v1(world)._handle_create_fact(_Request(world, bearer, {"statement": "Orphan v1"}))
     assert result.status_code == 403 and _v1_code(_body(result)) == "knowledge_org_required"
     assert _rows(world.store) == before
 
 
-def test_v2_import_is_closed_and_its_body_binds_the_org_and_scopes_skip_existing(world) -> None:
-    from aragora.rbac.models import AuthorizationContext
-    from aragora.server.fastapi.routes import knowledge_base as routes
-
+def test_v2_import_binds_the_org_and_scopes_skip_existing(world) -> None:
     beta = world.callers["beta"].org_id
     items = [
         {
@@ -183,23 +180,12 @@ def test_v2_import_is_closed_and_its_body_binds_the_org_and_scopes_skip_existing
         {"statement": "Beta pilot starts in December", "workspace_id": "acme-research"},
     ]
     hdr = {"Authorization": f"Bearer {_token(world, 'beta')}"}
-    before, rows = _acme_view(world), _rows(world.store)
+    before = _acme_view(world)
     r = _v2(world).post(
         V2 + "/import", json={"facts": items, "merge_strategy": "skip_existing"}, headers=hdr
     )
-    assert r.status_code == 403 and r.json()["code"] == "knowledge_fact_access_closed"
-    assert _rows(world.store) == rows
-
-    result = asyncio.run(
-        routes.import_knowledge_base(
-            body=routes.ImportRequest(
-                facts=items, workspace_id="default", merge_strategy="skip_existing"
-            ),
-            auth=AuthorizationContext(user_id=world.callers["beta"].user_id, org_id=beta),
-            store=world.store,
-        )
-    )
-    assert (result.imported, result.skipped, result.errors) == (2, 0, 0)
+    assert r.status_code == 201, r.text
+    assert (r.json()["imported"], r.json()["skipped"], r.json()["errors"]) == (2, 0, 0)
     beta_facts = ScopedFactStore(world.store, beta).list_facts(
         FactFilters(workspace_id="acme-research")
     )
@@ -208,9 +194,6 @@ def test_v2_import_is_closed_and_its_body_binds_the_org_and_scopes_skip_existing
 
 
 def test_v2_retries_reuse_the_callers_fact_and_never_another_orgs(world) -> None:
-    from aragora.rbac.models import AuthorizationContext
-    from aragora.server.fastapi.routes import knowledge_base as routes
-
     beta = world.callers["beta"].org_id
     before = _acme_view(world)
     body = {"statement": "Acme acquires Northwind", "workspace_id": "acme-research"}
@@ -220,15 +203,10 @@ def test_v2_retries_reuse_the_callers_fact_and_never_another_orgs(world) -> None
     fact_id = created[0].json()["id"]
     assert created[1].json()["id"] == fact_id != world.acme_fact.id
 
-    auth = AuthorizationContext(user_id=world.callers["beta"].user_id, org_id=beta)
-    request = routes.ImportRequest(
-        facts=[body], workspace_id="default", merge_strategy="skip_existing"
-    )
-    for _ in range(2):
-        result = asyncio.run(
-            routes.import_knowledge_base(body=request, auth=auth, store=world.store)
-        )
-        assert result.errors == 0
+    request = {"facts": [body], "merge_strategy": "skip_existing"}
+    imported = [client.post(V2 + "/import", json=request, headers=hdr) for _ in range(2)]
+    counts = [(r.status_code, r.json()["imported"], r.json()["skipped"]) for r in imported]
+    assert counts == [(201, 0, 1), (201, 0, 1)], imported[-1].text
     beta_facts = ScopedFactStore(world.store, beta).list_facts(
         FactFilters(include_superseded=True, limit=1000)
     )
