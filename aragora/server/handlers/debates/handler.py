@@ -37,14 +37,12 @@ Endpoints:
 from __future__ import annotations
 
 import logging
-from collections.abc import AsyncIterator
 from typing import Any
 from urllib.parse import unquote
 
 from aragora.rbac.decorators import require_permission
 from aragora.server.debate_controller_mixin import DebateControllerMixin
 from aragora.server.debate_utils import _active_debates  # noqa: F401
-from aragora.server.http_utils import run_async
 from aragora.server.validation import validate_debate_id, validate_debate_ref
 from aragora.server.validation.schema import validate_against_schema  # noqa: F401
 from aragora.tenancy.debate_access import (
@@ -383,26 +381,9 @@ class DebatesHandler(
         if path.endswith("/results"):
             return self._get_batch_export_results(job_id, org_id=org_id)
 
-        # GET /api/debates/export/batch/{job_id}/stream - SSE stream
+        # GET /api/debates/export/batch/{job_id}/stream - SSE snapshot
         if path.endswith("/stream"):
-            if not self._batch_export_visible(job_id, org_id):
-                return record_not_found("Export job")
-
-            async def stream() -> AsyncIterator[Any]:
-                async for chunk in self._stream_batch_export_progress(job_id):  # Mixin method
-                    yield chunk
-
-            return HandlerResult(
-                status_code=200,
-                content_type="text/event-stream",
-                body=run_async(
-                    stream()  # type: ignore[arg-type]
-                ),  # Async generator used as SSE stream body  # type: ignore[misc]
-                headers={
-                    "Cache-Control": "no-cache",
-                    "Connection": "keep-alive",
-                },
-            )
+            return self._get_batch_export_stream(job_id, org_id=org_id)
 
         return error_response(f"Unknown batch export endpoint: {path}", 404)
 

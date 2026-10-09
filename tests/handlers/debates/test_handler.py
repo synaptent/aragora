@@ -1039,29 +1039,43 @@ class TestHandleBatchExportMethod:
 
     def test_batch_export_stream(self, mock_http_handler):
         handler = _make_handler()
-
-        async def _mock_stream(*args, **kwargs):
-            yield b"data: test\n\n"
-
-        handler._stream_batch_export_progress = _mock_stream
-        handler._batch_export_visible = MagicMock(return_value=True)
-        with patch("aragora.server.handlers.debates.handler.run_async") as mock_run:
-            mock_run.return_value = iter([b"data: test\n\n"])
-            result = handler._handle_batch_export(
-                "/api/debates/export/batch/job1/stream", {}, mock_http_handler
-            )
-            assert _status(result) == 200
-            assert result.content_type == "text/event-stream"
-        handler._batch_export_visible.assert_called_once_with("job1", TEST_ORG)
-
-    def test_batch_export_stream_other_org_job_not_found(self, mock_http_handler):
-        handler = _make_handler()
-        handler._batch_export_visible = MagicMock(return_value=False)
+        handler._get_batch_export_stream = MagicMock(
+            return_value=MagicMock(status_code=200, body=b"data: {}\n\n")
+        )
         result = handler._handle_batch_export(
             "/api/debates/export/batch/job1/stream", {}, mock_http_handler
         )
-        assert _status(result) == 404
-        assert _body(result) == {"error": "Export job not found", "code": "not_found"}
+        assert _status(result) == 200
+        handler._get_batch_export_stream.assert_called_once_with("job1", org_id=TEST_ORG)
+
+    def test_batch_export_stream_returns_an_sse_snapshot(self, mock_http_handler, monkeypatch):
+        from aragora.server.handlers.debates import export
+
+        job = export.BatchExportJob(
+            job_id="job1",
+            items=[export.BatchExportItem(debate_id="d1", format="json")],
+            org_id=TEST_ORG,
+        )
+        monkeypatch.setitem(export._batch_export_jobs, "job1", job)
+        result = _make_handler()._handle_batch_export(
+            "/api/debates/export/batch/job1/stream", {}, mock_http_handler
+        )
+        assert _status(result) == 200
+        assert result.content_type == "text/event-stream"
+        assert result.body.startswith(b"retry: ")
+        assert b'"type": "connected"' in result.body
+
+    def test_batch_export_stream_other_org_job_not_found(self, mock_http_handler, monkeypatch):
+        from aragora.server.handlers.debates import export
+
+        other = export.BatchExportJob(job_id="job1", items=[], org_id="other-org")
+        monkeypatch.setitem(export._batch_export_jobs, "job1", other)
+        for job_id in ("job1", "job-missing"):
+            result = _make_handler()._handle_batch_export(
+                f"/api/debates/export/batch/{job_id}/stream", {}, mock_http_handler
+            )
+            assert _status(result) == 404
+            assert _body(result) == {"error": "Export job not found", "code": "not_found"}
 
     def test_batch_export_unknown_endpoint(self, mock_http_handler):
         handler = _make_handler()
