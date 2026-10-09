@@ -803,6 +803,13 @@ DEFAULT_ROUTE_PERMISSIONS = [
     # ── Evolution ──
     RoutePermission(r"^/api/evolution", "GET", "evolution.read"),
     RoutePermission(r"^/api/evolution", "POST", "evolution.write"),
+    # ── Cross-pollination conflicts and the Teams list: the keys their handlers check ──
+    RoutePermission(
+        r"^/api/(?:v1/)?cross-pollination/conflicts/[^/]+/resolve$",
+        "POST",
+        "cross_pollination.write",
+    ),
+    RoutePermission(r"^/api/(?:v1/)?teams$", "GET", "bots.read"),
     # ── Plugins ──
     RoutePermission(r"^/api/(v1/)?plugins", "GET", "plugins.read"),
     RoutePermission(r"^/api/(v1/)?plugins", "POST", "plugins.install"),

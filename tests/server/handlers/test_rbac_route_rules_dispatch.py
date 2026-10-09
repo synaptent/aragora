@@ -64,6 +64,11 @@ class _Server(AuthChecksMixin, _Registry):
     """The registry behind the server's pre-dispatch RBAC and auth checks."""
 
 
+# _Registry's None-valued server attributes shadow UnifiedHandler's typed ones on purpose.
+class _Live(_Registry, unified_server.UnifiedHandler):  # type: ignore[misc]
+    """The registry behind the real server request path (``do_GET``/``do_POST``)."""
+
+
 @pytest.fixture(scope="module")
 def registry() -> type[_Registry]:
     _Registry._init_handlers()
@@ -116,7 +121,7 @@ _client_ips = itertools.count(1)
 
 
 def _request(cls: type[_Registry], method: str, path: str, caller: str) -> Any:
-    instance: Any = cls()
+    instance: Any = cls.__new__(cls)
     instance.path = path
     instance.command = method
     instance.headers = {"Content-Length": "0", "Content-Type": "application/json"}
@@ -125,7 +130,8 @@ def _request(cls: type[_Registry], method: str, path: str, caller: str) -> Any:
             user_id=f"jwt-{caller}", email=f"{caller}@example.com", org_id="org-1", role=caller
         )
         instance.headers["Authorization"] = f"Bearer {token}"
-    instance.rbac = unified_server.UnifiedHandler._get_rbac()
+    if not isinstance(instance, unified_server.UnifiedHandler):
+        instance.rbac = unified_server.UnifiedHandler._get_rbac()
     instance.rfile = io.BytesIO(b"")
     instance.wfile = io.BytesIO()
     instance.send_response = MagicMock()
@@ -170,7 +176,11 @@ def _dispatch(cls: type[_Registry], method: str, path: str, caller: str) -> tupl
         ),
         _no_revocation_db(),
     ):
-        if isinstance(instance, AuthChecksMixin):
+        if cls is _Live:
+            getattr(instance, f"do_{method}")()
+            if instance._send_json.called:
+                return _sent_json(instance)
+        elif isinstance(instance, AuthChecksMixin):
             # UnifiedHandler's _do_<METHOD>_internal order; GET alone is rate limited.
             checks = [
                 lambda: instance._check_rbac(path, method),
@@ -180,7 +190,7 @@ def _dispatch(cls: type[_Registry], method: str, path: str, caller: str) -> tupl
                 checks.append(instance._check_rate_limit)
             if not all(check() for check in checks):
                 return _sent_json(instance)
-        handled = instance._try_modular_handler(path, {})
+        handled = cls is _Live or instance._try_modular_handler(path, {})
     assert handled is True, f"{method} {path} was not handled"
     status = instance.send_response.call_args[0][0]
     return status, json.loads(instance.wfile.getvalue() or b"{}")
@@ -206,6 +216,8 @@ RULES: dict[tuple[str, str], str] = {
     ("GET", "/api/v1/connectors/types"): "",
     ("DELETE", "/api/v1/analytics/metabase"): "analytics.configure",
     ("GET", "/api/v1/documents/processing/stats"): "documents.read",
+    ("GET", "/api/v1/teams"): "bots.read",
+    ("POST", "/api/v1/cross-pollination/conflicts/c1/resolve"): "cross_pollination.write",
 }
 
 _XP = "/api/v1/cross-pollination"
@@ -236,8 +248,6 @@ UNSERVED: list[tuple[str, str]] = [
     ("POST", f"{_XP}/reset"),
     ("POST", f"{_XP}/km/sync"),
     ("POST", f"{_XP}/km/staleness-check"),
-    ("POST", f"{_XP}/conflicts/c1/resolve"),
-    ("GET", "/api/v1/teams"),
     ("POST", "/api/v1/teams"),
 ]
 
@@ -249,6 +259,8 @@ HOLDERS: dict[str, set[str]] = {
     "connectors.test": {"owner", "admin"},
     "analytics.configure": {"owner", "admin"},
     "documents.read": {"owner", "admin", "analyst"},
+    "bots.read": {"owner", "admin", "member"},
+    "cross_pollination.write": {"owner", "admin"},
 }
 
 
@@ -347,6 +359,9 @@ DISPATCH: dict[tuple[str, str], tuple[str, str]] = {
         "200 200 403 200 403 403",
         "200 200 403 200 403 401",
     ),
+    # Served, but not implemented: a key holder gets the handler's 501 answer.
+    ("GET", "/api/v1/teams"): ("501 501 501 403 403 401",) * 2,
+    ("POST", f"{_XP}/conflicts/c1/resolve"): ("501 501 403 403 403 401",) * 2,
     # The batch handler's documents:read GET entry has no branch for these two routes yet.
     ("GET", "/api/v1/batch"): ("x x 403 x 403 403", "403 403 403 403 403 401"),
     ("GET", "/api/v1/batch/queue/status"): ("x x 403 x 403 403", "403 403 403 403 403 401"),
@@ -374,14 +389,15 @@ def fresh_memory_context(registry, monkeypatch) -> None:
 
 @pytest.mark.no_auto_auth
 @pytest.mark.parametrize("caller", CALLERS)
-@pytest.mark.parametrize("layer", ["handler", "server"])
+@pytest.mark.parametrize("layer", ["handler", "server", "live"])
 @pytest.mark.parametrize(("method", "path"), sorted(DISPATCH))
-def test_real_jwt_callers_get_the_same_rule_at_both_layers(
+def test_real_jwt_callers_get_the_same_rule_at_every_layer(
     registry, fresh_memory_context, method: str, path: str, layer: str, caller: str
 ) -> None:
     handler_spec, server_spec = DISPATCH[(method, path)]
-    expected = _cells(server_spec if layer == "server" else handler_spec)[caller]
-    status, body = _dispatch(_Server if layer == "server" else registry, method, path, caller)
+    expected = _cells(handler_spec if layer == "handler" else server_spec)[caller]
+    cls = {"handler": registry, "server": _Server, "live": _Live}[layer]
+    status, body = _dispatch(cls, method, path, caller)
     if expected == NO_RESULT:
         assert (status, body["code"]) == (500, "handler_no_result"), (layer, caller, body)
     else:

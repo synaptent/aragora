@@ -413,6 +413,26 @@ def test_snooze_routes_work_for_their_owner(registry_cls, services) -> None:
     assert email_module._snoozed_emails == {}
 
 
+# field -> (method, path, other body fields or None for a query, highest accepted value)
+BOUNDED = {
+    "expected_reply_days": ("POST", MARK, {"email_id": "e-1", "thread_id": "t-1"}, 365),
+    "days_back": ("POST", "/api/v1/email/followups/auto-detect", {}, 365),
+    "max_suggestions": ("GET", SNOOZE_SUGGESTIONS, None, 100),
+}
+
+
+@pytest.mark.parametrize("field", sorted(BOUNDED))
+def test_counts_above_their_ceiling_answer_400_not_500(registry_cls, services, field) -> None:
+    method, path, body, highest = BOUNDED[field]
+    statuses = [
+        _dispatch(registry_cls, method, path, query={field: str(value)}, **OWNER)[0]
+        if body is None
+        else _dispatch(registry_cls, method, path, body | {field: value}, **OWNER)[0]
+        for value in (highest, highest + 1, 10**8, 10**12)
+    ]
+    assert statuses == [200, 400, 400, 400]
+
+
 @pytest.mark.parametrize("env", ["development", "production"])
 def test_category_feedback_is_not_implemented_and_learns_nothing(
     registry_cls, services, monkeypatch, env

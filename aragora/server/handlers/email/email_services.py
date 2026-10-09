@@ -138,6 +138,12 @@ def _naive_local(value: str) -> datetime:
     return parsed.astimezone().replace(tzinfo=None) if parsed.tzinfo else parsed
 
 
+# Ceilings keep timedelta(days=...) from overflowing into a 500: a year of days, as the
+# inbox action-items window (8,760 hours), and the Gmail query handler's 100-result limit.
+_MAX_DAYS = 365
+_MAX_SUGGESTIONS = 100
+
+
 def _bounded(value: Any, kind: type, low: float, high: float | None = None) -> Any:
     """``kind(value)`` if it lies in [low, high], else None (query values arrive as strings)."""
     try:
@@ -230,12 +236,14 @@ async def handle_mark_followup(
         subject = data.get("subject", "")
         recipient = data.get("recipient", "")
         sent_at_str = data.get("sent_at")
-        expected_days = _bounded(data.get("expected_reply_days", 3), int, 0)
+        expected_days = _bounded(data.get("expected_reply_days", 3), int, 0, _MAX_DAYS)
 
         if not email_id or not thread_id:
             return error_response("email_id and thread_id are required", status=400)
         if expected_days is None:
-            return error_response("expected_reply_days must be an integer >= 0", status=400)
+            return error_response(
+                f"expected_reply_days must be an integer from 0 to {_MAX_DAYS}", status=400
+            )
 
         # Parse sent_at
         sent_at = datetime.now()
@@ -459,9 +467,9 @@ async def handle_auto_detect_followups(
     try:
         tracker = get_followup_tracker()
 
-        days = _bounded(days_back, int, 1)
+        days = _bounded(days_back, int, 1, _MAX_DAYS)
         if days is None:
-            return error_response("days_back must be an integer >= 1", status=400)
+            return error_response(f"days_back must be an integer from 1 to {_MAX_DAYS}", status=400)
         detected = await tracker.auto_detect_sent_emails(days_back=days)
         _record_followup_owner([f.id for f in detected], _owner(auth_context))
 
@@ -525,13 +533,14 @@ async def handle_get_snooze_suggestions(
             "received_at": data.get("received_at", datetime.now().isoformat()),
         }
 
-        max_suggestions = _bounded(data.get("max_suggestions", 5), int, 1)
+        max_suggestions = _bounded(data.get("max_suggestions", 5), int, 1, _MAX_SUGGESTIONS)
         priority_score = None
         if data.get("priority") is not None:
             priority_score = _bounded(data["priority"], float, 0.0, 1.0)
         if max_suggestions is None or (data.get("priority") is not None and priority_score is None):
             return error_response(
-                "max_suggestions must be an integer >= 1 and priority a number from 0 to 1",
+                f"max_suggestions must be an integer from 1 to {_MAX_SUGGESTIONS} "
+                "and priority a number from 0 to 1",
                 status=400,
             )
 
