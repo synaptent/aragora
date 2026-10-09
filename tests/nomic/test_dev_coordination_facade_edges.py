@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 import aragora.nomic.dev_coordination as facade
-from aragora.nomic import dev_leases, dev_receipts
+from aragora.nomic import dev_leases, dev_receipts, dev_receipts_merge_gate
 from aragora.nomic.dev_coordination import core
 
 _NOMIC_DIR = Path(dev_leases.__file__).resolve().parent
@@ -57,7 +57,7 @@ def _runtime_imports(path: Path) -> set[str]:
     return names
 
 
-@pytest.mark.parametrize("module_name", ["dev_leases", "dev_receipts"])
+@pytest.mark.parametrize("module_name", ["dev_leases", "dev_receipts", "dev_receipts_merge_gate"])
 def test_module_has_no_runtime_edge_into_core(module_name: str):
     imports = _runtime_imports(_NOMIC_DIR / f"{module_name}.py")
     assert not any(name.startswith("aragora.nomic.dev_coordination.core") for name in imports), (
@@ -66,7 +66,7 @@ def test_module_has_no_runtime_edge_into_core(module_name: str):
     assert "aragora.nomic.dev_coordination" in imports
 
 
-@pytest.mark.parametrize("module", [dev_leases, dev_receipts])
+@pytest.mark.parametrize("module", [dev_leases, dev_receipts, dev_receipts_merge_gate])
 def test_facade_resolves_every_consumed_name_to_the_core_object(module):
     source = Path(module.__file__).read_text(encoding="utf-8")
     names = sorted(set(re.findall(r"\b_dev\.([A-Za-z_][A-Za-z0-9_]*)", source)))
@@ -87,6 +87,7 @@ def test_leases_claims_overlap_is_the_core_implementation():
         ("aragora.nomic.dev_leases", "aragora.nomic.dev_coordination.core"),
         ("aragora.nomic.dev_receipts", "aragora.nomic.dev_coordination.core"),
         ("aragora.nomic.dev_coordination.core", "aragora.nomic.dev_receipts"),
+        ("aragora.nomic.dev_receipts_merge_gate", "aragora.nomic.dev_coordination.core"),
     ],
 )
 def test_modules_import_in_either_order(first: str, second: str):
