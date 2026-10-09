@@ -478,7 +478,7 @@ def _search_superseding_dependency_prs(
             )
         except (subprocess.CalledProcessError, json.JSONDecodeError):
             continue
-        rows = payload if isinstance(payload, list) else []
+        rows: list[Any] = payload if isinstance(payload, list) else []
         for row in rows:
             if not isinstance(row, dict):
                 continue

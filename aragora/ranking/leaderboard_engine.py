@@ -252,21 +252,42 @@ class LeaderboardEngine:
             )
             rows = cursor.fetchall()
 
-        matches: list[dict[str, Any]] = []
-        for row in rows:
-            elo_changes: dict[str, Any] = safe_json_loads(row[4], {})
-            participants: list[str] = safe_json_loads(row[2], [])
-            matches.append(
-                {
-                    "debate_id": row[0],
-                    "winner": row[1],
-                    "participants": participants,
-                    "domain": row[3],
-                    "elo_changes": elo_changes,
-                    "created_at": row[5],
-                }
+        return [self._match_from_row(row) for row in rows]
+
+    def get_match(self, debate_id: str) -> dict[str, Any] | None:
+        """
+        Get one match result by its debate ID (unique per match).
+
+        Returns:
+            Match dict in the same shape as get_recent_matches entries,
+            or None if no match was recorded for the debate.
+        """
+        with self._db.connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT debate_id, winner, participants, domain, elo_changes, created_at
+                FROM matches
+                WHERE debate_id = ?
+                """,
+                (debate_id,),
             )
-        return matches
+            row = cursor.fetchone()
+
+        return self._match_from_row(row) if row is not None else None
+
+    @staticmethod
+    def _match_from_row(row: Any) -> dict[str, Any]:
+        elo_changes: dict[str, Any] = safe_json_loads(row[4], {})
+        participants: list[str] = safe_json_loads(row[2], [])
+        return {
+            "debate_id": row[0],
+            "winner": row[1],
+            "participants": participants,
+            "domain": row[3],
+            "elo_changes": elo_changes,
+            "created_at": row[5],
+        }
 
     def get_head_to_head(self, agent_a: str, agent_b: str) -> dict:
         """

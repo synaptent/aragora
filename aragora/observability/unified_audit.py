@@ -644,10 +644,14 @@ _unified_logger: UnifiedAuditLogger | None = None
 _middleware_logger_factory: Callable[[], Any] | None = None
 
 
-def register_middleware_audit_logger(factory: Callable[[], Any]) -> None:
-    """Register the factory that returns the HTTP middleware audit logger."""
+def register_middleware_audit_logger(factory: Callable[[], Any], *, replace: bool = True) -> None:
+    """Register the factory that returns the HTTP middleware audit logger.
+
+    With ``replace=False`` a factory registered earlier is kept.
+    """
     global _middleware_logger_factory
-    _middleware_logger_factory = factory
+    if replace or _middleware_logger_factory is None:
+        _middleware_logger_factory = factory
 
 
 def get_unified_audit_logger() -> UnifiedAuditLogger:

@@ -970,8 +970,12 @@ def with_retry(
 
                     delay = backoff.get_delay(attempt)
                     logger.warning(
-                        f"[Retry] {func.__name__} attempt {attempt + 1}/{cfg.max_retries + 1} "
-                        f"failed: {e}. Retrying in {delay:.2f}s"
+                        "[Retry] %s attempt %s/%s failed: %s. Retrying in %.2fs",
+                        func.__name__,
+                        attempt + 1,
+                        cfg.max_retries + 1,
+                        e,
+                        delay,
                     )
                     await asyncio.sleep(delay)
 

@@ -87,7 +87,7 @@ class EvidenceGrounder:
         self.citation_extractor = citation_extractor
         self.claim_checker = claim_checker or ClaimCheck()
 
-    def set_evidence_pack(self, evidence_pack: EvidencePack) -> None:
+    def set_evidence_pack(self, evidence_pack: EvidencePack | None) -> None:
         """Update the evidence pack."""
         self.evidence_pack = evidence_pack
 

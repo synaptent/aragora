@@ -24,6 +24,7 @@ from pathlib import Path
 import re
 import sys
 from typing import Any
+from http.client import HTTPResponse
 from urllib import error, parse, request
 
 
@@ -135,7 +136,7 @@ class GitHubClient:
         url: str,
         payload: dict[str, Any] | None = None,
         extra_headers: dict[str, str] | None = None,
-    ) -> tuple[Any, request.addinfourl]:
+    ) -> tuple[Any, HTTPResponse]:
         body: bytes | None = None
         if payload is not None:
             body = json.dumps(payload).encode("utf-8")

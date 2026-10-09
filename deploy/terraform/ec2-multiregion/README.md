@@ -109,15 +109,10 @@ cp terraform.tfvars.example terraform.tfvars
 
 ### Software Stack
 - Python 3.11 with virtual environment
-- All Aragora optional features:
-  - `monitoring` - Prometheus metrics
-  - `observability` - OpenTelemetry tracing
-  - `postgres` - PostgreSQL support
-  - `redis` - Redis caching
-  - `documents` - Document processing (PDF, DOCX)
-  - `research` - Web search capabilities
-  - `broadcast` - TTS/audio features
-  - `control-plane` - Distributed coordination
+- The base `aragora` package. Optional extras are defined in `pyproject.toml`
+  `[project.optional-dependencies]` (`gateway`, `enterprise`, `connectors`,
+  `blockchain`, `experimental`, `all`); add the ones a deployment needs to the
+  `pip install` lines in `user-data.sh` and in [Update Aragora](#update-aragora).
 - nginx reverse proxy
 - CloudWatch agent for logs/metrics
 - systemd service (aragora)
@@ -248,7 +243,7 @@ variable "supermemory_api_key" {
 aws ssm start-session --target <instance-id>
 
 # Update
-sudo -u aragora /opt/aragora/venv/bin/pip install --upgrade aragora[monitoring,observability,postgres,redis,documents,research,broadcast,control-plane]
+sudo -u aragora /opt/aragora/venv/bin/pip install --upgrade aragora
 
 # Restart
 sudo systemctl restart aragora

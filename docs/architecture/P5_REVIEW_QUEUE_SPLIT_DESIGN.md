@@ -293,7 +293,8 @@ missing and that each moved name is the same object as in its unit.
 **C-2 Behavior corpus.** Golden JSON (sorted keys) of `ReviewPacket.to_dict()`
 from `_build_packet`, of `_build_merge_authorization_packet` and
 `_build_model_review_quorum`, and of `_classify_model_review_tier` over every
-`TIER_4_PREFIXES` entry plus Tier 0-3 samples. All inputs are mocked GitHub
+`TIER_4_PREFIXES` entry outside the I3-generated closure, plus Tier 0-3 samples;
+a property check covers the closure, which steps grow. All inputs are mocked GitHub
 payloads. The corpus covers the nine `reporting_case` variants in
 `tests/cli/commands/test_review_queue.py:232-363`, merged and settled states,
 draft, parked label, conflicting merge state, the direct check-run fallback,

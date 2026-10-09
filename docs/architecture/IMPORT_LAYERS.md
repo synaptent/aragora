@@ -87,18 +87,19 @@ physical import site, so a lazy or function-scope import still counts. Rules:
 
 ## Sanctioned seams
 
-`ignore_imports` in the layers contract holds exactly these three pairs and nothing else:
+`ignore_imports` in the layers contract holds exactly these four pairs and nothing else:
 
 ```text
 aragora.exceptions -> aragora.connectors.exceptions
 aragora.exceptions -> aragora.server.handlers.exceptions
 aragora.utils.redis_cache -> aragora.caching.redis
+aragora.exceptions -> aragora.control_plane.exceptions
 ```
 
-The two `aragora.exceptions` seams keep the lazy exception fallbacks; the `redis_cache` seam is a
-one-release compatibility shim. A fourth seam, for the `control_plane` exceptions mirror, is planned for the
-M3 control_plane split. Until it lands, the pair from `exceptions` to `control_plane` is baselined (adopted
-with tranche T4a). Any further seam needs an explicit architecture decision; it is never a convenience fix.
+The three `aragora.exceptions` seams keep the lazy exception fallbacks (the `control_plane` one mirrors the
+control-plane exception types through `aragora.exceptions.__getattr__`, added with the M3 control_plane
+split); the `redis_cache` seam is a one-release compatibility shim. Any further seam needs an explicit
+architecture decision; it is never a convenience fix.
 
 ## Fix classes
 
