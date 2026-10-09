@@ -13,7 +13,7 @@ import asyncio
 import inspect
 import json
 import sqlite3
-from contextlib import suppress
+from contextlib import closing, suppress
 from datetime import datetime, timezone
 from enum import Enum
 from types import SimpleNamespace
@@ -2768,6 +2768,70 @@ class TestCancelDuringRouting:
                 await handler.handle_post(
                     "/api/v1/decisions", {}, _make_http_handler({"content": "Q?"})
                 )
+
+
+# ---------------------------------------------------------------------------
+# Store capacity on the create and cancel paths
+# ---------------------------------------------------------------------------
+
+
+def _capped_store(monkeypatch, tmp_path, max_entries: int):
+    """A real durable store holding at most ``max_entries`` live results."""
+    import aragora.server.handlers.decision as mod
+    from aragora.storage.decision_result_store import DecisionResultStore
+
+    store = DecisionResultStore(
+        db_path=tmp_path / "decision_results.db", ttl_seconds=3600, max_entries=max_entries
+    )
+    holder = MagicMock()
+    holder.get.return_value = store
+    monkeypatch.setattr(mod, "_decision_result_store", holder)
+    return store
+
+
+def _durable_statuses(tmp_path) -> list[tuple[str, str]]:
+    with closing(sqlite3.connect(tmp_path / "decision_results.db")) as conn:
+        return conn.execute(
+            "SELECT request_id, status FROM decision_results ORDER BY created_at"
+        ).fetchall()
+
+
+class TestStoreCapacityOnCreate:
+    """Creates keep the store within max_entries without losing a decision that is routing."""
+
+    @pytest.mark.asyncio
+    async def test_creates_keep_the_store_within_max_entries(self, handler, tmp_path, monkeypatch):
+        store = _capped_store(monkeypatch, tmp_path, max_entries=3)
+
+        for i in range(5):
+            result, _doc_store, _runs = await _post_with_attachment(handler, f"dec_cap_{i}")
+            assert (_status(result), _body(result)["status"]) == (200, "completed")
+            assert len(_durable_statuses(tmp_path)) <= 3
+
+        assert _durable_statuses(tmp_path) == [(f"dec_cap_{i}", "completed") for i in range(2, 5)]
+        assert type(store)(db_path=tmp_path / "decision_results.db").count() == 3
+
+    @pytest.mark.asyncio
+    async def test_cancel_during_routing_still_answers_409_under_capacity_pressure(
+        self, handler, tmp_path, monkeypatch
+    ):
+        _capped_store(monkeypatch, tmp_path, max_entries=1)
+        during = []
+
+        async def another_create_then_cancel():
+            other, _doc_store, _runs = await _post_with_attachment(handler, "dec_other")
+            during.append(other)
+            during.append(await _post_action(handler, "dec_cancel", "cancel", {"reason": "no"}))
+
+        result, _doc_store, runs = await _post_with_attachment(
+            handler, "dec_cancel", another_create_then_cancel
+        )
+
+        assert [_status(r) for r in during] == [200, 200]
+        assert len(runs) == 1
+        assert _status(result) == 409
+        assert (_body(result)["request_id"], _body(result)["status"]) == ("dec_cancel", "cancelled")
+        assert _durable_statuses(tmp_path) == [("dec_cancel", "cancelled")]
 
 
 # ---------------------------------------------------------------------------

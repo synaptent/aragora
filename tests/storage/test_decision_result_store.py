@@ -9,10 +9,17 @@ Tests cover:
 - Persistence across restarts
 """
 
+import logging
 import pytest
+import sqlite3
 import time
+from contextlib import closing, contextmanager
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
+from unittest.mock import patch
 
+import aragora.storage.decision_result_store as store_module
 from aragora.storage.decision_result_store import (
     DecisionOwnershipConflict,
     DecisionResultStore,
@@ -201,7 +208,8 @@ class TestDecisionResultStore:
         # Should be expired now
         assert store.get("req-123") is None
 
-    def test_lru_eviction(self, tmp_path):
+    @pytest.mark.parametrize("write_path", ["save", "claim"])
+    def test_lru_eviction(self, tmp_path, write_path):
         """Should evict oldest entries when max reached."""
         store = DecisionResultStore(
             db_path=tmp_path / "lru_test.db",
@@ -211,7 +219,13 @@ class TestDecisionResultStore:
 
         # Add more than max entries
         for i in range(10):
-            store.save(f"req-{i}", {"status": "completed"})
+            if write_path == "save":
+                store.save(f"req-{i}", {"status": "completed"})
+            else:
+                store.claim(f"req-{i}", {"status": "pending"}, org_id="org-a")
+                store.save_if_status(
+                    f"req-{i}", {"status": "completed"}, org_id="org-a", expected_status="pending"
+                )
             time.sleep(0.01)  # Small delay to ensure ordering
 
         # Should have at most max_entries
@@ -537,6 +551,511 @@ class TestDecisionResultClaimAndConditionalSave:
 
         assert saved is False
         assert store.get("missing") is None
+
+
+class _Clock:
+    def __init__(self, now: float = 1000.0) -> None:
+        self.now = now
+
+    def time(self) -> float:
+        return self.now
+
+
+@pytest.fixture
+def clock(monkeypatch):
+    """A clock for the store module only; tests move it by hand."""
+    fixed = _Clock()
+    monkeypatch.setattr(store_module, "time", SimpleNamespace(time=fixed.time))
+    return fixed
+
+
+def _durable_rows(db_path: Path) -> list[tuple]:
+    """The rows on disk, read on a separate read-only connection (no store cache)."""
+    with closing(sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)) as conn:
+        return conn.execute(
+            "SELECT request_id, status, org_id, expires_at, result_json, created_by "
+            "FROM decision_results ORDER BY created_at, request_id"
+        ).fetchall()
+
+
+def _statuses(db_path: Path) -> list[tuple[str, str]]:
+    return [(row[0], row[1]) for row in _durable_rows(db_path)]
+
+
+def _create(store, request_id: str, *, org_id: str = "org-a") -> None:
+    """One decision create as the handler runs it: claim it pending, then save the outcome."""
+    claimed = store.claim(
+        request_id,
+        {"status": "pending", "result": {"request": {"content": request_id}}},
+        org_id=org_id,
+        created_by="u1",
+    )
+    assert claimed == "pending"
+    assert store.save_if_status(
+        request_id,
+        {"status": "completed", "result": {"answer": request_id}},
+        org_id=org_id,
+        expected_status="pending",
+    )
+
+
+class TestClaimLifecycleMaintenance:
+    """Creates and cancels (claim + save_if_status) keep the store's expiry and capacity limits."""
+
+    @pytest.fixture
+    def db_path(self, tmp_path):
+        return tmp_path / "maintenance.db"
+
+    def test_creates_stay_within_max_entries(self, db_path, clock):
+        store = DecisionResultStore(
+            db_path=db_path, ttl_seconds=10_000, max_entries=5, cache_size=5, cleanup_interval=5
+        )
+
+        for i in range(12):
+            clock.now = 1000.0 + i
+            _create(store, f"fresh-{i:02}")
+            assert len(_durable_rows(db_path)) <= 5
+
+        assert [row[0] for row in _durable_rows(db_path)] == [f"fresh-{i:02}" for i in range(7, 12)]
+        assert store.count() == 5
+
+    def test_expired_rows_are_purged_every_cleanup_interval(self, db_path, clock):
+        store = DecisionResultStore(
+            db_path=db_path, ttl_seconds=10, max_entries=100, cleanup_interval=5
+        )
+        _create(store, "seed-0")
+        _create(store, "seed-1")
+
+        for epoch in range(1, 5):
+            clock.now = 1000.0 + epoch * 20
+            _create(store, f"epoch-{epoch}-0")
+            _create(store, f"epoch-{epoch}-1")
+            expired = [row[0] for row in _durable_rows(db_path) if row[3] <= clock.now]
+            assert expired == []
+
+        assert [row[0] for row in _durable_rows(db_path)] == ["epoch-4-0", "epoch-4-1"]
+
+    def test_a_cancel_alone_runs_the_expiry_purge(self, db_path, clock):
+        store = DecisionResultStore(
+            db_path=db_path, ttl_seconds=10, max_entries=100, cleanup_interval=5
+        )
+        _create(store, "old-0")
+        _create(store, "old-1")
+        clock.now = 1008.0
+        assert store.claim("live", {"status": "pending"}, org_id="org-a") == "pending"
+        assert len(_durable_rows(db_path)) == 3
+        clock.now = 1014.0  # old-0 and old-1 expired at 1010; "live" is still pending
+
+        assert store.save_if_status(
+            "live", {"status": "cancelled"}, org_id="org-a", expected_status="pending"
+        )
+
+        assert _statuses(db_path) == [("live", "cancelled")]
+
+    def test_in_flight_claim_survives_eviction_and_its_late_save_lands(self, db_path, clock):
+        store = DecisionResultStore(
+            db_path=db_path, ttl_seconds=10_000, max_entries=3, cleanup_interval=5
+        )
+        assert store.claim("in-flight", {"status": "pending"}, org_id="org-a") == "pending"
+
+        for i in range(5):
+            clock.now = 1001.0 + i
+            _create(store, f"other-{i}")
+            statuses = _statuses(db_path)
+            assert ("in-flight", "pending") in statuses
+            assert len([s for s in statuses if s[1] == "completed"]) <= 2
+
+        clock.now = 1010.0
+        assert store.save_if_status(
+            "in-flight",
+            {"status": "completed", "result": {"answer": "late"}},
+            org_id="org-a",
+            expected_status="pending",
+        )
+        assert _statuses(db_path) == [
+            ("in-flight", "completed"),
+            ("other-3", "completed"),
+            ("other-4", "completed"),
+        ]
+
+    @pytest.mark.parametrize("in_flight_status", ["pending", "running", "processing"])
+    def test_save_never_evicts_an_in_flight_row(self, db_path, clock, in_flight_status):
+        store = DecisionResultStore(
+            db_path=db_path, ttl_seconds=10_000, max_entries=3, cleanup_interval=5
+        )
+        store.save("in-flight", {"status": in_flight_status}, org_id="org-a")
+
+        for i in range(4):
+            clock.now = 1001.0 + i
+            store.save(f"done-{i}", {"status": "completed"}, org_id="org-a")
+
+        assert _statuses(db_path) == [
+            ("in-flight", in_flight_status),
+            ("done-2", "completed"),
+            ("done-3", "completed"),
+        ]
+
+    def test_in_flight_rows_exceed_the_limit_only_until_they_finish(self, db_path, clock):
+        store = DecisionResultStore(
+            db_path=db_path, ttl_seconds=10_000, max_entries=2, cleanup_interval=5
+        )
+        for i in range(4):
+            clock.now = 1000.0 + i
+            assert store.claim(f"run-{i}", {"status": "pending"}, org_id="org-a") == "pending"
+        assert len(_durable_rows(db_path)) == 4
+
+        for i in range(4):
+            clock.now = 1010.0 + i
+            assert store.save_if_status(
+                f"run-{i}", {"status": "completed"}, org_id="org-a", expected_status="pending"
+            )
+
+        assert _statuses(db_path) == [("run-2", "completed"), ("run-3", "completed")]
+
+    def test_expiry_still_purges_an_orphaned_in_flight_row(self, db_path, clock):
+        store = DecisionResultStore(
+            db_path=db_path, ttl_seconds=10, max_entries=100, cleanup_interval=5
+        )
+        assert store.claim("orphan", {"status": "pending"}, org_id="org-a") == "pending"
+        clock.now = 1020.0
+
+        _create(store, "next")
+
+        assert _statuses(db_path) == [("next", "completed")]
+
+    def test_an_evicted_result_is_not_served_from_the_read_cache(self, db_path, clock):
+        store = DecisionResultStore(
+            db_path=db_path, ttl_seconds=10_000, max_entries=2, cleanup_interval=5
+        )
+        store.save("saved", {"status": "completed"}, org_id="org-a")
+        _create(store, "created")
+        assert store.get("saved")["status"] == "completed"
+        assert store.get("created")["status"] == "completed"
+
+        for i in range(2):
+            clock.now = 1001.0 + i
+            _create(store, f"newer-{i}")
+
+        assert [row[0] for row in _durable_rows(db_path)] == ["newer-0", "newer-1"]
+        assert store.get("saved") is None
+        assert store.get_for_org("created", "org-a") is None
+        assert store.get("newer-1")["status"] == "completed"
+
+    def test_cancel_during_routing_stays_cancelled_under_maintenance(self, db_path, clock):
+        store = DecisionResultStore(
+            db_path=db_path, ttl_seconds=10_000, max_entries=3, cleanup_interval=5
+        )
+        for i in range(3):
+            clock.now = 1000.0 + i
+            _create(store, f"old-{i}")
+        clock.now = 1003.0
+        assert store.claim("routing", {"status": "pending"}, org_id="org-a") == "pending"
+        clock.now = 1004.0
+        assert store.save_if_status(
+            "routing", {"status": "cancelled"}, org_id="org-a", expected_status="pending"
+        )
+        for i in range(2):
+            clock.now = 1010.0 + i
+            _create(store, f"new-{i}")
+
+        late = store.save_if_status(
+            "routing",
+            {"status": "completed", "result": {"answer": "late"}},
+            org_id="org-a",
+            expected_status="pending",
+        )
+
+        assert late is False
+        for reader in (store, DecisionResultStore(db_path=db_path)):
+            kept = reader.get_for_org("routing", "org-a")
+            assert (kept["status"], kept["result"]) == ("cancelled", {})
+        assert [row[0] for row in _durable_rows(db_path)] == ["routing", "new-0", "new-1"]
+
+    def test_cross_org_conflict_runs_no_maintenance(self, db_path, clock):
+        seeder = DecisionResultStore(
+            db_path=db_path, ttl_seconds=10_000, max_entries=100, cleanup_interval=10_000
+        )
+        seeder.save("theirs", {"status": "completed", "result": {"answer": "b"}}, org_id="org-b")
+        seeder.save("older", {"status": "completed"}, org_id="org-b")
+        DecisionResultStore(
+            db_path=db_path, ttl_seconds=10, max_entries=100, cleanup_interval=10_000
+        ).save("expiring", {"status": "completed"}, org_id="org-b")
+        writer = DecisionResultStore(
+            db_path=db_path, ttl_seconds=10_000, max_entries=1, cleanup_interval=5
+        )
+        clock.now = 1100.0  # cleanup is due, "expiring" has expired, 2 live rows > max_entries
+        before = _durable_rows(db_path)
+
+        with (
+            patch.object(writer, "_maybe_cleanup", wraps=writer._maybe_cleanup) as cleanup,
+            patch.object(
+                writer, "_enforce_max_entries", wraps=writer._enforce_max_entries
+            ) as enforce,
+        ):
+            with pytest.raises(DecisionOwnershipConflict):
+                writer.claim("theirs", {"status": "pending"}, org_id="org-a", created_by="u1")
+            assert (
+                writer.save_if_status(
+                    "theirs", {"status": "cancelled"}, org_id="org-a", expected_status="completed"
+                )
+                is False
+            )
+
+        cleanup.assert_not_called()
+        enforce.assert_not_called()
+        assert _durable_rows(db_path) == before
+
+    def test_a_maintenance_failure_never_fails_a_committed_write(
+        self, db_path, clock, monkeypatch, caplog
+    ):
+        store = DecisionResultStore(
+            db_path=db_path, ttl_seconds=10_000, max_entries=100, cleanup_interval=5
+        )
+
+        class DriverError(Exception):
+            """A driver error the maintenance methods do not catch (like psycopg2.Error)."""
+
+        def broken() -> None:
+            raise DriverError("connection lost")
+
+        monkeypatch.setattr(store, "_maybe_cleanup", broken)
+        monkeypatch.setattr(store, "_enforce_max_entries", broken)
+
+        with caplog.at_level(logging.WARNING, logger=store_module.__name__):
+            assert store.claim("req-1", {"status": "pending"}, org_id="org-a") == "pending"
+            assert store.save_if_status(
+                "req-1", {"status": "completed"}, org_id="org-a", expected_status="pending"
+            )
+            store.save("req-2", {"status": "completed"}, org_id="org-a")
+
+        assert _statuses(db_path) == [("req-1", "completed"), ("req-2", "completed")]
+        failures = [r for r in caplog.records if "connection lost" in r.getMessage()]
+        assert len(failures) == 6
+        assert {r.levelno for r in failures} == {logging.WARNING}
+
+
+class TestClaimOfAnExpiredResult:
+    """An expired row that cleanup has not purged yet decides neither the owner nor the status."""
+
+    @pytest.fixture
+    def db_path(self, tmp_path):
+        return tmp_path / "expired_claim.db"
+
+    @staticmethod
+    def _store(db_path: Path, ttl_seconds: int) -> DecisionResultStore:
+        return DecisionResultStore(
+            db_path=db_path, ttl_seconds=ttl_seconds, cleanup_interval=1_000_000
+        )
+
+    def test_claim_of_expired_unpurged_id_is_fresh(self, db_path, clock):
+        # Built before the clock moves: a store purges expired rows when it is constructed.
+        short_lived = self._store(db_path, ttl_seconds=10)
+        store = self._store(db_path, ttl_seconds=10_000)
+        short_lived.save(
+            "dup",
+            {"status": "completed", "result": {"answer": "org-b secret"}},
+            org_id="org-b",
+            created_by="ub",
+        )
+        short_lived.save("mine", {"status": "cancelled"}, org_id="org-a", created_by="u1")
+        clock.now = 1011.0
+        assert len(_durable_rows(db_path)) == 2  # expired, but not purged yet
+
+        assert (
+            store.claim(
+                "dup",
+                {"status": "pending", "result": {"q": "org-a"}},
+                org_id="org-a",
+                created_by="u1",
+            )
+            == "pending"
+        )
+        assert store.claim("mine", {"status": "pending"}, org_id="org-a", created_by="u1") == (
+            "pending"
+        )
+
+        rows = {row[0]: row for row in _durable_rows(db_path)}
+        assert rows["dup"][1:3] == ("pending", "org-a")
+        assert rows["dup"][4:] == ('{"q": "org-a"}', "u1")
+        assert rows["mine"][1:3] == ("pending", "org-a")
+        assert store.get_for_org("dup", "org-b") is None
+        assert store.save_if_status(
+            "dup", {"status": "completed"}, org_id="org-a", expected_status="pending"
+        )
+
+    def test_a_live_foreign_result_still_conflicts(self, db_path, clock):
+        store = self._store(db_path, ttl_seconds=10_000)
+        self._store(db_path, ttl_seconds=10).save(
+            "dup", {"status": "completed", "result": {"answer": "b"}}, org_id="org-b"
+        )
+        clock.now = 1009.0
+
+        with pytest.raises(DecisionOwnershipConflict):
+            store.claim("dup", {"status": "pending"}, org_id="org-a")
+
+        assert _statuses(db_path) == [("dup", "completed")]
+        assert _durable_rows(db_path)[0][2] == "org-b"
+
+
+class _RecordingPostgreSQLBackend:
+    """Stands in for PostgreSQLBackend: records each statement and answers the store's reads."""
+
+    def __init__(self, database_url: str, **kwargs: Any) -> None:
+        self.statements: list[tuple[str, tuple]] = []
+        self.owner: tuple | None = ("org-a", "pending")
+        self.rowcount = 1
+        self.live_rows = 0
+        self.expired_rows = 0
+        self.oldest_finished: list[tuple] = []
+
+    @staticmethod
+    def convert_placeholder(sql: str) -> str:
+        return sql.replace("?", "%s")
+
+    def _record(self, sql: str, params: tuple) -> str:
+        normalized = " ".join(sql.replace("%s", "?").split())
+        self.statements.append((normalized, tuple(params)))
+        return normalized
+
+    @contextmanager
+    def connection(self):
+        backend = self
+
+        class _Cursor:
+            rowcount = backend.rowcount
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc_info):
+                return False
+
+            def execute(self, sql, params=()):
+                backend._record(sql, params)
+
+        yield SimpleNamespace(cursor=_Cursor)
+
+    def execute_write(self, sql: str, params: tuple = ()) -> None:
+        self._record(sql, params)
+
+    def fetch_one(self, sql: str, params: tuple = ()) -> tuple | None:
+        sql = self._record(sql, params)
+        if sql.startswith("SELECT org_id, status"):
+            return self.owner
+        if sql.startswith("SELECT COUNT(*)"):
+            return (self.expired_rows,) if "expires_at <=" in sql else (self.live_rows,)
+        return None
+
+    def fetch_all(self, sql: str, params: tuple = ()) -> list[Any]:
+        sql = self._record(sql, params)
+        return list(self.oldest_finished) if sql.startswith("SELECT request_id") else []
+
+    def close(self) -> None:
+        pass
+
+
+_PURGE_SQL = "DELETE FROM decision_results WHERE expires_at <= ?"
+_EVICT_PREFIX = "DELETE FROM decision_results WHERE request_id IN ( "
+
+
+class TestPostgreSQLMaintenance:
+    """The PostgreSQL code path issues the same maintenance after claims and conditional saves."""
+
+    @pytest.fixture
+    def pg_store(self, monkeypatch, tmp_path, clock):
+        monkeypatch.setattr(store_module, "PostgreSQLBackend", _RecordingPostgreSQLBackend)
+        monkeypatch.setattr(store_module, "POSTGRESQL_AVAILABLE", True)
+        store = DecisionResultStore(
+            db_path=tmp_path / "unused.db",
+            backend="postgresql",
+            database_url="postgresql://u@127.0.0.1:1/db",
+            max_entries=2,
+            cleanup_interval=5,
+        )
+        store._backend.live_rows = 3
+        store._backend.expired_rows = 1
+        store._backend.statements.clear()
+        return store
+
+    @staticmethod
+    def _maintenance(backend) -> tuple[list[tuple], list[tuple]]:
+        purges = [(s, p) for s, p in backend.statements if s == _PURGE_SQL]
+        evictions = [
+            (s, p)
+            for s, p in backend.statements
+            if "ORDER BY created_at ASC" in s and s.startswith("DELETE")
+        ]
+        return purges, evictions
+
+    def _assert_maintained(self, backend) -> None:
+        purges, evictions = self._maintenance(backend)
+        assert len(purges) == 1
+        assert len(evictions) == 1
+        sql, params = evictions[0]
+        assert sql.startswith("DELETE FROM decision_results WHERE request_id IN (")
+        assert "status NOT IN (?, ?, ?)" in sql
+        assert params[1:] == ("pending", "running", "processing", 1)
+        selected = [(s, p) for s, p in backend.statements if s.startswith("SELECT request_id")]
+        assert selected == [(sql.removeprefix(_EVICT_PREFIX).removesuffix(" )"), params)]
+
+    def test_claim_and_conditional_save_issue_the_maintenance_sql(self, pg_store, clock):
+        backend = pg_store._backend
+
+        clock.now += 10
+        assert pg_store.claim("req-1", {"status": "pending"}, org_id="org-a") == "pending"
+        self._assert_maintained(backend)
+
+        backend.statements.clear()
+        clock.now += 10
+        assert pg_store.save_if_status(
+            "req-1", {"status": "completed"}, org_id="org-a", expected_status="pending"
+        )
+        self._assert_maintained(backend)
+
+    def test_evicted_results_leave_the_read_cache(self, pg_store, clock):
+        pg_store._cache["old-1"] = DecisionResultEntry(
+            request_id="old-1", status="completed", result={}, org_id="org-a"
+        )
+        pg_store._cache["kept"] = DecisionResultEntry(
+            request_id="kept", status="completed", result={}, org_id="org-a"
+        )
+        assert pg_store.get("old-1")["status"] == "completed"
+        pg_store._backend.oldest_finished = [("old-1",)]
+
+        assert pg_store.claim("req-1", {"status": "pending"}, org_id="org-a") == "pending"
+
+        assert pg_store.get("old-1") is None
+        assert pg_store.get("kept")["status"] == "completed"
+
+    def test_claim_first_deletes_only_an_expired_row_for_its_id(self, pg_store, clock):
+        backend = pg_store._backend
+
+        assert pg_store.claim("req-1", {"status": "pending"}, org_id="org-a") == "pending"
+
+        first, second = backend.statements[:2]
+        assert first == (
+            "DELETE FROM decision_results WHERE request_id = ? AND expires_at <= ?",
+            ("req-1", clock.now),
+        )
+        assert second[0].startswith("INSERT INTO decision_results")
+        assert second[0].endswith("ON CONFLICT (request_id) DO NOTHING")
+
+    def test_writes_that_change_nothing_issue_no_maintenance_sql(self, pg_store, clock):
+        backend = pg_store._backend
+        clock.now += 10
+
+        backend.rowcount = 0
+        assert (
+            pg_store.save_if_status(
+                "req-1", {"status": "completed"}, org_id="org-a", expected_status="pending"
+            )
+            is False
+        )
+        backend.owner = ("org-b", "completed")
+        with pytest.raises(DecisionOwnershipConflict):
+            pg_store.claim("req-2", {"status": "pending"}, org_id="org-a")
+
+        assert self._maintenance(backend) == ([], [])
 
 
 class TestGlobalStore:

@@ -60,6 +60,9 @@ DEFAULT_CACHE_SIZE = 1000  # In-memory cache size
 DEFAULT_DB_PATH = Path(resolve_db_path("decision_results.db"))
 DEFAULT_CLEANUP_INTERVAL = 300  # 5 minutes
 
+# Statuses of a decision that has not finished yet; capacity eviction never removes these.
+_IN_FLIGHT_STATUSES = ("pending", "running", "processing")
+
 
 class DecisionOwnershipConflict(ValueError):
     """A save targeted a decision result owned by another org (or by no org)."""
@@ -421,11 +424,7 @@ class DecisionResultStore:
             while len(self._cache) > self._cache_size:
                 self._cache.popitem(last=False)
 
-        # Maybe run cleanup
-        self._maybe_cleanup()
-
-        # Enforce max entries with LRU eviction
-        self._enforce_max_entries()
+        self._run_maintenance()
 
     _CLAIM_SQL = """
         INSERT INTO decision_results
@@ -434,6 +433,8 @@ class DecisionResultStore:
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (request_id) DO NOTHING
     """
+
+    _DELETE_EXPIRED_ID_SQL = "DELETE FROM decision_results WHERE request_id = ? AND expires_at <= ?"
 
     _SAVE_IF_STATUS_SQL = """
         UPDATE decision_results
@@ -452,13 +453,16 @@ class DecisionResultStore:
         """Store ``data`` for a new ``request_id``; leave an existing result unchanged.
 
         Returns the stored status afterwards: ``data``'s status for a new id,
-        or the existing status when ``org_id`` already owns the id.
+        or the existing status when ``org_id`` already owns the id. An expired
+        result counts as absent, as in ``get()``: it is deleted first, whichever
+        org owned it, and the id is claimed fresh.
 
         Raises:
             DecisionOwnershipConflict: ``request_id`` belongs to another org or
                 to no org. Nothing is written.
         """
         now = time.time()
+        self._execute_counted(self._DELETE_EXPIRED_ID_SQL, (request_id, now))
         params = (
             request_id,
             data.get("status", "unknown"),
@@ -479,6 +483,7 @@ class DecisionResultStore:
             raise DecisionOwnershipConflict(
                 f"Decision result {request_id} belongs to another owner"
             )
+        self._run_maintenance()
         return str(row[1])
 
     def save_if_status(
@@ -507,6 +512,8 @@ class DecisionResultStore:
         )
         saved = self._execute_counted(self._SAVE_IF_STATUS_SQL, params) > 0
         self._forget_cached(request_id)
+        if saved:
+            self._run_maintenance()
         return saved
 
     def _execute_counted(self, sql: str, params: tuple) -> int:
@@ -530,10 +537,11 @@ class DecisionResultStore:
         row = self._get_connection().execute(sql, params).fetchone()
         return None if row is None else tuple(row)
 
-    def _forget_cached(self, request_id: str) -> None:
-        """Drop the cached entry so the next read sees the database row."""
+    def _forget_cached(self, *request_ids: str) -> None:
+        """Drop the cached entries so the next read sees the database rows."""
         with self._cache_lock:
-            self._cache.pop(request_id, None)
+            for request_id in request_ids:
+                self._cache.pop(request_id, None)
 
     def get(self, request_id: str) -> dict[str, Any] | None:
         """
@@ -755,6 +763,18 @@ class DecisionResultStore:
         conn.commit()
         return cursor.rowcount > 0
 
+    def _run_maintenance(self) -> None:
+        """Purge expired results (once per cleanup interval), then enforce ``max_entries``.
+
+        Runs after every write that stored something. The write has already
+        committed, so a failure here is logged and never raised to the caller.
+        """
+        for step in (self._maybe_cleanup, self._enforce_max_entries):
+            try:
+                step()
+            except Exception as e:  # noqa: BLE001 - housekeeping must not fail a stored write
+                logger.warning("Decision result store maintenance failed: %s", e)
+
     def _maybe_cleanup(self) -> None:
         """Run cleanup if interval has passed."""
         now = time.time()
@@ -792,8 +812,25 @@ class DecisionResultStore:
         except (OSError, RuntimeError, sqlite3.Error) as e:
             logger.warning("Failed to cleanup expired results: %s", e)
 
+    # Every live row counts toward max_entries, but only finished ones are evicted:
+    # deleting an in-flight row would make its pending conditional save find nothing.
+    _OLDEST_FINISHED_SQL = f"""
+        SELECT request_id FROM decision_results
+        WHERE expires_at > ?
+          AND status NOT IN ({", ".join("?" for _ in _IN_FLIGHT_STATUSES)})
+        ORDER BY created_at ASC
+        LIMIT ?
+    """
+    _EVICT_OLDEST_FINISHED_SQL = (
+        f"DELETE FROM decision_results WHERE request_id IN ({_OLDEST_FINISHED_SQL})"
+    )
+
     def _enforce_max_entries(self) -> None:
-        """Enforce maximum entries using LRU eviction."""
+        """Evict the oldest finished results while live results exceed ``max_entries``.
+
+        Results in ``_IN_FLIGHT_STATUSES`` are never evicted, so the store can hold
+        more than ``max_entries`` rows while that many decisions are in flight.
+        """
         try:
             if self._backend is not None:
                 result = self._backend.fetch_one(
@@ -804,20 +841,14 @@ class DecisionResultStore:
 
                 if count > self._max_entries:
                     excess = count - self._max_entries
-                    self._backend.execute_write(
-                        """
-                        DELETE FROM decision_results
-                        WHERE request_id IN (
-                            SELECT request_id FROM decision_results
-                            WHERE expires_at > ?
-                            ORDER BY created_at ASC
-                            LIMIT ?
-                        )
-                        """,
-                        (time.time(), excess),
-                    )
+                    params = (time.time(), *_IN_FLIGHT_STATUSES, excess)
+                    evicted = self._backend.fetch_all(self._OLDEST_FINISHED_SQL, params)
+                    self._backend.execute_write(self._EVICT_OLDEST_FINISHED_SQL, params)
+                    self._forget_cached(*(row[0] for row in evicted))
                     logger.info(
-                        "LRU evicted %s decision results (max: %s)", excess, self._max_entries
+                        "LRU evicted up to %s decision results (max: %s)",
+                        excess,
+                        self._max_entries,
                     )
                 return
 
@@ -829,22 +860,15 @@ class DecisionResultStore:
             count = cursor.fetchone()[0]
 
             if count > self._max_entries:
-                # Delete oldest entries beyond the limit
                 excess = count - self._max_entries
-                conn.execute(
-                    """
-                    DELETE FROM decision_results
-                    WHERE request_id IN (
-                        SELECT request_id FROM decision_results
-                        WHERE expires_at > ?
-                        ORDER BY created_at ASC
-                        LIMIT ?
-                    )
-                    """,
-                    (time.time(), excess),
-                )
+                params = (time.time(), *_IN_FLIGHT_STATUSES, excess)
+                evicted = conn.execute(self._OLDEST_FINISHED_SQL, params).fetchall()
+                cursor = conn.execute(self._EVICT_OLDEST_FINISHED_SQL, params)
                 conn.commit()
-                logger.info("LRU evicted %s decision results (max: %s)", excess, self._max_entries)
+                self._forget_cached(*(row[0] for row in evicted))
+                logger.info(
+                    "LRU evicted %s decision results (max: %s)", cursor.rowcount, self._max_entries
+                )
         except (OSError, RuntimeError, sqlite3.Error) as e:
             logger.warning("Failed to enforce max entries: %s", e)
 
