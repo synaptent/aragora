@@ -389,9 +389,11 @@ class WebSocketHandlerMixin:
 
         The caller sees what the spectate SSE route shows them: a named debate
         must be public or their org's (else 401/403/404 before the upgrade),
-        and only events they may view are sent. A debate socket is closed with
-        ``share_revoked`` once the caller may no longer view the debate, at the
-        next event for it or, when none comes, at the next heartbeat check.
+        and only events they may view are sent. Each queued event is checked
+        again right before it is sent. A debate socket is closed with
+        ``share_revoked``, sending nothing more, once the caller may no longer
+        view the debate (or at the next heartbeat check when no event comes); a
+        pipeline socket drops that debate's events and carries on.
         """
         import aiohttp
         import aiohttp.web as web
@@ -479,6 +481,12 @@ class WebSocketHandlerMixin:
                     ):
                         continue
                     event = _SPECTATE_REVOKED
+                if event is not _SPECTATE_REVOKED:
+                    delivery = await asyncio.to_thread(visibility.delivery, event, debate_id)
+                    if delivery == "drop":
+                        continue
+                    if delivery == "end":
+                        event = _SPECTATE_REVOKED
                 if event is _SPECTATE_REVOKED:
                     await ws.send_json({"type": "share_revoked", "debate_id": debate_id})
                     await ws.close()

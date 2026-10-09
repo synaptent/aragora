@@ -19,9 +19,10 @@ import json
 import logging
 import queue
 import sqlite3
+import threading
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Literal
 
 from aragora.tenancy.debate_access import (
     authorize_debate_write,
@@ -233,7 +234,8 @@ class SpectateVisibility:
     org is visible to no one. Events linked only to a pipeline follow the same
     rule with the pipeline's owner org. Decisions are cached for one request or
     stream, and dropped whenever a debate stops being public, so a stream
-    never keeps showing a debate that was unshared after it opened.
+    never keeps showing a debate that was unshared after it opened. One
+    instance may be used from several threads (a publisher's and the stream's).
     """
 
     def __init__(self, org_id: str | None = None, *, storage: Any | None = None) -> None:
@@ -244,6 +246,10 @@ class SpectateVisibility:
         self._visible: dict[str, bool] = {}
         self._owned_pipelines: set[str] = set()
         self._revocations = public_revocation_count()
+        # Held from the revocation check to the cache write: otherwise a decision
+        # that read the share flag before an unshare could store its answer after
+        # another thread had already cleared the cache for that unshare.
+        self._lock = threading.RLock()
 
     def _forget_after_revocation(self) -> None:
         revocations = public_revocation_count()
@@ -261,16 +267,21 @@ class SpectateVisibility:
     def is_public(self, debate_id: Any) -> bool:
         if not isinstance(debate_id, str) or not debate_id:
             return False
-        self._forget_after_revocation()
-        return _is_public_spectate_debate(
-            debate_id, storage=self._get_storage(), visibility_cache=self._public
-        )
+        with self._lock:
+            self._forget_after_revocation()
+            return _is_public_spectate_debate(
+                debate_id, storage=self._get_storage(), visibility_cache=self._public
+            )
 
     def can_view(self, debate_id: Any) -> bool:
         if debate_id is None or debate_id == "":
             return True
         if not isinstance(debate_id, str):
             return False
+        with self._lock:
+            return self._can_view(debate_id)
+
+    def _can_view(self, debate_id: str) -> bool:
         self._forget_after_revocation()
         cached = self._visible.get(debate_id)
         if cached is not None:
@@ -316,7 +327,22 @@ class SpectateVisibility:
         Only a decided answer counts: a debate that cannot be found is not
         reported, since it may be registered after its first events.
         """
-        return not self.can_view(debate_id) and self._visible.get(debate_id) is False
+        with self._lock:
+            return not self.can_view(debate_id) and self._visible.get(debate_id) is False
+
+    def delivery(self, event: Any, stream_debate_id: str | None) -> Literal["send", "drop", "end"]:
+        """What to do with a buffered ``event`` right before it is sent.
+
+        ``send`` it while the caller may still view it, else ``drop`` it, or
+        ``end`` a stream for ``stream_debate_id`` once the caller may no longer
+        view that debate. Checked again at send time because the debate may
+        have been unshared while the event waited in a snapshot or queue.
+        """
+        if self.can_view_event(event):
+            return "send"
+        if stream_debate_id and self.lost_access(stream_debate_id):
+            return "end"
+        return "drop"
 
 
 def authorize_spectate_request(
@@ -407,8 +433,10 @@ def iter_live_spectate_sse_frames(
     Only events visible to a caller acting for ``org_id`` are sent (public
     events only when it is None); see :class:`SpectateVisibility`. Callers must
     authorize a named ``debate_id`` first with :func:`authorize_spectate_request`.
-    A stream for a named debate ends with a ``share_revoked`` frame once the
-    caller may no longer view it (its owner unshared it).
+    Each snapshot or queued event is checked again right before it is sent. A
+    stream for a named debate ends with a ``share_revoked`` frame, sending
+    nothing more, once the caller may no longer view it (its owner unshared
+    it); any other stream drops that debate's events and carries on.
     """
     visibility = SpectateVisibility(org_id, storage=storage)
     if bridge is None:
@@ -487,11 +515,17 @@ def iter_live_spectate_sse_frames(
             except queue.Full:
                 logger.debug("spectate_live_sse_resync_enqueue_failed", exc_info=True)
 
+    share_revoked = _sse_frame("share_revoked", {"debate_id": debate_id}).encode("utf-8")
     bridge.subscribe(enqueue)
     try:
         yield _sse_frame("connected", metadata).encode("utf-8")
         for event in backlog:
-            yield _sse_frame("spectate", event.to_dict()).encode("utf-8")
+            delivery = visibility.delivery(event, debate_id)
+            if delivery == "end":
+                yield share_revoked
+                return
+            if delivery == "send":
+                yield _sse_frame("spectate", event.to_dict()).encode("utf-8")
         yield _sse_frame("snapshot_complete", metadata).encode("utf-8")
 
         while True:
@@ -504,7 +538,7 @@ def iter_live_spectate_sse_frames(
                     yield b": heartbeat\n\n"
                     continue
             if event is _LIVE_SSE_REVOKED_SENTINEL:
-                yield _sse_frame("share_revoked", {"debate_id": debate_id}).encode("utf-8")
+                yield share_revoked
                 break
             if event is _LIVE_SSE_RESYNC_SENTINEL:
                 yield _sse_frame(
@@ -519,7 +553,12 @@ def iter_live_spectate_sse_frames(
                     },
                 ).encode("utf-8")
                 break
-            yield _sse_frame("spectate", event.to_dict()).encode("utf-8")
+            delivery = visibility.delivery(event, debate_id)
+            if delivery == "end":
+                yield share_revoked
+                break
+            if delivery == "send":
+                yield _sse_frame("spectate", event.to_dict()).encode("utf-8")
     finally:
         bridge.unsubscribe(enqueue)
 
