@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -24,6 +25,10 @@ def _selector(**kwargs) -> TeamSelector:
     return TeamSelector(
         calibration_tracker=MagicMock(), control_plane_registry=MagicMock(), **kwargs
     )
+
+
+def _agent(name: str) -> Any:
+    return SimpleNamespace(name=name)
 
 
 def test_team_selector_inherits_history_mixin() -> None:
@@ -58,10 +63,8 @@ def test_elo_win_rate_score_through_selector() -> None:
     ]
     selector = _selector(elo_system=elo, config=TeamSelectionConfig(enable_elo_win_rate=True))
 
-    assert selector._compute_elo_win_rate_score(SimpleNamespace(name="claude-opus"), "code") == (
-        pytest.approx(0.5)
-    )
-    assert selector._compute_elo_win_rate_score(SimpleNamespace(name="gemini"), "code") == 0.0
+    assert selector._compute_elo_win_rate_score(_agent("claude-opus"), "code") == pytest.approx(0.5)
+    assert selector._compute_elo_win_rate_score(_agent("gemini"), "code") == 0.0
 
 
 def test_pattern_score_caches_affinities_and_records_telemetry() -> None:
@@ -70,7 +73,7 @@ def test_pattern_score_caches_affinities_and_records_telemetry() -> None:
     matcher.get_agent_affinities.return_value = {"codex": 0.8}
     selector = _selector(pattern_matcher=matcher)
 
-    agent = SimpleNamespace(name="codex-mini")
+    agent = _agent("codex-mini")
     assert selector._compute_pattern_score(agent, "split the god file") == 0.8
     assert selector._compute_pattern_score(agent, "split another file") == 0.8
 
