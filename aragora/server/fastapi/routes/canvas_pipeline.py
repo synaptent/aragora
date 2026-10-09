@@ -47,6 +47,12 @@ Agent Management:
 - POST /api/v2/pipeline/{id}/agents/{agent_id}/approve  Approve agent
 - POST /api/v2/pipeline/{id}/agents/{agent_id}/reject   Reject agent
 - PUT  /api/v2/canvas/pipeline/{id}                  Save canvas state
+
+Pipelines belong to the org that created them (the ``PipelineResultStore``
+owner). Every route except the template list needs a signed-in caller acting
+for an org. Routes on one pipeline check that the caller's org owns it before
+checking the permission, so another org's pipeline, one with no recorded org
+and a missing one answer the same 404.
 """
 
 from __future__ import annotations
@@ -56,9 +62,10 @@ import inspect
 import logging
 import time
 import uuid
+from collections.abc import Awaitable, Callable
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from aragora.pipeline.backbone_errors import (
@@ -66,13 +73,24 @@ from aragora.pipeline.backbone_errors import (
     FAIL_CLOSED_BACKBONE_MESSAGE,
 )
 from aragora.pipeline.execution_mode import ExecutionMode as SafetyMode
-from aragora.rbac.models import AuthorizationContext
 from aragora.server.handlers.canvas.canvas_pipeline import attach_unified_live_state
+from aragora.tenancy.record_scope import OrgScope, record_not_found_error, record_visible
 
-from ..dependencies.auth import require_permission
+from ..dependencies.auth import check_permission
+from ..dependencies.pipeline_access import (
+    PIPELINE_CREATE,
+    PIPELINE_READ,
+    PIPELINE_RUN,
+    PIPELINE_UPDATE,
+    PipelineCaller,
+    pipeline_permission,
+    require_pipeline_caller,
+)
 from ..middleware.error_handling import NotFoundError
 
 logger = logging.getLogger(__name__)
+
+_PIPELINE = "Pipeline"
 
 router = APIRouter(prefix="/api/v2", tags=["Canvas Pipeline"])
 
@@ -391,15 +409,15 @@ def _get_ai_agent() -> Any | None:
     return None
 
 
-def _persist_universal_graph(result: Any) -> None:
-    """Persist the UniversalGraph from a PipelineResult to GraphStore."""
+def _persist_universal_graph(result: Any, owner: dict[str, str]) -> None:
+    """Persist the UniversalGraph from a PipelineResult to GraphStore for ``owner``."""
     if result.universal_graph is None:
         return
     try:
         from aragora.pipeline.graph_store import get_graph_store
 
         store = get_graph_store()
-        store.create(result.universal_graph)
+        store.create(result.universal_graph, **owner)
     except (ImportError, OSError) as e:
         logger.debug("Could not persist universal graph: %s", e)
 
@@ -445,13 +463,52 @@ def _summarize_result(result: Any) -> PipelineCreateResponse:
     )
 
 
-async def _store_result(result: Any) -> None:
-    """Persist pipeline result to store and keep live object."""
+async def _store_result(result: Any, caller: PipelineCaller) -> None:
+    """Persist pipeline result to store and keep live object.
+
+    A new pipeline (and its universal graph) belongs to the caller's org; the
+    store keeps the first owner of an existing pipeline.
+    """
+    owner = caller.owner_fields()
     result_dict = attach_unified_live_state(result.to_dict()) if hasattr(result, "to_dict") else {}
-    await _call_store_method(_get_store(), "save", result.pipeline_id, result_dict)
+    await _call_store_method(_get_store(), "save", result.pipeline_id, result_dict, **owner)
     _pipeline_objects[result.pipeline_id] = result
-    await asyncio.to_thread(_persist_universal_graph, result)
+    await asyncio.to_thread(_persist_universal_graph, result, owner)
     await asyncio.to_thread(_persist_pipeline_to_km, result)
+
+
+async def _pipeline_owned(pipeline_id: str, scope: OrgScope) -> bool:
+    """Whether the stored pipeline ``pipeline_id`` belongs to the caller's org.
+
+    A live pipeline object alone proves nothing: ownership is the store's.
+    """
+    try:
+        owner = await _call_store_method(_get_store(), "get_owner_org", pipeline_id)
+    except Exception as exc:  # noqa: BLE001 - an unreadable owner must hide the pipeline
+        logger.warning("Pipeline owner lookup failed; denying: %s", type(exc).__name__)
+        return False
+    return record_visible(owner if isinstance(owner, str) and owner else None, scope)
+
+
+async def _require_owned(pipeline_id: str, caller: PipelineCaller, permission: str) -> None:
+    """Raise the shared 404 unless the caller's org owns the pipeline, then check
+    ``permission``."""
+    if not await _pipeline_owned(pipeline_id, caller.scope):
+        raise record_not_found_error(_PIPELINE)
+    check_permission(caller.auth, permission)
+
+
+def owned_pipeline(permission: str) -> Callable[..., Awaitable[PipelineCaller]]:
+    """Dependency for routes on ``{pipeline_id}``: org ownership, then ``permission``."""
+
+    async def dependency(
+        pipeline_id: str,
+        caller: PipelineCaller = Depends(require_pipeline_caller),
+    ) -> PipelineCaller:
+        await _require_owned(pipeline_id, caller, permission)
+        return caller
+
+    return dependency
 
 
 async def _get_result_or_404(pipeline_id: str) -> Any:
@@ -459,9 +516,9 @@ async def _get_result_or_404(pipeline_id: str) -> Any:
     result = _pipeline_objects.get(pipeline_id)
     if result is not None:
         return result
-    stored = await _call_store_method(_get_store(), "load", pipeline_id)
+    stored = await _call_store_method(_get_store(), "get", pipeline_id)
     if stored is None:
-        raise NotFoundError(f"Pipeline {pipeline_id} not found")
+        raise record_not_found_error(_PIPELINE)
     return stored
 
 
@@ -477,7 +534,7 @@ async def _get_result_or_404(pipeline_id: str) -> Any:
 )
 async def create_from_debate(
     body: FromDebateRequest,
-    auth: AuthorizationContext = Depends(require_permission("pipeline:create")),
+    caller: PipelineCaller = Depends(pipeline_permission(PIPELINE_CREATE)),
 ) -> PipelineCreateResponse:
     """Create a pipeline from an ArgumentCartographer debate export."""
     try:
@@ -494,7 +551,7 @@ async def create_from_debate(
             event_callback=event_cb,
             pipeline_id=pipeline_id,
         )
-        await _store_result(result)
+        await _store_result(result, caller)
         return _summarize_result(result)
 
     except (ImportError, ValueError, TypeError, RuntimeError) as e:
@@ -509,7 +566,7 @@ async def create_from_debate(
 )
 async def create_from_ideas(
     body: FromIdeasRequest,
-    auth: AuthorizationContext = Depends(require_permission("pipeline:create")),
+    caller: PipelineCaller = Depends(pipeline_permission(PIPELINE_CREATE)),
 ) -> PipelineCreateResponse:
     """Create a pipeline from raw idea strings."""
     try:
@@ -526,7 +583,7 @@ async def create_from_ideas(
             event_callback=event_cb,
             pipeline_id=pipeline_id,
         )
-        await _store_result(result)
+        await _store_result(result, caller)
         return _summarize_result(result)
 
     except (ImportError, ValueError, TypeError, RuntimeError) as e:
@@ -541,7 +598,7 @@ async def create_from_ideas(
 )
 async def create_from_braindump(
     body: FromBraindumpRequest,
-    auth: AuthorizationContext = Depends(require_permission("pipeline:create")),
+    caller: PipelineCaller = Depends(pipeline_permission(PIPELINE_CREATE)),
 ) -> PipelineCreateResponse:
     """Create a pipeline from brain dump text."""
     try:
@@ -578,7 +635,7 @@ async def create_from_braindump(
             pipeline_id=pipeline_id,
             event_callback=event_cb,
         )
-        await _store_result(result)
+        await _store_result(result, caller)
         response = _summarize_result(result)
         if orchestrator_summary is None:
             return response
@@ -606,7 +663,7 @@ async def create_from_braindump(
 )
 async def create_from_template(
     body: FromTemplateRequest,
-    auth: AuthorizationContext = Depends(require_permission("pipeline:create")),
+    caller: PipelineCaller = Depends(pipeline_permission(PIPELINE_CREATE)),
 ) -> PipelineCreateResponse:
     """Create a pipeline from a template."""
     try:
@@ -642,7 +699,7 @@ async def create_from_template(
                 event_callback=event_cb,
                 pipeline_id=pipeline_id,
             )
-        await _store_result(result)
+        await _store_result(result, caller)
         return _summarize_result(result)
 
     except NotFoundError:
@@ -661,7 +718,7 @@ async def create_from_template(
 )
 async def create_from_system_metrics(
     body: FromSystemMetricsRequest,
-    auth: AuthorizationContext = Depends(require_permission("pipeline:create")),
+    caller: PipelineCaller = Depends(pipeline_permission(PIPELINE_CREATE)),
 ) -> PipelineCreateResponse:
     """Create a pipeline from system metrics analysis."""
     try:
@@ -672,7 +729,7 @@ async def create_from_system_metrics(
         result = await IdeaToExecutionPipeline.from_system_metrics(
             pipeline_id=pipeline_id,
         )
-        await _store_result(result)
+        await _store_result(result, caller)
         return _summarize_result(result)
 
     except (ImportError, ValueError, TypeError, RuntimeError, AttributeError) as e:
@@ -686,7 +743,7 @@ async def create_from_system_metrics(
     status_code=201,
 )
 async def create_demo_pipeline(
-    auth: AuthorizationContext = Depends(require_permission("pipeline:create")),
+    caller: PipelineCaller = Depends(pipeline_permission(PIPELINE_CREATE)),
 ) -> PipelineCreateResponse:
     """Create a demo pipeline with sample data."""
     try:
@@ -704,7 +761,7 @@ async def create_demo_pipeline(
             auto_advance=True,
             pipeline_id=pipeline_id,
         )
-        await _store_result(result)
+        await _store_result(result, caller)
         return _summarize_result(result)
 
     except (ImportError, ValueError, TypeError, RuntimeError) as e:
@@ -720,9 +777,10 @@ async def create_demo_pipeline(
 @router.post("/canvas/pipeline/advance", response_model=PipelineCreateResponse)
 async def advance_pipeline(
     body: AdvanceRequest,
-    auth: AuthorizationContext = Depends(require_permission("pipeline:create")),
+    caller: PipelineCaller = Depends(require_pipeline_caller),
 ) -> PipelineCreateResponse:
-    """Advance a pipeline to the next stage."""
+    """Advance a pipeline the caller's org owns to the next stage."""
+    await _require_owned(body.pipeline_id, caller, PIPELINE_RUN)
     try:
         result = _pipeline_objects.get(body.pipeline_id)
         if result is None:
@@ -749,7 +807,7 @@ async def advance_pipeline(
             except (ImportError, ValueError):
                 target = next_stage  # type: ignore[assignment]
             result = pipeline.advance_stage(result, target)
-        await _store_result(result)
+        await _store_result(result, caller)
         return _summarize_result(result)
 
     except NotFoundError:
@@ -766,7 +824,7 @@ async def advance_pipeline(
 )
 async def run_pipeline(
     body: RunRequest,
-    auth: AuthorizationContext = Depends(require_permission("pipeline:create")),
+    caller: PipelineCaller = Depends(pipeline_permission(PIPELINE_RUN)),
 ) -> PipelineCreateResponse:
     """Start an async pipeline run from ideas or brain dump text."""
     try:
@@ -792,7 +850,7 @@ async def run_pipeline(
                 pipeline_id=pipeline_id,
             )
 
-        await _store_result(result)
+        await _store_result(result, caller)
         return _summarize_result(result)
 
     except (ImportError, ValueError, TypeError, RuntimeError) as e:
@@ -803,7 +861,7 @@ async def run_pipeline(
 @router.post("/canvas/pipeline/auto-run", response_model=PipelineCreateResponse, status_code=201)
 async def auto_run_pipeline(
     body: AutoRunRequest,
-    auth: AuthorizationContext = Depends(require_permission("pipeline:create")),
+    caller: PipelineCaller = Depends(pipeline_permission(PIPELINE_CREATE)),
 ) -> PipelineCreateResponse:
     """Auto-run a full pipeline end-to-end."""
     try:
@@ -829,7 +887,7 @@ async def auto_run_pipeline(
                 pipeline_id=pipeline_id,
             )
 
-        await _store_result(result)
+        await _store_result(result, caller)
         return _summarize_result(result)
 
     except (ImportError, ValueError, TypeError, RuntimeError) as e:
@@ -841,7 +899,7 @@ async def auto_run_pipeline(
 async def execute_pipeline(
     pipeline_id: str,
     body: ExecuteRequest,
-    auth: AuthorizationContext = Depends(require_permission("pipeline:create")),
+    caller: PipelineCaller = Depends(owned_pipeline(PIPELINE_RUN)),
 ) -> PipelineCreateResponse:
     """Execute a completed pipeline's orchestration stage."""
     data = await _get_result_or_404(pipeline_id)
@@ -893,12 +951,14 @@ async def execute_pipeline(
     }:
         raise HTTPException(status_code=409, detail="Pipeline is already executing")
 
+    auth = caller.auth
     try:
         from aragora.pipeline.canonical_execution import (
             build_decision_plan_from_orchestration,
             execute_queued_plan,
             queue_plan_execution,
         )
+        from aragora.pipeline.execution_ownership import ExecutionNotAuthorizedError
 
         plan, tasks = build_decision_plan_from_orchestration(
             subject_id=pipeline_id,
@@ -915,7 +975,11 @@ async def execute_pipeline(
                 auth_context=auth,
                 execution_mode="workflow",
                 safety_mode=SafetyMode.INTERACTIVE,
+                **caller.owner_fields(),
             )
+        except ExecutionNotAuthorizedError as exc:
+            logger.warning("FastAPI canvas execution of %s refused: %s", pipeline_id, exc.code)
+            raise record_not_found_error(_PIPELINE) from exc
         except BackbonePersistenceError as exc:
             logger.warning("FastAPI canvas execution blocked for %s: %s", pipeline_id, exc)
             raise HTTPException(status_code=503, detail=FAIL_CLOSED_BACKBONE_MESSAGE) from exc
@@ -1019,7 +1083,7 @@ async def execute_pipeline(
 async def trigger_self_improve(
     pipeline_id: str,
     body: SelfImproveRequest,
-    auth: AuthorizationContext = Depends(require_permission("pipeline:create")),
+    caller: PipelineCaller = Depends(owned_pipeline(PIPELINE_RUN)),
 ) -> dict[str, Any]:
     """Trigger self-improvement from pipeline insights."""
     await _get_result_or_404(pipeline_id)
@@ -1052,7 +1116,7 @@ async def trigger_self_improve(
 async def approve_transition(
     pipeline_id: str,
     body: TransitionApprovalRequest,
-    auth: AuthorizationContext = Depends(require_permission("pipeline:approve")),
+    caller: PipelineCaller = Depends(owned_pipeline(PIPELINE_RUN)),
 ) -> TransitionApprovalResponse:
     """Approve or reject a stage transition."""
     await _get_result_or_404(pipeline_id)
@@ -1061,10 +1125,10 @@ async def approve_transition(
         result = _pipeline_objects.get(pipeline_id)
         if result and hasattr(result, "approve_transition"):
             result.approve_transition(approved=body.approved, feedback=body.feedback)
-            await _store_result(result)
+            await _store_result(result, caller)
 
         action = "approved" if body.approved else "rejected"
-        logger.info("Pipeline %s transition %s by %s", pipeline_id, action, auth.user_id)
+        logger.info("Pipeline %s transition %s by %s", pipeline_id, action, caller.scope.user_id)
 
         return TransitionApprovalResponse(
             pipeline_id=pipeline_id,
@@ -1123,7 +1187,10 @@ async def list_templates() -> PipelineTemplatesResponse:
 
 
 @router.get("/canvas/pipeline/{pipeline_id}", response_model=PipelineCreateResponse)
-async def get_pipeline(pipeline_id: str) -> PipelineCreateResponse:
+async def get_pipeline(
+    pipeline_id: str,
+    caller: PipelineCaller = Depends(owned_pipeline(PIPELINE_READ)),
+) -> PipelineCreateResponse:
     """Get a pipeline result by ID."""
     data = await _get_result_or_404(pipeline_id)
 
@@ -1141,7 +1208,10 @@ async def get_pipeline(pipeline_id: str) -> PipelineCreateResponse:
 
 
 @router.get("/canvas/pipeline/{pipeline_id}/status", response_model=PipelineStatusResponse)
-async def get_pipeline_status(pipeline_id: str) -> PipelineStatusResponse:
+async def get_pipeline_status(
+    pipeline_id: str,
+    caller: PipelineCaller = Depends(owned_pipeline(PIPELINE_READ)),
+) -> PipelineStatusResponse:
     """Get per-stage status for a pipeline."""
     data = await _get_result_or_404(pipeline_id)
 
@@ -1166,7 +1236,11 @@ async def get_pipeline_status(pipeline_id: str) -> PipelineStatusResponse:
 
 
 @router.get("/canvas/pipeline/{pipeline_id}/stage/{stage}", response_model=PipelineStageResponse)
-async def get_pipeline_stage(pipeline_id: str, stage: str) -> PipelineStageResponse:
+async def get_pipeline_stage(
+    pipeline_id: str,
+    stage: str,
+    caller: PipelineCaller = Depends(owned_pipeline(PIPELINE_READ)),
+) -> PipelineStageResponse:
     """Get specific stage canvas data."""
     data = await _get_result_or_404(pipeline_id)
 
@@ -1214,6 +1288,7 @@ async def get_pipeline_stage(pipeline_id: str, stage: str) -> PipelineStageRespo
 async def get_pipeline_graph(
     pipeline_id: str,
     stage: str | None = Query(None, description="Stage to get graph for"),
+    caller: PipelineCaller = Depends(owned_pipeline(PIPELINE_READ)),
 ) -> PipelineGraphResponse:
     """Get React Flow graph JSON for a pipeline stage."""
     data = await _get_result_or_404(pipeline_id)
@@ -1250,7 +1325,10 @@ async def get_pipeline_graph(
 
 
 @router.get("/canvas/pipeline/{pipeline_id}/receipt", response_model=PipelineReceiptResponse)
-async def get_pipeline_receipt(pipeline_id: str) -> PipelineReceiptResponse:
+async def get_pipeline_receipt(
+    pipeline_id: str,
+    caller: PipelineCaller = Depends(owned_pipeline(PIPELINE_READ)),
+) -> PipelineReceiptResponse:
     """Get the DecisionReceipt for a pipeline."""
     data = await _get_result_or_404(pipeline_id)
     data_dict = (
@@ -1286,7 +1364,7 @@ async def get_pipeline_receipt(pipeline_id: str) -> PipelineReceiptResponse:
 @router.post("/canvas/pipeline/extract-goals")
 async def extract_goals(
     body: ExtractGoalsRequest,
-    auth: AuthorizationContext = Depends(require_permission("pipeline:create")),
+    caller: PipelineCaller = Depends(pipeline_permission(PIPELINE_READ)),
 ) -> dict[str, Any]:
     """Extract goals from an ideas canvas."""
     try:
@@ -1310,7 +1388,7 @@ async def extract_goals(
 @router.post("/canvas/pipeline/extract-principles")
 async def extract_principles(
     body: ExtractPrinciplesRequest,
-    auth: AuthorizationContext = Depends(require_permission("pipeline:create")),
+    caller: PipelineCaller = Depends(pipeline_permission(PIPELINE_READ)),
 ) -> dict[str, Any]:
     """Extract guiding principles from ideas."""
     try:
@@ -1331,7 +1409,7 @@ async def extract_principles(
 @router.post("/canvas/convert/debate")
 async def convert_debate(
     body: ConvertDebateRequest,
-    auth: AuthorizationContext = Depends(require_permission("pipeline:create")),
+    caller: PipelineCaller = Depends(pipeline_permission(PIPELINE_READ)),
 ) -> dict[str, Any]:
     """Convert a debate to an ideas canvas."""
     try:
@@ -1367,7 +1445,7 @@ async def convert_debate(
 @router.post("/canvas/convert/workflow")
 async def convert_workflow(
     body: ConvertWorkflowRequest,
-    auth: AuthorizationContext = Depends(require_permission("pipeline:create")),
+    caller: PipelineCaller = Depends(pipeline_permission(PIPELINE_READ)),
 ) -> dict[str, Any]:
     """Convert a workflow to an actions canvas."""
     try:
@@ -1408,9 +1486,19 @@ async def convert_workflow(
 async def debate_to_pipeline(
     debate_id: str,
     body: DebateToPipelineRequest,
-    auth: AuthorizationContext = Depends(require_permission("pipeline:create")),
+    request: Request,
+    caller: PipelineCaller = Depends(require_pipeline_caller),
 ) -> PipelineCreateResponse:
-    """Convert a specific debate into a full pipeline."""
+    """Convert a debate the caller's org owns into a pipeline owned by that org.
+
+    Another org's debate, an unowned one and a missing one answer the same 404,
+    checked before ``canvas:create``.
+    """
+    from aragora.tenancy.debate_access import authorize_debate_write_fastapi
+
+    context = getattr(request.app.state, "context", None) or {}
+    write = await authorize_debate_write_fastapi(caller.scope, context.get("storage"), debate_id)
+    check_permission(caller.auth, PIPELINE_CREATE)
     try:
         from aragora.pipeline.idea_to_execution import IdeaToExecutionPipeline
 
@@ -1420,12 +1508,12 @@ async def debate_to_pipeline(
         event_cb = _get_pipeline_emitter_callback(pipeline_id)
 
         result = pipeline.from_debate(
-            {"debate_id": debate_id},
+            {"debate_id": write.debate_id},
             auto_advance=body.auto_advance,
             event_callback=event_cb,
             pipeline_id=pipeline_id,
         )
-        await _store_result(result)
+        await _store_result(result, caller)
         return _summarize_result(result)
 
     except (ImportError, ValueError, TypeError, RuntimeError) as e:
@@ -1439,7 +1527,10 @@ async def debate_to_pipeline(
 
 
 @router.get("/canvas/pipeline/{pipeline_id}/intelligence", response_model=IntelligenceResponse)
-async def get_intelligence(pipeline_id: str) -> IntelligenceResponse:
+async def get_intelligence(
+    pipeline_id: str,
+    caller: PipelineCaller = Depends(owned_pipeline(PIPELINE_READ)),
+) -> IntelligenceResponse:
     """Get intelligence overlay for a pipeline."""
     data = await _get_result_or_404(pipeline_id)
 
@@ -1487,7 +1578,10 @@ async def get_intelligence(pipeline_id: str) -> IntelligenceResponse:
 
 
 @router.get("/canvas/pipeline/{pipeline_id}/beliefs")
-async def get_beliefs(pipeline_id: str) -> dict[str, Any]:
+async def get_beliefs(
+    pipeline_id: str,
+    caller: PipelineCaller = Depends(owned_pipeline(PIPELINE_READ)),
+) -> dict[str, Any]:
     """Get belief network for a pipeline."""
     await _get_result_or_404(pipeline_id)
 
@@ -1504,7 +1598,10 @@ async def get_beliefs(pipeline_id: str) -> dict[str, Any]:
 
 
 @router.get("/canvas/pipeline/{pipeline_id}/explanations")
-async def get_explanations(pipeline_id: str) -> dict[str, Any]:
+async def get_explanations(
+    pipeline_id: str,
+    caller: PipelineCaller = Depends(owned_pipeline(PIPELINE_READ)),
+) -> dict[str, Any]:
     """Get explainability data for a pipeline."""
     data = await _get_result_or_404(pipeline_id)
 
@@ -1521,7 +1618,10 @@ async def get_explanations(pipeline_id: str) -> dict[str, Any]:
 
 
 @router.get("/canvas/pipeline/{pipeline_id}/precedents")
-async def get_precedents(pipeline_id: str) -> dict[str, Any]:
+async def get_precedents(
+    pipeline_id: str,
+    caller: PipelineCaller = Depends(owned_pipeline(PIPELINE_READ)),
+) -> dict[str, Any]:
     """Get historical precedents for a pipeline."""
     data = await _get_result_or_404(pipeline_id)
 
@@ -1542,7 +1642,10 @@ async def get_precedents(pipeline_id: str) -> dict[str, Any]:
 
 
 @router.get("/pipeline/{pipeline_id}/agents", response_model=AgentListResponse)
-async def get_pipeline_agents(pipeline_id: str) -> AgentListResponse:
+async def get_pipeline_agents(
+    pipeline_id: str,
+    caller: PipelineCaller = Depends(owned_pipeline(PIPELINE_READ)),
+) -> AgentListResponse:
     """List agents assigned to a pipeline."""
     data = await _get_result_or_404(pipeline_id)
 
@@ -1586,7 +1689,7 @@ async def get_pipeline_agents(pipeline_id: str) -> AgentListResponse:
 async def approve_agent(
     pipeline_id: str,
     agent_id: str,
-    auth: AuthorizationContext = Depends(require_permission("pipeline:approve")),
+    caller: PipelineCaller = Depends(owned_pipeline(PIPELINE_RUN)),
 ) -> AgentActionResponse:
     """Approve an agent assignment for a pipeline."""
     data = await _get_result_or_404(pipeline_id)
@@ -1624,7 +1727,7 @@ async def approve_agent(
 async def reject_agent(
     pipeline_id: str,
     agent_id: str,
-    auth: AuthorizationContext = Depends(require_permission("pipeline:approve")),
+    caller: PipelineCaller = Depends(owned_pipeline(PIPELINE_RUN)),
 ) -> AgentActionResponse:
     """Reject an agent assignment for a pipeline."""
     data = await _get_result_or_404(pipeline_id)
@@ -1664,15 +1767,19 @@ async def reject_agent(
 async def save_canvas_state(
     pipeline_id: str,
     body: SaveCanvasRequest,
-    auth: AuthorizationContext = Depends(require_permission("pipeline:create")),
+    caller: PipelineCaller = Depends(owned_pipeline(PIPELINE_UPDATE)),
 ) -> dict[str, Any]:
-    """Save canvas state for a pipeline."""
+    """Save canvas state for a pipeline the caller's org owns.
+
+    Only an existing pipeline can be saved: a client-chosen id never creates
+    one, so the answer cannot tell a free id from another org's pipeline.
+    """
     try:
         store = _get_store()
 
-        existing = await _call_store_method(store, "load", pipeline_id)
+        existing = await _call_store_method(store, "get", pipeline_id)
         if existing is None:
-            existing = {"pipeline_id": pipeline_id}
+            raise record_not_found_error(_PIPELINE)
 
         if body.stage and body.canvas_data:
             canvas_key = f"{body.stage}_canvas"

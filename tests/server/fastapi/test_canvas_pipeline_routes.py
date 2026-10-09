@@ -23,7 +23,11 @@ from fastapi.testclient import TestClient
 
 from aragora.pipeline.backbone_errors import BackbonePersistenceError, FAIL_CLOSED_BACKBONE_MESSAGE
 from aragora.server.fastapi import create_app
+from aragora.server.fastapi.dependencies.pipeline_access import PipelineCaller
 from aragora.server.fastapi.routes.canvas_pipeline import ExecuteRequest, execute_pipeline
+from aragora.tenancy.record_scope import OrgScope, require_org_scope_fastapi
+
+ORG = "org-test"
 
 
 @pytest.fixture
@@ -40,28 +44,40 @@ def client(app):
 
 @pytest.fixture
 def _bypass_auth(app):
-    """Bypass authentication for all tests using FastAPI dependency overrides."""
+    """Act as an admin of ``ORG`` using FastAPI dependency overrides."""
     from aragora.rbac.models import AuthorizationContext
     from aragora.server.fastapi.dependencies.auth import require_authenticated
 
     mock_ctx = AuthorizationContext(
         user_id="test-user",
         user_email="test@example.com",
+        org_id=ORG,
         roles={"admin"},
         permissions={"*"},
     )
     app.dependency_overrides[require_authenticated] = lambda: mock_ctx
+    app.dependency_overrides[require_org_scope_fastapi] = lambda: OrgScope(
+        org_id=ORG, user_id="test-user", role="admin"
+    )
     yield
     app.dependency_overrides.pop(require_authenticated, None)
+    app.dependency_overrides.pop(require_org_scope_fastapi, None)
+
+
+def _caller() -> PipelineCaller:
+    return PipelineCaller(
+        auth=MagicMock(), scope=OrgScope(org_id=ORG, user_id="test-user", role="admin")
+    )
 
 
 @pytest.fixture
 def mock_pipeline_store(monkeypatch):
-    """Mock the pipeline store."""
+    """Mock the pipeline store; every pipeline in it belongs to ``ORG``."""
     store = {}
     mock_store = MagicMock()
-    mock_store.load = MagicMock(side_effect=lambda k: store.get(k))
-    mock_store.save = MagicMock(side_effect=lambda k, v: store.__setitem__(k, v))
+    mock_store.get = MagicMock(side_effect=lambda k: store.get(k))
+    mock_store.get_owner_org = MagicMock(side_effect=lambda k: ORG if k in store else None)
+    mock_store.save = MagicMock(side_effect=lambda k, v, **_owner: store.__setitem__(k, v))
     monkeypatch.setattr(
         "aragora.server.fastapi.routes.canvas_pipeline._get_store",
         lambda: mock_store,
@@ -275,6 +291,7 @@ class TestPipelineCreation:
 # =============================================================================
 
 
+@pytest.mark.usefixtures("_bypass_auth")
 class TestPipelineQuerying:
     """Tests for pipeline query endpoints."""
 
@@ -389,6 +406,7 @@ class TestPipelineQuerying:
         assert data["current_stage"] == "workflow"
 
 
+@pytest.mark.usefixtures("_bypass_auth")
 class TestPipelineExecution:
     @pytest.mark.asyncio
     async def test_execute_pipeline_background_task_updates_store(self, monkeypatch):
@@ -456,7 +474,7 @@ class TestPipelineExecution:
             response = await execute_pipeline(
                 "pipe-fastapi",
                 ExecuteRequest(),
-                auth=MagicMock(),
+                caller=_caller(),
             )
 
         assert response.result is not None
@@ -524,7 +542,7 @@ class TestPipelineExecution:
                 await execute_pipeline(
                     "pipe-fastapi-backbone",
                     ExecuteRequest(),
-                    auth=MagicMock(),
+                    caller=_caller(),
                 )
 
         assert getattr(excinfo.value, "status_code", None) == 503
@@ -582,6 +600,7 @@ class TestPipelineExecution:
 # =============================================================================
 
 
+@pytest.mark.usefixtures("_bypass_auth")
 class TestIntelligence:
     """Tests for intelligence overlay endpoints."""
 
@@ -634,6 +653,7 @@ class TestIntelligence:
 # =============================================================================
 
 
+@pytest.mark.usefixtures("_bypass_auth")
 class TestAgentManagement:
     """Tests for agent management endpoints."""
 
@@ -713,14 +733,15 @@ class TestSaveCanvasState:
         assert data["saved"] is True
 
     @pytest.mark.usefixtures("_bypass_auth")
-    def test_save_canvas_creates_new(self, client, mock_pipeline_store):
-        """Save canvas creates entry for new pipeline."""
+    def test_save_canvas_never_creates_a_pipeline(self, client, mock_pipeline_store):
+        """A client-chosen id that no pipeline has answers 404 and stores nothing."""
         resp = client.put(
             "/api/v2/canvas/pipeline/pipe-new",
             json={"canvas_data": {"nodes": {}}, "stage": "goals"},
         )
-        assert resp.status_code == 200
-        assert resp.json()["saved"] is True
+        assert resp.status_code == 404
+        assert resp.json() == {"error": "Pipeline not found", "code": "not_found"}
+        assert mock_pipeline_store == {}
 
 
 # =============================================================================
