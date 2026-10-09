@@ -12,18 +12,15 @@ resolve to the same functions as before.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 # Runtime imports, not TYPE_CHECKING ones: typing.get_type_hints() on
-# AutonomousOrchestrator and its subclasses evaluates the class annotations
-# below in this module's namespace.
+# AutonomousOrchestrator, its subclasses and the methods below evaluates
+# their annotations in this module's namespace.
 from aragora.nomic.agent_router import AgentRouter
-from aragora.nomic.types import HierarchyConfig, Track, TrackConfig
+from aragora.nomic.types import AgentAssignment, HierarchyConfig, Track, TrackConfig
 from aragora.observability import get_logger
 from aragora.workflow.types import StepDefinition, WorkflowDefinition
-
-if TYPE_CHECKING:
-    from aragora.nomic.types import AgentAssignment
 
 # The facade's logger name, so records from these methods keep the name that
 # log filters and caplog assertions already use.

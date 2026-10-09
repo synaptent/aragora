@@ -53,6 +53,12 @@ def test_class_annotations_resolve_at_runtime() -> None:
     assert typing.get_type_hints(HardenedOrchestrator)["hierarchy"] is HierarchyConfig
 
 
+@pytest.mark.parametrize("name", MOVED_METHODS)
+def test_moved_method_annotations_resolve_at_runtime(name: str) -> None:
+    typing.get_type_hints(getattr(AutonomousOrchestrator, name))
+    typing.get_type_hints(getattr(HardenedOrchestrator, name))
+
+
 def test_mixin_logs_under_the_orchestrator_logger() -> None:
     assert autonomous_workflow.logger is ao_module.logger
 
