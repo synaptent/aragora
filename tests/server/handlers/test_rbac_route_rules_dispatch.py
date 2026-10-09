@@ -100,6 +100,7 @@ def _auth_on_and_isolated_state(monkeypatch):
     runtime = SimpleNamespace(
         get=lambda name: known if name == "known_conn" else None,
         health_check=lambda name: ConnectorStatus.HEALTHY,
+        get_summary=lambda: {"total": 1},
     )
     monkeypatch.setattr(ConnectorManagementHandler, "_get_registry", lambda self: runtime)
     # Owner and admin callers are admins who have enabled MFA, so the server's separate
@@ -334,7 +335,7 @@ DISPATCH: dict[tuple[str, str], tuple[str, str]] = {
     ("POST", "/api/v1/connectors/c1/syncs/s1/cancel"): ("404 404 403 403 403 401",) * 2,
     ("POST", "/api/v1/connectors/test"): ("501 501 403 403 403 401",) * 2,
     ("GET", "/api/v1/connectors/c1"): ("404 404 403 403 403 401",) * 2,
-    ("GET", "/api/v1/connectors/summary"): ("404 404 403 403 403 401",) * 2,
+    ("GET", "/api/v1/connectors/summary"): ("200 200 403 403 403 401",) * 2,
     ("GET", "/api/v1/connectors/stats"): ("200 200 403 403 403 401",) * 2,
     ("GET", "/api/v1/connectors/health"): ("200 200 403 403 403 401",) * 2,
     ("GET", "/api/v1/connectors/sync-history"): ("200 200 403 403 403 401",) * 2,

@@ -124,6 +124,12 @@ class ConnectorManagementHandler(BaseHandler):
                 return unsupported
             return self._handle_health(name)
 
+        # GET /api/v1/connectors/summary
+        if sub == "/summary":
+            if perm_err := self._check_rbac_permission(user, "connectors:read"):
+                return perm_err
+            return self._handle_summary()
+
         _, perm_err = self.require_permission_or_error(handler, "connectors:read")
         if perm_err:
             return perm_err
@@ -131,10 +137,6 @@ class ConnectorManagementHandler(BaseHandler):
         # GET /api/v1/connectors  or  /api/v1/connectors/
         if sub in ("", "/"):
             return self._handle_list(query_params)
-
-        # GET /api/v1/connectors/summary
-        if sub == "/summary":
-            return self._handle_summary()
 
         # GET /api/v1/connectors/<name>
         if len(parts) == 1:
