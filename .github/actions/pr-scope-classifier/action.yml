@@ -67,6 +67,8 @@ runs:
             - 'deploy/**'
             - 'security/policies/**'
             - 'aragora-operator/**'
+            - '.importlinter'
+            - '.github/actions/pr-scope-classifier/**'
           quality:
             - 'aragora/debate/output_quality.py'
             - 'aragora/debate/repo_grounding.py'
