@@ -2,20 +2,21 @@
 
 from __future__ import annotations
 
-from . import dev_coordination as _dev
+import hashlib
+import subprocess
+from pathlib import Path
+from typing import Any
 
-Any = _dev.Any
-Path = _dev.Path
-SalvageCandidate = _dev.SalvageCandidate
-SalvageStatus = _dev.SalvageStatus
-_estimate_salvage_value = _dev._estimate_salvage_value
-_json_dump = _dev._json_dump
-_normalize_claim = _dev._normalize_claim
-_parse_worktree_entries = _dev._parse_worktree_entries
-_status_paths = _dev._status_paths
-_utcnow = _dev._utcnow
-hashlib = _dev.hashlib
-subprocess = _dev.subprocess
+from .dev_coordination import (
+    SalvageCandidate,
+    SalvageStatus,
+    _estimate_salvage_value,
+    _json_dump,
+    _normalize_claim,
+    _parse_worktree_entries,
+    _status_paths,
+    _utcnow,
+)
 
 
 def list_salvage_candidates(self, statuses: list[str] | None = None) -> list[SalvageCandidate]:

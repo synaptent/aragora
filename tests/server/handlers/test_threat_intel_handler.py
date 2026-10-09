@@ -159,8 +159,8 @@ def mock_threat_service():
     )
 
     service.check_urls_batch = AsyncMock(
-        return_value=[
-            MockThreatResult(
+        return_value={
+            "https://example1.com": MockThreatResult(
                 target="https://example1.com",
                 is_malicious=False,
                 threat_type=MockThreatType.NONE,
@@ -168,7 +168,7 @@ def mock_threat_service():
                 confidence=0.0,
                 details={},
             ),
-        ]
+        }
     )
 
     service.check_ip = AsyncMock(
@@ -569,8 +569,8 @@ class TestThreatIntelSummaryResponses:
         self, threat_handler, mock_request, mock_threat_service
     ):
         """Test that batch URL response includes correct malicious count."""
-        mock_threat_service.check_urls_batch.return_value = [
-            MockThreatResult(
+        mock_threat_service.check_urls_batch.return_value = {
+            "https://clean.com": MockThreatResult(
                 target="https://clean.com",
                 is_malicious=False,
                 threat_type=MockThreatType.NONE,
@@ -578,7 +578,7 @@ class TestThreatIntelSummaryResponses:
                 confidence=0.0,
                 details={},
             ),
-            MockThreatResult(
+            "https://malicious.com": MockThreatResult(
                 target="https://malicious.com",
                 is_malicious=True,
                 threat_type=MockThreatType.MALWARE,
@@ -586,7 +586,7 @@ class TestThreatIntelSummaryResponses:
                 confidence=0.95,
                 details={},
             ),
-        ]
+        }
         mock_request.json.return_value = {
             "urls": ["https://clean.com", "https://malicious.com"],
         }

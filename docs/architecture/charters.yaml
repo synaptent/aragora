@@ -275,6 +275,155 @@ authorities:
     disposition: adopt
     registry_refs: []
 
+# Machine-readable mirror of Intended Architecture Appendix A. Keep this map in exact
+# parity with the generated table. While the charter is DRAFT, UNMAPPED growth is reported
+# as PROPOSED; after ratification it becomes BINDING. Existing-file maintenance stays allowed.
+package_states:
+  aragora/advocates: UNMAPPED
+  aragora/agents: MAPPED
+  aragora/analysis: UNMAPPED
+  aragora/analytics: UNMAPPED
+  aragora/approvals: UNMAPPED
+  aragora/audience: UNMAPPED
+  aragora/audit: UNMAPPED
+  aragora/auth: MAPPED
+  aragora/autonomous: MAPPED
+  aragora/backup: MAPPED
+  aragora/billing: MAPPED
+  aragora/blockchain: UNMAPPED
+  aragora/bots: MAPPED
+  aragora/brief_engine: UNMAPPED
+  aragora/broadcast: MAPPED
+  aragora/caching: UNMAPPED
+  aragora/canvas: UNMAPPED
+  aragora/channels: MAPPED
+  aragora/cli: MAPPED
+  aragora/client: MAPPED
+  aragora/codex: UNMAPPED
+  aragora/compat: UNMAPPED
+  aragora/compliance: MAPPED
+  aragora/computer_use: UNMAPPED
+  aragora/config: UNMAPPED
+  aragora/connectors: MAPPED
+  aragora/control_plane: MAPPED
+  aragora/coordination: MAPPED
+  aragora/core: MAPPED
+  aragora/db: MAPPED
+  aragora/debate: MAPPED
+  aragora/deliberation: UNMAPPED
+  aragora/documents: MAPPED
+  aragora/embeddings: UNMAPPED
+  aragora/epistemic: UNMAPPED
+  aragora/essay: UNMAPPED
+  aragora/evaluation: MAPPED
+  aragora/events: MAPPED
+  aragora/evidence: MAPPED
+  aragora/evolution: UNMAPPED
+  aragora/explainability: MAPPED
+  aragora/export: MAPPED
+  aragora/extensions: MAPPED
+  aragora/fabric: MAPPED
+  aragora/factory: UNMAPPED
+  aragora/fixtures: UNMAPPED
+  aragora/gateway: MAPPED
+  aragora/gauntlet: MAPPED
+  aragora/genesis: UNMAPPED
+  aragora/goals: MAPPED
+  aragora/gti: UNMAPPED
+  aragora/harnesses: MAPPED
+  aragora/heterogeneity: UNMAPPED
+  aragora/hooks: UNMAPPED
+  aragora/ideacloud: UNMAPPED
+  aragora/implement: UNMAPPED
+  aragora/inbox: UNMAPPED
+  aragora/insights: MAPPED
+  aragora/integrations: MAPPED
+  aragora/interrogation: UNMAPPED
+  aragora/introspection: UNMAPPED
+  aragora/knowledge: MAPPED
+  aragora/learning: UNMAPPED
+  aragora/live: UNMAPPED
+  aragora/maintenance: UNMAPPED
+  aragora/marketplace: UNMAPPED
+  aragora/markets: UNMAPPED
+  aragora/mcp: MAPPED
+  aragora/memory: MAPPED
+  aragora/metrics: MAPPED
+  aragora/migrations: MAPPED
+  aragora/missions: UNMAPPED
+  aragora/ml: MAPPED
+  aragora/models: UNMAPPED
+  aragora/moderation: UNMAPPED
+  aragora/modes: UNMAPPED
+  aragora/monitoring: MAPPED
+  aragora/nomic: MAPPED
+  aragora/notifications: MAPPED
+  aragora/observability: MAPPED
+  aragora/onboarding: UNMAPPED
+  aragora/operations: UNMAPPED
+  aragora/ops: UNMAPPED
+  aragora/pdb: UNMAPPED
+  aragora/performance: UNMAPPED
+  aragora/persistence: MAPPED
+  aragora/pipeline: MAPPED
+  aragora/playbooks: UNMAPPED
+  aragora/plugins: UNMAPPED
+  aragora/policy: UNMAPPED
+  aragora/prediction: UNMAPPED
+  aragora/privacy: MAPPED
+  aragora/prompt_engine: UNMAPPED
+  aragora/prompts: UNMAPPED
+  aragora/protocols: UNMAPPED
+  aragora/pulse: UNMAPPED
+  aragora/queue: MAPPED
+  aragora/ralph: UNMAPPED
+  aragora/ranking: MAPPED
+  aragora/rbac: MAPPED
+  aragora/reasoning: MAPPED
+  aragora/receipts: MAPPED
+  aragora/replay: UNMAPPED
+  aragora/reports: UNMAPPED
+  aragora/reputation: UNMAPPED
+  aragora/resilience: MAPPED
+  aragora/review: UNMAPPED
+  aragora/rlm: MAPPED
+  aragora/routing: UNMAPPED
+  aragora/runtime: UNMAPPED
+  aragora/sandbox: UNMAPPED
+  aragora/scheduler: MAPPED
+  aragora/schedulers: MAPPED
+  aragora/security: MAPPED
+  aragora/server: MAPPED
+  aragora/services: UNMAPPED
+  aragora/shared: UNMAPPED
+  aragora/skills: UNMAPPED
+  aragora/spectate: UNMAPPED
+  aragora/storage: MAPPED
+  aragora/stores: UNMAPPED
+  aragora/streaming: UNMAPPED
+  aragora/swarm: MAPPED
+  aragora/sync: UNMAPPED
+  aragora/telemetry: MAPPED
+  aragora/templates: UNMAPPED
+  aragora/tenancy: UNMAPPED
+  aragora/tools: UNMAPPED
+  aragora/tournaments: UNMAPPED
+  aragora/trail: UNMAPPED
+  aragora/training: UNMAPPED
+  aragora/transcription: UNMAPPED
+  aragora/triage: UNMAPPED
+  aragora/types: UNMAPPED
+  aragora/uncertainty: UNMAPPED
+  aragora/utils: UNMAPPED
+  aragora/verification: MAPPED
+  aragora/verticals: UNMAPPED
+  aragora/visualization: UNMAPPED
+  aragora/webhooks: MAPPED
+  aragora/work: UNMAPPED
+  aragora/workflow: MAPPED
+  aragora/workspace: MAPPED
+  aragora/worktree: MAPPED
+
 registry:
   # --- 3a. Executed (RATIFIED) ---
   - id: CHR-P4A-001
@@ -531,7 +680,7 @@ registry:
       - docs/architecture/GATEWAY_ARCHITECTURE.md
       - docs/architecture/CODEBASE_ANALYSIS.md
       - docs/architecture/ANALYSIS.md
-      - docs/architecture/ground-up-assessment-2026-01-29.md
+      - docs/archive/architecture/ground-up-assessment-2026-01-29.md
     symbols: []
     deadline: null
     owner: null

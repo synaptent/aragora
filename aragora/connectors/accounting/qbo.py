@@ -111,7 +111,7 @@ class QuickBooksConnector(QBOOperationsMixin):
 
         # Circuit breaker for API resilience
         if circuit_breaker is not None:
-            self._circuit_breaker = circuit_breaker
+            self._circuit_breaker: CircuitBreaker | None = circuit_breaker
         elif enable_circuit_breaker:
             self._circuit_breaker = CircuitBreaker(
                 name="qbo",

@@ -130,9 +130,9 @@ def find_test_file(handler_path: str, tests_dir: Path) -> Path | None:
     # Try matching based on directory structure
     handler_parts = handler_path.replace("aragora/server/handlers/", "").split("/")
     if len(handler_parts) > 1:
-        subdir = "/".join(handler_parts[:-1])
+        subdir_path = "/".join(handler_parts[:-1])
         for pattern in patterns:
-            test_path = tests_dir / subdir / pattern
+            test_path = tests_dir / subdir_path / pattern
             if test_path.exists():
                 return test_path
 
@@ -201,7 +201,7 @@ def generate_markdown_report(handlers: list[HandlerInfo]) -> str:
     coverage_pct = (tested / total * 100) if total > 0 else 0
 
     # Count by coverage level
-    by_level = defaultdict(int)
+    by_level: defaultdict[str, int] = defaultdict(int)
     for h in handlers:
         by_level[h.coverage_level] += 1
 

@@ -248,7 +248,7 @@ def _record_pr_number(record: dict[str, Any]) -> int | None:
     if record.get("pr_number") is None:
         return None
     try:
-        return int(record.get("pr_number"))
+        return int(record["pr_number"])
     except (TypeError, ValueError):
         return None
 
@@ -296,8 +296,8 @@ def _open_pr_lookup(open_prs_payload: Any) -> dict[int, dict[str, Any]]:
         if not isinstance(row, dict):
             continue
         try:
-            number = int(row.get("number"))
-        except (TypeError, ValueError):
+            number = int(row["number"])
+        except (KeyError, TypeError, ValueError):
             continue
         out[number] = row
     return out
@@ -438,7 +438,7 @@ def _score_candidate(
     reason = "active non-PR lane"
     pr_number: int | None = None
     try:
-        pr_number = int(record.get("pr_number")) if record.get("pr_number") is not None else None
+        pr_number = int(record["pr_number"]) if record.get("pr_number") is not None else None
     except (TypeError, ValueError):
         pr_number = None
     if pr_number is not None and pr_number in open_prs:
@@ -817,6 +817,7 @@ def _run_cycle_locked(
             }
         )
         return result
+    assert current_record is not None, "a missing record always sets current_blocker"
     candidate = Candidate(
         record=current_record,
         target_key=candidate.target_key,
@@ -828,7 +829,7 @@ def _run_cycle_locked(
     open_pr: dict[str, Any] | None = None
     try:
         pr_number = (
-            int(candidate.record.get("pr_number"))
+            int(candidate.record["pr_number"])
             if candidate.record.get("pr_number") is not None
             else None
         )

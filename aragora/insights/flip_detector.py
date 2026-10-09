@@ -568,25 +568,35 @@ class FlipDetector:
             )
             rows = cursor.fetchall()
 
-        return [
-            FlipEvent(
-                id=row["id"],
-                agent_name=row["agent_name"],
-                original_claim=row["original_claim"],
-                new_claim=row["new_claim"],
-                original_confidence=row["original_confidence"],
-                new_confidence=row["new_confidence"],
-                original_debate_id=row["original_debate_id"],
-                new_debate_id=row["new_debate_id"],
-                original_position_id=row["original_position_id"],
-                new_position_id=row["new_position_id"],
-                similarity_score=row["similarity_score"],
-                flip_type=row["flip_type"],
-                domain=row["domain"],
-                detected_at=row["detected_at"],
-            )
-            for row in rows
-        ]
+        return [self._flip_from_row(row) for row in rows]
+
+    def get_flip(self, flip_id: str) -> FlipEvent | None:
+        """Get a single detected flip by its ID, or None if it is not stored."""
+        with self.db.connection() as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute("SELECT * FROM detected_flips WHERE id = ?", (flip_id,))
+            row = cursor.fetchone()
+
+        return self._flip_from_row(row) if row is not None else None
+
+    @staticmethod
+    def _flip_from_row(row: sqlite3.Row) -> FlipEvent:
+        return FlipEvent(
+            id=row["id"],
+            agent_name=row["agent_name"],
+            original_claim=row["original_claim"],
+            new_claim=row["new_claim"],
+            original_confidence=row["original_confidence"],
+            new_confidence=row["new_confidence"],
+            original_debate_id=row["original_debate_id"],
+            new_debate_id=row["new_debate_id"],
+            original_position_id=row["original_position_id"],
+            new_position_id=row["new_position_id"],
+            similarity_score=row["similarity_score"],
+            flip_type=row["flip_type"],
+            domain=row["domain"],
+            detected_at=row["detected_at"],
+        )
 
     def get_flip_summary(self) -> dict:
         """Get summary of all flips for dashboard display."""

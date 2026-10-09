@@ -187,7 +187,7 @@ class JudgeSelectionStrategy(ABC):
         agents: Sequence[Agent],
         proposals: dict[str, str],
         context: list[Message],
-    ) -> Agent:
+    ) -> Agent | None:
         """Select a judge from available agents.
 
         Args:
@@ -209,7 +209,7 @@ class LastAgentStrategy(JudgeSelectionStrategy):
         agents: Sequence[Agent],
         proposals: dict[str, str],
         context: list[Message],
-    ) -> Agent:
+    ) -> Agent | None:
         """Select synthesizer if available, else last agent."""
         synthesizers = [a for a in agents if getattr(a, "role", None) == "synthesizer"]
         if synthesizers:
@@ -225,7 +225,7 @@ class RandomStrategy(JudgeSelectionStrategy):
         agents: Sequence[Agent],
         proposals: dict[str, str],
         context: list[Message],
-    ) -> Agent:
+    ) -> Agent | None:
         """Select a random agent as judge."""
         return random.choice(list(agents)) if agents else None  # noqa: S311 -- non-security agent selection
 
@@ -241,7 +241,7 @@ class EloRankedStrategy(JudgeSelectionStrategy, JudgeScoringMixin):
         agents: Sequence[Agent],
         proposals: dict[str, str],
         context: list[Message],
-    ) -> Agent:
+    ) -> Agent | None:
         """Select agent with highest ELO rating."""
         if not self._elo_system or not agents:
             return random.choice(list(agents)) if agents else None  # noqa: S311 -- non-security agent selection
@@ -276,7 +276,7 @@ class CalibratedStrategy(JudgeSelectionStrategy, JudgeScoringMixin):
         agents: Sequence[Agent],
         proposals: dict[str, str],
         context: list[Message],
-    ) -> Agent:
+    ) -> Agent | None:
         """Select agent with best composite score."""
         if not self._elo_system or not agents:
             return random.choice(list(agents)) if agents else None  # noqa: S311 -- non-security agent selection
@@ -318,7 +318,7 @@ class CruxAwareStrategy(JudgeSelectionStrategy, JudgeScoringMixin):
         proposals: dict[str, str],
         context: list[Message],
         cruxes: list[dict] | None = None,
-    ) -> Agent:
+    ) -> Agent | None:
         """Select agent who historically dissented on similar cruxes.
 
         Args:
@@ -462,7 +462,7 @@ class VotedStrategy(JudgeSelectionStrategy):
         agents: Sequence[Agent],
         proposals: dict[str, str],
         context: list[Message],
-    ) -> Agent:
+    ) -> Agent | None:
         """Have agents vote on who should judge."""
         if not agents:
             return None
@@ -617,7 +617,7 @@ class JudgeSelector(JudgeScoringMixin):
         self,
         proposals: dict[str, str],
         context: list[Message],
-    ) -> Agent:
+    ) -> Agent | None:
         """
         Select a judge using the configured strategy.
 
@@ -628,7 +628,7 @@ class JudgeSelector(JudgeScoringMixin):
             context: Debate context messages
 
         Returns:
-            Selected judge agent
+            Selected judge agent, or None when no agents are configured
         """
         # Filter available agents first
         available_agents = self._filter_available_agents(self._agents)
@@ -1139,8 +1139,10 @@ class JudgePanel:
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         for result in results:
-            if isinstance(result, tuple) and result[1] is not None:
+            if isinstance(result, tuple):
                 name, assessment = result
+                if assessment is None:
+                    continue
                 assessments[name] = assessment
                 logger.debug(
                     "judge_initial_assessment judge=%s recommendation=%s",
@@ -1236,8 +1238,10 @@ class JudgePanel:
 
         updated: dict[str, dict] = {}
         for result in results:
-            if isinstance(result, tuple) and result[1] is not None:
+            if isinstance(result, tuple):
                 name, assessment = result
+                if assessment is None:
+                    continue
                 updated[name] = assessment
 
         return updated

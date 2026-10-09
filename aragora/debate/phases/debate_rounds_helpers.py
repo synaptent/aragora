@@ -293,7 +293,7 @@ async def refresh_with_skills(
 
     try:
         from aragora.reasoning.evidence_collector import EvidenceSnippet
-        from aragora.skills import SkillCapability, SkillContext, SkillStatus
+        from aragora.types.skills import SkillCapability, SkillContext, SkillStatus
 
         # Create skill execution context
         skill_ctx = SkillContext(
