@@ -25,6 +25,15 @@ MARKDOWN = b"# Pricing\nSeat pricing today.\n\n## Risks\nRevenue less predictabl
 TEXT = b"Customer interviews favour usage pricing.\n\nThree of five asked for it."
 PASTED = "Board asked for a recommendation.\n\nDecide by Q3."
 
+WRITTEN_TABLES = (
+    "plans",
+    "backbone_runs",
+    "backbone_run_events",
+    "workspace_decisions",
+    "decision_sources",
+    "decision_passages",
+)
+
 
 def seed_decision(org_id: str, user_id: str, question: str = QUESTION) -> SimpleNamespace:
     """Store a decision (pasted text plus two files) without going through the POST route."""
@@ -63,7 +72,7 @@ def counts(env: Any) -> dict[str, int]:
     try:
         result = {
             table: conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
-            for table in ("plans", "workspace_decisions", "decision_sources", "decision_passages")
+            for table in WRITTEN_TABLES
         }
     finally:
         conn.close()

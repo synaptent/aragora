@@ -1,15 +1,19 @@
-"""Decision workspace API: agent options, decisions, sources and passages.
+"""Decision workspace API: intake, decisions, sources and passages.
 
 Endpoints (all need a signed-in user with an org):
 - GET  /api/v1/workspace/agent-options
 - GET  /api/v1/workspace/decisions
+- POST /api/v1/workspace/decisions          (multipart/form-data, or JSON for text only)
 - GET  /api/v1/workspace/decisions/{decision_id}
 - GET  /api/v1/workspace/decisions/{decision_id}/sources
 - GET  /api/v1/workspace/decisions/{decision_id}/passages/{passage_id}
 
 No user -> 401 ``auth_required``; a user without an org (or the static API
 token) -> 403 ``org_required``. Another org's decision, source or passage
-answers exactly like a missing one (404 ``not_found``).
+answers exactly like a missing one (404 ``not_found``). The owner of a new
+decision always comes from the auth context, never from the request body.
+A refused intake creates nothing: every check runs before the first write,
+and a failed write removes what was already written.
 """
 
 from __future__ import annotations
@@ -19,11 +23,21 @@ import re
 from typing import Any
 
 from aragora.decision_workspace.config import agent_options, workspace_limits
+from aragora.decision_workspace.debate_hook import DebateStartRequest, start_decision_debate
+from aragora.decision_workspace.forms import (
+    IntakeError,
+    max_request_bytes,
+    parse_json_intake,
+    parse_multipart_intake,
+)
 from aragora.decision_workspace.intake import (
     ACCEPTED_EXTENSIONS,
     DEFAULT_ROUNDS,
+    KIND_UPLOAD,
     MAX_ROUNDS,
     MIN_ROUNDS,
+    PreparedDecision,
+    prepare_decision,
 )
 from aragora.decision_workspace.store import (
     DEFAULT_LIST_LIMIT,
@@ -33,6 +47,7 @@ from aragora.decision_workspace.store import (
     SourceRecord,
     WorkspaceStore,
     get_workspace_store,
+    new_decision_rows,
 )
 from aragora.rbac.decorators import require_permission
 from aragora.tenancy.record_scope import (
@@ -60,7 +75,7 @@ _ROUTE_PATTERNS = (
 )
 _ALLOWED_METHODS = {
     "agent_options": "GET",
-    "decisions": "GET",
+    "decisions": "GET, POST",
     "decision": "GET",
     "sources": "GET",
     "passage": "GET",
@@ -111,7 +126,7 @@ def _get_plan_store() -> Any:
 
 
 class WorkspaceDecisionsHandler(BaseHandler):
-    """Decision workspace read routes."""
+    """Decision workspace intake and read routes."""
 
     # Dynamic sub-routes are routed through the registry's PREFIX_PATTERNS entry
     # rather than ROUTE_PREFIXES, which the spec generator would publish as a
@@ -154,7 +169,15 @@ class WorkspaceDecisionsHandler(BaseHandler):
     def handle_post(
         self, path: str, query_params: dict[str, Any], handler: Any
     ) -> HandlerResult | None:
-        return self._unsupported(path, handler)
+        scope, err = require_org_scope(handler)
+        if scope is None:
+            return err
+        matched = _match(path)
+        if matched is None:
+            return _not_found()
+        if matched[0] != "decisions":
+            return _method_not_allowed(matched[0])
+        return self._create_decision(handler, scope)
 
     @handle_errors("workspace decision update")
     @scope_denial_first
@@ -261,6 +284,165 @@ class WorkspaceDecisionsHandler(BaseHandler):
         if passage is None:
             return record_not_found("Passage")
         return json_response(_passage_body(passage))
+
+    # -- intake ------------------------------------------------------------
+
+    def _create_decision(self, handler: Any, scope: OrgScope) -> HandlerResult:
+        limits = workspace_limits()
+        cap = max_request_bytes(limits)
+        raw_length = handler.headers.get("Content-Length")
+        if raw_length is None:
+            return _error(411, "length_required", "Content-Length is required.")
+        try:
+            length = int(raw_length)
+        except (TypeError, ValueError):
+            length = -1
+        if length < 0:
+            return _error(400, "invalid_content_length", "Content-Length must be a byte count.")
+        if length > cap:
+            return _error(
+                413,
+                "request_too_large",
+                f"The request is {length} bytes; at most {cap} bytes are accepted.",
+                limit=cap,
+            )
+        body = handler.rfile.read(length) if length else b""
+        if len(body) != length:
+            return _error(400, "incomplete_body", "The request body ended early.")
+
+        content_type = handler.headers.get("Content-Type", "") or ""
+        media_type = content_type.split(";", 1)[0].strip().lower()
+        try:
+            if media_type == "multipart/form-data":
+                form = parse_multipart_intake(body, content_type)
+            elif media_type == "application/json":
+                form = parse_json_intake(body)
+            else:
+                raise IntakeError(
+                    415,
+                    None,
+                    "unsupported_media_type",
+                    "Send the decision as multipart/form-data, or as JSON without files.",
+                )
+            prepared = prepare_decision(form, options=agent_options(), limits=limits)
+        except IntakeError as exc:
+            return json_response(exc.body(), status=exc.status)
+
+        if any(source.kind == KIND_UPLOAD for source in prepared.sources):
+            if self.ctx.get("document_store") is None:
+                return _error(
+                    503,
+                    "document_store_unavailable",
+                    "File uploads are unavailable: the document store is not configured.",
+                )
+        decision = self._store_decision(prepared, scope)
+        start_decision_debate(
+            DebateStartRequest(
+                plan_id=decision.plan_id,
+                org_id=scope.org_id,
+                user_id=scope.user_id,
+                question=decision.question,
+                agents=decision.agents,
+                rounds=decision.rounds,
+            )
+        )
+        body_out = _decision_body(decision)
+        body_out.update(self._sources_body(decision, scope))
+        return json_response(body_out, status=202)
+
+    def _store_decision(self, prepared: PreparedDecision, scope: OrgScope) -> DecisionRecord:
+        """Store documents, the plan with its backbone run and the workspace rows.
+
+        A failure part way removes everything already written.
+        """
+        from aragora.documents.parsing import parse_document
+        from aragora.pipeline.decision_integrity_utils import ensure_decision_plan_backbone_run
+        from aragora.pipeline.decision_plan.core import ApprovalMode, DecisionPlan
+
+        plan_store = _get_plan_store()
+        workspace = get_workspace_store(plan_store.db_path)
+        documents = self.ctx.get("document_store")
+        plan = DecisionPlan(
+            task=prepared.question,
+            approval_mode=ApprovalMode.ALWAYS,
+            metadata={
+                "source": "decision_workspace",
+                "agents": list(prepared.agents),
+                "rounds": prepared.rounds,
+            },
+            org_id=scope.org_id,
+            created_by=scope.user_id,
+        )
+        new_documents: list[str] = []
+        document_ids: dict[str, str] = {}
+        plan_created = False
+        try:
+            for source in prepared.sources:
+                if source.kind != KIND_UPLOAD or source.content is None:
+                    continue
+                doc = parse_document(
+                    source.content,
+                    source.filename or "",
+                    org_id=scope.org_id,
+                    created_by=scope.user_id,
+                )
+                if documents.get(doc.id) is None:
+                    new_documents.append(doc.id)
+                documents.add(doc)
+                document_ids[source.label] = doc.id
+            ensure_decision_plan_backbone_run(
+                plan,
+                auth_context=scope,
+                source_surface="decision_workspace",
+                source_id="",
+                org_id=scope.org_id,
+                created_by=scope.user_id,
+            )
+            plan_store.create(plan)
+            plan_created = True
+            rows = new_decision_rows(
+                prepared,
+                plan_id=plan.id,
+                org_id=scope.org_id,
+                user_id=scope.user_id,
+                document_ids=document_ids,
+            )
+            workspace.insert_decision(rows)
+        except Exception:
+            self._undo(
+                plan_store,
+                plan.id if plan_created else None,
+                plan.metadata.get("backbone_run_id"),
+                documents,
+                new_documents,
+            )
+            raise
+        logger.info(
+            "Workspace decision %s created by %s in %s with %d sources",
+            plan.id,
+            scope.user_id,
+            scope.org_id,
+            len(rows.sources),
+        )
+        return rows.decision
+
+    @staticmethod
+    def _undo(
+        plan_store: Any,
+        plan_id: str | None,
+        run_id: str | None,
+        documents: Any,
+        document_ids: list[str],
+    ) -> None:
+        try:
+            if plan_id is not None:
+                plan_store.delete(plan_id)
+            if run_id:
+                plan_store.delete_run(run_id)
+            for doc_id in document_ids:
+                documents.delete(doc_id)
+        except Exception:  # noqa: BLE001 - keep the original failure as the one raised
+            logger.exception("Could not undo a failed workspace intake (plan %s)", plan_id)
 
 
 def _bounded_int(raw: str | None, default: int, low: int, high: int | None) -> int | None:

@@ -1517,6 +1517,17 @@ class PlanStore:
         finally:
             conn.close()
 
+    def delete_run(self, run_id: str) -> bool:
+        """Delete a backbone run and its stage events. Returns True if the run was deleted."""
+        conn = self._connect()
+        try:
+            conn.execute("DELETE FROM backbone_run_events WHERE run_id = ?", (run_id,))
+            cursor = conn.execute("DELETE FROM backbone_runs WHERE run_id = ?", (run_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+        finally:
+            conn.close()
+
     # -------------------------------------------------------------------------
     # Helpers
     # -------------------------------------------------------------------------

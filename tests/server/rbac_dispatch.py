@@ -108,9 +108,22 @@ def dispatch(
     *,
     body: dict[str, Any] | None = None,
     query: dict[str, str] | None = None,
+    raw_body: bytes | None = None,
+    content_type: str = "application/json",
+    content_length: int | None = None,
 ) -> tuple[int, dict[str, Any]]:
     """Send one request through ``_do_<METHOD>_internal``; return (status, JSON body)."""
-    status, _, payload = dispatch_raw(server, method, path, authorization, body=body, query=query)
+    status, _, payload = dispatch_raw(
+        server,
+        method,
+        path,
+        authorization,
+        body=body,
+        query=query,
+        raw_body=raw_body,
+        content_type=content_type,
+        content_length=content_length,
+    )
     return status, json.loads(payload) if payload else {}
 
 
@@ -122,9 +135,18 @@ def dispatch_raw(
     *,
     body: dict[str, Any] | None = None,
     query: dict[str, str] | None = None,
+    raw_body: bytes | None = None,
+    content_type: str = "application/json",
+    content_length: int | None = None,
 ) -> tuple[int, dict[str, str], bytes]:
-    """Like ``dispatch``, but return (status, response headers, raw body)."""
-    raw = json.dumps(body if body is not None else {}).encode()
+    """Like ``dispatch``, but return (status, response headers, raw body).
+
+    ``raw_body`` replaces the JSON ``body`` (for multipart uploads), and
+    ``content_length`` overrides the announced length.
+    """
+    raw = (
+        raw_body if raw_body is not None else json.dumps(body if body is not None else {}).encode()
+    )
     request_cls = type("_Request", (server.cls,), {"user_store": MFAEnrolledUsers()})
     request = request_cls.__new__(request_cls)
     request.command = method
@@ -132,8 +154,8 @@ def dispatch_raw(
     request.request_version = "HTTP/1.1"
     request.headers = http.client.HTTPMessage()
     request.headers["Host"] = "localhost"
-    request.headers["Content-Type"] = "application/json"
-    request.headers["Content-Length"] = str(len(raw))
+    request.headers["Content-Type"] = content_type
+    request.headers["Content-Length"] = str(len(raw) if content_length is None else content_length)
     if authorization is not None:
         request.headers["Authorization"] = authorization
     request.rfile = io.BytesIO(raw)
