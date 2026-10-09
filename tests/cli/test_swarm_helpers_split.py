@@ -4,7 +4,8 @@ The issue validation-contract audit helpers live in
 ``aragora.cli.commands.swarm_validation_audit`` and the runner payload builders
 live in ``aragora.cli.commands.swarm_runner_payloads``.
 ``aragora.cli.commands.swarm`` keeps exporting every name, so existing imports
-and ``mock.patch("aragora.cli.commands.swarm.<name>")`` targets keep working.
+keep working. Patching a name on ``swarm`` only affects calls made from
+``swarm.py``; helpers called inside the sibling modules must be patched there.
 """
 
 from __future__ import annotations

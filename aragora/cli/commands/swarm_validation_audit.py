@@ -1,8 +1,10 @@
 """Issue validation-contract audit helpers for ``aragora swarm``.
 
-Probes the runnable commands in a queued issue's validation contract (direct
-commands only, no shell operators) and classifies whether the issue is still
-actionable. ``aragora.cli.commands.swarm`` re-exports every name here.
+Runs the commands in a queued issue's validation contract and classifies
+whether the issue is still actionable. Each command runs without a shell, and
+commands containing shell operators are rejected rather than run. The commands
+come from issue text and run in the audit checkout; the shell-operator screen is
+not a sandbox. ``aragora.cli.commands.swarm`` re-exports every name here.
 """
 
 from __future__ import annotations
