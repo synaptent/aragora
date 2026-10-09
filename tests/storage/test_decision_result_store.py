@@ -816,6 +816,69 @@ class TestClaimLifecycleMaintenance:
         assert {r.levelno for r in failures} == {logging.WARNING}
 
 
+class TestClaimOfAnExpiredResult:
+    """An expired row that cleanup has not purged yet decides neither the owner nor the status."""
+
+    @pytest.fixture
+    def db_path(self, tmp_path):
+        return tmp_path / "expired_claim.db"
+
+    @staticmethod
+    def _store(db_path: Path, ttl_seconds: int) -> DecisionResultStore:
+        return DecisionResultStore(
+            db_path=db_path, ttl_seconds=ttl_seconds, cleanup_interval=1_000_000
+        )
+
+    def test_claim_of_expired_unpurged_id_is_fresh(self, db_path, clock):
+        # Built before the clock moves: a store purges expired rows when it is constructed.
+        short_lived = self._store(db_path, ttl_seconds=10)
+        store = self._store(db_path, ttl_seconds=10_000)
+        short_lived.save(
+            "dup",
+            {"status": "completed", "result": {"answer": "org-b secret"}},
+            org_id="org-b",
+            created_by="ub",
+        )
+        short_lived.save("mine", {"status": "cancelled"}, org_id="org-a", created_by="u1")
+        clock.now = 1011.0
+        assert len(_durable_rows(db_path)) == 2  # expired, but not purged yet
+
+        assert (
+            store.claim(
+                "dup",
+                {"status": "pending", "result": {"q": "org-a"}},
+                org_id="org-a",
+                created_by="u1",
+            )
+            == "pending"
+        )
+        assert store.claim("mine", {"status": "pending"}, org_id="org-a", created_by="u1") == (
+            "pending"
+        )
+
+        rows = {row[0]: row for row in _durable_rows(db_path)}
+        assert rows["dup"][1:3] == ("pending", "org-a")
+        assert rows["dup"][4:] == ('{"q": "org-a"}', "u1")
+        assert rows["mine"][1:3] == ("pending", "org-a")
+        assert store.get_for_org("dup", "org-b") is None
+        assert store.save_if_status(
+            "dup", {"status": "completed"}, org_id="org-a", expected_status="pending"
+        )
+
+    def test_a_live_foreign_result_still_conflicts(self, db_path, clock):
+        store = self._store(db_path, ttl_seconds=10_000)
+        self._store(db_path, ttl_seconds=10).save(
+            "dup", {"status": "completed", "result": {"answer": "b"}}, org_id="org-b"
+        )
+        clock.now = 1009.0
+
+        with pytest.raises(DecisionOwnershipConflict):
+            store.claim("dup", {"status": "pending"}, org_id="org-a")
+
+        assert _statuses(db_path) == [("dup", "completed")]
+        assert _durable_rows(db_path)[0][2] == "org-b"
+
+
 class _RecordingPostgreSQLBackend:
     """Stands in for PostgreSQLBackend: records each statement and answers the store's reads."""
 
@@ -921,6 +984,19 @@ class TestPostgreSQLMaintenance:
             "req-1", {"status": "completed"}, org_id="org-a", expected_status="pending"
         )
         self._assert_maintained(backend)
+
+    def test_claim_first_deletes_only_an_expired_row_for_its_id(self, pg_store, clock):
+        backend = pg_store._backend
+
+        assert pg_store.claim("req-1", {"status": "pending"}, org_id="org-a") == "pending"
+
+        first, second = backend.statements[:2]
+        assert first == (
+            "DELETE FROM decision_results WHERE request_id = ? AND expires_at <= ?",
+            ("req-1", clock.now),
+        )
+        assert second[0].startswith("INSERT INTO decision_results")
+        assert second[0].endswith("ON CONFLICT (request_id) DO NOTHING")
 
     def test_writes_that_change_nothing_issue_no_maintenance_sql(self, pg_store, clock):
         backend = pg_store._backend

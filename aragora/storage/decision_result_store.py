@@ -434,6 +434,8 @@ class DecisionResultStore:
         ON CONFLICT (request_id) DO NOTHING
     """
 
+    _DELETE_EXPIRED_ID_SQL = "DELETE FROM decision_results WHERE request_id = ? AND expires_at <= ?"
+
     _SAVE_IF_STATUS_SQL = """
         UPDATE decision_results
         SET status = ?, result_json = ?, completed_at = ?, error = ?, expires_at = ?
@@ -451,13 +453,16 @@ class DecisionResultStore:
         """Store ``data`` for a new ``request_id``; leave an existing result unchanged.
 
         Returns the stored status afterwards: ``data``'s status for a new id,
-        or the existing status when ``org_id`` already owns the id.
+        or the existing status when ``org_id`` already owns the id. An expired
+        result counts as absent, as in ``get()``: it is deleted first, whichever
+        org owned it, and the id is claimed fresh.
 
         Raises:
             DecisionOwnershipConflict: ``request_id`` belongs to another org or
                 to no org. Nothing is written.
         """
         now = time.time()
+        self._execute_counted(self._DELETE_EXPIRED_ID_SQL, (request_id, now))
         params = (
             request_id,
             data.get("status", "unknown"),
