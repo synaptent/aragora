@@ -863,29 +863,19 @@ class TestExecuteDebateThread:
         mock_tracker_class.assert_called_once()
 
 
-class _RealConsensusArena:
+class _SynthesisPastDeadlineArena:
     """Arena running the real ``Arena.run`` over the real consensus phase.
 
-    By default its synthesis outlives the protocol deadline, so ``Arena.run``'s
-    own timeout cancels the consensus phase mid-synthesis. With a fast
-    synthesis and ``post_consensus_seconds``, the deadline instead fires in the
-    work that follows the consensus phase (analytics, feedback, cleanup).
+    Its synthesis outlives the protocol deadline, so ``Arena.run``'s own
+    timeout cancels the consensus phase mid-synthesis.
     """
 
     run = Arena.run
 
-    def __init__(
-        self,
-        hooks: dict,
-        timeout_seconds: float,
-        synthesis_seconds: float = 30,
-        post_consensus_seconds: float = 0,
-    ) -> None:
+    def __init__(self, hooks: dict, timeout_seconds: float) -> None:
         self.hooks = hooks
         self.protocol = SimpleNamespace(timeout_seconds=timeout_seconds, consensus="majority")
         self.env = SimpleNamespace(task="Should our company adopt a four-day work week?")
-        self.synthesis_seconds = synthesis_seconds
-        self.post_consensus_seconds = post_consensus_seconds
         self.synthesis_cancelled = False
         self._cleanup_debate_persistence = AsyncMock()
 
@@ -905,18 +895,18 @@ class _RealConsensusArena:
             callbacks=ConsensusCallbacks(),
         )
 
-        async def _synthesis(_ctx) -> bool:
+        async def _slow_synthesis(_ctx) -> bool:
             try:
-                await asyncio.sleep(self.synthesis_seconds)
+                await asyncio.sleep(30)
             except asyncio.CancelledError:
                 self.synthesis_cancelled = True
                 raise
-            _ctx.result.final_answer = "Pilot it first."
             return True
 
-        with patch.object(phase._synthesis_generator, "generate_mandatory_synthesis", _synthesis):
+        with patch.object(
+            phase._synthesis_generator, "generate_mandatory_synthesis", _slow_synthesis
+        ):
             await phase.execute(ctx)
-        await asyncio.sleep(self.post_consensus_seconds)
         return ctx.result
 
 
@@ -984,10 +974,10 @@ class TestExecuteDebateThreadDeadline:
     ):
         debate_id = "stream-synthesis-deadline"
         active_debates[debate_id] = {"status": "starting"}
-        arenas: list[_RealConsensusArena] = []
+        arenas: list[_SynthesisPastDeadlineArena] = []
 
         def _arena(_env, _agents, _protocol, *, event_hooks, **_kwargs):
-            arenas.append(_RealConsensusArena(event_hooks, timeout_seconds=0.2))
+            arenas.append(_SynthesisPastDeadlineArena(event_hooks, timeout_seconds=0.2))
             return arenas[-1]
 
         with patch("aragora.server.stream.debate_executor.Arena", side_effect=_arena):
@@ -1000,64 +990,6 @@ class TestExecuteDebateThreadDeadline:
         assert ends[0].data["debate_id"] == ends[0].loop_id == debate_id
         assert active_debates[debate_id]["status"] == "timeout"
         assert "result" not in active_debates[debate_id]
-
-    def test_deadline_after_the_debate_ended_keeps_its_answer_and_sends_no_second_end(
-        self, emitter, active_debates, two_agents
-    ):
-        """The consensus phase already ended the debate; the deadline only stopped later work."""
-        debate_id = "stream-deadline-after-consensus"
-        active_debates[debate_id] = {"status": "starting"}
-        arenas: list[_RealConsensusArena] = []
-
-        def _arena(_env, _agents, _protocol, *, event_hooks, **_kwargs):
-            arenas.append(
-                _RealConsensusArena(
-                    event_hooks,
-                    timeout_seconds=0.2,
-                    synthesis_seconds=0,
-                    post_consensus_seconds=30,
-                )
-            )
-            return arenas[-1]
-
-        with patch("aragora.server.stream.debate_executor.Arena", side_effect=_arena):
-            self._run(debate_id, emitter)
-
-        assert len(arenas) == 1 and not arenas[0].synthesis_cancelled
-        ends = _debate_end_events(emitter)
-        assert len(ends) == 1
-        assert "status" not in ends[0].data
-        assert active_debates[debate_id]["status"] == "completed"
-        assert active_debates[debate_id]["completed_at"]
-        assert "error" not in active_debates[debate_id]
-        assert active_debates[debate_id]["result"]["final_answer"] == "Pilot it first."
-
-    def test_backstop_timeout_mid_synthesis_sends_one_error_debate_end(
-        self, emitter, active_debates, two_agents
-    ):
-        """Without a protocol deadline the executor's own timeout cancels the debate."""
-        debate_id = "stream-backstop-timeout"
-        active_debates[debate_id] = {"status": "starting"}
-        arenas: list[_RealConsensusArena] = []
-
-        def _arena(_env, _agents, _protocol, *, event_hooks, **_kwargs):
-            arenas.append(_RealConsensusArena(event_hooks, timeout_seconds=0))
-            return arenas[-1]
-
-        with (
-            patch("aragora.server.stream.debate_executor.Arena", side_effect=_arena),
-            patch("aragora.server.stream.debate_executor.DEBATE_TIMEOUT_SECONDS", 0.2),
-        ):
-            self._run(debate_id, emitter)
-
-        assert len(arenas) == 1 and arenas[0].synthesis_cancelled
-        ends = _debate_end_events(emitter)
-        assert [event.data.get("status") for event in ends] == ["error"]
-        assert ends[0].data["debate_id"] == ends[0].loop_id == debate_id
-        assert active_debates[debate_id]["status"] == "error"
-        assert active_debates[debate_id]["error"]
-        emitted = [call.args[0].type for call in emitter.emit.call_args_list]
-        assert emitted.index(StreamEventType.ERROR) < emitted.index(StreamEventType.DEBATE_END)
 
     def test_timeout_result_emits_one_timeout_debate_end(self, emitter, active_debates, two_agents):
         debate_id = "stream-timeout-result"
@@ -1406,3 +1338,100 @@ class TestErrorHandling:
             if hasattr(call[0][0], "type") and call[0][0].type.value == "error"
         ]
         assert len(error_calls) >= 1
+
+
+class _SlowAfterConsensusArena(_SynthesisPastDeadlineArena):
+    """The real consensus phase finishes; the work after it outlives the deadline."""
+
+    async def _run_inner(self, correlation_id: str = "") -> DebateResult:
+        ctx = DebateContext(
+            env=self.env,
+            agents=[],
+            proposals={"anthropic-api": "Adopt it.", "openai-api": "Pilot it first."},
+            result=DebateResult(task=self.env.task),
+            start_time=time.time(),
+            debate_id="deadline-after-consensus",
+        )
+        phase = ConsensusPhase(
+            deps=ConsensusDependencies(
+                protocol=RealDebateProtocol(rounds=1, consensus="none"), hooks=self.hooks
+            ),
+            callbacks=ConsensusCallbacks(),
+        )
+
+        async def _synthesis(_ctx) -> bool:
+            _ctx.result.final_answer = "Pilot it first."
+            return True
+
+        with patch.object(phase._synthesis_generator, "generate_mandatory_synthesis", _synthesis):
+            await phase.execute(ctx)
+        await asyncio.sleep(30)
+        return ctx.result
+
+
+class TestExecuteDebateThreadEndAlreadySent:
+    """The executor sends a terminal debate_end only when no phase already did."""
+
+    @pytest.fixture
+    def active_debates(self):
+        debates: dict = {}
+        specs = [
+            MagicMock(provider=p, model=None, persona=None, role=None)
+            for p in ("anthropic-api", "openai-api")
+        ]
+        for spec in specs:
+            spec.name = None
+        agent = MagicMock()
+        agent.name = "test-agent"
+        module = "aragora.server.stream.debate_executor"
+        with (
+            patch(f"{module}._active_debates", debates),
+            patch(f"{module}._active_debates_lock", MagicMock()),
+            patch(f"{module}.AgentSpec") as spec_cls,
+            patch(f"{module}.AgentRegistry") as registry,
+            patch(f"{module}.create_agent", return_value=agent),
+            patch(f"{module}.wrap_agent_for_streaming", return_value=agent),
+            patch("aragora.agents.api_agents.common.close_shared_connector", new=AsyncMock()),
+        ):
+            spec_cls.coerce_list.return_value = specs
+            registry.get_spec.return_value = MagicMock(env_vars=None)
+            yield debates
+
+    def _run(self, debate_id: str, arena_cls: type, timeout_seconds: float) -> tuple[list, list]:
+        emitter = MagicMock()
+        arenas: list = []
+
+        def _arena(_env, _agents, _protocol, *, event_hooks, **_kwargs):
+            arenas.append(arena_cls(event_hooks, timeout_seconds=timeout_seconds))
+            return arenas[-1]
+
+        with patch("aragora.server.stream.debate_executor.Arena", side_effect=_arena):
+            execute_debate_thread(
+                debate_id, "Adopt it?", "anthropic-api,openai-api", 1, "majority", None, emitter
+            )
+        assert len(arenas) == 1
+        return arenas, [call.args[0] for call in emitter.emit.call_args_list]
+
+    def test_deadline_after_the_debate_ended_keeps_its_answer(self, active_debates):
+        active_debates["late"] = {"status": "starting"}
+        arenas, events = self._run("late", _SlowAfterConsensusArena, 0.2)
+
+        assert not arenas[0].synthesis_cancelled
+        ends = [event for event in events if event.type == StreamEventType.DEBATE_END]
+        assert len(ends) == 1 and "status" not in ends[0].data
+        assert active_debates["late"]["status"] == "completed"
+        assert "error" not in active_debates["late"]
+        assert active_debates["late"]["result"]["final_answer"] == "Pilot it first."
+
+    def test_backstop_timeout_mid_synthesis_sends_one_error_debate_end(self, active_debates):
+        active_debates["backstop"] = {"status": "starting"}
+        with patch("aragora.server.stream.debate_executor.DEBATE_TIMEOUT_SECONDS", 0.2):
+            arenas, events = self._run("backstop", _SynthesisPastDeadlineArena, 0)
+
+        assert arenas[0].synthesis_cancelled
+        types = [event.type for event in events]
+        assert types.count(StreamEventType.DEBATE_END) == 1
+        assert types.index(StreamEventType.ERROR) < types.index(StreamEventType.DEBATE_END)
+        end = events[types.index(StreamEventType.DEBATE_END)]
+        assert end.data["status"] == "error" and end.loop_id == "backstop"
+        assert active_debates["backstop"]["status"] == "error"
