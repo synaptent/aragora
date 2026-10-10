@@ -81,6 +81,48 @@ def test_redact_copies_nested_values_and_message_assignments(key):
     assert redacted["outer"][0][key] == "***"
 
 
+@pytest.mark.parametrize(
+    "value",
+    [
+        ["Authorization: Bearer SECRET-FOXTROT-222"],
+        '{"api_key": "SECRET-GOLF-333"}',
+        "Authorization: Bearer SECRET-HOTEL-444",
+        str({"Authorization": "Bearer SECRET-JULIET-666"}),
+        "authorization:Basic SECRET-KILO-777",
+        "{'password': 'SECRET-MIKE-999 with spaces'}",
+    ],
+)
+def test_redact_colon_and_quoted_key_forms(value):
+    assert "SECRET-" not in json.dumps(redact(value), default=str)
+
+
+def test_redact_colon_forms_keep_their_shape():
+    assert redact("Authorization: Bearer SECRET-HOTEL-444") == "Authorization: ***"
+    assert json.loads(redact('{"api_key": "SECRET-GOLF-333", "model": "m"}')) == {
+        "api_key": "***",
+        "model": "m",
+    }
+    assert redact(str({"Authorization": "Bearer SECRET-JULIET-666"})) == "{'Authorization': '***'}"
+
+
+def test_json_formatter_coerces_non_string_keys_without_logging_error():
+    result = _probe(
+        """
+from aragora_verify._logging import configure_logging
+import logging
+configure_logging()
+logging.getLogger("aragora_verify.val").warning(
+    "probe", extra={"payload": {("tuple", "key"): "SECRET-INDIA-555"}}
+)
+""",
+        ARAGORA_LOG_FORMAT="json",
+    )
+    (line,) = result.stderr.splitlines()
+    assert json.loads(line)["payload"] == {"('tuple', 'key')": "***"}
+    assert "SECRET-" not in result.stderr
+    assert "Logging error" not in result.stderr
+
+
 @pytest.mark.parametrize("formatter", [JsonFormatter(), TextFormatter()])
 def test_formatters_redact_messages_and_exceptions_without_mutating_records(formatter):
     record = logging.LogRecord(

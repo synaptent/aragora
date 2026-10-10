@@ -120,6 +120,63 @@ def test_redact_message_assignments(message):
     assert "SECRET-" not in redact(message)
 
 
+@pytest.mark.parametrize(
+    "value",
+    [
+        ["Authorization: Bearer SECRET-FOXTROT-222"],
+        '{"api_key": "SECRET-GOLF-333"}',
+        "Authorization: Bearer SECRET-HOTEL-444",
+        str({"Authorization": "Bearer SECRET-JULIET-666"}),
+        "authorization:Basic SECRET-KILO-777",
+        "x-api-key: SECRET-LIMA-888",
+        "{'password': 'SECRET-MIKE-999 with spaces'}",
+        '"token" = "SECRET-NOVEMBER-000"',
+        'headers={"Authorization": "Basic SECRET-OSCAR-111"}',
+    ],
+)
+def test_redact_colon_and_quoted_key_forms(value):
+    assert "SECRET-" not in json.dumps(redact(value), default=str)
+
+
+def test_redact_colon_forms_keep_their_shape():
+    assert redact("Authorization: Bearer SECRET-HOTEL-444") == "Authorization: ***"
+    assert json.loads(redact('{"api_key": "SECRET-GOLF-333", "model": "m"}')) == {
+        "api_key": "***",
+        "model": "m",
+    }
+    assert redact(str({"Authorization": "Bearer SECRET-JULIET-666", "n": 1})) == (
+        "{'Authorization': '***', 'n': 1}"
+    )
+    assert redact("model: gpt, retries: 3") == "model: gpt, retries: 3"
+
+
+def test_redact_masks_values_under_keys_json_cannot_encode():
+    payload = {("api", "key"): "SECRET-ALPHA-123", 7: "seven", "n": {("a", 1): 2}}
+    assert redact(payload) == {"('api', 'key')": "***", 7: "seven", "n": {"('a', 1)": "***"}}
+    assert payload[("api", "key")] == "SECRET-ALPHA-123"
+
+
+def test_json_formatter_coerces_non_string_keys_without_logging_error():
+    result = _probe(
+        """
+from aragora_debate._logging import configure_logging
+import logging
+configure_logging()
+logging.getLogger("aragora_debate.val").warning(
+    "probe",
+    extra={"payload": {("tuple", "key"): "SECRET-INDIA-555", 2: {"n": 1}}},
+)
+""",
+        ARAGORA_LOG_FORMAT="json",
+    )
+    (line,) = result.stderr.splitlines()
+    data = json.loads(line)
+    assert data["payload"] == {"('tuple', 'key')": "***", "2": {"n": 1}}
+    assert data["msg"] == "probe"
+    assert "SECRET-" not in result.stderr
+    assert "Logging error" not in result.stderr
+
+
 @pytest.mark.parametrize("formatter", [JsonFormatter(), TextFormatter()])
 def test_formatters_redact_interpolated_messages_nested_payloads_and_exceptions(formatter):
     record = logging.LogRecord(

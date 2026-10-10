@@ -17,9 +17,10 @@ from typing import Any
 
 _SECRET_KEY = r"(?:api[_-]?key|token|secret|password|authorization)"
 _KEY_PATTERN = re.compile(_SECRET_KEY, re.IGNORECASE)
+# key=value, key: value, and quoted keys as in JSON ("key": ...) or reprs ('key': ...).
 _ASSIGNMENT = re.compile(
-    rf"(?P<key>[\w-]*{_SECRET_KEY}[\w-]*)(?P<sep>\s*=\s*)"
-    r"""(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|"""
+    rf"""(?P<key>(?P<kq>["']?)[\w-]*{_SECRET_KEY}[\w-]*(?P=kq))(?P<sep>\s*[=:]\s*)"""
+    r"""(?:(?P<dq>"(?:\\.|[^"\\])*")|(?P<sq>'(?:\\.|[^'\\])*')|"""
     r"(?:Bearer|Basic)\s+[^\s,;}\]]+|[^\s,;}\]]+)",
     re.IGNORECASE,
 )
@@ -33,19 +34,33 @@ _STANDARD_FIELDS = frozenset(logging.makeLogRecord({}).__dict__) | {
 }
 
 
+def _mask_assignment(match: re.Match[str]) -> str:
+    quote = '"' if match.group("dq") else "'" if match.group("sq") else ""
+    return f"{match.group('key')}{match.group('sep')}{quote}{_REDACTED}{quote}"
+
+
+def _redact_item(key: Any, value: Any) -> tuple[Any, Any]:
+    if isinstance(key, (str, int, float)) or key is None:
+        return key, _REDACTED if _KEY_PATTERN.search(str(key)) else redact(value)
+    # json.dumps rejects other key types, and a composite key such as
+    # ("api", "key") can split a secret name, so stringify it and fail closed.
+    return redact(str(key)), _REDACTED
+
+
 def redact(obj: Any) -> Any:
-    """Copy nested mappings/sequences, masking sensitive keys and assignments."""
+    """Copy nested mappings/sequences, masking sensitive keys and assignments.
+
+    Mapping keys other than str/int/float/None become strings, with the value
+    masked, so the result is always JSON-encodable as far as keys go.
+    """
     if isinstance(obj, Mapping):
-        return {
-            key: _REDACTED if _KEY_PATTERN.search(str(key)) else redact(value)
-            for key, value in obj.items()
-        }
+        return dict(_redact_item(key, value) for key, value in obj.items())
     if isinstance(obj, list):
         return [redact(value) for value in obj]
     if isinstance(obj, tuple):
         return tuple(redact(value) for value in obj)
     if isinstance(obj, str):
-        return _ASSIGNMENT.sub(r"\g<key>\g<sep>" + _REDACTED, obj)
+        return _ASSIGNMENT.sub(_mask_assignment, obj)
     return obj
 
 
