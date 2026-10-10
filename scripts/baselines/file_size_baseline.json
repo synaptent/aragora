@@ -30,7 +30,6 @@
     "aragora/swarm/campaign.py": 2944,
     "aragora/swarm/reporter.py": 2988,
     "aragora/swarm/supervisor.py": 3314,
-    "aragora/swarm/supervisor_workers.py": 2440,
     "aragora/swarm/tranche_queue.py": 3228,
     "aragora/swarm/worker_launcher.py": 2649
   }
