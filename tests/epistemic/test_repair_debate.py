@@ -79,8 +79,9 @@ class _StringSupportAgent:
 
 
 class _NamedCruxAgent:
-    def __init__(self, name: str, **scores) -> None:
+    def __init__(self, name: str, statement: str = "Shared concern", **scores) -> None:
         self.name = name
+        self.statement = statement
         self.scores = scores
 
     def evaluate(self, spec, context):
@@ -89,7 +90,7 @@ class _NamedCruxAgent:
             "crux_candidates": [
                 {
                     "crux_id": "crux.shared",
-                    "statement": "Shared concern",
+                    "statement": self.statement,
                     **self.scores,
                 }
             ],
@@ -318,6 +319,95 @@ class TestCruxPropagation:
         )
         shared = next(crux for crux in result.receipt.cruxes if crux.crux_id == "crux.shared")
         assert shared.contesting_agents == ["agent-a", "agent-b"]
+
+    def test_shared_crux_content_does_not_depend_on_agent_order(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        spec = _spec(monkeypatch)
+
+        def agents() -> list[_NamedCruxAgent]:
+            return [
+                _NamedCruxAgent(
+                    "agent-low",
+                    statement="Low-rated concern",
+                    load_bearing_score=0.0,
+                    uncertainty_score=0.2,
+                    resolution_impact=0.9,
+                ),
+                _NamedCruxAgent(
+                    "agent-high",
+                    statement="High-rated concern",
+                    load_bearing_score=1.0,
+                    uncertainty_score=0.9,
+                    resolution_impact=0.1,
+                ),
+            ]
+
+        forward = run_repair_debate(spec, agents())
+        backward = run_repair_debate(spec, list(reversed(agents())))
+        assert [c.to_dict() for c in forward.receipt.cruxes] == [
+            c.to_dict() for c in backward.receipt.cruxes
+        ]
+
+    def test_later_agent_higher_scores_are_kept(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        spec = _spec(monkeypatch)
+        result = run_repair_debate(
+            spec,
+            [
+                _NamedCruxAgent(
+                    "agent-a",
+                    load_bearing_score=0.1,
+                    uncertainty_score=0.6,
+                    resolution_impact=0.2,
+                ),
+                _NamedCruxAgent(
+                    "agent-b",
+                    load_bearing_score=0.9,
+                    uncertainty_score=0.3,
+                    resolution_impact=0.8,
+                ),
+            ],
+        )
+        shared = next(crux for crux in result.receipt.cruxes if crux.crux_id == "crux.shared")
+        assert shared.load_bearing_score == 0.9
+        assert shared.uncertainty_score == 0.6
+        assert shared.resolution_impact == 0.8
+
+    def test_shared_crux_statement_and_agents_follow_sorted_agent_names(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        spec = _spec(monkeypatch)
+        agents = [
+            _NamedCruxAgent("agent-c", statement="Concern raised by c"),
+            _NamedCruxAgent("agent-a", statement=""),
+            _NamedCruxAgent("agent-b", statement="Concern raised by b"),
+        ]
+        for order in (agents, list(reversed(agents))):
+            result = run_repair_debate(spec, order)
+            shared = next(crux for crux in result.receipt.cruxes if crux.crux_id == "crux.shared")
+            assert shared.statement == "Concern raised by b"
+            assert shared.contesting_agents == ["agent-a", "agent-b", "agent-c"]
+
+    def test_unusable_scores_do_not_override_usable_ones(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        spec = _spec(monkeypatch)
+        result = run_repair_debate(
+            spec,
+            [
+                _NamedCruxAgent("agent-a", uncertainty_score="high", resolution_impact=None),
+                _NamedCruxAgent(
+                    "agent-b",
+                    load_bearing_score=0.0,
+                    uncertainty_score=0.2,
+                    resolution_impact=float("nan"),
+                ),
+            ],
+        )
+        shared = next(crux for crux in result.receipt.cruxes if crux.crux_id == "crux.shared")
+        assert shared.load_bearing_score == 0.0
+        assert shared.uncertainty_score == 0.2
+        assert shared.resolution_impact == 0.5
 
     def test_zero_scores_are_preserved_and_malformed_scores_default(
         self, monkeypatch: pytest.MonkeyPatch

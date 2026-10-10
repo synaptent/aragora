@@ -7,6 +7,9 @@ Invariants:
 - Requires ``ARAGORA_REPAIR_PIPELINE_ENABLED`` (inherited from repair.py, default off).
 - Re-checks ``spec.repair_kind``: ``"live_swap"`` and unknown kinds raise
   ``ValueError`` before any agent runs, including for hand-built specs.
+- Crux content does not depend on agent order: a crux several agents name
+  keeps the highest usable score per field, a statement chosen by sorted
+  agent name, and sorted ``contesting_agents``.
 - No live Arena, no queue mutation, no issue creation.
 - Callers inject a :class:`RepairDebateAgent` protocol so tests run without
   API keys or network access.
@@ -176,9 +179,15 @@ def _collect_crux_entries(
     spec: RepairSpec,
     evaluations: list[dict[str, Any]],
 ) -> list[CruxEntry]:
-    """Build the ordered, deduplicated list of :class:`CruxEntry` objects."""
-    crux_entries: list[CruxEntry] = []
-    entries_by_id: dict[str, CruxEntry] = {}
+    """Build the ordered, deduplicated list of :class:`CruxEntry` objects.
+
+    Entries keep first-named order. A crux named by several agents is merged
+    so that its content does not depend on agent order: each score is the
+    highest usable value any agent gave (the neutral default applies only when
+    none gave one), the statement is the first non-empty one in sorted
+    ``(agent name, statement)`` order, and ``contesting_agents`` is sorted.
+    """
+    named: dict[str, list[tuple[Any, dict[str, Any]]]] = {}
 
     for ev in evaluations:
         candidates = ev.get("crux_candidates") or []
@@ -190,22 +199,10 @@ def _collect_crux_entries(
             cid = str(cand.get("crux_id") or "")
             if not cid:
                 continue
-            existing = entries_by_id.get(cid)
-            if existing is not None:
-                if ev["agent"] not in existing.contesting_agents:
-                    existing.contesting_agents.append(ev["agent"])
-                continue
-            entry = CruxEntry(
-                crux_id=cid,
-                statement=str(cand.get("statement") or ""),
-                load_bearing_score=_score_or_default(cand, "load_bearing_score"),
-                uncertainty_score=_score_or_default(cand, "uncertainty_score"),
-                contesting_agents=[ev["agent"]],
-                affected_claims=list(spec.linked_claims),
-                resolution_impact=_score_or_default(cand, "resolution_impact"),
-            )
-            entries_by_id[cid] = entry
-            crux_entries.append(entry)
+            named.setdefault(cid, []).append((ev["agent"], cand))
+
+    crux_entries = [_merge_named_crux(cid, named_by, spec) for cid, named_by in named.items()]
+    entries_by_id = {entry.crux_id: entry for entry in crux_entries}
 
     for crux_id in spec.linked_crux_ids:
         if crux_id in entries_by_id:
@@ -225,17 +222,45 @@ def _collect_crux_entries(
     return crux_entries
 
 
-def _score_or_default(candidate: dict[str, Any], key: str, default: float = 0.5) -> float:
-    """Preserve numeric zeroes and bound malformed agent scores to a neutral default."""
-    value = candidate.get(key, default)
+def _merge_named_crux(
+    crux_id: str,
+    named_by: list[tuple[Any, dict[str, Any]]],
+    spec: RepairSpec,
+) -> CruxEntry:
+    """Merge every agent candidate for *crux_id* into one order-independent entry."""
+    candidates = [cand for _, cand in named_by]
+    statements = sorted((str(agent), str(cand.get("statement") or "")) for agent, cand in named_by)
+    agents: list[Any] = []
+    for agent, _ in named_by:
+        if agent not in agents:
+            agents.append(agent)
+    return CruxEntry(
+        crux_id=crux_id,
+        statement=next((text for _, text in statements if text), ""),
+        load_bearing_score=_merged_score(candidates, "load_bearing_score"),
+        uncertainty_score=_merged_score(candidates, "uncertainty_score"),
+        contesting_agents=sorted(agents, key=str),
+        affected_claims=list(spec.linked_claims),
+        resolution_impact=_merged_score(candidates, "resolution_impact"),
+    )
+
+
+def _merged_score(candidates: list[dict[str, Any]], key: str, default: float = 0.5) -> float:
+    """Return the highest usable score for *key*, or *default* when none is usable."""
+    scores = [s for s in (_usable_score(c.get(key)) for c in candidates) if s is not None]
+    return max(scores) if scores else default
+
+
+def _usable_score(value: Any) -> float | None:
+    """Bound an agent score to [0, 1], preserving zeroes; ``None`` when missing or malformed."""
     if value is None:
-        return default
+        return None
     try:
         score = float(value)
     except (TypeError, ValueError, OverflowError):
-        return default
+        return None
     if not math.isfinite(score):
-        return default
+        return None
     return min(1.0, max(0.0, score))
 
 
