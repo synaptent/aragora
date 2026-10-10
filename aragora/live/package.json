@@ -54,7 +54,7 @@
     "@types/d3-force": "^3.0.10",
     "@types/d3-selection": "^3.0.11",
     "@types/d3-zoom": "^3.0.8",
-    "@xyflow/react": "^12.11.6",
+    "@xyflow/react": "^12.12.0",
     "clsx": "^2.1.1",
     "d3-drag": "^3.0.0",
     "d3-force": "^3.0.0",
