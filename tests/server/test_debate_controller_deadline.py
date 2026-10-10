@@ -587,3 +587,28 @@ class TestResolveDebateDeadline:
 def test_run_async_global_default_timeout_is_unchanged():
     default = inspect.signature(async_utils.run_async).parameters["timeout"].default
     assert default == RUN_ASYNC_DEFAULT_TIMEOUT
+
+
+class _DeadlineIgnoringArena(_FakeArena):
+    async def run(self, correlation_id: str = "") -> Any:
+        return await self._run_inner(correlation_id)
+
+
+class TestBackstopStopIsADeadlineStop:
+    def test_single_run_is_recorded_as_timeout(self, execution_path, registered_debate):
+        debate_id = registered_debate(f"backstop-single-{execution_path.name}")
+        arena, emitter = _DeadlineIgnoringArena(timeout_seconds=45, work_seconds=10_000), Mock()
+        _controller(arena, emitter=emitter)._run_debate(_config(debate_id), debate_id)
+        assert arena.cancelled_after == pytest.approx(45.0 + dc._RUN_ASYNC_CLEANUP_MARGIN_SECONDS)
+        assert get_state_manager().get_debate(debate_id).status == "timeout"
+        assert [event.data["status"] for event in _debate_end_events(emitter)] == ["timeout"]
+
+    def test_comparison_counts_it_as_a_deadline_stop(self, execution_path, registered_debate):
+        debate_id = registered_debate(f"backstop-comparison-{execution_path.name}")
+        _run_comparison(debate_id, [_DeadlineIgnoringArena(45, 10_000) for _ in range(2)])
+        assert get_state_manager().get_debate(debate_id).status == "timeout"
+
+    def test_run_async_limit_is_a_deadline_stop(self, monkeypatch):
+        monkeypatch.setattr(dc, "run_async", lambda coro, timeout: coro.throw(TimeoutError()))
+        with pytest.raises(dc._DebateDeadlineReached, match="its 45s deadline"):
+            _controller(_FakeArena(45, 0))._execute_debate_candidate(_config("ra"), "ra", {})

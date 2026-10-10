@@ -13,7 +13,7 @@ import logging
 import math
 import os
 import uuid
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any
 from collections.abc import Callable
@@ -1205,9 +1205,13 @@ class DebateController:
                 arena.run(), timeout=timeout + _RUN_ASYNC_CLEANUP_MARGIN_SECONDS
             )
 
-        result = run_async(
-            run_with_timeout(), timeout=timeout + 2 * _RUN_ASYNC_CLEANUP_MARGIN_SECONDS
-        )
+        try:
+            result = run_async(
+                run_with_timeout(), timeout=timeout + 2 * _RUN_ASYNC_CLEANUP_MARGIN_SECONDS
+            )
+        except (TimeoutError, asyncio.TimeoutError, FuturesTimeoutError) as exc:
+            # A backstop expired (wait_for or run_async's own limit); three classes before 3.11.
+            raise _DebateDeadlineReached(f"Debate stopped at its {timeout:.0f}s deadline") from exc
         result_metadata = getattr(result, "metadata", None)
         if isinstance(result_metadata, dict) and result_metadata.get("deadline_exceeded"):
             raise _DebateDeadlineReached(f"Debate stopped at its {timeout:.0f}s deadline")
