@@ -97,6 +97,15 @@ class _NamedCruxAgent:
         }
 
 
+class _PayloadAgent:
+    def __init__(self, name: str, payload) -> None:
+        self.name = name
+        self.payload = payload
+
+    def evaluate(self, spec, context):
+        return self.payload
+
+
 class _MalformedCandidatesAgent:
     name = "mock-malformed-candidates"
 
@@ -347,6 +356,34 @@ class TestCruxPropagation:
         backward = run_repair_debate(spec, list(reversed(agents())))
         assert [c.to_dict() for c in forward.receipt.cruxes] == [
             c.to_dict() for c in backward.receipt.cruxes
+        ]
+
+    def test_receipt_crux_order_does_not_depend_on_agent_order(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        spec = _spec(monkeypatch)
+
+        def agents() -> list[_PayloadAgent]:
+            return [
+                _PayloadAgent(
+                    "agent-1",
+                    {"supports_repair": True, "crux_candidates": [{"crux_id": "crux.zeta"}]},
+                ),
+                _PayloadAgent(
+                    "agent-2",
+                    {"supports_repair": True, "crux_candidates": [{"crux_id": "crux.alpha"}]},
+                ),
+            ]
+
+        forward = run_repair_debate(spec, agents())
+        backward = run_repair_debate(spec, list(reversed(agents())))
+        assert [c.to_dict() for c in forward.receipt.cruxes] == [
+            c.to_dict() for c in backward.receipt.cruxes
+        ]
+        assert [c.crux_id for c in forward.receipt.cruxes] == [
+            "crux.alpha",
+            "crux.zeta",
+            *spec.linked_crux_ids,
         ]
 
     def test_later_agent_higher_scores_are_kept(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -642,3 +679,136 @@ class TestMisc:
         assert len(d["receipt"]["checksum"]) == 64
         assert "cruxes" in d["receipt"]
         assert isinstance(d["agent_evaluations"], list)
+
+
+# ---------------------------------------------------------------------------
+# Agent evaluation payloads are exposed as strict JSON
+# ---------------------------------------------------------------------------
+
+
+class TestAgentEvaluationSerialization:
+    @pytest.mark.parametrize(
+        ("payload", "expected"),
+        [
+            (
+                {
+                    "supports_repair": True,
+                    "crux_candidates": [
+                        {"crux_id": "crux.x", "statement": "s", "load_bearing_score": float("nan")}
+                    ],
+                },
+                {
+                    "supports_repair": True,
+                    "crux_candidates": [
+                        {"crux_id": "crux.x", "statement": "s", "load_bearing_score": None}
+                    ],
+                },
+            ),
+            (
+                {"supports_repair": True, "confidence": float("inf")},
+                {"supports_repair": True, "confidence": None},
+            ),
+            (
+                {"supports_repair": False, "detail": {"floor": [float("-inf"), 0.25]}},
+                {"supports_repair": False, "detail": {"floor": [None, 0.25]}},
+            ),
+            (
+                {"supports_repair": True, "notes": {"only-value"}},
+                {"supports_repair": True, "notes": "{'only-value'}"},
+            ),
+        ],
+        ids=["nan-crux-score", "infinity", "negative-infinity-nested", "set"],
+    )
+    def test_to_dict_is_strict_json_for_malformed_agent_values(
+        self, monkeypatch: pytest.MonkeyPatch, payload: dict, expected: dict
+    ) -> None:
+        spec = _spec(monkeypatch)
+        result = run_repair_debate(spec, [_PayloadAgent("agent-a", payload)])
+        encoded = json.dumps(result.to_dict(), allow_nan=False)
+        assert json.loads(encoded)["agent_evaluations"] == [{**expected, "agent": "agent-a"}]
+        json.dumps(result.agent_evaluations, allow_nan=False)
+
+    def test_mapping_keys_become_strings_and_tuples_become_lists(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        spec = _spec(monkeypatch)
+        payload = {"supports_repair": True, "by_round": {1: ("a", 2.5), None: "x"}}
+        result = run_repair_debate(spec, [_PayloadAgent("agent-a", payload)])
+        assert result.agent_evaluations[0]["by_round"] == {"1": ["a", 2.5], "None": "x"}
+        json.dumps(result.to_dict(), allow_nan=False, sort_keys=True)
+
+    def test_self_referential_and_oversized_values_do_not_break_serialization(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        spec = _spec(monkeypatch)
+        loop: dict = {"name": "loop"}
+        loop["self"] = loop
+        payload = {"supports_repair": True, "loop": loop, "count": 10**5000}
+        result = run_repair_debate(spec, [_PayloadAgent("agent-a", payload)])
+        evaluation = result.agent_evaluations[0]
+        assert evaluation["loop"] == {"name": "loop", "self": None}
+        assert evaluation["count"] is None
+        json.dumps(result.to_dict(), allow_nan=False)
+
+    def test_deeply_nested_and_unprintable_values_do_not_break_serialization(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        class _Unprintable:
+            def __str__(self) -> str:
+                raise RuntimeError("no text form")
+
+        spec = _spec(monkeypatch)
+        nested: list = []
+        for _ in range(5000):
+            nested = [nested]
+        payload = {"supports_repair": True, "nested": nested, "obj": _Unprintable()}
+        result = run_repair_debate(spec, [_PayloadAgent("agent-a", payload)])
+        assert result.agent_evaluations[0]["obj"] == "<unprintable _Unprintable>"
+        assert result.to_dict()["agent_evaluations"] == result.agent_evaluations
+        json.dumps(result.to_dict(), allow_nan=False)
+
+    def test_clean_agent_payload_is_exposed_unchanged(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        spec = _spec(monkeypatch)
+        result = run_repair_debate(spec, [_SupportAgent(), _OpposeAgent()])
+        expected = [
+            {**_SupportAgent().evaluate(spec, {}), "agent": "mock-support"},
+            {**_OpposeAgent().evaluate(spec, {}), "agent": "mock-oppose"},
+        ]
+        assert result.agent_evaluations == expected
+        assert result.to_dict()["agent_evaluations"] == expected
+
+    def test_exposed_evaluations_do_not_alias_the_agent_payload(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        spec = _spec(monkeypatch)
+        payload = {"supports_repair": True, "crux_candidates": [], "trace": ["step-1"]}
+        result = run_repair_debate(spec, [_PayloadAgent("agent-a", payload)])
+        payload["trace"].append(float("nan"))
+        payload["crux_candidates"].append({"crux_id": "crux.late"})
+        assert result.agent_evaluations[0]["trace"] == ["step-1"]
+        assert result.agent_evaluations[0]["crux_candidates"] == []
+        json.dumps(result.to_dict(), allow_nan=False)
+
+    def test_hand_built_result_is_sanitized(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        spec = _spec(monkeypatch)
+        built = run_repair_debate(spec, [_SupportAgent()])
+        result = RepairDebateResult(
+            spec_id=built.spec_id,
+            receipt=built.receipt,
+            agent_evaluations=[{"agent": "hand", "score": float("nan"), "tags": {"t"}}],
+            consensus_reached=built.consensus_reached,
+            recommended_action=built.recommended_action,
+        )
+        assert result.agent_evaluations == [{"agent": "hand", "score": None, "tags": "{'t'}"}]
+        json.dumps(result.to_dict(), allow_nan=False)
+
+    def test_malformed_values_do_not_change_consensus(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        spec = _spec(monkeypatch)
+        payload = {"supports_repair": True, "confidence": float("nan"), "notes": {"n"}}
+        result = run_repair_debate(spec, [_PayloadAgent("agent-a", payload)])
+        assert result.consensus_reached is True
+        assert result.recommended_action == "proceed_with_repair"

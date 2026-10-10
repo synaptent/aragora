@@ -7,9 +7,15 @@ Invariants:
 - Requires ``ARAGORA_REPAIR_PIPELINE_ENABLED`` (inherited from repair.py, default off).
 - Re-checks ``spec.repair_kind``: ``"live_swap"`` and unknown kinds raise
   ``ValueError`` before any agent runs, including for hand-built specs.
-- Crux content does not depend on agent order: a crux several agents name
-  keeps the highest usable score per field, a statement chosen by sorted
-  agent name, and sorted ``contesting_agents``.
+- Receipt cruxes do not depend on agent order: agent-named cruxes are sorted
+  by ``crux_id`` (spec-linked cruxes no agent named follow in spec order), and
+  a crux several agents name keeps the highest usable score per field, a
+  statement chosen by sorted agent name, and sorted ``contesting_agents``.
+- ``agent_evaluations`` is a strict-JSON deep copy of the agents' payloads:
+  non-finite floats, integers too long to print, cycles and nesting deeper
+  than 64 levels become ``None``; mapping keys and other non-JSON values
+  become ``str`` (keys that collide after ``str`` keep the last value);
+  tuples become lists.
 - No live Arena, no queue mutation, no issue creation.
 - Callers inject a :class:`RepairDebateAgent` protocol so tests run without
   API keys or network access.
@@ -26,6 +32,7 @@ import hashlib
 import json
 import math
 import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol, Sequence
 
@@ -36,6 +43,12 @@ from aragora.epistemic.repair import (
     RepairSpec,
     repair_pipeline_enabled,
 )
+
+# json.dumps raises ValueError for an int whose decimal form exceeds
+# sys.get_int_max_str_digits(). 2048 bits is at most 617 digits, below 640,
+# the lowest limit Python accepts, so such ints always print.
+_MAX_JSON_INT_BITS = 2048
+_MAX_JSON_DEPTH = 64
 
 
 class RepairDebateAgent(Protocol):
@@ -72,6 +85,8 @@ class RepairDebateResult:
     downstream provenance and audit. ``consensus_reached`` reflects whether
     a majority of agents supported the repair; ``recommended_action`` is the
     bounded string recommendation (never a live routing instruction).
+    ``agent_evaluations`` is always stored as a strict-JSON copy, so
+    ``json.dumps(result.to_dict(), allow_nan=False)`` cannot fail on agent output.
     """
 
     spec_id: str
@@ -80,13 +95,17 @@ class RepairDebateResult:
     consensus_reached: bool
     recommended_action: str  # "proceed_with_repair" | "request_human_review"
 
+    def __post_init__(self) -> None:
+        safe = [_json_safe(ev) for ev in self.agent_evaluations]
+        object.__setattr__(self, "agent_evaluations", safe)
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "spec_id": self.spec_id,
             "consensus_reached": self.consensus_reached,
             "recommended_action": self.recommended_action,
             "receipt": self.receipt.to_dict(),
-            "agent_evaluations": self.agent_evaluations,
+            "agent_evaluations": [_json_safe(ev) for ev in self.agent_evaluations],
         }
 
 
@@ -181,7 +200,8 @@ def _collect_crux_entries(
 ) -> list[CruxEntry]:
     """Build the ordered, deduplicated list of :class:`CruxEntry` objects.
 
-    Entries keep first-named order. A crux named by several agents is merged
+    Agent-named entries are sorted by ``crux_id``; spec-linked cruxes that no
+    agent named follow in spec order. A crux named by several agents is merged
     so that its content does not depend on agent order: each score is the
     highest usable value any agent gave (the neutral default applies only when
     none gave one), the statement is the first non-empty one in sorted
@@ -201,7 +221,7 @@ def _collect_crux_entries(
                 continue
             named.setdefault(cid, []).append((ev["agent"], cand))
 
-    crux_entries = [_merge_named_crux(cid, named_by, spec) for cid, named_by in named.items()]
+    crux_entries = [_merge_named_crux(cid, named[cid], spec) for cid in sorted(named)]
     entries_by_id = {entry.crux_id: entry for entry in crux_entries}
 
     for crux_id in spec.linked_crux_ids:
@@ -262,6 +282,31 @@ def _usable_score(value: Any) -> float | None:
     if not math.isfinite(score):
         return None
     return min(1.0, max(0.0, score))
+
+
+def _json_safe(value: Any, depth: int = 0, active: frozenset[int] = frozenset()) -> Any:
+    """Return a deep copy of an agent payload that ``json.dumps(allow_nan=False)`` accepts."""
+    if value is None or isinstance(value, (bool, str)):
+        return value
+    if isinstance(value, int):
+        return value if value.bit_length() <= _MAX_JSON_INT_BITS else None
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, (Mapping, list, tuple)):
+        if id(value) in active or depth >= _MAX_JSON_DEPTH:
+            return None
+        inner = active | {id(value)}
+        if isinstance(value, Mapping):
+            return {_safe_str(k): _json_safe(v, depth + 1, inner) for k, v in value.items()}
+        return [_json_safe(v, depth + 1, inner) for v in value]
+    return _safe_str(value)
+
+
+def _safe_str(value: Any) -> str:
+    try:
+        return str(value)
+    except Exception:  # noqa: BLE001 - agent payloads may carry objects whose __str__ raises
+        return f"<unprintable {type(value).__name__}>"
 
 
 def _build_receipt(
