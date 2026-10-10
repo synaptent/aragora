@@ -310,14 +310,203 @@ def test_non_bypass_options_still_pass(adopted: tuple[Path, Path]) -> None:
     assert result.returncode == 0, result.stderr
 
 
-def test_tracked_project_matches_baseline() -> None:
-    result = run("--pyproject", "pyproject.toml", "--baseline", BASELINE)
+# Every spelling mypy 2.1.0's convert_to_boolean reads as true or false.
+ALLOW_TRUE = [
+    "allow_untyped_defs = true",
+    'allow_untyped_defs = "true"',
+    'allow_untyped_defs = "True"',
+    'allow_untyped_defs = "TRUE"',
+    'allow_untyped_defs = "yes"',
+    'allow_untyped_defs = "on"',
+    'allow_untyped_defs = "1"',
+    "allow_untyped_defs = 1",
+]
+ALLOW_FALSE = [
+    "allow_untyped_defs = false",
+    'allow_untyped_defs = "false"',
+    'allow_untyped_defs = "False"',
+    'allow_untyped_defs = "no"',
+    'allow_untyped_defs = "off"',
+    'allow_untyped_defs = "0"',
+    "allow_untyped_defs = 0",
+]
+ALLOW_NOT_BOOLEAN = [
+    "allow_untyped_defs = 2",
+    "allow_untyped_defs = -1",
+    "allow_untyped_defs = 1.0",
+    'allow_untyped_defs = "maybe"',
+    'allow_untyped_defs = ""',
+    'allow_untyped_defs = " true "',
+    "allow_untyped_defs = [true]",
+    "allow_untyped_defs = {}",
+]
+
+
+def _global_table(extra: str) -> str:
+    return f"[tool.mypy]\ndisallow_untyped_defs = true\n{extra}\n"
+
+
+def _override_block(extra: str) -> str:
+    return (
+        _global_table("")
+        + '[[tool.mypy.overrides]]\nmodule = ["aragora.val_probe"]\n'
+        + f"{extra}\n"
+    )
+
+
+@pytest.mark.parametrize("line", ALLOW_TRUE)
+def test_override_allow_untyped_defs_true_spellings_are_bypasses(
+    adopted: tuple[Path, Path], line: str
+) -> None:
+    project, baseline = adopted
+    before = baseline.read_bytes()
+    project.write_text(_override_block(line))
+    for flags in ([], ["--update"]):
+        result = run("--pyproject", project, "--baseline", baseline, *flags)
+        assert result.returncode == 2, result.stdout + result.stderr
+        assert "allow_untyped_defs" in result.stderr
+        assert "aragora.val_probe" in result.stderr
+        assert "Traceback" not in result.stderr
+        assert baseline.read_bytes() == before
+
+
+@pytest.mark.parametrize(
+    ("line", "key"),
+    [
+        *[(line, "allow_untyped_defs") for line in ALLOW_TRUE],
+        ('disable_error_code = ["no-untyped-def"]', "no-untyped-def"),
+        ('disable_error_code = ["misc", " no-untyped-def "]', "no-untyped-def"),
+        ('disable_error_code = "misc, no-untyped-def"', "no-untyped-def"),
+    ],
+)
+def test_global_tool_mypy_table_bypasses_are_rejected(
+    adopted: tuple[Path, Path], line: str, key: str
+) -> None:
+    project, baseline = adopted
+    before = baseline.read_bytes()
+    project.write_text(_global_table(line))
+    for flags in ([], ["--update"]):
+        result = run("--pyproject", project, "--baseline", baseline, *flags)
+        assert result.returncode == 2, result.stdout + result.stderr
+        assert key in result.stderr
+        assert "[tool.mypy]" in result.stderr
+        assert "Traceback" not in result.stderr
+        assert baseline.read_bytes() == before
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "key"),
+    [
+        ("[tool.mypy]\n", '[tool.mypy]\nallow_untyped_defs = "on"\n', "allow_untyped_defs"),
+        (
+            "disable_error_code = [\n",
+            'disable_error_code = [\n"no-untyped-def",\n',
+            "no-untyped-def",
+        ),
+    ],
+)
+def test_global_bypass_added_to_tracked_project_is_rejected(
+    tmp_path: Path, old: str, new: str, key: str
+) -> None:
+    text = (ROOT / "pyproject.toml").read_text()
+    assert isinstance(tomllib.loads(text)["tool"]["mypy"]["disable_error_code"], list)
+    project = tmp_path / "pyproject.toml"
+    project.write_text(text.replace(old, new, 1))
+    assert project.read_text() != text
+    result = run("--pyproject", project)
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert key in result.stderr and "[tool.mypy]" in result.stderr
+
+
+@pytest.mark.parametrize("line", ALLOW_FALSE)
+@pytest.mark.parametrize("build", [_global_table, _override_block], ids=["global", "override"])
+def test_allow_untyped_defs_false_spellings_pass(
+    adopted: tuple[Path, Path], line: str, build
+) -> None:
+    project, baseline = adopted
+    project.write_text(
+        build(line)
+        + '[[tool.mypy.overrides]]\nmodule = ["pkg.a", "pkg.b"]\ndisallow_untyped_defs = false\n'
+    )
+    result = run("--pyproject", project, "--baseline", baseline)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("line", ALLOW_NOT_BOOLEAN)
+@pytest.mark.parametrize("build", [_global_table, _override_block], ids=["global", "override"])
+def test_allow_untyped_defs_non_boolean_values_are_shape_errors(
+    adopted: tuple[Path, Path], line: str, build
+) -> None:
+    project, baseline = adopted
+    project.write_text(build(line))
+    result = run("--pyproject", project, "--baseline", baseline)
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert "allow_untyped_defs" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        "bypass",
+        "overrides-not-a-list",
+        "module-is-int",
+        "missing-pyproject",
+        "pyproject-is-directory",
+        "invalid-toml",
+        "bad-baseline",
+    ],
+)
+def test_error_exit_still_writes_report_json(tmp_path: Path, case: str) -> None:
+    project = tmp_path / "pyproject.toml"
+    baseline = tmp_path / "baseline.json"
+    baseline.write_bytes((ROOT / BASELINE).read_bytes())
+    texts = {
+        "bypass": _override_block('allow_untyped_defs = "yes"'),
+        "overrides-not-a-list": _global_table('overrides = "not-a-list"'),
+        "module-is-int": _global_table("") + "[[tool.mypy.overrides]]\nmodule = 42\n",
+        "invalid-toml": "[tool.mypy\n",
+    }
+    if case in texts:
+        project.write_text(texts[case])
+    elif case == "pyproject-is-directory":
+        project.mkdir()
+    elif case == "bad-baseline":
+        config(project, ["pkg.a"])
+        baseline.write_text("{")
+    report = tmp_path / "reports/mypy-overrides.json"
+    result = run("--pyproject", project, "--baseline", baseline, "--report-json", report)
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert "Traceback" not in result.stderr
+    data = json.loads(report.read_text())
+    assert data["tool"] == "mypy-overrides"
+    assert data["exit_code"] == 2
+    assert isinstance(data["error"], str) and data["error"]
+    assert data["error"] in result.stderr
+
+
+def test_unwritable_report_path_is_an_error_without_traceback(
+    adopted: tuple[Path, Path], tmp_path: Path
+) -> None:
+    project, baseline = adopted
+    result = run("--pyproject", project, "--baseline", baseline, "--report-json", tmp_path)
+    assert result.returncode == 2
+    assert "ERROR" in result.stderr and "Traceback" not in result.stderr
+
+
+def test_tracked_project_matches_baseline(tmp_path: Path) -> None:
+    report = tmp_path / "ok.json"
+    result = run("--pyproject", "pyproject.toml", "--baseline", BASELINE, "--report-json", report)
     assert result.returncode == 0, result.stderr
     assert "mypy-overrides: 0 new findings" in result.stdout
     findings = json.loads((ROOT / BASELINE).read_text())["findings"]
     assert (
         f"current {len(findings)} key(s) / {sum(findings.values())} occurrence(s)" in result.stdout
     )
+    data = json.loads(report.read_text())
+    assert data["exit_code"] == data["new_count"] == 0
+    assert data["baselined_count"] == len(findings)
+    assert "error" not in data
 
 
 def test_defaults_and_relative_baseline_are_repo_relative(tmp_path: Path) -> None:

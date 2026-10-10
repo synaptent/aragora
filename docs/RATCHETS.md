@@ -276,14 +276,22 @@ command), where the count is `len(findings)`.
   `mypy-overrides`. Each distinct module exempted from `disallow_untyped_defs`
   has one key, `pyproject.toml::<module>::disallow_untyped_defs`, with value 1.
   The global flag must remain true; wildcard relaxations are rejected.
-  Override blocks cannot bypass the ratchet with `allow_untyped_defs = true`
-  or `disable_error_code` containing `no-untyped-def` (list or comma-separated
-  string): both are shape errors (exit 2) naming the key and modules.
+  Neither the global `[tool.mypy]` table nor any override block can bypass
+  the ratchet with a true `allow_untyped_defs` or with `disable_error_code`
+  containing `no-untyped-def` (list or comma-separated string): both are shape
+  errors (exit 2) naming the key and `[tool.mypy]` or the block's modules.
+  "True" means every spelling mypy 2.1.0 reads as true: `true`, the strings
+  `"true"`, `"yes"`, `"on"` and `"1"` (any case) and the integer `1`. The false
+  spellings (`false`, `"false"`, `"no"`, `"off"`, `"0"`, `0`) pass; any other
+  `allow_untyped_defs` value is a shape error.
   Other error-code-only overrides do not count. Same-count replacements
   still fail because membership, not just the total, is ratcheted.
   `--pyproject` and `--baseline` resolve relative paths from the repository
   root regardless of cwd. Exit codes: 0 subset, 1 growth (added names printed),
-  2 baseline/config/usage error. `--update` creates or shrinks the baseline;
+  2 baseline/config/usage error. `--report-json` is written on every run past
+  argument parsing, including exit 2 for a shape error, an unreadable or
+  missing file or invalid TOML; then it carries `exit_code` 2 and an `error`
+  string. `--update` creates or shrinks the baseline;
   growth requires `--update --allow-grow --reason "<why>"`.
 - **Required full mypy tier.** `bash scripts/test_tiers.sh typecheck` calls
   `scripts/ci/mypy_with_baseline.py --baseline scripts/baselines/root-mypy-full.json`.

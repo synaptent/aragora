@@ -5,24 +5,28 @@ Uses check_tool_baseline's comparison, JSON format, and shrink-only updates.
 Exit codes: 0 current set is a subset of baseline; 1 grew (added names printed);
 2 baseline/config shape, I/O, or usage error. Defaults are repository-relative,
 including scripts/baselines/root-mypy-overrides.json, regardless of cwd.
+--report-json is also written for exit 2, with an ``error`` string.
 """
 
 from __future__ import annotations
 
 import argparse
+import configparser
 import re
 import sys
 import tomllib
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from check_tool_baseline import (  # noqa: E402
+    EXIT_BASELINE_ERROR,
     Baseline,
     BaselineError,
     Comparison,
     Finding,
+    _write_report,
     check_findings,
     count_findings,
     load_baseline,
@@ -35,6 +39,38 @@ RULE = "disallow_untyped_defs"
 # Script module names may contain hyphens. Wildcard exemptions are not a
 # finite module set and would exempt future modules without growing the ratchet.
 MODULE_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_-]*(?:\.[A-Za-z_][A-Za-z0-9_-]*)*")
+# mypy's config_parser.convert_to_boolean keeps bools and looks every other
+# value up as str(value).lower() here, so "on", "yes", "1" and 1 all mean true.
+MYPY_BOOLEANS = configparser.RawConfigParser.BOOLEAN_STATES
+
+
+def _mypy_boolean(path: Path, where: str, key: str, value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    state = MYPY_BOOLEANS.get(str(value).lower())
+    if state is None:
+        raise BaselineError(f"{path}: {key} = {value!r} in {where} is not a mypy boolean")
+    return state
+
+
+def _reject_bypasses(path: Path, table: Mapping[str, object], where: str) -> None:
+    """Reject the two spellings that switch the untyped-def check off for `where`."""
+    if "allow_untyped_defs" in table:
+        value = table["allow_untyped_defs"]
+        if _mypy_boolean(path, where, "allow_untyped_defs", value):
+            raise BaselineError(
+                f"{path}: allow_untyped_defs = {value!r} in {where} bypasses the ratchet"
+            )
+    disabled_codes = table.get("disable_error_code", [])
+    if isinstance(disabled_codes, str):
+        disabled_codes = disabled_codes.split(",")
+    if isinstance(disabled_codes, list) and any(
+        isinstance(code, str) and code.strip() == "no-untyped-def" for code in disabled_codes
+    ):
+        raise BaselineError(
+            f"{path}: disable_error_code contains no-untyped-def in {where}, "
+            "which bypasses the ratchet"
+        )
 
 
 def overridden_modules(path: Path) -> list[str]:
@@ -44,6 +80,7 @@ def overridden_modules(path: Path) -> list[str]:
     mypy = tool.get("mypy", {}) if isinstance(tool, dict) else None
     if not isinstance(mypy, dict) or mypy.get(RULE) is not True:
         raise BaselineError(f"{path}: [tool.mypy] must set {RULE} = true globally")
+    _reject_bypasses(path, mypy, "[tool.mypy]")
     overrides = mypy.get("overrides", [])
     if not isinstance(overrides, list):
         raise BaselineError(f"{path}: mypy overrides must be an array of tables")
@@ -64,19 +101,7 @@ def overridden_modules(path: Path) -> list[str]:
             )
         ):
             raise BaselineError(f"{path}: each mypy override requires valid module names")
-        if override.get("allow_untyped_defs") is True:
-            raise BaselineError(
-                f"{path}: allow_untyped_defs = true bypasses the ratchet for modules {names}"
-            )
-        disabled_codes = override.get("disable_error_code", [])
-        if isinstance(disabled_codes, str):
-            disabled_codes = disabled_codes.split(",")
-        if isinstance(disabled_codes, list) and any(
-            isinstance(code, str) and code.strip() == "no-untyped-def" for code in disabled_codes
-        ):
-            raise BaselineError(
-                f"{path}: disable_error_code contains no-untyped-def for modules {names}"
-            )
+        _reject_bypasses(path, override, f"the override for modules {names}")
         if RULE not in override:
             continue
         if not isinstance(override[RULE], bool):
@@ -114,7 +139,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     parser.add_argument("--pyproject", type=Path, default=Path("pyproject.toml"))
     parser.add_argument("--baseline", type=Path, default=Path(DEFAULT_BASELINE))
-    parser.add_argument("--report-json", type=Path, help="Write the shared runner's JSON report.")
+    parser.add_argument(
+        "--report-json",
+        type=Path,
+        help="Write the shared runner's JSON report, also when exiting 2 (with an error field).",
+    )
     parser.add_argument("--update", action="store_true", help="Create or shrink the baseline.")
     parser.add_argument(
         "--allow-grow", action="store_true", help="Allow growth with --update and --reason."
@@ -127,6 +156,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("--reason requires --allow-grow")
     project = REPO_ROOT / args.pyproject
     path = REPO_ROOT / args.baseline
+    report = REPO_ROOT / args.report_json if args.report_json is not None else None
     try:
         modules = overridden_modules(project)
         baseline = (
@@ -150,11 +180,18 @@ def main(argv: Sequence[str] | None = None) -> int:
             update=args.update,
             allow_grow=args.allow_grow,
             reason=args.reason,
-            report_json=REPO_ROOT / args.report_json if args.report_json is not None else None,
+            report_json=report,
         )
     except (BaselineError, OSError, UnicodeError, tomllib.TOMLDecodeError) as exc:
-        print(f"ERROR: {exc}", file=sys.stderr)
-        return 2
+        error = str(exc) or type(exc).__name__
+        print(f"ERROR: {error}", file=sys.stderr)
+        try:
+            _write_report(
+                report, tool=TOOL, baseline=path, exit_code=EXIT_BASELINE_ERROR, error=error
+            )
+        except OSError as report_exc:
+            print(f"ERROR: cannot write --report-json {report}: {report_exc}", file=sys.stderr)
+        return EXIT_BASELINE_ERROR
 
 
 if __name__ == "__main__":
