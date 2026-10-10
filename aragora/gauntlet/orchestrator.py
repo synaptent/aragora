@@ -174,6 +174,9 @@ class GauntletConfig:
     # Can be a RegulatoryPersona instance or string name ("gdpr", "hipaa", "ai_act", "security")
     persona: Any | None = None  # RegulatoryPersona or str
 
+    # Preallocated by API/queue submission; standalone execution generates its own.
+    gauntlet_id: str | None = None
+
     def __post_init__(self):
         # Load content from path if provided
         if self.input_path and not self.input_content:
@@ -746,7 +749,9 @@ class GauntletOrchestrator:
         """
         self._start_time = datetime.now()
         self._findings_count = 0
-        gauntlet_id = f"gauntlet-{datetime.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:6]}"
+        gauntlet_id = config.gauntlet_id or (
+            f"gauntlet-{datetime.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:6]}"
+        )
 
         logger.info("=" * 60)
         logger.info("GAUNTLET STRESS-TEST: %s", gauntlet_id)

@@ -305,6 +305,7 @@ class GauntletRunnerMixin:
 
             # Create config
             config = OrchestratorConfig(
+                gauntlet_id=gauntlet_id,
                 input_type=input_type_enum,
                 input_content=input_content,
                 persona=persona,
