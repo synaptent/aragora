@@ -8,6 +8,7 @@ resolving for the supervisor and its delegate modules.
 
 from __future__ import annotations
 
+import ast
 import inspect
 
 import pytest
@@ -46,9 +47,14 @@ def test_helper_is_defined_once_on_its_mixin(mixin: type, name: str) -> None:
     assert inspect.getattr_static(SwarmSupervisor, name) is vars(mixin)[name]
 
 
-def test_mixin_modules_carry_no_supervisor_import() -> None:
+def test_mixin_modules_do_not_import_the_supervisor_facade() -> None:
     for module in (supervisor_requeue, supervisor_waiting):
-        assert "aragora.swarm.supervisor " not in inspect.getsource(module)
+        imported = {
+            node.module
+            for node in ast.walk(ast.parse(inspect.getsource(module)))
+            if isinstance(node, ast.ImportFrom)
+        }
+        assert "aragora.swarm.supervisor" not in imported
         assert not hasattr(module, "SwarmSupervisor")
 
 
