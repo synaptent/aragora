@@ -329,10 +329,13 @@ def test_mound_fact_sync_route_is_closed_and_writes_no_node(world) -> None:
     assert mound.mock_calls == []
 
 
-def test_ara_api_keys_keep_todays_reachability(world) -> None:
+def test_ara_api_keys_create_facts_in_the_key_owners_org(world) -> None:
     body = {"statement": "Key-authenticated create", "workspace_id": "default"}
     r = _v2(world).post(V2 + "/facts", json=body, headers={"Authorization": f"Bearer {world.key}"})
-    assert r.status_code == 401
+    assert r.status_code == 201, r.text
+    fact_id = r.json()["id"]
+    assert ScopedFactStore(world.store, world.callers["beta"].org_id).get_fact(fact_id) is not None
+    assert ScopedFactStore(world.store, world.callers["acme"].org_id).get_fact(fact_id) is None
     result = _v1(world)._handle_create_fact(_Request(world, world.key, body))
     assert result.status_code == 201, result.body
 
