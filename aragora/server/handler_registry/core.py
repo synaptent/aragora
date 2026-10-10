@@ -489,6 +489,9 @@ class RouteIndex:
             "_nomic_handler": ["/api/nomic/", "/api/modes"],
             "_docs_handler": ["/api/openapi", "/api/docs", "/api/redoc", "/api/postman"],
             "_debates_handler": ["/api/debate", "/api/debates", "/api/debates/", "/api/search"],
+            # Without this entry the version-stripped path falls into
+            # DebatesHandler's slug lookup, which skips the is_public check.
+            "_public_debate_viewer_handler": ["/api/v1/debates/public/"],
             "_agents_handler": [
                 "/api/agent/",
                 "/api/agents",

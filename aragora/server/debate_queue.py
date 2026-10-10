@@ -188,6 +188,9 @@ class BatchItem:
     consensus: str = "majority"
     priority: int = 0  # Higher = runs first
     metadata: dict[str, Any] = field(default_factory=dict)
+    # Owning org, set by the submit handler from the authenticated caller;
+    # from_dict never reads it from client input.
+    org_id: str | None = None
 
     # Populated during execution
     item_id: str = field(default_factory=lambda: f"item_{uuid.uuid4().hex[:8]}")
