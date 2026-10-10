@@ -14,8 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- `redact()` also masks `key: value` forms (`Authorization: Bearer …`, JSON such as `{"api_key": "…"}`, and Python reprs), and masks the whole `Authorization` value for any scheme rather than only Bearer/Basic.
-- The JSON log formatter no longer raises, which made `logging` print the raw, unredacted record: mapping keys JSON cannot encode become redacted strings, self-referencing containers are logged as `<cycle>`, arguments that do not fit the format string are replaced by a note, and extras too deeply nested to encode are dropped with a `format_error` field.
+- `redact()` also masks `key: value` forms (`Authorization: Bearer …`, JSON such as `{"api_key": "…"}`, and Python reprs), and masks the whole `Authorization` or `Proxy-Authorization` value for any scheme rather than only Bearer/Basic, including quoted, spaced or comma-separated parameters such as a Digest `response`.
+- The log formatters no longer raise, which made `logging` print the raw, unredacted record: mapping keys JSON cannot encode become redacted strings, self-referencing containers are logged as `<cycle>`, arguments that do not fit the format string or cannot be converted are replaced by a note, and any other formatting failure (extras too deeply nested to encode, an unprintable extra or message, malformed exception, stack or timestamp data) writes one JSON line with the redacted message template and a `format_error` field. The handler from `configure_logging()` reports a failed stream write by error type, without the record's arguments.
 
 ## [0.2.3] - 2026-02-24
 

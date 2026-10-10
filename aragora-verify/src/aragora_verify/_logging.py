@@ -2,26 +2,48 @@
 
 Call configure_logging() explicitly. JSON lines use ts (UTC ISO timestamp),
 level, logger, and msg; exception/stack and extra record fields are optional.
+Formatters never raise: arguments that cannot be interpolated leave the
+redacted template plus a note naming the error, and any other formatting
+failure yields one JSON line with the redacted template and format_error.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
+import contextlib
 import copy
 from datetime import datetime, timezone
 import json
 import logging
 import os
 import re
-from typing import Any
+import sys
+from typing import TYPE_CHECKING, Any, TextIO
+
+if TYPE_CHECKING:
+    _StreamHandler = logging.StreamHandler[TextIO]
+else:
+    _StreamHandler = logging.StreamHandler
 
 _SECRET_KEY = r"(?:api[_-]?key|token|secret|password|authorization)"
 _KEY_PATTERN = re.compile(_SECRET_KEY, re.IGNORECASE)
 _BARE = r"[^\s,;}\]]+"
 _DQ = r'"(?:\\.|[^"\\])*"'
-# Any scheme, its credential and trailing name=value auth-params (Digest,
-# AWS SigV4), so a scheme other than Bearer/Basic cannot leave the secret behind.
-_AUTH_VALUE = rf"(?:[A-Za-z][\w.+-]*\s+)?{_BARE}(?:\s*,\s*[\w-]+=(?:{_DQ}|{_BARE}))*"
+# The same quoted string inside JSON-encoded text, as in json.dumps(header_line):
+# an encoded backslash with the char it escapes, another JSON escape, or a plain char.
+_ESCAPED_DQ = r'\\"(?:\\\\(?:\\.|[^\\])|\\[^"\\]|[^"\\])*\\"'
+# A param value may contain ";" (SigV4 SignedHeaders=host;x-amz-date).
+_PARAM_TOKEN = r"[^\s,}\]]+"
+# Malformed text glued to a quoted value, stopping at an enclosing string's quote.
+_QUOTED_TAIL = r"""[^\s,}\]"'\\]*"""
+# An HTTP token, except "*", so already-masked "***" is never read as a scheme.
+_NAME = r"[\w!#$%&+.^`|~-]+"
+_AUTH_PARAM = rf"{_NAME}\s*=\s*(?:(?:{_DQ}|{_ESCAPED_DQ}){_QUOTED_TAIL}|{_PARAM_TOKEN})"
+# Any scheme, then a token68 credential or auth-params (Digest, OAuth, AWS
+# SigV4), quoted, spaced or not, so no part of the credential is left behind.
+# "(?!=)" stops a scheme-less "name = value" first param being read as a scheme;
+# empty list elements (",,") are allowed between params.
+_AUTH_VALUE = rf"(?:{_NAME}\s+(?!=))?(?:{_AUTH_PARAM}|{_BARE})(?:\s*,[\s,]*{_AUTH_PARAM})*"
 # key=value, key: value, and quoted keys as in JSON ("key": ...) or reprs ('key': ...).
 _ASSIGNMENT = re.compile(
     r"""(?P<key>(?P<kq>["']?)[\w-]*"""
@@ -81,7 +103,8 @@ def redact(obj: Any) -> Any:
     return _redact(obj, frozenset())
 
 
-def _message(record: logging.LogRecord) -> str:
+def _message(record: logging.LogRecord) -> tuple[str, str | None]:
+    """Return the redacted message and, if interpolation failed, the error type."""
     safe = copy.copy(record)
     # Leave %-placeholders intact until interpolation has completed.
     safe.msg = record.msg if isinstance(record.msg, str) else redact(record.msg)
@@ -98,47 +121,96 @@ def _message(record: logging.LogRecord) -> str:
         )
     safe.args = redact(record.args)
     try:
-        message = safe.getMessage()
-    except (TypeError, ValueError, KeyError) as exc:
+        return str(redact(safe.getMessage())), None
+    except Exception as exc:  # noqa: BLE001 - any argument's str() may raise anything
+        # The template stands in for the message so the record's other fields survive.
+        error = type(exc).__name__
+        return str(redact(f"{safe.msg} [unformattable log arguments: {error}]")), error
+
+
+def _timestamp(created: float) -> str:
+    return datetime.fromtimestamp(created, timezone.utc).isoformat()
+
+
+def _text(value: object) -> str:
+    return value if isinstance(value, str) else f"<{type(value).__name__}>"
+
+
+def _fallback(record: logging.LogRecord, error: Exception) -> str:
+    """One JSON line from the redacted template; never str() or repr() of the args."""
+    created = getattr(record, "created", None)
+    ts: str | None = None
+    if isinstance(created, (int, float)):
+        with contextlib.suppress(OverflowError, OSError, ValueError):
+            ts = _timestamp(created)
+    msg = getattr(record, "msg", None)
+    # A non-string message is not converted: its str() may be what failed.
+    template = str(redact(msg)) if isinstance(msg, str) else f"<{type(msg).__name__} message>"
+    fields = {
+        "ts": ts,
+        "level": _text(getattr(record, "levelname", None)),
+        "logger": _text(getattr(record, "name", None)),
+        "msg": template,
+        "format_error": type(error).__name__,
+    }
+    return json.dumps(fields, ensure_ascii=False)
+
+
+def _format_safely(render: Callable[[logging.LogRecord], str], record: logging.LogRecord) -> str:
+    try:
+        return render(record)
+    except Exception as exc:  # noqa: BLE001 - boundary: format() must never raise
         # Raising here makes logging's error handler print the raw msg and args.
-        message = f"{safe.msg} [unformattable log arguments: {type(exc).__name__}]"
-    return str(redact(message))
+        return _fallback(record, exc)
 
 
 class JsonFormatter(logging.Formatter):
     """One JSON object per line, including redacted structured extras."""
 
     def format(self, record: logging.LogRecord) -> str:
-        base = {
-            "ts": datetime.fromtimestamp(record.created, timezone.utc).isoformat(),
-            "level": record.levelname,
-            "logger": record.name,
-            "msg": _message(record),
-        }
+        return _format_safely(self._render, record)
+
+    def _render(self, record: logging.LogRecord) -> str:
+        message, error = _message(record)
         data = {key: value for key, value in record.__dict__.items() if key not in _STANDARD_FIELDS}
-        data.update(base)
+        data.update(
+            ts=_timestamp(record.created), level=record.levelname, logger=record.name, msg=message
+        )
+        if error:
+            data["format_error"] = error
         if record.exc_info:
             data["exception"] = self.formatException(record.exc_info)
         if record.stack_info:
             data["stack"] = self.formatStack(record.stack_info)
-        try:
-            return json.dumps(
-                redact(data), default=lambda obj: redact(str(obj)), ensure_ascii=False
-            )
-        except (TypeError, ValueError, RecursionError) as exc:
-            # Raising here makes logging's error handler print the raw record.
-            return json.dumps({**base, "format_error": type(exc).__name__}, ensure_ascii=False)
+        return json.dumps(redact(data), default=lambda obj: redact(str(obj)), ensure_ascii=False)
 
 
 class TextFormatter(logging.Formatter):
     """Human-readable output with the same message/exception redaction."""
 
     def format(self, record: logging.LogRecord) -> str:
+        return _format_safely(self._render, record)
+
+    def _render(self, record: logging.LogRecord) -> str:
         safe = copy.copy(record)
-        safe.msg = _message(record)
+        safe.msg = _message(record)[0]
         safe.args = ()
         safe.exc_text = None
         return str(redact(super().format(safe)))
+
+
+class _ErrorSafeStreamHandler(_StreamHandler):
+    """Report a failed write by error type only."""
+
+    def handleError(self, record: logging.LogRecord) -> None:  # noqa: N802 - stdlib override
+        # logging.Handler.handleError prints record.msg and record.args unredacted.
+        if not logging.raiseExceptions or sys.stderr is None:
+            return
+        error = sys.exc_info()[0]
+        name = error.__name__ if error else "unknown error"
+        logger = _text(getattr(record, "name", None))
+        with contextlib.suppress(OSError, ValueError):
+            sys.stderr.write(f"--- Logging error: {name} writing a record from {logger} ---\n")
 
 
 def configure_logging() -> None:
@@ -151,7 +223,7 @@ def configure_logging() -> None:
     level = logging.getLevelName(level_name)
     if not isinstance(level, int):
         level = logging.WARNING
-    handler = logging.StreamHandler()
+    handler = _ErrorSafeStreamHandler()
     formatter: logging.Formatter = (
         JsonFormatter()
         if os.environ.get("ARAGORA_LOG_FORMAT", "text").lower() == "json"
