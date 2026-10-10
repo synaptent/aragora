@@ -13,6 +13,8 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
 
+from aragora.tenancy.record_scope import OrgScope, record_not_found_error, require_org_scope_fastapi
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v2", tags=["Tasks"])
@@ -498,37 +500,43 @@ async def get_task(task_id: str):
 
 
 @router.get("/deliberations/{request_id}")
-async def get_deliberation(request_id: str):
-    """Get a deliberation result by request ID."""
+async def get_deliberation(request_id: str, scope: OrgScope = Depends(require_org_scope_fastapi)):
+    """Get a deliberation result the caller's org owns (404 otherwise)."""
     try:
-        from aragora.core.decision_results import get_decision_result
+        from aragora.core.decision_results import get_decision_result_for_org
 
-        result = get_decision_result(request_id)
-        if result:
-            return {"data": result}
-        raise HTTPException(status_code=404, detail="Deliberation not found")
-    except HTTPException:
-        raise
+        result = get_decision_result_for_org(request_id, scope.org_id)
     except (ImportError, ValueError, KeyError, AttributeError) as e:
         logger.error("Error getting deliberation %s: %s", request_id, e)
         raise HTTPException(status_code=500, detail="Failed to get deliberation")
+    if result is None:
+        raise record_not_found_error("Deliberation")
+    return {"data": result}
 
 
 @router.get("/deliberations/{request_id}/status")
-async def get_deliberation_status(request_id: str):
-    """Get deliberation status for polling."""
+async def get_deliberation_status(
+    request_id: str, scope: OrgScope = Depends(require_org_scope_fastapi)
+):
+    """Get the polling status of a deliberation the caller's org owns (404 otherwise)."""
     try:
-        from aragora.core.decision_results import get_decision_status
+        from aragora.core.decision_results import get_decision_status_for_org
 
-        return {"data": get_decision_status(request_id)}
+        status = get_decision_status_for_org(request_id, scope.org_id)
     except (ImportError, ValueError, KeyError, AttributeError) as e:
         logger.error("Error getting deliberation status %s: %s", request_id, e)
         raise HTTPException(status_code=500, detail="Failed to get deliberation status")
+    if status is None:
+        raise record_not_found_error("Deliberation")
+    return {"data": status}
 
 
 @router.post("/deliberations", status_code=202)
-async def submit_deliberation(body: SubmitDeliberationRequest):
+async def submit_deliberation(
+    body: SubmitDeliberationRequest, scope: OrgScope = Depends(require_org_scope_fastapi)
+):
     """Submit a deliberation (sync or async via control plane)."""
+    owner = {"org_id": scope.org_id, "created_by": scope.user_id}
     try:
         from aragora.control_plane.integration import get_integrated_control_plane
 
@@ -560,7 +568,7 @@ async def submit_deliberation(body: SubmitDeliberationRequest):
                 required_capabilities=required_capabilities,
                 priority=priority_enum,
                 timeout_seconds=body.timeout_seconds,
-                metadata={"request_id": request_id},
+                metadata={"request_id": request_id, **owner},
             )
 
             return {
@@ -580,7 +588,7 @@ async def submit_deliberation(body: SubmitDeliberationRequest):
         request = DecisionRequest(content=body.content)
 
         try:
-            result = await run_deliberation(request)
+            result = await run_deliberation(request, **owner)
             return {
                 "data": {
                     "request_id": request.request_id,

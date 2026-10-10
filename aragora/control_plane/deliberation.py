@@ -224,6 +224,8 @@ def build_decision_record(
     status: str | None = None,
     error: str | None = None,
     metrics: DeliberationMetrics | None = None,
+    org_id: str | None = None,
+    created_by: str | None = None,
 ) -> dict[str, Any]:
     """Build a DecisionResultStore record with optional metrics."""
     resolved_status = status or ("completed" if result and result.success else "failed")
@@ -233,6 +235,8 @@ def build_decision_record(
         "result": result.to_dict() if result else {},
         "completed_at": datetime.now(timezone.utc).isoformat(),
         "error": error,
+        "org_id": org_id,
+        "created_by": created_by,
     }
 
     if metrics:
@@ -255,15 +259,28 @@ def build_decision_record(
 async def run_deliberation(
     request: DecisionRequest,
     router: Any | None = None,
+    *,
+    org_id: str | None = None,
+    created_by: str | None = None,
 ) -> DecisionResult:
     """Run a deliberation and persist the result."""
     decision_router = router or get_decision_router()
     result = await decision_router.route(request)
-    save_decision_result(request.request_id, build_decision_record(request.request_id, result))
+    save_decision_result(
+        request.request_id,
+        build_decision_record(request.request_id, result, org_id=org_id, created_by=created_by),
+    )
     return result
 
 
-def record_deliberation_error(request_id: str, error: str, status: str = "failed") -> None:
+def record_deliberation_error(
+    request_id: str,
+    error: str,
+    status: str = "failed",
+    *,
+    org_id: str | None = None,
+    created_by: str | None = None,
+) -> None:
     """Persist a deliberation error result."""
     save_decision_result(
         request_id,
@@ -272,6 +289,8 @@ def record_deliberation_error(request_id: str, error: str, status: str = "failed
             result=None,
             status=status,
             error=error,
+            org_id=org_id,
+            created_by=created_by,
         ),
     )
     logger.warning("deliberation_failed", extra={"request_id": request_id, "error": error})
@@ -481,6 +500,9 @@ class DeliberationManager:
         """
         task.status = DeliberationStatus.IN_PROGRESS
         task.metrics.started_at = time.time()
+        # Submitters put the creating org and user next to request_id.
+        metadata = task.metadata or {}
+        owner = {"org_id": metadata.get("org_id"), "created_by": metadata.get("created_by")}
 
         try:
             # Create decision request
@@ -495,7 +517,7 @@ class DeliberationManager:
             )
 
             # Run the deliberation
-            result = await run_deliberation(request, router)
+            result = await run_deliberation(request, router, **owner)
 
             # Update metrics
             task.metrics.completed_at = time.time()
@@ -537,7 +559,7 @@ class DeliberationManager:
             task.error = f"Deliberation exceeded SLA timeout of {task.sla.timeout_seconds}s"
             task.metrics.completed_at = time.time()
             task.metrics.sla_compliance = SLAComplianceLevel.VIOLATED
-            record_deliberation_error(task.request_id, task.error, status="timeout")
+            record_deliberation_error(task.request_id, task.error, status="timeout", **owner)
             outcome = self._build_outcome_from_task(task)
             self._emit_completion_notification(task, outcome)
             return outcome
@@ -547,7 +569,9 @@ class DeliberationManager:
             task.error = "Deliberation failed"
             task.metrics.completed_at = time.time()
             logger.warning("Deliberation failed for request %s: %s", task.request_id, e)
-            record_deliberation_error(task.request_id, "Deliberation failed")
+            record_deliberation_error(
+                task.request_id, "Deliberation failed", status="failed", **owner
+            )
             outcome = self._build_outcome_from_task(task)
             self._emit_completion_notification(task, outcome)
             return outcome

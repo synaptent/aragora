@@ -1331,9 +1331,21 @@ class TestDeliberations:
         assert result is not None
         assert result.status_code == 400
 
-    def test_get_deliberation_result(self, control_plane_handler, mock_http_handler):
+    @pytest.fixture
+    def org_caller(self, monkeypatch):
+        from aragora.billing.auth.context import UserAuthContext
+
+        user = UserAuthContext(
+            authenticated=True, user_id="user-1", org_id="org-1", role="admin", token_type="access"
+        )
+        monkeypatch.setattr(
+            "aragora.billing.jwt_auth.extract_user_from_request",
+            lambda handler, user_store=None: user,
+        )
+
+    def test_get_deliberation_result(self, control_plane_handler, mock_http_handler, org_caller):
         """Test getting deliberation result by ID."""
-        with patch("aragora.core.decision_results.get_decision_result") as mock_get:
+        with patch("aragora.core.decision_results.get_decision_result_for_org") as mock_get:
             mock_get.return_value = {
                 "request_id": "req-001",
                 "status": "completed",
@@ -1347,10 +1359,11 @@ class TestDeliberations:
 
             assert result is not None
             assert result.status_code == 200
+            mock_get.assert_called_once_with("req-001", "org-1")
 
-    def test_get_deliberation_not_found(self, control_plane_handler, mock_http_handler):
+    def test_get_deliberation_not_found(self, control_plane_handler, mock_http_handler, org_caller):
         """Test getting non-existent deliberation."""
-        with patch("aragora.core.decision_results.get_decision_result") as mock_get:
+        with patch("aragora.core.decision_results.get_decision_result_for_org") as mock_get:
             mock_get.return_value = None
 
             http = mock_http_handler(method="GET")
@@ -1361,9 +1374,9 @@ class TestDeliberations:
             assert result is not None
             assert result.status_code == 404
 
-    def test_get_deliberation_status(self, control_plane_handler, mock_http_handler):
+    def test_get_deliberation_status(self, control_plane_handler, mock_http_handler, org_caller):
         """Test getting deliberation status."""
-        with patch("aragora.core.decision_results.get_decision_status") as mock_status:
+        with patch("aragora.core.decision_results.get_decision_status_for_org") as mock_status:
             mock_status.return_value = {
                 "request_id": "req-001",
                 "status": "processing",
