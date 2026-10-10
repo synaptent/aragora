@@ -310,6 +310,8 @@ def _ensure_backbone_run(
     execution_mode: str,
     safety_mode: SafetyMode,
     runtime: BackboneRuntime,
+    org_id: str | None = None,
+    created_by: str | None = None,
 ) -> str:
     metadata = getattr(plan, "metadata", None)
     if not isinstance(metadata, dict):
@@ -358,7 +360,7 @@ def _ensure_backbone_run(
             metadata=run_metadata,
         )
         try:
-            runtime.create_run(run)
+            runtime.create_run(run, org_id=org_id, created_by=created_by)
             _ensure_backbone_write(
                 runtime.get_run(run_id) is not None,
                 safety_mode=safety_mode,
@@ -551,13 +553,31 @@ def queue_plan_execution(
     auth_context: Any | None = None,
     execution_mode: str | None = None,
     safety_mode: SafetyMode | None = None,
+    org_id: str | None = None,
+    created_by: str | None = None,
 ) -> dict[str, Any]:
-    """Persist a plan and queue a durable execution record."""
+    """Persist a plan and queue a durable execution record.
+
+    The execution and its backbone run are owned by the scheduling org
+    (``org_id``/``created_by``, else the auth context's org and user). A plan
+    owned by another org, or whose owner is unknown, is refused with
+    :class:`~aragora.pipeline.execution_ownership.ExecutionNotAuthorizedError`
+    before anything is written.
+    """
+    from aragora.pipeline.execution_ownership import (
+        claim_plan_for_scheduler,
+        resolve_execution_owner,
+    )
     from aragora.pipeline.executor import store_plan
     from aragora.pipeline.plan_store import get_plan_store
 
     store = get_plan_store()
     runtime = BackboneRuntime(store)
+    owner_org, owner_user = resolve_execution_owner(
+        auth_context, org_id=org_id, created_by=created_by
+    )
+    stored_plan = store.get(plan.id)
+    claim_plan_for_scheduler(plan, stored_plan, org_id=owner_org, created_by=owner_user)
     normalized_mode = normalize_execution_mode(execution_mode) or "workflow"
     resolved_safety_mode = resolve_safety_mode(safety_mode, auth_context=auth_context)
     execution_id = f"exec-{uuid.uuid4().hex[:12]}"
@@ -574,7 +594,7 @@ def queue_plan_execution(
         existing_run_id or f"run-{uuid.uuid4().hex[:12]}",
         _backbone_entrypoint(plan),
     )
-    if store.get(plan.id) is None:
+    if stored_plan is None:
         store.create(plan)
     else:
         store.save(plan)
@@ -585,6 +605,8 @@ def queue_plan_execution(
         execution_mode=normalized_mode,
         safety_mode=resolved_safety_mode,
         runtime=runtime,
+        org_id=owner_org,
+        created_by=owner_user,
     )
     if _plan_has_backbone_receipt(plan):
         _ensure_backbone_write(
@@ -606,6 +628,8 @@ def queue_plan_execution(
             "safety_mode": resolved_safety_mode.value,
             "scheduled_by": getattr(auth_context, "user_id", None),
         },
+        org_id=owner_org,
+        created_by=owner_user,
     )
     _ensure_backbone_write(
         store.get_execution_record(execution_id) is not None,
@@ -685,10 +709,17 @@ async def execute_queued_plan(
     auth_context: Any | None = None,
     execution_mode: str | None = None,
 ) -> tuple[Any, dict[str, Any] | None, dict[str, Any] | None]:
-    """Execute a queued plan through ExecutionBridge and return artifacts."""
+    """Execute a queued plan through ExecutionBridge and return artifacts.
+
+    Raises :class:`~aragora.pipeline.execution_ownership.ExecutionNotAuthorizedError`
+    (after marking the execution failed) when the plan's org no longer matches
+    the execution's org or the scheduling user left that org.
+    """
     from aragora.pipeline.execution_bridge import get_execution_bridge
+    from aragora.pipeline.execution_ownership import ensure_execution_still_authorized
     from aragora.pipeline.plan_store import get_plan_store
 
+    ensure_execution_still_authorized(get_plan_store(), plan_id=plan.id, execution_id=execution_id)
     bridge = get_execution_bridge()
     normalized_mode = normalize_execution_mode(execution_mode) or "workflow"
     outcome = await bridge.execute_approved_plan(

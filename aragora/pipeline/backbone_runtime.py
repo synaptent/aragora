@@ -44,8 +44,14 @@ class BackboneRuntime:
             self._plan_store = get_plan_store()
         return self._plan_store
 
-    def create_run(self, run: RunLedger) -> None:
-        self.plan_store.create_run(run)
+    def create_run(
+        self,
+        run: RunLedger,
+        *,
+        org_id: str | None = None,
+        created_by: str | None = None,
+    ) -> None:
+        self.plan_store.create_run(run, org_id=org_id, created_by=created_by)
 
     def get_run(self, run_id: str) -> RunLedger | None:
         return self.plan_store.get_run(run_id)

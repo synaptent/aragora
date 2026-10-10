@@ -30,6 +30,7 @@ from aragora.pipeline.execution_mode import (
     ExecutionMode as SafetyMode,
     resolve_safety_mode,
 )
+from aragora.pipeline.execution_ownership import owner_for_plan
 
 if TYPE_CHECKING:
     from aragora.pipeline.executor import ExecutionMode, PlanExecutor
@@ -275,6 +276,7 @@ class ExecutionBridge:
                         "backbone_run_id": backbone_run_id or None,
                         "execution_gate": gate_decision.gate,
                     },
+                    **owner_for_plan(plan, auth_context),
                 )
             else:
                 self._ensure_backbone_write(
@@ -361,6 +363,7 @@ class ExecutionBridge:
                     "backbone_run_id": backbone_run_id or None,
                     "execution_gate": gate_decision.gate,
                 },
+                **owner_for_plan(plan, auth_context),
             )
         else:
             self._ensure_backbone_write(
@@ -630,6 +633,7 @@ class ExecutionBridge:
                         "backbone_run_id": backbone_run_id or None,
                         "execution_gate": gate_decision.gate,
                     },
+                    **owner_for_plan(plan, auth_context),
                 )
                 self._ensure_execution_record(
                     record_execution_id,
@@ -675,6 +679,7 @@ class ExecutionBridge:
                     "scheduled_by": getattr(auth_context, "user_id", None),
                     "backbone_run_id": backbone_run_id or None,
                 },
+                **owner_for_plan(plan, auth_context),
             )
             self._ensure_execution_record(
                 record_execution_id,

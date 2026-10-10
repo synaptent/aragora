@@ -169,8 +169,14 @@ def ensure_decision_plan_backbone_run(
     auth_context: Any | None,
     source_surface: str,
     source_id: str,
+    org_id: str | None = None,
+    created_by: str | None = None,
 ) -> str:
-    """Seed a RunLedger for a decision plan before persistence or execution."""
+    """Seed a RunLedger for a decision plan before persistence or execution.
+
+    A new run is owned by ``org_id``/``created_by`` (else the auth context's
+    org and user, else the plan's owner).
+    """
     from aragora.pipeline.backbone_contracts import (
         BackboneStage,
         IntakeBundle,
@@ -178,7 +184,15 @@ def ensure_decision_plan_backbone_run(
         build_goal_refs_from_implement_plan,
     )
     from aragora.pipeline.backbone_runtime import BackboneRuntime
+    from aragora.pipeline.execution_ownership import owner_for_plan, resolve_execution_owner
     from aragora.pipeline.plan_store import get_plan_store
+
+    owner_org, owner_user = resolve_execution_owner(
+        auth_context, org_id=org_id, created_by=created_by
+    )
+    if owner_org is None:
+        plan_owner = owner_for_plan(plan, auth_context)
+        owner_org, owner_user = plan_owner["org_id"], plan_owner["created_by"]
 
     metadata = getattr(plan, "metadata", None)
     if not isinstance(metadata, dict):
@@ -241,7 +255,7 @@ def ensure_decision_plan_backbone_run(
             + (list(spec_bundle.taint_flags) if spec_bundle is not None else []),
             metadata=run_metadata,
         )
-        runtime.create_run(run)
+        runtime.create_run(run, org_id=owner_org, created_by=owner_user)
         runtime.append_stage_event(
             run_id,
             BackboneStage.INTAKE,
@@ -315,6 +329,7 @@ async def execute_decision_plan_with_backbone(
     """Queue and execute a decision plan through ExecutionBridge with a supplied executor."""
     from aragora.pipeline.canonical_execution import queue_plan_execution
     from aragora.pipeline.execution_bridge import ExecutionBridge
+    from aragora.pipeline.execution_ownership import ensure_execution_still_authorized
     from aragora.pipeline.plan_store import get_plan_store
 
     launch = queue_plan_execution(
@@ -322,6 +337,11 @@ async def execute_decision_plan_with_backbone(
         auth_context=auth_context,
         execution_mode=execution_mode,
         safety_mode=safety_mode,
+    )
+    ensure_execution_still_authorized(
+        get_plan_store(),
+        plan_id=plan.id,
+        execution_id=str(launch.get("execution_id", "") or ""),
     )
     bridge = ExecutionBridge(plan_store=get_plan_store(), executor=executor)
     raw_mode = str(launch.get("execution_mode", execution_mode or "")).strip() or None
