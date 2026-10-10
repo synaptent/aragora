@@ -314,15 +314,23 @@ def test_roles_without_knowledge_read_are_denied(
     assert (status, payload) == (403, PERMISSION_DENIED)
 
 
-@pytest.mark.parametrize("target", ["other-org", "unassigned"])
+# Only the SQLite store can hold a fact stored before org scoping (NULL org_id),
+# so the unassigned case is never generated for the in-memory store.
+@pytest.mark.parametrize(
+    ("target", "fact_store"),
+    [
+        ("other-org", "in-memory-store"),
+        ("other-org", "sqlite-store"),
+        ("unassigned", "sqlite-store"),
+    ],
+    indirect=["fact_store"],
+)
 @pytest.mark.parametrize(("method", "path", "body"), FACT_ID_REQUESTS)
 def test_a_fact_outside_the_callers_org_answers_the_missing_404(
     registry_cls, fact_store, facts, target, method, path, body
 ) -> None:
     """Another org's fact and a fact without an org look exactly like an id that does not exist."""
     if target == "unassigned":
-        if not isinstance(fact_store, FactStore):
-            pytest.skip("only the SQLite store keeps facts stored before org scoping")
         legacy = fact_store.add_fact("Unassigned legacy fact", "ws", org_id=ORG)
         with sqlite3.connect(fact_store.db_path) as conn:
             conn.execute("UPDATE facts SET org_id = NULL WHERE id = ?", (legacy.id,))
