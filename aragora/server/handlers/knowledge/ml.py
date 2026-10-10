@@ -155,8 +155,10 @@ def get_local_embedding_service() -> Any:
         # LocalEmbeddingService loads its model lazily; reading the dimension loads it.
         _ = service.dimension
     except (ImportError, RuntimeError, OSError, ValueError) as e:
+        # Not recorded on the shared "embeddings" breaker: /api/v1/ml/search and
+        # /api/v1/ml/models take its half-open probes without reporting an outcome,
+        # so a breaker opened by load failures could stay half-open after recovery.
         logger.warning("Local embedding model not available: %s", e)
-        _get_circuit_breaker("embeddings").record_failure()
         return None
     return service
 

@@ -14,6 +14,7 @@ import io
 import json
 import threading
 from collections.abc import Callable, Iterator, Sequence
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -22,6 +23,7 @@ import pytest
 from aragora.billing.jwt_auth import create_access_token
 from aragora.core.embeddings.service import UnifiedEmbeddingService
 from aragora.ml.embeddings import LocalEmbeddingService
+from aragora.resilience import simple_circuit_breaker
 from aragora.server.handler_registry import HandlerRegistryMixin, get_route_index
 from aragora.server.handlers.base import error_response
 from aragora.server.handlers.knowledge import ml as ml_handler_module
@@ -220,6 +222,70 @@ def test_both_embed_routes_answer_503_when_the_local_model_cannot_load(
     assert batch_status == embed_status == 503, (batch, single)
     assert batch == single
     assert "embeddings" not in batch
+
+
+class _ModelLoadsLater:
+    """A local service whose model cannot load until ``loadable`` is set."""
+
+    model_name = _FakeLocalService.model_name
+
+    def __init__(self) -> None:
+        self.loadable = False
+        self._model = _FakeLocalService()
+
+    @property
+    def dimension(self) -> int:
+        if not self.loadable:
+            raise OSError("model download timed out")
+        return self._model.dimension
+
+    def embed(self, text: str) -> list[float]:
+        return self._model.embed(text)
+
+    def embed_batch(self, texts: Sequence[str]) -> list[list[float]]:
+        return self._model.embed_batch(texts)
+
+    def search(self, **kwargs: Any) -> list[Any]:
+        return []
+
+
+def _ml_search(registry_cls: type[_RegistryMixin], body: dict[str, Any]) -> tuple[int, Any]:
+    http = MagicMock()
+    http.client_address = ("127.0.0.1", 12345)
+    result = registry_cls._ml_handler.handle_post("/api/v1/ml/search", body, http)
+    return result.status_code, json.loads(result.body)
+
+
+def test_embed_routes_answer_again_once_the_local_model_loads(
+    registry_cls, install_local_service, monkeypatch
+) -> None:
+    clock = [1_000_000.0]
+    monkeypatch.setattr(simple_circuit_breaker, "time", SimpleNamespace(time=lambda: clock[0]))
+    service = install_local_service(_ModelLoadsLater())
+    breaker = ml_handler_module._get_circuit_breaker("embeddings")
+
+    for _ in range(breaker.failure_threshold):
+        batch_status, batch = _dispatch(
+            registry_cls, "POST", "/api/v1/index/embed-batch", {"texts": ["alpha"]}
+        )
+        embed_status, single = _ml_embed(registry_cls, {"texts": ["alpha"]})
+        assert batch_status == embed_status == 503, (batch, single)
+
+    service.loadable = True
+    clock[0] += breaker.cooldown_seconds + 1
+    # /api/v1/ml/search takes the shared breaker's probe slots without reporting an
+    # outcome, so a breaker opened by load failures would never close again.
+    for _ in range(breaker.half_open_max_calls):
+        status, body = _ml_search(registry_cls, {"query": "q", "documents": ["d"]})
+        assert status == 200, body
+
+    batch_status, batch = _dispatch(
+        registry_cls, "POST", "/api/v1/index/embed-batch", {"texts": ["alpha"]}
+    )
+    embed_status, single = _ml_embed(registry_cls, {"texts": ["alpha"]})
+    assert batch_status == embed_status == 200, (batch, single)
+    assert batch["embeddings"] == single["embeddings"] == [service.embed("alpha")]
+    assert breaker.get_status()["state"] == "closed"
 
 
 @pytest.mark.parametrize(
