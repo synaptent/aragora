@@ -170,6 +170,8 @@ CRITICAL_RISK_PATHS = [
     "aragora/nomic/self_improve_execution.py",
     "aragora/nomic/autonomous_orchestrator.py",
     "aragora/nomic/autonomous_workflow.py",
+    "aragora/nomic/autonomous_feedback.py",
+    "aragora/nomic/autonomous_coordination.py",
     "aragora/nomic/agent_router.py",
     "aragora/nomic/feedback_loop.py",
     "aragora/nomic/types.py",
