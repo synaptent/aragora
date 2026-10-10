@@ -314,7 +314,7 @@ class BatchOperationsMixin:
         """Create a debate executor function for the batch queue."""
         # The controller refuses to start debates it cannot persist, so batch
         # debates need the server's debate storage.
-        storage = self.ctx.get("storage")
+        storage = (getattr(self, "ctx", None) or {}).get("storage")
 
         async def execute_debate(item: BatchItem) -> Any:
             """Execute a single debate from batch."""
