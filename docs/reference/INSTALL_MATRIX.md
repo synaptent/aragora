@@ -16,13 +16,14 @@ Each distribution ships its own `pyproject.toml` and its own version number.
 **They are independent — do not assume one tracks another.** Versions below
 are read directly from each package's `pyproject.toml` and cross-checked live
 against the public PyPI index (`curl -s https://pypi.org/pypi/<name>/json`,
-re-verified 2026-10-10):
+`info.version`, re-verified 2026-10-10; a date in parentheses is that
+version's upload time):
 
 | Distribution | PyPI name | Declared in | Current version | PyPI status (live-checked) |
 |---|---|---|---|---|
-| Root platform | `aragora` | `pyproject.toml` | **2.12.0** | Latest on PyPI = 2.11.1 (2026-09-28; the 2.12.0 build ships when the operator tags `v2.12.0` and dispatches `publish-aragora.yml`) |
+| Root platform | `aragora` | `pyproject.toml` | **2.12.0** | Latest on PyPI = 2.11.1 (uploaded 2026-09-28T05:55Z; the 2.12.0 build ships when the operator tags `v2.12.0` and dispatches `publish-aragora.yml`) |
 | Debate engine | `aragora-debate` | `aragora-debate/pyproject.toml` | **0.2.3** | Published; latest on PyPI = 0.2.3 |
-| Python SDK | `aragora-sdk` | `sdk/python/pyproject.toml` | **2.12.0** | Published; latest on PyPI = **2.11.0** (2026-09-27) — the repo's in-tree version has moved to 2.12.0 but that build has not been released to PyPI yet, so `pip install aragora-sdk` today gives you 2.11.0, not 2.12.0 |
+| Python SDK | `aragora-sdk` | `sdk/python/pyproject.toml` | **2.12.0** | Published; latest on PyPI = **2.11.0** (uploaded 2026-09-27T18:33Z) — the repo's in-tree version has moved to 2.12.0 but that build has not been released to PyPI yet, so `pip install aragora-sdk` today gives you 2.11.0, not 2.12.0 |
 | Verifier | `aragora-verify` | `aragora-verify/pyproject.toml` | **0.2.0** | Published; latest on PyPI = **0.2.0** (released 2026-09-25T00:08Z). It is the first line that accepts ODR v0.2, the default output since 2.11.0; 0.1.x rejects v0.2 documents at `schema_conformance`. Its published metadata requires `cryptography>=48.0.1` |
 
 <!-- FACT (live-verified 2026-09-27): aragora-verify 0.2.0 IS on PyPI (info.version=0.2.0, requires_dist cryptography>=48.0.1). Before changing this, re-run: curl -s https://pypi.org/pypi/aragora-verify/json | jq .info.version -->
