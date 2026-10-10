@@ -259,6 +259,25 @@ The `readiness-*` targets fan out to every app in the repo and print
 `SKIP <app>: <reason>` when a toolchain is absent; see
 [docs/RATCHETS.md](docs/RATCHETS.md) for the baseline ratchets they run.
 
+#### Quality gates
+
+Every app (the root package, `aragora-debate`, `aragora-verify`,
+`aragora/live`, `docs-site`, `ide/vscode-aragora` and `aragora-operator`) runs
+the same three gates from the repo root:
+
+| Gate | Command | What it runs |
+|------|---------|--------------|
+| Lint | `make readiness-lint` | Linters, formatters and the ratchets for naming, complexity, dead code, duplication and unused dependencies |
+| Type check | `make readiness-typecheck` | mypy for the Python apps, `tsc` for the TypeScript apps, `go build` and `go vet` for the operator |
+| Test | `make readiness-test` | Each app's curated test lanes |
+
+Each gate also has a per-app target, for example `make readiness-lint-live`.
+Existing findings are frozen in shrink-only baselines under
+`scripts/baselines/`, so only new findings fail a gate. See
+[docs/RATCHETS.md](docs/RATCHETS.md) for how the ratchets work and how to
+shrink a baseline, and [docs/READINESS_REPORT.md](docs/READINESS_REPORT.md)
+for the before and after agent-readiness report.
+
 ---
 
 <a id="full-vision"></a>

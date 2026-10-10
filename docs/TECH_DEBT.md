@@ -25,7 +25,7 @@ counts and the number of files are recorded separately below.
 | TODO/FIXME (`check_todo_ratchet.py`); case-sensitive matching lines in `aragora/ scripts/ tests/` `*.py`, strings and comments; excludes `docs/`, `baselines/` directories (including `scripts/baselines/`), and its own source. Both TODO mechanisms coexist until a later cleanup | `scripts/baselines/root-todo.json` | 200 | Python core maintainers | `python scripts/ci/check_todo_ratchet.py --baseline scripts/baselines/root-todo.json --update` |
 | Legacy TODO/FIXME/HACK/XXX (`scripts/todo_audit.py`); case-insensitive comment-start markers in `aragora/**/*.py`; `lint.yml` job `todo-audit`, push-only in the normal PR/push flow (the unchanged non-PR condition also admits manual/merge-group runs). Both TODO mechanisms coexist until a later cleanup | `aragora/.todo_baseline` | 1 | Python core maintainers | `python scripts/todo_audit.py --mode count --root aragora` (inspect count; baseline changes require separate review) |
 | Deptry (DEP002 ignore count; also one DEP004 exception, DEP001/DEP003 disabled) | `pyproject.toml` `[tool.deptry]` | 1 | Python core maintainers | `deptry .` (review per-rule exceptions in config, no generated baseline) |
-| jscpd 5.1.1 (Python, `minTokens` 70, hard 2.1% line threshold; 4,221 sources / 1,938 clones) | `.jscpd.json`; no `root-jscpd.json`, threshold-only | 2.0001% lines | Python core maintainers | `npx --yes jscpd@5.1.1 --config .jscpd.json` (measure, no baseline regeneration) |
+| jscpd 5.1.1 (Python, `minTokens` 70, hard 2.1% line threshold; 4,221 sources / 1,938 clones) | `.jscpd.json`; no `root-jscpd.json`, threshold-only | 2.0001% lines at `91a21a4593` | Python core maintainers | `npx --yes jscpd@5.1.1 --config .jscpd.json` (measure, no baseline regeneration) |
 | Debate Vulture (confidence 80) | `scripts/baselines/debate-vulture.json` | 0 | Debate package maintainers | `python scripts/ci/check_tool_baseline.py --tool vulture --baseline scripts/baselines/debate-vulture.json --update -- vulture aragora-debate/src --min-confidence 80` |
 | Debate file size (2,000 lines) | `scripts/baselines/debate-file-sizes.json` | 0 | Debate package maintainers | `python scripts/ci/check_file_sizes.py --glob 'aragora-debate/src/**/*.py' --baseline scripts/baselines/debate-file-sizes.json --freeze` |
 | Verify Vulture (confidence 80) | `scripts/baselines/verify-vulture.json` | 0 | Verify package maintainers | `python scripts/ci/check_tool_baseline.py --tool vulture --baseline scripts/baselines/verify-vulture.json --update -- vulture aragora-verify/src --min-confidence 80` |
@@ -33,10 +33,10 @@ counts and the number of files are recorded separately below.
 | Live ESLint naming and complexity (max 15, native suppression file) | `aragora/live/eslint-suppressions.json` | 339 | Live frontend maintainers | `cd aragora/live && npx eslint . --prune-suppressions` |
 | Live knip (unused files, dependencies, exports and types) | `scripts/baselines/live-knip.json` | 2475 | Live frontend maintainers | `python scripts/ci/check_tool_baseline.py --tool knip --cwd aragora/live --baseline scripts/baselines/live-knip.json --update -- npx knip --reporter json` |
 | Live file size (2,000 lines) | `scripts/baselines/live-file-sizes.json` | 3 | Live frontend maintainers | `python scripts/ci/check_file_sizes.py --glob 'aragora/live/src/**/*.{ts,tsx}' --baseline scripts/baselines/live-file-sizes.json --freeze` |
-| Live jscpd (50 minimum tokens, hard 6% line threshold) | `aragora/live/.jscpd.json`, threshold-only | 5.3496% lines | Live frontend maintainers | `cd aragora/live && npx jscpd --config .jscpd.json` (measure, no baseline regeneration) |
+| Live jscpd (50 minimum tokens, hard 6% line threshold) | `aragora/live/.jscpd.json`, threshold-only | 5.3496% lines at `ad03fc855a` | Live frontend maintainers | `cd aragora/live && npx jscpd --config .jscpd.json` (measure, no baseline regeneration) |
 | Docs knip (unused files, dependencies, exports and types; the unused `clsx` dependency and the `vercel` binary of the legacy deploy scripts) | `scripts/baselines/docs-knip.json` | 2 | Docs site maintainers | `python scripts/ci/check_tool_baseline.py --tool knip --cwd docs-site --baseline scripts/baselines/docs-knip.json --update -- npx knip --reporter json` |
 | Docs file size (2,000 lines) | `scripts/baselines/docs-file-sizes.json` | 0 | Docs site maintainers | `python scripts/ci/check_file_sizes.py --glob 'docs-site/src/**/*.{js,ts,tsx}' --baseline scripts/baselines/docs-file-sizes.json --freeze` |
-| Docs jscpd (50 minimum tokens, hard 1% line threshold over `src`, `scripts`, `tests`) | `docs-site/.jscpd.json`, threshold-only | 0.8070% lines | Docs site maintainers | `cd docs-site && npx jscpd --config .jscpd.json` (measure, no baseline regeneration) |
+| Docs jscpd (50 minimum tokens, hard 1% line threshold over `src`, `scripts`, `tests`) | `docs-site/.jscpd.json`, threshold-only | 0.8070% lines at `2ee3bea1d0` | Docs site maintainers | `cd docs-site && npx jscpd --config .jscpd.json` (measure, no baseline regeneration) |
 | Docs broken links (Docusaurus `onBrokenLinks: 'warn'` report; one key per page route and link as written, 54 occurrences; the build stays green, this ratchet enforces) | `scripts/baselines/docs-broken-links.json` | 54 | Docs site maintainers | `node docs-site/scripts/check_broken_links.mjs --update` (runs `docusaurus build`; add `--log <file>` to reuse a saved build log) |
 | VS Code extension knip (unused files, dependencies, exports and types; plain `npx knip` also exits 0) | `scripts/baselines/vscode-knip.json` | 0 | VS Code extension maintainers | `python scripts/ci/check_tool_baseline.py --tool knip --cwd ide/vscode-aragora --baseline scripts/baselines/vscode-knip.json --update -- npx knip --reporter json` |
 | VS Code extension file size (2,000 lines; extension and webview-ui sources) | `scripts/baselines/vscode-file-sizes.json` | 0 | VS Code extension maintainers | `python scripts/ci/check_file_sizes.py --glob 'ide/vscode-aragora/src/**/*.ts' --glob 'ide/vscode-aragora/webview-ui/src/**/*.{ts,tsx}' --baseline scripts/baselines/vscode-file-sizes.json --freeze` |
@@ -67,9 +67,13 @@ Live's file-size census includes `Oracle.tsx` (2,256 lines),
 sources; no large-file exemptions were added. Initial adoption freezes
 these existing files, rather than splitting product code in a gate change.
 The duplication check likewise scans all of `src/`, including generated
-types and tests: 1,397 sources, 1,625 clones, 21,918 duplicated lines out of
-409,710. It uses the pinned app dependency and writes an ignored
-`.jscpd-report/jscpd-report.json` in `aragora/live`.
+types and tests: at `ad03fc855a` it measured 1,397 sources, 1,625 clones and
+21,918 duplicated lines out of 409,710. It uses the pinned app dependency and
+writes an ignored `.jscpd-report/jscpd-report.json` in `aragora/live`.
+The generated `src/types/api.generated.ts` has no clones but is about 46 % of
+those lines, and 660 of the clones sit in test files, so duplication over
+product code alone was 9.86 % at `deb02e61e1`. The 6 % gate stays measured
+over all of `src/`.
 
 
 Package gates run through `make readiness-lint-debate readiness-lint-verify`.
@@ -85,7 +89,7 @@ locally before ruff and the ratchets run.
 
 Package duplication gates reuse the root `.jscpd.json` settings and
 `JSCPD_VERSION` pin, with explicit source paths and thresholds in the
-Makefile. At adoption, debate measured 3.5589% duplicated lines across
+Makefile. At adoption (`d4b62df13d`), debate measured 3.5589% duplicated lines across
 16 sources (9 clones), and verify measured 0% across 6 sources (0 clones).
 Thresholds are the measured percentages plus 0.5 points, rounded to two
 decimals: 4.06% and 0.5%. `make readiness-lint-debate readiness-lint-verify`
@@ -137,7 +141,7 @@ reports. It is independent of required-check umbrellas. The existing
   under `optional_dependencies_dev_groups` so it does not reclassify readiness
   tools as unused runtime dependencies; every bundled runtime dependency is
   still checked through its original extra.
-- jscpd's adoption measurement is 2.0001% duplicated lines, below the hard
+- jscpd's adoption measurement (`91a21a4593`) is 2.0001% duplicated lines, below the hard
   2.1% threshold at 70 minimum tokens. No clone baseline is needed; run the
   real root config and verify the source count before trusting a percentage.
   The root `.npmrc` three-day release cooldown applies to the pinned npx
@@ -169,3 +173,15 @@ reports. It is independent of required-check umbrellas. The existing
   Changing the field types now would break the published `v1alpha1` schema.
   Retire the flag with a `v1alpha2` API that stores these values as
   `resource.Quantity` or strings, plus a conversion from `v1alpha1`.
+- Live analytics: `capture` in `aragora/live/src/lib/analytics.ts` has no
+  production call sites yet; only its unit test calls it. PostHog initialises
+  asynchronously in `instrumentation-client.ts`, so future callers must await
+  the exported `telemetryReady` promise before capturing, or early events can
+  be dropped.
+- Live logger: `aragora/live/src/lib/logger.ts` (pino) has a single importer,
+  the Node `/healthz` route. Keeping it out of client and edge bundles relies
+  on a code comment only; no `server-only` import or lint rule enforces it.
+- Live observability delivery: Sentry, PostHog and OpenTelemetry wiring was
+  verified against local capture stubs only. Delivery to the real vendors
+  (VAL-LIVEOBS-018) is deferred to M11 `m11-pr` by contract amendment (23),
+  which needs recorded telemetry consent and real keys.
