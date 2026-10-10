@@ -8,12 +8,16 @@ multiple handlers/workers can reuse consistent behavior.
 from __future__ import annotations
 
 import logging
+import threading
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
 _decision_result_store = None
 _decision_results_fallback: dict[str, dict[str, Any]] = {}
+# Producers save from several threads; the owner check and the write must be
+# one step, or two orgs could both claim a new id.
+_decision_results_fallback_lock = threading.Lock()
 
 
 def _get_result_store():
@@ -43,11 +47,12 @@ def save_decision_result(request_id: str, data: dict[str, Any]) -> None:
             return
         except (OSError, RuntimeError, ValueError) as e:
             logger.warning("Failed to persist result, using fallback: %s", e)
-    existing = _decision_results_fallback.get(request_id)
-    if existing is not None and existing.get("org_id") != data.get("org_id"):
-        logger.warning("Decision result %s belongs to another owner; not saved", request_id)
-        return
-    _decision_results_fallback[request_id] = data
+    with _decision_results_fallback_lock:
+        existing = _decision_results_fallback.get(request_id)
+        if existing is not None and existing.get("org_id") != data.get("org_id"):
+            logger.warning("Decision result %s belongs to another owner; not saved", request_id)
+            return
+        _decision_results_fallback[request_id] = data
 
 
 def without_stored_request(record: dict[str, Any]) -> dict[str, Any]:

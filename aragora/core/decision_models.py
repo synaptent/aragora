@@ -287,6 +287,18 @@ def normalize_document_ids(value: Any, max_items: int = 50) -> list[str]:
     return normalized
 
 
+def effective_metadata_document_ids(metadata: Any) -> list[str]:
+    """Document IDs a request grounds on from its context metadata.
+
+    A non-empty ``documents`` value shadows ``document_ids``, even when it
+    holds no valid ID. Routing and the cache/in-flight key both use this, so
+    two requests that run on different documents never share a key.
+    """
+    if not isinstance(metadata, dict):
+        return []
+    return normalize_document_ids(metadata.get("documents") or metadata.get("document_ids"))
+
+
 @dataclass
 class DecisionRequest:
     """

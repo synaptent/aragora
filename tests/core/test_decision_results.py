@@ -118,6 +118,25 @@ class TestSaveDecisionResult:
 
             assert module._decision_results_fallback["req-1"]["answer"] == "second"
 
+    def test_concurrent_fallback_saves_of_a_new_id_have_one_owner(self, monkeypatch):
+        """B saves while A is paused between reading and writing: A keeps the id."""
+        import aragora.core.decision_results as module
+        from tests.utils.interleave import PausingDict, race
+
+        racy = PausingDict()
+        monkeypatch.setattr(module, "_decision_results_fallback", racy)
+        monkeypatch.setattr(module, "_get_result_store", lambda: None)
+
+        race(
+            racy,
+            lambda org: save_decision_result("req-race", {"answer": org, "org_id": org}),
+            "org-a",
+            "org-b",
+        )
+
+        assert racy.writes == ["org-a"]
+        assert racy["req-race"] == {"answer": "org-a", "org_id": "org-a"}
+
 
 # =============================================================================
 # get_decision_result Tests

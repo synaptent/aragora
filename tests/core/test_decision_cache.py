@@ -489,6 +489,78 @@ class TestDecisionCacheOrgPartition:
         assert repeat.answer == "answer from doc-1"
         assert calls == ["doc-1", "doc-2"]
 
+    def test_effective_metadata_documents_prefer_documents_over_document_ids(self):
+        from aragora.core.decision_models import effective_metadata_document_ids as effective
+
+        assert effective({"documents": ["d1"], "document_ids": ["d2"]}) == ["d1"]
+        assert effective({"documents": [], "document_ids": [" d2 ", "d2"]}) == ["d2"]
+        assert effective({"documents": 7, "document_ids": ["d2"]}) == []
+        assert effective(None) == effective(["d1"]) == []
+
+    def test_swapped_metadata_document_aliases_do_not_share_a_key(self):
+        cache = DecisionCache()
+
+        def key(metadata):
+            return cache._compute_hash(_org_request("org-a", metadata=metadata))
+
+        first = {"documents": ["d1"], "document_ids": ["d2"]}
+        swapped = {"documents": ["d2"], "document_ids": ["d1"]}
+        assert key(first) != key(swapped)
+        assert key(first) == key({"documents": ["d1"]}) == key({"document_ids": ["d1"]})
+        assert key(swapped) == key({"documents": ["d2"]})
+        assert key({"documents": ["d1"], "document_ids": ["d1"]}) == key({"documents": ["d1"]})
+        assert key({"documents": 7, "document_ids": ["d1"]}) == key({})
+
+    @pytest.mark.asyncio
+    async def test_in_flight_request_is_not_shared_across_swapped_aliases(self):
+        cache = DecisionCache()
+        await cache.mark_in_flight(
+            _org_request("org-a", metadata={"documents": ["d1"], "document_ids": ["d2"]})
+        )
+
+        swapped = _org_request("org-a", metadata={"documents": ["d2"], "document_ids": ["d1"]})
+        assert await cache.is_in_flight(swapped) is False
+        assert await cache.wait_for_result(swapped, timeout=0.01) is None
+        assert await cache.is_in_flight(_org_request("org-a", metadata={"documents": ["d1"]}))
+
+    @pytest.mark.asyncio
+    async def test_router_runs_swapped_aliases_on_their_own_documents(self):
+        from types import SimpleNamespace
+        from unittest.mock import AsyncMock
+
+        from aragora.core import decision_router
+        from aragora.core.decision import DecisionConfig, DecisionRouter
+
+        grounded: list[list[str]] = []
+
+        class FakeArena:
+            def __init__(self, environment, **kwargs):
+                grounded.append(list(environment.documents))
+
+            async def run(self):
+                answer = f"answer from {grounded[-1]}"
+                return SimpleNamespace(final_answer=answer, consensus_reached=True, summary="")
+
+        def request(documents, document_ids):
+            metadata = {"documents": documents, "document_ids": document_ids}
+            req = _org_request("org-a", metadata=metadata)
+            req.config = DecisionConfig(agents=[], use_knowledge_mound=False)
+            return req
+
+        router = DecisionRouter(debate_engine=FakeArena)
+        with (
+            patch.object(decision_router, "_cache_imported", True),
+            patch.object(decision_router, "_decision_cache", DecisionCache()),
+            patch.object(router, "_maybe_build_decision_integrity", AsyncMock(return_value=None)),
+        ):
+            answers = [
+                (await router.route(request(*docs))).answer
+                for docs in ((["d1"], ["d2"]), (["d2"], ["d1"]), (["d1"], ["d2"]))
+            ]
+
+        assert grounded == [["d1"], ["d2"]]
+        assert answers == ["answer from ['d1']", "answer from ['d2']", "answer from ['d1']"]
+
 
 # =============================================================================
 # DecisionCache Tests - Get/Set Operations

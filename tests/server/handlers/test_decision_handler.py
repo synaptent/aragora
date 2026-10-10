@@ -23,6 +23,7 @@ import os
 import pytest
 
 from aragora.server.handlers.decision import DecisionHandler
+from aragora.storage.decision_result_store import DecisionOwnershipConflict
 
 
 # ===========================================================================
@@ -132,7 +133,8 @@ class MockDecisionResultStore:
     """Mock decision result store for testing, with org ownership like the real store.
 
     ``save`` also stands in for ``_save_result``: it returns False, writing
-    nothing, for a result owned by another org or by no org.
+    nothing, for a result owned by another org or by no org. ``claim`` and
+    ``save_if_status`` follow the real store.
     """
 
     def __init__(self):
@@ -160,6 +162,37 @@ class MockDecisionResultStore:
             ),
         }
         return True
+
+    def claim(
+        self,
+        request_id: str,
+        data: dict[str, Any],
+        *,
+        org_id: str,
+        created_by: str | None = None,
+    ) -> str:
+        previous = self._results.get(request_id)
+        if previous is not None and previous.get("org_id") != org_id:
+            raise DecisionOwnershipConflict(request_id)
+        if previous is None:
+            self.save(request_id, data, org_id=org_id, created_by=created_by)
+        return self._results[request_id]["status"]
+
+    def save_if_status(
+        self,
+        request_id: str,
+        data: dict[str, Any],
+        *,
+        org_id: str,
+        expected_status: str,
+    ) -> bool:
+        previous = self._results.get(request_id)
+        if previous is None or (previous.get("org_id"), previous.get("status")) != (
+            org_id,
+            expected_status,
+        ):
+            return False
+        return self.save(request_id, data, org_id=org_id)
 
     def get(self, request_id: str) -> dict[str, Any] | None:
         return self._results.get(request_id)
@@ -617,7 +650,8 @@ class TestCreateDecision:
                 "aragora.server.handlers.decision._get_decision_router", return_value=mock_router
             ),
             patch(
-                "aragora.server.handlers.decision._save_result", side_effect=mock_result_store.save
+                "aragora.server.handlers.decision._decision_result_store.get",
+                return_value=mock_result_store,
             ),
             patch("aragora.core.decision.DecisionRequest", MockDecisionRequest),
             patch(
@@ -631,6 +665,7 @@ class TestCreateDecision:
             assert "request_id" in body
             assert body["status"] == "completed"
             assert "answer" in body
+            assert mock_result_store.get(body["request_id"])["status"] == "completed"
 
     @pytest.mark.asyncio
     async def test_create_decision_minimal_request(self, mock_server_context, mock_result_store):
@@ -649,7 +684,8 @@ class TestCreateDecision:
                 "aragora.server.handlers.decision._get_decision_router", return_value=mock_router
             ),
             patch(
-                "aragora.server.handlers.decision._save_result", side_effect=mock_result_store.save
+                "aragora.server.handlers.decision._decision_result_store.get",
+                return_value=mock_result_store,
             ),
             patch("aragora.core.decision.DecisionRequest", MockDecisionRequest),
             patch(
@@ -673,15 +709,9 @@ class TestCancelDecision:
             body={"reason": "No longer needed"},
         )
 
-        with (
-            patch(
-                "aragora.server.handlers.decision._get_result",
-                side_effect=mock_result_store.get_for_org,
-            ),
-            patch(
-                "aragora.server.handlers.decision._save_result",
-                side_effect=mock_result_store.save,
-            ),
+        with patch(
+            "aragora.server.handlers.decision._decision_result_store.get",
+            return_value=mock_result_store,
         ):
             result = await h.handle_post(
                 "/api/v1/decisions/dec_pending456/cancel", {}, mock_handler
@@ -690,6 +720,7 @@ class TestCancelDecision:
             body = json.loads(result.body)
             assert body["status"] == "cancelled"
             assert body["reason"] == "No longer needed"
+            assert mock_result_store.get("dec_pending456")["status"] == "cancelled"
 
     @pytest.mark.asyncio
     async def test_cancel_completed_decision_fails(self, mock_server_context, mock_result_store):
@@ -832,7 +863,8 @@ class TestDecisionHandlerErrors:
                 "aragora.server.handlers.decision._get_decision_router", return_value=mock_router
             ),
             patch(
-                "aragora.server.handlers.decision._save_result", side_effect=mock_result_store.save
+                "aragora.server.handlers.decision._decision_result_store.get",
+                return_value=mock_result_store,
             ),
             patch("aragora.core.decision.DecisionRequest", MockDecisionRequest),
             patch(
@@ -862,7 +894,8 @@ class TestDecisionHandlerErrors:
                 "aragora.server.handlers.decision._get_decision_router", return_value=mock_router
             ),
             patch(
-                "aragora.server.handlers.decision._save_result", side_effect=mock_result_store.save
+                "aragora.server.handlers.decision._decision_result_store.get",
+                return_value=mock_result_store,
             ),
             patch("aragora.core.decision.DecisionRequest", MockDecisionRequest),
             patch(
