@@ -30,6 +30,10 @@ ORG_A = "org-a-create-auth"
 ORG_B = "org-b-create-auth"
 STATIC_TOKEN = "create-auth-static-token-0123456789abcdef"
 AUTH_REQUIRED_BODY = {"error": "Authentication required", "code": "auth_required"}
+ORG_REQUIRED_BODY = {
+    "error": "This resource belongs to an organization; sign in as a member of one",
+    "code": "org_required",
+}
 
 # Every POST path that reaches a debate create method. Any /api/v<N>/ prefix
 # is stripped before dispatch, so v2 stands in for all other versions.
@@ -377,20 +381,27 @@ class TestRefusedCallers:
         assert status == 403
         _assert_no_side_effect(probes)
 
-    def test_with_api_token_set_anonymous_and_static_token_are_refused(
-        self, server, probes, monkeypatch
-    ):
-        """With ARAGORA_API_TOKEN set the RBAC middleware answers before any handler.
-
-        A static-token-only request has no user, so the middleware's own
-        ``auth_required`` 401 is what reaches the caller (not ``org_required``);
-        either way nothing is created.
-        """
+    @pytest.mark.parametrize("path", sorted(CREATE_ALIASES))
+    def test_with_api_token_set_anonymous_gets_401(self, server, probes, monkeypatch, path):
         _install_api_token(monkeypatch, STATIC_TOKEN)
-        for path in PRIMARY_ROUTES:
-            for authorization in (None, f"Bearer {STATIC_TOKEN}"):
-                status, body = _post(server, probes, path, _body_for(path), authorization)
-                assert (status, body) == (401, AUTH_REQUIRED_BODY), (path, authorization)
+
+        status, body = _post(server, probes, path, _body_for(path))
+
+        assert (status, body) == (401, AUTH_REQUIRED_BODY)
+        _assert_no_side_effect(probes)
+
+    @pytest.mark.parametrize("path", sorted(CREATE_ALIASES))
+    def test_with_api_token_set_static_token_gets_403_org_required(
+        self, server, probes, monkeypatch, path
+    ):
+        """The RBAC check answers first: a static-token-only request has no user, so no org."""
+        _install_api_token(monkeypatch, STATIC_TOKEN)
+
+        status, body = _post(
+            server, probes, path, _body_for(path), f"Bearer {STATIC_TOKEN}", headers=SPOOF_HEADERS
+        )
+
+        assert (status, body) == (403, ORG_REQUIRED_BODY)
         _assert_no_side_effect(probes)
 
     def test_with_api_token_set_org_less_jwt_gets_403_org_required(
@@ -445,6 +456,18 @@ class TestOrgUserCreates:
         assert status == 200, body
         batch = probes.queue.submit_batch.call_args.args[0]
         assert [item.org_id for item in batch.items] == [ORG_A]
+
+    def test_with_api_token_set_create_stores_token_org_private(self, server, probes, monkeypatch):
+        _install_api_token(monkeypatch, STATIC_TOKEN)
+        path = "/api/v1/debates"
+
+        status, body = _post(
+            server, probes, path, _body_for(path), _jwt(ORG_A), headers=SPOOF_HEADERS
+        )
+
+        assert status == 200, body
+        assert probes.start.call_args.args[0].org_id == ORG_A
+        assert _debate_rows(probes.storage) == [(body["debate_id"], ORG_A, 0)]
 
     def test_custom_role_granted_debate_create_succeeds(self, server, probes, _isolated_auth):
         _isolated_auth._custom_roles[f"{ORG_A}:debate-runner"] = {"permissions": {"debates.create"}}

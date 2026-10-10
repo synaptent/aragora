@@ -44,6 +44,7 @@ Usage (FastAPI route)::
 from __future__ import annotations
 
 import hmac
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -101,6 +102,36 @@ ORG_REQUIRED = ScopeDenial(
     "This resource belongs to an organization; sign in as a member of one",
 )
 
+# Route families whose records are org-owned, written without the version
+# segment. A path matches a family when it equals it or continues with "/".
+_ORG_SCOPED_FAMILIES = (
+    "/api/plans",
+    "/api/decisions",
+    "/api/runs",
+    "/api/documents",
+    "/api/knowledge/jobs",
+    "/api/receipts",
+    "/api/gauntlet",
+    "/api/debates",
+    "/api/debate",
+    "/api/debate-this",
+    "/api/search",
+    "/api/graph-debates",
+    "/api/matrix-debates",
+    "/api/pipeline",
+    "/api/canvas/pipeline",
+    "/api/workspace",
+)
+# Public-by-design routes inside those families.
+_PUBLIC_IN_ORG_SCOPED_FAMILIES = re.compile(
+    r"^/api/(?:"
+    r"receipts/share/.*|receipts/signing-key|receipts/verify"
+    r"|debates/public(?:/.*)?|debates/[^/]+/spectate/public"
+    r"|gauntlet/personas(?:/.*)?"
+    r")$"
+)
+_VERSION_SEGMENT = re.compile(r"^/api/v\d+(?=/|$)")
+
 
 def record_visible(record_org_id: str | None, scope: OrgScope | None) -> bool:
     """Return True only when the record has a known owner equal to the caller's org."""
@@ -151,6 +182,40 @@ def carries_static_api_token(headers: Any) -> bool:
     if hmac.compare_digest(token.encode("utf-8"), api_token.encode("utf-8")):
         return True
     return config.validate_token(token) is True
+
+
+def is_org_scoped_path(path: str) -> bool:
+    """Whether ``path`` belongs to a route family whose records are org-owned.
+
+    Plans, plan executions and runs, documents and knowledge jobs, receipts
+    (gauntlet included), debates and their create aliases, search, pipelines
+    and the decision workspace. Any ``/api/v<N>/`` form matches like ``/api/``.
+    Public-by-design routes in those families do not match: receipt share
+    links, the signing key and the stateless verifier, the public debate
+    viewer and spectate page, and gauntlet personas.
+    """
+    if not isinstance(path, str):
+        return False
+    normalized = _VERSION_SEGMENT.sub("/api", path, count=1)
+    if _PUBLIC_IN_ORG_SCOPED_FAMILIES.match(normalized):
+        return False
+    return any(
+        normalized == family or normalized.startswith(family + "/")
+        for family in _ORG_SCOPED_FAMILIES
+    )
+
+
+def static_token_denial(path: str, headers: Any) -> ScopeDenial | None:
+    """``ORG_REQUIRED`` when a request without a user carries the static token
+    on an org-scoped path, else None.
+
+    For auth gates that answer before the handler (and so before
+    :func:`require_org_scope`) a request that has no authenticated user, so
+    the caller gets the same answer the handler would give.
+    """
+    if is_org_scoped_path(path) and carries_static_api_token(headers):
+        return ORG_REQUIRED
+    return None
 
 
 def require_org_scope(
@@ -255,6 +320,7 @@ __all__ = [
     "OrgScope",
     "ScopeDenial",
     "carries_static_api_token",
+    "is_org_scoped_path",
     "not_found_body",
     "record_not_found",
     "record_not_found_error",
@@ -262,4 +328,5 @@ __all__ = [
     "require_org_scope",
     "require_org_scope_fastapi",
     "resolve_org_scope",
+    "static_token_denial",
 ]
