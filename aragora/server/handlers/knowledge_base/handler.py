@@ -18,21 +18,17 @@ Facts API (FactStore):
 - GET /api/knowledge/stats - Get knowledge base statistics
 
 Index API (no named-index registry exists yet):
-- POST /api/v1/index/embed-batch - Embed texts with the unified embedding service
+- POST /api/v1/index/embed-batch - Embed texts with the local model /api/v1/ml/embed uses
 - GET /api/v1/index - List named vector indexes (always empty)
 - POST /api/v1/index, POST /api/v1/index/search - 501 not_implemented
 """
 
 from __future__ import annotations
 
-import asyncio
-import concurrent.futures
 import logging
-import time
 from typing import TYPE_CHECKING, Any
 from functools import wraps
 
-from aragora.core.embeddings.types import EmbeddingConfig, EmbeddingError
 from aragora.knowledge import (
     DatasetQueryEngine,
     FactStore,
@@ -42,7 +38,6 @@ from aragora.knowledge import (
 )
 from aragora.rbac import AuthorizationContext, PermissionDeniedError, get_permission_checker
 from aragora.rbac.decorators import require_permission
-from aragora.server.http_utils import run_async as _run_async
 
 from ..base import (
     BaseHandler,
@@ -139,26 +134,20 @@ def _closed_until_org_scoping(
 _knowledge_limiter = RateLimiter(requests_per_minute=60)
 
 # Allowed methods per /api/v1/index route (also the 405 Allow header).
-_INDEX_ROUTE_METHODS = {
-    "/api/v1/index": "GET, POST",
-    "/api/v1/index/embed-batch": "POST",
-    "/api/v1/index/search": "POST",
+_INDEX_ROUTE_METHODS: dict[str, tuple[str, ...]] = {
+    "/api/v1/index": ("GET", "POST"),
+    "/api/v1/index/embed-batch": ("POST",),
+    "/api/v1/index/search": ("POST",),
 }
 # The /api/v1/ml/embed limit. It also bounds the response, which is built in
-# memory: 100 vectors of 1,536 floats serialize to about 3.2 MB of JSON.
+# memory: 100 vectors of 768 floats (the largest local model) are about 1.6 MB of JSON.
 _MAX_EMBED_BATCH_TEXTS = 100
 _MAX_EMBED_BATCH_SIZE = 100
-# Under the smallest input limit of any backend the service can select: 2,048 tokens
-# for Gemini text-embedding-004 and Ollama nomic-embed-text (OpenAI
-# text-embedding-3-small allows 8,192). A token never covers less than one byte, so
-# 2,000 bytes stay under 2,048 tokens with room for the [CLS]/[SEP] a BERT tokenizer
-# adds: no accepted text can draw a provider length error, which the backends count
-# toward the process-wide embedding circuit breaker. With the 100-text cap this also
-# bounds the provider work of one request.
+# A request bound, not a model limit: sentence-transformers truncates every text to
+# the model's max_seq_length (256 word pieces for all-MiniLM-L6-v2), so no length
+# fails. 2,000 bytes still fits a full window of English prose and caps one request
+# at 200 KB of tokenizer input.
 _MAX_EMBED_TEXT_BYTES = 2000
-# Shared by every backend call of one embed-batch request, so small batch sizes
-# cannot turn one request into many sequential 30 s waits.
-_EMBED_BATCH_BUDGET_SECONDS = 30.0
 _NOT_IMPLEMENTED_MESSAGE = "Named vector indexes are not implemented on this server"
 
 
@@ -377,9 +366,9 @@ class KnowledgeHandler(
 
     def _handle_index_routes(self, path: str, method: str, handler: Any) -> HandlerResult:
         """Handle the /api/v1/index family; there is no named-index registry yet."""
-        if method not in _INDEX_ROUTE_METHODS[path].split(", "):
+        if method not in _INDEX_ROUTE_METHODS[path]:
             return error_response(
-                "Method not allowed", 405, headers={"Allow": _INDEX_ROUTE_METHODS[path]}
+                "Method not allowed", 405, headers={"Allow": ", ".join(_INDEX_ROUTE_METHODS[path])}
             )
         if path == "/api/v1/index/embed-batch":
             return self._handle_embed_batch(handler)
@@ -388,7 +377,7 @@ class KnowledgeHandler(
         return _coded_error(_NOT_IMPLEMENTED_MESSAGE, "not_implemented", 501)
 
     def _handle_embed_batch(self, handler: Any) -> HandlerResult:
-        """Handle POST /api/v1/index/embed-batch with the unified embedding service."""
+        """Handle POST /api/v1/index/embed-batch with the local model /api/v1/ml/embed uses."""
         data, body_error = self.read_json_body_validated(handler)
         if data is None:
             return body_error if body_error is not None else error_response("Invalid JSON", 400)
@@ -401,9 +390,12 @@ class KnowledgeHandler(
             return error_response("'texts' must be a non-empty list of non-empty strings", 400)
         if len(texts) > _MAX_EMBED_BATCH_TEXTS:
             return error_response(f"At most {_MAX_EMBED_BATCH_TEXTS} texts per request", 400)
-        # "surrogatepass": a lone surrogate from a JSON \ud800 escape has no UTF-8 form;
-        # it counts 3 bytes, like the U+FFFD a provider substitutes, instead of raising.
-        if any(len(t.encode("utf-8", "surrogatepass")) > _MAX_EMBED_TEXT_BYTES for t in texts):
+        try:
+            text_bytes = [len(t.encode("utf-8")) for t in texts]
+        except UnicodeEncodeError:
+            # A JSON "\ud800" escape decodes to a lone surrogate, which no tokenizer encodes.
+            return error_response("Each text must be valid Unicode text (no lone surrogates)", 400)
+        if max(text_bytes) > _MAX_EMBED_TEXT_BYTES:
             return error_response(
                 f"Each text may be at most {_MAX_EMBED_TEXT_BYTES} bytes of UTF-8", 400
             )
@@ -417,59 +409,36 @@ class KnowledgeHandler(
                 f"'batch_size' must be an integer from 1 to {_MAX_EMBED_BATCH_SIZE}", 400
             )
 
-        from aragora.core.embeddings.service import get_embedding_service
+        from aragora.server.handlers.knowledge.ml import get_local_embedding_service
 
+        service = get_local_embedding_service()
+        if service is None:
+            return error_response("ML embeddings not available", 503)
+        requested_model = data.get("model")
+        if requested_model is not None and requested_model != service.model_name:
+            return error_response(
+                f"Model selection is not supported; this server embeds with {service.model_name}",
+                400,
+            )
+        batches = [texts[i : i + batch_size] for i in range(0, len(texts), batch_size)]
+        embeddings: list[list[float]] = []
         try:
-            # Not the process-wide singleton: its cache is shared with other subsystems
-            # and would keep the zero vectors the base backend substitutes on failure.
-            service = get_embedding_service(config=EmbeddingConfig(cache_enabled=False))
-            requested_model = data.get("model")
-            if requested_model is not None and requested_model != service.model:
-                return error_response(
-                    f"Model selection is not supported; this server embeds with {service.model}",
-                    400,
-                )
-            batches = [texts[i : i + batch_size] for i in range(0, len(texts), batch_size)]
-            embeddings: list[list[float]] = []
-            deadline = time.monotonic() + _EMBED_BATCH_BUDGET_SECONDS
             for batch in batches:
-                remaining = deadline - time.monotonic()
-                if remaining <= 0:
-                    raise TimeoutError(
-                        f"embed-batch exceeded its {_EMBED_BATCH_BUDGET_SECONDS:g}s budget"
-                    )
-                vectors = _run_async(service.embed_batch_raw(batch), timeout=remaining)
+                vectors = service.embed_batch(batch)
                 if len(vectors) != len(batch):
-                    raise ValueError(f"backend returned {len(vectors)} vectors for {len(batch)}")
-                # EmbeddingBackend.embed_batch answers a failed text with a zero vector.
-                if not all(any(vector) for vector in vectors):
-                    raise ValueError("backend returned an all-zero vector")
+                    raise ValueError(f"model returned {len(vectors)} vectors for {len(batch)}")
                 embeddings.extend(vectors)
-        # AttributeError/TypeError: UnifiedEmbeddingService.embed_batch leaves None
-        # placeholders when a backend returns fewer vectors than it was given.
-        # The three timeout classes are distinct on Python 3.10.
-        except (
-            EmbeddingError,
-            RuntimeError,
-            OSError,
-            TimeoutError,
-            asyncio.TimeoutError,
-            concurrent.futures.TimeoutError,
-            ValueError,
-            AttributeError,
-            TypeError,
-        ) as e:
+        except (RuntimeError, OSError, ValueError, TypeError) as e:
             logger.warning("Index embed-batch failed: %s", e)
             return _coded_error("Embedding service unavailable", "service_unavailable", 503)
 
         return json_response(
             {
                 "embeddings": embeddings,
-                "dimension": len(embeddings[0]) if embeddings else 0,
+                "dimension": len(embeddings[0]),
                 "count": len(embeddings),
                 "batch_count": len(batches),
-                "provider": service.provider,
-                "model": service.model,
+                "model": service.model_name,
             }
         )
 

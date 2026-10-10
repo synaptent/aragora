@@ -32,6 +32,7 @@ __all__ = [
     "MLHandler",
     "MLCircuitBreaker",
     "get_ml_circuit_breaker_status",
+    "get_local_embedding_service",
     "_clear_ml_components",
 ]
 
@@ -139,6 +140,25 @@ def _get_ml_component(name: str) -> Any:
                 circuit_breaker.record_failure()
 
         return _ml_components.get(name)
+
+
+def get_local_embedding_service() -> Any:
+    """Return the local embedding service with its model loaded, or None if it cannot load.
+
+    /api/v1/ml/embed and /api/v1/index/embed-batch both embed through this, so they
+    share one model and dimension and answer the same 503 when the model is missing.
+    """
+    service = _get_ml_component("embeddings")
+    if service is None:
+        return None
+    try:
+        # LocalEmbeddingService loads its model lazily; reading the dimension loads it.
+        _ = service.dimension
+    except (ImportError, RuntimeError, OSError, ValueError) as e:
+        logger.warning("Local embedding model not available: %s", e)
+        _get_circuit_breaker("embeddings").record_failure()
+        return None
+    return service
 
 
 def _clear_ml_components() -> None:
@@ -552,7 +572,7 @@ class MLHandler(BaseHandler):
                 "dimension": 384
             }
         """
-        embeddings = _get_ml_component("embeddings")
+        embeddings = get_local_embedding_service()
         if not embeddings:
             return error_response("ML embeddings not available", 503)
 

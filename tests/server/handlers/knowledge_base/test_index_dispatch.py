@@ -9,24 +9,22 @@ so first-match ownership and the dispatcher's own 500 fallbacks are exercised.
 
 from __future__ import annotations
 
-import asyncio
-import concurrent.futures
+import hashlib
 import io
 import json
 import threading
+from collections.abc import Callable, Iterator, Sequence
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from aragora.billing.jwt_auth import create_access_token
-from aragora.core.embeddings.backends import EmbeddingBackend, HashBackend
-from aragora.core.embeddings.cache import EmbeddingCache
-from aragora.core.embeddings.service import UnifiedEmbeddingService, get_embedding_service
-from aragora.core.embeddings.types import EmbeddingConfig
+from aragora.core.embeddings.service import UnifiedEmbeddingService
+from aragora.ml.embeddings import LocalEmbeddingService
 from aragora.server.handler_registry import HandlerRegistryMixin, get_route_index
 from aragora.server.handlers.base import error_response
-from aragora.server.handlers.knowledge_base import handler as handler_module
+from aragora.server.handlers.knowledge import ml as ml_handler_module
 from aragora.server.handlers.knowledge_base.handler import (
     KnowledgeHandler,
     _knowledge_limiter,
@@ -70,39 +68,48 @@ def _clear_knowledge_limiter():
     _knowledge_limiter.clear()
 
 
-@pytest.fixture
-def hash_service() -> UnifiedEmbeddingService:
-    return UnifiedEmbeddingService(config=EmbeddingConfig(provider="hash", cache_enabled=False))
+class _FakeLocalService:
+    """Stands in for aragora.ml's LocalEmbeddingService without loading a model."""
+
+    model_name = "fake-minilm"
+    dimension = 4
+
+    def __init__(self) -> None:
+        self.batches: list[list[str]] = []
+
+    def embed(self, text: str) -> list[float]:
+        digest = hashlib.sha256(text.encode("utf-8")).digest()
+        return [byte / 255 for byte in digest[: self.dimension]]
+
+    def embed_batch(self, texts: Sequence[str]) -> list[list[float]]:
+        self.batches.append(list(texts))
+        return [self.embed(text) for text in texts]
+
+
+def _refuse_provider_service(*args: Any, **kwargs: Any) -> Any:
+    raise AssertionError("embed-batch must not build a provider embedding service")
 
 
 @pytest.fixture
-def shared_embedding_cache(monkeypatch) -> EmbeddingCache:
-    """A fresh process-wide embedding cache and singleton, restored after the test."""
-    cache = EmbeddingCache()
-    monkeypatch.setattr("aragora.core.embeddings.cache._global_cache", cache)
-    monkeypatch.setattr("aragora.core.embeddings.service._global_service", None)
-    return cache
+def install_local_service(monkeypatch) -> Iterator[Callable[[Any], Any]]:
+    """Put one service behind aragora.ml.get_embedding_service, the seam both embed routes use."""
+    ml_handler_module._clear_ml_components()
+    ml_handler_module._ml_limiter.clear()
+    monkeypatch.setattr(
+        "aragora.core.embeddings.service.get_embedding_service", _refuse_provider_service
+    )
+
+    def install(service: Any) -> Any:
+        monkeypatch.setattr("aragora.ml.get_embedding_service", lambda *a, **k: service)
+        return service
+
+    yield install
+    ml_handler_module._clear_ml_components()
 
 
-class _FailingTextsBackend(EmbeddingBackend):
-    """Keeps the base embed_batch, which swaps every failed text for a zero vector."""
-
-    def __init__(self, failing: set[str]) -> None:
-        super().__init__(EmbeddingConfig(dimension=8), use_circuit_breaker=False)
-        self.failing = failing
-
-    @property
-    def provider_name(self) -> str:
-        return "failing"
-
-    @property
-    def model_name(self) -> str:
-        return "failing-model"
-
-    async def embed(self, text: str) -> list[float]:
-        if text in self.failing:
-            raise ConnectionError(f"provider outage for {text!r}")
-        return [1.0] * self.dimension
+@pytest.fixture
+def local_service(install_local_service) -> _FakeLocalService:
+    return install_local_service(_FakeLocalService())
 
 
 def _dispatch(
@@ -140,6 +147,15 @@ def _dispatch(
     return status, json.loads(instance.wfile.getvalue() or b"{}")
 
 
+def _ml_embed(registry_cls: type[_RegistryMixin], body: dict[str, Any]) -> tuple[int, Any]:
+    # The registry passes MLHandler.handle_post the query dict rather than the JSON
+    # body, so /api/v1/ml/embed is called here with the parsed body, as its own tests do.
+    http = MagicMock()
+    http.client_address = ("127.0.0.1", 12345)
+    result = registry_cls._ml_handler.handle_post("/api/v1/ml/embed", body, http)
+    return result.status_code, json.loads(result.body)
+
+
 @pytest.mark.parametrize("path", INDEX_PATHS)
 def test_index_routes_resolve_to_knowledge_handler(registry_cls, path: str) -> None:
     match = get_route_index().get_handler(path)
@@ -150,22 +166,59 @@ def test_index_routes_resolve_to_knowledge_handler(registry_cls, path: str) -> N
 
 
 @pytest.mark.parametrize("send_active_model", [False, True])
-def test_embed_batch_returns_service_embeddings(
-    registry_cls, hash_service, send_active_model: bool
+def test_embed_batch_and_ml_embed_return_the_same_vectors(
+    registry_cls, local_service, send_active_model: bool
 ) -> None:
     texts = ["alpha", "beta", "gamma"]
     payload: dict[str, Any] = {"texts": texts, "batch_size": 2}
     if send_active_model:
-        payload["model"] = hash_service.model
-    with patch("aragora.core.embeddings.service.get_embedding_service", return_value=hash_service):
-        status, body = _dispatch(registry_cls, "POST", "/api/v1/index/embed-batch", payload)
+        payload["model"] = local_service.model_name
+    status, batch = _dispatch(registry_cls, "POST", "/api/v1/index/embed-batch", payload)
+    assert status == 200, batch
+    status, single = _ml_embed(registry_cls, {"texts": texts})
+    assert status == 200, single
+
+    assert batch["embeddings"] == single["embeddings"]
+    assert batch["dimension"] == single["dimension"] == local_service.dimension
+    assert batch["count"] == 3
+    assert batch["batch_count"] == 2
+    assert local_service.batches[:2] == [["alpha", "beta"], ["gamma"]]
+    assert batch["model"] == local_service.model_name
+    assert "provider" not in batch
+
+
+def test_embed_batch_never_builds_the_provider_embedding_service(
+    registry_cls, local_service, monkeypatch
+) -> None:
+    monkeypatch.setattr(UnifiedEmbeddingService, "__init__", _refuse_provider_service)
+    status, body = _dispatch(
+        registry_cls, "POST", "/api/v1/index/embed-batch", {"texts": ["alpha"]}
+    )
     assert status == 200, body
-    expected = asyncio.run(hash_service.embed_batch_raw(texts))
-    assert body["embeddings"] == expected
-    assert body["count"] == 3
-    assert body["dimension"] == len(expected[0]) > 0
-    assert body["batch_count"] == 2
-    assert body["provider"] == "hash"
+    assert body["embeddings"] == [local_service.embed("alpha")]
+
+
+def _raise_os_error(*args: Any, **kwargs: Any) -> Any:
+    raise OSError("model download failed")
+
+
+@pytest.mark.parametrize(
+    "sentence_transformer",
+    [None, _raise_os_error],
+    ids=["dependency-missing", "model-cannot-load"],
+)
+def test_both_embed_routes_answer_503_when_the_local_model_cannot_load(
+    registry_cls, install_local_service, monkeypatch, sentence_transformer: Any
+) -> None:
+    monkeypatch.setattr("aragora.ml.embeddings.SentenceTransformer", sentence_transformer)
+    install_local_service(LocalEmbeddingService())
+    batch_status, batch = _dispatch(
+        registry_cls, "POST", "/api/v1/index/embed-batch", {"texts": ["alpha"]}
+    )
+    embed_status, single = _ml_embed(registry_cls, {"texts": ["alpha"]})
+    assert batch_status == embed_status == 503, (batch, single)
+    assert batch == single
+    assert "embeddings" not in batch
 
 
 @pytest.mark.parametrize(
@@ -185,10 +238,16 @@ def test_embed_batch_returns_service_embeddings(
         {"texts": ["a"], "model": "some-other-model"},
     ],
 )
-def test_embed_batch_rejects_invalid_payload(registry_cls, hash_service, payload) -> None:
-    with patch("aragora.core.embeddings.service.get_embedding_service", return_value=hash_service):
-        status, body = _dispatch(registry_cls, "POST", "/api/v1/index/embed-batch", payload)
+def test_embed_batch_rejects_invalid_payload(registry_cls, local_service, payload) -> None:
+    status, body = _dispatch(registry_cls, "POST", "/api/v1/index/embed-batch", payload)
     assert status == 400, body
+
+
+@pytest.fixture
+def counted_service_getter(install_local_service, monkeypatch) -> MagicMock:
+    getter = MagicMock(return_value=_FakeLocalService())
+    monkeypatch.setattr("aragora.ml.get_embedding_service", getter)
+    return getter
 
 
 @pytest.mark.parametrize(
@@ -202,151 +261,81 @@ def test_embed_batch_rejects_invalid_payload(registry_cls, hash_service, payload
         # Three-byte CJK: 667 characters are 2,001 bytes, far under 2,000 characters.
         pytest.param("\u4e2d" * 666 + "xx", 200, id="cjk-at-cap"),
         pytest.param("\u4e2d" * 667, 400, id="cjk-over"),
-        # A lone surrogate (JSON "\ud800") counts three bytes and must not raise.
-        pytest.param("\ud800" * 667, 400, id="lone-surrogate-over"),
     ],
 )
 def test_embed_batch_caps_each_text_at_2000_utf8_bytes(
-    registry_cls, hash_service, text: str, status: int
+    registry_cls, counted_service_getter, text: str, status: int
 ) -> None:
-    assert len(text.encode("utf-8", "surrogatepass")) == (2000 if status == 200 else 2001)
+    assert len(text.encode("utf-8")) == (2000 if status == 200 else 2001)
     payload = {"texts": ["short", text]}
-    with patch(
-        "aragora.core.embeddings.service.get_embedding_service", return_value=hash_service
-    ) as get_service:
-        got, body = _dispatch(registry_cls, "POST", "/api/v1/index/embed-batch", payload)
+    got, body = _dispatch(registry_cls, "POST", "/api/v1/index/embed-batch", payload)
     assert got == status, body
     if status == 200:
         assert body["count"] == 2
     else:
         assert body["error"] == "Each text may be at most 2000 bytes of UTF-8"
-        get_service.assert_not_called()
+        counted_service_getter.assert_not_called()
+
+
+def test_embed_batch_rejects_a_lone_surrogate_before_the_service(
+    registry_cls, counted_service_getter
+) -> None:
+    # JSON "\ud800" decodes to a lone surrogate, which no tokenizer can encode.
+    payload = {"texts": ["short", "a\ud800b"]}
+    status, body = _dispatch(registry_cls, "POST", "/api/v1/index/embed-batch", payload)
+    assert status == 400, body
+    assert body["error"] == "Each text must be valid Unicode text (no lone surrogates)"
+    counted_service_getter.assert_not_called()
 
 
 @pytest.mark.parametrize(("count", "status"), [(100, 200), (101, 400)])
 def test_embed_batch_caps_the_request_at_100_texts(
-    registry_cls, hash_service, count: int, status: int
+    registry_cls, counted_service_getter, count: int, status: int
 ) -> None:
     payload = {"texts": [f"text {i}" for i in range(count)]}
-    with patch(
-        "aragora.core.embeddings.service.get_embedding_service", return_value=hash_service
-    ) as get_service:
-        got, body = _dispatch(registry_cls, "POST", "/api/v1/index/embed-batch", payload)
+    got, body = _dispatch(registry_cls, "POST", "/api/v1/index/embed-batch", payload)
     assert got == status, body
     if status == 200:
         assert body["count"] == 100
     else:
         assert body["error"] == "At most 100 texts per request"
-        get_service.assert_not_called()
+        counted_service_getter.assert_not_called()
 
 
-def test_embed_batch_requires_a_json_content_type(registry_cls, hash_service) -> None:
-    with patch("aragora.core.embeddings.service.get_embedding_service", return_value=hash_service):
-        status, body = _dispatch(
-            registry_cls,
-            "POST",
-            "/api/v1/index/embed-batch",
-            {"texts": ["alpha"]},
-            headers={"Content-Type": "text/plain"},
-        )
+def test_embed_batch_requires_a_json_content_type(registry_cls, local_service) -> None:
+    status, body = _dispatch(
+        registry_cls,
+        "POST",
+        "/api/v1/index/embed-batch",
+        {"texts": ["alpha"]},
+        headers={"Content-Type": "text/plain"},
+    )
     assert status == 415, body
 
 
-@pytest.mark.parametrize(
-    "failure",
-    [RuntimeError("backend down"), asyncio.TimeoutError(), concurrent.futures.TimeoutError()],
-)
-def test_embed_batch_reports_backend_failure_as_503(
-    registry_cls, monkeypatch, failure: Exception
+@pytest.mark.parametrize("failure", [RuntimeError("encode failed"), OSError("device lost")])
+def test_embed_batch_reports_an_encode_failure_as_503(
+    registry_cls, local_service, monkeypatch, failure: Exception
 ) -> None:
     # 5xx messages from error_response are rewritten in production; this one must not be.
     monkeypatch.setenv("ARAGORA_ENV", "production")
-    broken = MagicMock()
-    broken.embed_batch_raw.side_effect = failure
-    with patch("aragora.core.embeddings.service.get_embedding_service", return_value=broken):
-        status, body = _dispatch(
-            registry_cls, "POST", "/api/v1/index/embed-batch", {"texts": ["alpha"]}
-        )
+    monkeypatch.setattr(local_service, "embed_batch", MagicMock(side_effect=failure))
+    status, body = _dispatch(
+        registry_cls, "POST", "/api/v1/index/embed-batch", {"texts": ["alpha"]}
+    )
     assert status == 503, body
     assert body == {
         "error": {"message": "Embedding service unavailable", "code": "service_unavailable"}
     }
 
 
-@pytest.mark.parametrize("failing", [{"alpha", "beta"}, {"beta"}])
-def test_embed_batch_answers_503_when_the_base_backend_swallows_failures(
-    registry_cls, shared_embedding_cache, monkeypatch, failing: set[str]
+def test_embed_batch_short_model_reply_answers_503(
+    registry_cls, local_service, monkeypatch
 ) -> None:
-    monkeypatch.setattr(
-        UnifiedEmbeddingService, "_create_backend", lambda self: _FailingTextsBackend(failing)
-    )
+    monkeypatch.setattr(local_service, "embed_batch", lambda texts: [[1.0, 0.0, 0.0, 0.0]])
     status, body = _dispatch(
         registry_cls, "POST", "/api/v1/index/embed-batch", {"texts": ["alpha", "beta"]}
     )
-    assert status == 503, body
-    assert len(shared_embedding_cache) == 0
-
-
-def test_embed_batch_neither_reads_nor_writes_the_shared_embedding_cache(
-    registry_cls, shared_embedding_cache, monkeypatch
-) -> None:
-    monkeypatch.setattr(
-        UnifiedEmbeddingService, "_create_backend", lambda self: HashBackend(self.config)
-    )
-    shared = get_embedding_service()
-    stale = [9.0] * shared.dimension
-    shared_embedding_cache.set("alpha", stale)
-    before = shared_embedding_cache.stats()
-
-    status, body = _dispatch(
-        registry_cls, "POST", "/api/v1/index/embed-batch", {"texts": ["alpha", "beta"]}
-    )
-
-    assert status == 200, body
-    assert body["embeddings"] == asyncio.run(shared._backend.embed_batch(["alpha", "beta"]))
-    assert body["embeddings"][0] != stale
-    assert shared_embedding_cache.stats() == before
-    assert get_embedding_service() is shared
-
-
-def test_embed_batch_stops_at_the_overall_time_budget(registry_cls, monkeypatch) -> None:
-    monkeypatch.setattr(handler_module, "_EMBED_BATCH_BUDGET_SECONDS", 0.2, raising=False)
-    calls: list[list[str]] = []
-
-    class _SlowService:
-        model = "slow-model"
-        provider = "slow"
-
-        async def embed_batch_raw(self, batch: list[str]) -> list[list[float]]:
-            calls.append(batch)
-            await asyncio.sleep(0.05)
-            return [[1.0] for _ in batch]
-
-    texts = [f"t{i}" for i in range(40)]
-    with patch(
-        "aragora.core.embeddings.service.get_embedding_service", return_value=_SlowService()
-    ):
-        status, body = _dispatch(
-            registry_cls, "POST", "/api/v1/index/embed-batch", {"texts": texts, "batch_size": 1}
-        )
-    assert status == 503, body
-    assert len(calls) < len(texts)
-
-
-def test_embed_batch_short_backend_reply_answers_503(registry_cls, hash_service) -> None:
-    backend = hash_service._backend
-    real_embed_batch = backend.embed_batch
-
-    async def _short_reply(texts: list[str]) -> list[list[float]]:
-        return (await real_embed_batch(texts))[:-1]
-
-    with (
-        patch.object(backend, "embed_batch", _short_reply),
-        patch("aragora.core.embeddings.service.get_embedding_service", return_value=hash_service),
-    ):
-        status, body = _dispatch(
-            registry_cls, "POST", "/api/v1/index/embed-batch", {"texts": ["alpha", "beta"]}
-        )
     assert status == 503, body
 
 
@@ -442,16 +431,13 @@ _INDEX_ROLE_MATRIX: dict[str, dict[str, int]] = {
     ],
 )
 def test_real_jwt_roles_follow_rbac_v2(
-    registry_cls, hash_service, role: str, request_name: str, expected: int
+    registry_cls, local_service, role: str, request_name: str, expected: int
 ) -> None:
     """A real access token per role, the real RBAC v2 checker and the real dispatcher."""
     method, path, payload = _INDEX_ROLE_REQUESTS[request_name]
     token = create_access_token(user_id=f"jwt-{role}", email=f"{role}@example.com", role=role)
     # Keep token validation off whatever revocation database the host environment points at.
-    with (
-        patch("aragora.billing.auth.blacklist.is_token_revoked_persistent", return_value=False),
-        patch("aragora.core.embeddings.service.get_embedding_service", return_value=hash_service),
-    ):
+    with patch("aragora.billing.auth.blacklist.is_token_revoked_persistent", return_value=False):
         status, body = _dispatch(
             registry_cls, method, path, payload, headers={"Authorization": f"Bearer {token}"}
         )
@@ -464,4 +450,4 @@ def test_real_jwt_roles_follow_rbac_v2(
         assert body == {"indexes": [], "count": 0}
     else:
         assert body["count"] == 1
-        assert body["provider"] == "hash"
+        assert body["model"] == local_service.model_name
