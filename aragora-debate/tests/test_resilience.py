@@ -253,6 +253,21 @@ async def test_circuit_open_error_cause_is_cleared_after_recovery():
     assert caught.value.__cause__ is second
 
 
+@pytest.mark.asyncio
+async def test_circuit_open_error_chains_a_failed_half_open_probe():
+    now = [0.0]
+    breaker = resilience.CircuitBreaker(1, 5, clock=lambda: now[0])
+    opened, probe = ValueError("opened"), ValueError("probe")
+    with pytest.raises(ValueError):
+        await breaker.call(MagicMock(side_effect=opened))
+    now[0] = 5
+    with pytest.raises(ValueError):
+        await breaker.call(MagicMock(side_effect=probe))
+    with pytest.raises(resilience.CircuitOpenError) as caught:
+        await breaker.call(lambda: "never")
+    assert caught.value.__cause__ is probe
+
+
 def _install_sdk_stubs(monkeypatch):
     module = MagicMock()
     client = MagicMock()

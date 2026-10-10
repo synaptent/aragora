@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Built-in Claude, OpenAI, Mistral, and Gemini agents now give their SDK clients a transport timeout equal to the per-attempt timeout, `ARAGORA_DEBATE_TIMEOUT_S` (30-second default per attempt): `timeout=` for Anthropic and OpenAI, `timeout_ms=` for Mistral, and `http_options={"timeout": ...}` in milliseconds for Gemini. SDK transport timeouts now match the wrapper timeout; the SDK defaults were several minutes, so a timed-out call could keep its worker thread busy long after the attempt was abandoned.
 - `CircuitOpenError` is now raised `from` the provider failure that opened the circuit, so `__cause__` carries the original error.
 
+### Fixed
+
+- `redact()` also masks `key: value` forms (`Authorization: Bearer …`, JSON such as `{"api_key": "…"}`, and Python reprs), and masks the whole `Authorization` value for any scheme rather than only Bearer/Basic.
+- The JSON log formatter no longer raises, which made `logging` print the raw, unredacted record: mapping keys JSON cannot encode become redacted strings, self-referencing containers are logged as `<cycle>`, arguments that do not fit the format string are replaced by a note, and extras too deeply nested to encode are dropped with a `format_error` field.
+
 ## [0.2.3] - 2026-02-24
 
 ### Changed

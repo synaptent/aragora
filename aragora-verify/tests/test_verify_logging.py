@@ -90,10 +90,35 @@ def test_redact_copies_nested_values_and_message_assignments(key):
         str({"Authorization": "Bearer SECRET-JULIET-666"}),
         "authorization:Basic SECRET-KILO-777",
         "{'password': 'SECRET-MIKE-999 with spaces'}",
+        "Authorization: Token SECRET-PAPA-222",
+        "Authorization: AWS4-HMAC-SHA256 Credential=SECRET-ROMEO-444/s3, Signature=SECRET-SIERRA-5",
     ],
 )
 def test_redact_colon_and_quoted_key_forms(value):
     assert "SECRET-" not in json.dumps(redact(value), default=str)
+
+
+def test_redact_masks_any_authorization_scheme_and_replaces_cycles():
+    assert redact("Authorization: Token SECRET-PAPA-222 sent") == "Authorization: *** sent"
+    payload = {"name": "x", "token": "SECRET-WHISKEY-3"}
+    payload["self"] = payload
+    assert redact(payload) == {"name": "x", "token": "***", "self": "<cycle>"}
+
+
+def test_unformattable_arguments_never_reach_the_logging_error_handler():
+    result = _probe(
+        """
+from aragora_verify._logging import configure_logging
+import logging
+configure_logging()
+logging.getLogger("val").warning("api_key=%s retries=%d", "SECRET-XRAY-4", "many")
+""",
+        ARAGORA_LOG_FORMAT="json",
+    )
+    (line,) = result.stderr.splitlines()
+    assert "unformattable log arguments: TypeError" in json.loads(line)["msg"]
+    assert "SECRET-" not in result.stderr
+    assert "Logging error" not in result.stderr
 
 
 def test_redact_colon_forms_keep_their_shape():

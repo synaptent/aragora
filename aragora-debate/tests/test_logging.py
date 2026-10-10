@@ -132,10 +132,32 @@ def test_redact_message_assignments(message):
         "{'password': 'SECRET-MIKE-999 with spaces'}",
         '"token" = "SECRET-NOVEMBER-000"',
         'headers={"Authorization": "Basic SECRET-OSCAR-111"}',
+        "Authorization: Token SECRET-PAPA-222",
+        "proxy-authorization=Digest SECRET-QUEBEC-333",
+        "Authorization: AWS4-HMAC-SHA256 Credential=SECRET-ROMEO-444/s3, Signature=SECRET-SIERRA-5",
     ],
 )
 def test_redact_colon_and_quoted_key_forms(value):
     assert "SECRET-" not in json.dumps(redact(value), default=str)
+
+
+def test_redact_masks_the_whole_authorization_value_for_any_scheme():
+    assert redact("Authorization: Token SECRET-PAPA-222 sent") == "Authorization: *** sent"
+    assert redact("Authorization: ApiKey SECRET-UNIFORM-1, Accept: json") == (
+        "Authorization: ***, Accept: json"
+    )
+    assert redact("token: Bearer SECRET-VICTOR-2 ok") == "token: *** ok"
+
+
+def test_redact_replaces_reference_cycles():
+    payload = {"name": "x", "token": "SECRET-WHISKEY-3"}
+    payload["self"] = payload
+    items = ["a"]
+    items.append(items)
+    assert redact(payload) == {"name": "x", "token": "***", "self": "<cycle>"}
+    assert redact(items) == ["a", "<cycle>"]
+    shared = {"n": 1}
+    assert redact([shared, shared]) == [{"n": 1}, {"n": 1}]
 
 
 def test_redact_colon_forms_keep_their_shape():
@@ -175,6 +197,41 @@ logging.getLogger("aragora_debate.val").warning(
     assert data["msg"] == "probe"
     assert "SECRET-" not in result.stderr
     assert "Logging error" not in result.stderr
+
+
+@pytest.mark.parametrize("format_name", ["text", "json"])
+def test_unformattable_arguments_never_reach_the_logging_error_handler(format_name):
+    result = _probe(
+        """
+from aragora_debate._logging import configure_logging
+import logging
+configure_logging()
+logging.getLogger("val").warning("api_key=%s retries=%d", "SECRET-XRAY-4", "many")
+cyclic = {"token": "SECRET-YANKEE-5"}
+cyclic["self"] = cyclic
+logging.getLogger("val").warning("cyclic", extra={"payload": cyclic})
+""",
+        ARAGORA_LOG_FORMAT=format_name,
+    )
+    lines = result.stderr.splitlines()
+    assert len(lines) == 2, result.stderr
+    assert "unformattable log arguments: TypeError" in lines[0]
+    assert "SECRET-" not in result.stderr
+    assert "Logging error" not in result.stderr
+    if format_name == "json":
+        assert json.loads(lines[1])["payload"] == {"token": "***", "self": "<cycle>"}
+
+
+def test_json_formatter_falls_back_when_extras_are_too_deep_to_encode():
+    nested: list = []
+    for _ in range(5000):
+        nested = [nested]
+    record = logging.LogRecord("val", logging.WARNING, "", 0, "deep api_key=%s", ("x",), None)
+    record.payload = nested
+    data = json.loads(JsonFormatter().format(record))
+    assert data["msg"] == "deep api_key=***"
+    assert data["format_error"] == "RecursionError"
+    assert "payload" not in data
 
 
 @pytest.mark.parametrize("formatter", [JsonFormatter(), TextFormatter()])

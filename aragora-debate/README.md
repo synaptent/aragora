@@ -409,10 +409,17 @@ suppressed). Set `ARAGORA_LOG_FORMAT=json` for one JSON object per line:
 
 Both formatters use `redact()` to mask values as `***` for keys matching
 `(?i)(api[_-]?key|token|secret|password|authorization)` in nested mappings and
-sequences, and `key=value` assignments in messages (including quoted and
-Bearer/Basic values). Interpolated messages and exceptions are redacted without
-mutating the original record. Unlabelled sensitive text is not automatically
-recognized; avoid logging credentials or user content.
+sequences, and `key=value` or `key: value` assignments in messages (including
+quoted keys and values as in JSON or Python reprs, and Bearer/Basic values). An
+`Authorization` value is masked with its scheme and credential, whatever the
+scheme. Matching fails closed, so labels such as `token_count: 5` are masked too.
+Mapping keys JSON cannot encode become strings with their values masked, and a
+container that contains itself is logged as `<cycle>`. When the arguments do
+not fit the format string, the message template is logged with an
+`[unformattable log arguments: …]` note instead of the arguments. Interpolated
+messages and exceptions are redacted without mutating the original record.
+Unlabelled sensitive text is not automatically recognized; avoid logging
+credentials or user content.
 
 ## When to use adversarial debate
 
