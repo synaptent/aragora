@@ -481,6 +481,167 @@ class TestDebateStateCaching:
         assert len(server_base.debate_states) == initial_count
 
 
+class TestDebateEndStatus:
+    """debate_end keeps the terminal status its emitter reports."""
+
+    @staticmethod
+    def _running(server_base, loop_id: str = "end-loop") -> None:
+        server_base.set_debate_state(
+            loop_id,
+            {
+                "loop_id": loop_id,
+                "status": "running",
+                "rounds": [],
+                "messages": [],
+                "current_round": 1,
+            },
+        )
+
+    @pytest.mark.parametrize(
+        ("data", "status", "error", "reason"),
+        [
+            (
+                {"status": "timeout", "reason": "Debate timed out after 650s", "duration": 650.0},
+                "timeout",
+                None,
+                "Debate timed out after 650s",
+            ),
+            (
+                {"status": "timeout", "duration": 301.0, "rounds": 1, "error": "deadline 300s"},
+                "timeout",
+                "deadline 300s",
+                None,
+            ),
+            (
+                {"status": "error", "error": "Debate execution failed"},
+                "error",
+                "Debate execution failed",
+                None,
+            ),
+            (
+                {"status": "cancelled", "reason": "Cancelled by user"},
+                "cancelled",
+                None,
+                "Cancelled by user",
+            ),
+        ],
+        ids=["watchdog-timeout", "executor-timeout", "executor-error", "user-cancel"],
+    )
+    def test_status_bearing_debate_end_keeps_its_status(
+        self, server_base, data, status, error, reason
+    ):
+        self._running(server_base)
+
+        server_base._update_debate_state(
+            StreamEvent(
+                type=StreamEventType.DEBATE_END,
+                loop_id="end-loop",
+                data={"debate_id": "end-loop", **data},
+            )
+        )
+
+        state = server_base.get_debate_state("end-loop")
+        assert state["status"] == status
+        assert state["ended"] is True
+        assert state.get("error") == error
+        assert state.get("reason") == reason
+
+    def test_debate_end_without_status_stays_completed(self, server_base):
+        self._running(server_base)
+
+        server_base._update_debate_state(
+            StreamEvent(
+                type=StreamEventType.DEBATE_END,
+                loop_id="end-loop",
+                data={"duration": 12.5, "rounds": 2, "answer": "Use a token bucket"},
+            )
+        )
+
+        state = server_base.get_debate_state("end-loop")
+        assert state["status"] == "completed"
+        assert state["ended"] is True
+        assert state["result"] == "Use a token bucket"
+        assert "error" not in state
+
+    def test_debate_end_with_completed_status_stays_completed(self, server_base):
+        self._running(server_base)
+
+        server_base._update_debate_state(
+            StreamEvent(
+                type=StreamEventType.DEBATE_END,
+                loop_id="end-loop",
+                data={"status": "completed", "result": "Ship it"},
+            )
+        )
+
+        state = server_base.get_debate_state("end-loop")
+        assert state["status"] == "completed"
+        assert state["ended"] is True
+        assert state["result"] == "Ship it"
+
+    def test_controller_error_debate_end_does_not_hide_the_error(self, server_base):
+        """The controller sends ERROR, then a debate_end carrying only ``error``."""
+        self._running(server_base)
+
+        server_base._update_debate_state(
+            StreamEvent(
+                type=StreamEventType.ERROR,
+                loop_id="end-loop",
+                data={"error": "Debate validation failed.", "debate_id": "end-loop"},
+            )
+        )
+        server_base._update_debate_state(
+            StreamEvent(
+                type=StreamEventType.DEBATE_END,
+                loop_id="end-loop",
+                data={
+                    "debate_id": "end-loop",
+                    "duration": 0.2,
+                    "rounds": 0,
+                    "error": "Debate validation failed.",
+                },
+            )
+        )
+
+        state = server_base.get_debate_state("end-loop")
+        assert state["status"] == "error"
+        assert state["error"] == "Debate validation failed."
+        assert state["ended"] is True
+
+    def test_cancellation_hook_debate_end_is_cancelled(self, server_base):
+        """The arena cancellation hook sends ``cancelled: True`` without a status."""
+        self._running(server_base)
+
+        server_base._update_debate_state(
+            {
+                "type": "debate_end",
+                "loop_id": "end-loop",
+                "data": {"cancelled": True, "reason": "User requested"},
+            }
+        )
+
+        state = server_base.get_debate_state("end-loop")
+        assert state["status"] == "cancelled"
+        assert state["reason"] == "User requested"
+        assert state["ended"] is True
+
+    def test_consensus_event_still_marks_completed(self, server_base):
+        self._running(server_base)
+
+        server_base._update_debate_state(
+            StreamEvent(
+                type=StreamEventType.CONSENSUS,
+                loop_id="end-loop",
+                data={"status": "timeout", "answer": "Agreed"},
+            )
+        )
+
+        state = server_base.get_debate_state("end-loop")
+        assert state["status"] == "completed"
+        assert state["result"] == "Agreed"
+        assert state["ended"] is True
+
+
 # ===========================================================================
 # Test Active Loops Tracking
 # ===========================================================================

@@ -36,6 +36,25 @@ logger = logging.getLogger(__name__)
 WS_TOKEN_REVALIDATION_INTERVAL = 300.0
 
 
+def _debate_end_status(data: dict[str, Any]) -> str:
+    """Return the stream-state status for a ``debate_end`` payload.
+
+    Uses the same terminal precedence as
+    ``PostDebateWorkflowSubscriber.classify_outcome``. Some emitters mark a
+    non-success end only with a flag and no ``status``: the arena cancellation
+    hook sends ``cancelled`` and the controller's failure paths send ``error``.
+    """
+    raw_status = data.get("status")
+    status = raw_status.strip().lower() if isinstance(raw_status, str) else ""
+    if data.get("timed_out") or status == "timeout":
+        return "timeout"
+    if data.get("cancelled") or status == "cancelled":
+        return "cancelled"
+    if data.get("error") or status == "error":
+        return "error"
+    return "completed"
+
+
 @dataclass
 class ServerConfig:
     """Configuration for server behavior."""
@@ -312,7 +331,17 @@ class ServerBase:
                     }
                 )
                 state["synthesis"] = event_data.get("content", "")
-            elif event_type in ("debate_end", "consensus_reached", "consensus"):
+            elif event_type == "debate_end":
+                status = _debate_end_status(event_data)
+                state["status"] = status
+                state["result"] = event_data.get("result") or event_data.get("answer")
+                state["ended"] = True
+                if status != "completed":
+                    if event_data.get("error"):
+                        state["error"] = event_data["error"]
+                    if event_data.get("reason"):
+                        state["reason"] = event_data["reason"]
+            elif event_type in ("consensus_reached", "consensus"):
                 state["status"] = "completed"
                 state["result"] = event_data.get("result") or event_data.get("answer")
                 state["ended"] = True
