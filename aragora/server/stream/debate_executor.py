@@ -275,6 +275,52 @@ def _set_debate_error(
         )
 
 
+# Time the backstop around Arena.run allows past the protocol deadline, so the
+# timeout result Arena.run returns at its deadline arrives first.
+_ARENA_DEADLINE_MARGIN_SECONDS = 15.0
+
+
+def _stopped_at_deadline(result: Any) -> bool:
+    """True when Arena.run stopped the debate at its protocol deadline."""
+    metadata = getattr(result, "metadata", None)
+    return getattr(result, "status", None) == "timeout" or (
+        isinstance(metadata, dict) and bool(metadata.get("deadline_exceeded"))
+    )
+
+
+def _record_deadline_stop(
+    debate_id: str,
+    result: Any,
+    deadline_seconds: float,
+    duration: float,
+    emitter: SyncEventEmitter,
+) -> None:
+    """Record a debate stopped at its deadline and emit its terminal debate_end.
+
+    The consensus phase skips its own debate_end when the deadline cancels it,
+    so this is the end event clients receive for such a debate.
+    """
+    error = f"Debate stopped at its {deadline_seconds:.0f}s deadline"
+    logger.warning("[debate] %s: %s", debate_id, error)
+    with _active_debates_lock:
+        _active_debates[debate_id]["status"] = "timeout"
+        _active_debates[debate_id]["error"] = error
+        _active_debates[debate_id]["completed_at"] = time.time()
+    emitter.emit(
+        StreamEvent(
+            type=StreamEventType.DEBATE_END,
+            data={
+                "debate_id": debate_id,
+                "status": "timeout",
+                "duration": duration,
+                "rounds": getattr(result, "rounds_used", 0),
+                "error": error,
+            },
+            loop_id=debate_id,
+        )
+    )
+
+
 def _filter_agent_specs_with_fallback(
     agent_specs: list[Any],
     emitter: SyncEventEmitter,
@@ -361,6 +407,53 @@ def _filter_agent_specs_with_fallback(
         )
 
     return filtered_specs, requested_agents, missing_agents
+
+
+class _DebateEndTracker:
+    """Records the consensus and debate_end the arena's phases already sent to clients."""
+
+    def __init__(self) -> None:
+        self.sent = False
+        self.consensus: dict[str, Any] | None = None
+
+    def wrap(self, hooks: dict[str, Any]) -> None:
+        """Wrap the consensus and debate_end hooks in place."""
+        on_consensus = hooks.get("on_consensus")
+        on_debate_end = hooks.get("on_debate_end")
+        if on_consensus is not None:
+
+            def _on_consensus(*args: Any, **kwargs: Any) -> None:
+                on_consensus(*args, **kwargs)
+                self.consensus = kwargs
+
+            hooks["on_consensus"] = _on_consensus
+        if on_debate_end is not None:
+
+            def _on_debate_end(*args: Any, **kwargs: Any) -> None:
+                on_debate_end(*args, **kwargs)
+                self.sent = True
+
+            hooks["on_debate_end"] = _on_debate_end
+
+
+def _record_ended_before_deadline(debate_id: str, consensus: dict[str, Any] | None) -> None:
+    """Record a debate whose end clients already received when the deadline fired.
+
+    The consensus phase sends debate_end before analytics, feedback and cleanup
+    run, all still inside Arena.run's deadline. A deadline in that later work
+    leaves the debate completed with the answer clients were sent.
+    """
+    logger.warning("[debate] %s: post-consensus work stopped at the deadline", debate_id)
+    consensus = consensus or {}
+    with _active_debates_lock:
+        entry = _active_debates[debate_id]
+        entry["status"] = "completed"
+        entry["completed_at"] = time.time()
+        entry["result"] = {
+            "final_answer": consensus.get("answer", ""),
+            "consensus_reached": consensus.get("reached", False),
+            "confidence": consensus.get("confidence", 0.0),
+        }
 
 
 def _create_debate_agents(
@@ -458,6 +551,7 @@ def execute_debate_thread(
         f"question={question[:50]}..., agents={agents_str}, rounds={rounds}"
     )
     thread_start_time = time.time()
+    debate_end = _DebateEndTracker()
 
     try:
         # Parse agents with bounds check
@@ -534,6 +628,7 @@ def execute_debate_thread(
 
         # Create arena with hooks
         hooks = create_arena_hooks(emitter, loop_id=debate_id)
+        debate_end.wrap(hooks)
 
         usage_tracker = None
         if user_id or org_id:
@@ -567,13 +662,15 @@ def execute_debate_thread(
             except (RuntimeError, TypeError, ValueError, OSError) as cb_err:
                 logger.warning("[debate] on_arena_created callback failed: %s", cb_err)
 
-        # Run debate with timeout protection
+        # Run debate with timeout protection. When the protocol has a deadline,
+        # Arena.run enforces it and returns a timeout result; the outer limit is
+        # then only a backstop, with a margin so that result is not cancelled.
         protocol_timeout = getattr(arena.protocol, "timeout_seconds", 0)
-        timeout = (
-            protocol_timeout
-            if isinstance(protocol_timeout, (int, float)) and protocol_timeout > 0
-            else DEBATE_TIMEOUT_SECONDS
-        )
+        if isinstance(protocol_timeout, (int, float)) and protocol_timeout > 0:
+            deadline = protocol_timeout
+            timeout = deadline + _ARENA_DEADLINE_MARGIN_SECONDS
+        else:
+            deadline = timeout = DEBATE_TIMEOUT_SECONDS
         with _active_debates_lock:
             _active_debates[debate_id]["status"] = "running"
 
@@ -590,7 +687,13 @@ def execute_debate_thread(
                 except (RuntimeError, TypeError, ValueError, OSError) as cb_err:
                     logger.warning("[debate] on_arena_finished callback failed: %s", cb_err)
 
+        if debate_end.sent and _stopped_at_deadline(result):
+            _record_ended_before_deadline(debate_id, debate_end.consensus)
+            return
         total_time = time.time() - thread_start_time
+        if _stopped_at_deadline(result):
+            _record_deadline_stop(debate_id, result, deadline, total_time, emitter)
+            return
         logger.info(
             f"[debate] {debate_id}: Completed in {total_time:.2f}s, "
             f"consensus={result.consensus_reached}, confidence={result.confidence:.2f}"
@@ -626,6 +729,10 @@ def execute_debate_thread(
                 data={"error": safe_msg, "debate_id": debate_id},
             )
         )
+        if isinstance(e, asyncio.TimeoutError) and not debate_end.sent:
+            # A consensus phase cancelled by this backstop leaves debate_end to its canceller.
+            end = {"debate_id": debate_id, "status": "error", "error": safe_msg}
+            emitter.emit(StreamEvent(type=StreamEventType.DEBATE_END, data=end, loop_id=debate_id))
 
 
 __all__ = [

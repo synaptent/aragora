@@ -20,17 +20,25 @@ import inspect
 import math
 import selectors
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
 import aragora.agents.api_agents.common as api_common
 import aragora.server.debate_controller as dc
+from aragora.core_types import DebateResult
+from aragora.debate.context import DebateContext
 from aragora.debate.orchestrator import Arena
+from aragora.debate.phases.consensus_phase import (
+    ConsensusCallbacks,
+    ConsensusDependencies,
+    ConsensusPhase,
+)
 from aragora.protocols.debate import DebateProtocol
 from aragora.server.debate_controller import DebateController
 from aragora.server.debate_factory import DebateConfig
@@ -391,11 +399,89 @@ def _at_deadline() -> _FakeArena:
     return _FakeArena(timeout_seconds=45, work_seconds=10_000)
 
 
+@dataclass
+class _ConsensusArena(_FakeArena):
+    """Arena stand-in whose debate is the real consensus phase, with synthesis outliving the deadline."""
+
+    hooks: dict[str, Any] = field(default_factory=dict)
+
+    async def _run_inner(self, correlation_id: str = "") -> Any:
+        self.loop = asyncio.get_running_loop()
+        self.started_at = self.loop.time()
+        ctx = DebateContext(
+            env=self.env,
+            agents=[],
+            proposals={"openai-api": "Adopt it.", "grok": "Pilot it first."},
+            result=DebateResult(task=self.env.task),
+            start_time=time.time(),
+            debate_id="consensus-arena",
+        )
+        phase = ConsensusPhase(
+            deps=ConsensusDependencies(
+                protocol=DebateProtocol(rounds=1, consensus="none"), hooks=self.hooks
+            ),
+            callbacks=ConsensusCallbacks(),
+        )
+
+        async def _slow_synthesis(_ctx: Any) -> bool:
+            await asyncio.sleep(self.work_seconds)
+            return True
+
+        try:
+            with patch.object(
+                phase._synthesis_generator, "generate_mandatory_synthesis", _slow_synthesis
+            ):
+                await phase.execute(ctx)
+        except asyncio.CancelledError:
+            self.cancelled_at = self.loop.time()
+            raise
+        finally:
+            self.cleaned_up = True
+        self.finished_at = self.loop.time()
+        return ctx.result
+
+
+def _hand_hooks_to(arenas: list[Any]) -> Any:
+    """``create_arena`` side effect giving each arena the controller's event hooks."""
+    pending = iter(arenas)
+
+    def _create(_config: Any, *, event_hooks: dict[str, Any], **_kwargs: Any) -> Any:
+        arena = next(pending)
+        arena.hooks = event_hooks
+        return arena
+
+    return _create
+
+
+class TestDeadlineInRealConsensusPhase:
+    def test_single_run_emits_exactly_one_timeout_debate_end(
+        self, execution_path, registered_debate
+    ):
+        debate_id = registered_debate(f"consensus-deadline-{execution_path.name}")
+        arena = _ConsensusArena(timeout_seconds=45, work_seconds=10_000)
+        storage = Mock()
+        emitter = Mock()
+        controller = _controller(arena, storage=storage, emitter=emitter)
+        controller.factory.create_arena.side_effect = _hand_hooks_to([arena])
+        controller._generate_debate_receipt = Mock()
+
+        controller._run_debate(_config(debate_id), debate_id)
+
+        assert "on_debate_end" in arena.hooks
+        assert arena.cancelled_after == pytest.approx(45.0)
+        assert get_state_manager().get_debate(debate_id).status == "timeout"
+        storage.save_dict.assert_not_called()
+        controller._generate_debate_receipt.assert_not_called()
+        end_events = _debate_end_events(emitter)
+        assert [event.data.get("status") for event in end_events] == ["timeout"]
+        assert execution_path.leftover_tasks() == []
+
+
 def _run_comparison(debate_id: str, arenas: list[Any]) -> tuple[DebateController, Mock, Mock]:
     storage = Mock()
     emitter = Mock()
     controller = _controller(arenas[0], storage=storage, emitter=emitter)
-    controller.factory.create_arena.side_effect = arenas
+    controller.factory.create_arena.side_effect = _hand_hooks_to(arenas)
     controller._generate_debate_receipt = Mock()
     controller._emit_leaderboard_update = Mock()
     config = replace(
@@ -432,6 +518,22 @@ class TestComparisonModeDeadline:
         end_events = _debate_end_events(emitter)
         assert [event.data["status"] for event in end_events] == ["timeout"]
         assert end_events[0].data["debate_id"] == debate_id
+        assert execution_path.leftover_tasks() == []
+
+    def test_all_candidates_stopped_in_real_consensus_emit_one_debate_end(
+        self, execution_path, registered_debate
+    ):
+        debate_id = registered_debate(f"comparison-consensus-deadline-{execution_path.name}")
+        arenas = [_ConsensusArena(timeout_seconds=45, work_seconds=10_000) for _ in range(2)]
+
+        controller, storage, emitter = _run_comparison(debate_id, arenas)
+
+        assert [arena.cancelled_after for arena in arenas] == [pytest.approx(45.0)] * 2
+        assert get_state_manager().get_debate(debate_id).status == "timeout"
+        storage.save_dict.assert_not_called()
+        controller._generate_debate_receipt.assert_not_called()
+        end_events = _debate_end_events(emitter)
+        assert [event.data.get("status") for event in end_events] == ["timeout"]
         assert execution_path.leftover_tasks() == []
 
     def test_one_success_among_deadline_stops_keeps_the_success_result(

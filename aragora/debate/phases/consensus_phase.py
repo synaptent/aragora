@@ -379,6 +379,7 @@ class ConsensusPhase:
             self._attach_crux_cards(ctx)
 
         # Always generate final synthesis regardless of consensus mode
+        cancelled = False
         try:
             synthesis_generated = await self._synthesis_generator.generate_mandatory_synthesis(ctx)
 
@@ -403,9 +404,17 @@ class ConsensusPhase:
                         logger.warning("on_message hook failed in fallback: %s", hook_err)
         except (RuntimeError, OSError, ConnectionError, TimeoutError) as e:  # noqa: BLE001 - phase isolation
             logger.error("synthesis_or_hooks_failed: %s", e, exc_info=True)
+        except asyncio.CancelledError:
+            cancelled = True
+            raise
         finally:
-            logger.info("consensus_phase_emitting_guaranteed_events")
-            self._emit_guaranteed_events(ctx)
+            # A cancelled debate (e.g. stopped at its deadline) did not end here:
+            # whoever cancelled it owns the single terminal debate_end event.
+            if cancelled:
+                logger.info("consensus_phase_cancelled_skipping_guaranteed_events")
+            else:
+                logger.info("consensus_phase_emitting_guaranteed_events")
+                self._emit_guaranteed_events(ctx)
 
     def _attach_crux_cards(self, ctx: "DebateContext") -> None:
         """Attach a crux-cards block to result metadata (``enable_crux_cards``).
