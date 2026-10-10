@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 import shlex
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -111,6 +112,99 @@ def test_existing_frontend_hook_is_unchanged() -> None:
         "files": r"^aragora/live/src/.*\.(ts|tsx)$",
         "stages": ["pre-push"],
     }
+
+
+TSC_HOOK = ROOT / "scripts/tsc_check_hook.sh"
+
+
+def test_tsc_hook_guards_npx_before_the_unchanged_check() -> None:
+    lines = [line.strip() for line in TSC_HOOK.read_text().splitlines() if line.strip()]
+    assert lines[-2:] == ['cd "$live"', "exec npx tsc --noEmit"]
+    guard = lines.index("if ! command -v npx >/dev/null 2>&1; then")
+    assert lines.index('if [ ! -d "$live/node_modules" ]; then') < guard < len(lines) - 2
+
+
+def _tsc_sandbox(tmp_path: Path, *, node_modules: bool, npx: bool) -> tuple[Path, dict[str, str]]:
+    repo = tmp_path / "repo"
+    (repo / "scripts").mkdir(parents=True)
+    (repo / "scripts/tsc_check_hook.sh").write_bytes(TSC_HOOK.read_bytes())
+    (repo / "aragora/live").mkdir(parents=True)
+    if node_modules:
+        (repo / "aragora/live/node_modules").mkdir()
+    env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    subprocess.run(["git", "init", "-q", str(repo)], check=True, env=env, timeout=30)
+    # Only git (and the fake npx when wanted) on PATH, whatever the host has installed.
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    git = shutil.which("git")
+    assert git is not None
+    (bin_dir / "git").symlink_to(git)
+    if npx:
+        (bin_dir / "npx").write_text(
+            '#!/bin/sh\nprintf "%s|%s\\n" "$PWD" "$*" >> "$HOOK_LOG"\nexit "$HOOK_EXIT"\n'
+        )
+        (bin_dir / "npx").chmod(0o755)
+    env.update(PATH=str(bin_dir), HOOK_LOG=str(tmp_path / "calls"), HOOK_EXIT="0")
+    env.pop("ARAGORA_TSC_CHECK_STRICT", None)
+    return repo, env
+
+
+def _run_tsc_hook(repo: Path, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
+    bash = shutil.which("bash")
+    assert bash is not None
+    return subprocess.run(
+        [bash, "scripts/tsc_check_hook.sh"],
+        cwd=repo,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+
+@pytest.mark.parametrize(
+    ("node_modules", "reason"),
+    [(False, "aragora/live/node_modules is absent"), (True, "npx is not on PATH")],
+    ids=["no-node-modules", "no-npx"],
+)
+@pytest.mark.parametrize("strict", [False, True], ids=["default", "strict"])
+def test_tsc_hook_skips_loudly_or_fails_strict_without_its_tools(
+    tmp_path: Path, node_modules: bool, reason: str, strict: bool
+) -> None:
+    repo, env = _tsc_sandbox(tmp_path, node_modules=node_modules, npx=False)
+    if strict:
+        env["ARAGORA_TSC_CHECK_STRICT"] = "1"
+    result = _run_tsc_hook(repo, env)
+    assert "not found" not in result.stderr
+    assert reason in result.stdout + result.stderr
+    if strict:
+        assert result.returncode == 1, result.stdout + result.stderr
+        assert "SKIPPED" not in result.stdout
+        assert "ARAGORA_TSC_CHECK_STRICT=1, failing" in result.stderr
+    else:
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.startswith("tsc-check: SKIPPED.")
+        assert "authoritative" in result.stdout
+        if node_modules:
+            assert "NOT type-checked" in result.stdout
+    assert not (tmp_path / "calls").exists()
+
+
+@pytest.mark.parametrize("tool_exit", [0, 2])
+@pytest.mark.parametrize("strict", [False, True], ids=["default", "strict"])
+def test_tsc_hook_runs_tsc_when_npx_is_present(
+    tmp_path: Path, tool_exit: int, strict: bool
+) -> None:
+    repo, env = _tsc_sandbox(tmp_path, node_modules=True, npx=True)
+    env["HOOK_EXIT"] = str(tool_exit)
+    if strict:
+        env["ARAGORA_TSC_CHECK_STRICT"] = "1"
+    result = _run_tsc_hook(repo, env)
+    assert result.returncode == tool_exit, result.stdout + result.stderr
+    assert "SKIP" not in result.stdout
+    live = (repo / "aragora/live").resolve()
+    assert (tmp_path / "calls").read_text().splitlines() == [f"{live}|tsc --noEmit"]
 
 
 @pytest.mark.parametrize("hook_id", HOOK_APPS)

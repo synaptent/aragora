@@ -4,8 +4,9 @@
 # A fresh worktree has no aragora/live/node_modules, and `tsc` then fails with
 # TS2688 "Cannot find type definition file for 'node'/'jest'". That is an
 # environment artifact, not a code error, and it tempts `git push --no-verify`,
-# which also skips every other pre-push hook. So when dependencies are absent
-# this hook skips itself with a clear message; CI's TypeScript checks remain the
+# which also skips every other pre-push hook. So when dependencies are absent,
+# or npx itself is not on PATH (a GUI git client or a minimal shell), this hook
+# skips itself with a clear message; CI's TypeScript checks remain the
 # authoritative gate. Set ARAGORA_TSC_CHECK_STRICT=1 to fail instead of skip.
 set -euo pipefail
 
@@ -20,6 +21,18 @@ if [ ! -d "$live/node_modules" ]; then
   echo "tsc-check: SKIPPED. aragora/live/node_modules is absent in this checkout (fresh worktree)."
   echo "           CI's TypeScript checks remain authoritative. To run the check locally first:"
   echo "             (cd aragora/live && npm ci)"
+  exit 0
+fi
+
+if ! command -v npx >/dev/null 2>&1; then
+  if [ "${ARAGORA_TSC_CHECK_STRICT:-0}" = "1" ]; then
+    echo "tsc-check: npx is not on PATH and ARAGORA_TSC_CHECK_STRICT=1, failing." >&2
+    exit 1
+  fi
+  echo "tsc-check: SKIPPED. npx is not on PATH, so aragora/live was NOT type-checked."
+  echo "           This is not a pass. CI's TypeScript checks remain authoritative."
+  echo "           Put Node.js (which provides npx) on PATH, then run:"
+  echo "             (cd aragora/live && npx tsc --noEmit)"
   exit 0
 fi
 
