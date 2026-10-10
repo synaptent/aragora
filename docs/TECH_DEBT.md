@@ -78,6 +78,10 @@ Both use the shared Vulture runner and the file-size checker's existing
 from each package directory, classifies `dev` as development dependencies,
 and enables all rules without suppressions. Debate maps the `google-genai`
 distribution to its `google` import namespace.
+`readiness-lint-verify` first runs `python3 scripts/check_aragora_verify_dependency_policy.py`,
+the policy check behind the required `lint` CI context, so an unadopted
+dependency (in the `dev` extra or any other list) or allowlist drift fails
+locally before ruff and the ratchets run.
 
 Package duplication gates reuse the root `.jscpd.json` settings and
 `JSCPD_VERSION` pin, with explicit source paths and thresholds in the

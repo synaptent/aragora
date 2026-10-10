@@ -153,3 +153,36 @@ def test_debt_register_covers_baselines_both_ways_and_counts() -> None:
     ]
     assert extras["readiness"] == ["vulture>=2.16,<3.0", "deptry>=0.25.1,<1.0"]
     assert set(extras["readiness"]) <= set(extras["all"])
+
+
+def _baseline_rows(table: str, path_cell: int, command_cell: int) -> dict[str, str]:
+    """Map each JSON baseline path in a docs table to its first regeneration command.
+
+    Threshold-only rows (the jscpd configs) have no baseline file; the `[tool.deptry]`
+    config table and the legacy `aragora/.todo_baseline` count file are not JSON.
+    """
+    rows: dict[str, str] = {}
+    for line in table.splitlines():
+        cells = line.split("|")
+        if not line.startswith("|") or "threshold-only" in cells[path_cell]:
+            continue
+        for path in re.findall(r"`([^`]+\.json)`", cells[path_cell]):
+            assert path not in rows, f"{path} has two rows"
+            rows[path] = re.findall(r"`([^`]+)`", cells[command_cell])[0]
+    return rows
+
+
+def test_ratchets_doc_lists_every_debt_register_baseline_both_ways() -> None:
+    debt = (ROOT / "docs/TECH_DEBT.md").read_text()
+    debt_table = debt.split("## Ratchets", 1)[1].split("\n### ", 1)[0]
+    ratchets = (ROOT / "docs/RATCHETS.md").read_text()
+    wired = ratchets.split("### Wired baselines and their regeneration commands", 1)[1]
+    table = re.search(
+        r"(?m)^\| Baseline \| Wired in \| Regeneration command \|\n(?:\|.*\n)+", wired
+    )
+    assert table is not None
+    wired_table = table.group(0)
+    debt_rows = _baseline_rows(debt_table, path_cell=2, command_cell=5)
+    wired_rows = _baseline_rows(wired_table, path_cell=1, command_cell=3)
+    assert set(debt_rows) == set(wired_rows)
+    assert debt_rows == wired_rows

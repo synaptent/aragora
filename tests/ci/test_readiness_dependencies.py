@@ -87,12 +87,41 @@ def test_dependabot_cooldown_respects_ecosystem_support() -> None:
             assert entry["cooldown"] == {"default-days": 7, "semver-major-days": 14}
 
 
+def _recipe(target: str) -> str:
+    makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+    recipe = re.search(rf"(?m)^{re.escape(target)}:\n((?:\t[^\n]*\n)+)", makefile)
+    assert recipe is not None, f"Makefile has no {target} recipe"
+    return recipe.group(1)
+
+
+def test_readiness_lint_verify_runs_dependency_policy_before_tools() -> None:
+    # CI's required lint context runs this policy; the local gate must fail first.
+    lines = [line.strip() for line in _recipe("readiness-lint-verify").splitlines()]
+    policy = "python3 scripts/check_aragora_verify_dependency_policy.py && \\"
+    assert policy in lines
+    guards = [index for index, line in enumerate(lines) if line.startswith("command -v ")]
+    assert guards and max(guards) + 1 == lines.index(policy)
+    assert lines[lines.index(policy) + 1].startswith("ruff check aragora-verify")
+
+
+def test_readiness_test_root_runs_policy_script_tests() -> None:
+    recipe = _recipe("readiness-test-root")
+    paths = re.findall(r"(?<!\S)tests/\S+", recipe.split("$(READINESS_EXTRA_TESTS)", 1)[0])
+    for test_file in (
+        "tests/scripts/test_check_aragora_verify_dependency_policy.py",
+        "tests/scripts/test_check_prometheus_rules.py",
+    ):
+        assert test_file in paths
+        assert (REPO_ROOT / test_file).is_file()
+    # Explicit files: the whole tests/scripts tree has hundreds of unvetted tests.
+    assert "tests/scripts" not in paths and "tests/scripts/" not in paths
+    assert len(paths) == len(set(paths))
+
+
 @pytest.mark.parametrize(("flag", "package"), PYTEST_PLUGINS)
 def test_readiness_pytest_flags_have_declared_plugins(flag: str, package: str) -> None:
-    makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
-    recipe = re.search(r"(?m)^readiness-test-root:\n((?:\t[^\n]*\n)+)", makefile)
-    assert recipe is not None
-    assert re.search(rf"(?<!\S){re.escape(flag)}(?:=|\s)", recipe.group(1))
+    recipe = _recipe("readiness-test-root")
+    assert re.search(rf"(?<!\S){re.escape(flag)}(?:=|\s)", recipe)
 
     project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     requirements = {

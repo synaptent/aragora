@@ -83,10 +83,29 @@ def test_workflow_runs_strict_types_ratchets_and_timed_coverage() -> None:
     ):
         assert flag in tests["run"]
     assert '["fail_under"]' in tests["run"]
-    artifact = next(step for step in steps if step.get("uses") == "actions/upload-artifact@v4")
+    artifact = next(
+        step
+        for step in steps
+        if re.fullmatch(r"actions/upload-artifact@[0-9a-f]{40}", step.get("uses", ""))
+    )
     assert artifact["if"] == "always()"
     assert artifact["with"]["name"] == "junit-${{ matrix.app }}"
     assert artifact["with"]["path"] == "aragora-${{ matrix.app }}/junit.xml"
+
+
+def test_workflow_pins_every_remote_action_to_a_commit() -> None:
+    text = (ROOT / ".github/workflows/packages-ci.yml").read_text()
+    # YAML parsing drops comments, so the version comment is checked on the raw line.
+    uses = re.findall(r"(?m)^\s*(?:-\s+)?uses:\s*(.+?)\s*$", text)
+    remote = [use for use in uses if not use.startswith("./")]
+    assert {use.split("@", 1)[0] for use in remote} == {
+        "actions/checkout",
+        "actions/upload-artifact",
+    }
+    for use in remote:
+        assert re.fullmatch(r"[\w.-]+/[\w.-]+@[0-9a-f]{40} # v\d+\.\d+\.\d+", use), use
+    assert re.search(r"(?m)uses: actions/upload-artifact@[0-9a-f]{40} # v4\.\d+\.\d+$", text)
+    assert not re.search(r"upload-artifact@v\d", text)
 
 
 def test_security_gate_tracks_all_workspace_manifests() -> None:
@@ -241,9 +260,12 @@ def test_hooks_run_tools_and_propagate_failures(
     hook_id: str, tool_exit: int, tmp_path: Path
 ) -> None:
     tool = "ruff" if hook_id == "packages-ruff" else "mypy"
+    # Answer the version the real pinned tool prints, so a hook's version check
+    # sees this stand-in as that tool.
+    version = {"ruff": "ruff 0.14.14", "mypy": "mypy 2.1.0 (compiled: yes)"}[tool]
     binary = tmp_path / tool
     binary.write_text(
-        '#!/bin/sh\nif [ "$1" = "--version" ]; then echo "mypy 2.1.0 (compiled: yes)"; '
+        f'#!/bin/sh\nif [ "$1" = "--version" ]; then echo "{version}"; '
         'exit 0; fi\nprintf "%s|%s\\n" "$PWD" "$*" >> "$HOOK_LOG"\nexit "$HOOK_EXIT"\n'
     )
     binary.chmod(0o755)

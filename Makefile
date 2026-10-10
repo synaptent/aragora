@@ -456,6 +456,7 @@ readiness-test-root:
 	pytest tests/ci tests/config tests/observability tests/telemetry \
 		tests/server/handlers/test_accounting_dispatch.py tests/server/handler_registry/test_accounting_routes.py \
 		tests/server/handlers/test_ap_automation.py tests/server/handlers/test_ar_automation.py tests/server/handlers/test_accounting.py \
+		tests/scripts/test_check_aragora_verify_dependency_policy.py tests/scripts/test_check_prometheus_rules.py \
 		$(READINESS_EXTRA_TESTS) -q -p no:randomly -n 4 --timeout=120 --cov=aragora --cov-fail-under=$$fail_under --junitxml="$(READINESS_JUNIT_DIR)/root.xml" && \
 	$(READINESS_DONE)
 
@@ -504,6 +505,7 @@ readiness-lint-verify:
 	command -v deptry >/dev/null 2>&1 || { echo "SKIP verify: deptry not found (put .venv/bin on PATH)"; exit 0; }; \
 	command -v npx >/dev/null 2>&1 || { echo "SKIP verify: npx not found"; exit 0; }; \
 	command -v git >/dev/null 2>&1 || { echo "SKIP verify: git not found"; exit 0; }; \
+	python3 scripts/check_aragora_verify_dependency_policy.py && \
 	ruff check aragora-verify && ruff format --check aragora-verify && \
 	python3 scripts/ci/check_tool_baseline.py --tool vulture \
 		--baseline scripts/baselines/verify-vulture.json \
