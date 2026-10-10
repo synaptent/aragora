@@ -258,7 +258,7 @@ DEFAULT_ROUTE_PERMISSIONS = [
     RoutePermission(r"^/api/(?:v1/)?analytics/export", "POST", "analytics.export_data"),
     # Disconnect a platform; the names are the analytics platforms handler's SUPPORTED_PLATFORMS.
     RoutePermission(
-        r"^/api/v1/analytics/(?:metabase|google_analytics|mixpanel)$",
+        r"^/api/(?:v1/)?analytics/(?:metabase|google_analytics|mixpanel)$",
         "DELETE",
         "analytics.configure",
     ),

@@ -13,6 +13,7 @@ from __future__ import annotations
 import io
 import itertools
 import json
+import sys
 import threading
 from types import SimpleNamespace
 from typing import Any
@@ -23,7 +24,7 @@ import pytest
 from aragora.auth.mfa_enforcement import MFAEnforcementMiddleware, MFAStatus
 from aragora.billing.jwt_auth import create_access_token
 from aragora.connectors.runtime_registry import ConnectorStatus
-from aragora.rbac.decorators import PermissionDeniedError
+from aragora.rbac.decorators import MFARequiredError, PermissionDeniedError, RoleRequiredError
 from aragora.rbac.middleware import DEFAULT_ROUTE_PERMISSIONS
 from aragora.server import unified_server
 from aragora.server.auth import auth_config
@@ -230,6 +231,7 @@ RULES: dict[tuple[str, str], str] = {
     ("POST", "/api/v1/connectors/c1/test"): "connectors.test",
     ("GET", "/api/v1/connectors/types"): "",
     ("DELETE", "/api/v1/analytics/metabase"): "analytics.configure",
+    ("DELETE", "/api/analytics/metabase"): "analytics.configure",
     ("GET", "/api/v1/documents/processing/stats"): "documents.read",
     ("GET", "/api/v1/teams"): "bots.read",
     ("POST", "/api/v1/cross-pollination/conflicts/c1/resolve"): "cross_pollination.write",
@@ -298,9 +300,10 @@ def test_unserved_routes_stay_default_denied(method: str, path: str) -> None:
     assert _first_rule(method, path) is None
 
 
-def test_every_supported_analytics_platform_has_a_disconnect_rule() -> None:
+@pytest.mark.parametrize("prefix", ["/api/v1/analytics", "/api/analytics"])
+def test_every_supported_analytics_platform_has_a_disconnect_rule(prefix: str) -> None:
     for platform in analytics_module.SUPPORTED_PLATFORMS:
-        rule = _first_rule("DELETE", f"/api/v1/analytics/{platform}")
+        rule = _first_rule("DELETE", f"{prefix}/{platform}")
         assert rule is not None and rule.permission_key == "analytics.configure", platform
 
 
@@ -365,6 +368,7 @@ DISPATCH: dict[tuple[str, str], tuple[str, str]] = {
     ("POST", "/api/v1/connectors/known_conn/test"): ("200 200 403 403 403 401",) * 2,
     ("GET", "/api/v1/connectors/types"): ("200 200 200 200 200 200", "200 200 200 200 200 401"),
     ("DELETE", "/api/v1/analytics/metabase"): ("404 404 403 403 403 401",) * 2,
+    ("DELETE", "/api/analytics/metabase"): ("404 404 403 403 403 401",) * 2,
     ("GET", "/api/v1/documents/processing/stats"): (
         "200 200 403 200 403 403",
         "200 200 403 200 403 401",
@@ -523,11 +527,23 @@ def test_member_denied_by_the_handler_behind_the_server_rule_gets_403(registry) 
             PermissionDeniedError("Can only modify own data or requires admin role"),
             (403, FORBIDDEN),
         ),
+        (RoleRequiredError("Requires role admin", {"admin"}, {"member"}), (403, FORBIDDEN)),
+        (
+            MFARequiredError("Admin roles require MFA", required_action="/api/auth/mfa/setup"),
+            (
+                403,
+                {
+                    "error": "MFA required",
+                    "code": "MFA_REQUIRED",
+                    "required_action": "/api/auth/mfa/setup",
+                },
+            ),
+        ),
         (RuntimeError("store unavailable"), (500, None)),
     ],
-    ids=["resource-policy", "own-data", "runtime-error"],
+    ids=["resource-policy", "own-data", "role-required", "mfa-required", "runtime-error"],
 )
-def test_every_permission_denial_maps_to_403_and_other_errors_stay_500(
+def test_rbac_decorator_denials_answer_403_and_other_errors_stay_500(
     registry, monkeypatch, error: Exception, expected: tuple[int, Any]
 ) -> None:
     def _raise(*args: Any, **kwargs: Any) -> None:
@@ -540,3 +556,13 @@ def test_every_permission_denial_maps_to_403_and_other_errors_stay_500(
         assert body == expected[1]
     else:
         assert body["code"] == "handler_error"
+
+
+@pytest.mark.no_auto_auth
+def test_rbac_package_import_failure_answers_503(registry, monkeypatch) -> None:
+    monkeypatch.setitem(sys.modules, "aragora.rbac.decorators", None)
+    status, body = _dispatch(registry, "GET", "/api/v1/memory/tier-stats", "owner")
+    assert (status, body) == (
+        503,
+        {"error": "Feature temporarily unavailable", "code": "subsystem_unavailable"},
+    )

@@ -399,11 +399,17 @@ class HandlerRegistryMixin:
 
         attr_name, handler = route_match
 
-        # Initialized handlers have already loaded the RBAC package; importing it at
-        # module level would load it for every importer of this registry.
-        from aragora.rbac.decorators import PermissionDeniedError
-
         try:
+            # Initialized handlers have already loaded the RBAC package; importing it at
+            # module level would load it for every importer of this registry. It is the first
+            # statement here: a failed import answers 503 through `except ImportError`, which
+            # is matched before the clause that names these classes is evaluated.
+            from aragora.rbac.decorators import (
+                MFARequiredError,
+                PermissionDeniedError,
+                RoleRequiredError,
+            )
+
             # Extract auth context and store on request handler for permission checks
             try:
                 from aragora.billing.jwt_auth import extract_user_from_request
@@ -573,18 +579,28 @@ class HandlerRegistryMixin:
             LookupError,
             TimeoutError,
             PermissionDeniedError,
+            RoleRequiredError,
+            MFARequiredError,
         ) as e:
             # Check for permission-related errors
             error_msg = str(e)
             if (
-                isinstance(e, PermissionDeniedError)
+                isinstance(e, (PermissionDeniedError, RoleRequiredError, MFARequiredError))
                 or "AuthorizationContext" in error_msg
                 or "Permission" in error_msg
             ):
                 logger.warning(
                     "[handlers] Permission denied in %s: %s", handler.__class__.__name__, e
                 )
-                body_403 = json.dumps({"error": "Permission denied", "code": "forbidden"}).encode()
+                denial: dict[str, Any] = {"error": "Permission denied", "code": "forbidden"}
+                if isinstance(e, MFARequiredError):
+                    # Keeps the MFA middleware's code and says where MFA is set up.
+                    denial = {
+                        "error": "MFA required",
+                        "code": "MFA_REQUIRED",
+                        "required_action": e.required_action,
+                    }
+                body_403 = json.dumps(denial).encode()
                 self.send_response(403)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(body_403)))
