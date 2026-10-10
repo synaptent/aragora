@@ -53,6 +53,9 @@ def test_workflow_runs_strict_types_ratchets_and_timed_coverage() -> None:
     assert "python -m pip install" in install
     for requirement in ("mypy==2.1.0", "ruff==0.14.14", "vulture==2.16", "deptry==0.25.1"):
         assert requirement in install
+    # Test plugins come from each package's own dev extra, so CI sees what a
+    # fresh install sees (debate declares pytest-asyncio; verify needs none).
+    assert "pytest-asyncio" not in install
     assert "./aragora-${{ matrix.app }}[${{ matrix.extras }}]" in install
     # The contract-drift authority checker rejects `${{ }}` in `working-directory`.
     assert workflow["jobs"]["packages"]["env"]["APP"] == "${{ matrix.app }}"

@@ -74,7 +74,6 @@ jobs:
         run: >-
           python -m pip install -e "./aragora-${{ matrix.app }}[${{ matrix.extras }}]"
           'ruff==0.14.14' 'mypy==2.1.0' 'vulture==2.16' 'deptry==0.25.1'
-          'pytest-asyncio>=0.23'
       - name: Ruff and ratchets
         shell: bash
         run: |

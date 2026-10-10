@@ -68,7 +68,16 @@ def test_package_coverage_gate_uses_its_own_module_and_recorded_floor(package: s
     assert config["pytest"]["ini_options"]["python_files"] == ["test_*.py"]
     assert config["pytest"]["ini_options"]["python_functions"] == ["test_*"]
     assert config["pytest"]["ini_options"]["testpaths"] == ["tests"]
-    assert config["pytest"]["ini_options"]["asyncio_mode"] == "auto"
+    # Only debate has async tests and declares pytest-asyncio in its dev extra;
+    # the option without its plugin is a PytestConfigWarning in a fresh venv.
+    project = tomllib.loads((ROOT / f"aragora-{package}/pyproject.toml").read_text())["project"]
+    dev_extra = project["optional-dependencies"]["dev"]
+    if package == "debate":
+        assert config["pytest"]["ini_options"]["asyncio_mode"] == "auto"
+        assert any(dep.startswith("pytest-asyncio") for dep in dev_extra)
+    else:
+        assert "asyncio_mode" not in config["pytest"]["ini_options"]
+        assert not any(dep.startswith("pytest-asyncio") for dep in dev_extra)
     result = subprocess.run(
         ["make", "-n", f"readiness-test-{package}"],
         cwd=ROOT,
