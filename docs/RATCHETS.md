@@ -284,6 +284,9 @@ command), where the count is `len(findings)`.
   `"true"`, `"yes"`, `"on"` and `"1"` (any case) and the integer `1`. The false
   spellings (`false`, `"false"`, `"no"`, `"off"`, `"0"`, `0`) pass; any other
   `allow_untyped_defs` value is a shape error.
+  `no_disallow_untyped_defs` follows the same rules, because mypy 2.1.0's
+  config parser drops its `no_` prefix and inverts the value just as it adds
+  `dis` to `allow_untyped_defs`; no other key spelling reaches the option.
   Other error-code-only overrides do not count. Same-count replacements
   still fail because membership, not just the total, is ratcheted.
   `--pyproject` and `--baseline` resolve relative paths from the repository

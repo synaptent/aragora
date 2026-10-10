@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import io
 import json
+import re
 import subprocess
 import sys
 import tomllib
@@ -267,6 +269,7 @@ def test_repository_has_one_sorted_relaxation_block() -> None:
     ("key", "value"),
     [
         ("allow_untyped_defs", "true"),
+        ("no_disallow_untyped_defs", "true"),
         ("disable_error_code", '["no-untyped-def"]'),
         ("disable_error_code", '["misc", "no-untyped-def"]'),
         ("disable_error_code", '["misc", " no-untyped-def "]'),
@@ -310,36 +313,58 @@ def test_non_bypass_options_still_pass(adopted: tuple[Path, Path]) -> None:
     assert result.returncode == 0, result.stderr
 
 
+# The spellings other than disallow_untyped_defs itself that mypy 2.1.0 maps onto
+# that option. Both invert the value, so their true family switches the check off.
+INVERTING_KEYS = ["allow_untyped_defs", "no_disallow_untyped_defs"]
 # Every spelling mypy 2.1.0's convert_to_boolean reads as true or false.
-ALLOW_TRUE = [
-    "allow_untyped_defs = true",
-    'allow_untyped_defs = "true"',
-    'allow_untyped_defs = "True"',
-    'allow_untyped_defs = "TRUE"',
-    'allow_untyped_defs = "yes"',
-    'allow_untyped_defs = "on"',
-    'allow_untyped_defs = "1"',
-    "allow_untyped_defs = 1",
-]
-ALLOW_FALSE = [
-    "allow_untyped_defs = false",
-    'allow_untyped_defs = "false"',
-    'allow_untyped_defs = "False"',
-    'allow_untyped_defs = "no"',
-    'allow_untyped_defs = "off"',
-    'allow_untyped_defs = "0"',
-    "allow_untyped_defs = 0",
-]
-ALLOW_NOT_BOOLEAN = [
-    "allow_untyped_defs = 2",
-    "allow_untyped_defs = -1",
-    "allow_untyped_defs = 1.0",
-    'allow_untyped_defs = "maybe"',
-    'allow_untyped_defs = ""',
-    'allow_untyped_defs = " true "',
-    "allow_untyped_defs = [true]",
-    "allow_untyped_defs = {}",
-]
+TRUE_VALUES = ["true", '"true"', '"True"', '"TRUE"', '"yes"', '"on"', '"1"', "1"]
+FALSE_VALUES = ["false", '"false"', '"False"', '"no"', '"off"', '"0"', "0"]
+NOT_BOOLEAN_VALUES = ["2", "-1", "1.0", '"maybe"', '""', '" true "', "[true]", "{}"]
+
+
+def _lines(values: list[str]) -> list[tuple[str, str]]:
+    return [(key, f"{key} = {value}") for key in INVERTING_KEYS for value in values]
+
+
+ALLOW_TRUE = _lines(TRUE_VALUES)
+ALLOW_FALSE = _lines(FALSE_VALUES)
+ALLOW_NOT_BOOLEAN = _lines(NOT_BOOLEAN_VALUES)
+
+
+def _names(key: str, stderr: str) -> bool:
+    # "allow_untyped_defs" is a substring of "no_disallow_untyped_defs".
+    return re.search(rf"(?<![A-Za-z_]){re.escape(key)}\b", stderr) is not None
+
+
+def test_mypy_maps_exactly_these_spellings_onto_the_rule() -> None:
+    config_parser = pytest.importorskip("mypy.config_parser")
+    from mypy.options import Options
+
+    bases = ["disallow_untyped_defs", "allow_untyped_defs", "untyped_defs"]
+    prefixes = ["", "no_", "dis", "no_dis", "no_no_", "show_", "hide_", "x_"]
+    candidates = {prefix + base for prefix in prefixes for base in bases}
+    candidates |= {key.replace("_", "-") for key in candidates} | {
+        key.upper() for key in candidates
+    }
+    resolved: dict[str, tuple[bool, bool]] = {}
+    for key in sorted(candidates):
+        values = []
+        for value in (True, False):
+            results, _ = config_parser.parse_section(
+                "",
+                Options(),
+                lambda: None,
+                {key: value},
+                config_parser.toml_config_types,
+                io.StringIO(),
+            )
+            values.append(results.get("disallow_untyped_defs"))
+        if values != [None, None]:
+            resolved[key] = (values[0], values[1])
+    assert resolved == {
+        "disallow_untyped_defs": (True, False),
+        **dict.fromkeys(INVERTING_KEYS, (False, True)),
+    }
 
 
 def _global_table(extra: str) -> str:
@@ -354,9 +379,9 @@ def _override_block(extra: str) -> str:
     )
 
 
-@pytest.mark.parametrize("line", ALLOW_TRUE)
-def test_override_allow_untyped_defs_true_spellings_are_bypasses(
-    adopted: tuple[Path, Path], line: str
+@pytest.mark.parametrize(("key", "line"), ALLOW_TRUE)
+def test_override_inverted_true_spellings_are_bypasses(
+    adopted: tuple[Path, Path], key: str, line: str
 ) -> None:
     project, baseline = adopted
     before = baseline.read_bytes()
@@ -364,23 +389,23 @@ def test_override_allow_untyped_defs_true_spellings_are_bypasses(
     for flags in ([], ["--update"]):
         result = run("--pyproject", project, "--baseline", baseline, *flags)
         assert result.returncode == 2, result.stdout + result.stderr
-        assert "allow_untyped_defs" in result.stderr
-        assert "aragora.val_probe" in result.stderr
+        assert _names(key, result.stderr)
+        assert "the override for modules ['aragora.val_probe']" in result.stderr
         assert "Traceback" not in result.stderr
         assert baseline.read_bytes() == before
 
 
 @pytest.mark.parametrize(
-    ("line", "key"),
+    ("key", "line"),
     [
-        *[(line, "allow_untyped_defs") for line in ALLOW_TRUE],
-        ('disable_error_code = ["no-untyped-def"]', "no-untyped-def"),
-        ('disable_error_code = ["misc", " no-untyped-def "]', "no-untyped-def"),
-        ('disable_error_code = "misc, no-untyped-def"', "no-untyped-def"),
+        *ALLOW_TRUE,
+        ("no-untyped-def", 'disable_error_code = ["no-untyped-def"]'),
+        ("no-untyped-def", 'disable_error_code = ["misc", " no-untyped-def "]'),
+        ("no-untyped-def", 'disable_error_code = "misc, no-untyped-def"'),
     ],
 )
 def test_global_tool_mypy_table_bypasses_are_rejected(
-    adopted: tuple[Path, Path], line: str, key: str
+    adopted: tuple[Path, Path], key: str, line: str
 ) -> None:
     project, baseline = adopted
     before = baseline.read_bytes()
@@ -388,7 +413,7 @@ def test_global_tool_mypy_table_bypasses_are_rejected(
     for flags in ([], ["--update"]):
         result = run("--pyproject", project, "--baseline", baseline, *flags)
         assert result.returncode == 2, result.stdout + result.stderr
-        assert key in result.stderr
+        assert _names(key, result.stderr)
         assert "[tool.mypy]" in result.stderr
         assert "Traceback" not in result.stderr
         assert baseline.read_bytes() == before
@@ -398,6 +423,11 @@ def test_global_tool_mypy_table_bypasses_are_rejected(
     ("old", "new", "key"),
     [
         ("[tool.mypy]\n", '[tool.mypy]\nallow_untyped_defs = "on"\n', "allow_untyped_defs"),
+        (
+            "disallow_untyped_defs = true\n",
+            "disallow_untyped_defs = true\nno_disallow_untyped_defs = true\n",
+            "no_disallow_untyped_defs",
+        ),
         (
             "disable_error_code = [\n",
             'disable_error_code = [\n"no-untyped-def",\n',
@@ -415,13 +445,13 @@ def test_global_bypass_added_to_tracked_project_is_rejected(
     assert project.read_text() != text
     result = run("--pyproject", project)
     assert result.returncode == 2, result.stdout + result.stderr
-    assert key in result.stderr and "[tool.mypy]" in result.stderr
+    assert _names(key, result.stderr) and "[tool.mypy]" in result.stderr
 
 
-@pytest.mark.parametrize("line", ALLOW_FALSE)
+@pytest.mark.parametrize(("key", "line"), ALLOW_FALSE)
 @pytest.mark.parametrize("build", [_global_table, _override_block], ids=["global", "override"])
-def test_allow_untyped_defs_false_spellings_pass(
-    adopted: tuple[Path, Path], line: str, build
+def test_inverted_false_spellings_pass(
+    adopted: tuple[Path, Path], key: str, line: str, build
 ) -> None:
     project, baseline = adopted
     project.write_text(
@@ -432,16 +462,16 @@ def test_allow_untyped_defs_false_spellings_pass(
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-@pytest.mark.parametrize("line", ALLOW_NOT_BOOLEAN)
+@pytest.mark.parametrize(("key", "line"), ALLOW_NOT_BOOLEAN)
 @pytest.mark.parametrize("build", [_global_table, _override_block], ids=["global", "override"])
-def test_allow_untyped_defs_non_boolean_values_are_shape_errors(
-    adopted: tuple[Path, Path], line: str, build
+def test_inverted_non_boolean_values_are_shape_errors(
+    adopted: tuple[Path, Path], key: str, line: str, build
 ) -> None:
     project, baseline = adopted
     project.write_text(build(line))
     result = run("--pyproject", project, "--baseline", baseline)
     assert result.returncode == 2, result.stdout + result.stderr
-    assert "allow_untyped_defs" in result.stderr
+    assert _names(key, result.stderr)
     assert "Traceback" not in result.stderr
 
 

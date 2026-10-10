@@ -42,6 +42,10 @@ MODULE_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_-]*(?:\.[A-Za-z_][A-Za-z0-9_-]*)*
 # mypy's config_parser.convert_to_boolean keeps bools and looks every other
 # value up as str(value).lower() here, so "on", "yes", "1" and 1 all mean true.
 MYPY_BOOLEANS = configparser.RawConfigParser.BOOLEAN_STATES
+# mypy's config_parser.parse_section maps these keys onto disallow_untyped_defs
+# with the value inverted (an "allow" key gains "dis", a "no_" prefix is dropped),
+# so a true value switches the check off.
+INVERTED_RULE_KEYS = ("allow_untyped_defs", "no_disallow_untyped_defs")
 
 
 def _mypy_boolean(path: Path, where: str, key: str, value: object) -> bool:
@@ -54,13 +58,13 @@ def _mypy_boolean(path: Path, where: str, key: str, value: object) -> bool:
 
 
 def _reject_bypasses(path: Path, table: Mapping[str, object], where: str) -> None:
-    """Reject the two spellings that switch the untyped-def check off for `where`."""
-    if "allow_untyped_defs" in table:
-        value = table["allow_untyped_defs"]
-        if _mypy_boolean(path, where, "allow_untyped_defs", value):
-            raise BaselineError(
-                f"{path}: allow_untyped_defs = {value!r} in {where} bypasses the ratchet"
-            )
+    """Reject the spellings that switch the untyped-def check off for `where`."""
+    for key in INVERTED_RULE_KEYS:
+        if key not in table:
+            continue
+        value = table[key]
+        if _mypy_boolean(path, where, key, value):
+            raise BaselineError(f"{path}: {key} = {value!r} in {where} bypasses the ratchet")
     disabled_codes = table.get("disable_error_code", [])
     if isinstance(disabled_codes, str):
         disabled_codes = disabled_codes.split(",")
