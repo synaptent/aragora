@@ -261,7 +261,7 @@ jobs:
 
       - name: Restore Atlas fetch cache
         id: atlas_cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ${{ env.ATLAS_CACHE }}
           key: atlas-fetch-v1-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
@@ -303,7 +303,7 @@ jobs:
 
       - name: Save Atlas fetch cache
         if: always() && steps.atlas_cache.outcome == 'success'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ${{ env.ATLAS_CACHE }}
           key: ${{ steps.atlas_cache.outputs.cache-primary-key }}
