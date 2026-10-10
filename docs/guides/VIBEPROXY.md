@@ -142,7 +142,12 @@ using the existing direct backend, and only before any output begins.
 In `vibeproxy-prefer`, capabilities outside the supported slices above (web
 search, tools, custom endpoints, streaming) stay direct. In
 `vibeproxy-required` the policy is an egress boundary: those requests raise
-instead of silently reaching a direct provider endpoint.
+instead of silently reaching a direct provider endpoint. Two exceptions keep
+the `openai-api` agent usable in server-run debates without crossing that
+boundary: streaming callers receive the non-streaming proxy answer as a single
+chunk, and web-search auto-detection is turned off (one warning per process),
+so matching prompts are sent through the proxy without the `web_search` tool.
+Custom endpoints (`OPENAI_BASE_URL`) and tool-bearing payloads still raise.
 One timeout budget covers catalog resolution and each eligible proxy request;
 catalog discovery is additionally capped at a few seconds so an unresponsive
 proxy cannot delay `vibeproxy-prefer` fallback.
