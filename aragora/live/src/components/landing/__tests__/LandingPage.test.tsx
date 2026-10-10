@@ -99,4 +99,41 @@ describe('LandingPage', () => {
       );
     });
   });
+
+  describe('live preview API base', () => {
+    it('stays same-origin when the configured api is empty (local dev)', () => {
+      mockUseBackend.mockReturnValue({ config: { api: '', ws: 'ws://localhost:8765/ws' } });
+
+      render(<LandingPage />);
+
+      expect(mockLiveDebatePanel).toHaveBeenCalledWith(expect.objectContaining({ apiBase: '' }));
+      expect(mockLiveDebatePanel).not.toHaveBeenCalledWith(
+        expect.objectContaining({ apiBase: 'https://api.example.com' }),
+      );
+    });
+
+    it('uses a non-empty configured api unchanged (deployed site)', () => {
+      mockUseBackend.mockReturnValue({
+        config: { api: 'https://api.aragora.ai', ws: 'wss://api.aragora.ai/ws' },
+      });
+
+      render(<LandingPage />);
+
+      expect(mockLiveDebatePanel).toHaveBeenCalledWith(
+        expect.objectContaining({ apiBase: 'https://api.aragora.ai' }),
+      );
+    });
+
+    it('prefers an explicit apiBase prop over the configured api', () => {
+      mockUseBackend.mockReturnValue({
+        config: { api: 'https://api.aragora.ai', ws: 'wss://api.aragora.ai/ws' },
+      });
+
+      render(<LandingPage apiBase="https://preview.example.com" />);
+
+      expect(mockLiveDebatePanel).toHaveBeenCalledWith(
+        expect.objectContaining({ apiBase: 'https://preview.example.com' }),
+      );
+    });
+  });
 });

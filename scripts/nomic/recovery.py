@@ -25,7 +25,7 @@ class PhaseError(Exception):
         phase: str,
         message: str,
         recoverable: bool = True,
-        original_error: Exception = None,
+        original_error: Exception | None = None,
     ):
         self.phase = phase
         self.recoverable = recoverable

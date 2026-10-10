@@ -290,7 +290,7 @@ class DatabaseMigrator:
         backup_subdir = self.backup_dir / f"backup_{timestamp}"
         backup_subdir.mkdir()
 
-        manifest = {
+        manifest: dict[str, Any] = {
             "timestamp": timestamp,
             "databases": {},
         }
@@ -420,7 +420,7 @@ class DatabaseMigrator:
 
     def migrate(self, dry_run: bool = True) -> list[MigrationResult]:
         """Execute the migration."""
-        results = []
+        results: list[MigrationResult] = []
 
         if dry_run:
             logger.info("[DRY RUN] Migration plan:")

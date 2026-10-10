@@ -588,7 +588,7 @@ class MultiBackendRotator:
     """Rotates keys across multiple backends."""
 
     def __init__(self):
-        self.backends: dict[str, object] = {}
+        self.backends: dict[str, AWSSecretsBackend | GitHubSecretsBackend | LocalEnvBackend] = {}
         self.backup_dir = Path(__file__).parent.parent / ".env_backups"
 
     def init_backends(self, include: list[str] | None = None) -> None:
@@ -671,17 +671,17 @@ class MultiBackendRotator:
 
     def get_key_from_backends(self, config: KeyConfig) -> dict[str, str | None]:
         """Get a key's value from all backends."""
-        values = {}
+        values: dict[str, str | None] = {}
 
         for name, backend in self.backends.items():
-            if name.startswith("aws"):
+            if isinstance(backend, AWSSecretsBackend):
                 # Try individual path first, fall back to bundle
                 path = config.aws_secret_path or config.env_var
                 values[name] = backend.get_secret(path, env_var=config.env_var)
-            elif name == "github":
+            elif isinstance(backend, GitHubSecretsBackend):
                 if config.github_secret_name:
                     values[name] = backend.get_secret(config.github_secret_name)
-            elif name == "local":
+            elif isinstance(backend, LocalEnvBackend):
                 values[name] = backend.get_secret(config.env_var)
 
         return values
@@ -691,27 +691,27 @@ class MultiBackendRotator:
     ) -> dict[str, bool]:
         """Set a key in specified backends."""
         backends = backends or list(self.backends.keys())
-        results = {}
+        results: dict[str, bool] = {}
 
         for name in backends:
             if name not in self.backends:
                 continue
             backend = self.backends[name]
 
-            if name.startswith("aws"):
+            if isinstance(backend, AWSSecretsBackend):
                 # Use env_var name for bundle-based storage
                 results[name] = backend.set_secret(config.env_var, value)
-            elif name == "github":
+            elif isinstance(backend, GitHubSecretsBackend):
                 if config.github_secret_name:
                     results[name] = backend.set_secret(config.github_secret_name, value)
-            elif name == "local":
+            elif isinstance(backend, LocalEnvBackend):
                 results[name] = backend.set_secret(config.env_var, value)
 
         return results
 
     def validate_all(self, verbose: bool = True) -> dict[str, dict[str, tuple[bool, str]]]:
         """Validate all keys across all backends."""
-        results = {}
+        results: dict[str, dict[str, tuple[bool, str]]] = {}
 
         for config in KEY_CONFIGS:
             if verbose:
@@ -853,7 +853,7 @@ class MultiBackendRotator:
         print(f"\n  Syncing from AWS ({source_region}) to other backends...")
 
         source = self.backends.get(f"aws-{source_region.replace('us-', '')}")
-        if not source:
+        if not isinstance(source, AWSSecretsBackend):
             print(f"  ✗ AWS {source_region} not available")
             return False
 
@@ -874,15 +874,15 @@ class MultiBackendRotator:
                 if dry_run:
                     print(f"    would sync to {name}")
                 else:
-                    if name.startswith("aws"):
+                    if isinstance(backend, AWSSecretsBackend):
                         success = backend.set_secret(config.env_var, value)
-                    elif name == "github":
+                    elif isinstance(backend, GitHubSecretsBackend):
                         success = (
                             backend.set_secret(config.github_secret_name, value)
                             if config.github_secret_name
                             else False
                         )
-                    elif name == "local":
+                    elif isinstance(backend, LocalEnvBackend):
                         success = backend.set_secret(config.env_var, value)
                     else:
                         success = False
@@ -903,7 +903,7 @@ class MultiBackendRotator:
         print("The bundle will NOT be deleted (do that manually after verifying).\n")
 
         for name, backend in self.backends.items():
-            if not name.startswith("aws"):
+            if not isinstance(backend, AWSSecretsBackend):
                 continue
 
             print(f"\n{name}:")

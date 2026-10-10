@@ -33,6 +33,14 @@ Migration Notes:
     Note: The existing ``knowledge.py`` routes cover the Knowledge Mound
     (higher-level knowledge items, adapters, gap detection). This module
     covers the lower-level FactStore API (facts, relations, queries, search).
+
+Organization scoping:
+    POST /facts and POST /import bind each new fact to the caller's
+    organization; a caller without one gets 403 ``knowledge_org_required``.
+    Until organization scoping lands for the other fact routes, every route
+    that reads or changes stored facts (everything except POST /facts,
+    POST /import and GET /sync-status) answers 401 to anonymous callers and
+    403 ``knowledge_fact_access_closed`` to every authenticated caller.
 """
 
 from __future__ import annotations
@@ -41,10 +49,10 @@ import asyncio
 import inspect
 import logging
 import time
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from aragora.rbac.models import AuthorizationContext
 
@@ -54,6 +62,8 @@ from ..middleware.error_handling import APIError, NotFoundError
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v2/knowledge-base", tags=["Knowledge Base"])
+
+_WORKSPACE_ID_MAX_LENGTH = 100
 
 
 # =============================================================================
@@ -280,11 +290,32 @@ class ImportRequest(BaseModel):
     """Request body for POST /import."""
 
     facts: list[dict[str, Any]] = Field(..., description="List of fact dicts to import")
-    workspace_id: str = Field("default", max_length=100, description="Target workspace")
-    merge_strategy: str = Field(
-        "skip_existing",
-        description="How to handle duplicates: skip_existing, overwrite, merge",
+    workspace_id: str = Field(
+        "default", max_length=_WORKSPACE_ID_MAX_LENGTH, description="Target workspace"
     )
+    merge_strategy: Literal["skip_existing"] = Field(
+        "skip_existing",
+        description=(
+            "How to handle an entry that is already stored: only skip_existing is "
+            "supported (the entry is counted in skipped)"
+        ),
+    )
+
+    @field_validator("facts")
+    @classmethod
+    def _entry_workspace_is_a_short_string(
+        cls, facts: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        for index, fact in enumerate(facts):
+            if "workspace_id" not in fact:
+                continue
+            workspace_id = fact["workspace_id"]
+            if not isinstance(workspace_id, str) or len(workspace_id) > _WORKSPACE_ID_MAX_LENGTH:
+                raise ValueError(
+                    f"facts[{index}].workspace_id must be a string of at most "
+                    f"{_WORKSPACE_ID_MAX_LENGTH} characters"
+                )
+        return facts
 
 
 class ImportResponse(BaseModel):
@@ -315,6 +346,27 @@ def _require_knowledge() -> None:
     """Raise 503 if the knowledge subsystem is not available."""
     if not _KNOWLEDGE_AVAILABLE:
         raise HTTPException(status_code=503, detail="Knowledge subsystem not available")
+
+
+FACT_ACCESS_CLOSED_MESSAGE = "Knowledge fact access is disabled until org scoping is available"
+FACT_ACCESS_CLOSED_CODE = "knowledge_fact_access_closed"
+
+
+async def _fact_access_closed(
+    auth: AuthorizationContext = Depends(require_authenticated),
+) -> None:
+    """Answer 403 to every authenticated caller of a route that touches stored facts.
+
+    Organization scoping has not landed for these routes yet, so none of them
+    may touch stored facts. Route-level dependencies run before the
+    route's own parameters are resolved, so this answers before the route's
+    permission check and before the fact store or query engine is created;
+    anonymous callers still get 401 from ``require_authenticated``.
+    """
+    raise APIError(FACT_ACCESS_CLOSED_MESSAGE, status_code=403, code=FACT_ACCESS_CLOSED_CODE)
+
+
+_CLOSED_UNTIL_ORG_SCOPING = [Depends(_fact_access_closed)]
 
 
 _fact_store_instance: Any = None
@@ -471,7 +523,7 @@ def _caller_org(auth: AuthorizationContext) -> str:
 # =============================================================================
 
 
-@router.get("/facts", response_model=FactListResponse)
+@router.get("/facts", response_model=FactListResponse, dependencies=_CLOSED_UNTIL_ORG_SCOPING)
 async def list_facts(
     request: Request,
     workspace_id: str | None = Query(None, max_length=100, description="Filter by workspace"),
@@ -516,7 +568,7 @@ async def list_facts(
         raise HTTPException(status_code=500, detail="Failed to list facts")
 
 
-@router.get("/facts/{fact_id}", response_model=FactDetail)
+@router.get("/facts/{fact_id}", response_model=FactDetail, dependencies=_CLOSED_UNTIL_ORG_SCOPING)
 async def get_fact(
     fact_id: str,
     auth: AuthorizationContext = Depends(require_authenticated),
@@ -573,7 +625,7 @@ async def create_fact(
         raise HTTPException(status_code=500, detail="Failed to create fact")
 
 
-@router.put("/facts/{fact_id}", response_model=FactDetail)
+@router.put("/facts/{fact_id}", response_model=FactDetail, dependencies=_CLOSED_UNTIL_ORG_SCOPING)
 async def update_fact(
     fact_id: str,
     body: UpdateFactRequest,
@@ -615,7 +667,7 @@ async def update_fact(
         raise HTTPException(status_code=500, detail="Failed to update fact")
 
 
-@router.delete("/facts/{fact_id}")
+@router.delete("/facts/{fact_id}", dependencies=_CLOSED_UNTIL_ORG_SCOPING)
 async def delete_fact(
     fact_id: str,
     auth: AuthorizationContext = Depends(require_permission("knowledge:delete")),
@@ -644,7 +696,11 @@ async def delete_fact(
 # =============================================================================
 
 
-@router.post("/facts/{fact_id}/verify", response_model=VerifyFactResponse)
+@router.post(
+    "/facts/{fact_id}/verify",
+    response_model=VerifyFactResponse,
+    dependencies=_CLOSED_UNTIL_ORG_SCOPING,
+)
 async def verify_fact(
     fact_id: str,
     auth: AuthorizationContext = Depends(require_permission("knowledge:write")),
@@ -715,7 +771,11 @@ async def verify_fact(
         raise HTTPException(status_code=500, detail="Failed to verify fact")
 
 
-@router.get("/facts/{fact_id}/contradictions", response_model=ContradictionsResponse)
+@router.get(
+    "/facts/{fact_id}/contradictions",
+    response_model=ContradictionsResponse,
+    dependencies=_CLOSED_UNTIL_ORG_SCOPING,
+)
 async def get_contradictions(
     fact_id: str,
     auth: AuthorizationContext = Depends(require_authenticated),
@@ -745,7 +805,11 @@ async def get_contradictions(
         raise HTTPException(status_code=500, detail="Failed to get contradictions")
 
 
-@router.get("/facts/{fact_id}/relations", response_model=FactRelationsResponse)
+@router.get(
+    "/facts/{fact_id}/relations",
+    response_model=FactRelationsResponse,
+    dependencies=_CLOSED_UNTIL_ORG_SCOPING,
+)
 async def get_relations(
     fact_id: str,
     relation_type: str | None = Query(
@@ -789,7 +853,12 @@ async def get_relations(
         raise HTTPException(status_code=500, detail="Failed to get relations")
 
 
-@router.post("/facts/{fact_id}/relations", response_model=FactRelation, status_code=201)
+@router.post(
+    "/facts/{fact_id}/relations",
+    response_model=FactRelation,
+    status_code=201,
+    dependencies=_CLOSED_UNTIL_ORG_SCOPING,
+)
 async def add_relation(
     fact_id: str,
     body: AddRelationRequest,
@@ -835,7 +904,12 @@ async def add_relation(
         raise HTTPException(status_code=500, detail="Failed to add relation")
 
 
-@router.post("/facts/relations", response_model=FactRelation, status_code=201)
+@router.post(
+    "/facts/relations",
+    response_model=FactRelation,
+    status_code=201,
+    dependencies=_CLOSED_UNTIL_ORG_SCOPING,
+)
 async def add_relation_bulk(
     body: AddRelationBulkRequest,
     auth: AuthorizationContext = Depends(require_permission("knowledge:write")),
@@ -876,7 +950,7 @@ async def add_relation_bulk(
 # =============================================================================
 
 
-@router.post("/query", response_model=QueryResponse)
+@router.post("/query", response_model=QueryResponse, dependencies=_CLOSED_UNTIL_ORG_SCOPING)
 async def query_knowledge_base(
     body: QueryRequest,
     auth: AuthorizationContext = Depends(require_authenticated),
@@ -924,7 +998,7 @@ async def query_knowledge_base(
         raise HTTPException(status_code=500, detail="Failed to execute query")
 
 
-@router.get("/search", response_model=SearchResponse)
+@router.get("/search", response_model=SearchResponse, dependencies=_CLOSED_UNTIL_ORG_SCOPING)
 async def search_knowledge_base(
     q: str = Query(..., min_length=1, max_length=500, description="Search query"),
     workspace_id: str = Query("default", max_length=100, description="Workspace to search"),
@@ -965,7 +1039,7 @@ async def search_knowledge_base(
         raise HTTPException(status_code=500, detail="Failed to search knowledge base")
 
 
-@router.get("/stats", response_model=StatsResponse)
+@router.get("/stats", response_model=StatsResponse, dependencies=_CLOSED_UNTIL_ORG_SCOPING)
 async def get_stats(
     workspace_id: str | None = Query(None, max_length=100, description="Filter by workspace"),
     auth: AuthorizationContext = Depends(require_authenticated),
@@ -993,7 +1067,7 @@ async def get_stats(
 # =============================================================================
 
 
-@router.get("/export", response_model=ExportResponse)
+@router.get("/export", response_model=ExportResponse, dependencies=_CLOSED_UNTIL_ORG_SCOPING)
 async def export_knowledge_base(
     workspace_id: str | None = Query(None, max_length=100, description="Workspace to export"),
     format: str = Query("json", description="Export format (json)"),
@@ -1040,7 +1114,12 @@ async def import_knowledge_base(
     Import knowledge entries.
 
     Accepts a list of fact dictionaries and imports them into the knowledge
-    base. Supports merge strategies: ``skip_existing``, ``overwrite``, ``merge``.
+    base. The only merge strategy is ``skip_existing`` (the default); any
+    other value answers 422 before the fact store is read or written.
+    Every fact is bound to the caller's organization. An entry whose ``id``
+    is already stored in that organization, or whose statement is already
+    stored in that organization and workspace, is counted in ``skipped``,
+    not ``imported``.
 
     Requires ``knowledge:write`` permission.
     """
@@ -1058,19 +1137,23 @@ async def import_knowledge_base(
                 details.append(f"Skipped entry without statement: {fact_data.get('id', 'unknown')}")
                 continue
 
-            # Check for existing fact by ID if merge strategy requires it
             fact_id = fact_data.get("id")
-            if fact_id and body.merge_strategy == "skip_existing":
+            if fact_id:
                 existing = await _call_store(store, "get_fact", fact_id, org_id=org_id)
                 if existing:
                     skipped += 1
                     continue
 
+            workspace_id = fact_data.get("workspace_id", body.workspace_id)
+            if await _call_store(store, "find_duplicate", statement, workspace_id, org_id=org_id):
+                skipped += 1
+                continue
+
             await _call_store(
                 store,
                 "add_fact",
                 statement=statement,
-                workspace_id=fact_data.get("workspace_id", body.workspace_id),
+                workspace_id=workspace_id,
                 evidence_ids=fact_data.get("evidence_ids", []),
                 source_documents=fact_data.get("source_documents", []),
                 confidence=fact_data.get("confidence", 0.5),

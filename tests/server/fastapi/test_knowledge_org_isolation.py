@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import io
 import json
 import sqlite3
@@ -190,6 +191,50 @@ def test_v2_import_binds_the_org_and_scopes_skip_existing(world) -> None:
     )
     assert len(beta_facts) == 2 and all(f.org_id == beta for f in beta_facts)
     assert _acme_view(world) == before
+
+
+def test_v2_retries_reuse_the_callers_fact_and_never_another_orgs(world) -> None:
+    beta = world.callers["beta"].org_id
+    before = _acme_view(world)
+    body = {"statement": "Acme acquires Northwind", "workspace_id": "acme-research"}
+    client, hdr = _v2(world), {"Authorization": f"Bearer {_token(world, 'beta')}"}
+    created = [client.post(V2 + "/facts", json=body, headers=hdr) for _ in range(2)]
+    assert [r.status_code for r in created] == [201, 201], created[-1].text
+    fact_id = created[0].json()["id"]
+    assert created[1].json()["id"] == fact_id != world.acme_fact.id
+
+    request = {"facts": [body], "merge_strategy": "skip_existing"}
+    imported = [client.post(V2 + "/import", json=request, headers=hdr) for _ in range(2)]
+    counts = [(r.status_code, r.json()["imported"], r.json()["skipped"]) for r in imported]
+    assert counts == [(201, 0, 1), (201, 0, 1)], imported[-1].text
+    beta_facts = ScopedFactStore(world.store, beta).list_facts(
+        FactFilters(include_superseded=True, limit=1000)
+    )
+    assert [f.id for f in beta_facts] == [fact_id]
+    assert _acme_view(world) == before
+
+
+def test_v2_import_body_requires_an_org(world) -> None:
+    from aragora.rbac.models import AuthorizationContext
+    from aragora.server.fastapi.middleware.error_handling import APIError
+    from aragora.server.fastapi.routes import knowledge_base as routes
+
+    before = _rows(world.store)
+    request = routes.ImportRequest(
+        facts=[{"statement": "Orphan import"}],
+        workspace_id="default",
+        merge_strategy="skip_existing",
+    )
+    with pytest.raises(APIError) as raised:
+        asyncio.run(
+            routes.import_knowledge_base(
+                body=request,
+                auth=AuthorizationContext(user_id=world.callers["no-org"].user_id, org_id=None),
+                store=world.store,
+            )
+        )
+    assert (raised.value.status_code, raised.value.code) == (403, "knowledge_org_required")
+    assert _rows(world.store) == before
 
 
 V2_CLOSED = [
