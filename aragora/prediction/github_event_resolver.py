@@ -56,9 +56,9 @@ class GitHubEventPayload:
         merged: For ``pull_request`` events: whether the PR was merged.
         conclusion: For ``check_run``/``workflow_run`` events: the final
             conclusion. ``"success"``, ``"neutral"`` and ``"skipped"`` resolve
-            YES; ``"failure"``, ``"cancelled"`` and ``"timed_out"`` resolve NO;
-            any other value, including a missing one, leaves the claim
-            unresolved.
+            YES; ``"failure"``, ``"cancelled"``, ``"timed_out"`` and
+            ``"startup_failure"`` resolve NO; any other value, including a
+            missing one, leaves the claim unresolved.
         raw: Arbitrary additional fields preserved for traceability.  ``CI_PASS``
             events resolve only when ``raw["aggregate"] is True``, which means
             the caller has already reduced all required checks for ``target_ref``
@@ -113,10 +113,15 @@ class GitHubEventResolver:
     # claim. neutral/skipped pass, as for required status checks and in
     # aragora.markets.resolver. Unlike that pull-based resolver, NO is not
     # taken from action_required (a run awaiting approval can still run) or
-    # stale; those, startup_failure and unknown or missing values leave the
-    # claim OPEN for a later definitive event or the sweeper.
+    # stale; those and unknown or missing values leave the claim OPEN for a
+    # later definitive event or the sweeper. startup_failure resolves NO here
+    # (that resolver reads it as inconclusive): these claims settle only from
+    # run_attempt=1, so a first run that never started can no longer pass and
+    # would otherwise sit OPEN until the sweeper voids it.
     _CI_PASS_CONCLUSIONS: frozenset[str] = frozenset({"success", "neutral", "skipped"})
-    _CI_FAIL_CONCLUSIONS: frozenset[str] = frozenset({"failure", "cancelled", "timed_out"})
+    _CI_FAIL_CONCLUSIONS: frozenset[str] = frozenset(
+        {"failure", "cancelled", "timed_out", "startup_failure"}
+    )
 
     @staticmethod
     def _normalize_target_ref(ref: str) -> str:
@@ -178,7 +183,9 @@ class GitHubEventResolver:
         event that occurred at or before the claim's expiry qualifies even
         when it is processed after that expiry has passed on the wall clock
         (webhook lag, redelivery, replay).  Processing-time finality is
-        enforced by the store sweeper's grace window, not here.
+        enforced by the store sweeper's grace window, not here.  ``CI_PASS``
+        claims also need an event that completed at or after the claim's
+        ``created_at``; PR-merge and issue-close claims have no lower bound.
 
         Evidence arriving for a claim that is already settled
         (EXPIRED/RESOLVED_*) is emitted as an auditable side-output — a
@@ -252,6 +259,14 @@ class GitHubEventResolver:
         or unparseable event timestamp fails closed (unresolved, with
         evidence).  Processing-time finality is bounded by the store
         sweeper's grace window (``expire_stale``), not here.
+
+        ``CI_PASS`` claims also have a lower bound: an event that completed
+        before ``claim.created_at`` is non-qualifying, because a branch-scoped
+        CI claim binds no run identity and an earlier run would otherwise
+        settle it.  A missing or unparseable ``created_at`` on a ``CI_PASS``
+        claim fails closed.  PR-merge and issue-close claims keep pure
+        occurrence semantics: a merge or close before the claim existed
+        still qualifies.
         """
         expiry_dt = self._parse_datetime(claim.expiry)
         if expiry_dt is None:
@@ -279,6 +294,29 @@ class GitHubEventResolver:
                     f"{expiry_dt.isoformat()}; leaving unresolved for expiry handling."
                 ),
             )
+        if claim.question_type == QuestionType.CI_PASS:
+            created_dt = self._parse_datetime(claim.created_at)
+            if created_dt is None:
+                return ResolutionResult(
+                    claim_id=claim.claim_id,
+                    resolved=False,
+                    resolution_value=False,
+                    evidence=(
+                        f"Claim created_at {claim.created_at!r} is missing or invalid; "
+                        "cannot verify the CI event completed after the claim was created."
+                    ),
+                )
+            if event_dt < created_dt:
+                return ResolutionResult(
+                    claim_id=claim.claim_id,
+                    resolved=False,
+                    resolution_value=False,
+                    evidence=(
+                        f"CI event at {event_dt.isoformat()} completed before claim creation "
+                        f"{created_dt.isoformat()}; a run that finished before the claim "
+                        "existed cannot settle it."
+                    ),
+                )
         return None
 
     # Per-event-type allowlist of terminal timestamps (#8777): generic

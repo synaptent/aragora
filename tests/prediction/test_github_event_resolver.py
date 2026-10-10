@@ -26,6 +26,10 @@ _FUTURE = (_NOW + timedelta(days=30)).isoformat()
 _PAST = (_NOW - timedelta(days=1)).isoformat()
 _BEFORE_PAST = (_NOW - timedelta(days=2)).isoformat()
 _AFTER_EXPIRY = (_NOW + timedelta(days=31)).isoformat()
+# Fixed creation time for helper-built claims. CI_PASS claims ignore events
+# that completed before claim creation, so fixture events at _NOW must not
+# depend on the wall-clock moment the claim object happens to be built.
+_CLAIM_CREATED_AT = (_NOW - timedelta(days=3)).isoformat()
 
 
 @pytest.fixture(autouse=True)
@@ -42,6 +46,7 @@ def _open_claim(
     claim_id: str = "c1",
     question_type: QuestionType = QuestionType.PR_MERGE,
     target_ref: str = "owner/repo#42",
+    created_at: str = _CLAIM_CREATED_AT,
 ) -> StakeableClaim:
     return StakeableClaim(
         claim_id=claim_id,
@@ -49,6 +54,7 @@ def _open_claim(
         question_type=question_type,
         target_ref=target_ref,
         expiry=_FUTURE,
+        created_at=created_at,
     )
 
 
@@ -939,7 +945,7 @@ class TestCIConclusionClassification:
         assert result.resolution_value is True
         assert f"conclusion={conclusion!r}" in result.evidence
 
-    @pytest.mark.parametrize("conclusion", ["failure", "cancelled", "timed_out"])
+    @pytest.mark.parametrize("conclusion", ["failure", "cancelled", "timed_out", "startup_failure"])
     def test_failing_conclusions_resolve_no(self, conclusion):
         r = GitHubEventResolver()
         claim = _open_claim(question_type=QuestionType.CI_PASS, target_ref="a/b@main")
@@ -950,7 +956,7 @@ class TestCIConclusionClassification:
 
     @pytest.mark.parametrize(
         "conclusion",
-        ["", "unknown", "SUCCESS", " success", "action_required", "stale", "startup_failure", None],
+        ["", "unknown", "SUCCESS", " success", "action_required", "stale", None],
     )
     def test_missing_or_non_definitive_conclusion_waits(self, conclusion):
         r = GitHubEventResolver()
@@ -978,6 +984,194 @@ class TestCIConclusionClassification:
         assert later.resolved is True
         store.resolve(claim.claim_id, later.resolution_value, later.evidence)
         assert store.get("ci-missing-conclusion").resolution_status == ResolutionStatus.RESOLVED_YES
+
+    def test_first_run_startup_failure_settles_store_claim_no(self):
+        # A first run that failed to start is a failed first run: the claim
+        # settles NO instead of staying OPEN until the sweeper voids it.
+        store = InMemoryStakeableClaimStore()
+        claim = _open_claim(
+            claim_id="ci-startup-failure",
+            question_type=QuestionType.CI_PASS,
+            target_ref="a/b#5",
+        )
+        store.add(claim)
+        r = GitHubEventResolver()
+        result = r.resolve_from_event(claim, _aggregate_ci_event("startup_failure", "a/b#5"))
+        assert result.resolved is True
+        assert result.resolution_value is False
+        store.resolve(claim.claim_id, result.resolution_value, result.evidence)
+        assert store.get("ci-startup-failure").resolution_status == ResolutionStatus.RESOLVED_NO
+        assert store.expire_stale(grace=0) == []
+        assert store.get("ci-startup-failure").resolution_status == ResolutionStatus.RESOLVED_NO
+
+
+class TestCIClaimCreationLowerBound:
+    """CI_PASS claims settle only from CI that completed at or after claim creation.
+
+    A branch-scoped CI claim binds no run identity, so without this bound a
+    run that finished before the claim existed would settle it. PR-merge and
+    issue-close claims keep pure occurrence semantics (event time <= expiry).
+    """
+
+    _CREATED = _NOW
+    _BEFORE_CREATION = (_NOW - timedelta(days=10)).isoformat()
+    _AFTER_CREATION = (_NOW + timedelta(hours=1)).isoformat()
+
+    def _ci_claim(self, claim_id: str, created_at: object = None) -> StakeableClaim:
+        return StakeableClaim(
+            claim_id=claim_id,
+            question="Will a/b@main pass CI?",
+            question_type=QuestionType.CI_PASS,
+            target_ref="a/b@main",
+            expiry=_FUTURE,
+            created_at=self._CREATED.isoformat() if created_at is None else created_at,  # type: ignore[arg-type]
+        )
+
+    @staticmethod
+    def _ci_event(conclusion: str, completed_at: str, occurred_at: str = "") -> GitHubEventPayload:
+        return GitHubEventPayload(
+            event_type="workflow_run",
+            action="completed",
+            target_ref="a/b@main",
+            occurred_at=occurred_at,
+            conclusion=conclusion,
+            raw={"aggregate": True, "run_attempt": 1, "completed_at": completed_at},
+        )
+
+    @pytest.mark.parametrize("conclusion", ["success", "failure"])
+    def test_ci_completed_before_claim_creation_leaves_claim_open(self, conclusion):
+        store = InMemoryStakeableClaimStore()
+        claim = self._ci_claim(f"pre-creation-{conclusion}")
+        store.add(claim)
+        r = GitHubEventResolver()
+        result = r.resolve_from_event(claim, self._ci_event(conclusion, self._BEFORE_CREATION))
+        assert result.resolved is False
+        assert result.resolution_value is False
+        assert "before claim creation" in result.evidence
+        assert store.get(claim.claim_id).resolution_status == ResolutionStatus.OPEN
+
+    @pytest.mark.parametrize(("conclusion", "expected"), [("success", True), ("failure", False)])
+    def test_ci_completed_after_claim_creation_resolves(self, conclusion, expected):
+        store = InMemoryStakeableClaimStore()
+        claim = self._ci_claim(f"post-creation-{conclusion}")
+        store.add(claim)
+        r = GitHubEventResolver()
+        result = r.resolve_from_event(claim, self._ci_event(conclusion, self._AFTER_CREATION))
+        assert result.resolved is True
+        assert result.resolution_value is expected
+        store.resolve(claim.claim_id, result.resolution_value, result.evidence)
+        expected_status = (
+            ResolutionStatus.RESOLVED_YES if expected else ResolutionStatus.RESOLVED_NO
+        )
+        assert store.get(claim.claim_id).resolution_status == expected_status
+
+    def test_ci_completed_at_claim_creation_instant_resolves(self):
+        r = GitHubEventResolver()
+        claim = self._ci_claim("at-creation")
+        result = r.resolve_from_event(claim, self._ci_event("success", self._CREATED.isoformat()))
+        assert result.resolved is True
+        assert result.resolution_value is True
+
+    def test_pre_creation_event_then_post_creation_event_resolves(self):
+        store = InMemoryStakeableClaimStore()
+        claim = self._ci_claim("stale-then-fresh")
+        store.add(claim)
+        r = GitHubEventResolver()
+        stale = r.resolve_from_event(claim, self._ci_event("failure", self._BEFORE_CREATION))
+        assert stale.resolved is False
+        fresh = r.resolve_from_event(claim, self._ci_event("success", self._AFTER_CREATION))
+        assert fresh.resolved is True
+        store.resolve(claim.claim_id, fresh.resolution_value, fresh.evidence)
+        assert store.get(claim.claim_id).resolution_status == ResolutionStatus.RESOLVED_YES
+
+    def test_terminal_completed_at_before_creation_beats_later_occurred_at(self):
+        r = GitHubEventResolver()
+        claim = self._ci_claim("backdated-terminal")
+        event = self._ci_event("success", self._BEFORE_CREATION, occurred_at=self._AFTER_CREATION)
+        result = r.resolve_from_event(claim, event)
+        assert result.resolved is False
+        assert "before claim creation" in result.evidence
+
+    @pytest.mark.parametrize(
+        "created_at", ["not-a-timestamp", "", 1760000000, "2026-13-01T00:00:00"]
+    )
+    def test_unparseable_claim_created_at_fails_closed(self, created_at):
+        store = InMemoryStakeableClaimStore()
+        claim = self._ci_claim("bad-created-at", created_at=created_at)
+        store.add(claim)
+        r = GitHubEventResolver()
+        result = r.resolve_from_event(claim, self._ci_event("success", self._AFTER_CREATION))
+        assert result.resolved is False
+        assert result.resolution_value is False
+        assert "created_at" in result.evidence
+        assert store.get(claim.claim_id).resolution_status == ResolutionStatus.OPEN
+
+    def test_missing_claim_created_at_fails_closed(self):
+        r = GitHubEventResolver()
+        claim = self._ci_claim("none-created-at")
+        claim.created_at = None  # type: ignore[assignment]
+        result = r.resolve_from_event(claim, self._ci_event("failure", self._AFTER_CREATION))
+        assert result.resolved is False
+        assert "created_at" in result.evidence
+
+    def test_pr_merge_before_claim_creation_still_resolves(self):
+        r = GitHubEventResolver()
+        claim = StakeableClaim(
+            claim_id="pr-occurrence",
+            question="Will a/b#60 merge?",
+            question_type=QuestionType.PR_MERGE,
+            target_ref="a/b#60",
+            expiry=_FUTURE,
+            created_at=self._CREATED.isoformat(),
+        )
+        event = GitHubEventPayload(
+            event_type="pull_request",
+            action="closed",
+            target_ref="a/b#60",
+            merged=True,
+            raw={"merged_at": self._BEFORE_CREATION},
+        )
+        result = r.resolve_from_event(claim, event)
+        assert result.resolved is True
+        assert result.resolution_value is True
+
+    def test_issue_close_before_claim_creation_still_resolves(self):
+        r = GitHubEventResolver()
+        claim = StakeableClaim(
+            claim_id="issue-occurrence",
+            question="Will a/b#61 close?",
+            question_type=QuestionType.ISSUE_CLOSE,
+            target_ref="a/b#61",
+            expiry=_FUTURE,
+            created_at=self._CREATED.isoformat(),
+        )
+        event = GitHubEventPayload(
+            event_type="issues",
+            action="closed",
+            target_ref="a/b#61",
+            raw={"closed_at": self._BEFORE_CREATION},
+        )
+        result = r.resolve_from_event(claim, event)
+        assert result.resolved is True
+        assert result.resolution_value is True
+
+    def test_non_ci_claims_ignore_unparseable_created_at(self):
+        r = GitHubEventResolver()
+        claim = _open_claim(
+            claim_id="pr-bad-created",
+            question_type=QuestionType.PR_MERGE,
+            target_ref="a/b#62",
+            created_at="not-a-timestamp",
+        )
+        event = GitHubEventPayload(
+            event_type="pull_request",
+            action="closed",
+            target_ref="a/b#62",
+            occurred_at=_EVENT_TIME,
+            merged=True,
+        )
+        result = r.resolve_from_event(claim, event)
+        assert result.resolved is True
 
 
 class TestNonStringExpiry:
