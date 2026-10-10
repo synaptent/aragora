@@ -1069,6 +1069,7 @@ class MockUserReadOnly:
     def __init__(self, user_id: str = "readonly-user"):
         self.user_id = user_id
         self.role = "member"
+        self.org_id = "org-readonly"
 
 
 class MockUserAdmin:

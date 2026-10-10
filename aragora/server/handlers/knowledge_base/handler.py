@@ -86,34 +86,21 @@ def _permission_denied_as_403(
 FACT_ACCESS_CLOSED_MESSAGE = "Knowledge fact access is disabled until org scoping is available"
 FACT_ACCESS_CLOSED_CODE = "knowledge_fact_access_closed"
 
-# POST /facts binds each new fact to the caller's organization. Until organization
-# scoping lands for the other fact routes, routes that return data derived from
-# stored facts or act on an existing fact are closed to every authenticated caller.
-_CLOSED_FACT_DATA_PATHS = frozenset(
-    {
-        "/api/v1/knowledge/query",
-        "/api/v1/knowledge/search",
-        "/api/v1/knowledge/stats",
-    }
-)
+# Every fact route reads and writes only the caller's organization's facts.
+# Chunk search is not organization-scoped yet, so it stays closed to every
+# authenticated caller.
+_CLOSED_FACT_DATA_PATHS = frozenset({"/api/v1/knowledge/search"})
 
 
 def _is_fact_access_closed(path: str, method: str) -> bool:
-    """Return True when the (already alias-normalized) route touches stored facts.
-
-    Creating a fact (POST to the facts collection) stays open to RBAC v2.
-    """
-    if path in _CLOSED_FACT_DATA_PATHS:
-        return True
-    if path == "/api/v1/knowledge/facts":
-        return method != "POST"
-    return path.startswith("/api/v1/knowledge/facts/")
+    """Return True when the (already alias-normalized) route is still closed."""
+    return path in _CLOSED_FACT_DATA_PATHS
 
 
 def _closed_until_org_scoping(
     func: Callable[..., HandlerResult | None],
 ) -> Callable[..., HandlerResult | None]:
-    """Answer closed fact routes before any permission check: 401 anonymous, 403 otherwise."""
+    """Answer closed routes before any permission check: 401 anonymous, 403 otherwise."""
 
     @wraps(func)
     def wrapper(
@@ -356,7 +343,7 @@ class KnowledgeHandler(
             workspace_id = get_bounded_string_param(
                 query_params, "workspace_id", None, max_length=100
             )
-            return self._handle_stats(workspace_id)
+            return self._handle_stats(workspace_id, handler)
 
         # Dynamic fact routes
         if path.startswith("/api/v1/knowledge/facts/"):
@@ -453,7 +440,7 @@ class KnowledgeHandler(
             fact_id = parts[4]
             method = getattr(handler, "command", "GET")
             if method == "GET":
-                return self._handle_get_fact(fact_id)
+                return self._handle_get_fact(fact_id, handler)
             elif method == "PUT":
                 return self._handle_update_fact(fact_id, handler)
             elif method == "DELETE":
@@ -467,7 +454,7 @@ class KnowledgeHandler(
         # /api/v1/knowledge/facts/:id/contradictions (6 parts)
         if len(parts) == 6 and parts[5] == "contradictions":
             fact_id = parts[4]
-            return self._handle_get_contradictions(fact_id)
+            return self._handle_get_contradictions(fact_id, handler)
 
         # /api/v1/knowledge/facts/:id/relations (6 parts)
         if len(parts) == 6 and parts[5] == "relations":
@@ -475,7 +462,7 @@ class KnowledgeHandler(
             method = getattr(handler, "command", "GET")
             if method == "POST":
                 return self._handle_add_relation(fact_id, handler)
-            return self._handle_get_relations(fact_id, query_params)
+            return self._handle_get_relations(fact_id, query_params, handler)
 
         # /api/v1/knowledge/facts/relations (POST - add relation) (5 parts)
         if len(parts) == 5 and parts[4] == "relations":

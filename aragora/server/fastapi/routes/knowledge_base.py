@@ -35,12 +35,13 @@ Migration Notes:
     covers the lower-level FactStore API (facts, relations, queries, search).
 
 Organization scoping:
-    POST /facts and POST /import bind each new fact to the caller's
-    organization; a caller without one gets 403 ``knowledge_org_required``.
-    Until organization scoping lands for the other fact routes, every route
-    that reads or changes stored facts (everything except POST /facts,
-    POST /import and GET /sync-status) answers 401 to anonymous callers and
-    403 ``knowledge_fact_access_closed`` to every authenticated caller.
+    Every fact route reads, matches and changes only facts of the caller's
+    authenticated organization; a caller without one gets 403
+    ``knowledge_org_required``. A fact that is missing, belongs to another
+    organization or has no organization answers the same 404. Reads need
+    ``knowledge:read``. GET /search is not organization-scoped yet and answers
+    401 to anonymous callers and 403 ``knowledge_fact_access_closed`` to every
+    authenticated caller.
 """
 
 from __future__ import annotations
@@ -507,8 +508,8 @@ async def _call_store(store: Any, method_name: str, *args: Any, **kwargs: Any) -
     return result
 
 
-def _caller_org(auth: AuthorizationContext, action: str = "Creating knowledge facts") -> str:
-    """The organization fact writes and chunk reads bind to: only the verified auth context."""
+def _caller_org(auth: AuthorizationContext, action: str = "Knowledge fact access") -> str:
+    """The organization every fact route is confined to: only the verified auth context."""
     if not auth.org_id:
         raise APIError(
             f"{action} requires an organization",
@@ -523,7 +524,7 @@ def _caller_org(auth: AuthorizationContext, action: str = "Creating knowledge fa
 # =============================================================================
 
 
-@router.get("/facts", response_model=FactListResponse, dependencies=_CLOSED_UNTIL_ORG_SCOPING)
+@router.get("/facts", response_model=FactListResponse)
 async def list_facts(
     request: Request,
     workspace_id: str | None = Query(None, max_length=100, description="Filter by workspace"),
@@ -533,7 +534,7 @@ async def list_facts(
     include_superseded: bool = Query(False, description="Include superseded facts"),
     limit: int = Query(50, ge=1, le=200, description="Max results"),
     offset: int = Query(0, ge=0, le=10000, description="Pagination offset"),
-    auth: AuthorizationContext = Depends(require_authenticated),
+    auth: AuthorizationContext = Depends(require_permission("knowledge:read")),
     store: Any = Depends(get_fact_store),
 ) -> FactListResponse:
     """
@@ -542,6 +543,7 @@ async def list_facts(
     Returns facts from the knowledge base matching the specified filters.
     Supports filtering by workspace, topic, confidence, and validation status.
     """
+    org_id = _caller_org(auth)
     try:
         filters = FactFilters(
             workspace_id=workspace_id,
@@ -551,6 +553,7 @@ async def list_facts(
             include_superseded=include_superseded,
             limit=limit,
             offset=offset,
+            org_id=org_id,
         )
 
         facts = await _call_store(store, "list_facts", filters)
@@ -568,10 +571,10 @@ async def list_facts(
         raise HTTPException(status_code=500, detail="Failed to list facts")
 
 
-@router.get("/facts/{fact_id}", response_model=FactDetail, dependencies=_CLOSED_UNTIL_ORG_SCOPING)
+@router.get("/facts/{fact_id}", response_model=FactDetail)
 async def get_fact(
     fact_id: str,
-    auth: AuthorizationContext = Depends(require_authenticated),
+    auth: AuthorizationContext = Depends(require_permission("knowledge:read")),
     store: Any = Depends(get_fact_store),
 ) -> FactDetail:
     """
@@ -579,8 +582,9 @@ async def get_fact(
 
     Returns the full details of a fact including evidence and metadata.
     """
+    org_id = _caller_org(auth)
     try:
-        fact = await _call_store(store, "get_fact", fact_id)
+        fact = await _call_store(store, "get_fact", fact_id, org_id=org_id)
         if not fact:
             raise NotFoundError(f"Fact not found: {fact_id}")
         return _fact_to_detail(fact)
@@ -603,7 +607,7 @@ async def create_fact(
     Adds a fact to the knowledge base with the given statement, confidence,
     topics, and metadata. Requires ``knowledge:write`` permission.
     """
-    org_id = _caller_org(auth)
+    org_id = _caller_org(auth, "Creating knowledge facts")
     try:
         fact = await _call_store(
             store,
@@ -625,7 +629,7 @@ async def create_fact(
         raise HTTPException(status_code=500, detail="Failed to create fact")
 
 
-@router.put("/facts/{fact_id}", response_model=FactDetail, dependencies=_CLOSED_UNTIL_ORG_SCOPING)
+@router.put("/facts/{fact_id}", response_model=FactDetail)
 async def update_fact(
     fact_id: str,
     body: UpdateFactRequest,
@@ -638,6 +642,7 @@ async def update_fact(
     Partially updates the specified fields of a fact.
     Requires ``knowledge:write`` permission.
     """
+    org_id = _caller_org(auth)
     try:
         kwargs: dict[str, Any] = {}
         if body.confidence is not None:
@@ -653,7 +658,7 @@ async def update_fact(
         if body.superseded_by is not None:
             kwargs["superseded_by"] = body.superseded_by
 
-        updated = await _call_store(store, "update_fact", fact_id, **kwargs)
+        updated = await _call_store(store, "update_fact", fact_id, **kwargs, org_id=org_id)
         if not updated:
             raise NotFoundError(f"Fact not found: {fact_id}")
 
@@ -667,7 +672,7 @@ async def update_fact(
         raise HTTPException(status_code=500, detail="Failed to update fact")
 
 
-@router.delete("/facts/{fact_id}", dependencies=_CLOSED_UNTIL_ORG_SCOPING)
+@router.delete("/facts/{fact_id}")
 async def delete_fact(
     fact_id: str,
     auth: AuthorizationContext = Depends(require_permission("knowledge:delete")),
@@ -679,8 +684,9 @@ async def delete_fact(
     Permanently removes a fact from the knowledge base.
     Requires ``knowledge:delete`` permission.
     """
+    org_id = _caller_org(auth)
     try:
-        deleted = await _call_store(store, "delete_fact", fact_id)
+        deleted = await _call_store(store, "delete_fact", fact_id, org_id=org_id)
         if not deleted:
             raise NotFoundError(f"Fact not found: {fact_id}")
         return {"deleted": True, "fact_id": fact_id}
@@ -696,11 +702,7 @@ async def delete_fact(
 # =============================================================================
 
 
-@router.post(
-    "/facts/{fact_id}/verify",
-    response_model=VerifyFactResponse,
-    dependencies=_CLOSED_UNTIL_ORG_SCOPING,
-)
+@router.post("/facts/{fact_id}/verify", response_model=VerifyFactResponse)
 async def verify_fact(
     fact_id: str,
     auth: AuthorizationContext = Depends(require_permission("knowledge:write")),
@@ -716,8 +718,9 @@ async def verify_fact(
 
     Requires ``knowledge:write`` permission.
     """
+    org_id = _caller_org(auth)
     try:
-        fact = await _call_store(store, "get_fact", fact_id)
+        fact = await _call_store(store, "get_fact", fact_id, org_id=org_id)
         if not fact:
             raise NotFoundError(f"Fact not found: {fact_id}")
 
@@ -732,6 +735,7 @@ async def verify_fact(
                     "_pending_verification": True,
                     "_verification_queued_at": time.time(),
                 },
+                org_id=org_id,
             )
             return VerifyFactResponse(
                 fact_id=fact_id,
@@ -744,7 +748,7 @@ async def verify_fact(
             )
 
         try:
-            verified = await _await_if_needed(engine.verify_fact(fact_id))
+            verified = await _await_if_needed(engine.verify_fact(fact_id, org_id=org_id))
         except (KeyError, ValueError, OSError, TypeError, RuntimeError) as e:
             logger.error("Verification failed: %s", e)
             raise HTTPException(status_code=500, detail="Verification failed")
@@ -771,14 +775,10 @@ async def verify_fact(
         raise HTTPException(status_code=500, detail="Failed to verify fact")
 
 
-@router.get(
-    "/facts/{fact_id}/contradictions",
-    response_model=ContradictionsResponse,
-    dependencies=_CLOSED_UNTIL_ORG_SCOPING,
-)
+@router.get("/facts/{fact_id}/contradictions", response_model=ContradictionsResponse)
 async def get_contradictions(
     fact_id: str,
-    auth: AuthorizationContext = Depends(require_authenticated),
+    auth: AuthorizationContext = Depends(require_permission("knowledge:read")),
     store: Any = Depends(get_fact_store),
 ) -> ContradictionsResponse:
     """
@@ -787,12 +787,13 @@ async def get_contradictions(
     Returns a list of facts in the knowledge base that are identified as
     contradicting the specified fact.
     """
+    org_id = _caller_org(auth)
     try:
-        fact = await _call_store(store, "get_fact", fact_id)
+        fact = await _call_store(store, "get_fact", fact_id, org_id=org_id)
         if not fact:
             raise NotFoundError(f"Fact not found: {fact_id}")
 
-        contradictions = await _call_store(store, "get_contradictions", fact_id)
+        contradictions = await _call_store(store, "get_contradictions", fact_id, org_id=org_id)
         return ContradictionsResponse(
             fact_id=fact_id,
             contradictions=[_fact_to_summary(c) for c in contradictions],
@@ -805,11 +806,7 @@ async def get_contradictions(
         raise HTTPException(status_code=500, detail="Failed to get contradictions")
 
 
-@router.get(
-    "/facts/{fact_id}/relations",
-    response_model=FactRelationsResponse,
-    dependencies=_CLOSED_UNTIL_ORG_SCOPING,
-)
+@router.get("/facts/{fact_id}/relations", response_model=FactRelationsResponse)
 async def get_relations(
     fact_id: str,
     relation_type: str | None = Query(
@@ -817,7 +814,7 @@ async def get_relations(
     ),
     as_source: bool = Query(True, description="Include relations where fact is source"),
     as_target: bool = Query(True, description="Include relations where fact is target"),
-    auth: AuthorizationContext = Depends(require_authenticated),
+    auth: AuthorizationContext = Depends(require_permission("knowledge:read")),
     store: Any = Depends(get_fact_store),
 ) -> FactRelationsResponse:
     """
@@ -826,8 +823,9 @@ async def get_relations(
     Returns relations where this fact is a source and/or target,
     optionally filtered by relation type.
     """
+    org_id = _caller_org(auth)
     try:
-        fact = await _call_store(store, "get_fact", fact_id)
+        fact = await _call_store(store, "get_fact", fact_id, org_id=org_id)
         if not fact:
             raise NotFoundError(f"Fact not found: {fact_id}")
 
@@ -839,6 +837,7 @@ async def get_relations(
             relation_type=rel_type,
             as_source=as_source,
             as_target=as_target,
+            org_id=org_id,
         )
 
         return FactRelationsResponse(
@@ -853,12 +852,7 @@ async def get_relations(
         raise HTTPException(status_code=500, detail="Failed to get relations")
 
 
-@router.post(
-    "/facts/{fact_id}/relations",
-    response_model=FactRelation,
-    status_code=201,
-    dependencies=_CLOSED_UNTIL_ORG_SCOPING,
-)
+@router.post("/facts/{fact_id}/relations", response_model=FactRelation, status_code=201)
 async def add_relation(
     fact_id: str,
     body: AddRelationRequest,
@@ -873,15 +867,16 @@ async def add_relation(
 
     Requires ``knowledge:write`` permission.
     """
+    org_id = _caller_org(auth)
     try:
         rel_type = FactRelationType(body.relation_type)
     except (ValueError, KeyError):
         raise HTTPException(status_code=400, detail=f"Invalid relation_type: {body.relation_type}")
 
     try:
-        if not await _call_store(store, "get_fact", fact_id):
+        if not await _call_store(store, "get_fact", fact_id, org_id=org_id):
             raise NotFoundError(f"Source fact not found: {fact_id}")
-        if not await _call_store(store, "get_fact", body.target_fact_id):
+        if not await _call_store(store, "get_fact", body.target_fact_id, org_id=org_id):
             raise NotFoundError(f"Target fact not found: {body.target_fact_id}")
 
         relation = await _call_store(
@@ -893,7 +888,10 @@ async def add_relation(
             confidence=body.confidence,
             created_by=body.created_by,
             metadata=body.metadata,
+            org_id=org_id,
         )
+        if relation is None:
+            raise NotFoundError("Source or target fact not found")
         return _relation_to_model(relation)
     except NotFoundError:
         raise
@@ -904,12 +902,7 @@ async def add_relation(
         raise HTTPException(status_code=500, detail="Failed to add relation")
 
 
-@router.post(
-    "/facts/relations",
-    response_model=FactRelation,
-    status_code=201,
-    dependencies=_CLOSED_UNTIL_ORG_SCOPING,
-)
+@router.post("/facts/relations", response_model=FactRelation, status_code=201)
 async def add_relation_bulk(
     body: AddRelationBulkRequest,
     auth: AuthorizationContext = Depends(require_permission("knowledge:write")),
@@ -921,6 +914,7 @@ async def add_relation_bulk(
     Both source and target fact IDs are specified in the request body.
     Requires ``knowledge:write`` permission.
     """
+    org_id = _caller_org(auth)
     try:
         rel_type = FactRelationType(body.relation_type)
     except (ValueError, KeyError):
@@ -936,8 +930,13 @@ async def add_relation_bulk(
             confidence=body.confidence,
             created_by=body.created_by,
             metadata=body.metadata,
+            org_id=org_id,
         )
+        if relation is None:
+            raise NotFoundError("Source or target fact not found")
         return _relation_to_model(relation)
+    except NotFoundError:
+        raise
     except HTTPException:
         raise
     except (RuntimeError, ValueError, TypeError, OSError, KeyError, AttributeError) as e:
@@ -950,10 +949,10 @@ async def add_relation_bulk(
 # =============================================================================
 
 
-@router.post("/query", response_model=QueryResponse, dependencies=_CLOSED_UNTIL_ORG_SCOPING)
+@router.post("/query", response_model=QueryResponse)
 async def query_knowledge_base(
     body: QueryRequest,
-    auth: AuthorizationContext = Depends(require_authenticated),
+    auth: AuthorizationContext = Depends(require_permission("knowledge:read")),
     engine: Any = Depends(get_query_engine),
 ) -> QueryResponse:
     """
@@ -1044,10 +1043,10 @@ async def search_knowledge_base(
         raise HTTPException(status_code=500, detail="Failed to search knowledge base")
 
 
-@router.get("/stats", response_model=StatsResponse, dependencies=_CLOSED_UNTIL_ORG_SCOPING)
+@router.get("/stats", response_model=StatsResponse)
 async def get_stats(
     workspace_id: str | None = Query(None, max_length=100, description="Filter by workspace"),
-    auth: AuthorizationContext = Depends(require_authenticated),
+    auth: AuthorizationContext = Depends(require_permission("knowledge:read")),
     store: Any = Depends(get_fact_store),
 ) -> StatsResponse:
     """
@@ -1056,8 +1055,9 @@ async def get_stats(
     Returns aggregate statistics about facts, relations, and topics,
     optionally scoped to a specific workspace.
     """
+    org_id = _caller_org(auth)
     try:
-        stats = await _call_store(store, "get_statistics", workspace_id)
+        stats = await _call_store(store, "get_statistics", workspace_id, org_id=org_id)
         return StatsResponse(
             workspace_id=workspace_id,
             **stats,
@@ -1072,11 +1072,11 @@ async def get_stats(
 # =============================================================================
 
 
-@router.get("/export", response_model=ExportResponse, dependencies=_CLOSED_UNTIL_ORG_SCOPING)
+@router.get("/export", response_model=ExportResponse)
 async def export_knowledge_base(
     workspace_id: str | None = Query(None, max_length=100, description="Workspace to export"),
     format: str = Query("json", description="Export format (json)"),
-    auth: AuthorizationContext = Depends(require_authenticated),
+    auth: AuthorizationContext = Depends(require_permission("knowledge:read")),
     store: Any = Depends(get_fact_store),
 ) -> ExportResponse:
     """
@@ -1085,6 +1085,7 @@ async def export_knowledge_base(
     Returns all facts (optionally filtered by workspace) in the requested
     format for backup or transfer purposes.
     """
+    org_id = _caller_org(auth)
     try:
         from datetime import datetime, timezone
 
@@ -1094,6 +1095,7 @@ async def export_knowledge_base(
             include_superseded=True,
             limit=10000,
             offset=0,
+            org_id=org_id,
         )
         facts = await _call_store(store, "list_facts", filters)
         fact_dicts = [f.to_dict() if hasattr(f, "to_dict") else f for f in facts]
@@ -1128,7 +1130,7 @@ async def import_knowledge_base(
 
     Requires ``knowledge:write`` permission.
     """
-    org_id = _caller_org(auth)
+    org_id = _caller_org(auth, "Creating knowledge facts")
     imported = 0
     skipped = 0
     errors = 0

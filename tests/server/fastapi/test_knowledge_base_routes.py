@@ -42,7 +42,8 @@ def test_verify_fact_awaits_engine_in_async_route() -> None:
 
     assert response.fact_id == "fact-1"
     assert response.verified is True
-    engine.verify_fact.assert_awaited_once_with("fact-1")
+    engine.verify_fact.assert_awaited_once_with("fact-1", org_id="org-1")
+    store.get_fact.assert_called_once_with("fact-1", org_id="org-1")
 
 
 def test_query_knowledge_base_awaits_engine_query() -> None:

@@ -21,6 +21,7 @@ from ..base import (
     json_response,
 )
 from ..openapi_decorator import api_endpoint
+from .facts import caller_org_or_error
 
 if TYPE_CHECKING:
     from aragora.knowledge import DatasetQueryEngine, SimpleQueryEngine
@@ -32,6 +33,7 @@ class QueryHandlerProtocol(Protocol):
     """Protocol for handlers that use QueryOperationsMixin."""
 
     def _get_query_engine(self) -> DatasetQueryEngine | SimpleQueryEngine: ...
+    def require_auth_or_error(self, handler: Any) -> tuple[Any, HandlerResult | None]: ...
 
 
 class QueryOperationsMixin:
@@ -100,7 +102,10 @@ class QueryOperationsMixin:
     def _handle_query(
         self: QueryHandlerProtocol, query_params: dict, handler: Any
     ) -> HandlerResult:
-        """Handle POST /api/knowledge/query - Natural language query."""
+        """Handle POST /api/knowledge/query - Query the caller's organization's knowledge."""
+        org_id, err = caller_org_or_error(self, handler)
+        if err:
+            return err
 
         try:
             content_length = int(handler.headers.get("Content-Length", 0))
@@ -131,7 +136,7 @@ class QueryOperationsMixin:
         engine = self._get_query_engine()
 
         try:
-            result = _run_async(engine.query(question, workspace_id, options))
+            result = _run_async(engine.query(question, workspace_id, options, org_id=org_id))
         except (KeyError, ValueError, OSError, TypeError, RuntimeError) as e:
             logger.error("Query execution failed: %s", e)
             return error_response("Query execution failed", 500)
