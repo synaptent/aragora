@@ -21,6 +21,7 @@ describe('Next observability build wiring', () => {
       'SENTRY_AUTH_TOKEN',
       'NEXT_PUBLIC_SENTRY_DSN',
       'NEXT_PUBLIC_POSTHOG_KEY',
+      'NEXT_PUBLIC_POSTHOG_DISABLE_COMPRESSION',
     ]) {
       delete process.env[key];
     }
@@ -34,15 +35,18 @@ describe('Next observability build wiring', () => {
     const config = require('../next.config');
     expect(config.env.NEXT_PUBLIC_SENTRY_DSN).toBe('');
     expect(config.env.NEXT_PUBLIC_POSTHOG_KEY).toBe('');
+    expect(config.env.NEXT_PUBLIC_POSTHOG_DISABLE_COMPRESSION).toBe('');
     expect(mockLoadSentry).not.toHaveBeenCalled();
   });
 
   it('preserves public keys without loading the server build wrapper', () => {
     process.env.NEXT_PUBLIC_SENTRY_DSN = 'http://public@localhost:3141/1';
     process.env.NEXT_PUBLIC_POSTHOG_KEY = 'phc_test';
+    process.env.NEXT_PUBLIC_POSTHOG_DISABLE_COMPRESSION = '1';
     const config = require('../next.config');
     expect(config.env.NEXT_PUBLIC_SENTRY_DSN).toBe('http://public@localhost:3141/1');
     expect(config.env.NEXT_PUBLIC_POSTHOG_KEY).toBe('phc_test');
+    expect(config.env.NEXT_PUBLIC_POSTHOG_DISABLE_COMPRESSION).toBe('1');
     expect(mockLoadSentry).not.toHaveBeenCalled();
   });
 

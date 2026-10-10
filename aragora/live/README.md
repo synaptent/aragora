@@ -194,10 +194,12 @@ variables in a server environment. Unset values use these defaults; `true` or
 
 Optional telemetry uses `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_DSN`,
 `SENTRY_AUTH_TOKEN`, `SENTRY_ENVIRONMENT`, `NEXT_PUBLIC_POSTHOG_KEY`,
-`NEXT_PUBLIC_POSTHOG_HOST` and `OTEL_EXPORTER_OTLP_ENDPOINT`. The keys and
-OTLP endpoint are unset by default. `LOG_LEVEL` controls local JSON logging
-(default `info`, no remote export). `NEXT_PUBLIC_FLAG_*` flags default off. See
-[Observability](#observability) for their defaults and enablement rules.
+`NEXT_PUBLIC_POSTHOG_HOST`, `NEXT_PUBLIC_POSTHOG_DISABLE_COMPRESSION`,
+`OTEL_EXPORTER_OTLP_ENDPOINT` and `OTEL_SERVICE_NAME`. The keys and OTLP
+endpoint are unset by default, and the compression knob is off by default.
+`LOG_LEVEL` controls local JSON logging (default `info`, no remote export).
+`NEXT_PUBLIC_FLAG_*` flags default off. See [Observability](#observability)
+for their defaults and enablement rules.
 
 ## Observability
 
@@ -208,18 +210,20 @@ restart the dev server or rebuild after changing them.
 Next config explicitly inlines empty public keys so default production builds
 also exclude the disabled SDK chunks.
 
-| Variable                      | Purpose                                                                                                                                                    |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NEXT_PUBLIC_SENTRY_DSN`      | Unset: browser error reporting is off, no SDK initialization or network. A non-empty DSN enables it.                                                       |
-| `SENTRY_DSN`                  | Unset: server/edge error reporting and the Sentry build wrapper are off. A non-empty DSN enables them.                                                     |
-| `SENTRY_AUTH_TOKEN`           | Optional secret for source-map upload only, disabled when unset; requires the build wrapper. Never use a public variable for this token.                   |
-| `SENTRY_ENVIRONMENT`          | Optional server/edge environment override; otherwise `NODE_ENV`. Browser events use `NODE_ENV`.                                                            |
-| `NEXT_PUBLIC_BUILD_SHA`       | Sentry release, falling back to the package version when unavailable. Next config normally supplies Git HEAD.                                              |
-| `NEXT_PUBLIC_POSTHOG_KEY`     | Unset: analytics is off and `capture(event, props)` from `src/lib/analytics.ts` is a no-op. A key enables pageviews and capture.                           |
-| `NEXT_PUBLIC_POSTHOG_HOST`    | Optional ingestion host, default `https://us.i.posthog.com` only when a key enables analytics; otherwise no network, even if this host is set.             |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | Unset: tracing is off, no SDK import or export. An endpoint enables `@vercel/otel` traces with service name `aragora-live`, independent of Sentry.         |
-| `LOG_LEVEL`                   | Unset/empty: local JSON stdout at `info`, not silent; no remote export. `debug` includes debug records, `silent` disables logs.                            |
-| `NEXT_PUBLIC_FLAG_*`          | Unset: flags are off (`false`), leaving existing behavior unchanged. Only the exact string `true` enables a flag; public build-time values, never secrets. |
+| Variable                                  | Purpose                                                                                                                                                                                                                                                                 |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_SENTRY_DSN`                  | Unset: browser error reporting is off, no SDK initialization or network. A non-empty DSN enables it.                                                                                                                                                                    |
+| `SENTRY_DSN`                              | Unset: server/edge error reporting and the Sentry build wrapper are off. A non-empty DSN enables them.                                                                                                                                                                  |
+| `SENTRY_AUTH_TOKEN`                       | Optional secret for source-map upload only, disabled when unset; requires the build wrapper. Never use a public variable for this token.                                                                                                                                |
+| `SENTRY_ENVIRONMENT`                      | Optional server/edge environment override; otherwise `NODE_ENV`. Browser events use `NODE_ENV`.                                                                                                                                                                         |
+| `NEXT_PUBLIC_BUILD_SHA`                   | Sentry release. Precedence: an explicit value, then Git HEAD at build time, then `unknown` inside a Next build (Next config inlines it). The package version is the fallback only outside a Next build, for example in Jest.                                            |
+| `NEXT_PUBLIC_POSTHOG_KEY`                 | Unset: analytics is off and `capture(event, props)` from `src/lib/analytics.ts` is a no-op. A key enables pageviews and capture.                                                                                                                                        |
+| `NEXT_PUBLIC_POSTHOG_HOST`                | Optional ingestion host, default `https://us.i.posthog.com` only when a key enables analytics; otherwise no network, even if this host is set.                                                                                                                          |
+| `NEXT_PUBLIC_POSTHOG_DISABLE_COMPRESSION` | Validation/debugging only, off by default. Unset: posthog-js compresses event payloads (its default). Only exactly `1` or `true` sends clear-text payloads, for local capture stubs. Public build-time value.                                                           |
+| `OTEL_EXPORTER_OTLP_ENDPOINT`             | Unset: tracing is off, no SDK import or export. An endpoint enables `@vercel/otel` HTTP/protobuf traces with service name `aragora-live`, independent of Sentry.                                                                                                        |
+| `OTEL_SERVICE_NAME`                       | Unset: traces use the default service name `aragora-live`. When set, `OTEL_SERVICE_NAME` overrides that default; see the collector notes below.                                                                                                                         |
+| `LOG_LEVEL`                               | Unset/empty: local JSON stdout at `info`, not silent; no remote export. Accepts exactly `trace`, `debug`, `info`, `warn`, `error`, `fatal` or `silent`. Any other value falls back to `info` and logs one warning naming the rejected value; it never stops the server. |
+| `NEXT_PUBLIC_FLAG_*`                      | Unset: flags are off (`false`), leaving existing behavior unchanged. Only the exact string `true` enables a flag; public build-time values, never secrets.                                                                                                              |
 
 Analytics capture drops keys matching
 `/email|password|token|secret|authorization|cookie|apikey/i`, including nested
@@ -238,7 +242,10 @@ Visit <http://localhost:3120/debug/sentry-test/?boom=1>. After hydration, this
 throws `Aragora Live Sentry test error` into the existing app error boundary.
 The fallback offers retry, refresh and home controls. Without a public DSN
 the test page does not throw. The envelope should arrive within 10 seconds
-with a build SHA/package version release and the Next environment.
+with a build SHA/package version release and the Next environment. The route
+is development-only: production builds (`NODE_ENV=production`) answer it with
+the 404 page via `notFound()`. Errors in the root layout reach Sentry through
+`global-error.tsx` the same way when the public DSN is set.
 
 For a local analytics capture endpoint, start with
 `NEXT_PUBLIC_POSTHOG_KEY=phc_test NEXT_PUBLIC_POSTHOG_HOST=http://localhost:3142`
@@ -247,7 +254,11 @@ and visit <http://localhost:3120/landing/>. A `$pageview` should arrive within
 they do not send to real projects. Real vendor verification requires real keys.
 PostHog filters bots, including headless browsers and `navigator.webdriver`;
 automated delivery tests must simulate a normal browser, not disable that
-filter in production. Event compression is disabled for inspectable payloads.
+filter in production. Event payloads are compressed by default (the SDK sends
+`compression=gzip-js` gzip bodies when the ingestion host advertises it). For
+clear-text payloads in a local capture stub, add
+`NEXT_PUBLIC_POSTHOG_DISABLE_COMPRESSION=1` (or `true`) and restart; never set
+it in production.
 
 With an OTLP HTTP collector listening locally, enable server traces:
 
@@ -257,6 +268,22 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 npm run dev -- --port 3120
 
 Request <http://localhost:3120/healthz/> and inspect the collector for
 `service.name=aragora-live`. Restart without the endpoint to disable tracing.
+Collector notes for `@vercel/otel` 2.1.3:
+
+- The service name resolves as `OTEL_SERVICE_NAME || serviceName`, so an
+  `OTEL_SERVICE_NAME` in the environment overrides `aragora-live`; unset it
+  before checking for `service.name=aragora-live`.
+- `OTEL_SDK_DISABLED=true` makes registration a no-op even with an endpoint.
+  The SDK checks only for a non-empty value, so `OTEL_SDK_DISABLED=false`
+  disables it too.
+- The app only enables tracing when `OTEL_EXPORTER_OTLP_ENDPOINT` is set. When
+  `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` is also set, it takes precedence and is
+  used as-is; the generic endpoint gets `/v1/traces` appended.
+- Export uses OTLP over HTTP (`http/protobuf` by default, `http/json`
+  accepted) on port 4318. gRPC and port 4317 are not supported: any other
+  protocol value, including `grpc`, logs a warning and falls back to
+  `http/protobuf` at the default `http://localhost:4318/v1/traces`, ignoring
+  the configured endpoint.
 
 Run the isolated telemetry tests without the global coverage floors:
 
@@ -264,6 +291,8 @@ Run the isolated telemetry tests without the global coverage floors:
 npx jest --coverage=false src/lib/__tests__/analytics.test.ts --maxWorkers=4
 npx jest --coverage=false src/lib/__tests__/instrumentation.test.ts --maxWorkers=4
 npx jest --coverage=false src/app/__tests__/error.test.tsx --maxWorkers=4
+npx jest --coverage=false src/app/__tests__/global-error.test.tsx --maxWorkers=4
+npx jest --coverage=false src/app/debug/sentry-test/page.test.tsx --maxWorkers=4
 npx jest --coverage=false src/lib/__tests__/logger.test.ts --maxWorkers=4
 npx jest --coverage=false src/lib/__tests__/flags.test.ts --maxWorkers=4
 npx jest --coverage=false src/lib/__tests__/deadFlags.test.ts --maxWorkers=4
@@ -310,10 +339,17 @@ the feature. Rebuild after changing flags; they are not runtime user settings
 and are separate from the legacy `featureFlags.ts`/localStorage helper.
 
 Declare new flags as explicit properties in `src/lib/flags.ts` and reference
-them using imported `flags.name` or `flags['name']` (import aliases work).
+them using imported `flags.name` or `flags['name']`. Supported imports are the
+named import `import { flags } from '@/lib/flags'` and its aliases, such as
+`import { flags as f } from '@/lib/flags'` with `f.name`.
 `node scripts/check_dead_flags.mjs` scans JS/TS in `src/`, excluding the
 declaration file, `.d.ts`, `__tests__/`, `*.test.*` and `*.spec.*`; comments and
 strings are not references. Destructuring/dynamic-key reads are not supported.
+Namespace imports (`import * as flagsModule from '@/lib/flags'` with
+`flagsModule.flags.name`) and re-exports (`export { flags } from '@/lib/flags'`,
+then reading the flag through the re-exporting module) are also unsupported.
+The check fails closed for them: a flag read only that way is reported as
+unreferenced and the check exits 1, so use the named import instead.
 Exit 0 means all flags are referenced, 1 lists unreferenced flags, and 2 is an
 input/parse error. `--src-dir PATH` supports fixture directories; `--help`
 prints usage. The check runs in `readiness-lint-live`.

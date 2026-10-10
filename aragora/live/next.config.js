@@ -43,6 +43,8 @@ const nextConfig = {
     // Explicit empty defaults let bundlers remove disabled telemetry SDK chunks.
     NEXT_PUBLIC_SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN || '',
     NEXT_PUBLIC_POSTHOG_KEY: process.env.NEXT_PUBLIC_POSTHOG_KEY || '',
+    NEXT_PUBLIC_POSTHOG_DISABLE_COMPRESSION:
+      process.env.NEXT_PUBLIC_POSTHOG_DISABLE_COMPRESSION || '',
   },
   // redirects and rewrites are not supported with output: 'export'.
   // When exporting statically, these are handled by the hosting platform

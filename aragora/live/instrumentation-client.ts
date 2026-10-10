@@ -16,8 +16,10 @@ async function initializeTelemetry() {
     posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY, {
       api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST || 'https://us.i.posthog.com',
       capture_pageview: true,
-      // Keep event payloads inspectable by self-hosted ingestion proxies and capture stubs.
-      disable_compression: true,
+      // Clear-text payloads are opt-in for capture stubs and debugging; the SDK compresses by default.
+      disable_compression: ['1', 'true'].includes(
+        process.env.NEXT_PUBLIC_POSTHOG_DISABLE_COMPRESSION ?? '',
+      ),
       autocapture: false,
       disable_session_recording: true,
       person_profiles: 'identified_only',

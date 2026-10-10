@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { notFound } from 'next/navigation';
 
-export default function SentryTestPage() {
+function SentryTestTrigger() {
   const [boom, setBoom] = useState(false);
 
   useEffect(() => {
@@ -17,4 +18,10 @@ export default function SentryTestPage() {
   if (boom) throw new Error('Aragora Live Sentry test error');
 
   return <p>Sentry test: add ?boom=1 with NEXT_PUBLIC_SENTRY_DSN configured.</p>;
+}
+
+export default function SentryTestPage() {
+  if (process.env.NODE_ENV === 'production') notFound();
+
+  return <SentryTestTrigger />;
 }

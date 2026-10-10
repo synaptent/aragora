@@ -30,6 +30,13 @@ export default function GlobalError({
     if (accepted) {
       reporter.flush();
     }
+    if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
+      void import('@sentry/nextjs')
+        .then((Sentry) => Sentry.captureException(error))
+        .catch(() => {
+          // Keep the recovery UI usable even if the optional SDK cannot load.
+        });
+    }
   }, [error]);
 
   const isHydrationError =

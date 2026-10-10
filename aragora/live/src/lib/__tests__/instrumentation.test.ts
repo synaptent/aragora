@@ -35,6 +35,7 @@ describe('telemetry instrumentation', () => {
       'NEXT_PUBLIC_BUILD_SHA',
       'NEXT_PUBLIC_POSTHOG_KEY',
       'NEXT_PUBLIC_POSTHOG_HOST',
+      'NEXT_PUBLIC_POSTHOG_DISABLE_COMPRESSION',
       'OTEL_EXPORTER_OTLP_ENDPOINT',
       'NEXT_RUNTIME',
     ]) {
@@ -89,10 +90,44 @@ describe('telemetry instrumentation', () => {
       expect.objectContaining({
         api_host: 'http://localhost:3142',
         capture_pageview: true,
-        disable_compression: true,
+        disable_compression: false,
+        autocapture: false,
+        disable_session_recording: true,
+        person_profiles: 'identified_only',
       }),
     );
+    expect(mockPosthogInit.mock.calls[0][1]).not.toHaveProperty('opt_out_useragent_filter');
     expect(mockLoadSentry).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [undefined, false],
+    ['', false],
+    ['0', false],
+    ['false', false],
+    ['yes', false],
+    ['TRUE', false],
+    ['1', true],
+    ['true', true],
+  ])('disables PostHog compression only for the opt-in knob (%p -> %p)', async (knob, disabled) => {
+    process.env.NEXT_PUBLIC_POSTHOG_KEY = 'phc_test';
+    if (knob !== undefined) process.env.NEXT_PUBLIC_POSTHOG_DISABLE_COMPRESSION = knob;
+    const { telemetryReady } = await import('../../../instrumentation-client');
+    await telemetryReady;
+    expect(mockPosthogInit).toHaveBeenCalledTimes(1);
+    expect(mockPosthogInit.mock.calls[0][1]).toMatchObject({
+      api_host: 'https://us.i.posthog.com',
+      disable_compression: disabled,
+    });
+    expect(mockPosthogInit.mock.calls[0][1]).not.toHaveProperty('opt_out_useragent_filter');
+  });
+
+  it('ignores the compression knob when PostHog has no key', async () => {
+    process.env.NEXT_PUBLIC_POSTHOG_DISABLE_COMPRESSION = '1';
+    const { telemetryReady } = await import('../../../instrumentation-client');
+    await telemetryReady;
+    expect(mockLoadPosthog).not.toHaveBeenCalled();
+    expect(mockPosthogInit).not.toHaveBeenCalled();
   });
 
   it.each(['nodejs', 'edge'])('register skips Sentry for %s without a DSN', async (runtime) => {
