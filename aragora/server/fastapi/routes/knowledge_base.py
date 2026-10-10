@@ -507,11 +507,11 @@ async def _call_store(store: Any, method_name: str, *args: Any, **kwargs: Any) -
     return result
 
 
-def _caller_org(auth: AuthorizationContext) -> str:
-    """The organization fact writes bind to: only the verified auth context."""
+def _caller_org(auth: AuthorizationContext, action: str = "Creating knowledge facts") -> str:
+    """The organization fact writes and chunk reads bind to: only the verified auth context."""
     if not auth.org_id:
         raise APIError(
-            "Creating knowledge facts requires an organization",
+            f"{action} requires an organization",
             status_code=403,
             code="knowledge_org_required",
         )
@@ -962,6 +962,7 @@ async def query_knowledge_base(
     Runs a question through the query engine, which uses facts and embeddings
     to produce an answer with citations.
     """
+    org_id = _caller_org(auth, "Querying knowledge")
     try:
         options_data = body.options
         options = QueryOptions(
@@ -973,7 +974,9 @@ async def query_knowledge_base(
         )
 
         try:
-            result = await _await_if_needed(engine.query(body.question, body.workspace_id, options))
+            result = await _await_if_needed(
+                engine.query(body.question, body.workspace_id, options, org_id=org_id)
+            )
         except (KeyError, ValueError, OSError, TypeError, RuntimeError) as e:
             logger.error("Query execution failed: %s", e)
             raise HTTPException(status_code=500, detail="Query execution failed")
@@ -1009,9 +1012,11 @@ async def search_knowledge_base(
     """
     Search knowledge base chunks via embeddings.
 
-    Performs a vector similarity search over knowledge base chunks and
-    returns ranked results.
+    Performs a vector similarity search over the caller's organization's
+    chunks and returns ranked results; a caller without an organization
+    gets 403 ``knowledge_org_required``.
     """
+    org_id = _caller_org(auth, "Searching knowledge")
     try:
         if not hasattr(engine, "search"):
             raise HTTPException(
@@ -1020,7 +1025,7 @@ async def search_knowledge_base(
             )
 
         try:
-            results = await _await_if_needed(engine.search(q, workspace_id, limit))
+            results = await _await_if_needed(engine.search(q, workspace_id, limit, org_id=org_id))
         except (KeyError, ValueError, OSError, TypeError, RuntimeError) as e:
             logger.error("Search failed: %s", e)
             raise HTTPException(status_code=500, detail="Search operation failed")

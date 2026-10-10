@@ -2,20 +2,21 @@ from __future__ import annotations
 
 import asyncio
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from aragora.server.fastapi.routes import knowledge_base
 
 
-def _auth() -> SimpleNamespace:
-    return SimpleNamespace(user_id="user-1", email="user@example.com")
+def _auth() -> Any:
+    return SimpleNamespace(user_id="user-1", email="user@example.com", org_id="org-1")
 
 
 def test_verify_fact_awaits_engine_in_async_route() -> None:
     class FakeDatasetQueryEngine:
         pass
 
-    engine = FakeDatasetQueryEngine()
+    engine: Any = FakeDatasetQueryEngine()
     engine.verify_fact = AsyncMock(
         return_value=SimpleNamespace(
             to_dict=lambda: {
@@ -76,6 +77,7 @@ def test_query_knowledge_base_awaits_engine_query() -> None:
     assert response.answer == "Use the knowledge base directly."
     assert response.confidence == 0.81
     engine.query.assert_awaited_once()
+    assert engine.query.await_args.kwargs == {"org_id": "org-1"}
 
 
 def test_search_knowledge_base_awaits_engine_search() -> None:
@@ -105,4 +107,4 @@ def test_search_knowledge_base_awaits_engine_search() -> None:
 
     assert response.count == 1
     assert response.results[0]["chunk_id"] == "chunk-1"
-    engine.search.assert_awaited_once_with("result", "default", 5)
+    engine.search.assert_awaited_once_with("result", "default", 5, org_id="org-1")

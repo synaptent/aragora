@@ -123,6 +123,7 @@ def pipeline_config(temp_db_dir):
     """Create PipelineConfig for testing."""
     return PipelineConfig(
         workspace_id="test_pipeline",
+        org_id="org-test",
         use_weaviate=False,
         extract_facts=False,
         fact_db_path=temp_db_dir / "facts.db",
@@ -730,7 +731,7 @@ class TestKnowledgePipelineIntegration:
     @pytest.mark.asyncio
     async def test_pipeline_search(self, pipeline_config):
         """Test searching through pipeline."""
-        pipeline = KnowledgePipeline(config=pipeline_config)
+        pipeline = KnowledgePipeline(config=pipeline_config, fact_store=_scoped_store())
         await pipeline.start()
 
         try:

@@ -68,8 +68,14 @@ from aragora.knowledge.embeddings import (
     EmbeddingConfig,
     InMemoryEmbeddingService,
     WeaviateEmbeddingService,
+    chunk_namespace,
 )
-from aragora.knowledge.fact_store import FactStore, InMemoryFactStore
+from aragora.knowledge.fact_store import (
+    FactStore,
+    InMemoryFactStore,
+    OrgScopeRequiredError,
+    ScopedFactStore,
+)
 from aragora.knowledge.query_engine import DatasetQueryEngine, QueryOptions, SimpleQueryEngine
 from aragora.knowledge.types import Fact, QueryResult, ValidationStatus
 
@@ -82,11 +88,11 @@ KnowledgeSource: Any = None
 MOUND_AVAILABLE: bool = False
 
 try:
-    from aragora.knowledge.mound import (
-        KnowledgeMound,  # type: ignore[no-redef]
-        MoundConfig,  # type: ignore[no-redef]
-        IngestionRequest,  # type: ignore[no-redef]
-        KnowledgeSource,  # type: ignore[no-redef]
+    from aragora.knowledge.mound import (  # type: ignore[no-redef]
+        KnowledgeMound,
+        MoundConfig,
+        IngestionRequest,
+        KnowledgeSource,
     )
 
     MOUND_AVAILABLE = True
@@ -100,7 +106,7 @@ logger = logging.getLogger(__name__)
 UnstructuredParser: Any = None
 UNSTRUCTURED_AVAILABLE: bool = False
 try:
-    from aragora.documents.ingestion import (
+    from aragora.documents.ingestion import (  # type: ignore[no-redef]
         UnstructuredParser,
         UNSTRUCTURED_AVAILABLE,
     )
@@ -114,6 +120,9 @@ class PipelineConfig:
 
     # Workspace
     workspace_id: str = "default"
+    # Set only from verified authentication. Without it, fact and chunk reads
+    # and writes fail closed with OrgScopeRequiredError.
+    org_id: str | None = None
 
     # Chunking
     chunk_size: int = 512
@@ -186,7 +195,7 @@ class KnowledgePipeline:
     def __init__(
         self,
         config: PipelineConfig | None = None,
-        fact_store: FactStore | InMemoryFactStore | None = None,
+        fact_store: FactStore | InMemoryFactStore | ScopedFactStore | None = None,
         embedding_service: WeaviateEmbeddingService | InMemoryEmbeddingService | None = None,
         agents: list | None = None,
         knowledge_mound: Any | None = None,  # KnowledgeMound if available
@@ -226,6 +235,17 @@ class KnowledgePipeline:
         # Callbacks
         self._on_progress: Callable[[str, float, str], None] | None = None
 
+    @property
+    def _org_id(self) -> str | None:
+        return self.config.org_id or None
+
+    def _chunk_key(self) -> str:
+        # A caller-built ScopedFactStore is the same trusted org boundary as config.org_id.
+        org_id = self._org_id
+        if org_id is None and isinstance(self._fact_store, ScopedFactStore):
+            org_id = self._fact_store.org_id
+        return chunk_namespace(self.config.workspace_id, org_id, require_org=True)
+
     def set_progress_callback(self, callback: Callable[[str, float, str], None]) -> None:
         """Set progress callback: callback(document_id, progress, message)."""
         self._on_progress = callback
@@ -252,6 +272,8 @@ class KnowledgePipeline:
                 except (OSError, RuntimeError, ValueError) as e:
                     logger.warning("Failed to create FactStore, using in-memory: %s", e)
                     self._fact_store = InMemoryFactStore()
+        if self.config.org_id and not isinstance(self._fact_store, ScopedFactStore):
+            self._fact_store = ScopedFactStore(self._fact_store, self.config.org_id)
 
         # Initialize embedding service
         if self._embedding_service is None:
@@ -418,6 +440,8 @@ class KnowledgePipeline:
                 facts=facts,
             )
 
+        except OrgScopeRequiredError as e:
+            return self._refused(document_id, filename, start_time, e)
         except (OSError, RuntimeError, ValueError, KeyError, AttributeError) as e:  # noqa: BLE001 - adapter isolation
             logger.warning("Document processing failed: %s", e)
             duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
@@ -529,6 +553,8 @@ class KnowledgePipeline:
                 facts=facts,
             )
 
+        except OrgScopeRequiredError as e:
+            return self._refused(document_id, filename, start_time, e)
         except (OSError, RuntimeError, ValueError, KeyError, AttributeError) as e:  # noqa: BLE001 - adapter isolation
             logger.warning("Text processing failed: %s", e)
             duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
@@ -545,6 +571,24 @@ class KnowledgePipeline:
                 success=False,
                 error="Text processing failed",
             )
+
+    def _refused(
+        self, document_id: str, filename: str, start_time: datetime, error: Exception
+    ) -> ProcessingResult:
+        """A document refused before any chunk was written, e.g. for a missing organization."""
+        logger.warning("Knowledge processing refused for %s: %s", document_id, error)
+        return ProcessingResult(
+            document_id=document_id,
+            filename=filename,
+            workspace_id=self.config.workspace_id,
+            chunk_count=0,
+            embedded_count=0,
+            fact_count=0,
+            total_tokens=0,
+            duration_ms=int((datetime.now() - start_time).total_seconds() * 1000),
+            success=False,
+            error=str(error),
+        )
 
     async def process_batch(
         self,
@@ -726,10 +770,11 @@ class KnowledgePipeline:
         # Embed in batches
         total_embedded = 0
         batch_size = self.config.embedding_batch_size
+        key = self._chunk_key()
 
         for i in range(0, len(chunk_data), batch_size):
             batch = chunk_data[i : i + batch_size]
-            count = await self._embedding_service.embed_chunks(batch, self.config.workspace_id)
+            count = await self._embedding_service.embed_chunks(batch, key)
             total_embedded += count
 
         return total_embedded
@@ -782,6 +827,7 @@ Include dates, numbers, names, and specific claims where possible."""
                             evidence_ids=[c.id for c in context_chunks],
                             confidence=self.config.min_fact_confidence,
                             validation_status=ValidationStatus.UNVERIFIED,
+                            org_id=self._org_id,
                         )
                         facts.append(fact)
 
@@ -925,7 +971,9 @@ Include dates, numbers, names, and specific claims where possible."""
             raise RuntimeError("Query engine not initialized")
 
         # Standard query through query engine
-        result = await self._query_engine.query(question, self.config.workspace_id, options)
+        result = await self._query_engine.query(
+            question, self.config.workspace_id, options, org_id=self._org_id
+        )
 
         # Augment with Knowledge Mound results if available
         if use_mound and self._knowledge_mound and MOUND_AVAILABLE:
@@ -995,15 +1043,22 @@ Include dates, numbers, names, and specific claims where possible."""
             limit: Maximum results
 
         Returns:
-            List of matching chunks
+            List of matching chunks of this pipeline's organization
+
+        Raises:
+            OrgScopeRequiredError: the pipeline has no organization
         """
         if not self._running:
             await self.start()
 
+        key = self._chunk_key()
         if not self._embedding_service:
             return []
 
-        return await self._embedding_service.hybrid_search(query, self.config.workspace_id, limit)
+        matches = await self._embedding_service.hybrid_search(query, key, limit)
+        for match in matches:
+            match.workspace_id = self.config.workspace_id
+        return matches
 
     async def get_facts(
         self,
@@ -1034,6 +1089,7 @@ Include dates, numbers, names, and specific claims where possible."""
             workspace_id=self.config.workspace_id,
             min_confidence=min_confidence,
             limit=limit,
+            org_id=self._org_id,
         )
 
         if query:
@@ -1045,11 +1101,13 @@ Include dates, numbers, names, and specific claims where possible."""
         """Get pipeline statistics."""
         embedding_stats = {}
         if self._embedding_service:
-            embedding_stats = self._embedding_service.get_statistics(self.config.workspace_id)
+            embedding_stats = self._embedding_service.get_statistics(self._chunk_key())
 
         fact_stats = {}
         if self._fact_store:
-            fact_stats = self._fact_store.get_statistics(self.config.workspace_id)
+            fact_stats = self._fact_store.get_statistics(
+                self.config.workspace_id, org_id=self._org_id
+            )
 
         mound_stats: dict[str, Any] = {}
         if self._knowledge_mound:

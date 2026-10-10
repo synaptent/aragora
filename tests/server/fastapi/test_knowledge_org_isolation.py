@@ -7,6 +7,7 @@ import io
 import json
 import sqlite3
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -411,3 +412,31 @@ def test_v1_default_provider_closes_reads_and_creates_cannot_be_read_back(
         assert result.status_code == 403
         assert _v1_code(_body(result)) == "knowledge_fact_access_closed"
     _assert_only_operator_sees(world, fid, after)
+
+
+def test_search_reads_only_the_callers_org_chunks_once_reopened(world) -> None:
+    """GET /search stays closed here; once org scoping reopens it, it is scoped by verified auth."""
+    from aragora.knowledge.embeddings import chunk_namespace
+    from aragora.server.fastapi.routes.knowledge_base import _fact_access_closed
+
+    client = _v2(world)
+    app: Any = client.app
+    service = app.state.context["query_engine"]._embedding_service
+    for who in ("acme", "beta"):
+        chunk = {"chunk_id": f"{who}-chunk", "document_id": who, "content": f"{who} invoices"}
+        asyncio.run(service.embed_chunks([chunk], chunk_namespace("ws", world.callers[who].org_id)))
+
+    def search(who: str, workspace_id: str = "ws") -> tuple[int, Any]:
+        params = {"q": "invoices", "workspace_id": workspace_id}
+        hdr = {"Authorization": f"Bearer {_token(world, who)}"}
+        r = client.get(V2 + "/search", params=params, headers=hdr)
+        if r.status_code != 200:
+            return r.status_code, r.json().get("code")
+        return 200, [(m["chunk_id"], m["workspace_id"]) for m in r.json()["results"]]
+
+    assert search("acme") == (403, "knowledge_fact_access_closed")
+    app.dependency_overrides[_fact_access_closed] = lambda: None
+    assert search("acme") == (200, [("acme-chunk", "ws")])
+    assert search("beta") == (200, [("beta-chunk", "ws")])
+    assert search("beta", chunk_namespace("ws", world.callers["acme"].org_id)) == (200, [])
+    assert search("no-org") == (403, "knowledge_org_required")

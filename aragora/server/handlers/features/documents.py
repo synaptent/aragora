@@ -18,7 +18,7 @@ import time
 from collections import OrderedDict
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any
+from typing import Any, cast
 
 from aragora.rbac.decorators import require_permission
 
@@ -131,7 +131,7 @@ class DocumentHandler(BaseHandler):
             doc_id, err = self.extract_path_param(path, 4, "document_id")
             if err:
                 return err
-            return self._get_document(doc_id)
+            return self._get_document(cast(str, doc_id))
 
         return None
 
@@ -169,7 +169,7 @@ class DocumentHandler(BaseHandler):
             doc_id, err = self.extract_path_param(path, 4, "document_id")
             if err:
                 return err
-            return self._delete_document(doc_id)
+            return self._delete_document(cast(str, doc_id))
         return None
 
     @require_permission("documents:delete")
@@ -489,6 +489,7 @@ class DocumentHandler(BaseHandler):
                         document_id=doc_id,
                         async_processing=True,  # Queue for background processing
                         metadata=metadata,
+                        org_id=getattr(user, "org_id", None),
                     )
                     response_data.update(knowledge_result)
                     logger.info(
