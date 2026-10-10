@@ -376,6 +376,12 @@ DEFAULT_ROUTE_PERMISSIONS = [
     RoutePermission(r"^/api/v1/control-plane/agents/([^/]+)$", "GET", "control_plane.read", 1),
     RoutePermission(r"^/api/v1/control-plane/deliberations$", "GET", "control_plane.read"),
     RoutePermission(r"^/api/v1/control-plane/deliberations$", "POST", "control_plane.deliberate"),
+    RoutePermission(
+        r"^/api/(?:v1/)?control-plane/deliberations/([^/]+)(?:/status)?$",
+        "GET",
+        "control_plane.read",
+        1,
+    ),
     RoutePermission(r"^/api/v1/control-plane/stats$", "GET", "control_plane.read"),
     RoutePermission(r"^/api/v1/control-plane/health$", "GET", "", allow_unauthenticated=True),
     # Audit findings workflow

@@ -631,11 +631,16 @@ class AuthChecksMixin:
         allowed, reason, permission_key = self.rbac.check_request(path, method, auth_ctx)
 
         if not allowed:
+            from aragora.tenancy.record_scope import missing_org_denial
+
+            no_org = None if auth_ctx is None else missing_org_denial(path, auth_ctx.org_id)
             if auth_ctx is None:
                 self._send_json(
                     {"error": "Authentication required", "code": "auth_required"},
                     status=401,
                 )
+            elif no_org is not None:
+                self._send_json(no_org.body(), status=no_org.status)
             else:
                 self._send_json(
                     {

@@ -53,6 +53,8 @@ FAMILY_PATHS = [
     "/api/checkpoints",
     "/api/checkpoints/resumable",
     "/api/checkpoints/cp-1/intervention",
+    "/api/control-plane/deliberations/dec-1",
+    "/api/control-plane/deliberations/dec-1/status",
 ]
 
 PUBLIC_PATHS = [
@@ -85,6 +87,11 @@ OTHER_PATHS = [
     "/api/debate-thisx",
     "/api/searches",
     "/api/checkpointsx",
+    "/api/control-plane/deliberations",
+    "/api/control-plane/deliberations/",
+    "/api/control-plane/deliberations/dec-1/transcript",
+    "/api/control-plane/deliberations/dec-1/status/x",
+    "/api/control-plane/tasks/task-1",
     "/.well-known/aragora-odr-signing-key",
     "/healthz",
     "/",
@@ -116,6 +123,8 @@ class TestIsOrgScopedPath:
         assert is_org_scoped_path("/api/v1/workspaces") is False
         assert is_org_scoped_path("/api/v1/memory/stats") is False
         assert is_org_scoped_path("/api/vx/plans") is False
+        assert is_org_scoped_path("/api/v1/control-plane/deliberations") is False
+        assert is_org_scoped_path("/api/v1/control-plane/deliberations/d-1/transcript") is False
 
     @pytest.mark.parametrize("value", [None, 42, b"/api/plans"])
     def test_non_string_is_not_matched(self, value):

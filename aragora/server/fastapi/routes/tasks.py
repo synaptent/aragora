@@ -564,7 +564,14 @@ async def submit_deliberation(
 
             task_id = await cp.submit_task(
                 task_type="deliberation",
-                payload={"content": body.content, "context": body.context},
+                payload={
+                    "content": body.content,
+                    "context": {
+                        **body.context,
+                        "workspace_id": scope.org_id,
+                        "user_id": scope.user_id,
+                    },
+                },
                 required_capabilities=required_capabilities,
                 priority=priority_enum,
                 timeout_seconds=body.timeout_seconds,
