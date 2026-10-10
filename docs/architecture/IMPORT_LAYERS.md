@@ -13,8 +13,8 @@ baseline [scripts/baselines/import_contracts_baseline.json](../../scripts/baseli
 Symbols moved down a layer keep a compatibility re-export at their old path; every such move is listed in
 [shims.md](shims.md).
 
-This page is in its M3 form. Measured on `origin/main` at `b0ab11df1366` (2026-10-06, after #10367) with
-tranche T4a applied: 125 layered names, 85 baselined pairs (17 in Partition A, 68 in Partition B), and the
+This page is in its M4 form. Measured on `origin/main` at `81d6da4c897d` (2026-10-09, after #10267) with
+tranche T4b applied: 133 layered names, 65 baselined pairs (16 in Partition A, 49 in Partition B), and the
 live pair set equals the baseline.
 
 ## Enforcement
@@ -37,13 +37,13 @@ live pair set equals the baseline.
 
 ## Current layer membership
 
-Exactly what `.importlinter` declares today (125 names). The container package `aragora` itself is never a
+Exactly what `.importlinter` declares today (133 names). The container package `aragora` itself is never a
 member.
 
 | layer | count | members |
 |---|---|---|
 | interface | 8 | `server` `cli` `mcp` `gateway` `bots` `channels` `integrations` `connectors` |
-| application | 22 | `workflow` `pipeline` `nomic` `swarm` `gauntlet` `goals` `implement` `modes` `verticals` `autonomous` `broadcast` `canvas` `spectate` `analytics` `audit` `control_plane` `golden` `inbox` `marketplace` `services` `skills` `stores` |
+| application | 30 | `workflow` `pipeline` `nomic` `swarm` `gauntlet` `goals` `implement` `modes` `verticals` `autonomous` `broadcast` `canvas` `spectate` `analytics` `audit` `control_plane` `golden` `inbox` `marketplace` `services` `skills` `stores` `computer_use` `coordination` `export` `markets` `plugins` `prompt_engine` `receipts` `workspace` |
 | domain | 43 | `debate` `agents` `memory` `knowledge` `ranking` `reasoning` `evidence` `evaluation` `explainability` `learning` `ml` `advocates` `analysis` `audience` `blockchain` `compliance` `container` `core` `deliberation` `documents` `embeddings` `epistemic` `evolution` `genesis` `heterogeneity` `insights` `introspection` `metrics` `moderation` `prompts` `pulse` `replay` `reputation` `rlm` `routing` `templates` `tools` `tournaments` `training` `uncertainty` `verification` `visualization` `work` |
 | infrastructure | 31 | `storage` `resilience` `events` `observability` `security` `queue` `db` `caching` `billing` `backup` `migrations` `cache` `deletion_coordinator` `fabric` `maintenance` `monitoring` `performance` `resilience_config` `resilience_patterns` `runtime` `sandbox` `streaming` `telemetry` `transcription` `auth` `logging_config` `notifications` `persistence` `privacy` `rbac` `tenancy` |
 | foundation | 21 | `api_errors` `config` `core_types` `exceptions` `errors` `utils` `protocols` `types` `__version__` `_lazy_imports` `core_protocols` `docs_only` `http_client` `models` `serialization` `task_brief` `topic_handler` `topic_spec` `topics` `type_protocols` `shared` |
@@ -62,14 +62,13 @@ by PR #9057 (commit `5ac7fa3fc280`, 2026-09-30), so it is not planned. The final
 |---|---|---|---|
 | interface | layered | 8 | `server` `cli` `mcp` `gateway` `bots` `channels` `integrations` `connectors` |
 | interface | tranche T6 | 5 | `__main__` `approvals` `client` `extensions` `webhooks` |
-| application | layered | 22 | `workflow` `pipeline` `nomic` `swarm` `gauntlet` `goals` `implement` `modes` `verticals` `autonomous` `broadcast` `canvas` `spectate` `analytics` `audit` `control_plane` `golden` `inbox` `marketplace` `services` `skills` `stores` |
-| application | tranche T4b | 8 | `computer_use` `coordination` `export` `markets` `plugins` `prompt_engine` `receipts` `workspace` |
+| application | layered | 30 | `workflow` `pipeline` `nomic` `swarm` `gauntlet` `goals` `implement` `modes` `verticals` `autonomous` `broadcast` `canvas` `spectate` `analytics` `audit` `control_plane` `golden` `inbox` `marketplace` `services` `skills` `stores` `computer_use` `coordination` `export` `markets` `plugins` `prompt_engine` `receipts` `workspace` |
 | application | tranche T5 | 28 | `brief_engine` `codex` `compat` `essay` `factory` `fixtures` `gti` `harnesses` `hooks` `ideacloud` `interrogation` `missions` `onboarding` `operations` `ops` `pdb` `playbooks` `policy` `prediction` `ralph` `reports` `review` `scheduler` `schedulers` `sync` `trail` `triage` `worktree` |
 | domain | layered | 43 | `debate` `agents` `memory` `knowledge` `ranking` `reasoning` `evidence` `evaluation` `explainability` `learning` `ml` `advocates` `analysis` `audience` `blockchain` `compliance` `container` `core` `deliberation` `documents` `embeddings` `epistemic` `evolution` `genesis` `heterogeneity` `insights` `introspection` `metrics` `moderation` `prompts` `pulse` `replay` `reputation` `rlm` `routing` `templates` `tools` `tournaments` `training` `uncertainty` `verification` `visualization` `work` |
 | infrastructure | layered | 31 | `storage` `resilience` `events` `observability` `security` `queue` `db` `caching` `billing` `backup` `migrations` `cache` `deletion_coordinator` `fabric` `maintenance` `monitoring` `performance` `resilience_config` `resilience_patterns` `runtime` `sandbox` `streaming` `telemetry` `transcription` `auth` `logging_config` `notifications` `persistence` `privacy` `rbac` `tenancy` |
 | foundation | layered | 21 | `api_errors` `config` `core_types` `exceptions` `errors` `utils` `protocols` `types` `__version__` `_lazy_imports` `core_protocols` `docs_only` `http_client` `models` `serialization` `task_brief` `topic_handler` `topic_spec` `topics` `type_protocols` `shared` |
 
-Tranche T4a landed in milestone M3; T4b, T5 and T6 land in M4. Deprecated shim packages that are listed
+Tranche T4a landed in milestone M3 and T4b in M4; T5 and T6 land in M4. Deprecated shim packages that are listed
 (`cache`, `core_protocols`, `metrics`, `monitoring`, `telemetry`, `type_protocols`, `operations`,
 `schedulers`, `resilience_patterns`) stay listed until they are retired; when a listed module is deleted, its
 name leaves `.importlinter` in the same PR, because import-linter errors on a missing layer module.
@@ -177,6 +176,7 @@ through `aragora.training.specialist_models`).
 | #10382 | `4ec2d475be` | Audit split: the compliance audit log, the unified audit facade and the audit persistence backends moved down to `aragora.observability` (`audit_log`, `unified_audit`, `audit_persistence`) with re-exports at the old `aragora.audit` paths; the server registers the HTTP middleware audit logger; the storage, debate and rlm sites flipped. Resolved `aragora.audit -> aragora.server`, `aragora.debate -> aragora.audit`, `aragora.rlm -> aragora.audit` and `aragora.storage -> aragora.audit` | 125 | 85 to 81 |
 | #10390 | `2652b4a148` | Code scanner inversion: `aragora.agents.code_scanners` holds the scanner registry, and `aragora.audit` registers its security scanner and bug detector from its init and through the `aragora.code_scanners` entry point. Resolved `aragora.agents -> aragora.audit` | 125 | 81 to 80 |
 | #10394 | squash merge of #10394 | Audit split site flips: the rbac permission-denial audit and the compliance monitor's audit log lookups import from `aragora.observability` (`unified_audit`, `audit_log`). Resolved `aragora.compliance -> aragora.audit` and `aragora.rbac -> aragora.audit` | 125 | 65 to 63 |
+| #10510 | squash merge of #10510 | Tranche T4b: `computer_use coordination export markets plugins prompt_engine receipts workspace` (application); adopted `aragora.computer_use -> aragora.connectors`, `aragora.export -> aragora.cli`, `aragora.knowledge -> aragora.coordination` and `aragora.markets -> aragora.connectors`; none resolved | 133 | 61 to 65 |
 
 The two config pairs adopted by #10314 (`aragora.config -> aragora.persistence`, `aragora.config ->
 aragora.tenancy`) are fixed by the config-seam PR #10316 (Tier 4), which was prepared and is awaiting

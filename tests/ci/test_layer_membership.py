@@ -181,6 +181,18 @@ _TRANCHES: dict[str, dict[str, tuple[str, ...]]] = {
             "stores",
         ),
     },
+    "T4b": {
+        "application": (
+            "computer_use",
+            "coordination",
+            "export",
+            "markets",
+            "plugins",
+            "prompt_engine",
+            "receipts",
+            "workspace",
+        ),
+    },
 }
 
 _SEAMS = {
