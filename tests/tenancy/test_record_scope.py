@@ -8,6 +8,7 @@ responses. Every identity case runs with ARAGORA_API_TOKEN unset and set.
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -26,6 +27,7 @@ ORG_B = "org-b-59edef89"
 USER_A = "user-a-9f964e24"
 USER_B = "user-b-5a0814ad"
 STATIC_TOKEN = "rs-static-api-token-0123456789abcdef"
+API_KEY = "ara_record_scope_key_0123456789abcdef"
 
 AUTH_REQUIRED_BODY = {"error": "Authentication required", "code": "auth_required"}
 
@@ -88,12 +90,20 @@ class _LegacyRequest:
         self.client_address = ("127.0.0.1", 50000)
 
 
-def _legacy(authorization: str | None) -> tuple[OrgScope | None, Any]:
-    return require_org_scope(_LegacyRequest(authorization))
+class _ApiKeyUserStore:
+    def __init__(self, users: dict[str, Any]) -> None:
+        self._users = users
+
+    def get_user_by_api_key(self, api_key: str) -> Any:
+        return self._users.get(api_key)
 
 
-def _legacy_outcome(authorization: str | None) -> tuple[int, Any]:
-    scope, err = _legacy(authorization)
+def _legacy(authorization: str | None, user_store: Any = None) -> tuple[OrgScope | None, Any]:
+    return require_org_scope(_LegacyRequest(authorization), user_store)
+
+
+def _legacy_outcome(authorization: str | None, user_store: Any = None) -> tuple[int, Any]:
+    scope, err = _legacy(authorization, user_store)
     if err is not None:
         assert scope is None
         return err.status_code, json.loads(err.body)
@@ -283,17 +293,26 @@ class TestFastAPIDependency:
         assert status == 403
         assert body["code"] == "org_required"
 
-    def test_mirrors_legacy_helper(self, scope_client, api_token):
+    def test_mirrors_legacy_helper(self, scope_client, api_token, monkeypatch):
+        user = SimpleNamespace(
+            id=USER_B, email=f"{USER_B}@example.test", org_id=ORG_B, role="member", is_active=True
+        )
+        store = _ApiKeyUserStore({API_KEY: user})
+        # The FastAPI factory keeps the store in app.state.context, not on the app.
+        monkeypatch.setattr(scope_client.app.state, "context", {"user_store": store}, raising=False)
         cases = [
             None,
             "Bearer not-a-valid-token",
             f"Bearer {_jwt(USER_B, None)}",
             f"Bearer {_jwt(USER_B, ORG_B, role='owner')}",
+            f"Bearer {API_KEY}",
         ]
         if api_token:
             cases.append(f"Bearer {STATIC_TOKEN}")
         for case in cases:
-            assert _fastapi_outcome(scope_client, case) == _legacy_outcome(case), case
+            assert _fastapi_outcome(scope_client, case) == _legacy_outcome(case, store), case
+        api_key_scope = {"org_id": ORG_B, "user_id": USER_B, "role": "member"}
+        assert _fastapi_outcome(scope_client, f"Bearer {API_KEY}") == (200, api_key_scope)
 
 
 # =============================================================================
