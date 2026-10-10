@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import inspect
+from typing import Any
 
 import pytest
 
@@ -89,14 +90,15 @@ def test_retired_lanes_count_as_superseded() -> None:
 
 
 def test_merge_readiness_and_lane_health_for_a_blocked_lane() -> None:
-    flags = {
-        "stale_heartbeat": False,
-        "missing_receipt": True,
-        "scope_violation": False,
-        "superseded": False,
-        "collisions": [],
-    }
-    readiness = reporter._merge_readiness(status="completed", queue_status="", **flags)
+    readiness = reporter._merge_readiness(
+        status="completed",
+        queue_status="",
+        stale_heartbeat=False,
+        missing_receipt=True,
+        scope_violation=False,
+        superseded=False,
+        collisions=[],
+    )
     assert readiness == "blocked"
     health = reporter._lane_health(
         readiness=readiness,
@@ -104,7 +106,11 @@ def test_merge_readiness_and_lane_health_for_a_blocked_lane() -> None:
         terminal_outcome="",
         lease_status="active",
         blockers=[],
-        **flags,
+        stale_heartbeat=False,
+        missing_receipt=True,
+        scope_violation=False,
+        superseded=False,
+        collisions=[],
     )
     assert health == "blocked"
     actions = reporter._available_actions(
@@ -121,7 +127,7 @@ def test_merge_readiness_and_lane_health_for_a_blocked_lane() -> None:
 
 
 def test_sort_newest_reads_metadata_timestamps() -> None:
-    items = [
+    items: list[dict[str, Any]] = [
         {"id": "old", "updated_at": "2026-03-01T00:00:00Z"},
         {"id": "new", "metadata": {"updated_at": "2026-03-02T00:00:00Z"}},
         {"id": "none"},
