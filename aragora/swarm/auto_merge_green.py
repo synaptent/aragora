@@ -20,7 +20,7 @@ to flow through ``scripts/settle_tier4_pr.py`` unchanged.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 # The branch-protection required checks (mirrors boss_drain_pass._REQUIRED).
@@ -34,10 +34,10 @@ QUORUM_CHECK = "aragora-merge-quorum"
 # Tiers 0-2 settle without human risk acceptance; 3-4 always need a human.
 MAX_AUTO_MERGE_TIER = 2
 
-# Merge states from which an authorized admin squash is safe. BLOCKED is allowed
-# only because a satisfied merge-packet is what substitutes for the missing
-# review approval under branch protection; every other non-CLEAN state (DIRTY,
-# BEHIND, UNSTABLE, UNKNOWN) is refused.
+# Merge states from which an authorized admin squash is ordinarily safe. BLOCKED
+# is allowed only because a satisfied merge-packet substitutes for the missing
+# review approval under branch protection. UNSTABLE requires the separate,
+# authoritative required-check proof below; all other states are refused.
 _SAFE_MERGE_STATES = frozenset({"CLEAN", "BLOCKED"})
 
 # Any check ending in one of these conclusions blocks the merge -- even a
@@ -46,6 +46,10 @@ _SAFE_MERGE_STATES = frozenset({"CLEAN", "BLOCKED"})
 # would not show up as UNSTABLE; without this guard it would pass every other
 # check and be --admin-merged. This also closes the REQUIRED_CHECKS drift hazard
 # (a newly-required check failing is caught here regardless of the static list).
+# The one exception is an optional-only UNSTABLE proof, and it waives only live
+# failing rows the packet named as non-required, matching its proven failing
+# count; cancelled rows are never waived there (see
+# _live_failures_match_optional_only_proof).
 _FAILING_CHECK_STATES = frozenset(
     {"FAILURE", "ERROR", "CANCELLED", "TIMED_OUT", "STARTUP_FAILURE", "ACTION_REQUIRED"}
 )
@@ -69,6 +73,11 @@ class PRMergeContext:
     mergeable: str
     merge_state_status: str
     check_states: dict[str, str]
+    check_surfaces: dict[str, Any] = field(default_factory=dict)
+    # Live failing rows named as the packet's rollup diagnostics name them
+    # (``workflow / name``). ``None`` means they were not derived, and the
+    # optional-only UNSTABLE waiver then does not apply.
+    failing_check_identities: frozenset[str] | None = None
 
 
 @dataclass(frozen=True)
@@ -79,6 +88,106 @@ class MergeDecision:
     head_sha: str
     should_merge: bool
     blockers: tuple[str, ...]
+
+
+def required_check_surface_proves_optional_only_unstable(check_surfaces: Any) -> bool:
+    """Return whether an authoritative surface proves every non-green row optional.
+
+    This is deliberately stricter than merely observing ``UNSTABLE``. The
+    required-check query must be available and selected with at least one
+    effective required check, no required failures or pending rows, and the
+    complete rollup diagnostics must classify every non-green row as
+    non-required. Missing or malformed diagnostics fail closed.
+    """
+    if not isinstance(check_surfaces, dict):
+        return False
+    required = check_surfaces.get("required_pr_checks")
+    rollup = check_surfaces.get("pr_rollup")
+    effective_gate = check_surfaces.get("effective_gate")
+    if not isinstance(required, dict) or not isinstance(rollup, dict):
+        return False
+    if not isinstance(effective_gate, dict):
+        return False
+    if required.get("available") is not True or required.get("gate_selected") is not True:
+        return False
+    if effective_gate.get("source") != "required_pr_checks":
+        return False
+    effective_total = required.get("effective_total")
+    if (
+        not isinstance(effective_total, int)
+        or isinstance(effective_total, bool)
+        or effective_total <= 0
+    ):
+        return False
+    gate_blocked_reason = required.get("gate_blocked_reason")
+    if gate_blocked_reason is not None and gate_blocked_reason != "":
+        return False
+    if required.get("failing_or_cancelled") != [] or required.get("pending") != []:
+        return False
+    if rollup.get("available") is not True:
+        return False
+
+    count_keys = (
+        "non_green_count",
+        "non_required_non_green_count",
+        "failing_or_cancelled_count",
+        "pending_count",
+    )
+    counts: dict[str, int] = {}
+    for key in count_keys:
+        value = rollup.get(key)
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            return False
+        counts[key] = value
+    non_green = counts["non_green_count"]
+    return (
+        non_green > 0
+        and counts["non_required_non_green_count"] == non_green
+        and counts["failing_or_cancelled_count"] + counts["pending_count"] == non_green
+    )
+
+
+def _live_failures_match_optional_only_proof(
+    check_states: dict[str, str],
+    check_surfaces: dict[str, Any],
+    failing: list[str],
+    failing_identities: frozenset[str] | None,
+) -> bool:
+    """Whether the live failing rows are exactly the rows the packet proved optional.
+
+    The proof comes from the packet's rollup, a separate fetch from the live view,
+    so it cannot vouch for a row it never counted. Its rollup buckets skip
+    cancelled non-quorum rows entirely, so a live ``CANCELLED`` row is never
+    covered (verified cancellations have their own receipt path), and the live
+    failing count must equal the packet's proven failing count.
+
+    A matching count alone would still waive a different row failing in place of
+    a proven one that went green, so every live failing row must also appear,
+    by its ``workflow / name`` identity, in the packet's non-required name
+    sample. That sample is capped; when it does not name every non-required row
+    the match cannot be checked and the waiver does not apply.
+    """
+    rollup = check_surfaces.get("pr_rollup") if isinstance(check_surfaces, dict) else None
+    if not isinstance(rollup, dict):
+        return False
+    proven = rollup.get("failing_or_cancelled_count")
+    if not isinstance(proven, int) or isinstance(proven, bool):
+        return False
+    if any(check_states.get(name) == "CANCELLED" for name in failing):
+        return False
+    if len(failing) != proven:
+        return False
+    if failing_identities is None or len(failing_identities) != len(failing):
+        return False
+    proven_names = rollup.get("non_required_non_green_sample")
+    proven_total = rollup.get("non_required_non_green_count")
+    if not isinstance(proven_names, list) or not all(isinstance(n, str) for n in proven_names):
+        return False
+    if not isinstance(proven_total, int) or isinstance(proven_total, bool):
+        return False
+    if len(proven_names) != proven_total:
+        return False
+    return failing_identities <= set(proven_names)
 
 
 def decide_auto_merge(
@@ -142,7 +251,11 @@ def decide_auto_merge(
     if ctx.mergeable != "MERGEABLE":
         blockers.append(f"not mergeable (mergeable={ctx.mergeable or 'unknown'})")
 
-    if ctx.merge_state_status not in _SAFE_MERGE_STATES:
+    optional_only_unstable = (
+        ctx.merge_state_status == "UNSTABLE"
+        and required_check_surface_proves_optional_only_unstable(ctx.check_surfaces)
+    )
+    if ctx.merge_state_status not in _SAFE_MERGE_STATES and not optional_only_unstable:
         blockers.append(
             f"merge state not safe (mergeStateStatus={ctx.merge_state_status or 'unknown'})"
         )
@@ -157,7 +270,12 @@ def decide_auto_merge(
             blockers.append(f"required check not green: {name}={state or 'absent'}")
 
     failing = sorted(n for n, s in ctx.check_states.items() if s in _FAILING_CHECK_STATES)
-    if failing:
+    if failing and not (
+        optional_only_unstable
+        and _live_failures_match_optional_only_proof(
+            ctx.check_states, ctx.check_surfaces, failing, ctx.failing_check_identities
+        )
+    ):
         shown = ", ".join(failing[:3])
         blockers.append(
             f"failing checks present (incl. non-required): {shown}{', …' if len(failing) > 3 else ''}"
@@ -234,8 +352,26 @@ def _state_precedence(state: str) -> int:
     return 0
 
 
-def _reduce_rollup_states(rollup: Any) -> dict[str, str]:
+def _rollup_display_name(item: dict[str, Any]) -> str:
+    """Name a rollup row the way the merge-packet's rollup diagnostics name it.
+
+    Must stay identical to ``review_queue._status_check_display_name``: the
+    optional-only waiver compares these names with the packet's
+    ``non_required_non_green_sample``.
+    """
+    workflow = str(item.get("workflowName") or item.get("workflow") or "").strip()
+    name = str(item.get("name") or item.get("context") or "").strip()
+    if workflow and name:
+        return f"{workflow} / {name}"
+    return name or workflow
+
+
+def _reduce_rollup_states(
+    rollup: Any, *, key: Callable[[dict[str, Any]], str] | None = None
+) -> dict[str, str]:
     """Collapse a status-check rollup to one state per check name.
+
+    ``key`` names each row; by default it is the bare check name.
 
     Newest row per name wins, but **only between rows that can actually be
     ordered**. When two rows are not comparable — equal stamps, or *either* row
@@ -260,7 +396,7 @@ def _reduce_rollup_states(rollup: Any) -> dict[str, str]:
     for item in rollup or []:
         if not isinstance(item, dict):
             continue
-        name = item.get("name") or item.get("context")
+        name = key(item) if key is not None else (item.get("name") or item.get("context"))
         if not name:
             continue
         name = str(name)
@@ -328,7 +464,13 @@ def context_from_gh(view: dict[str, Any], packet_entry: dict[str, Any] | None) -
     established the reduction is **fail-closed**: an unranked failing row wins
     over a success it cannot be proven newer than.
     """
-    check_states = _reduce_rollup_states(view.get("statusCheckRollup") or [])
+    rollup = view.get("statusCheckRollup") or []
+    check_states = _reduce_rollup_states(rollup)
+    failing_check_identities = frozenset(
+        name
+        for name, state in _reduce_rollup_states(rollup, key=_rollup_display_name).items()
+        if state in _FAILING_CHECK_STATES
+    )
 
     packet = packet_entry or {}
     tier_raw = packet.get("tier")
@@ -361,6 +503,12 @@ def context_from_gh(view: dict[str, Any], packet_entry: dict[str, Any] | None) -
         mergeable=str(view.get("mergeable") or ""),
         merge_state_status=str(view.get("mergeStateStatus") or ""),
         check_states=check_states,
+        check_surfaces=(
+            dict(packet.get("check_surfaces") or {})
+            if isinstance(packet.get("check_surfaces"), dict)
+            else {}
+        ),
+        failing_check_identities=failing_check_identities,
     )
 
 

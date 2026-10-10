@@ -1418,6 +1418,38 @@ class TestUnstableCancellationReceipt:
 
         assert receipt == {}
 
+    def test_rejects_pr_modifying_optional_only_unstable_predicate(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # The live gate imports its optional-only UNSTABLE proof from this
+        # module, so editing it is editing the gate.
+        head_sha = "exact-head"
+        pr = _make_pr(
+            number=9034,
+            checks=[self._cancelled_build_check()],
+            merge_state_status="UNSTABLE",
+        )
+        pr["headRefOid"] = head_sha
+        monkeypatch.setattr(
+            "aragora.cli.commands.review_queue._fetch_required_pr_check_surface",
+            lambda *_args, **_kwargs: self._required_surface(),
+        )
+        monkeypatch.setattr(
+            "aragora.cli.commands.review_queue._gh_json",
+            self._gh_json_dispatch(
+                self._cancelled_build_run(head_sha),
+                files=[{"filename": "aragora/swarm/auto_merge_green.py"}],
+            ),
+        )
+
+        receipt = _verified_unstable_non_required_cancellation_receipt(
+            pr=pr,
+            pr_number=9034,
+            repo_override="synaptent/aragora",
+        )
+
+        assert receipt == {}
+
     def test_rejects_empty_changed_files_listing(self, monkeypatch: pytest.MonkeyPatch) -> None:
         head_sha = "exact-head"
         pr = _make_pr(
@@ -4760,7 +4792,10 @@ class TestBuildQueueAndPacket:
             (
                 "UNSTABLE",
                 [],
-                "mergeStateStatus=UNSTABLE; admin squash requires CLEAN or BLOCKED",
+                (
+                    "mergeStateStatus=UNSTABLE; admin squash requires CLEAN/BLOCKED or "
+                    "authoritative optional-only UNSTABLE proof"
+                ),
             ),
             (
                 "CLEAN",
@@ -4770,7 +4805,10 @@ class TestBuildQueueAndPacket:
             (
                 "",
                 [],
-                "mergeStateStatus unavailable; admin squash requires CLEAN or BLOCKED",
+                (
+                    "mergeStateStatus unavailable; admin squash requires CLEAN/BLOCKED or "
+                    "authoritative optional-only UNSTABLE proof"
+                ),
             ),
         ],
     )
@@ -4929,6 +4967,89 @@ class TestBuildQueueAndPacket:
         assert entry["admin_squash_gate_blockers"] == []
         assert entry["unstable_non_required_contexts_ignored"] == [ignored_context]
         assert packet["admin_squash_order"] == [9034]
+
+    def test_merge_packet_allows_unstable_with_authoritative_required_checks(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def fake_build_packet(ref: str, **_kwargs: Any) -> ReviewPacket:
+            return ReviewPacket(
+                pr_number=int(ref),
+                title=f"PR {ref}",
+                url=f"https://github.com/synaptent/aragora/pull/{ref}",
+                head_sha="abc123",
+                base_sha="def456",
+                author="codex",
+                is_draft=False,
+                additions=1,
+                deletions=1,
+                changed_files=1,
+                queue_bucket="ready_now",
+                touched_subsystems=["scripts"],
+                high_risk_paths_touched=[],
+                validation=[],
+                checks_summary="6/6 required green",
+                risk_flags=[],
+                machine_recommendation="approve_candidate",
+                machine_recommendation_reason="required checks authoritative",
+                packet_sha="sha256:test",
+                generated_at="2026-07-22T00:00:00+00:00",
+                check_surfaces={
+                    "effective_gate": {
+                        "source": "required_pr_checks",
+                        "summary": "6/6 required green",
+                    },
+                    "required_pr_checks": {
+                        "available": True,
+                        "effective_total": 6,
+                        "gate_selected": True,
+                        "gate_blocked_reason": "",
+                        "failing_or_cancelled": [],
+                        "pending": [],
+                    },
+                    "pr_rollup": {
+                        "available": True,
+                        "non_green_count": 2,
+                        "non_required_non_green_count": 2,
+                        "failing_or_cancelled_count": 2,
+                        "pending_count": 0,
+                        "non_required_non_green_sample": [
+                            "Security Gate / npm Security Scan",
+                            "Security Gate / Security Gate Summary",
+                        ],
+                    },
+                },
+                merge_state_status="UNSTABLE",
+                model_review_quorum={
+                    "tier": 2,
+                    "tier_name": "Tier 2",
+                    "status": "satisfied",
+                    "verdict": "admin_squash_allowed",
+                    "admin_squash_allowed": True,
+                    "requires_human_risk_settlement": False,
+                    "unresolved_dissent": False,
+                    "reviewer_signals": [],
+                    "dogfood_evidence": [],
+                    "counted_reviewer_ids": ["claude", "openai"],
+                    "reasons": ["clean exact-head quorum"],
+                },
+            )
+
+        monkeypatch.setattr("aragora.cli.commands.review_queue._build_packet", fake_build_packet)
+        monkeypatch.setattr(
+            "aragora.cli.commands.review_queue._explicit_merged_pr_merge_packet_entry",
+            lambda ref, repo_override: None,
+        )
+
+        packet = _build_merge_authorization_packet(
+            pr_refs=["9453"],
+            limit=30,
+            repo_override="synaptent/aragora",
+        )
+
+        entry = packet["entries"][0]
+        assert entry["admin_squash_allowed"] is True
+        assert entry["admin_squash_gate_blockers"] == []
+        assert packet["admin_squash_order"] == [9453]
 
     def test_merge_packet_text_renderer_prints_live_gate_blockers(
         self,

@@ -16,6 +16,7 @@ from urllib.parse import urlparse
 
 from aragora.cli.commands import review_queue_rest_fallback as rest_fallback
 from aragora.cli.commands.review_queue_transport import _GhError
+from aragora.swarm.auto_merge_green import required_check_surface_proves_optional_only_unstable
 
 UNSTABLE_CANCELLATION_POLICY_PATH = "docs/runbooks/MERGE_STATE_UNSTABLE_SETTLEMENT.md"
 UNSTABLE_ALLOWLISTED_WORKFLOW_PATHS: dict[str, str] = {
@@ -32,6 +33,7 @@ UNSTABLE_RECEIPT_GUARD_PATHS: frozenset[str] = frozenset(
         *UNSTABLE_ALLOWLISTED_WORKFLOW_PATHS.values(),
         ".github/workflows/required-check-priority.yml",
         "aragora/cli/commands/review_queue_unstable.py",
+        "aragora/swarm/auto_merge_green.py",
         "scripts/check_required_check_priority_policy.py",
     }
 )
@@ -445,12 +447,19 @@ def admin_squash_live_gate_blockers(packet: Any) -> list[str]:
 
     merge_state_status = str(packet.merge_state_status or "").strip().upper()
     if not merge_state_status:
-        blockers.append("mergeStateStatus unavailable; admin squash requires CLEAN or BLOCKED")
-    elif merge_state_status == "UNSTABLE" and _verified_unstable_cancellation_override(packet):
+        blockers.append(
+            "mergeStateStatus unavailable; admin squash requires CLEAN/BLOCKED or "
+            "authoritative optional-only UNSTABLE proof"
+        )
+    elif merge_state_status == "UNSTABLE" and (
+        _verified_unstable_cancellation_override(packet)
+        or required_check_surface_proves_optional_only_unstable(packet.check_surfaces)
+    ):
         pass
     elif merge_state_status not in {"CLEAN", "BLOCKED"}:
         blockers.append(
-            f"mergeStateStatus={merge_state_status}; admin squash requires CLEAN or BLOCKED"
+            f"mergeStateStatus={merge_state_status}; admin squash requires CLEAN/BLOCKED or "
+            "authoritative optional-only UNSTABLE proof"
         )
     return blockers
 

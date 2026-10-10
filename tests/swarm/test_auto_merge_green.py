@@ -25,6 +25,7 @@ from aragora.swarm.auto_merge_green import (
     context_from_gh,
     decide_auto_merge,
     first_error_line,
+    required_check_surface_proves_optional_only_unstable,
 )
 
 
@@ -51,6 +52,7 @@ def _authorized_context(**overrides) -> PRMergeContext:
         mergeable="MERGEABLE",
         merge_state_status="BLOCKED",
         check_states=_green_checks(),
+        check_surfaces={},
     )
     base.update(overrides)
     return PRMergeContext(**base)
@@ -183,10 +185,340 @@ def test_dirty_merge_state_is_blocked():
 
 
 def test_unstable_merge_state_is_blocked():
-    # UNSTABLE = a non-required check is failing; skip rather than risk it.
+    # UNSTABLE alone is not evidence that only optional checks are non-green.
     decision = decide_auto_merge(_authorized_context(merge_state_status="UNSTABLE"))
     assert decision.should_merge is False
     assert any("merge state" in b.lower() for b in decision.blockers)
+
+
+def _optional_only_unstable_surface(**required_overrides) -> dict:
+    required = {
+        "available": True,
+        "effective_total": 6,
+        "gate_selected": True,
+        "gate_blocked_reason": "",
+        "failing_or_cancelled": [],
+        "pending": [],
+    }
+    required.update(required_overrides)
+    return {
+        "effective_gate": {"source": "required_pr_checks", "summary": "6/6 required green"},
+        "required_pr_checks": required,
+        "pr_rollup": {
+            "available": True,
+            "non_green_count": 2,
+            "non_required_non_green_count": 2,
+            "non_required_non_green_sample": ["npm Security Scan", "Security Gate Summary"],
+            "failing_or_cancelled_count": 2,
+            "pending_count": 0,
+        },
+    }
+
+
+def test_unstable_with_authoritative_required_green_surface_is_mergeable():
+    states = _green_checks()
+    states["npm Security Scan"] = "FAILURE"
+    states["Security Gate Summary"] = "FAILURE"
+    decision = decide_auto_merge(
+        _authorized_context(
+            merge_state_status="UNSTABLE",
+            check_states=states,
+            check_surfaces=_optional_only_unstable_surface(),
+            failing_check_identities=frozenset({"npm Security Scan", "Security Gate Summary"}),
+        )
+    )
+    assert decision.should_merge is True
+    assert decision.blockers == ()
+
+
+@pytest.mark.parametrize(
+    "required_overrides",
+    [
+        {"available": False},
+        {"failing_or_cancelled": ["lint"]},
+        {"pending": ["typecheck"]},
+        {"gate_blocked_reason": ["malformed"]},
+    ],
+)
+def test_unstable_required_surface_failures_remain_blocked(required_overrides):
+    surface = _optional_only_unstable_surface(**required_overrides)
+    assert required_check_surface_proves_optional_only_unstable(surface) is False
+    decision = decide_auto_merge(
+        _authorized_context(merge_state_status="UNSTABLE", check_surfaces=surface)
+    )
+    assert decision.should_merge is False
+    assert any("merge state" in blocker.lower() for blocker in decision.blockers)
+
+
+def test_context_from_gh_preserves_packet_required_check_surface():
+    view = {
+        "number": 9453,
+        "headRefOid": "a" * 40,
+        "isDraft": False,
+        "mergeable": "MERGEABLE",
+        "mergeStateStatus": "UNSTABLE",
+        "statusCheckRollup": [
+            *[
+                {"name": name, "conclusion": "SUCCESS"}
+                for name in sorted(REQUIRED_CHECKS | {"aragora-merge-quorum"})
+            ],
+            {"name": "npm Security Scan", "conclusion": "FAILURE"},
+            {"name": "Security Gate Summary", "conclusion": "FAILURE"},
+        ],
+    }
+    packet = {
+        "pr_number": 9453,
+        "head_sha": "a" * 40,
+        "tier": 2,
+        "status": "satisfied",
+        "verdict": "admin_squash_allowed",
+        "admin_squash_allowed": True,
+        "requires_human_risk_settlement": False,
+        "unresolved_dissent": False,
+        "check_surfaces": _optional_only_unstable_surface(),
+    }
+    decision = decide_auto_merge(context_from_gh(view, packet))
+    assert decision.should_merge is True
+    assert decision.blockers == ()
+
+
+def test_unstable_proof_does_not_waive_live_cancelled_optional_row():
+    # The packet's rollup counts never include cancelled non-quorum rows, so a
+    # live cancellation is outside what the optional-only proof covers.
+    states = _green_checks()
+    states["npm Security Scan"] = "FAILURE"
+    states["Security Gate Summary"] = "FAILURE"
+    states["Docs Consistency"] = "CANCELLED"
+    decision = decide_auto_merge(
+        _authorized_context(
+            merge_state_status="UNSTABLE",
+            check_states=states,
+            check_surfaces=_optional_only_unstable_surface(),
+        )
+    )
+    assert decision.should_merge is False
+    assert any("failing checks" in blocker for blocker in decision.blockers)
+    assert any("Docs Consistency" in blocker for blocker in decision.blockers)
+
+
+def test_unstable_proof_never_waives_a_cancelled_row_even_when_counts_match():
+    states = _green_checks()
+    states["npm Security Scan"] = "FAILURE"
+    states["Docs Consistency"] = "CANCELLED"
+    decision = decide_auto_merge(
+        _authorized_context(
+            merge_state_status="UNSTABLE",
+            check_states=states,
+            check_surfaces=_optional_only_unstable_surface(),
+        )
+    )
+    assert decision.should_merge is False
+    assert any("failing checks" in blocker for blocker in decision.blockers)
+
+
+def test_unstable_proof_does_not_waive_a_live_failure_the_packet_did_not_count():
+    states = _green_checks()
+    states["npm Security Scan"] = "FAILURE"
+    states["Security Gate Summary"] = "FAILURE"
+    states["Newly Added Check"] = "FAILURE"
+    decision = decide_auto_merge(
+        _authorized_context(
+            merge_state_status="UNSTABLE",
+            check_states=states,
+            check_surfaces=_optional_only_unstable_surface(),
+        )
+    )
+    assert decision.should_merge is False
+    assert any("failing checks" in blocker for blocker in decision.blockers)
+
+
+def test_context_from_gh_unstable_proof_keeps_live_cancelled_row_blocking():
+    view = {
+        "number": 9453,
+        "headRefOid": "a" * 40,
+        "isDraft": False,
+        "mergeable": "MERGEABLE",
+        "mergeStateStatus": "UNSTABLE",
+        "statusCheckRollup": [
+            *[
+                {"name": name, "conclusion": "SUCCESS"}
+                for name in sorted(REQUIRED_CHECKS | {"aragora-merge-quorum"})
+            ],
+            {"name": "npm Security Scan", "conclusion": "FAILURE"},
+            {"name": "Security Gate Summary", "conclusion": "FAILURE"},
+            {"name": "Integration Smoke", "conclusion": "CANCELLED"},
+        ],
+    }
+    packet = {
+        "pr_number": 9453,
+        "head_sha": "a" * 40,
+        "tier": 2,
+        "status": "satisfied",
+        "verdict": "admin_squash_allowed",
+        "admin_squash_allowed": True,
+        "requires_human_risk_settlement": False,
+        "unresolved_dissent": False,
+        "check_surfaces": _optional_only_unstable_surface(),
+    }
+    decision = decide_auto_merge(context_from_gh(view, packet))
+    assert decision.should_merge is False
+    assert any("Integration Smoke" in blocker for blocker in decision.blockers)
+
+
+def _unstable_view(extra_rows: list[dict]) -> dict:
+    return {
+        "number": 9453,
+        "headRefOid": "a" * 40,
+        "isDraft": False,
+        "mergeable": "MERGEABLE",
+        "mergeStateStatus": "UNSTABLE",
+        "statusCheckRollup": [
+            *[
+                {"name": name, "conclusion": "SUCCESS"}
+                for name in sorted(REQUIRED_CHECKS | {"aragora-merge-quorum"})
+            ],
+            *extra_rows,
+        ],
+    }
+
+
+def _unstable_packet(check_surfaces: dict) -> dict:
+    return {
+        "pr_number": 9453,
+        "head_sha": "a" * 40,
+        "tier": 2,
+        "status": "satisfied",
+        "verdict": "admin_squash_allowed",
+        "admin_squash_allowed": True,
+        "requires_human_risk_settlement": False,
+        "unresolved_dissent": False,
+        "check_surfaces": check_surfaces,
+    }
+
+
+def test_unstable_proof_does_not_waive_a_different_row_failing_in_a_proven_rows_place():
+    # The packet proved two optional failures. Live, one of them went green and
+    # a row the packet never named failed instead: the count still matches, but
+    # the proof does not cover the new row.
+    view = _unstable_view(
+        [
+            {"name": "npm Security Scan", "conclusion": "SUCCESS"},
+            {"name": "Security Gate Summary", "conclusion": "FAILURE"},
+            {"name": "Release Readiness", "conclusion": "FAILURE"},
+        ]
+    )
+    decision = decide_auto_merge(
+        context_from_gh(view, _unstable_packet(_optional_only_unstable_surface()))
+    )
+    assert decision.should_merge is False
+    assert any("Release Readiness" in blocker for blocker in decision.blockers)
+
+
+def test_unstable_proof_binds_the_workflow_qualified_identity():
+    # Two workflows share the bare job name "test". The packet proved only the
+    # optional workflow's row; live, that row passed and the other one failed.
+    surface = _optional_only_unstable_surface()
+    surface["pr_rollup"].update(
+        non_green_count=1,
+        non_required_non_green_count=1,
+        non_required_non_green_sample=["Optional Scans / test"],
+        failing_or_cancelled_count=1,
+    )
+    view = _unstable_view(
+        [
+            {
+                "name": "test",
+                "workflowName": "Optional Scans",
+                "conclusion": "SUCCESS",
+                "startedAt": "2026-10-07T06:00:00Z",
+                "completedAt": "2026-10-07T06:05:00Z",
+            },
+            {
+                "name": "test",
+                "workflowName": "Release Gate",
+                "conclusion": "FAILURE",
+                "startedAt": "2026-10-07T06:10:00Z",
+                "completedAt": "2026-10-07T06:15:00Z",
+            },
+        ]
+    )
+    decision = decide_auto_merge(context_from_gh(view, _unstable_packet(surface)))
+    assert decision.should_merge is False
+    assert any("failing checks" in blocker for blocker in decision.blockers)
+
+
+def test_unstable_proof_refuses_a_truncated_packet_sample():
+    # The packet's name sample is capped; when it cannot name every proven row,
+    # the live rows cannot be matched to the proof and the veto stands.
+    names = [f"Optional Check {index:02d}" for index in range(13)]
+    surface = _optional_only_unstable_surface()
+    surface["pr_rollup"].update(
+        non_green_count=13,
+        non_required_non_green_count=13,
+        non_required_non_green_sample=names[:12],
+        failing_or_cancelled_count=13,
+    )
+    view = _unstable_view([{"name": name, "conclusion": "FAILURE"} for name in names])
+    decision = decide_auto_merge(context_from_gh(view, _unstable_packet(surface)))
+    assert decision.should_merge is False
+    assert any("failing checks" in blocker for blocker in decision.blockers)
+
+
+def test_unstable_proof_without_live_failing_identities_fails_closed():
+    # A context built without the live failing identities cannot be matched to
+    # the packet's named rows, so the optional-only waiver does not apply.
+    states = _green_checks()
+    states["npm Security Scan"] = "FAILURE"
+    states["Security Gate Summary"] = "FAILURE"
+    decision = decide_auto_merge(
+        _authorized_context(
+            merge_state_status="UNSTABLE",
+            check_states=states,
+            check_surfaces=_optional_only_unstable_surface(),
+        )
+    )
+    assert decision.should_merge is False
+    assert any("failing checks" in blocker for blocker in decision.blockers)
+
+
+def test_unstable_proof_accepts_identities_named_by_the_packet_producer():
+    # Build the packet's rollup diagnostics with the real producer from the same
+    # workflow-qualified rows the executor sees, so both sides name rows alike.
+    from aragora.cli.commands.review_queue import _rollup_non_green_diagnostics
+
+    optional_rows = [
+        {
+            "name": "npm Security Scan",
+            "workflowName": "Security",
+            "status": "COMPLETED",
+            "conclusion": "FAILURE",
+            "startedAt": "2026-10-07T06:00:00Z",
+            "completedAt": "2026-10-07T06:05:00Z",
+        },
+        {
+            "name": "Security Gate Summary",
+            "workflowName": "Security",
+            "status": "COMPLETED",
+            "conclusion": "FAILURE",
+            "startedAt": "2026-10-07T06:00:00Z",
+            "completedAt": "2026-10-07T06:06:00Z",
+        },
+    ]
+    view = _unstable_view(optional_rows)
+    diagnostics = _rollup_non_green_diagnostics(
+        view["statusCheckRollup"],
+        required_checks=[{"name": name} for name in sorted(REQUIRED_CHECKS)],
+    )
+    surface = _optional_only_unstable_surface()
+    surface["pr_rollup"] = {"available": True, **diagnostics}
+    assert surface["pr_rollup"]["non_required_non_green_sample"] == [
+        "Security / npm Security Scan",
+        "Security / Security Gate Summary",
+    ]
+
+    decision = decide_auto_merge(context_from_gh(view, _unstable_packet(surface)))
+    assert decision.should_merge is True
+    assert decision.blockers == ()
 
 
 def test_quorum_not_green_is_blocked():

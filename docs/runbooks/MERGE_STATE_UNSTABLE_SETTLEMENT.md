@@ -150,9 +150,11 @@ settlement-stable only when all of these exact-head predicates are true:
    new substantive step cannot appear without review.
 9. The PR does not modify any receipt-guarded path (the four allowlisted
    workflow files, `required-check-priority.yml`, `review_queue_unstable.py`,
-   or the policy check script). A PR editing those surfaces could smuggle
-   substantive work behind its own cancellation, so it never qualifies for the
-   exception; its cancelled advisory runs must be rerun instead.
+   `aragora/swarm/auto_merge_green.py`, which holds the optional-only UNSTABLE
+   proof the live gate uses, or the policy check script). A PR editing those
+   surfaces could smuggle substantive work behind its own cancellation, so it
+   never qualifies for the exception; its cancelled advisory runs must be rerun
+   instead.
 10. The helper emits an explicit receipt field naming each ignored non-required
     cancelled context, run URL, and reason so the merge record does not silently
     hide GitHub rollup noise.
