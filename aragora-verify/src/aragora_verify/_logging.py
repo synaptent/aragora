@@ -29,30 +29,30 @@ _SECRET_KEY = r"(?:api[_-]?key|token|secret|password|authorization)"
 _KEY_PATTERN = re.compile(_SECRET_KEY, re.IGNORECASE)
 _BARE = r"[^\s,;}\]]+"
 _DQ = r'"(?:\\.|[^"\\])*"'
-# The same quoted string inside JSON-encoded text, as in json.dumps(header_line):
-# an encoded backslash with the char it escapes, another JSON escape, or a plain char.
-_ESCAPED_DQ = r'\\"(?:\\\\(?:\\.|[^\\])|\\[^"\\]|[^"\\])*\\"'
-# A param value may contain ";" (SigV4 SignedHeaders=host;x-amz-date).
-_PARAM_TOKEN = r"[^\s,}\]]+"
-# Malformed text glued to a quoted value, stopping at an enclosing string's quote.
-_QUOTED_TAIL = r"""[^\s,}\]"'\\]*"""
-# An HTTP token, except "*", so already-masked "***" is never read as a scheme.
-_NAME = r"[\w!#$%&+.^`|~-]+"
-_AUTH_PARAM = rf"{_NAME}\s*=\s*(?:(?:{_DQ}|{_ESCAPED_DQ}){_QUOTED_TAIL}|{_PARAM_TOKEN})"
-# Any scheme, then a token68 credential or auth-params (Digest, OAuth, AWS
-# SigV4), quoted, spaced or not, so no part of the credential is left behind.
-# "(?!=)" stops a scheme-less "name = value" first param being read as a scheme;
-# empty list elements (",,") are allowed between params.
-_AUTH_VALUE = rf"(?:{_NAME}\s+(?!=))?(?:{_AUTH_PARAM}|{_BARE})(?:\s*,[\s,]*{_AUTH_PARAM})*"
 # key=value, key: value, and quoted keys as in JSON ("key": ...) or reprs ('key': ...).
+# An unquoted Authorization value matches empty here; _auth_value_end() finds where
+# it ends without parsing the scheme or any auth-param.
 _ASSIGNMENT = re.compile(
     r"""(?P<key>(?P<kq>["']?)[\w-]*"""
     r"(?:api[_-]?key|token|secret|password|(?P<auth>authorization))"
     r"""[\w-]*(?P=kq))(?P<sep>\s*[=:]\s*)"""
     rf"""(?:(?P<dq>{_DQ})|(?P<sq>'(?:\\.|[^'\\])*')|"""
-    rf"(?(auth){_AUTH_VALUE}|(?:(?:Bearer|Basic)\s+)?{_BARE}))",
+    rf"(?(auth)|(?:(?:Bearer|Basic)\s+)?{_BARE}))",
     re.IGNORECASE,
 )
+# A line break ends a header value unless the next line starts with a space or tab
+# (a folded continuation line, RFC 9112 obs-fold); a lone "\r" does not end it.
+_VALUE_LINE_END = re.compile(r"\r?\n(?![ \t])")
+# The body of a JSON or repr string up to its first unescaped quote.
+_STRING_BODY = {
+    '"': re.compile(r'(?:\\.|[^"\\\r\n])*'),
+    "'": re.compile(r"(?:\\.|[^'\\\r\n])*"),
+}
+# What follows a string's closing quote inside a container: a separator, a closing
+# bracket or the end of the line. A quote opening a quoted auth-param does not fit.
+_AFTER_STRING = re.compile(r"[^\S\r\n]*(?:[,:)\]}\r\n]|\Z)")
+# A quote opens a JSON or repr string at the start of a line or after one of these.
+_STRING_OPENERS = frozenset(("", "[", "{", "(", ",", ":", "="))
 _REDACTED = "***"
 _CYCLE = "<cycle>"
 _MAPPING_FIELD = re.compile(
@@ -67,6 +67,76 @@ _STANDARD_FIELDS = frozenset(logging.makeLogRecord({}).__dict__) | {
 def _mask_assignment(match: re.Match[str]) -> str:
     quote = '"' if match.group("dq") else "'" if match.group("sq") else ""
     return f"{match.group('key')}{match.group('sep')}{quote}{_REDACTED}{quote}"
+
+
+class _OpenString:
+    """The quote of the JSON or repr string open at the end of the text fed so far."""
+
+    __slots__ = ("_escaped", "_previous", "quote")
+
+    def __init__(self) -> None:
+        self.quote = ""
+        self._previous = ""
+        self._escaped = False
+
+    def feed(self, text: str) -> None:
+        line_start = max(text.rfind("\n"), text.rfind("\r")) + 1
+        if line_start:
+            self.quote, self._previous, self._escaped = "", "", False
+        for char in text[line_start:]:
+            if self.quote:
+                if self._escaped:
+                    self._escaped = False
+                elif char == "\\":
+                    self._escaped = True
+                elif char == self.quote:
+                    self.quote, self._previous = "", char
+            elif char in "\"'" and self._previous in _STRING_OPENERS:
+                self.quote = char
+            elif not char.isspace():
+                self._previous = char
+
+
+def _auth_value_end(text: str, start: int, quote: str) -> int:
+    """Where an unquoted Authorization value starting at start ends.
+
+    That is the end of its line, after any folded continuation lines, or, when
+    the value sits in a JSON or repr string opened by quote, that string's
+    closing quote, honoring backslash escapes.
+    """
+    if quote and (body := _STRING_BODY[quote].match(text, start)):
+        close = body.end()
+        if text.startswith(quote, close) and _AFTER_STRING.match(text, close + 1):
+            return close
+    line_end = _VALUE_LINE_END.search(text, start)
+    return line_end.start() if line_end else len(text)
+
+
+def _redact_text(text: str) -> str:
+    parts: list[str] = []
+    open_string = _OpenString()
+    fed = done = 0
+    while match := _ASSIGNMENT.search(text, done):
+        parts.append(text[done : match.start()])
+        quoted = match.group("dq") or match.group("sq")
+        # Only a quoted key ("Authorization": "...") makes a quoted value the whole
+        # value; after a bare key a quote may open an auth-param or close a container.
+        if match.group("auth") is None or (quoted and match.group("kq")):
+            parts.append(_mask_assignment(match))
+            done = match.end()
+            continue
+        parts.append(match.group("key") + match.group("sep"))
+        # Reading the output rather than the input gives a second pass the same answer.
+        for part in parts[fed:]:
+            open_string.feed(part)
+        fed = len(parts)
+        done = match.end("sep")
+        end = _auth_value_end(text, done, open_string.quote)
+        if end > done:
+            parts.append(_REDACTED)
+            done = end
+    parts.append(text[done:])
+    return "".join(parts)
 
 
 def _redact_item(key: Any, value: Any, active: frozenset[int]) -> tuple[Any, Any]:
@@ -89,7 +159,7 @@ def _redact(obj: Any, active: frozenset[int]) -> Any:
     if isinstance(obj, tuple):
         return tuple(_redact(value, active) for value in obj)
     if isinstance(obj, str):
-        return _ASSIGNMENT.sub(_mask_assignment, obj)
+        return _redact_text(obj)
     return obj
 
 
@@ -99,6 +169,9 @@ def redact(obj: Any) -> Any:
     Mapping keys other than str/int/float/None become strings, with the value
     masked, so the result is always JSON-encodable as far as keys go. A
     container that contains itself is replaced by "<cycle>" where it recurs.
+    An unquoted Authorization value is masked to the end of its line, folded
+    continuation lines included, or to the closing quote of the JSON or repr
+    string that holds it.
     """
     return _redact(obj, frozenset())
 

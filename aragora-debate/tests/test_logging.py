@@ -1,6 +1,7 @@
 """The logging entry point is explicit and secrets never reach its formatters."""
 
 import ast
+import io
 import json
 import logging
 import os
@@ -152,9 +153,9 @@ def test_redact_colon_and_quoted_key_forms(value):
 
 
 def test_redact_masks_the_whole_authorization_value_for_any_scheme():
-    assert redact("Authorization: Token SECRET-PAPA-222 sent") == "Authorization: *** sent"
-    assert redact("Authorization: ApiKey SECRET-UNIFORM-1, Accept: json") == (
-        "Authorization: ***, Accept: json"
+    assert redact("Authorization: Token SECRET-PAPA-222 sent") == "Authorization: ***"
+    assert redact("Authorization: ApiKey SECRET-UNIFORM-1, Accept: json\nnext line") == (
+        "Authorization: ***\nnext line"
     )
     assert redact("token: Bearer SECRET-VICTOR-2 ok") == "token: *** ok"
 
@@ -205,9 +206,9 @@ def test_redact_masks_digest_params_with_quoted_spaced_values(header):
         "junk-after-quoted-value",
     ],
 )
-def test_redact_masks_every_auth_param_up_to_the_end_of_the_value(value):
+def test_redact_masks_every_auth_param_up_to_the_end_of_the_line(value):
     masked = redact(f"Authorization: {value} next")
-    assert masked == "Authorization: *** next"
+    assert masked == "Authorization: ***"
     assert redact(masked) == masked
 
 
@@ -216,6 +217,134 @@ def test_redact_masks_a_json_encoded_auth_param_holding_an_escaped_quote():
     assert redact(line) == "Authorization: ***"
     assert json.loads(redact(json.dumps(line))) == "Authorization: ***"
     assert json.loads(redact(json.dumps({"headers": line}))) == {"headers": "Authorization: ***"}
+
+
+# Every synthetic credential part contains "SECRET-".
+_AUTH_CREDENTIALS = {
+    "token68": "SECRET-T68-dXNlcjpwYXNz+/9==",
+    "quoted-first-param-with-spaces": (
+        'username="Jane SECRET-QF-1 Doe", realm="test", response="SECRET-QF-2"'
+    ),
+    "ext-param-first": "username*=UTF-8''J%C3%A4ne%20SECRET-XF-1, realm=test, response=SECRET-XF-2",
+    "ext-param-middle": 'realm="test", username*=UTF-8\'\'J%C3%A4ne%20Doe, response="SECRET-XM-1"',
+    "ext-param-last": (
+        'realm="test", response="SECRET-XL-1", username*=UTF-8\'en\'J%C3%A4ne%20SECRET-XL-2'
+    ),
+    "spaces-around-equals": 'realm = "test" , nonce= "SECRET-WS-1" , response ="SECRET-WS-2"',
+    "empty-list-elements": ', realm="test",, , nonce="SECRET-EL-1" ,,response="SECRET-EL-2",',
+    "escaped-quotes-and-commas": (
+        r'realm="a \"b\", c", opaque=", SECRET-EQ-1 \"x\"", response="SECRET-EQ-2"'
+    ),
+    "unquoted-last-param": 'realm="test", qop=auth, response=SECRET-UQ-1',
+}
+
+
+def _fold(line):
+    """The header with obs-fold continuation lines, as http.client and email keep it."""
+    head, scheme_and_credential = line.split(": ", 1)
+    scheme, _, credential = scheme_and_credential.partition(" ")
+    return f"{head}: {scheme}\r\n " + credential.replace(", ", ",\n\t")
+
+
+# Containers are built the way logging receives them: json.dumps() and repr() of a mapping.
+_AUTH_CONTAINERS = {
+    "plain-line": lambda line: line,
+    "line-then-text": lambda line: f"{line} (retrying, attempt=2)",
+    "folded-lines": _fold,
+    "json-dumps": lambda line: json.dumps({"headers": line, "next": "ok"}),
+    "repr": lambda line: repr({"headers": line, "next": "ok"}),
+}
+_PROPOSAL_FAILED = "Agent proposal failed: "
+
+
+def _render_through(path, text):
+    """Return the full output and the redacted text for one rendering path."""
+    if path == "redact":
+        masked = redact(text)
+        return masked, masked
+    stream = io.StringIO()
+    handler = logging.StreamHandler(stream)
+    handler.setFormatter(
+        JsonFormatter()
+        if path == "json-formatter"
+        else TextFormatter("%(levelname)s %(name)s: %(message)s")
+    )
+    logger = logging.getLogger("aragora_debate.tests.auth_matrix")
+    logger.propagate = False
+    logger.setLevel(logging.WARNING)
+    logger.addHandler(handler)
+    try:
+        # The arena's failure path logs the provider exception through "%s".
+        logger.warning(_PROPOSAL_FAILED + "%s", RuntimeError(text))
+    finally:
+        logger.removeHandler(handler)
+    output = stream.getvalue()
+    assert output.endswith("\n")
+    if path == "json-formatter":
+        message = json.loads(output)["msg"]
+    else:
+        message = output[:-1].removeprefix(f"WARNING {logger.name}: ")
+    assert message.startswith(_PROPOSAL_FAILED)
+    return output, message[len(_PROPOSAL_FAILED) :]
+
+
+@pytest.mark.parametrize("path", ["redact", "text-formatter", "json-formatter"])
+@pytest.mark.parametrize("container", list(_AUTH_CONTAINERS))
+@pytest.mark.parametrize("credential", list(_AUTH_CREDENTIALS))
+@pytest.mark.parametrize(
+    "scheme", ["Basic", "Bearer", "Digest", "AWS4-HMAC-SHA256", "Negotiate", "Acme-Auth.v2"]
+)
+@pytest.mark.parametrize("header", ["Authorization", "Proxy-Authorization", "authorization"])
+def test_authorization_shape_matrix_masks_the_whole_value(
+    header, scheme, credential, container, path
+):
+    line = f"{header}: {scheme} {_AUTH_CREDENTIALS[credential]}"
+    output, masked = _render_through(path, _AUTH_CONTAINERS[container](line))
+    assert "SECRET-" not in output
+    assert redact(masked) == masked
+    if container == "json-dumps":
+        assert json.loads(masked) == {"headers": f"{header}: ***", "next": "ok"}
+    elif container == "repr":
+        assert ast.literal_eval(masked) == {"headers": f"{header}: ***", "next": "ok"}
+    else:
+        assert masked == f"{header}: ***"
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        # A quote that cannot close the string holding the header does not end the value.
+        (
+            'bad header: "Authorization: Digest realm="x", response="SECRET-Q1""',
+            'bad header: "Authorization: ***',
+        ),
+        (
+            "it's 'Authorization: Digest username*=UTF-8''J, response=SECRET-Q2' ok",
+            "it's 'Authorization: ***",
+        ),
+        ('Authorization: "Digest x", response="SECRET-Q3"', "Authorization: ***"),
+        ("Req(authorization='Bearer SECRET-Q4', n=1)", "Req(authorization=***"),
+        ("{'Authorization': None, 'n': 1}", "{'Authorization': ***"),
+        # Folded continuation lines belong to the value; a lone "\r" does not end it.
+        (
+            'Authorization: Digest username="Mufasa",\r\n       response="SECRET-Q8"\r\nHost: x',
+            "Authorization: ***\r\nHost: x",
+        ),
+        ("Authorization: Bearer x\rSECRET-Q9 tail\nnext", "Authorization: ***\nnext"),
+        # A JSON or repr string holding the header ends at its closing quote.
+        ("Req(h='Authorization: Bearer SECRET-Q5', n=1)", "Req(h='Authorization: ***', n=1)"),
+        (json.dumps(["Authorization: Bearer SECRET-Q6", "ok"]), '["Authorization: ***", "ok"]'),
+        (repr(("Authorization: Bearer SECRET-Q10", "ok")), "('Authorization: ***', 'ok')"),
+        (
+            json.dumps({"Authorization": 'Digest response="SECRET-Q7"', "n": 1}),
+            '{"Authorization": "***", "n": 1}',
+        ),
+        ('{"headers": "Authorization: ", "n": 1}', '{"headers": "Authorization: ", "n": 1}'),
+    ],
+)
+def test_redact_ends_an_authorization_value_at_a_container_close_or_the_line_end(text, expected):
+    assert redact(text) == expected
+    assert redact(expected) == expected
 
 
 def test_redact_replaces_reference_cycles():

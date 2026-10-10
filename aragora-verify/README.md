@@ -122,9 +122,11 @@ Both formatters use `redact()` to mask values as `***` for keys matching
 `(?i)(api[_-]?key|token|secret|password|authorization)` in nested mappings and
 sequences, and `key=value` or `key: value` assignments in messages (including
 quoted keys and values as in JSON or Python reprs, and Bearer/Basic values). An
-`Authorization` or `Proxy-Authorization` value is masked whole, whatever the
-scheme: the scheme, the credential and every parameter, quoted or spaced or not
-(Digest, OAuth, AWS SigV4). Matching fails closed, so labels such as
+`Authorization` or `Proxy-Authorization` value is masked whole without being
+parsed, whatever the scheme: the scheme, the credential, every parameter and the
+rest of the line, including continuation lines that start with a space or tab,
+or everything up to the closing quote when the header line is inside a JSON or
+Python-repr string. Matching fails closed, so labels such as
 `token_count: 5` are masked too. Mapping keys JSON cannot encode become strings
 with their values masked, and a container that contains itself is logged as
 `<cycle>`. When the arguments do not fit the format string or cannot be
