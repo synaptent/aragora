@@ -62,6 +62,9 @@ class MockDebateResult:
     dissenting_views: list = field(default_factory=list)
     rounds_used: int = 0
     debate_cruxes: list = field(default_factory=list)
+    # Mirrors DebateResult.metadata (aragora/core_types.py); the consensus phase
+    # records vote participation there.
+    metadata: dict = field(default_factory=dict)
     evidence_suggestions: list = field(default_factory=list)
     winner: str | None = None  # Added for synthesis generation
     synthesis: str | None = None  # Added for synthesis generation
