@@ -54,15 +54,19 @@ def test_workflow_runs_strict_types_ratchets_and_timed_coverage() -> None:
     for requirement in ("mypy==2.1.0", "ruff==0.14.14", "vulture==2.16", "deptry==0.25.1"):
         assert requirement in install
     assert "./aragora-${{ matrix.app }}[${{ matrix.extras }}]" in install
+    # The contract-drift authority checker rejects `${{ }}` in `working-directory`.
+    assert workflow["jobs"]["packages"]["env"]["APP"] == "${{ matrix.app }}"
     strict = next(step for step in steps if step["name"] == "Strict mypy")
-    assert strict["working-directory"] == "aragora-${{ matrix.app }}"
-    assert strict["run"].splitlines() == ["mypy --version", "mypy --strict src"]
+    assert "working-directory" not in strict
+    assert strict["run"].splitlines()[0] == 'cd "aragora-$APP"'
+    assert strict["run"].splitlines()[1:] == ["mypy --version", "mypy --strict src"]
     ratchets = next(step["run"] for step in steps if step["name"] == "Ruff and ratchets")
     assert "make readiness-lint-${{ matrix.app }}" in ratchets
     assert "pipefail" in ratchets
     assert "! grep" in ratchets and "SKIP" in ratchets
     tests = next(step for step in steps if step["name"] == "Tests with coverage")
-    assert tests["working-directory"] == strict["working-directory"]
+    assert "working-directory" not in tests
+    assert tests["run"].splitlines()[0] == strict["run"].splitlines()[0]
     for flag in (
         "--cov=aragora_${{ matrix.app }}",
         "--cov-config=pyproject.toml",

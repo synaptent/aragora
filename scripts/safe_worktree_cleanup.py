@@ -8,6 +8,7 @@ import json
 import os
 import shutil
 import subprocess
+import textwrap
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -285,18 +286,18 @@ def _worktree_is_dirty(path: Path) -> bool:
         return False
     try:
         proc = subprocess.run(
-            ["git", "status", "--short"],
+            ["git", "status", "--porcelain", "--untracked-files=all"],
             cwd=path,
             text=True,
             capture_output=True,
             check=False,
             timeout=DEFAULT_GIT_TIMEOUT_SECONDS,
         )
-    except subprocess.TimeoutExpired:
-        # Conservatively treat status timeouts as dirty so cleanup is blocked.
+    except (OSError, subprocess.TimeoutExpired):
+        # A failed inspection is not evidence that local work is absent.
         return True
     if proc.returncode != 0:
-        return False
+        return True
     return bool(proc.stdout.strip())
 
 
@@ -651,6 +652,44 @@ def cmd_inspect(args: argparse.Namespace) -> int:
     return 0 if not inspection.blockers else 1
 
 
+REMOVE_FAILURE_STATUSES: frozenset[str] = frozenset(
+    {
+        "blocked",
+        "remove_failed",
+        "remove_failed_path_purged",
+        "remove_failed_purge_incomplete",
+        "untracked_path",
+        "partial",
+        "purge_incomplete",
+    }
+)
+
+_INSPECT_EXIT_STATUS_EPILOG = """\
+exit status:
+  0  no blockers were found
+  1  at least one blocker was found, including blockers that remove --force
+     would bypass
+"""
+
+_REMOVE_FAILURE_STATUS_LIST = textwrap.fill(
+    ", ".join(sorted(REMOVE_FAILURE_STATUSES)),
+    width=78,
+    initial_indent="     ",
+    subsequent_indent="     ",
+    break_on_hyphens=False,
+)
+
+_REMOVE_EXIT_STATUS_EPILOG = f"""\
+exit status:
+  0  the worktree was removed (status removed or purged). This includes a
+     --force run that bypassed blockers; the bypassed blockers are still
+     listed in the JSON "blockers" field, so read "status", not "blockers",
+     to decide whether removal succeeded.
+  1  nothing was removed or removal was incomplete, with status one of:
+{_REMOVE_FAILURE_STATUS_LIST}
+"""
+
+
 def cmd_remove(args: argparse.Namespace) -> int:
     repo_root = _repo_root_from_arg(args.repo)
     inspection = inspect_worktree(repo_root, Path(args.path), branch_override=args.branch)
@@ -666,15 +705,7 @@ def cmd_remove(args: argparse.Namespace) -> int:
     else:
         print(json.dumps(result, indent=2))
     status = str(result.get("status", ""))
-    if status in {
-        "blocked",
-        "remove_failed",
-        "remove_failed_path_purged",
-        "remove_failed_purge_incomplete",
-        "untracked_path",
-        "partial",
-        "purge_incomplete",
-    }:
+    if status in REMOVE_FAILURE_STATUSES:
         return 1
     return 0
 
@@ -685,7 +716,10 @@ def _build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     inspect_parser = subparsers.add_parser(
-        "inspect", help="Inspect a worktree for active-session / open-PR blockers"
+        "inspect",
+        help="Inspect a worktree for active-session / open-PR blockers",
+        epilog=_INSPECT_EXIT_STATUS_EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     inspect_parser.add_argument("path", help="Worktree path to inspect")
     inspect_parser.add_argument(
@@ -695,7 +729,10 @@ def _build_parser() -> argparse.ArgumentParser:
     inspect_parser.set_defaults(func=cmd_inspect)
 
     remove_parser = subparsers.add_parser(
-        "remove", help="Safely remove a worktree if no blockers exist"
+        "remove",
+        help="Safely remove a worktree if no blockers exist",
+        epilog=_REMOVE_EXIT_STATUS_EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     remove_parser.add_argument("path", help="Worktree path to remove")
     remove_parser.add_argument(

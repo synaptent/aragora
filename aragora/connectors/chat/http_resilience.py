@@ -168,8 +168,13 @@ class HTTPResilienceMixin:
                     total_delay = delay + jitter
 
                     logger.warning(
-                        f"{self.platform_name} {operation} failed (attempt {attempt + 1}/{max_retries}): {e}. "
-                        f"Retrying in {total_delay:.1f}s"
+                        "%s %s failed (attempt %s/%s): %s. Retrying in %.1fs",
+                        self.platform_name,
+                        operation,
+                        attempt + 1,
+                        max_retries,
+                        e,
+                        total_delay,
                     )
                     await asyncio.sleep(total_delay)
                 else:
@@ -283,8 +288,13 @@ class HTTPResilienceMixin:
                             total_delay = delay + jitter
 
                             logger.warning(
-                                f"{self.platform_name} {operation} got {response.status_code} "
-                                f"(attempt {attempt + 1}/{max_retries}). Retrying in {total_delay:.1f}s"
+                                "%s %s got %s (attempt %s/%s). Retrying in %.1fs",
+                                self.platform_name,
+                                operation,
+                                response.status_code,
+                                attempt + 1,
+                                max_retries,
+                                total_delay,
                             )
                             await asyncio.sleep(total_delay)
                             continue
@@ -322,8 +332,12 @@ class HTTPResilienceMixin:
                 if attempt < max_retries - 1:
                     delay = min(base_delay * (2**attempt), 30.0)
                     logger.warning(
-                        f"{self.platform_name} {operation} timed out "
-                        f"(attempt {attempt + 1}/{max_retries}). Retrying in {delay:.1f}s"
+                        "%s %s timed out (attempt %s/%s). Retrying in %.1fs",
+                        self.platform_name,
+                        operation,
+                        attempt + 1,
+                        max_retries,
+                        delay,
                     )
                     await asyncio.sleep(delay)
                 else:
@@ -341,8 +355,12 @@ class HTTPResilienceMixin:
                 if attempt < max_retries - 1:
                     delay = min(base_delay * (2**attempt), 30.0)
                     logger.warning(
-                        f"{self.platform_name} {operation} connection failed "
-                        f"(attempt {attempt + 1}/{max_retries}). Retrying in {delay:.1f}s"
+                        "%s %s connection failed (attempt %s/%s). Retrying in %.1fs",
+                        self.platform_name,
+                        operation,
+                        attempt + 1,
+                        max_retries,
+                        delay,
                     )
                     await asyncio.sleep(delay)
                 else:

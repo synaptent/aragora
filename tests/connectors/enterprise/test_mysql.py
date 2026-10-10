@@ -297,19 +297,19 @@ class TestConnectionPool:
     @pytest.mark.asyncio
     async def test_get_pool_creates_pool(self, mysql_connector):
         """Test pool is created on first access."""
-        import sys
+        aiomysql = pytest.importorskip("aiomysql")
 
         mock_pool = MagicMock()
-        mock_aiomysql = MagicMock()
-        mock_aiomysql.create_pool = AsyncMock(return_value=mock_pool)
 
-        # Inject mock aiomysql module
-        with patch.dict(sys.modules, {"aiomysql": mock_aiomysql}):
+        # mysql.py binds aiomysql at import time, so patch the module object it holds.
+        with patch.object(
+            aiomysql, "create_pool", AsyncMock(return_value=mock_pool)
+        ) as mock_create_pool:
             pool = await mysql_connector._get_pool()
 
             assert pool == mock_pool
             assert mysql_connector._pool == mock_pool
-            mock_aiomysql.create_pool.assert_called_once()
+            mock_create_pool.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_get_pool_reuses_existing(self, mysql_connector):

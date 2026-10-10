@@ -736,13 +736,15 @@ class AutonomousOrchestrator:
 
                     if _metrics_delta.improved:
                         logger.info(
-                            f"metrics_improvement_detected score={_metrics_delta.improvement_score:.2f} "
-                            f"summary={_metrics_delta.summary}"
+                            "metrics_improvement_detected score=%.2f summary=%s",
+                            _metrics_delta.improvement_score,
+                            _metrics_delta.summary,
                         )
                     elif not _metrics_delta.improved and _metrics_delta.improvement_score < 0.3:
                         logger.warning(
-                            f"metrics_no_improvement score={_metrics_delta.improvement_score:.2f} "
-                            f"summary={_metrics_delta.summary}"
+                            "metrics_no_improvement score=%.2f summary=%s",
+                            _metrics_delta.improvement_score,
+                            _metrics_delta.summary,
                         )
                 except (RuntimeError, OSError, ValueError, subprocess.SubprocessError) as e:
                     logger.debug("metrics_comparison_failed: %s", e)
@@ -931,7 +933,10 @@ class AutonomousOrchestrator:
                 # Budget hard cutoff: don't start new tasks if budget exceeded
                 if self.budget_limit is not None and self._total_cost_usd > self.budget_limit:
                     logger.warning(
-                        f"budget_exceeded limit={self.budget_limit:.2f} spent={self._total_cost_usd:.2f} remaining_tasks={len(pending)}"
+                        "budget_exceeded limit=%.2f spent=%.2f remaining_tasks=%s",
+                        self.budget_limit,
+                        self._total_cost_usd,
+                        len(pending),
                     )
                     for p in pending:
                         p.status = "skipped"
@@ -1027,8 +1032,9 @@ class AutonomousOrchestrator:
                     )
                 else:
                     logger.info(
-                        f"stuck_detection_clean total={health.total_items} "
-                        f"health={health.health_percentage:.0f}%"
+                        "stuck_detection_clean total=%s health=%.0f%%",
+                        health.total_items,
+                        health.health_percentage,
                     )
             except (RuntimeError, OSError, ValueError, ConnectionError, asyncio.TimeoutError) as e:
                 logger.debug("stuck_detection_shutdown_failed: %s", e)

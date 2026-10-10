@@ -179,7 +179,7 @@ class StartupTransaction:
     def mark_initialized(self, component: str) -> None:
         """Mark a component as successfully initialized."""
         self._components_initialized.append(component)
-        logger.debug(f"Initialized: {component} ({self.elapsed_seconds:.2f}s)")
+        logger.debug("Initialized: %s (%.2fs)", component, self.elapsed_seconds)
 
     def mark_failed(self, component: str) -> None:
         """Mark a component as failed."""
@@ -233,7 +233,7 @@ class StartupTransaction:
             components=list(self._components_initialized),
         )
         self._checkpoints.append(cp)
-        logger.info(f"Startup checkpoint: {name} ({cp.elapsed_seconds:.2f}s)")
+        logger.info("Startup checkpoint: %s (%.2fs)", name, cp.elapsed_seconds)
         return cp
 
     async def _run_cleanups(self) -> None:
@@ -291,7 +291,7 @@ class StartupTransaction:
         if exc_type is not None:
             # Failure - run cleanups
             error_msg = str(exc_val) if exc_val else "Unknown error"
-            logger.error(f"Startup failed after {duration:.2f}s: {error_msg}")
+            logger.error("Startup failed after %.2fs: %s", duration, error_msg)
             await self._run_cleanups()
 
             # Record metrics
@@ -308,10 +308,12 @@ class StartupTransaction:
         # Log SLO status
         if duration > self.slo_seconds:
             logger.warning(
-                f"Startup completed in {duration:.2f}s (exceeded SLO of {self.slo_seconds}s)"
+                "Startup completed in %.2fs (exceeded SLO of %ss)", duration, self.slo_seconds
             )
         else:
-            logger.info(f"Startup completed in {duration:.2f}s (within SLO of {self.slo_seconds}s)")
+            logger.info(
+                "Startup completed in %.2fs (within SLO of %ss)", duration, self.slo_seconds
+            )
 
         # Record metrics
         _init_startup_metrics()

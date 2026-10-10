@@ -47,6 +47,8 @@ jobs:
     name: Package ${{ matrix.app }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      APP: ${{ matrix.app }}
     strategy:
       fail-fast: false
       matrix:
@@ -80,13 +82,13 @@ jobs:
           make readiness-lint-${{ matrix.app }} 2>&1 | tee "lint-${{ matrix.app }}.log"
           ! grep -q '^SKIP ' "lint-${{ matrix.app }}.log"
       - name: Strict mypy
-        working-directory: aragora-${{ matrix.app }}
         run: |
+          cd "aragora-$APP"
           mypy --version
           mypy --strict src
       - name: Tests with coverage
-        working-directory: aragora-${{ matrix.app }}
         run: |
+          cd "aragora-$APP"
           fail_under=$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["tool"]["coverage"]["report"]["fail_under"])')
           pytest tests -q -p randomly --randomly-seed=1234 -n 4 --timeout=120 \
             --cov=aragora_${{ matrix.app }} --cov-config=pyproject.toml \

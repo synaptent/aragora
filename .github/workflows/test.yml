@@ -67,7 +67,7 @@ jobs:
           cache-dependency-path: pyproject.toml
 
       - name: Set up Node 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "20"
 
@@ -244,7 +244,7 @@ jobs:
           cache-dependency-path: pyproject.toml
 
       - name: Set up Node 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "20"
           cache: 'npm'
@@ -717,7 +717,7 @@ jobs:
     needs: [test-shard-scope]
     strategy:
       fail-fast: false
-      matrix: &fast-shards
+      matrix:
         category:
           # Light shards (unchanged from prior 9-shard layout)
           - name: agents
@@ -787,7 +787,7 @@ jobs:
             scope: handlers
             timeout: 30
 
-    steps: &fast-shard-steps
+    steps:
       - name: Resolve shard relevance
         id: relevance
         shell: bash
@@ -911,8 +911,189 @@ jobs:
     needs: [test-shard-scope]
     strategy:
       fail-fast: false
-      matrix: *fast-shards
-    steps: *fast-shard-steps
+      matrix:
+        category:
+          # Light shards (unchanged from prior 9-shard layout)
+          - name: agents
+            pytest_args: tests/agents
+            scope: agents
+            timeout: 30
+          - name: reasoning
+            pytest_args: tests/rlm tests/reasoning
+            scope: reasoning
+            timeout: 30
+          - name: workflow-client
+            pytest_args: tests/workflow tests/client
+            scope: workflow_client
+            timeout: 30
+          - name: knowledge
+            pytest_args: tests/knowledge tests/evidence tests/memory
+            scope: knowledge
+            timeout: 30
+          - name: storage
+            pytest_args: tests/storage tests/ranking tests/persistence tests/billing
+            scope: storage
+            timeout: 30
+          - name: infra
+            pytest_args: tests/nomic tests/control_plane tests/rbac tests/events tests/observability tests/compliance tests/gauntlet tests/cli tests/verify
+            scope: infra
+            timeout: 30
+
+          # server (was 1 shard at 23 min, now 3 sub-shards)
+          # tests/server/handlers/ a-m subdirs + files (~16K tests)
+          - name: server-handlers-am
+            pytest_args: ""
+            resolver: server-handlers-am
+            scope: server_handlers
+            timeout: 30
+          # tests/server/handlers/ n-z subdirs + files (~8K tests)
+          - name: server-handlers-nz
+            pytest_args: ""
+            resolver: server-handlers-nz
+            scope: server_handlers
+            timeout: 30
+          # tests/server/ minus tests/server/handlers/ (~7500 tests)
+          - name: server-rest
+            pytest_args: ""
+            resolver: server-rest
+            scope: server_rest
+            timeout: 30
+
+          # handlers (was 1 shard at 26 min, now 3 sub-shards)
+          # tests/handlers/features/ alone (~7700 tests, biggest single subdir)
+          - name: handlers-features
+            pytest_args: ""
+            resolver: handlers-features
+            scope: handlers
+            timeout: 30
+          # tests/handlers/ A-K subdirs (incl. underscore-prefixed) + A-K files,
+          # excluding ``features``. Mutually-exclusive with handlers-lz.
+          - name: handlers-amk-no-features
+            pytest_args: ""
+            resolver: handlers-amk-no-features
+            scope: handlers
+            timeout: 30
+          # tests/handlers/ L-Z subdirs + L-Z files. Mutually-exclusive with
+          # handlers-amk-no-features. See scripts/ci_resolve_test_shard.py.
+          - name: handlers-lz
+            pytest_args: ""
+            resolver: handlers-lz
+            scope: handlers
+            timeout: 30
+    steps:
+      - name: Resolve shard relevance
+        id: relevance
+        shell: bash
+        env:
+          SCOPES: ${{ needs.test-shard-scope.outputs.scopes_changed }}
+          MY_SCOPE: ${{ matrix.category.scope }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          # Always run on push/schedule/dispatch (non-PR)
+          if [[ "$EVENT" != "pull_request" ]]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "Reason: not a pull_request"
+            exit 0
+          fi
+          # If 'core' (workflow/dependency/version) changed, all shards run
+          if echo "$SCOPES" | grep -q '"core"'; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "Reason: core scope matched (deps/workflow/version)"
+            exit 0
+          fi
+          # If our scope matched, run
+          if echo "$SCOPES" | grep -q "\"$MY_SCOPE\""; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "Reason: scope '$MY_SCOPE' matched"
+          else
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Shard ${{ matrix.category.name }} skipped (scope '$MY_SCOPE' not in changes: $SCOPES)"
+          fi
+
+      - name: Checkout
+        if: steps.relevance.outputs.should_run == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Verify checkout integrity
+        if: steps.relevance.outputs.should_run == 'true'
+        shell: bash
+        run: |
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::pyproject.toml missing after checkout; attempting recovery"
+            git sparse-checkout disable || true
+            git fetch --no-tags origin "${GITHUB_SHA:-HEAD}"
+            git reset --hard FETCH_HEAD
+            git clean -ffd || true
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::Standard recovery failed; attempting archive restore"
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+            git archive "${GITHUB_SHA:-HEAD}" | tar -x || git archive HEAD | tar -x
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::error::Repository checkout is incomplete (pyproject.toml missing)"
+            echo "PWD=$(pwd)"
+            ls -la
+            exit 1
+          fi
+
+      - name: Set up Python
+        if: steps.relevance.outputs.should_run == 'true'
+        uses: ./.github/actions/setup-python-safe
+        with:
+          python-version: "3.11"
+          cache: 'pip'
+          cache-dependency-path: pyproject.toml
+
+      - name: Install dependencies
+        if: steps.relevance.outputs.should_run == 'true'
+        run: |
+          python -m pip install --upgrade pip
+          bash scripts/ci_install_project.sh --extras test
+          python -m pip install pytest-timeout pytest-xdist
+
+      - name: Resolve shard test paths
+        id: shard_paths
+        if: steps.relevance.outputs.should_run == 'true'
+        shell: bash
+        env:
+          RESOLVER: ${{ matrix.category.resolver }}
+          INLINE_ARGS: ${{ matrix.category.pytest_args }}
+        run: |
+          # Light shards encode their paths inline via pytest_args. Heavy
+          # shards delegate to scripts/ci_resolve_test_shard.py so the
+          # alphabetic partitioning lives in versioned Python rather than
+          # 5KB of fragile YAML --ignore-glob soup. See script header for
+          # rationale.
+          if [[ -n "$RESOLVER" ]]; then
+            args=$(python3 scripts/ci_resolve_test_shard.py "$RESOLVER" --check)
+          else
+            args="$INLINE_ARGS"
+          fi
+          echo "args=$args" >> "$GITHUB_OUTPUT"
+          echo "Resolved pytest args: $args"
+
+      - name: Run ${{ matrix.category.name }} tests
+        if: steps.relevance.outputs.should_run == 'true'
+        run: |
+          pytest ${{ steps.shard_paths.outputs.args }} \
+            -m "not slow and not load and not e2e and not integration and not integration_minimal and not benchmark and not performance" \
+            --timeout=120 \
+            -n 4 \
+            --dist loadscope \
+            -v \
+            --tb=short \
+            --durations=20 \
+            --durations-min=1.0
+        env:
+          PYTHONPATH: .:aragora-debate/src
+
+      - name: Mark shard as skipped (no-op success)
+        if: steps.relevance.outputs.should_run != 'true'
+        run: |
+          echo "::notice::Shard ${{ matrix.category.name }} skipped: scope '${{ matrix.category.scope }}' not in changed scopes"
 
   test-fast-gate:
     needs: [test-shard-scope, test-fast-gate-run]
@@ -2087,7 +2268,7 @@ jobs:
           bash scripts/ci_install_project.sh --extras dev,test
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '24.18.0'
           cache: 'npm'
@@ -2227,7 +2408,7 @@ jobs:
 
       - name: Set up Node.js
         if: steps.scope.outputs.frontend == 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '24.18.0'
           cache: 'npm'
