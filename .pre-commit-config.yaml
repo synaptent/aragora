@@ -239,7 +239,11 @@ repos:
         verbose: true
 
   # Operator: fails on any tracked Go file gofmt would reformat, then go vet.
-  # Same SKIP contract as `make readiness-lint-operator`.
+  # Same SKIP contract as `make readiness-lint-operator`. Go files are listed
+  # from the repo root: a real `git push` exports GIT_DIR to hooks, and git then
+  # treats the current directory as the work-tree top, so `git ls-files` run
+  # after `cd aragora-operator` would print root-relative paths. An empty list
+  # fails, because gofmt with no file arguments reads stdin.
   - repo: local
     hooks:
       - id: operator-gofmt-vet
@@ -247,9 +251,11 @@ repos:
         entry: >-
           bash -c 'command -v go >/dev/null || {
           echo "SKIP operator: go not found"; exit 0; };
-          cd aragora-operator && unfmt=$(gofmt -l $(git ls-files "*.go")) && [ -z "$unfmt" ] || {
+          files=$(git ls-files "aragora-operator/*.go") && [ -n "$files" ] || {
+          echo "operator-gofmt-vet: no tracked Go files under aragora-operator/"; exit 1; };
+          unfmt=$(gofmt -l $files) && [ -z "$unfmt" ] || {
           echo "$unfmt"; exit 1; };
-          go vet ./...'
+          cd aragora-operator && go vet ./...'
         language: system
         pass_filenames: false
         files: ^aragora-operator/.*\.go$

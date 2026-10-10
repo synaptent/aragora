@@ -674,15 +674,18 @@ readiness-heavy-vscode:
 
 # --- operator (aragora-operator, Go) ----------------------------------------
 # gofmt fails on any tracked Go file it would reformat (an empty file list
-# would make gofmt read stdin, so it fails instead).
+# would make gofmt read stdin, so it fails instead). Files are listed from the
+# repo root: with GIT_DIR exported (as git does for hooks), `git ls-files`
+# after `cd aragora-operator` prints root-relative paths.
 readiness-lint-operator:
 	@$(READINESS_T0); \
 	command -v go >/dev/null 2>&1 || { echo "SKIP operator: go not found"; exit 0; }; \
 	command -v gofmt >/dev/null 2>&1 || { echo "SKIP operator: gofmt not found"; exit 0; }; \
 	command -v python3 >/dev/null 2>&1 || { echo "SKIP operator: python3 not found"; exit 0; }; \
 	command -v git >/dev/null 2>&1 || { echo "SKIP operator: git not found"; exit 0; }; \
-	[ -n "$$(cd aragora-operator && git ls-files '*.go')" ] || { echo "readiness-lint-operator: no tracked Go files"; exit 1; }; \
-	unformatted=$$(cd aragora-operator && gofmt -l $$(git ls-files '*.go')) || exit 1; \
+	gofiles=$$(git ls-files 'aragora-operator/*.go'); \
+	[ -n "$$gofiles" ] || { echo "readiness-lint-operator: no tracked Go files"; exit 1; }; \
+	unformatted=$$(gofmt -l $$gofiles) || exit 1; \
 	[ -z "$$unformatted" ] || { echo "gofmt would reformat (run gofmt -w):"; echo "$$unformatted"; exit 1; }; \
 	(cd aragora-operator && go vet ./...) && \
 	python3 scripts/ci/check_file_sizes.py --glob 'aragora-operator/**/*.go' \

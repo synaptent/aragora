@@ -202,3 +202,129 @@ def test_hook_runs_vet_in_the_operator_when_formatted(tmp_path: Path) -> None:
         "gofmt -l",
         f"{ROOT}/aragora-operator|vet ./...",
     ]
+
+
+# gofmt stub that fails the way real gofmt does when a listed path is missing, and
+# also refuses an empty file list (real gofmt would then wait on stdin).
+_STRICT_GOFMT = """#!/bin/sh
+files=0
+for arg in "$@"; do
+  case "$arg" in -*) continue ;; esac
+  files=$((files + 1))
+  [ -e "$arg" ] || { echo "lstat $arg: no such file or directory" >&2; exit 2; }
+done
+[ "$files" -gt 0 ] || { echo "gofmt stub: no file arguments" >&2; exit 2; }
+echo "$files" >> "$GOFMT_LOG"
+"""
+
+
+def _strict_go_tools(tmp_path: Path) -> Path:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "gofmt").write_text(_STRICT_GOFMT)
+    (bin_dir / "go").write_text("#!/bin/sh\nexit 0\n")
+    for stub in bin_dir.iterdir():
+        stub.chmod(0o755)
+    return bin_dir
+
+
+def _env_without_git_location() -> dict[str, str]:
+    return {
+        key: value
+        for key, value in os.environ.items()
+        if key not in {"GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"}
+    }
+
+
+def test_hook_passes_with_and_without_exported_git_dir(tmp_path: Path) -> None:
+    # A real `git push` exports GIT_DIR (without GIT_WORK_TREE) to hooks, which makes
+    # git treat the current directory as the work-tree top; `pre-commit run` does not.
+    bin_dir = _strict_go_tools(tmp_path)
+    base_env = _env_without_git_location()
+    git_dir = subprocess.run(
+        ["git", "rev-parse", "--absolute-git-dir"],
+        cwd=ROOT,
+        env=base_env,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    go_files = subprocess.run(
+        ["git", "ls-files", "aragora-operator/*.go"],
+        cwd=ROOT,
+        env=base_env,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split()
+    assert go_files
+
+    entry = _hook()["entry"]
+    assert shlex.split(entry)[:2] == ["bash", "-c"]
+    gofmt_log = tmp_path / "gofmt-calls"
+    env = {
+        **base_env,
+        "PATH": f"{bin_dir}{os.pathsep}{base_env['PATH']}",
+        "GOFMT_LOG": str(gofmt_log),
+    }
+    for label, run_env in (
+        ("GIT_DIR exported", {**env, "GIT_DIR": git_dir}),
+        ("GIT_DIR unset", env),
+    ):
+        result = subprocess.run(
+            shlex.split(entry),
+            cwd=ROOT,
+            env=run_env,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        output = result.stdout + result.stderr
+        assert result.returncode == 0, f"{label}: {output}"
+        assert "lstat" not in output and "no such file" not in output, f"{label}: {output}"
+        assert "SKIP" not in output, f"{label}: {output}"
+    assert gofmt_log.read_text().split() == [str(len(go_files))] * 2
+
+
+def test_hook_refuses_an_empty_go_file_list(tmp_path: Path) -> None:
+    bin_dir = _strict_go_tools(tmp_path)
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    env = _env_without_git_location()
+    subprocess.run(["git", "init", "-q"], cwd=repo, env=env, check=True)
+    gofmt_log = tmp_path / "gofmt-calls"
+    result = subprocess.run(
+        shlex.split(_hook()["entry"]),
+        cwd=repo,
+        env={
+            **env,
+            "PATH": f"{bin_dir}{os.pathsep}{env['PATH']}",
+            "GOFMT_LOG": str(gofmt_log),
+        },
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert result.returncode == 1
+    assert "no tracked Go files" in result.stdout
+    assert not gofmt_log.exists()
+
+
+def _make_recipe(target: str) -> str:
+    text = (ROOT / "Makefile").read_text()
+    match = re.search(rf"^{re.escape(target)}:.*\n((?:\t.*\n)+)", text, re.MULTILINE)
+    assert match, f"{target} recipe not found in Makefile"
+    return match.group(1)
+
+
+def test_make_lint_operator_lists_go_files_from_the_root_for_git_dir() -> None:
+    recipe = _make_recipe("readiness-lint-operator")
+    listing = "git ls-files 'aragora-operator/*.go'"
+    assert listing in recipe
+    first_cd = recipe.index("cd aragora-operator")
+    assert recipe.index(listing) < first_cd
+    assert "git ls-files" not in recipe[first_cd:]
+    assert 'echo "SKIP operator: go not found"; exit 0;' in recipe
+    assert "readiness-lint-operator: no tracked Go files" in recipe
