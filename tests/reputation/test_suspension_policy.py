@@ -461,3 +461,90 @@ def test_decision_threshold_fingerprint_matches(monkeypatch):
     store = _store_with_deltas(count=5, delta_value=1.0)
     decision = checker.check("agent-a", store)
     assert decision.threshold_fingerprint == threshold.fingerprint()
+
+
+# ---------------------------------------------------------------------------
+# Domain-filtered path applies time-decay (same footing as all-domain path)
+# ---------------------------------------------------------------------------
+
+
+def _decaying_delta(
+    agent_id: str,
+    *,
+    delta: float,
+    domain: str,
+    idx: int,
+    applied_at: str,
+    half_life_days: float,
+) -> ReputationDelta:
+    return ReputationDelta(
+        delta_id=f"rep_{agent_id}_{domain}_decay_{idx:04d}",
+        agent_id=agent_id,
+        domain=domain,
+        claim_id=f"claim-{idx}",
+        resolution_id=f"res-{idx}",
+        delta=delta,
+        scoring_rule="binary",
+        applied_at=applied_at,
+        decay_half_life_days=half_life_days,
+        reason={"idx": idx},
+    )
+
+
+def test_domain_filter_applies_decay(monkeypatch):
+    """Old losses in the filtered domain decay instead of being summed raw.
+
+    Six deltas of -10 recorded many half-lives ago would sum to -60 (below a
+    -50 floor) if the domain path ignored decay; decayed they are ~0, so the
+    agent must stay eligible.
+    """
+    monkeypatch.setenv(_FLAG, "1")
+    threshold = SuspensionThreshold(
+        score_floor=-50.0,
+        min_samples=5,
+        domains=frozenset({"prediction_market"}),
+    )
+    store = ReputationStore()
+    ancient = "2020-01-01T00:00:00Z"
+    for i in range(6):
+        store.record_delta(
+            _decaying_delta(
+                "agent-e",
+                delta=-10.0,
+                domain="prediction_market",
+                idx=i,
+                applied_at=ancient,
+                half_life_days=7.0,
+            )
+        )
+    decision = SuspensionChecker(threshold=threshold).check("agent-e", store)
+    assert not decision.suspended
+    assert decision.reason == "score_above_floor"
+    assert decision.sample_count == 6
+    assert decision.score is not None
+    assert decision.score == pytest.approx(0.0, abs=1e-6)
+    # The raw (undecayed) slice really is below the floor, proving decay was applied.
+    assert store.domain_score("agent-e", "prediction_market", apply_decay=False) == pytest.approx(
+        -60.0
+    )
+
+
+def test_domain_filter_matches_store_domain_score(monkeypatch):
+    monkeypatch.setenv(_FLAG, "1")
+    threshold = SuspensionThreshold(
+        score_floor=-1000.0,
+        min_samples=1,
+        domains=frozenset({"prediction_market", "code_pr"}),
+    )
+    store = ReputationStore()
+    for i in range(4):
+        store.record_delta(_delta("agent-f", delta=-10.0, domain="prediction_market", idx=i))
+    for i in range(3):
+        store.record_delta(_delta("agent-f", delta=5.0, domain="code_pr", idx=i + 50))
+    store.record_delta(_delta("agent-f", delta=-999.0, domain="debate_position", idx=99))
+    decision = SuspensionChecker(threshold=threshold).check("agent-f", store)
+    assert decision.sample_count == 7
+    assert decision.score == pytest.approx(
+        store.domain_score("agent-f", threshold.domains, apply_decay=True)
+    )
+    assert decision.score == pytest.approx(-25.0)
