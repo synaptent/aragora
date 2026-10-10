@@ -70,7 +70,7 @@ def test_facade_consumers_get_the_moved_planner_class() -> None:
 
 
 def test_source_items_split_on_bullets_and_headings() -> None:
-    text = "- first item\n* second item\n\n# Heading\nbody line\n\n1. numbered"
+    text = "- first item\n* second item\n\n# Heading\nbody line\n\n12. numbered"
     assert campaign._parse_source_items(text) == [
         "first item",
         "second item",
