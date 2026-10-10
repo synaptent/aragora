@@ -1211,6 +1211,8 @@ class Arena(ArenaDelegatesMixin):
                         votes=[],
                         dissenting_views=[],
                         rounds_used=getattr(self, "_partial_rounds", 0),
+                        status="timeout",
+                        metadata={"deadline_exceeded": True},
                     )
             return await self._run_inner(correlation_id=correlation_id)
         finally:

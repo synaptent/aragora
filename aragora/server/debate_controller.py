@@ -10,9 +10,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import os
 import uuid
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any
 from collections.abc import Callable
@@ -84,11 +85,36 @@ _FIRST_SUCCESSFUL_SELECTION_STRATEGY = "first_successful"
 _SUPPORTED_COMPARISON_SELECTION_STRATEGIES = {
     _DEFAULT_COMPARISON_SELECTION_STRATEGY,
 }
+_FALLBACK_DEBATE_DEADLINE_SECONDS = 900.0
+# Arena.run enforces a positive protocol deadline itself and returns a timeout
+# result. The controller's own limit is only a backstop one margin later (for
+# protocols with no arena limit), and run_async's limit (30 s by default) comes
+# one margin after that, so each layer can unwind before the outer one fires.
+_RUN_ASYNC_CLEANUP_MARGIN_SECONDS = 15.0
 
 if TYPE_CHECKING:
     from aragora.server.stream import SyncEventEmitter
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_debate_deadline(protocol_timeout: Any) -> float:
+    """Return the finite deadline (seconds) for one server-run debate.
+
+    Uses the protocol's ``timeout_seconds``, else ``DEBATE_TIMEOUT_SECONDS``,
+    else a fixed default; zero, negative, non-finite and non-numeric values
+    are skipped so the debate never waits without bound.
+    """
+    for candidate in (protocol_timeout, DEBATE_TIMEOUT_SECONDS):
+        if isinstance(candidate, bool) or not isinstance(candidate, (int, float)):
+            continue
+        if math.isfinite(candidate) and candidate > 0:
+            return float(candidate)
+    return _FALLBACK_DEBATE_DEADLINE_SECONDS
+
+
+class _DebateDeadlineReached(TimeoutError):
+    """Arena.run stopped the debate at its deadline; its result is not a completed debate."""
 
 
 def _parse_budget_limit(value: Any) -> float | None:
@@ -1171,18 +1197,24 @@ class DebateController:
 
         self.factory.reset_circuit_breakers(arena)
 
-        protocol_timeout = getattr(arena.protocol, "timeout_seconds", 0)
-        timeout = (
-            protocol_timeout
-            if isinstance(protocol_timeout, (int, float)) and protocol_timeout > 0
-            else DEBATE_TIMEOUT_SECONDS
-        )
-        update_debate_status(debate_id, "running")
+        timeout = _resolve_debate_deadline(getattr(arena.protocol, "timeout_seconds", 0))
+        update_debate_status(debate_id, "running", deadline_seconds=timeout)
 
         async def run_with_timeout():
-            return await asyncio.wait_for(arena.run(), timeout=timeout)
+            return await asyncio.wait_for(
+                arena.run(), timeout=timeout + _RUN_ASYNC_CLEANUP_MARGIN_SECONDS
+            )
 
-        result = run_async(run_with_timeout())
+        try:
+            result = run_async(
+                run_with_timeout(), timeout=timeout + 2 * _RUN_ASYNC_CLEANUP_MARGIN_SECONDS
+            )
+        except (TimeoutError, asyncio.TimeoutError, FuturesTimeoutError) as exc:
+            # A backstop expired (wait_for or run_async's own limit); three classes before 3.11.
+            raise _DebateDeadlineReached(f"Debate stopped at its {timeout:.0f}s deadline") from exc
+        result_metadata = getattr(result, "metadata", None)
+        if isinstance(result_metadata, dict) and result_metadata.get("deadline_exceeded"):
+            raise _DebateDeadlineReached(f"Debate stopped at its {timeout:.0f}s deadline")
         duration_seconds = time.monotonic() - candidate_started
 
         quality_meta: dict[str, Any] | None = None
@@ -1303,6 +1335,7 @@ class DebateController:
 
         successful_runs: list[tuple[dict[str, Any], Any, DebateConfig, dict[str, Any] | None]] = []
         failures: list[dict[str, Any]] = []
+        deadline_stops = 0
 
         for candidate_index, candidate_agents in enumerate(candidates, start=1):
             candidate_config = replace(config, agents_str=candidate_agents)
@@ -1313,6 +1346,8 @@ class DebateController:
                     hooks,
                 )
             except Exception as exc:  # noqa: BLE001 - comparison mode should continue on per-candidate failures
+                if isinstance(exc, _DebateDeadlineReached):
+                    deadline_stops += 1
                 logger.warning(
                     "[debate] Comparison candidate %s failed for %s: %s",
                     candidate_index,
@@ -1341,6 +1376,11 @@ class DebateController:
             successful_runs.append((summary, candidate_result, candidate_config, quality_meta))
 
         if not successful_runs:
+            # Any genuine candidate failure keeps the run an error, even alongside deadline stops.
+            if failures and deadline_stops == len(failures):
+                raise _DebateDeadlineReached(
+                    f"All {deadline_stops} comparison candidates stopped at their deadline"
+                )
             raise ValueError("All comparison candidates failed")
 
         if pick_best_result:
@@ -1521,6 +1561,23 @@ class DebateController:
                 config=selected_config,
                 result=result,
                 duration_seconds=time.time() - start_time,
+            )
+
+        except _DebateDeadlineReached as e:
+            logger.warning("[debate] %s: %s", debate_id, e)
+            update_debate_status(debate_id, "timeout", error=str(e))
+            self.emitter.emit(
+                StreamEvent(
+                    type=StreamEventType.DEBATE_END,
+                    data={
+                        "debate_id": debate_id,
+                        "status": "timeout",
+                        "duration": time.time() - start_time,
+                        "rounds": 0,
+                        "error": str(e),
+                    },
+                    loop_id=debate_id,
+                )
             )
 
         except ValueError as e:
