@@ -7,6 +7,7 @@ validated against that store, so a request that cannot find it is anonymous.
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from typing import Any
 
@@ -34,14 +35,19 @@ class _ApiKeyUserStore:
         return self._users.get(api_key)
 
 
-def _user(user_id: str = "user-a", org_id: str = "org-a") -> SimpleNamespace:
+def _user(user_id: str = "user-a", org_id: str = "org-a", **extra: Any) -> SimpleNamespace:
     return SimpleNamespace(
         id=user_id,
         email=f"{user_id}@example.com",
         org_id=org_id,
         role="member",
         is_active=True,
+        **extra,
     )
+
+
+_FIVE_MINUTES_AGO = datetime.now(timezone.utc) - timedelta(minutes=5)
+_TOMORROW = datetime.now(timezone.utc) + timedelta(days=1)
 
 
 def _whoami_app(context: dict[str, Any] | None) -> FastAPI:
@@ -101,6 +107,44 @@ def test_unknown_api_key_on_fastapi_request_stays_anonymous(global_store_calls: 
     assert global_store_calls == []
 
 
+@pytest.mark.parametrize(
+    "expires_at",
+    [
+        _FIVE_MINUTES_AGO,
+        _FIVE_MINUTES_AGO.replace(tzinfo=None),
+        "2020-01-01T00:00:00Z",
+        "not-a-timestamp",
+    ],
+    ids=["aware-datetime", "naive-utc-datetime", "iso-string", "unparseable"],
+)
+def test_expired_api_key_on_fastapi_request_is_rejected(
+    global_store_calls: list[str], expires_at: Any
+) -> None:
+    # The Postgres store returns expired keys' users; only the SQLite store filters them.
+    store = _ApiKeyUserStore({API_KEY: _user(api_key_expires_at=expires_at)})
+
+    response = _whoami(_whoami_app({"user_store": store}), _api_key_headers())
+
+    assert response.status_code == 401
+    assert store.lookups == [API_KEY]
+
+
+@pytest.mark.parametrize(
+    "expires_at",
+    [None, "", _TOMORROW, "2999-01-01T00:00:00+00:00"],
+    ids=["none", "empty", "future-datetime", "future-iso-string"],
+)
+def test_unexpired_api_key_on_fastapi_request_resolves(
+    global_store_calls: list[str], expires_at: Any
+) -> None:
+    store = _ApiKeyUserStore({API_KEY: _user("user-a", "org-a", api_key_expires_at=expires_at)})
+
+    response = _whoami(_whoami_app({"user_store": store}), _api_key_headers())
+
+    assert response.status_code == 200
+    assert response.json() == {"user_id": "user-a", "org_id": "org-a"}
+
+
 @pytest.mark.parametrize("context", [None, {"user_store": None}], ids=["no-context", "no-store"])
 def test_api_key_falls_back_to_global_user_store(
     monkeypatch: pytest.MonkeyPatch, context: dict[str, Any] | None
@@ -149,6 +193,21 @@ async def test_aiohttp_application_still_supplies_user_store(
     assert (auth.user_id, auth.org_id) == ("user-b", "org-b")
     assert store.lookups == [API_KEY]
     assert global_store_calls == []
+
+
+@pytest.mark.filterwarnings("ignore::aiohttp.web_exceptions.NotAppKeyWarning")
+async def test_expired_api_key_on_aiohttp_request_stays_anonymous(
+    global_store_calls: list[str],
+) -> None:
+    store = _ApiKeyUserStore({API_KEY: _user(api_key_expires_at=_FIVE_MINUTES_AGO)})
+    app = web.Application()
+    app["user_store"] = store
+    request = make_mocked_request("GET", "/", headers=_api_key_headers(), app=app)
+
+    auth = await get_auth_context(request)
+
+    assert auth.user_id == "anonymous"
+    assert store.lookups == [API_KEY]
 
 
 async def test_aiohttp_application_without_user_store_is_unchanged(
