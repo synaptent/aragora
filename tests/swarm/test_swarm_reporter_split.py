@@ -33,8 +33,9 @@ def test_new_module_does_not_import_the_facade() -> None:
     tree = ast.parse(inspect.getsource(swarm_reporter))
     imported: set[str] = set()
     for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and node.module:
-            imported.add(node.module)
+        if isinstance(node, ast.ImportFrom):
+            assert node.level == 0, f"relative import of {node.module!r} escapes this check"
+            imported.add(node.module or "")
         elif isinstance(node, ast.Import):
             imported.update(alias.name for alias in node.names)
     assert "aragora.swarm.reporter" not in imported
