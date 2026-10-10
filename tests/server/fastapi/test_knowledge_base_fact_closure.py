@@ -1,15 +1,14 @@
-"""The v2 knowledge-base fact routes stay closed until organization scoping lands for them.
+"""The v2 knowledge-base fact routes serve only the caller's organization's facts.
 
 Requests go through the real FastAPI app (``create_app``) with access tokens from
 ``create_access_token``, so ``require_authenticated`` and ``require_permission`` see the
 context a real login produces. One organization's fact is seeded; every caller below
 belongs to another organization.
 
-Every route that reads or changes stored facts without organization scoping answers 401 to
-anonymous callers and the closure 403 to every authenticated role, before the fact store or
-the query engine is touched. Creating and importing facts stay open to ``knowledge:write``:
-both write only into the caller's organization and never match, return or change a fact
-that another organization stored.
+Reads need ``knowledge:read``, changes ``knowledge:write`` and deletes ``knowledge:delete``.
+Another organization's fact answers the same 404 as a missing id and is never returned,
+counted or changed; a caller without an organization gets 403 ``knowledge_org_required``.
+GET /search stays closed: 401 to anonymous callers, the closure 403 to every role.
 """
 
 from __future__ import annotations
@@ -28,6 +27,7 @@ from aragora.knowledge import (
 
 PREFIX = "/api/v2/knowledge-base"
 ROLES = ("owner", "admin", "member", "analyst", "viewer")
+READERS = ("owner", "admin", "member")
 ORG_A = "org-a"
 ORG_B = "org-b"
 ORG_C = "org-c"
@@ -42,7 +42,8 @@ CLOSED = {
 }
 
 FACT_ID = "{fact_id}"
-CLOSED_ROUTES: list[tuple[str, str, dict[str, Any] | None]] = [
+# A route naming another org's fact answers 404; the others answer 200 without its facts.
+ROUTES: list[tuple[str, str, dict[str, Any] | None]] = [
     ("GET", "/facts", None),
     ("GET", "/facts/{fact_id}", None),
     ("PUT", "/facts/{fact_id}", {"confidence": 0.9}),
@@ -61,11 +62,21 @@ CLOSED_ROUTES: list[tuple[str, str, dict[str, Any] | None]] = [
         {"source_fact_id": FACT_ID, "target_fact_id": FACT_ID, "relation_type": "supports"},
     ),
     ("POST", "/query", {"question": "What is the acquisition target?", "workspace_id": "default"}),
-    ("GET", "/search?q=Northwind", None),
     ("GET", "/stats", None),
     ("GET", "/export", None),
 ]
-ROUTE_IDS = [f"{method} {path}" for method, path, _ in CLOSED_ROUTES]
+ROUTE_IDS = [f"{method} {path}" for method, path, _ in ROUTES]
+SEARCH = ("GET", "/search?q=Northwind", None)
+
+
+def _permission(method: str, path: str) -> str:
+    if method == "DELETE":
+        return "knowledge:delete"
+    return "knowledge:read" if method == "GET" or path == "/query" else "knowledge:write"
+
+
+def _expected(path: str) -> int:
+    return 404 if path.startswith("/facts/") else 200
 
 
 class _Recording:
@@ -147,41 +158,80 @@ def _fill(value: Any, fact_id: str) -> Any:
     return value
 
 
-def _send(client, seeded, method: str, path: str, body: Any, headers: dict[str, str]):
-    fact_id = seeded["fact_a"].id
+def _send(client, seeded, method: str, path: str, body: Any, headers: dict[str, str], fact_id=None):
+    fact_id = fact_id or seeded["fact_a"].id
     return client.request(
         method, PREFIX + _fill(path, fact_id), json=_fill(body, fact_id), headers=headers
     )
 
 
-def _assert_no_org_a_data(seeded, response) -> None:
-    for fact_id in seeded["org_a_ids"]:
+def _assert_no_org_a_data(seeded, response, *, echoed_id: str | None = None) -> None:
+    for fact_id in seeded["org_a_ids"] - {echoed_id}:
         assert fact_id not in response.text
     assert ORG_A_STATEMENT not in response.text
     assert ORG_A_METADATA["deal_room"] not in response.text
 
 
+def _assert_org_a_unchanged(seeded) -> None:
+    inner = seeded["inner"]
+    for fact_id in seeded["org_a_ids"]:
+        fact = inner.get_fact(fact_id, org_id=ORG_A)
+        assert fact is not None and fact.confidence == 0.5
+        assert "_pending_verification" not in fact.metadata
+        assert inner.get_relations(fact_id, org_id=ORG_A) == []
+    assert inner.get_statistics(org_id=ORG_A)["total_facts"] == 2
+
+
 def _assert_untouched(seeded) -> None:
     assert seeded["store"].calls == []
     assert seeded["engine"].calls == []
-    assert seeded["inner"].get_fact(seeded["fact_a"].id, org_id=ORG_A).confidence == 0.5
+    _assert_org_a_unchanged(seeded)
 
 
-@pytest.mark.parametrize(("method", "path", "body"), CLOSED_ROUTES, ids=ROUTE_IDS)
+@pytest.mark.parametrize(("method", "path", "body"), ROUTES, ids=ROUTE_IDS)
 @pytest.mark.parametrize("role", ROLES)
-def test_closed_route_answers_closure_to_every_role(
+def test_route_serves_only_the_callers_org_by_role(
     fastapi_client, seeded, role, method, path, body
 ) -> None:
     response = _send(fastapi_client, seeded, method, path, body, _bearer(role))
+    permission = _permission(method, path)
+
+    if role == "owner" or (role in READERS and permission == "knowledge:read"):
+        assert response.status_code == _expected(path), response.text
+        _assert_no_org_a_data(seeded, response, echoed_id=seeded["fact_a"].id)
+        _assert_org_a_unchanged(seeded)
+    else:
+        assert response.status_code == 403
+        assert response.json() == {"detail": f"Permission denied: {permission}"}
+        _assert_untouched(seeded)
+
+
+@pytest.mark.parametrize(("method", "path", "body"), ROUTES, ids=ROUTE_IDS)
+def test_another_orgs_fact_answers_the_same_404_as_a_missing_one(
+    fastapi_client, seeded, method, path, body
+) -> None:
+    other = _send(fastapi_client, seeded, method, path, body, _bearer("owner"))
+    missing = _send(fastapi_client, seeded, method, path, body, _bearer("owner"), "fact_missing")
+
+    assert other.status_code == missing.status_code == _expected(path)
+    if _expected(path) == 404:
+        assert other.text.replace(seeded["fact_a"].id, "fact_missing") == missing.text
+    _assert_org_a_unchanged(seeded)
+
+
+@pytest.mark.parametrize(("method", "path", "body"), ROUTES, ids=ROUTE_IDS)
+def test_caller_without_an_org_gets_knowledge_org_required(
+    fastapi_client, seeded, method, path, body
+) -> None:
+    response = _send(fastapi_client, seeded, method, path, body, _bearer("owner", None))
 
     assert response.status_code == 403
-    assert response.json() == CLOSED
-    _assert_no_org_a_data(seeded, response)
+    assert response.json()["code"] == "knowledge_org_required"
     _assert_untouched(seeded)
 
 
-@pytest.mark.parametrize(("method", "path", "body"), CLOSED_ROUTES, ids=ROUTE_IDS)
-def test_closed_route_answers_401_to_anonymous(fastapi_client, seeded, method, path, body) -> None:
+@pytest.mark.parametrize(("method", "path", "body"), ROUTES, ids=ROUTE_IDS)
+def test_route_answers_401_to_anonymous(fastapi_client, seeded, method, path, body) -> None:
     response = _send(fastapi_client, seeded, method, path, body, {})
 
     assert response.status_code == 401
@@ -189,21 +239,40 @@ def test_closed_route_answers_401_to_anonymous(fastapi_client, seeded, method, p
     _assert_untouched(seeded)
 
 
-@pytest.mark.parametrize(("method", "path", "body"), CLOSED_ROUTES, ids=ROUTE_IDS)
-def test_closed_route_never_serves_an_api_key_caller(
-    fastapi_client, seeded, method, path, body
-) -> None:
-    """Whether or not the key resolves to a user, a closed route never reaches the store:
-    an unresolved key is anonymous (401) and a resolved one gets the closure (403)."""
-    headers = {"Authorization": f"Bearer {API_KEY}"}
-    response = _send(fastapi_client, seeded, method, path, body, headers)
+def test_owner_reads_and_changes_their_own_orgs_facts(fastapi_client, seeded) -> None:
+    owner_a, member_a = _bearer("owner", ORG_A), _bearer("member", ORG_A)
+    fact_id = seeded["fact_a"].id
 
-    if response.status_code == 401:
-        assert response.json() != CLOSED
-    else:
-        assert response.status_code == 403
-        assert response.json() == CLOSED
-    _assert_no_org_a_data(seeded, response)
+    listed = fastapi_client.get(f"{PREFIX}/facts", headers=member_a)
+    assert sorted(f["id"] for f in listed.json()["facts"]) == sorted(seeded["org_a_ids"])
+    got = fastapi_client.get(f"{PREFIX}/facts/{fact_id}", headers=member_a)
+    assert (got.status_code, got.json()["metadata"]) == (200, ORG_A_METADATA)
+    updated = fastapi_client.put(
+        f"{PREFIX}/facts/{fact_id}", json={"confidence": 0.8}, headers=owner_a
+    )
+    assert (updated.status_code, updated.json()["confidence"]) == (200, 0.8)
+    stats = fastapi_client.get(f"{PREFIX}/stats", headers=member_a).json()
+    assert stats["total_facts"] == 2
+    deleted = fastapi_client.delete(f"{PREFIX}/facts/{fact_id}", headers=owner_a)
+    assert deleted.json() == {"deleted": True, "fact_id": fact_id}
+    assert fastapi_client.get(f"{PREFIX}/facts/{fact_id}", headers=owner_a).status_code == 404
+
+
+@pytest.mark.parametrize("role", ROLES)
+def test_search_stays_closed_to_every_role(fastapi_client, seeded, role) -> None:
+    response = _send(fastapi_client, seeded, *SEARCH, _bearer(role))
+
+    assert response.status_code == 403
+    assert response.json() == CLOSED
+    _assert_untouched(seeded)
+
+
+def test_search_stays_closed_to_an_api_key_caller_and_anonymous(fastapi_client, seeded) -> None:
+    keyed = _send(fastapi_client, seeded, *SEARCH, {"Authorization": f"Bearer {API_KEY}"})
+    anonymous = _send(fastapi_client, seeded, *SEARCH, {})
+
+    assert (keyed.status_code, keyed.json()) == (403, CLOSED)
+    assert anonymous.status_code == 401
     _assert_untouched(seeded)
 
 

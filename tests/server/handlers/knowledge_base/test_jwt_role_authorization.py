@@ -9,17 +9,18 @@ the RBAC v2 checker is not patched (``no_auto_auth``).
 RBAC v2 grants ``knowledge.read`` to owner, admin and member (analyst and
 viewer have none), and ``knowledge.write`` / ``knowledge.delete`` to owner only.
 
-Until organization scoping lands for them, every route that returns data derived
-from stored facts or touches an existing fact is closed: anonymous callers get
-401 and every authenticated caller, owner included, gets the closure 403.
-Creating a fact and the routes that never touch stored facts follow RBAC v2,
-and creating a fact never hands back a fact another organization stored.
+Every fact route reads and changes only the caller's organization's facts. A
+fact of another organization, or one stored without an organization, answers
+the same 404 as an id that does not exist; a caller without an organization
+gets 403 ``knowledge_org_required``. Chunk search is not organization-scoped
+yet: anonymous callers get 401 and every authenticated caller the closure 403.
 """
 
 from __future__ import annotations
 
 import io
 import json
+import sqlite3
 import threading
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -49,24 +50,63 @@ CLOSED = {
 
 _Request = tuple[str, str, dict[str, Any] | None]
 
-CLOSED_REQUESTS: list[_Request] = [
-    ("GET", "/api/v1/knowledge/facts", None),
-    ("GET", "/api/v1/facts", None),
-    ("GET", "/api/v1/knowledge/facts/missing-fact", None),
-    ("GET", "/api/v1/facts/missing-fact", None),
-    ("GET", "/api/v1/knowledge/facts/missing-fact/contradictions", None),
-    ("GET", "/api/v1/knowledge/facts/missing-fact/relations", None),
-    ("GET", "/api/v1/knowledge/search", None),
-    ("GET", "/api/v1/knowledge/stats", None),
-    ("GET", "/api/v1/facts/stats", None),
-    ("POST", "/api/v1/knowledge/query", {}),
-    ("PUT", "/api/v1/knowledge/facts/missing-fact", {"confidence": 0.5}),
-    ("DELETE", "/api/v1/knowledge/facts/missing-fact", None),
-    ("POST", "/api/v1/knowledge/facts/missing-fact/verify", {}),
-    ("POST", "/api/v1/knowledge/facts/missing-fact/relations", {}),
-    ("POST", "/api/v1/knowledge/facts/relations", {}),
-    ("POST", "/api/v1/facts/batch", {}),
+ORG = "org-1"
+OTHER_ORG = "org-2"
+OWN_STATEMENT = "Org 1 pricing floor is 40 dollars"
+OTHER_STATEMENT = "Org 2 acquisition target is Northwind"
+OTHER_SECRET = "org-2-deal-room"
+PERMISSION_DENIED = {"error": "Permission denied"}
+
+# {own} and {own2} are facts of the caller's organization (org-1).
+READ_REQUESTS: list[tuple[str, str, dict[str, Any] | None, int]] = [
+    ("GET", "/api/v1/knowledge/facts", None, 200),
+    ("GET", "/api/v1/facts", None, 200),
+    ("GET", "/api/v1/knowledge/facts/{own}", None, 200),
+    ("GET", "/api/v1/facts/{own}", None, 200),
+    ("GET", "/api/v1/knowledge/facts/{own}/contradictions", None, 200),
+    ("GET", "/api/v1/knowledge/facts/{own}/relations", None, 200),
+    ("GET", "/api/v1/knowledge/stats", None, 200),
+    ("POST", "/api/v1/knowledge/query", {"question": "pricing floor", "workspace_id": "ws"}, 200),
 ]
+WRITE_REQUESTS: list[tuple[str, str, dict[str, Any] | None, int]] = [
+    ("PUT", "/api/v1/knowledge/facts/{own}", {"confidence": 0.7}, 200),
+    ("POST", "/api/v1/knowledge/facts/{own}/verify", {}, 200),
+    (
+        "POST",
+        "/api/v1/knowledge/facts/{own}/relations",
+        {"target_fact_id": "{own2}", "relation_type": "supports"},
+        201,
+    ),
+    (
+        "POST",
+        "/api/v1/knowledge/facts/relations",
+        {"source_fact_id": "{own}", "target_fact_id": "{own2}", "relation_type": "supports"},
+        201,
+    ),
+    ("DELETE", "/api/v1/knowledge/facts/{own}", None, 200),
+]
+SCOPED_REQUESTS: list[_Request] = [r[:3] for r in READ_REQUESTS + WRITE_REQUESTS]
+# Every route that names one fact; {id} is replaced with the fact under test.
+FACT_ID_REQUESTS: list[_Request] = [
+    ("GET", "/api/v1/knowledge/facts/{id}", None),
+    ("GET", "/api/v1/facts/{id}", None),
+    ("GET", "/api/v1/knowledge/facts/{id}/contradictions", None),
+    ("GET", "/api/v1/knowledge/facts/{id}/relations", None),
+    ("PUT", "/api/v1/knowledge/facts/{id}", {"confidence": 0.99}),
+    ("POST", "/api/v1/knowledge/facts/{id}/verify", {}),
+    (
+        "POST",
+        "/api/v1/knowledge/facts/{id}/relations",
+        {"target_fact_id": "{own}", "relation_type": "supports"},
+    ),
+    (
+        "POST",
+        "/api/v1/knowledge/facts/relations",
+        {"source_fact_id": "{own}", "target_fact_id": "{id}", "relation_type": "supports"},
+    ),
+    ("DELETE", "/api/v1/knowledge/facts/{id}", None),
+]
+SEARCH_REQUEST: _Request = ("GET", "/api/v1/knowledge/search", None)
 CREATE_REQUESTS: list[_Request] = [
     ("POST", "/api/v1/knowledge/facts", {"statement": "A fact", "workspace_id": "ws"}),
     ("POST", "/api/v1/facts", {"statement": "A fact", "workspace_id": "ws"}),
@@ -135,10 +175,20 @@ def _isolated_knowledge_state(registry_cls, monkeypatch):
     get_permission_checker().clear_cache()
 
 
-def _token(role: str) -> str:
+def _token(role: str, org_id: str | None = ORG) -> str:
     return create_access_token(
-        user_id=f"jwt-{role}", email=f"{role}@example.com", org_id="org-1", role=role
+        user_id=f"jwt-{org_id}-{role}", email=f"{role}@example.com", org_id=org_id, role=role
     )
+
+
+def _fill(value: Any, ids: dict[str, str]) -> Any:
+    if isinstance(value, str):
+        for name, fact_id in ids.items():
+            value = value.replace("{" + name + "}", fact_id)
+        return value
+    if isinstance(value, dict):
+        return {k: _fill(v, ids) for k, v in value.items()}
+    return value
 
 
 def _dispatch(
@@ -148,15 +198,18 @@ def _dispatch(
     body: dict[str, Any] | None,
     role: str | None,
     *,
+    org_id: str | None = ORG,
     bearer: str | None = None,
+    ids: dict[str, str] | None = None,
 ) -> tuple[int, dict[str, Any]]:
+    path, body = _fill(path, ids or {}), _fill(body, ids or {})
     instance: Any = registry_cls()
     raw = json.dumps(body).encode("utf-8") if body is not None else b""
     instance.command = method
     instance.path = path
     instance.headers = {"Content-Length": str(len(raw)), "Content-Type": "application/json"}
     if role is not None:
-        bearer = _token(role)
+        bearer = _token(role, org_id)
     if bearer is not None:
         instance.headers["Authorization"] = f"Bearer {bearer}"
     instance.rfile = io.BytesIO(raw)
@@ -184,20 +237,156 @@ def _dispatch(
     return status, json.loads(instance.wfile.getvalue() or b"{}")
 
 
-@pytest.mark.parametrize("role", ALL_ROLES)
-@pytest.mark.parametrize(("method", "path", "body"), CLOSED_REQUESTS)
-def test_closed_fact_routes_answer_closure_403_to_every_role(
-    registry_cls, role, method, path, body
+@pytest.fixture
+def facts(fact_store) -> dict[str, Any]:
+    own = fact_store.add_fact(OWN_STATEMENT, "ws", topics=["pricing"], org_id=ORG)
+    own2 = fact_store.add_fact("Org 1 discount cap is 15 percent", "ws", org_id=ORG)
+    other = fact_store.add_fact(
+        OTHER_STATEMENT, "ws", metadata={"secret": OTHER_SECRET}, org_id=OTHER_ORG
+    )
+    return {"own": own.id, "own2": own2.id, "other": other.id}
+
+
+def _assert_other_org_untouched(fact_store, facts) -> None:
+    other = fact_store.get_fact(facts["other"], org_id=OTHER_ORG)
+    assert other is not None
+    assert (other.statement, other.confidence, other.metadata) == (
+        OTHER_STATEMENT,
+        0.5,
+        {"secret": OTHER_SECRET},
+    )
+    assert fact_store.get_relations(facts["other"], org_id=OTHER_ORG) == []
+
+
+def _assert_no_other_org_data(payload: dict[str, Any], facts) -> None:
+    text = json.dumps(payload)
+    assert facts["other"] not in text
+    assert OTHER_STATEMENT not in text
+    assert OTHER_SECRET not in text
+
+
+@pytest.mark.parametrize("role", READERS)
+@pytest.mark.parametrize(("method", "path", "body", "expected"), READ_REQUESTS)
+def test_readers_read_their_orgs_facts(
+    registry_cls, fact_store, facts, role, method, path, body, expected
 ) -> None:
+    status, payload = _dispatch(registry_cls, method, path, body, role, ids=facts)
+    assert status == expected, payload
+    _assert_no_other_org_data(payload, facts)
+    _assert_other_org_untouched(fact_store, facts)
+
+
+def test_reads_return_the_callers_facts(registry_cls, facts) -> None:
+    _status, listed = _dispatch(registry_cls, "GET", "/api/v1/knowledge/facts", None, "member")
+    assert sorted(f["id"] for f in listed["facts"]) == sorted([facts["own"], facts["own2"]])
+    _status, fact = _dispatch(registry_cls, "GET", "/api/v1/facts/{own}", None, "admin", ids=facts)
+    assert (fact["id"], fact["statement"]) == (facts["own"], OWN_STATEMENT)
+    _status, stats = _dispatch(registry_cls, "GET", "/api/v1/knowledge/stats", None, "member")
+    assert (stats["total_facts"], stats["total_relations"]) == (2, 0)
+
+
+@pytest.mark.parametrize(("method", "path", "body", "expected"), WRITE_REQUESTS)
+def test_owner_changes_their_orgs_facts(
+    registry_cls, fact_store, facts, method, path, body, expected
+) -> None:
+    status, payload = _dispatch(registry_cls, method, path, body, "owner", ids=facts)
+    assert status == expected, payload
+    _assert_no_other_org_data(payload, facts)
+    _assert_other_org_untouched(fact_store, facts)
+
+
+@pytest.mark.parametrize("role", READERS_WITHOUT_WRITE)
+@pytest.mark.parametrize(("method", "path", "body", "expected"), WRITE_REQUESTS)
+def test_readers_without_write_cannot_change_facts(
+    registry_cls, fact_store, facts, role, method, path, body, expected
+) -> None:
+    status, payload = _dispatch(registry_cls, method, path, body, role, ids=facts)
+    assert (status, payload) == (403, PERMISSION_DENIED)
+    assert fact_store.get_fact(facts["own"], org_id=ORG).confidence == 0.5
+
+
+@pytest.mark.parametrize("role", NON_READERS)
+@pytest.mark.parametrize(("method", "path", "body"), SCOPED_REQUESTS)
+def test_roles_without_knowledge_read_are_denied(
+    registry_cls, facts, role, method, path, body
+) -> None:
+    status, payload = _dispatch(registry_cls, method, path, body, role, ids=facts)
+    assert (status, payload) == (403, PERMISSION_DENIED)
+
+
+@pytest.mark.parametrize("target", ["other-org", "unassigned"])
+@pytest.mark.parametrize(("method", "path", "body"), FACT_ID_REQUESTS)
+def test_a_fact_outside_the_callers_org_answers_the_missing_404(
+    registry_cls, fact_store, facts, target, method, path, body
+) -> None:
+    """Another org's fact and a fact without an org look exactly like an id that does not exist."""
+    if target == "unassigned":
+        if not isinstance(fact_store, FactStore):
+            pytest.skip("only the SQLite store keeps facts stored before org scoping")
+        legacy = fact_store.add_fact("Unassigned legacy fact", "ws", org_id=ORG)
+        with sqlite3.connect(fact_store.db_path) as conn:
+            conn.execute("UPDATE facts SET org_id = NULL WHERE id = ?", (legacy.id,))
+        target_id = legacy.id
+    else:
+        target_id = facts["other"]
+    missing_id = "fact-that-does-not-exist"
+
+    status, payload = _dispatch(
+        registry_cls, method, path, body, "owner", ids={**facts, "id": target_id}
+    )
+    missing_status, missing_payload = _dispatch(
+        registry_cls, method, path, body, "owner", ids={**facts, "id": missing_id}
+    )
+
+    assert status == missing_status == 404, payload
+    # The 404 echoes only the id the caller sent.
+    assert json.dumps(payload).replace(target_id, missing_id) == json.dumps(missing_payload)
+    assert OTHER_STATEMENT not in json.dumps(payload)
+    assert OTHER_SECRET not in json.dumps(payload)
+    _assert_other_org_untouched(fact_store, facts)
+    assert fact_store.get_relations(facts["own"], org_id=ORG) == []
+
+
+@pytest.mark.parametrize(("method", "path", "body"), SCOPED_REQUESTS + CREATE_REQUESTS)
+def test_callers_without_an_org_get_knowledge_org_required(
+    registry_cls, fact_store, facts, method, path, body
+) -> None:
+    status, payload = _dispatch(registry_cls, method, path, body, "owner", org_id=None, ids=facts)
+    assert status == 403, payload
+    assert payload["error"]["code"] == "knowledge_org_required"
+    _assert_no_other_org_data(payload, facts)
+    assert fact_store.get_fact(facts["own"], org_id=ORG).confidence == 0.5
+
+
+def test_listing_and_stats_are_never_served_from_another_orgs_response(registry_cls, facts) -> None:
+    """Back-to-back identical requests from two orgs, then a write, each read fresh."""
+    path, stats_path = "/api/v1/knowledge/facts", "/api/v1/knowledge/stats"
+    _s, org1 = _dispatch(registry_cls, "GET", path, None, "owner")
+    _s, org2 = _dispatch(registry_cls, "GET", path, None, "owner", org_id=OTHER_ORG)
+    assert {f["statement"] for f in org2["facts"]} == {OTHER_STATEMENT}
+    assert OTHER_STATEMENT not in json.dumps(org1)
+
+    _s, before = _dispatch(registry_cls, "GET", stats_path, None, "owner")
+    body = {"statement": "New", "workspace_id": "ws"}
+    status, created = _dispatch(registry_cls, "POST", path, body, "owner")
+    assert status == 201, created
+    _s, after = _dispatch(registry_cls, "GET", stats_path, None, "owner")
+    _s, listed = _dispatch(registry_cls, "GET", path, None, "owner")
+    _s, other = _dispatch(registry_cls, "GET", stats_path, None, "owner", org_id=OTHER_ORG)
+    assert (before["total_facts"], after["total_facts"], other["total_facts"]) == (2, 3, 1)
+    assert created["id"] in {f["id"] for f in listed["facts"]}
+
+
+@pytest.mark.parametrize("role", ALL_ROLES)
+@pytest.mark.parametrize(("method", "path", "body"), [SEARCH_REQUEST])
+def test_search_answers_closure_403_to_every_role(registry_cls, role, method, path, body) -> None:
     status, payload = _dispatch(registry_cls, method, path, body, role)
     assert status == 403, payload
     assert payload == CLOSED
 
 
-@pytest.mark.parametrize(("method", "path", "body"), CLOSED_REQUESTS)
-def test_closed_fact_routes_answer_401_to_a_non_jwt_bearer(
-    registry_cls, method, path, body
-) -> None:
+@pytest.mark.parametrize(("method", "path", "body"), SCOPED_REQUESTS + [SEARCH_REQUEST])
+def test_fact_routes_answer_401_to_a_non_jwt_bearer(registry_cls, method, path, body) -> None:
     status, payload = _dispatch(registry_cls, method, path, body, None, bearer="static-api-token")
     assert status == 401, payload
     assert payload == {"error": "Authentication required"}
@@ -285,19 +474,31 @@ def test_create_never_returns_another_orgs_existing_fact(
     assert "org-a-only" not in json.dumps(created)
 
 
-def test_owner_created_fact_stays_unreadable_to_owner_and_member(registry_cls) -> None:
+def test_retried_create_returns_the_callers_existing_fact(registry_cls, fact_store) -> None:
+    body = {"statement": "Retried fact", "workspace_id": "ws"}
+    path = "/api/v1/knowledge/facts"
+    first = _dispatch(registry_cls, "POST", path, body, "owner")
+    retry = _dispatch(registry_cls, "POST", path, body, "owner")
+    other_org = _dispatch(registry_cls, "POST", path, body, "owner", org_id=OTHER_ORG)
+    assert (first[0], retry[0], other_org[0]) == (201, 201, 201)
+    assert retry[1]["id"] == first[1]["id"] != other_org[1]["id"]
+
+
+def test_owner_created_fact_is_readable_by_the_owners_org_only(registry_cls) -> None:
     status, created = _dispatch(
         registry_cls,
         "POST",
         "/api/v1/knowledge/facts",
-        {"statement": "Owners write, nobody reads yet", "workspace_id": "ws"},
+        {"statement": "Owners write, their org reads", "workspace_id": "ws"},
         "owner",
     )
     assert status == 201, created
+    path = f"/api/v1/knowledge/facts/{created['id']}"
     for role in ("owner", "member"):
-        for path in ("/api/v1/knowledge/facts", f"/api/v1/knowledge/facts/{created['id']}"):
-            status, payload = _dispatch(registry_cls, "GET", path, None, role)
-            assert (status, payload) == (403, CLOSED)
+        status, payload = _dispatch(registry_cls, "GET", path, None, role)
+        assert (status, payload["id"]) == (200, created["id"])
+    status, _payload = _dispatch(registry_cls, "GET", path, None, "member", org_id=OTHER_ORG)
+    assert status == 404
 
 
 @pytest.mark.parametrize("role", READERS)
@@ -317,7 +518,9 @@ def test_index_routes_answer_403_to_roles_without_knowledge_read(
     assert payload == {"error": "Permission denied"}
 
 
-@pytest.mark.parametrize(("method", "path", "body"), CLOSED_REQUESTS + CREATE_REQUESTS)
+@pytest.mark.parametrize(
+    ("method", "path", "body"), SCOPED_REQUESTS + CREATE_REQUESTS + [SEARCH_REQUEST]
+)
 def test_anonymous_requests_get_401(registry_cls, method, path, body) -> None:
     status, payload = _dispatch(registry_cls, method, path, body, None)
     assert status == 401, payload

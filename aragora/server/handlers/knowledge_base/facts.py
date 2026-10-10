@@ -32,7 +32,6 @@ from ..base import (
     get_clamped_int_param,
     handle_errors,
     json_response,
-    ttl_cache,
 )
 from ..openapi_decorator import api_endpoint
 
@@ -41,8 +40,27 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Cache TTLs
-CACHE_TTL_FACTS = 60  # 1 minute for fact listings
+ORG_REQUIRED_CODE = "knowledge_org_required"
+
+
+def caller_org_or_error(
+    host: Any, handler: Any, action: str = "Knowledge fact access"
+) -> tuple[str | None, HandlerResult | None]:
+    """The organization a fact route is confined to: only the caller's verified auth.
+
+    Answers 401 when the request is not authenticated and 403
+    ``knowledge_org_required`` when the caller has no organization.
+    """
+    user, err = host.require_auth_or_error(handler)
+    if err:
+        return None, err
+    org_id = getattr(user, "org_id", None)
+    if not org_id:
+        return None, error_response(
+            f"{action} requires an organization", 403, code=ORG_REQUIRED_CODE
+        )
+    return org_id, None
+
 
 FACT_SCHEMA = {
     "type": "object",
@@ -152,17 +170,19 @@ class FactsOperationsMixin:
             "429": {"description": "Rate limit exceeded"},
         },
     )
-    @ttl_cache(ttl_seconds=CACHE_TTL_FACTS, key_prefix="knowledge_facts", skip_first=True)
     @handle_errors("list facts")
     @require_permission("knowledge:read")
     def _handle_list_facts(
         self: FactsHandlerProtocol, query_params: dict, handler: Any = None
     ) -> HandlerResult:
-        """Handle GET /api/knowledge/facts - List facts.
+        """Handle GET /api/knowledge/facts - List the caller's organization's facts.
 
-        ``handler`` is unused here; ``@require_permission`` reads the request's
-        authorization context from it.
+        Deliberately uncached: a shared response cache would be keyed without
+        the caller's organization.
         """
+        org_id, err = caller_org_or_error(self, handler)
+        if err:
+            return err
         workspace_id = get_bounded_string_param(query_params, "workspace_id", None, max_length=100)
         topic = get_bounded_string_param(query_params, "topic", None, max_length=200)
         min_confidence = get_bounded_float_param(
@@ -181,6 +201,7 @@ class FactsOperationsMixin:
             include_superseded=include_superseded,
             limit=limit,
             offset=offset,
+            org_id=org_id,
         )
 
         store = self._get_fact_store()
@@ -220,10 +241,15 @@ class FactsOperationsMixin:
         },
     )
     @handle_errors("get fact")
-    def _handle_get_fact(self: FactsHandlerProtocol, fact_id: str) -> HandlerResult:
+    def _handle_get_fact(
+        self: FactsHandlerProtocol, fact_id: str, handler: Any = None
+    ) -> HandlerResult:
         """Handle GET /api/knowledge/facts/:id - Get specific fact."""
+        org_id, err = caller_org_or_error(self, handler)
+        if err:
+            return err
         store = self._get_fact_store()
-        fact = store.get_fact(fact_id)
+        fact = store.get_fact(fact_id, org_id=org_id)
 
         if not fact:
             return error_response(f"Fact not found: {fact_id}", 404)
@@ -269,15 +295,9 @@ class FactsOperationsMixin:
     @handle_errors("create fact")
     def _handle_create_fact(self: FactsHandlerProtocol, handler: Any) -> HandlerResult:
         """Handle POST /api/knowledge/facts - Create new fact."""
-        user, err = self.require_auth_or_error(handler)
+        org_id, err = caller_org_or_error(self, handler, "Creating knowledge facts")
         if err:
             return err
-        if not getattr(user, "org_id", None):
-            return error_response(
-                "Creating knowledge facts requires an organization",
-                403,
-                code="knowledge_org_required",
-            )
 
         try:
             content_length = int(handler.headers.get("Content-Length", 0))
@@ -305,7 +325,7 @@ class FactsOperationsMixin:
             confidence=data.get("confidence", 0.5),
             topics=data.get("topics", []),
             metadata=data.get("metadata", {}),
-            org_id=user.org_id,
+            org_id=org_id,
         )
 
         return json_response(fact.to_dict(), status=201)
@@ -359,7 +379,7 @@ class FactsOperationsMixin:
         self: FactsHandlerProtocol, fact_id: str, handler: Any
     ) -> HandlerResult:
         """Handle PUT /api/knowledge/facts/:id - Update fact."""
-        user, err = self.require_auth_or_error(handler)
+        org_id, err = caller_org_or_error(self, handler)
         if err:
             return err
 
@@ -390,7 +410,7 @@ class FactsOperationsMixin:
         if "superseded_by" in data:
             kwargs["superseded_by"] = data["superseded_by"]
 
-        updated = store.update_fact(fact_id, **kwargs)
+        updated = store.update_fact(fact_id, **kwargs, org_id=org_id)
 
         if not updated:
             return error_response(f"Fact not found: {fact_id}", 404)
@@ -423,12 +443,12 @@ class FactsOperationsMixin:
         self: FactsHandlerProtocol, fact_id: str, handler: Any
     ) -> HandlerResult:
         """Handle DELETE /api/knowledge/facts/:id - Delete fact."""
-        user, err = self.require_auth_or_error(handler)
+        org_id, err = caller_org_or_error(self, handler)
         if err:
             return err
 
         store = self._get_fact_store()
-        deleted = store.delete_fact(fact_id)
+        deleted = store.delete_fact(fact_id, org_id=org_id)
 
         if not deleted:
             return error_response(f"Fact not found: {fact_id}", 404)
@@ -465,8 +485,11 @@ class FactsOperationsMixin:
         from aragora.knowledge import DatasetQueryEngine
         from aragora.server.http_utils import run_async as _run_async
 
+        org_id, err = caller_org_or_error(self, handler)
+        if err:
+            return err
         store = self._get_fact_store()
-        fact = store.get_fact(fact_id)
+        fact = store.get_fact(fact_id, org_id=org_id)
 
         if not fact:
             return error_response(f"Fact not found: {fact_id}", 404)
@@ -481,6 +504,7 @@ class FactsOperationsMixin:
                     "_pending_verification": True,
                     "_verification_queued_at": __import__("time").time(),
                 },
+                org_id=org_id,
             )
             return json_response(
                 {
@@ -492,7 +516,7 @@ class FactsOperationsMixin:
             )
 
         try:
-            verified = _run_async(engine.verify_fact(fact_id))
+            verified = _run_async(engine.verify_fact(fact_id, org_id=org_id))
         except (KeyError, ValueError, OSError, TypeError, RuntimeError) as e:
             logger.error("Verification failed: %s", e)
             return error_response("Verification failed", 500)
@@ -538,15 +562,20 @@ class FactsOperationsMixin:
         },
     )
     @handle_errors("get contradictions")
-    def _handle_get_contradictions(self: FactsHandlerProtocol, fact_id: str) -> HandlerResult:
+    def _handle_get_contradictions(
+        self: FactsHandlerProtocol, fact_id: str, handler: Any = None
+    ) -> HandlerResult:
         """Handle GET /api/knowledge/facts/:id/contradictions."""
+        org_id, err = caller_org_or_error(self, handler)
+        if err:
+            return err
         store = self._get_fact_store()
 
-        fact = store.get_fact(fact_id)
+        fact = store.get_fact(fact_id, org_id=org_id)
         if not fact:
             return error_response(f"Fact not found: {fact_id}", 404)
 
-        contradictions = store.get_contradictions(fact_id)
+        contradictions = store.get_contradictions(fact_id, org_id=org_id)
 
         return json_response(
             {
@@ -611,12 +640,15 @@ class FactsOperationsMixin:
     )
     @handle_errors("get relations")
     def _handle_get_relations(
-        self: FactsHandlerProtocol, fact_id: str, query_params: dict
+        self: FactsHandlerProtocol, fact_id: str, query_params: dict, handler: Any = None
     ) -> HandlerResult:
         """Handle GET /api/knowledge/facts/:id/relations."""
+        org_id, err = caller_org_or_error(self, handler)
+        if err:
+            return err
         store = self._get_fact_store()
 
-        fact = store.get_fact(fact_id)
+        fact = store.get_fact(fact_id, org_id=org_id)
         if not fact:
             return error_response(f"Fact not found: {fact_id}", 404)
 
@@ -631,6 +663,7 @@ class FactsOperationsMixin:
             relation_type=relation_type,
             as_source=as_source,
             as_target=as_target,
+            org_id=org_id,
         )
 
         return json_response(
@@ -690,6 +723,9 @@ class FactsOperationsMixin:
         self: FactsHandlerProtocol, fact_id: str, handler: Any
     ) -> HandlerResult:
         """Handle POST /api/knowledge/facts/:id/relations - Add relation from fact."""
+        org_id, err = caller_org_or_error(self, handler)
+        if err:
+            return err
         try:
             content_length = int(handler.headers.get("Content-Length", 0))
             if content_length > 0:
@@ -716,9 +752,9 @@ class FactsOperationsMixin:
 
         store = self._get_fact_store()
 
-        if not store.get_fact(fact_id):
+        if not store.get_fact(fact_id, org_id=org_id):
             return error_response(f"Source fact not found: {fact_id}", 404)
-        if not store.get_fact(target_fact_id):
+        if not store.get_fact(target_fact_id, org_id=org_id):
             return error_response(f"Target fact not found: {target_fact_id}", 404)
 
         relation = store.add_relation(
@@ -728,7 +764,10 @@ class FactsOperationsMixin:
             confidence=data.get("confidence", 0.5),
             created_by=data.get("created_by", ""),
             metadata=data.get("metadata"),
+            org_id=org_id,
         )
+        if relation is None:
+            return error_response("Source or target fact not found", 404)
 
         return json_response(relation.to_dict(), status=201)
 
@@ -773,6 +812,9 @@ class FactsOperationsMixin:
     @handle_errors("add relation bulk")
     def _handle_add_relation_bulk(self: FactsHandlerProtocol, handler: Any) -> HandlerResult:
         """Handle POST /api/knowledge/facts/relations - Add relation between facts."""
+        org_id, err = caller_org_or_error(self, handler)
+        if err:
+            return err
         try:
             content_length = int(handler.headers.get("Content-Length", 0))
             if content_length > 0:
@@ -809,6 +851,9 @@ class FactsOperationsMixin:
             confidence=data.get("confidence", 0.5),
             created_by=data.get("created_by", ""),
             metadata=data.get("metadata"),
+            org_id=org_id,
         )
+        if relation is None:
+            return error_response("Source or target fact not found", 404)
 
         return json_response(relation.to_dict(), status=201)
