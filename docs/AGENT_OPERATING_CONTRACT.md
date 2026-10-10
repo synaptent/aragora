@@ -54,6 +54,40 @@
 - Touching `scripts/nomic_loop.py`, `.env`, `secrets/`
 - Anything taking >1 CI cycle to validate
 
+### Standing settlement delegation
+
+The operator delegated Tier 3 and most Tier 4 settlement to agents on 2026-10-08. The decision, the operator's own words, and the risk they accepted are in [`docs/governance/records/20261008T0300Z-standing-settlement-delegation.md`](governance/records/20261008T0300Z-standing-settlement-delegation.md).
+
+**Default.** Agents working within an operator-authorized mission merge every PR that is good and useful for that mission as soon as it qualifies. For covered Tier 3/4 PRs, they also record the settlement themselves. They do not wait for a separate per-PR operator approval.
+
+**A PR qualifies when all of these hold at its exact current head:**
+
+1. It is in the agent's mission scope, non-draft and mergeable, and meets the live settlement-stability conditions in §Conductor and the normal helper.
+2. Every non-quorum required check is green, with none pending, failing or cancelled. Before settlement, `aragora-merge-quorum` may be blocked solely by missing settlement; confirm that cause in the exact-head packet. Before merge, every required check, including quorum, must be green.
+3. The tier's counted model quorum is present for that head, per [`docs/REVIEW_AUTHORITY_PRINCIPLES.md`](REVIEW_AUTHORITY_PRINCIPLES.md). For Tier 3/4, that means two counted western-frontier families, each clean under §Conductor evidence-last.
+4. Meaningful findings are addressed. No substantiated `[P0]`, `[P1]` or `[P2]` remains unresolved; a disputed finding needs a concrete evidence-backed disposition, not deletion or a replacement PASS. Every `[P3]` is fixed or answered in the PR body. Existing counted-family, dissent and evidence-integrity rules remain unchanged.
+5. It is not in a carve-out (below), and the delegation has not been revoked.
+
+**Carve-outs.** These stay with the operator and need the operator's own exact-head settlement, as before:
+
+- **The review gate itself:** merge-quorum, model-evidence, settlement and branch-protection code or configuration. Examples: `aragora/cli/commands/review_queue.py`, `aragora/swarm/quorum_evidence.py`, `scripts/collect_quorum_evidence.py`, `scripts/settle_*.py`, `.github/workflows/aragora-merge-quorum.yml`. Also the governance docs: this contract, `docs/REVIEW_AUTHORITY_PRINCIPLES.md`, `docs/governance/records/`, `CLAUDE.md` and `AGENTS.md`.
+- **Secrets:** how secrets, API keys, tokens or signing keys are stored, loaded or exposed. Examples: `aragora/config/secrets.py`, `.env*`, `secrets/`, key-custody code, and secret or auth setup in workflows.
+- **Deploy and workflow policy:** GitHub Actions workflows, release and publish workflows, deployment scripts and infrastructure, runner labels and fleet config, the required-check matrix, and pre-commit or pre-push hooks.
+- **Protected files** listed in `CLAUDE.md`, such as `scripts/nomic_loop.py`.
+
+**How to settle and merge a qualifying Tier 3/4 PR:**
+
+1. Follow the existing tier-appropriate helper preflight and evidence-last sequence. Record the settlement with a reason that starts with the delegation label, using the existing settlement interface where applicable:
+   `python3 -m aragora.cli.main review-queue record-settlement <PR> --head-sha <head> --action approve --reason "DELEGATED settlement by <agent>/<mission> under docs/governance/records/20261008T0300Z-standing-settlement-delegation.md: <one line>" --post-github-status`
+2. Post a PR comment that starts with `Delegated settlement:`. It names the agent and mission, the exact head, the counted families, and how each finding was handled. It must never say or imply that a human reviewed or accepted the PR.
+3. Re-read the live head and helper verdict, verify all required checks including quorum are green, then merge with `gh pr merge <PR> --repo synaptent/aragora --squash --match-head-commit <head>`, or with a merge commit when the mission's rules require one. Never use `--admin` or weaken protection. A helper refusal is a concrete blocker to diagnose, not permission to fabricate its signal.
+
+Tier 0-2 PRs merge through the normal helper path with no settlement step.
+
+**Audit.** Every mission that uses this delegation lists its delegated settlements in its next operator report, at least once a day. Each entry gives the PR, head, tier, counted families and how findings were handled.
+
+**Limits.** The delegation covers settlement and merge only. It does not change which work needs approval before it starts, and it never overrides the Auto-halt triggers, a merge halt file, ownership or genuine dependencies. The operator's current instruction supersedes the older blanket "never merge", "preparation never merges" and "no settlement by agents" riders in the six Factory missions. Preserve their history, but do not require another per-PR scheduling approval for covered work. A later explicit operator hold on a named PR or run remains binding. This amendment cannot authorize its own merge: it is a review-gate governance carve-out requiring direct exact-head operator settlement.
+
 ### "Break X" rule (revised from v1)
 
 > **Break unreleased branch behavior freely; never break main, public API/SDK, release flow, website, or CI.**
@@ -95,13 +129,16 @@ drifts (a self-replicating prompt mutates); a pointer does not. Use the thin tem
 **Precedence and scope.** This subsection narrows how already-selected PRs advance through
 review, evidence, and merge-quorum. It does **not** weaken the rest of this operating
 contract: Approval-required items, Auto-halt triggers, the canonical chain, and Tier 3/4
-human-settlement requirements remain hard stops. If any of those floors fire, pause the loop
+human-settlement requirements remain hard stops. A settlement recorded under
+[Standing settlement delegation](#standing-settlement-delegation) meets the Tier 3/4
+requirement for every PR outside its carve-outs. If any of those floors fire, pause the loop
 even when the current PR otherwise looks like Tier 0-2 work. The human-facing worker
 assignment / integration cadence in [`docs/guides/CONDUCTOR_WORKFLOW.md`](guides/CONDUCTOR_WORKFLOW.md)
 is separate: that guide governs selecting and coordinating worker lanes; this section governs
 advancing a chosen PR through model evidence and merge-quorum. This section also does **not**
 grant merge authority by itself: merge remains governed by the relevant helper verdict,
-branch protection, and any run-level "never merge by default" rule.
+branch protection, and any run-level "never merge by default" rule the operator chose for that
+run. The standing settlement delegation is a separate merge authority of this kind.
 Edits to this operating contract, `docs/REVIEW_AUTHORITY_PRINCIPLES.md`, or code that changes
 merge/evidence/settlement authority are merge-authority self-modification: classify them as
 Tier 4 and stop for exact-head human risk settlement before any merge/protection mutation,
@@ -114,10 +151,11 @@ asking the operator**, as long as every unit stays on Tier 0-2 rails as defined 
 [`docs/REVIEW_AUTHORITY_PRINCIPLES.md`](REVIEW_AUTHORITY_PRINCIPLES.md) and makes *external*
 progress (a posted-and-counted evidence comment, a repair commit that clears a finding, a real
 archive, or a merge only when a separate merge-on-green preference / helper authorization
-already permits it). Touch the operator **only** at (a) a genuine Tier 3/4 risk decision, or
+already permits it). Touch the operator **only** at (a) a genuine Tier 3/4 risk decision that
+the standing settlement delegation does not cover, or
 (b) a circuit-breaker halt. Do **not** insert a human checkpoint between safe, progressing units
 — that is the molasses failure mode. "One bounded unit, then stop and ask" is WRONG unless the
-next unit is Tier 3/4 or the breaker tripped. This rail does not override an existing
+next unit needs a risk decision outside the standing delegation or the breaker tripped. This rail does not override an existing
 batch/lane gate-attempt cap: after the allowed revise-and-retry budget is exhausted, park or
 halt that lane and move only to a different unblocked Tier 0-2 unit.
 
@@ -271,13 +309,15 @@ Operating contract: re-read docs/AGENT_OPERATING_CONTRACT.md §Conductor this cy
 Target: PR #NNNN @ <exact-head>.   Last: <one line>.   Next: <one bounded action>.
 
 Run on Tier 0-2 rails per §Conductor; continue through progressing units autonomously.
-Approval-required items, Auto-halt triggers, and Tier 3/4 settlement remain hard stops.
+Approval-required items, Auto-halt triggers, and Tier 3/4 settlement outside the standing
+settlement delegation remain hard stops; settle and merge qualifying PRs under that delegation.
 Use docs/REVIEW_AUTHORITY_PRINCIPLES.md for counted-family / Tier eligibility.
 Sequence for evidence: `collect_quorum_evidence.py` dry-run clean for the current head ->
 capture artifact head -> re-check head unchanged + mergeable + non-draft against the live PR ->
 `--prepared-json ... --apply` once only if those checks still match the live PR ->
 settle/merge only through the helper gates and any separate merge authority.
-Stop only at a Tier 3/4 risk decision or a circuit-breaker halt, emit the exact operator
+Stop only at a Tier 3/4 risk decision outside the standing settlement delegation or a
+circuit-breaker halt, emit the exact operator
 authorization text needed, then emit the next prompt in THIS thin form.
 ```
 
@@ -688,7 +728,7 @@ Beyond the checkpoint list above, four classes of decision are always operator a
 1. **Hypothesis selection** — which problem deserves the fleet's budget: the operator picks the bet, not the loop that generated the candidate list.
 2. **Implementation architecture** — whether a fix should smooth the path, change behavior, or redesign the surface: the shape of the intervention is a human call.
 3. **Eval curation** — the scorecard/rubrics ARE the hill the fleet climbs; if the eval rewards the wrong behavior the loop faithfully optimizes toward the wrong thing, so curating P7/scoreboard rubrics is an operator act.
-4. **Launch approval** — reading the evidence, understanding blast radius, and owning the rollout (Tier 3/4 settlement) stays with the human who accepts the risk.
+4. **Launch approval** — the operator retains accountability for the risk. Under the 2026-10-08 [Standing settlement delegation](#standing-settlement-delegation), agents perform covered exact-head settlements and supply a daily audit list; this does not imply personal operator review of each head. Changes to the review gate, secrets, deploy or workflow policy, and protected files still need the operator's own settlement.
 
 (adopted 2026-07-07 from Replit's continual-learning practice; see epic #8972)
 
