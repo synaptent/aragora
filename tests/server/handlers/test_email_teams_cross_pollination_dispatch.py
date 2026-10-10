@@ -596,7 +596,7 @@ def test_update_routes_need_email_update_in_middleware_handler_and_module(
 
 
 @pytest.mark.parametrize("caller", ("owner", "member"))
-def test_teams_list_answer_applies_to_get_only(registry_cls, caller: str) -> None:
+def test_teams_create_answers_not_implemented(registry_cls, caller: str) -> None:
     status, payload = _dispatch(registry_cls, "POST", "/api/v1/teams", {}, caller=caller)
     assert (status, payload["error"]["message"]) == (501, NOT_IMPLEMENTED["teams.createTeam"])
 

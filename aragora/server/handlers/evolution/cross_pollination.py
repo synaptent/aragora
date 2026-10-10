@@ -169,13 +169,15 @@ class CrossPollinationSubscribersHandler(_ReadViewDispatch, BaseHandler):
 
             subscribers = []
             for event_type, handlers in manager._subscribers.items():
-                for name, handler in handlers:
+                for name, callback in handlers:
                     subscribers.append(
                         {
                             "name": name,
                             "event_type": event_type.value,
                             "handler": (
-                                handler.__name__ if hasattr(handler, "__name__") else str(handler)
+                                callback.__name__
+                                if hasattr(callback, "__name__")
+                                else str(callback)
                             ),
                         }
                     )
@@ -240,7 +242,7 @@ class CrossPollinationBridgeHandler(_ReadViewDispatch, BaseHandler):
             return error_response("Internal server error", status=500)
 
 
-class CrossPollinationMetricsHandler(_ReadViewDispatch, BaseHandler):
+class CrossPollinationMetricsHandler(BaseHandler):
     """
     Handler for GET /api/cross-pollination/metrics.
 
@@ -250,7 +252,7 @@ class CrossPollinationMetricsHandler(_ReadViewDispatch, BaseHandler):
     ROUTES = ["/api/v1/cross-pollination/metrics"]
 
     @require_permission("analytics:read")
-    async def get(self, handler: Any = None) -> HandlerResult:
+    async def get(self) -> HandlerResult:
         """Get cross-pollination metrics in Prometheus format."""
         try:
             from aragora.server.prometheus_cross_pollination import (

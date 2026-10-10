@@ -817,7 +817,6 @@ DEFAULT_ROUTE_PERMISSIONS = [
         "GET",
         "cross_pollination.read",
     ),
-    RoutePermission(r"^/api/(?:v1/)?cross-pollination/metrics$", "GET", "analytics.read"),
     RoutePermission(r"^/api/(?:v1/)?teams$", "GET", "bots.read"),
     # Create and send have no key of their own yet; their handlers answer 501 under bots.read.
     RoutePermission(r"^/api/(?:v1/)?teams(?:/debates/send)?$", "POST", "bots.read"),

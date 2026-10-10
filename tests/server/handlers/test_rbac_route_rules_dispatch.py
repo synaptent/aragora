@@ -208,15 +208,11 @@ def _dispatch(
     assert handled is True, f"{method} {path} was not handled"
     status = instance.send_response.call_args[0][0]
     raw = instance.wfile.getvalue()
-    try:
-        return status, json.loads(raw or b"{}")
-    except ValueError:  # the Prometheus metrics route answers text/plain
-        return status, raw.decode()
+    return status, json.loads(raw or b"{}")
 
 
 _XP = "/api/v1/cross-pollination"
-# Cross-pollination routes by what their handler does for a caller holding the key
-# (``metrics`` is served too, under ``analytics.read``).
+# Cross-pollination routes by what their handler does for a caller holding the key.
 XP_SERVED_GETS = ("stats", "subscribers", "bridge", "km")
 XP_UNIMPLEMENTED_GETS = (
     "conflicts",
@@ -257,7 +253,6 @@ RULES: dict[tuple[str, str], str] = {
         ("GET", f"{_XP}/{route}"): "cross_pollination.read"
         for route in (*XP_SERVED_GETS, *XP_UNIMPLEMENTED_GETS)
     },
-    ("GET", f"{_XP}/metrics"): "analytics.read",
     # A create route behind a read key: no write key is registered and the answer is a 501.
     ("POST", "/api/v1/teams"): "bots.read",
     ("POST", "/api/v1/teams/debates/send"): "bots.read",
@@ -265,13 +260,15 @@ RULES: dict[tuple[str, str], str] = {
 
 # Methods the routes' handlers do not serve: a rule would turn the default-deny 403 into a
 # 500 handler_no_result for every key holder, so they stay without one until they are served.
-# The cross-pollination writes act on process-wide state and ``km/culture`` cannot scope its
-# workspace to the caller, so an organization-level key must not reach them.
+# The cross-pollination writes act on process-wide state, ``km/culture`` cannot scope its
+# workspace to the caller and ``metrics`` returns the whole Prometheus registry (which
+# ``metrics:read`` guards elsewhere), so an organization-level key must not reach them.
 UNSCOPED_XP: list[tuple[str, str]] = [
     ("POST", f"{_XP}/reset"),
     ("POST", f"{_XP}/km/sync"),
     ("POST", f"{_XP}/km/staleness-check"),
     ("GET", f"{_XP}/km/culture"),
+    ("GET", f"{_XP}/metrics"),
 ]
 UNSERVED: list[tuple[str, str]] = [
     ("POST", "/api/v1/batch"),
@@ -397,7 +394,7 @@ DISPATCH: dict[tuple[str, str], tuple[str, str]] = {
     },
     **{
         ("GET", f"{_XP}/{route}"): ("200 200 200 200 403 403", "200 200 200 200 403 401")
-        for route in (*XP_SERVED_GETS, "metrics")
+        for route in XP_SERVED_GETS
     },
     **{
         ("GET", f"{_XP}/{route}"): ("501 501 501 501 403 403", "501 501 501 501 403 401")
