@@ -8,6 +8,7 @@ import them lazily from ``dev_receipts`` keep working.
 from __future__ import annotations
 
 import ast
+import inspect
 import re
 import subprocess
 import sys
@@ -37,7 +38,7 @@ def test_function_is_defined_in_the_superseded_archive_module(name: str) -> None
 
 def test_grace_period_default_matches_core() -> None:
     func = superseded_archive.archive_duplicate_branch_deliverable_work_orders
-    default = func.__kwdefaults__["grace_period_hours"]
+    default = inspect.signature(func).parameters["grace_period_hours"].default
     assert default == core._DUPLICATE_BRANCH_DELIVERABLE_ARCHIVE_GRACE_HOURS
 
 
