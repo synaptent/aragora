@@ -334,6 +334,33 @@ class TestListsShowOnlyTheCallersOrg:
         assert {"receipts", "total", "limit", "offset"} <= set(body)
 
     @pytest.mark.asyncio
+    async def test_v1_list_items_keep_the_audit_trail_store_fields(self, receipts, act_as, store):
+        # The keys AuditTrailStore.list_receipts returned for this route.
+        base_keys = {
+            "receipt_id",
+            "gauntlet_id",
+            "created_at",
+            "verdict",
+            "confidence",
+            "risk_level",
+            "checksum",
+            "audit_trail_id",
+        }
+        traced = _payload("rcpt-a3", "subject-3")
+        traced["audit_trail_id"] = "trail-a3"
+        store.save(traced, org_id=ORG_A, created_by="user-a")
+        act_as(USER_A)
+        items = _json(await _call(receipts, "GET", "/api/v1/receipts"))["receipts"]
+
+        assert len(items) == 3
+        assert {i.get("audit_trail_id") for i in items} == {"trail-a3", None}
+        for item in items:
+            stored = store.get(item["receipt_id"])
+            assert base_keys <= set(item)
+            assert item["created_at"] == stored.created_at
+            assert item["audit_trail_id"] == stored.audit_trail_id
+
+    @pytest.mark.asyncio
     async def test_counts_cover_only_the_callers_org(self, receipts, act_as):
         act_as(USER_A)
         stats = _json(await _call(receipts, "GET", "/api/v2/receipts/stats"))

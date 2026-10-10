@@ -198,6 +198,14 @@ class RBACMiddlewareConfig:
     permission_checker: PermissionChecker | None = None
 
 
+# A receipt id segment. The receipts handler dispatches these fixed segments
+# before it reads an id (``dsar/{user}`` serves a DSAR), so they never match a
+# per-receipt rule and stay default-deny unless a rule names them.
+_RECEIPT_ID = (
+    r"(?!(?:dsar|share|search|stats|verify|verify-batch|sign-batch|batch-export"
+    r"|retention-status|signing-key)(?:/|$))[^/]+"
+)
+
 # Default route permission rules
 # Note: Route patterns use (?:v1/)? to match both /api/ and /api/v1/ prefixes,
 # since the frontend uses versioned endpoints (e.g., /api/v1/debates) and the
@@ -508,14 +516,9 @@ DEFAULT_ROUTE_PERMISSIONS = [
     # Receipt ODR surface (architecture §2.10). The stateless verifier is
     # public. The export rule only lets the request past this gate: receipts
     # are org-owned, so the server's auth gate and the receipts handler deny
-    # every export format to a caller without an org. The export pattern's
-    # parameter segment excludes the sibling route segments the handler
-    # dispatches first -- "dsar" reaches the GDPR subject-access branch.
+    # every export format to a caller without an org.
     RoutePermission(
-        r"^/api/v2/receipts/(?!(?:dsar|share|search|stats|verify)/)[^/]+/export$",
-        "GET",
-        "",
-        allow_unauthenticated=True,
+        rf"^/api/v2/receipts/{_RECEIPT_ID}/export$", "GET", "", allow_unauthenticated=True
     ),
     RoutePermission(r"^/api/v2/receipts/verify$", "POST", "", allow_unauthenticated=True),
     # Org-owned receipt routes, after the public rules above so those stay
@@ -526,12 +529,14 @@ DEFAULT_ROUTE_PERMISSIONS = [
     ),
     RoutePermission(r"^/api/v2/receipts/verify-batch$", "POST", "receipts.verify"),
     RoutePermission(r"^/api/v2/receipts/sign-batch$", "POST", "receipts.sign"),
-    RoutePermission(r"^/api/v2/receipts/[^/]+$", "GET", "receipts.read"),
-    RoutePermission(r"^/api/v2/receipts/[^/]+/formatted/[^/]+$", "GET", "receipts.read"),
-    RoutePermission(r"^/api/v2/receipts/[^/]+/verify$", "GET", "receipts.verify"),
-    RoutePermission(r"^/api/v2/receipts/[^/]+/verify(?:-signature)?$", "POST", "receipts.verify"),
+    RoutePermission(rf"^/api/v2/receipts/{_RECEIPT_ID}$", "GET", "receipts.read"),
+    RoutePermission(rf"^/api/v2/receipts/{_RECEIPT_ID}/formatted/[^/]+$", "GET", "receipts.read"),
+    RoutePermission(rf"^/api/v2/receipts/{_RECEIPT_ID}/verify$", "GET", "receipts.verify"),
     RoutePermission(
-        r"^/api/v2/receipts/[^/]+/(?:share|send-to-channel)$", "POST", "receipts.share"
+        rf"^/api/v2/receipts/{_RECEIPT_ID}/verify(?:-signature)?$", "POST", "receipts.verify"
+    ),
+    RoutePermission(
+        rf"^/api/v2/receipts/{_RECEIPT_ID}/(?:share|send-to-channel)$", "POST", "receipts.share"
     ),
     RoutePermission(r"^/api/v1/receipts/deliveries$", "GET", "receipts.read"),
     RoutePermission(r"^/api/v1/receipts/[^/]+/deliver$", "POST", "receipts.share"),

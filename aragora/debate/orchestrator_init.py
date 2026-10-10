@@ -187,6 +187,8 @@ def store_post_tracker_config(
     document_store: Any = None,
     evidence_store: Any = None,
     document_org_id: str | None = None,
+    receipt_org_id: str | None = None,
+    receipt_created_by: str | None = None,
 ) -> None:
     """Store additional config flags not tracked via CoreComponents or TrackerComponents.
 
@@ -196,6 +198,8 @@ def store_post_tracker_config(
         document_store: Optional document store for context injection.
         evidence_store: Optional evidence store for context injection.
         document_org_id: Org whose documents may be injected as context.
+        receipt_org_id: Org that owns the feedback phase's auto-receipt.
+        receipt_created_by: User recorded as that receipt's creator.
     """
     # RLM / Staking feature flags
     arena.enable_rlm = getattr(cfg, "enable_rlm", False)
@@ -215,6 +219,8 @@ def store_post_tracker_config(
     # Document/evidence stores for context injection
     arena.document_store = document_store
     arena.document_org_id = document_org_id
+    arena.receipt_org_id = receipt_org_id
+    arena.receipt_created_by = receipt_created_by
     arena.evidence_store = evidence_store
     # Supermemory integration (external memory persistence)
     arena.enable_supermemory = cfg.enable_supermemory

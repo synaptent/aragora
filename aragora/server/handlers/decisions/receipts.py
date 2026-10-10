@@ -551,6 +551,8 @@ def _v1_receipt_summary(receipt: Any) -> dict[str, Any]:
     return {
         "receipt_id": getattr(receipt, "receipt_id", None),
         "gauntlet_id": getattr(receipt, "gauntlet_id", None),
+        "created_at": created_at,
+        "audit_trail_id": getattr(receipt, "audit_trail_id", None),
         "timestamp": timestamp,
         "verdict": getattr(receipt, "verdict", None),
         "confidence": getattr(receipt, "confidence", None),
@@ -814,7 +816,9 @@ class ReceiptsHandler(BaseHandler):
                 # Get formatted for channel
                 if len(parts) > 5 and parts[5] == "formatted" and method == "GET":
                     channel_type = parts[6] if len(parts) > 6 else "slack"
-                    return await self._get_formatted(receipt_id, channel_type, query_params, scope)
+                    return await self._get_formatted(
+                        receipt_id, channel_type, query_params, scope, context=context
+                    )
 
                 # Get single receipt
                 if method == "GET":
@@ -2235,12 +2239,14 @@ class ReceiptsHandler(BaseHandler):
 
         return {"message_id": result.get("id")}
 
+    @require_permission("receipts:read")
     async def _get_formatted(
         self,
         receipt_id: str,
         channel_type: str,
         query_params: dict[str, str],
         scope: OrgScope,
+        context: Any = None,
     ) -> HandlerResult:
         """
         Get receipt formatted for a specific channel type.

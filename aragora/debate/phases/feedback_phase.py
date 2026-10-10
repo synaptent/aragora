@@ -155,6 +155,8 @@ class FeedbackPhase:
         auto_post_receipt: bool = False,  # Post receipt summary to originating channel
         cost_tracker: Any | None = None,  # CostTracker for populating cost data in receipt
         receipt_base_url: str = "/api/v2/receipts",  # Base URL for receipt links
+        receipt_org_id: str | None = None,  # Org that owns the auto-receipt
+        receipt_created_by: str | None = None,  # User recorded as the receipt's creator
         # Genesis Ledger for cryptographic debate provenance
         genesis_ledger: Any | None = None,  # GenesisLedger for immutable event recording
         # Meta-Learning for self-tuning hyperparameters
@@ -249,6 +251,8 @@ class FeedbackPhase:
         self.auto_post_receipt = auto_post_receipt
         self.cost_tracker = cost_tracker
         self.receipt_base_url = receipt_base_url
+        self.receipt_org_id = receipt_org_id
+        self.receipt_created_by = receipt_created_by
 
         # Genesis Ledger
         self.genesis_ledger = genesis_ledger
@@ -1064,7 +1068,11 @@ class FeedbackPhase:
                 from aragora.storage.receipt_store import get_receipt_store
 
                 store = get_receipt_store()
-                store.save(receipt_data.get("receipt", receipt.to_dict()))
+                store.save(
+                    receipt_data.get("receipt", receipt.to_dict()),
+                    org_id=self.receipt_org_id,
+                    created_by=self.receipt_created_by,
+                )
                 logger.info(
                     "[receipt] Generated receipt %s for debate %s",
                     receipt.receipt_id,

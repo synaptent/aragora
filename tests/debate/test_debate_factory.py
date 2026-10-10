@@ -406,6 +406,7 @@ class TestDebateFactoryCreateArena:
             "with_event_emitter",
             "with_loop_id",
             "with_strict_loop_scoping",
+            "with_receipt_owner",
             "with_enable_position_ledger",
             "with_agent_selection",
         ]

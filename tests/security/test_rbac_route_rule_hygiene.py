@@ -37,6 +37,9 @@ OLDER_RULES = {
 # Receipts DSAR, batch export and share-token read; debate reads without org scope.
 DEFERRED_ROUTES = [
     ("GET", "/api/v2/receipts/dsar/user-1"),
+    # The handler serves every GET under dsar/ as a DSAR for the next segment.
+    ("GET", "/api/v2/receipts/dsar/verify"),
+    ("GET", "/api/v2/receipts/dsar/formatted/slack"),
     ("POST", "/api/v2/receipts/batch-export"),
     ("GET", "/api/v2/receipts/share/tok-1"),
     ("GET", "/api/debates/batch/"),
@@ -45,6 +48,26 @@ DEFERRED_ROUTES = [
     ("GET", "/api/v1/debates/queue/status"),
     ("GET", "/api/v2/debates"),
     ("GET", "/api/v2/debates/deb-1"),
+]
+# Fixed segments the receipts handler dispatches before it reads a receipt id.
+RESERVED_RECEIPT_SEGMENTS = (
+    "dsar share search stats verify verify-batch sign-batch batch-export "
+    "retention-status signing-key"
+).split()
+PER_RECEIPT_SUFFIXES = [
+    ("GET", ""),
+    ("GET", "/formatted/slack"),
+    ("GET", "/export"),
+    ("GET", "/verify"),
+    ("POST", "/verify"),
+    ("POST", "/verify-signature"),
+    ("POST", "/share"),
+    ("POST", "/send-to-channel"),
+]
+PER_RECEIPT_RULES = [
+    rule
+    for rule in DEFAULT_ROUTE_PERMISSIONS
+    if rule.pattern.pattern.startswith(r"^/api/v2/receipts/") and "[^/]+" in rule.pattern.pattern
 ]
 
 
@@ -92,6 +115,26 @@ def test_deferred_routes_stay_default_deny_for_every_role(method, path):
         context = AuthorizationContext(user_id="u-1", org_id="org-1", roles={role})
         allowed, reason, _ = middleware.check_request(path, method, context)
         assert not allowed and "default-deny" in reason, (role, reason)
+
+
+@pytest.mark.parametrize("segment", RESERVED_RECEIPT_SEGMENTS)
+@pytest.mark.parametrize(("method", "suffix"), PER_RECEIPT_SUFFIXES)
+def test_reserved_receipt_segments_match_no_per_receipt_rule(segment, method, suffix):
+    path = f"/api/v2/receipts/{segment}{suffix}"
+
+    assert len(PER_RECEIPT_RULES) == 6
+    assert [r.pattern.pattern for r in PER_RECEIPT_RULES if r.matches(path, method)[0]] == []
+    if suffix:
+        assert RBACMiddleware().get_required_permission(path, method) is None
+
+
+def test_per_receipt_rules_still_match_a_receipt_id():
+    middleware = RBACMiddleware()
+
+    for method, suffix in PER_RECEIPT_SUFFIXES:
+        path = f"/api/v2/receipts/rcpt-verify-1{suffix}"
+        assert [r for r in PER_RECEIPT_RULES if r.matches(path, method)[0]], path
+    assert middleware.get_required_permission("/api/v2/receipts/rcpt-1", "GET") == "receipts.read"
 
 
 def test_folder_delete_uses_a_registered_key():

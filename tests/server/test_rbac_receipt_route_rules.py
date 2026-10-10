@@ -157,8 +157,8 @@ class TestReceiptsHandlerSeesTheCaller:
 
     @pytest.mark.parametrize(
         "route",
-        [RECEIPT_ROUTES[0], RECEIPT_ROUTES[5], RECEIPT_ROUTES[11], RECEIPT_ROUTES[12]],
-        ids=["list", "read", "sign-batch", "share"],
+        [RECEIPT_ROUTES[i] for i in (0, 5, 6, 11, 12)],
+        ids=["list", "read", "formatted", "sign-batch", "share"],
     )
     def test_same_org_admin_without_receipt_keys_gets_403(self, server, users, receipts, route):
         status, body = _receipt_request(server, route, users.a2)
