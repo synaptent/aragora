@@ -811,9 +811,11 @@ DEFAULT_ROUTE_PERMISSIONS = [
         "POST",
         "cross_pollination.write",
     ),
+    # Only the 501 routes: the stats, subscribers, bridge and km reads report process-wide
+    # state, so they stay without a rule (default-denied) like metrics and km/culture.
     RoutePermission(
-        r"^/api/(?:v1/)?cross-pollination/(?:stats|subscribers|bridge|km|conflicts"
-        r"|federation|federation/sync|subscribe|sync/status|sync/trigger)$",
+        r"^/api/(?:v1/)?cross-pollination/(?:conflicts|federation|federation/sync"
+        r"|subscribe|sync/status|sync/trigger)$",
         "GET",
         "cross_pollination.read",
     ),

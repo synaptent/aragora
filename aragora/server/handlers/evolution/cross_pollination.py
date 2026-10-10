@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import logging
 import re
-from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -31,18 +30,6 @@ _cross_pollination_limiter = RateLimiter(requests_per_minute=60)
 
 def _is_get(handler: Any) -> bool:
     return getattr(handler, "command", "GET") == "GET"
-
-
-class _ReadViewDispatch:
-    """Serves a GET on the handler's route with its permission-checked ``get`` view."""
-
-    get: Callable[..., Awaitable[HandlerResult]]
-
-    def handle(self, path: str, query_params: dict[str, Any], handler: Any) -> Any:
-        # The view's permission check reads the caller's context from the request handler.
-        if path in getattr(self, "ROUTES", ()) and _is_get(handler):
-            return self.get(handler)
-        return None
 
 
 class CrossPollinationStatsHandler(BaseHandler):
@@ -90,11 +77,9 @@ class CrossPollinationStatsHandler(BaseHandler):
     }
 
     def handle(self, path: str, query_params: dict[str, Any], handler: Any) -> Any:
-        """Serve the stats GET; the other listed sub-paths answer 501 after authorizing."""
+        """Answer the unimplemented sub-paths with 501 after authorizing; stats is not served."""
         if not _is_get(handler):
             return None
-        if path == "/api/v1/cross-pollination/stats":
-            return self.get(handler)
         message = self._NOT_IMPLEMENTED.get(path)
         return self._not_implemented(handler, message) if message else None
 
@@ -114,7 +99,7 @@ class CrossPollinationStatsHandler(BaseHandler):
         return not_implemented_response("Resolving cross-pollination conflicts is not implemented")
 
     @require_permission("cross_pollination:read")
-    async def get(self, handler: Any = None) -> HandlerResult:
+    async def get(self) -> HandlerResult:
         """Get cross-subscriber statistics."""
         try:
             from aragora.events.cross_subscribers import get_cross_subscriber_manager
@@ -150,7 +135,7 @@ class CrossPollinationStatsHandler(BaseHandler):
             return error_response("Internal server error", status=500)
 
 
-class CrossPollinationSubscribersHandler(_ReadViewDispatch, BaseHandler):
+class CrossPollinationSubscribersHandler(BaseHandler):
     """
     Handler for GET /api/cross-pollination/subscribers.
 
@@ -160,7 +145,7 @@ class CrossPollinationSubscribersHandler(_ReadViewDispatch, BaseHandler):
     ROUTES = ["/api/v1/cross-pollination/subscribers"]
 
     @require_permission("cross_pollination:read")
-    async def get(self, handler: Any = None) -> HandlerResult:
+    async def get(self) -> HandlerResult:
         """List all subscribers."""
         try:
             from aragora.events.cross_subscribers import get_cross_subscriber_manager
@@ -169,15 +154,13 @@ class CrossPollinationSubscribersHandler(_ReadViewDispatch, BaseHandler):
 
             subscribers = []
             for event_type, handlers in manager._subscribers.items():
-                for name, callback in handlers:
+                for name, handler in handlers:
                     subscribers.append(
                         {
                             "name": name,
                             "event_type": event_type.value,
                             "handler": (
-                                callback.__name__
-                                if hasattr(callback, "__name__")
-                                else str(callback)
+                                handler.__name__ if hasattr(handler, "__name__") else str(handler)
                             ),
                         }
                     )
@@ -200,7 +183,7 @@ class CrossPollinationSubscribersHandler(_ReadViewDispatch, BaseHandler):
             return error_response("Internal server error", status=500)
 
 
-class CrossPollinationBridgeHandler(_ReadViewDispatch, BaseHandler):
+class CrossPollinationBridgeHandler(BaseHandler):
     """
     Handler for GET /api/cross-pollination/bridge.
 
@@ -214,7 +197,7 @@ class CrossPollinationBridgeHandler(_ReadViewDispatch, BaseHandler):
     ROUTES = ["/api/v1/cross-pollination/bridge"]
 
     @require_permission("cross_pollination:read")
-    async def get(self, handler: Any = None) -> HandlerResult:
+    async def get(self) -> HandlerResult:
         """Get bridge status."""
         try:
             from aragora.debate.arena_bridge import EVENT_TYPE_MAP
@@ -317,7 +300,7 @@ class CrossPollinationResetHandler(BaseHandler):
             return error_response("Internal server error", status=500)
 
 
-class CrossPollinationKMHandler(_ReadViewDispatch, BaseHandler):
+class CrossPollinationKMHandler(BaseHandler):
     """
     Handler for GET /api/cross-pollination/km.
 
@@ -330,7 +313,7 @@ class CrossPollinationKMHandler(_ReadViewDispatch, BaseHandler):
     ROUTES = ["/api/v1/cross-pollination/km"]
 
     @require_permission("cross_pollination:read")
-    async def get(self, handler: Any = None) -> HandlerResult:
+    async def get(self) -> HandlerResult:
         """Get KM bidirectional integration status."""
         try:
             from aragora.events.cross_subscribers import get_cross_subscriber_manager

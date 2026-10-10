@@ -23,8 +23,6 @@ import pytest
 from aragora.auth.mfa_enforcement import MFAEnforcementMiddleware, MFAStatus
 from aragora.billing.jwt_auth import create_access_token
 from aragora.connectors.runtime_registry import ConnectorStatus
-from aragora.events import cross_subscribers
-from aragora.knowledge import mound as knowledge_mound
 from aragora.rbac.decorators import PermissionDeniedError
 from aragora.rbac.middleware import DEFAULT_ROUTE_PERMISSIONS
 from aragora.server import unified_server
@@ -110,16 +108,6 @@ def _auth_on_and_isolated_state(monkeypatch):
         get_summary=lambda: {"total": 1},
     )
     monkeypatch.setattr(ConnectorManagementHandler, "_get_registry", lambda self: runtime)
-    # Cross-pollination bodies read process-wide singletons; give them empty stand-ins.
-    manager = SimpleNamespace(
-        _subscribers={},
-        _ranking_adapter=SimpleNamespace(get_stats=dict),
-        _rlm_adapter=SimpleNamespace(get_stats=dict),
-        get_stats=dict,
-        get_batch_stats=dict,
-    )
-    monkeypatch.setattr(cross_subscribers, "get_cross_subscriber_manager", lambda: manager)
-    monkeypatch.setattr(knowledge_mound, "get_knowledge_mound", lambda *a, **k: None)
     # Owner and admin callers are admins who have enabled MFA, so the server's separate
     # admin-MFA gate (on by default) admits them and the RBAC rules decide.
     monkeypatch.setattr(
@@ -212,8 +200,7 @@ def _dispatch(
 
 
 _XP = "/api/v1/cross-pollination"
-# Cross-pollination routes by what their handler does for a caller holding the key.
-XP_SERVED_GETS = ("stats", "subscribers", "bridge", "km")
+# Cross-pollination GETs whose handler answers 501 to a caller holding the key.
 XP_UNIMPLEMENTED_GETS = (
     "conflicts",
     "federation",
@@ -249,10 +236,7 @@ RULES: dict[tuple[str, str], str] = {
     ("GET", "/api/v1/batch"): "documents.read",
     ("GET", "/api/v1/batch/queue/status"): "documents.read",
     ("PUT", "/api/v1/memory/k1"): "memory.update",
-    **{
-        ("GET", f"{_XP}/{route}"): "cross_pollination.read"
-        for route in (*XP_SERVED_GETS, *XP_UNIMPLEMENTED_GETS)
-    },
+    **{("GET", f"{_XP}/{route}"): "cross_pollination.read" for route in XP_UNIMPLEMENTED_GETS},
     # A create route behind a read key: no write key is registered and the answer is a 501.
     ("POST", "/api/v1/teams"): "bots.read",
     ("POST", "/api/v1/teams/debates/send"): "bots.read",
@@ -260,13 +244,16 @@ RULES: dict[tuple[str, str], str] = {
 
 # Methods the routes' handlers do not serve: a rule would turn the default-deny 403 into a
 # 500 handler_no_result for every key holder, so they stay without one until they are served.
-# The cross-pollination writes act on process-wide state, ``km/culture`` cannot scope its
-# workspace to the caller and ``metrics`` returns the whole Prometheus registry (which
-# ``metrics:read`` guards elsewhere), so an organization-level key must not reach them.
+# The cross-pollination writes act on process-wide state, the stats, subscribers, bridge
+# and km reads report process-wide state (subscriber callback names, adapter and batch
+# counters), ``km/culture`` cannot scope its workspace to the caller and ``metrics``
+# returns the whole Prometheus registry (which ``metrics:read`` guards elsewhere), so an
+# organization-level key must not reach them.
 UNSCOPED_XP: list[tuple[str, str]] = [
     ("POST", f"{_XP}/reset"),
     ("POST", f"{_XP}/km/sync"),
     ("POST", f"{_XP}/km/staleness-check"),
+    *(("GET", f"{_XP}/{route}") for route in ("stats", "subscribers", "bridge", "km")),
     ("GET", f"{_XP}/km/culture"),
     ("GET", f"{_XP}/metrics"),
 ]
@@ -283,7 +270,6 @@ HOLDERS: dict[str, set[str]] = {
     "connectors.read": {"owner", "admin"},
     "connectors.test": {"owner", "admin"},
     "analytics.configure": {"owner", "admin"},
-    "analytics.read": {"owner", "admin", "member", "analyst"},
     "documents.read": {"owner", "admin", "analyst"},
     "bots.read": {"owner", "admin", "member"},
     "memory.update": {"owner", "admin"},
@@ -393,10 +379,6 @@ DISPATCH: dict[tuple[str, str], tuple[str, str]] = {
         for route in MEMORY_UNIMPLEMENTED_GETS
     },
     **{
-        ("GET", f"{_XP}/{route}"): ("200 200 200 200 403 403", "200 200 200 200 403 401")
-        for route in XP_SERVED_GETS
-    },
-    **{
         ("GET", f"{_XP}/{route}"): ("501 501 501 501 403 403", "501 501 501 501 403 401")
         for route in XP_UNIMPLEMENTED_GETS
     },
@@ -454,23 +436,25 @@ def test_not_implemented_answers_keep_their_envelope_in_production(
 
 @pytest.mark.no_auto_auth
 @pytest.mark.parametrize("caller", CALLERS)
+@pytest.mark.parametrize("layer", ["server", "live"])
 @pytest.mark.parametrize(("method", "path"), UNSERVED)
 def test_unserved_routes_are_denied_before_dispatch(
-    registry, method: str, path: str, caller: str
+    registry, method: str, path: str, layer: str, caller: str
 ) -> None:
-    status, body = _dispatch(_Server, method, path, caller)
+    status, body = _dispatch({"server": _Server, "live": _Live}[layer], method, path, caller)
     expected = (401, "auth_required") if caller == "anon" else (403, "permission_denied")
-    assert (status, body["code"]) == expected, body
+    assert (status, body["code"]) == expected, (layer, body)
 
 
 @pytest.mark.no_auto_auth
+@pytest.mark.parametrize("caller", CALLERS)
 @pytest.mark.parametrize(("method", "path"), UNSCOPED_XP)
 def test_unscoped_cross_pollination_routes_are_not_dispatched(
-    registry, method: str, path: str
+    registry, method: str, path: str, caller: str
 ) -> None:
     found = get_route_index().get_handler(path)
     assert found is not None
-    request = _request(registry, method, path, "owner")
+    request = _request(registry, method, path, caller)
     serve = found[1].handle_post if method == "POST" else found[1].handle
     assert serve(path, {}, request) is None
 
