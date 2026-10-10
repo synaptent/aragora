@@ -119,6 +119,8 @@ SNOOZE_SUGGESTIONS = "/api/v1/email/probe-email/snooze-suggestions"
 
 ROUTES: dict[str, tuple[str, str, dict[str, Any] | None]] = {
     "teams.listTeams": ("GET", "/api/v1/teams", None),
+    "teams.createTeam": ("POST", "/api/v1/teams", {"name": "probe-team"}),
+    "teams.sendDebate": ("POST", "/api/v1/teams/debates/send", {"debate_id": "d1"}),
     "crossPollination.resolveConflict": (
         "POST",
         "/api/v1/cross-pollination/conflicts/probe-conflict/resolve",
@@ -140,13 +142,16 @@ EXPECTED: dict[str, dict[str, int]] = {
         "viewer": 403,
         "anon": 401,
     },
-    "teams.listTeams": {
-        "owner": 501,
-        "admin": 501,
-        "member": 501,
-        "analyst": 403,
-        "viewer": 403,
-        "anon": 401,
+    **{
+        route_id: {
+            "owner": 501,
+            "admin": 501,
+            "member": 501,
+            "analyst": 403,
+            "viewer": 403,
+            "anon": 401,
+        }
+        for route_id in ("teams.listTeams", "teams.createTeam", "teams.sendDebate")
     },
     "crossPollination.resolveConflict": {
         "owner": 501,
@@ -187,6 +192,8 @@ def test_conflict_resolve_is_answered_by_the_cross_pollination_handler(registry_
 
 NOT_IMPLEMENTED = {
     "teams.listTeams": "Listing teams is not implemented",
+    "teams.createTeam": "Creating teams is not implemented",
+    "teams.sendDebate": "Sending debates to Teams is not implemented",
     "crossPollination.resolveConflict": "Resolving cross-pollination conflicts is not implemented",
 }
 
@@ -588,10 +595,10 @@ def test_update_routes_need_email_update_in_middleware_handler_and_module(
     )
 
 
-@pytest.mark.parametrize("caller", ("owner", "member", "anon"))
-def test_teams_list_answer_applies_to_get_only(registry_cls, caller: str) -> None:
+@pytest.mark.parametrize("caller", ("owner", "member"))
+def test_teams_create_answers_not_implemented(registry_cls, caller: str) -> None:
     status, payload = _dispatch(registry_cls, "POST", "/api/v1/teams", {}, caller=caller)
-    assert status != 501, payload
+    assert (status, payload["error"]["message"]) == (501, NOT_IMPLEMENTED["teams.createTeam"])
 
 
 @pytest.mark.parametrize(

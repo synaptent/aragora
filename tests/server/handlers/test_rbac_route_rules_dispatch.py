@@ -120,14 +120,14 @@ def _auth_on_and_isolated_state(monkeypatch):
 _client_ips = itertools.count(1)
 
 
-def _request(cls: type[_Registry], method: str, path: str, caller: str) -> Any:
+def _request(cls: type[_Registry], method: str, path: str, caller: str, org: str = "org-1") -> Any:
     instance: Any = cls.__new__(cls)
     instance.path = path
     instance.command = method
     instance.headers = {"Content-Length": "0", "Content-Type": "application/json"}
     if caller != "anon":
         token = create_access_token(
-            user_id=f"jwt-{caller}", email=f"{caller}@example.com", org_id="org-1", role=caller
+            user_id=f"jwt-{caller}", email=f"{caller}@example.com", org_id=org, role=caller
         )
         instance.headers["Authorization"] = f"Bearer {token}"
     if not isinstance(instance, unified_server.UnifiedHandler):
@@ -166,8 +166,10 @@ def _server_rbac(method: str, path: str, caller: str) -> tuple[int, dict[str, An
     return _sent_json(instance)
 
 
-def _dispatch(cls: type[_Registry], method: str, path: str, caller: str) -> tuple[int, Any]:
-    instance = _request(cls, method, path, caller)
+def _dispatch(
+    cls: type[_Registry], method: str, path: str, caller: str, org: str = "org-1"
+) -> tuple[int, Any]:
+    instance = _request(cls, method, path, caller, org)
     with (
         patch("aragora.server.handler_registry.HANDLERS_AVAILABLE", True),
         patch(
@@ -193,8 +195,21 @@ def _dispatch(cls: type[_Registry], method: str, path: str, caller: str) -> tupl
         handled = cls is _Live or instance._try_modular_handler(path, {})
     assert handled is True, f"{method} {path} was not handled"
     status = instance.send_response.call_args[0][0]
-    return status, json.loads(instance.wfile.getvalue() or b"{}")
+    raw = instance.wfile.getvalue()
+    return status, json.loads(raw or b"{}")
 
+
+_XP = "/api/v1/cross-pollination"
+# Cross-pollination GETs whose handler answers 501 to a caller holding the key.
+XP_UNIMPLEMENTED_GETS = (
+    "conflicts",
+    "federation",
+    "federation/sync",
+    "subscribe",
+    "sync/status",
+    "sync/trigger",
+)
+MEMORY_UNIMPLEMENTED_GETS = ("context", "cross-debate", "snapshots")
 
 # (method, path) -> key of the first matching middleware rule. Each key is the one the
 # route's handler checks (``connectors:configure`` and ``connectors.configure`` name the
@@ -218,37 +233,34 @@ RULES: dict[tuple[str, str], str] = {
     ("GET", "/api/v1/documents/processing/stats"): "documents.read",
     ("GET", "/api/v1/teams"): "bots.read",
     ("POST", "/api/v1/cross-pollination/conflicts/c1/resolve"): "cross_pollination.write",
+    ("GET", "/api/v1/batch"): "documents.read",
+    ("GET", "/api/v1/batch/queue/status"): "documents.read",
+    ("PUT", "/api/v1/memory/k1"): "memory.update",
+    **{("GET", f"{_XP}/{route}"): "cross_pollination.read" for route in XP_UNIMPLEMENTED_GETS},
+    # A create route behind a read key: no write key is registered and the answer is a 501.
+    ("POST", "/api/v1/teams"): "bots.read",
+    ("POST", "/api/v1/teams/debates/send"): "bots.read",
 }
 
-_XP = "/api/v1/cross-pollination"
-
-# Routes whose handlers have no branch yet: a rule would turn the default-deny 403 into a
+# Methods the routes' handlers do not serve: a rule would turn the default-deny 403 into a
 # 500 handler_no_result for every key holder, so they stay without one until they are served.
-UNSERVED: list[tuple[str, str]] = [
-    ("GET", "/api/v1/batch"),
-    ("GET", "/api/v1/batch/queue/status"),
-    ("PUT", "/api/v1/memory/k1"),
-    *(
-        ("GET", f"{_XP}/{route}")
-        for route in (
-            "stats",
-            "conflicts",
-            "federation",
-            "federation/sync",
-            "subscribe",
-            "sync/status",
-            "sync/trigger",
-            "subscribers",
-            "bridge",
-            "km",
-            "km/culture",
-            "metrics",
-        )
-    ),
+# The cross-pollination writes act on process-wide state, the stats, subscribers, bridge
+# and km reads report process-wide state (subscriber callback names, adapter and batch
+# counters), ``km/culture`` cannot scope its workspace to the caller and ``metrics``
+# returns the whole Prometheus registry (which ``metrics:read`` guards elsewhere), so an
+# organization-level key must not reach them.
+UNSCOPED_XP: list[tuple[str, str]] = [
     ("POST", f"{_XP}/reset"),
     ("POST", f"{_XP}/km/sync"),
     ("POST", f"{_XP}/km/staleness-check"),
-    ("POST", "/api/v1/teams"),
+    *(("GET", f"{_XP}/{route}") for route in ("stats", "subscribers", "bridge", "km")),
+    ("GET", f"{_XP}/km/culture"),
+    ("GET", f"{_XP}/metrics"),
+]
+UNSERVED: list[tuple[str, str]] = [
+    ("POST", "/api/v1/batch"),
+    ("POST", f"{_XP}/subscribe"),
+    *UNSCOPED_XP,
 ]
 
 # Roles whose RBAC v2 defaults hold each key (measured with the real checker).
@@ -260,6 +272,8 @@ HOLDERS: dict[str, set[str]] = {
     "analytics.configure": {"owner", "admin"},
     "documents.read": {"owner", "admin", "analyst"},
     "bots.read": {"owner", "admin", "member"},
+    "memory.update": {"owner", "admin"},
+    "cross_pollination.read": {"owner", "admin", "member", "analyst"},
     "cross_pollination.write": {"owner", "admin"},
 }
 
@@ -327,18 +341,14 @@ def test_server_rbac_admits_exactly_the_key_holders(method: str, path: str, call
         assert (status, body["required_permission"]) == (403, key), body
 
 
-NO_RESULT = "x"
+def _cells(spec: str) -> dict[str, int]:
+    return dict(zip(CALLERS, (int(s) for s in spec.split()), strict=True))
 
 
-def _cells(spec: str) -> dict[str, int | str]:
-    return dict(zip(CALLERS, (s if s == NO_RESULT else int(s) for s in spec.split()), strict=True))
-
-
-# (method, path) -> (handler-layer answers, server answers) per caller. "x" marks a caller
-# the handler layer passes to a handler that has no branch for the route yet, which the
-# dispatcher answers 500 handler_no_result without running any handler body; the server's
-# default-deny answers 403 for those routes before dispatch. Owner and admin probe
-# empty in-memory state, so a connector or platform they may touch is not found (404).
+# (method, path) -> (handler-layer answers, server answers) per caller. Owner and admin
+# probe empty in-memory state, so a connector or platform they may touch is not found
+# (404). A 501 is the answer of a served route that has no implementation, given after
+# the handler's permission check.
 DISPATCH: dict[tuple[str, str], tuple[str, str]] = {
     ("PATCH", "/api/v1/connectors/c1"): ("404 404 403 403 403 401",) * 2,
     ("PUT", "/api/v1/connectors/c1"): ("404 404 403 403 403 401",) * 2,
@@ -359,14 +369,21 @@ DISPATCH: dict[tuple[str, str], tuple[str, str]] = {
         "200 200 403 200 403 403",
         "200 200 403 200 403 401",
     ),
-    # Served, but not implemented: a key holder gets the handler's 501 answer.
     ("GET", "/api/v1/teams"): ("501 501 501 403 403 401",) * 2,
     ("POST", f"{_XP}/conflicts/c1/resolve"): ("501 501 403 403 403 401",) * 2,
-    # The batch handler's documents:read GET entry has no branch for these two routes yet.
-    ("GET", "/api/v1/batch"): ("x x 403 x 403 403", "403 403 403 403 403 401"),
-    ("GET", "/api/v1/batch/queue/status"): ("x x 403 x 403 403", "403 403 403 403 403 401"),
-    # MemoryHandler has no handle_put, so PUT falls back to its memory:read GET entry.
-    ("PUT", "/api/v1/memory/k1"): ("x x x x 403 403", "403 403 403 403 403 401"),
+    ("GET", "/api/v1/batch"): ("501 501 403 501 403 403", "501 501 403 501 403 401"),
+    ("GET", "/api/v1/batch/queue/status"): ("501 501 403 501 403 403", "501 501 403 501 403 401"),
+    ("PUT", "/api/v1/memory/k1"): ("501 501 403 403 403 403", "501 501 403 403 403 401"),
+    **{
+        ("GET", f"/api/v1/memory/{route}"): ("501 501 501 501 403 403", "501 501 501 501 403 401")
+        for route in MEMORY_UNIMPLEMENTED_GETS
+    },
+    **{
+        ("GET", f"{_XP}/{route}"): ("501 501 501 501 403 403", "501 501 501 501 403 401")
+        for route in XP_UNIMPLEMENTED_GETS
+    },
+    ("POST", "/api/v1/teams"): ("501 501 501 403 403 401",) * 2,
+    ("POST", "/api/v1/teams/debates/send"): ("501 501 501 403 403 401",) * 2,
     # Continuum memory is not initialized here, so a caller holding memory.read gets 503.
     ("GET", "/api/v1/memory/tier-stats"): ("503 503 503 503 403 403", "503 503 503 503 403 401"),
     # The middleware's knowledge.read rule admits member; the handler's documents:read does not.
@@ -380,63 +397,106 @@ def _memory_handler() -> Any:
     return route[1]
 
 
-@pytest.fixture
-def fresh_memory_context(registry, monkeypatch) -> None:
-    # MemoryHandler keeps the last request's context on the shared instance, and its
-    # decorator reads that before the current request's; start every request without one.
-    monkeypatch.setattr(_memory_handler(), "_auth_context", None, raising=False)
-
-
 @pytest.mark.no_auto_auth
 @pytest.mark.parametrize("caller", CALLERS)
 @pytest.mark.parametrize("layer", ["handler", "server", "live"])
 @pytest.mark.parametrize(("method", "path"), sorted(DISPATCH))
 def test_real_jwt_callers_get_the_same_rule_at_every_layer(
-    registry, fresh_memory_context, method: str, path: str, layer: str, caller: str
+    registry, method: str, path: str, layer: str, caller: str
 ) -> None:
     handler_spec, server_spec = DISPATCH[(method, path)]
     expected = _cells(handler_spec if layer == "handler" else server_spec)[caller]
     cls = {"handler": registry, "server": _Server, "live": _Live}[layer]
     status, body = _dispatch(cls, method, path, caller)
-    if expected == NO_RESULT:
-        assert (status, body["code"]) == (500, "handler_no_result"), (layer, caller, body)
-    else:
-        assert status == expected, (layer, caller, body)
+    assert status == expected, (layer, caller, body)
+
+
+NOT_IMPLEMENTED_ROUTES = [
+    ("GET", "/api/v1/batch"),
+    ("GET", "/api/v1/batch/queue/status"),
+    ("PUT", "/api/v1/memory/k1"),
+    *(("GET", f"/api/v1/memory/{route}") for route in MEMORY_UNIMPLEMENTED_GETS),
+    *(("GET", f"{_XP}/{route}") for route in XP_UNIMPLEMENTED_GETS),
+    ("POST", "/api/v1/teams"),
+    ("POST", "/api/v1/teams/debates/send"),
+]
+
+
+@pytest.mark.no_auto_auth
+@pytest.mark.parametrize(("method", "path"), NOT_IMPLEMENTED_ROUTES)
+def test_not_implemented_answers_keep_their_envelope_in_production(
+    registry, monkeypatch, method: str, path: str
+) -> None:
+    monkeypatch.setenv("ARAGORA_ENV", "production")
+    status, body = _dispatch(registry, method, path, "owner")
+    assert (status, set(body), set(body["error"])) == (501, {"error"}, {"code", "message"})
+    assert body["error"]["code"] == "not_implemented"
+    assert body["error"]["message"].endswith("is not implemented"), body
 
 
 @pytest.mark.no_auto_auth
 @pytest.mark.parametrize("caller", CALLERS)
+@pytest.mark.parametrize("layer", ["server", "live"])
 @pytest.mark.parametrize(("method", "path"), UNSERVED)
 def test_unserved_routes_are_denied_before_dispatch(
-    registry, method: str, path: str, caller: str
+    registry, method: str, path: str, layer: str, caller: str
 ) -> None:
-    status, body = _dispatch(_Server, method, path, caller)
+    status, body = _dispatch({"server": _Server, "live": _Live}[layer], method, path, caller)
     expected = (401, "auth_required") if caller == "anon" else (403, "permission_denied")
-    assert (status, body["code"]) == expected, body
+    assert (status, body["code"]) == expected, (layer, body)
 
 
 @pytest.mark.no_auto_auth
-def test_memory_get_as_viewer_answers_403_not_500(registry, fresh_memory_context) -> None:
+@pytest.mark.parametrize("caller", CALLERS)
+@pytest.mark.parametrize(("method", "path"), UNSCOPED_XP)
+def test_unscoped_cross_pollination_routes_are_not_dispatched(
+    registry, method: str, path: str, caller: str
+) -> None:
+    found = get_route_index().get_handler(path)
+    assert found is not None
+    request = _request(registry, method, path, caller)
+    serve = found[1].handle_post if method == "POST" else found[1].handle
+    assert serve(path, {}, request) is None
+
+
+@pytest.mark.no_auto_auth
+def test_memory_get_as_viewer_answers_403_not_500(registry) -> None:
     status, body = _dispatch(registry, "GET", "/api/v1/memory/tier-stats", "viewer")
     assert (status, body) == (403, FORBIDDEN)
 
 
-@pytest.mark.no_auto_auth
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "plan X3: MemoryHandler keeps the request's auth context on the shared handler and "
-        "checks the next request against it; fixed in PR-B (m4-server-defects-pr-b)"
-    ),
+# Each caller signs in to its own organization, which is the tenant its memory reads use.
+MIXED_SEQUENCE = (
+    ("viewer", "org-v"),
+    ("owner", "org-o"),
+    ("viewer", "org-v"),
+    ("anon", "-"),
+    ("member", "org-m"),
+    ("owner", "org-o"),
 )
-def test_memory_handler_checks_each_request_against_its_own_caller(registry, monkeypatch) -> None:
-    monkeypatch.setattr(_memory_handler(), "_auth_context", None, raising=False)
+
+
+@pytest.mark.no_auto_auth
+@pytest.mark.parametrize(("layer", "anon_status"), [("handler", 403), ("live", 401)])
+def test_memory_handler_judges_and_scopes_each_request_by_its_own_caller(
+    registry, monkeypatch, layer: str, anon_status: int
+) -> None:
+    tenants: list[str | None] = []
+
+    def retrieve(**kwargs: Any) -> list[Any]:
+        tenants.append(kwargs["tenant_id"])
+        return []
+
+    monkeypatch.setitem(
+        _memory_handler().ctx, "continuum_memory", SimpleNamespace(retrieve=retrieve)
+    )
+    cls = {"handler": registry, "live": _Live}[layer]
     statuses = [
-        _dispatch(registry, "GET", "/api/v1/memory/tier-stats", caller)[0]
-        for caller in ("owner", "viewer")
+        _dispatch(cls, "GET", "/api/v1/memory/continuum/retrieve", caller, org)[0]
+        for caller, org in MIXED_SEQUENCE
     ]
-    assert statuses == [503, 403]
+    assert statuses == [403, 200, 403, anon_status, 200, 200]
+    assert tenants == ["org-o", "org-m", "org-o"]
 
 
 @pytest.mark.no_auto_auth

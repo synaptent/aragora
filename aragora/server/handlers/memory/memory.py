@@ -18,10 +18,14 @@ Note: `/api/memory/*` legacy routes are normalized to `/api/v1/memory/*`.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from contextvars import ContextVar
 from typing import Any
 
+import functools
 import logging
 import math
+import re
 
 from aragora.rbac.decorators import require_permission
 
@@ -34,6 +38,7 @@ from ..base import (
 )
 from ..secure import SecureHandler
 from ..utils.rate_limit import RateLimiter, get_client_ip
+from ..utils.responses import not_implemented_response
 
 # Import mixins
 from .memory_continuum import MemoryContinuumMixin
@@ -53,6 +58,37 @@ logger = logging.getLogger(__name__)
 MEMORY_READ_PERMISSION = "memory:read"
 MEMORY_WRITE_PERMISSION = "memory:write"
 MEMORY_MANAGE_PERMISSION = "memory:manage"
+
+# One MemoryHandler instance serves every request, so the caller's auth context is kept
+# per request (per thread and task) rather than on the instance.
+_NO_REQUEST: Any = object()
+_request_auth_context: ContextVar[Any] = ContextVar(
+    "memory_request_auth_context", default=_NO_REQUEST
+)
+
+
+def _with_request_auth_context(method: Callable[..., Any]) -> Callable[..., Any]:
+    """Bind the request handler's auth context while ``method`` runs."""
+
+    @functools.wraps(method)
+    def bound(self: Any, path: str, query_params: dict[str, Any], handler: Any) -> Any:
+        token = _request_auth_context.set(getattr(handler, "_auth_context", None))
+        try:
+            return method(self, path, query_params, handler)
+        finally:
+            _request_auth_context.reset(token)
+
+    return bound
+
+
+# Kept out of ``handle``'s source: the OpenAPI generator reads route literals there as
+# served GET operations, which would change the published spec for these routes.
+_UNIMPLEMENTED_READS = {
+    "/api/v1/memory/context": "Memory context is not implemented",
+    "/api/v1/memory/cross-debate": "Cross-debate memory is not implemented",
+    "/api/v1/memory/snapshots": "Listing memory snapshots is not implemented",
+}
+_ENTRY_PATH = re.compile(r"^/api/v1/memory/[^/]+$")
 
 # Optional import for memory functionality.
 # Fallbacks are assigned in the ``except`` branch so static type checkers do
@@ -93,6 +129,19 @@ class MemoryHandler(
     def __init__(self, ctx: dict | None = None, server_context: dict | None = None):
         """Initialize handler with optional context."""
         self.ctx = server_context or ctx or {}
+
+    @property
+    def _auth_context(self) -> Any:
+        """The current request's auth context; outside a request, the one assigned here."""
+        current = _request_auth_context.get()
+        return self.__dict__.get("_assigned_auth_context") if current is _NO_REQUEST else current
+
+    @_auth_context.setter
+    def _auth_context(self, value: Any) -> None:
+        if _request_auth_context.get() is _NO_REQUEST:
+            self.__dict__["_assigned_auth_context"] = value
+        else:
+            _request_auth_context.set(value)
 
     ROUTES = [
         "/api/v1/memory/continuum/retrieve",
@@ -161,10 +210,9 @@ class MemoryHandler(
         return self.ctx.get("user_store")
 
     @require_permission("memory:read")
+    @_with_request_auth_context
     def handle(self, path: str, query_params: dict[str, Any], handler: Any) -> HandlerResult | None:
         """Route memory requests to appropriate handler methods."""
-        # Capture auth context for downstream filtering (set by handler registry)
-        self._auth_context = getattr(handler, "_auth_context", None)
         path = self._normalize_path(path)
         client_ip = get_client_ip(handler)
 
@@ -243,10 +291,23 @@ class MemoryHandler(
                 return error_response("Rate limit exceeded. Please try again later.", 429)
             return self._get_unified_stats()
 
+        if path in _UNIMPLEMENTED_READS and getattr(handler, "command", "GET") == "GET":
+            return not_implemented_response(_UNIMPLEMENTED_READS[path])
+
+        return None
+
+    @require_permission("memory:update")
+    def handle_put(
+        self, path: str, query_params: dict[str, Any], handler: Any
+    ) -> HandlerResult | None:
+        """Answer memory entry updates, which have no implementation, after authorizing them."""
+        if _ENTRY_PATH.match(self._normalize_path(path)):
+            return not_implemented_response("Updating memory entries is not implemented")
         return None
 
     @handle_errors("memory creation")
     @require_permission("memory:manage")
+    @_with_request_auth_context
     def handle_post(
         self, path: str, query_params: dict[str, Any], handler: Any
     ) -> HandlerResult | None:
@@ -409,11 +470,11 @@ class MemoryHandler(
         return json_response({"success": True, "previous_tier": previous_tier})
 
     @handle_errors("memory deletion")
+    @_with_request_auth_context
     def handle_delete(
         self, path: str, query_params: dict[str, Any], handler: Any
     ) -> HandlerResult | None:
         """Route DELETE memory requests to appropriate methods with auth."""
-        self._auth_context = getattr(handler, "_auth_context", None)
         path = self._normalize_path(path)
         from aragora.billing.jwt_auth import extract_user_from_request
 
