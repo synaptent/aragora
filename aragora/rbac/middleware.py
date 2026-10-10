@@ -812,17 +812,12 @@ DEFAULT_ROUTE_PERMISSIONS = [
         "cross_pollination.write",
     ),
     RoutePermission(
-        r"^/api/(?:v1/)?cross-pollination/(?:stats|subscribers|bridge|km|km/culture|conflicts"
+        r"^/api/(?:v1/)?cross-pollination/(?:stats|subscribers|bridge|km|conflicts"
         r"|federation|federation/sync|subscribe|sync/status|sync/trigger)$",
         "GET",
         "cross_pollination.read",
     ),
     RoutePermission(r"^/api/(?:v1/)?cross-pollination/metrics$", "GET", "analytics.read"),
-    RoutePermission(
-        r"^/api/(?:v1/)?cross-pollination/(?:reset|km/sync|km/staleness-check)$",
-        "POST",
-        "cross_pollination.write",
-    ),
     RoutePermission(r"^/api/(?:v1/)?teams$", "GET", "bots.read"),
     # Create and send have no key of their own yet; their handlers answer 501 under bots.read.
     RoutePermission(r"^/api/(?:v1/)?teams(?:/debates/send)?$", "POST", "bots.read"),

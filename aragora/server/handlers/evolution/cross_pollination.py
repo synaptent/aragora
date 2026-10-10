@@ -45,15 +45,6 @@ class _ReadViewDispatch:
         return None
 
 
-class _WriteViewDispatch:
-    """Serves a POST on the handler's route with its permission-checked ``post`` view."""
-
-    post: Callable[..., Awaitable[HandlerResult]]
-
-    def handle_post(self, path: str, query_params: dict[str, Any], handler: Any) -> Any:
-        return self.post(handler) if path in getattr(self, "ROUTES", ()) else None
-
-
 class CrossPollinationStatsHandler(BaseHandler):
     """
     Handler for GET /api/cross-pollination/stats.
@@ -289,7 +280,7 @@ class CrossPollinationMetricsHandler(_ReadViewDispatch, BaseHandler):
             return error_response("Internal server error", status=500)
 
 
-class CrossPollinationResetHandler(_WriteViewDispatch, BaseHandler):
+class CrossPollinationResetHandler(BaseHandler):
     """
     Handler for POST /api/cross-pollination/reset.
 
@@ -299,7 +290,7 @@ class CrossPollinationResetHandler(_WriteViewDispatch, BaseHandler):
     ROUTES = ["/api/v1/cross-pollination/reset"]
 
     @require_permission("cross_pollination:write")
-    async def post(self, handler: Any = None) -> HandlerResult:
+    async def post(self) -> HandlerResult:
         """Reset subscriber statistics."""
         try:
             from aragora.events.cross_subscribers import get_cross_subscriber_manager
@@ -418,7 +409,7 @@ class CrossPollinationKMHandler(_ReadViewDispatch, BaseHandler):
             return error_response("Internal server error", status=500)
 
 
-class CrossPollinationKMSyncHandler(_WriteViewDispatch, BaseHandler):
+class CrossPollinationKMSyncHandler(BaseHandler):
     """
     Handler for POST /api/cross-pollination/km/sync.
 
@@ -429,7 +420,7 @@ class CrossPollinationKMSyncHandler(_WriteViewDispatch, BaseHandler):
     ROUTES = ["/api/v1/cross-pollination/km/sync"]
 
     @require_permission("cross_pollination:write")
-    async def post(self, handler: Any = None) -> HandlerResult:
+    async def post(self) -> HandlerResult:
         """Trigger manual KM adapter sync."""
         import time
 
@@ -537,7 +528,7 @@ class CrossPollinationKMSyncHandler(_WriteViewDispatch, BaseHandler):
             return error_response("Internal server error", status=500)
 
 
-class CrossPollinationKMStalenessHandler(_WriteViewDispatch, BaseHandler):
+class CrossPollinationKMStalenessHandler(BaseHandler):
     """
     Handler for POST /api/cross-pollination/km/staleness-check.
 
@@ -547,7 +538,7 @@ class CrossPollinationKMStalenessHandler(_WriteViewDispatch, BaseHandler):
     ROUTES = ["/api/v1/cross-pollination/km/staleness-check"]
 
     @require_permission("cross_pollination:write")
-    async def post(self, handler: Any = None) -> HandlerResult:
+    async def post(self) -> HandlerResult:
         """Trigger manual staleness check."""
         import time
 
@@ -623,7 +614,7 @@ class CrossPollinationKMStalenessHandler(_WriteViewDispatch, BaseHandler):
             return error_response("Internal server error", status=500)
 
 
-class CrossPollinationKMCultureHandler(_ReadViewDispatch, BaseHandler):
+class CrossPollinationKMCultureHandler(BaseHandler):
     """
     Handler for GET /api/cross-pollination/km/culture.
 
@@ -633,7 +624,7 @@ class CrossPollinationKMCultureHandler(_ReadViewDispatch, BaseHandler):
     ROUTES = ["/api/v1/cross-pollination/km/culture"]
 
     @require_permission("cross_pollination:read")
-    async def get(self, handler: Any = None) -> HandlerResult:
+    async def get(self) -> HandlerResult:
         """Get culture patterns."""
         try:
             workspace_id = (

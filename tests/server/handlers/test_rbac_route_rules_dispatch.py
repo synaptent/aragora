@@ -117,8 +117,6 @@ def _auth_on_and_isolated_state(monkeypatch):
         _rlm_adapter=SimpleNamespace(get_stats=dict),
         get_stats=dict,
         get_batch_stats=dict,
-        reset_stats=lambda: None,
-        flush_all_batches=lambda: 0,
     )
     monkeypatch.setattr(cross_subscribers, "get_cross_subscriber_manager", lambda: manager)
     monkeypatch.setattr(knowledge_mound, "get_knowledge_mound", lambda *a, **k: None)
@@ -219,7 +217,7 @@ def _dispatch(
 _XP = "/api/v1/cross-pollination"
 # Cross-pollination routes by what their handler does for a caller holding the key
 # (``metrics`` is served too, under ``analytics.read``).
-XP_SERVED_GETS = ("stats", "subscribers", "bridge", "km", "km/culture")
+XP_SERVED_GETS = ("stats", "subscribers", "bridge", "km")
 XP_UNIMPLEMENTED_GETS = (
     "conflicts",
     "federation",
@@ -228,7 +226,6 @@ XP_UNIMPLEMENTED_GETS = (
     "sync/status",
     "sync/trigger",
 )
-XP_POSTS = ("reset", "km/sync", "km/staleness-check")
 MEMORY_UNIMPLEMENTED_GETS = ("context", "cross-debate", "snapshots")
 
 # (method, path) -> key of the first matching middleware rule. Each key is the one the
@@ -261,7 +258,6 @@ RULES: dict[tuple[str, str], str] = {
         for route in (*XP_SERVED_GETS, *XP_UNIMPLEMENTED_GETS)
     },
     ("GET", f"{_XP}/metrics"): "analytics.read",
-    **{("POST", f"{_XP}/{route}"): "cross_pollination.write" for route in XP_POSTS},
     # A create route behind a read key: no write key is registered and the answer is a 501.
     ("POST", "/api/v1/teams"): "bots.read",
     ("POST", "/api/v1/teams/debates/send"): "bots.read",
@@ -269,9 +265,18 @@ RULES: dict[tuple[str, str], str] = {
 
 # Methods the routes' handlers do not serve: a rule would turn the default-deny 403 into a
 # 500 handler_no_result for every key holder, so they stay without one until they are served.
+# The cross-pollination writes act on process-wide state and ``km/culture`` cannot scope its
+# workspace to the caller, so an organization-level key must not reach them.
+UNSCOPED_XP: list[tuple[str, str]] = [
+    ("POST", f"{_XP}/reset"),
+    ("POST", f"{_XP}/km/sync"),
+    ("POST", f"{_XP}/km/staleness-check"),
+    ("GET", f"{_XP}/km/culture"),
+]
 UNSERVED: list[tuple[str, str]] = [
     ("POST", "/api/v1/batch"),
     ("POST", f"{_XP}/subscribe"),
+    *UNSCOPED_XP,
 ]
 
 # Roles whose RBAC v2 defaults hold each key (measured with the real checker).
@@ -398,10 +403,6 @@ DISPATCH: dict[tuple[str, str], tuple[str, str]] = {
         ("GET", f"{_XP}/{route}"): ("501 501 501 501 403 403", "501 501 501 501 403 401")
         for route in XP_UNIMPLEMENTED_GETS
     },
-    **{
-        ("POST", f"{_XP}/{route}"): ("200 200 403 403 403 403", "200 200 403 403 403 401")
-        for route in XP_POSTS
-    },
     ("POST", "/api/v1/teams"): ("501 501 501 403 403 401",) * 2,
     ("POST", "/api/v1/teams/debates/send"): ("501 501 501 403 403 401",) * 2,
     # Continuum memory is not initialized here, so a caller holding memory.read gets 503.
@@ -463,6 +464,18 @@ def test_unserved_routes_are_denied_before_dispatch(
     status, body = _dispatch(_Server, method, path, caller)
     expected = (401, "auth_required") if caller == "anon" else (403, "permission_denied")
     assert (status, body["code"]) == expected, body
+
+
+@pytest.mark.no_auto_auth
+@pytest.mark.parametrize(("method", "path"), UNSCOPED_XP)
+def test_unscoped_cross_pollination_routes_are_not_dispatched(
+    registry, method: str, path: str
+) -> None:
+    found = get_route_index().get_handler(path)
+    assert found is not None
+    request = _request(registry, method, path, "owner")
+    serve = found[1].handle_post if method == "POST" else found[1].handle
+    assert serve(path, {}, request) is None
 
 
 @pytest.mark.no_auto_auth
