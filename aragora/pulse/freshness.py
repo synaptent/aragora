@@ -203,8 +203,10 @@ class FreshnessCalculator:
         fresh.sort(key=lambda x: x.freshness, reverse=True)
 
         logger.debug(
-            f"Freshness filter: {len(topics)} topics -> {len(fresh)} fresh "
-            f"(min_freshness={min_freshness:.2f})"
+            "Freshness filter: %s topics -> %s fresh (min_freshness=%.2f)",
+            len(topics),
+            len(fresh),
+            min_freshness,
         )
 
         return fresh
@@ -279,7 +281,7 @@ class FreshnessCalculator:
     def set_platform_half_life(self, platform: str, half_life_hours: float) -> None:
         """Set custom half-life for a platform."""
         self._platform_half_lives[platform.lower()] = half_life_hours
-        logger.info(f"Set half-life for {platform}: {half_life_hours:.1f}h")
+        logger.info("Set half-life for %s: %.1fh", platform, half_life_hours)
 
     def get_decay_curve(
         self,

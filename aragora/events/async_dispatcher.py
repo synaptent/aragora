@@ -193,8 +193,10 @@ class AsyncWebhookDispatcher:
             duration_ms = (time.time() - start_time) * 1000
 
             logger.debug(
-                f"Async webhook delivered to {webhook.url}: "
-                f"status={response.status_code}, duration={duration_ms:.1f}ms"
+                "Async webhook delivered to %s: status=%s, duration=%.1fms",
+                webhook.url,
+                response.status_code,
+                duration_ms,
             )
 
             if 200 <= response.status_code < 300:
@@ -287,8 +289,11 @@ class AsyncWebhookDispatcher:
                         record_webhook_retry(event_type, attempt + 1)
 
                     logger.info(
-                        f"Retrying async webhook {webhook.id} in {delay:.1f}s "
-                        f"(attempt {attempt + 1}/{max_retries})"
+                        "Retrying async webhook %s in %.1fs (attempt %s/%s)",
+                        webhook.id,
+                        delay,
+                        attempt + 1,
+                        max_retries,
                     )
                     await asyncio.sleep(delay)
                     delay = min(delay * 2, max_delay)

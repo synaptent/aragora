@@ -93,8 +93,8 @@ def main() -> int:
     # Output JSON if requested
     if args.json:
         output_path = Path("security-report.json")
-        with open(output_path, "w") as f:
-            json.dump(report.to_dict(), f, indent=2, default=str)
+        with open(output_path, "w") as report_file:
+            json.dump(report.to_dict(), report_file, indent=2, default=str)
         print(f"\nJSON report written to: {output_path}")
 
     # Print summary

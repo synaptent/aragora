@@ -85,8 +85,12 @@ def with_resilience(
 
                     if attempt < retries - 1:
                         logger.warning(
-                            f"[resilience] {name} attempt {attempt + 1}/{retries} failed: {e}. "
-                            f"Retrying in {delay:.1f}s"
+                            "[resilience] %s attempt %s/%s failed: %s. Retrying in %.1fs",
+                            name,
+                            attempt + 1,
+                            retries,
+                            e,
+                            delay,
                         )
                         await asyncio.sleep(delay)
                     else:

@@ -157,9 +157,15 @@ class TeamsEnterpriseConnector(EnterpriseConnector):
             exclude_system_messages: Skip system/event messages
             messages_per_channel: Maximum messages to sync per channel
             use_delta_sync: Use delta queries for incremental sync
-            tenant_id: Azure AD tenant ID
+            tenant_id: Azure AD tenant ID used to request tokens (falls back to the
+                TEAMS_TENANT_ID credential). Stored as ``azure_tenant_id`` and
+                appended to ``connector_id`` (``teams-enterprise-<tenant_id>``), so
+                each Azure tenant gets its own sync state file and circuit breaker.
+                It does not set the Aragora tenant (``self.tenant_id``), which still
+                suffixes the state file name and keys the Knowledge Mound workspace.
         """
-        super().__init__(connector_id="teams-enterprise", **kwargs)
+        connector_id = f"teams-enterprise-{tenant_id}" if tenant_id else "teams-enterprise"
+        super().__init__(connector_id=connector_id, **kwargs)
 
         self.team_ids = team_ids or []
         self.channel_ids = channel_ids or []
@@ -170,7 +176,7 @@ class TeamsEnterpriseConnector(EnterpriseConnector):
         self.exclude_system_messages = exclude_system_messages
         self.messages_per_channel = messages_per_channel
         self.use_delta_sync = use_delta_sync
-        self.tenant_id = tenant_id
+        self.azure_tenant_id = tenant_id
 
         self._access_token: str | None = None
         self._token_expiry: datetime | None = None
@@ -194,7 +200,7 @@ class TeamsEnterpriseConnector(EnterpriseConnector):
             return self._access_token
 
         # Get credentials
-        tenant_id = self.tenant_id or await self.credentials.get_credential("TEAMS_TENANT_ID")
+        tenant_id = self.azure_tenant_id or await self.credentials.get_credential("TEAMS_TENANT_ID")
         client_id = await self.credentials.get_credential("TEAMS_CLIENT_ID")
         client_secret = await self.credentials.get_credential("TEAMS_CLIENT_SECRET")
 

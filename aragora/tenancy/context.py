@@ -29,16 +29,21 @@ from typing import (
 )
 from collections.abc import Awaitable, Callable
 
+# The context variables and their plain getters/setters live in the config
+# layer; re-exported here so both import paths share one tenant state.
+from aragora.config.tenant_context import (
+    _current_tenant as _current_tenant,
+    _current_tenant_id as _current_tenant_id,
+    get_current_tenant as get_current_tenant,
+    get_current_tenant_id as get_current_tenant_id,
+    set_tenant as set_tenant,
+    set_tenant_id as set_tenant_id,
+)
+
 if TYPE_CHECKING:
     from aragora.tenancy.tenant import Tenant
 
 logger = logging.getLogger(__name__)
-
-# Context variable for current tenant
-_current_tenant: ContextVar[Tenant | None] = ContextVar("current_tenant", default=None)
-
-# Context variable for tenant ID (lighter weight)
-_current_tenant_id: ContextVar[str | None] = ContextVar("current_tenant_id", default=None)
 
 T = TypeVar("T")
 P = ParamSpec("P")
@@ -126,6 +131,8 @@ class TenantContext:
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         """Exit sync context."""
+        if self._token_id is None or self._token_tenant is None:
+            raise RuntimeError("TenantContext exited before it was entered")
         _current_tenant_id.reset(self._token_id)
         _current_tenant.reset(self._token_tenant)
 
@@ -149,26 +156,6 @@ class TenantContext:
     def tenant(self) -> Tenant | None:
         """Get the tenant object for this context."""
         return self._tenant
-
-
-def get_current_tenant() -> Tenant | None:
-    """
-    Get the current tenant from context.
-
-    Returns:
-        Current tenant or None if not set
-    """
-    return _current_tenant.get()
-
-
-def get_current_tenant_id() -> str | None:
-    """
-    Get the current tenant ID from context.
-
-    Returns:
-        Current tenant ID or None if not set
-    """
-    return _current_tenant_id.get()
 
 
 def require_tenant() -> Tenant:
@@ -201,29 +188,6 @@ def require_tenant_id() -> str:
     if tenant_id is None:
         raise TenantNotSetError("No tenant ID set in current context")
     return tenant_id
-
-
-def set_tenant(tenant: Tenant | None) -> None:
-    """
-    Set the current tenant directly (use with caution).
-
-    Prefer using TenantContext for proper cleanup.
-
-    Args:
-        tenant: Tenant to set, or None to clear
-    """
-    _current_tenant.set(tenant)
-    _current_tenant_id.set(tenant.id if tenant else None)
-
-
-def set_tenant_id(tenant_id: str | None) -> None:
-    """
-    Set the current tenant ID directly (use with caution).
-
-    Args:
-        tenant_id: Tenant ID to set, or None to clear
-    """
-    _current_tenant_id.set(tenant_id)
 
 
 def get_context_info() -> TenantContextInfo:

@@ -42,7 +42,7 @@ async def _run_crux_debate(
 
     from aragora import Arena, Environment
     from aragora.agents import get_agents_by_names
-    from aragora.debate.protocol import DebateProtocol
+    from aragora.protocols.debate import DebateProtocol
 
     protocol = DebateProtocol(
         rounds=rounds,

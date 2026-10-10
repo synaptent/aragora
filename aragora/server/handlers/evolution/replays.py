@@ -159,8 +159,9 @@ class ReplaysHandler(BaseHandler):
             if len(dir_entries) >= max_to_scan:
                 break
 
-        # Sort only the collected subset by modification time (newest first)
-        dir_entries.sort(key=lambda x: x[0], reverse=True)
+        # Sort only the collected subset, newest first. Equal mtimes fall back to the
+        # directory name (descending) so the order never depends on iterdir() order.
+        dir_entries.sort(key=lambda x: (x[0], x[1].name), reverse=True)
 
         replays = []
         for _, replay_path in dir_entries[:limit]:

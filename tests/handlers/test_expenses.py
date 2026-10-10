@@ -366,7 +366,7 @@ class TestListExpenses:
         assert _status(result) == 200
 
     @pytest.mark.asyncio
-    async def test_list_expenses_invalid_date_ignored(self, mock_tracker):
+    async def test_list_expenses_invalid_date_rejected(self, mock_tracker):
         with patch(
             "aragora.server.handlers.expenses.get_expense_tracker",
             return_value=mock_tracker,
@@ -377,7 +377,8 @@ class TestListExpenses:
                     "end_date": "also-not-a-date",
                 }
             )
-        assert _status(result) == 200
+        assert _status(result) == 400
+        assert "start_date" in _body(result)["error"]
 
     @pytest.mark.asyncio
     async def test_list_expenses_invalid_category_ignored(self, mock_tracker):
@@ -514,7 +515,7 @@ class TestGetExpenseStats:
         assert _status(result) == 200
 
     @pytest.mark.asyncio
-    async def test_get_stats_invalid_date_ignored(self, mock_tracker):
+    async def test_get_stats_invalid_date_rejected(self, mock_tracker):
         with patch(
             "aragora.server.handlers.expenses.get_expense_tracker",
             return_value=mock_tracker,
@@ -524,7 +525,8 @@ class TestGetExpenseStats:
                     "start_date": "bad-date",
                 }
             )
-        assert _status(result) == 200
+        assert _status(result) == 400
+        assert "start_date" in _body(result)["error"]
 
     @pytest.mark.asyncio
     async def test_get_stats_dict_result(self, mock_tracker):

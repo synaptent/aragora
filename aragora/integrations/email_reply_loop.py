@@ -47,10 +47,8 @@ from typing import TYPE_CHECKING, Any
 from collections.abc import Callable
 
 from aragora.exceptions import REDIS_CONNECTION_ERRORS
-from aragora.control_plane.leader import (
-    is_distributed_state_required,
-    DistributedStateError,
-)
+from aragora.config.distributed import is_distributed_state_required
+from aragora.control_plane.leader import DistributedStateError
 from aragora.persistence.db_config import get_default_data_dir
 
 if TYPE_CHECKING:

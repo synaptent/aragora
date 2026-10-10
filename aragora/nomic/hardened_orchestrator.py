@@ -144,6 +144,11 @@ class HardenedOrchestrator(BudgetMixin, GauntletMixin, AuditMixin, AutonomousOrc
         AuditMixin: Cross-agent file overlap detection
     """
 
+    # Set by AutonomousOrchestrator.__init__. Declared here so mypy runs that skip
+    # following imports (the CI changed-file gate) do not infer it from the worktree
+    # swaps below and report [has-type].
+    aragora_path: Path
+
     def __init__(
         self,
         *,
