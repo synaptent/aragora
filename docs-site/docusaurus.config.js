@@ -215,9 +215,9 @@ const config = {
 
       // Announcement bar
       announcementBar: {
-        id: 'proof_first_rc1',
+        id: 'release_v2_12_0',
         content:
-          'Aragora v2.9.0-rc.1 is out: proof-first PR settlement, calibration gates, and Decision Integrity Core slices. <a href="/docs/contributing/b0-benchmark-truth-status">See the proof surfaces</a>.',
+          'Aragora v2.12.0: knowledge facts scoped to your organization, 403 instead of 500 for denied permissions, and a GitHub Action that runs outside this repository again. <a href="https://github.com/synaptent/aragora/blob/main/docs/releases/v2.12.0.md">Read the release notes</a>.',
         backgroundColor: '#4F46E5',
         textColor: '#FFFFFF',
         isCloseable: true,

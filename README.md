@@ -351,7 +351,7 @@ proves. *(docs/CANONICAL_GOALS.md, docs/vision/MAXIMALIST_VISION.md)*
 > **~4,400 Python files · ~2.0M LOC · 140+ top-level modules · 200,000+ test
 > functions across ~5,700 files · 3,205 API operations across 2,912 paths ·
 > 35+ allowlisted agent types across 12+ providers · 42 Knowledge Mound adapter specs
-> (47 files) · 360+ RBAC permissions · Python + TypeScript SDKs · v2.11.1.**
+> (47 files) · 360+ RBAC permissions · Python + TypeScript SDKs · v2.12.0.**
 > (Practical real-time debate uses 2–6 agents; the value is *heterogeneity*, not raw
 > count — see docs/strategy/HONEST_ASSESSMENT.md.)
 <!-- metrics:end -->

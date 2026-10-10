@@ -21,13 +21,13 @@ Each distribution ships its own `pyproject.toml` and its own version number.
 **They are independent — do not assume one tracks another.** Versions below
 are read directly from each package's `pyproject.toml` and cross-checked live
 against the public PyPI index (`curl -s https://pypi.org/pypi/<name>/json`,
-re-verified 2026-09-27):
+re-verified 2026-10-10):
 
 | Distribution | PyPI name | Declared in | Current version | PyPI status (live-checked) |
 |---|---|---|---|---|
-| Root platform | `aragora` | `pyproject.toml` | **2.11.1** | Latest on PyPI = 2.11.0 (2026-09-27; the 2.11.1 build ships when the operator tags `v2.11.1` and dispatches `publish-aragora.yml`) |
+| Root platform | `aragora` | `pyproject.toml` | **2.12.0** | Latest on PyPI = 2.11.1 (2026-09-28; the 2.12.0 build ships when the operator tags `v2.12.0` and dispatches `publish-aragora.yml`) |
 | Debate engine | `aragora-debate` | `aragora-debate/pyproject.toml` | **0.2.3** | Published; latest on PyPI = 0.2.3 |
-| Python SDK | `aragora-sdk` | `sdk/python/pyproject.toml` | **2.11.1** | Published; latest on PyPI = **2.11.0** (2026-09-27) — the repo's in-tree version has moved to 2.11.1 but that build has not been released to PyPI yet, so `pip install aragora-sdk` today gives you 2.11.0, not 2.11.1 |
+| Python SDK | `aragora-sdk` | `sdk/python/pyproject.toml` | **2.12.0** | Published; latest on PyPI = **2.11.0** (2026-09-27) — the repo's in-tree version has moved to 2.12.0 but that build has not been released to PyPI yet, so `pip install aragora-sdk` today gives you 2.11.0, not 2.12.0 |
 | Verifier | `aragora-verify` | `aragora-verify/pyproject.toml` | **0.2.0** | Published; latest on PyPI = **0.2.0** (released 2026-09-25T00:08Z). It is the first line that accepts ODR v0.2, the default output since 2.11.0; 0.1.x rejects v0.2 documents at `schema_conformance`. Its published metadata requires `cryptography>=48.0.1` |
 
 <!-- FACT (live-verified 2026-09-27): aragora-verify 0.2.0 IS on PyPI (info.version=0.2.0, requires_dist cryptography>=48.0.1). Before changing this, re-run: curl -s https://pypi.org/pypi/aragora-verify/json | jq .info.version -->
@@ -97,13 +97,13 @@ checked against that released wheel. The release-to-tree relationship is:
 | Install source | Version represented here | Compatibility check |
 |---|---|---|
 | PyPI (`pip install aragora-sdk`) | 2.11.0 | `python scripts/check_quickstart_surface.py --installed` in a fresh PyPI-only virtual environment |
-| This checkout (`pip install ./sdk/python`) | 2.11.1 | `python scripts/verify_sdk_contracts.py --strict` against the committed OpenAPI specs |
+| This checkout (`pip install ./sdk/python`) | 2.12.0 | `python scripts/verify_sdk_contracts.py --strict` against the committed OpenAPI specs |
 
 The public 2.8.0 quickstart intentionally uses only methods present in that
 wheel. Repository-tip references can move ahead under the decoupled release
 cadence and belong on the source-install path below.
 
-Or, to exercise this checkout's in-tree version (2.11.1, not yet released to
+Or, to exercise this checkout's in-tree version (2.12.0, not yet released to
 PyPI):
 
 ```bash

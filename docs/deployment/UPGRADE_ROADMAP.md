@@ -29,10 +29,10 @@ For detailed migration instructions, see:
 
 | Version | Release | End of Support | Status |
 |---------|---------|----------------|--------|
-| **v2.11.x** | 2026-09-25 | Active | **Current** |
+| **v2.12.x** | 2026-10-10 | Active | **Current** |
+| v2.11.x | 2026-09-25 | Active | Supported |
 | v2.10.x | 2026-09-04 | Active | Supported |
-| v2.9.x | 2026-04-25 | Active | Supported |
-| v2.5.x–v2.8.x | 2026-02-01–2026-02-25 | Active | Supported |
+| v2.5.x–v2.9.x | 2026-02-01–2026-04-25 | Active | Supported |
 | v2.0.x–v2.4.x | 2026-01-13–01-25 | Active | Supported |
 | v1.0.x | 2026-01-13 | 2026-06-01 | Deprecated |
 | v0.8.x | Pre-1.0 | 2026-03-01 | End of life |
@@ -47,28 +47,28 @@ For detailed migration instructions, see:
 
 ## Current Version
 
-**Aragora v2.11.1** (released 2026-09-28)
+**Aragora v2.12.0** (released 2026-10-10)
 
 ```python
 # Check your version
 from aragora.__version__ import __version__
-print(__version__)  # "2.11.1"
+print(__version__)  # "2.12.0"
 ```
 
 **Python support:** 3.10, 3.11, 3.12, 3.13
 
-**PyPI availability:** the `2.11.1` wheel ships when the operator pushes the `v2.11.1` tag and dispatches `publish-aragora.yml`; until then PyPI serves 2.11.0 and the `==2.11.1` commands below resolve nothing (see [INSTALL_MATRIX.md](../reference/INSTALL_MATRIX.md)).
+**PyPI availability:** the `2.12.0` wheel ships when the operator pushes the `v2.12.0` tag and dispatches `publish-aragora.yml`; until then PyPI serves 2.11.1 and the `==2.12.0` commands below resolve nothing (see [INSTALL_MATRIX.md](../reference/INSTALL_MATRIX.md)).
 
 ---
 
 ## Upgrade Paths
 
-### v2.x.x -> v2.11.1 (Minor Upgrade; Patch from v2.11.0)
+### v2.x.x -> v2.12.0 (Minor Upgrade)
 
-No server API breaking changes between v2.x releases. Behavioral changes are listed per release in the [Breaking Change Summary](#breaking-change-summary): v2.10.0 never mints a `DecisionReceipt` verdict from zero evidence (#9306), and v2.11.0 changes Gauntlet CLI exit codes, receipt-export authentication, agent-name validation and some SDK retry/stream behavior. v2.10.0 reached PyPI on 2026-09-25, so an upgrade from 2.9.x picks up both sets. SDK consumers should also read `sdk/python/BREAKING_CHANGES.md` and `sdk/typescript/BREAKING_CHANGES.md`: both SDKs removed methods whose routes no server dispatched. Standard upgrade:
+No server routes are removed between v2.x releases, but some responses change. Behavioral changes are listed per release in the [Breaking Change Summary](#breaking-change-summary): v2.10.0 never mints a `DecisionReceipt` verdict from zero evidence (#9306); v2.11.0 changes Gauntlet CLI exit codes, receipt-export authentication, agent-name validation and some SDK retry/stream behavior; v2.12.0 scopes knowledge facts to the caller's organization, answers 403 instead of 500 for denied permissions, and moves a relative budget-guard data directory under the home directory. v2.10.0 reached PyPI on 2026-09-25, so an upgrade from 2.9.x picks up every set. SDK consumers should also read `sdk/python/BREAKING_CHANGES.md` and `sdk/typescript/BREAKING_CHANGES.md`: both SDKs removed methods whose routes no server dispatched. Standard upgrade:
 
 ```bash
-pip install --upgrade aragora==2.11.1
+pip install --upgrade aragora==2.12.0
 ```
 
 Run database migrations if any are pending:
@@ -77,13 +77,13 @@ Run database migrations if any are pending:
 python -m aragora.migrations upgrade
 ```
 
-### v1.0.x -> v2.11.1 (Major Upgrade)
+### v1.0.x -> v2.12.0 (Major Upgrade)
 
 This upgrade requires API and SDK migration. Follow these steps in order:
 
 **Step 1: Update dependencies**
 ```bash
-pip install --upgrade aragora==2.11.1
+pip install --upgrade aragora==2.12.0
 ```
 
 **Step 2: Run database migrations**
@@ -150,7 +150,7 @@ ARAGORA_REQUIRE_DISTRIBUTED=true
 
 See [MIGRATION_V1_TO_V2.md](../status/MIGRATION_V1_TO_V2.md) for the complete migration guide.
 
-### v0.8.x -> v2.11.1 (Legacy Upgrade)
+### v0.8.x -> v2.12.0 (Legacy Upgrade)
 
 Upgrade to v1.0.0 first, then follow the v1 -> v2 path:
 
@@ -162,8 +162,8 @@ python -m aragora.migrations upgrade
 # Step 2: Verify v1 works
 pytest tests/ -v --timeout=60
 
-# Step 3: Upgrade to v2.11.1
-pip install aragora==2.11.1
+# Step 3: Upgrade to v2.12.0
+pip install aragora==2.12.0
 python -m aragora.migrations upgrade
 ```
 
@@ -200,7 +200,7 @@ Run through this checklist before any upgrade:
 
 ```bash
 # Create a full backup
-python -m aragora.backup.manager create --label "pre-upgrade-v2.11.1"
+python -m aragora.backup.manager create --label "pre-upgrade-v2.12.0"
 
 # Verify the backup
 python -m aragora.backup.manager verify --latest
@@ -275,7 +275,7 @@ Major version rollbacks require restoring from backup:
 systemctl stop aragora
 
 # 2. Restore from backup
-python -m aragora.backup.manager restore --label "pre-upgrade-v2.11.1"
+python -m aragora.backup.manager restore --label "pre-upgrade-v2.12.0"
 
 # 3. Downgrade the package
 pip install aragora==1.0.0
@@ -320,6 +320,16 @@ Migration safety features:
 ---
 
 ## Breaking Change Summary
+
+### v2.12.0 Behavioral Changes
+
+| Area | Change | Action Required |
+|------|--------|-----------------|
+| **Knowledge facts** | Fact routes on the v1 and v2 knowledge-base APIs serve only the caller's authenticated organization; a fact in another organization or without one answers 404, and a caller without an organization gets 403 `knowledge_org_required`. Chunk search and Knowledge Mound fact sync stay closed (403 `knowledge_fact_access_closed`, `OrgScopeRequiredError`), facts stored without an organization are quarantined, and the `aragora knowledge` commands `query`, `facts`, `process` and `stats` exit 2 at the fact store (#10267, #10298, #10386, #10555) | Give API callers an organization; follow "Legacy facts without an organization (operator-only)" in `docs/knowledge/KNOWLEDGE_MOUND_OPERATIONS.md` for old facts; re-upload documents whose chunks must be searchable by organization |
+| **Permission denials** | A handler-level permission or role denial answers 403 instead of 500, an MFA requirement answers 403 `MFA_REQUIRED`, and new middleware rules cover the connector, analytics-platform, cross-pollination, teams, document-batch and memory routes (#10468, #10557) | Clients that retried on the old 500 should treat 403 as final |
+| **Previously unrouted handlers** | Email, teams, cross-pollination, connector, analytics-platform and accounting routes reach their handlers; listed routes without backing logic answer 501 `not_implemented` after their permission check instead of 500 (#10227, #10228, #10238, #10473, #10534) | Handle 501 on those routes |
+| **Budget guard ledger** | A relative `ARAGORA_DATA_DIR` or `ARAGORA_NOMIC_DIR` is anchored under the home directory, so the ledger no longer depends on the working directory (#10210) | Before upgrading mid-month, copy the old ledger or set `ARAGORA_BUDGET_GUARD_STORE` to its absolute path |
+| **SDKs and client** | Methods for routes no server serves are removed: TypeScript `getMode`, `connectSSE`, `crossPollination.unsubscribe`, `apAutomation.addAPInvoice`, `policies.resolveViolation` and `AragoraClient.exportReplay`; Python SDK `get_mode` and `connect_sse`; in-package client `ReplayAPI.export`/`export_async` (#9112, #10204, #10279, #10388) | See `sdk/python/BREAKING_CHANGES.md`, `sdk/typescript/BREAKING_CHANGES.md` and [BREAKING_CHANGES.md](../reference/BREAKING_CHANGES.md) |
 
 ### v2.11.0 Behavioral Changes
 
