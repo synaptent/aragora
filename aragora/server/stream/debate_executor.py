@@ -275,6 +275,52 @@ def _set_debate_error(
         )
 
 
+# Time the backstop around Arena.run allows past the protocol deadline, so the
+# timeout result Arena.run returns at its deadline arrives first.
+_ARENA_DEADLINE_MARGIN_SECONDS = 15.0
+
+
+def _stopped_at_deadline(result: Any) -> bool:
+    """True when Arena.run stopped the debate at its protocol deadline."""
+    metadata = getattr(result, "metadata", None)
+    return getattr(result, "status", None) == "timeout" or (
+        isinstance(metadata, dict) and bool(metadata.get("deadline_exceeded"))
+    )
+
+
+def _record_deadline_stop(
+    debate_id: str,
+    result: Any,
+    deadline_seconds: float,
+    duration: float,
+    emitter: SyncEventEmitter,
+) -> None:
+    """Record a debate stopped at its deadline and emit its terminal debate_end.
+
+    The consensus phase skips its own debate_end when the deadline cancels it,
+    so this is the end event clients receive for such a debate.
+    """
+    error = f"Debate stopped at its {deadline_seconds:.0f}s deadline"
+    logger.warning("[debate] %s: %s", debate_id, error)
+    with _active_debates_lock:
+        _active_debates[debate_id]["status"] = "timeout"
+        _active_debates[debate_id]["error"] = error
+        _active_debates[debate_id]["completed_at"] = time.time()
+    emitter.emit(
+        StreamEvent(
+            type=StreamEventType.DEBATE_END,
+            data={
+                "debate_id": debate_id,
+                "status": "timeout",
+                "duration": duration,
+                "rounds": getattr(result, "rounds_used", 0),
+                "error": error,
+            },
+            loop_id=debate_id,
+        )
+    )
+
+
 def _filter_agent_specs_with_fallback(
     agent_specs: list[Any],
     emitter: SyncEventEmitter,
@@ -567,13 +613,15 @@ def execute_debate_thread(
             except (RuntimeError, TypeError, ValueError, OSError) as cb_err:
                 logger.warning("[debate] on_arena_created callback failed: %s", cb_err)
 
-        # Run debate with timeout protection
+        # Run debate with timeout protection. When the protocol has a deadline,
+        # Arena.run enforces it and returns a timeout result; the outer limit is
+        # then only a backstop, with a margin so that result is not cancelled.
         protocol_timeout = getattr(arena.protocol, "timeout_seconds", 0)
-        timeout = (
-            protocol_timeout
-            if isinstance(protocol_timeout, (int, float)) and protocol_timeout > 0
-            else DEBATE_TIMEOUT_SECONDS
-        )
+        if isinstance(protocol_timeout, (int, float)) and protocol_timeout > 0:
+            deadline = protocol_timeout
+            timeout = deadline + _ARENA_DEADLINE_MARGIN_SECONDS
+        else:
+            deadline = timeout = DEBATE_TIMEOUT_SECONDS
         with _active_debates_lock:
             _active_debates[debate_id]["status"] = "running"
 
@@ -591,6 +639,9 @@ def execute_debate_thread(
                     logger.warning("[debate] on_arena_finished callback failed: %s", cb_err)
 
         total_time = time.time() - thread_start_time
+        if _stopped_at_deadline(result):
+            _record_deadline_stop(debate_id, result, deadline, total_time, emitter)
+            return
         logger.info(
             f"[debate] {debate_id}: Completed in {total_time:.2f}s, "
             f"consensus={result.consensus_reached}, confidence={result.confidence:.2f}"
