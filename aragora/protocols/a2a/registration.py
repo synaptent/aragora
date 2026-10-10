@@ -64,6 +64,17 @@ class RegistrationError(RuntimeError):
 # persisted round trip.
 
 
+def _normalize_agent_id(value: object) -> str:
+    """Return the stripped ``agent_id``.
+
+    Records and store keys both use this form, so a lookup matches its
+    registration whatever whitespace either side carried.
+    """
+    if not isinstance(value, str) or not value.strip():
+        raise RegistrationError("agent_id must be a non-empty string")
+    return value.strip()
+
+
 def _normalize_capabilities(raw: Sequence[object]) -> frozenset[str]:
     """Strip each entry and require it to name an :class:`AgentCapability` member.
 
@@ -135,9 +146,7 @@ class AgentRegistrationRecord:
         if not isinstance(data, dict):
             raise RegistrationError("record must be a mapping")
 
-        raw_id = data.get("agent_id")
-        if not isinstance(raw_id, str) or not raw_id.strip():
-            raise RegistrationError("agent_id must be a non-empty string")
+        agent_id = _normalize_agent_id(data.get("agent_id"))
 
         raw_caps = data.get("capabilities", [])
         if not isinstance(raw_caps, list):
@@ -154,7 +163,7 @@ class AgentRegistrationRecord:
             raise RegistrationError(f"registered_at is not ISO-8601: {raw_ts!r}") from exc
 
         return cls(
-            agent_id=raw_id.strip(),
+            agent_id=agent_id,
             capabilities=_normalize_capabilities(raw_caps),
             public_key=_optional_str("public_key", data.get("public_key")),
             endpoint_url=_optional_str("endpoint_url", data.get("endpoint_url")),
@@ -169,6 +178,9 @@ class RegistrationStore:
     Suitable for unit tests and single-process evaluation.  Multi-process or
     persistent deployments should route through the identity-contract bridge
     (out of scope for this slice).
+
+    Records are keyed by their stripped ``agent_id``; ``put``, ``get`` and
+    ``remove`` raise :class:`RegistrationError` for a blank or non-string id.
     """
 
     _records: dict[str, AgentRegistrationRecord] = field(
@@ -176,20 +188,21 @@ class RegistrationStore:
     )
 
     def put(self, record: AgentRegistrationRecord, *, overwrite: bool = False) -> None:
-        if record.agent_id in self._records and not overwrite:
+        key = _normalize_agent_id(record.agent_id)
+        if key in self._records and not overwrite:
             raise RegistrationError(
-                f"Agent '{record.agent_id}' is already registered. Pass overwrite=True to replace."
+                f"Agent '{key}' is already registered. Pass overwrite=True to replace."
             )
-        self._records[record.agent_id] = record
+        self._records[key] = record
 
     def get(self, agent_id: str) -> AgentRegistrationRecord | None:
-        return self._records.get(agent_id)
+        return self._records.get(_normalize_agent_id(agent_id))
 
     def all(self) -> list[AgentRegistrationRecord]:
         return list(self._records.values())
 
     def remove(self, agent_id: str) -> bool:
-        return self._records.pop(agent_id, None) is not None
+        return self._records.pop(_normalize_agent_id(agent_id), None) is not None
 
     def __len__(self) -> int:
         return len(self._records)
@@ -222,13 +235,12 @@ def register_agent(
     ``overwrite`` is False.
     """
     _require_enabled()
-    if not agent_id or not agent_id.strip():
-        raise RegistrationError("agent_id must be a non-empty string.")
+    normalized_id = _normalize_agent_id(agent_id)
     if not capabilities:
         raise RegistrationError("At least one capability is required.")
 
     record = AgentRegistrationRecord(
-        agent_id=agent_id.strip(),
+        agent_id=normalized_id,
         capabilities=_normalize_capabilities(capabilities),
         public_key=_optional_str("public_key", public_key),
         endpoint_url=_optional_str("endpoint_url", endpoint_url),
@@ -246,7 +258,10 @@ def lookup_agent(
 ) -> AgentRegistrationRecord | None:
     """Return the :class:`AgentRegistrationRecord` for *agent_id*, or None.
 
-    Raises :class:`RegistrationError` if the gate is off.
+    *agent_id* is stripped the same way :func:`register_agent` strips it.
+
+    Raises :class:`RegistrationError` if the gate is off or *agent_id* is
+    blank or not a string.
     """
     _require_enabled()
     target = store if store is not None else _get_default_store()

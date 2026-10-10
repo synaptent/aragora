@@ -152,6 +152,13 @@ class TestRegisterAgent:
         rec = register_agent("  agent-10  ", ["debate"], store=store)
         assert rec.agent_id == "agent-10"
 
+    @pytest.mark.parametrize("bad", [42, b"agent-11", ["agent-11"], None])
+    def test_non_string_agent_id_raises_registration_error(self, bad):
+        store = _store()
+        with pytest.raises(RegistrationError, match="agent_id"):
+            register_agent(bad, ["debate"], store=store)
+        assert len(store) == 0
+
 
 # ---------------------------------------------------------------------------
 # Lookup
@@ -173,6 +180,21 @@ class TestLookupAgent:
     def test_lookup_missing_returns_none(self):
         store = _store()
         assert lookup_agent("unknown", store=store) is None
+
+    def test_lookup_with_padded_id_finds_record(self):
+        store = _store()
+        rec = register_agent("agent-b", ["debate"], store=store)
+        assert lookup_agent("  agent-b  ", store=store) is rec
+
+    def test_lookup_with_same_padded_id_used_at_registration(self):
+        store = _store()
+        rec = register_agent("  agent-c  ", ["debate"], store=store)
+        assert lookup_agent("  agent-c  ", store=store) is rec
+
+    @pytest.mark.parametrize("bad", [42, None, "", "   "])
+    def test_lookup_rejects_invalid_agent_id(self, bad):
+        with pytest.raises(RegistrationError, match="agent_id"):
+            lookup_agent(bad, store=_store())
 
 
 # ---------------------------------------------------------------------------
@@ -211,6 +233,46 @@ class TestRegistrationStore:
     def test_remove_missing_returns_false(self):
         store = _store()
         assert store.remove("nope") is False
+
+    def test_get_and_remove_normalize_agent_id(self):
+        store = _store()
+        rec = AgentRegistrationRecord("z2", frozenset(["debate"]), None, None, datetime.now(tz=UTC))
+        store.put(rec)
+        assert store.get("  z2  ") is rec
+        assert store.remove(" z2 ") is True
+        assert len(store) == 0
+
+    def test_put_keys_padded_record_by_normalized_id(self):
+        store = _store()
+        rec = AgentRegistrationRecord(" w ", frozenset(["audit"]), None, None, datetime.now(tz=UTC))
+        store.put(rec)
+        assert store.get("w") is rec
+        with pytest.raises(RegistrationError, match="already registered"):
+            store.put(
+                AgentRegistrationRecord("w", frozenset(["audit"]), None, None, datetime.now(tz=UTC))
+            )
+
+    @pytest.mark.parametrize("bad", ["", "   "])
+    def test_put_rejects_blank_agent_id(self, bad):
+        store = _store()
+        rec = AgentRegistrationRecord(bad, frozenset(["debate"]), None, None, datetime.now(tz=UTC))
+        with pytest.raises(RegistrationError, match="agent_id"):
+            store.put(rec)
+        assert len(store) == 0
+
+    def test_from_dict_record_is_found_by_padded_id(self):
+        store = _store()
+        rec = AgentRegistrationRecord.from_dict(
+            {
+                "agent_id": " fd-1 ",
+                "capabilities": ["audit"],
+                "public_key": None,
+                "endpoint_url": None,
+                "registered_at": "2026-06-01T00:00:00+00:00",
+            }
+        )
+        store.put(rec)
+        assert store.get(" fd-1 ") is rec
 
     def test_all(self):
         store = _store()
