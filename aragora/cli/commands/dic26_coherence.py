@@ -138,6 +138,6 @@ def cmd_coherence_scan(args: argparse.Namespace) -> int:
             ids = ", ".join(issue.belief_ids)
             print(f"  [{issue.severity}] {issue.kind.value}: {ids}")
             print(f"    {issue.detail}")
-    if emit_followup:
+    if emit_followup and not as_json:
         _render_proposals(report)
     return 0
