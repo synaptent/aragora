@@ -32,6 +32,7 @@ MRO_WITHOUT_SAFETY_MIXIN = [
     "BudgetMixin",
     "GauntletMixin",
     "AuditMixin",
+    "AgentPoolMixin",
     "AutonomousOrchestrator",
     "AutonomousWorkflowMixin",
     "AutonomousFeedbackMixin",
