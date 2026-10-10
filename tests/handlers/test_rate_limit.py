@@ -28,6 +28,7 @@ from aragora.server.handlers.utils.rate_limit import (
     get_client_ip,
     rate_limit,
 )
+from aragora.server.middleware.rate_limit import base as rl_base
 
 
 # ============================================================================
@@ -139,7 +140,7 @@ class TestNormalizeIp:
 
     def test_ipv6_loopback(self):
         result = _normalize_ip("::1")
-        assert result == "::1"
+        assert result == "::"
 
 
 # ============================================================================
@@ -172,7 +173,7 @@ class TestGetClientIp:
     def test_x_forwarded_for_from_trusted_proxy(self):
         handler = self._make_handler(
             remote_ip="127.0.0.1",
-            headers={"X-Forwarded-For": "203.0.113.50, 10.0.0.1"},
+            headers={"X-Forwarded-For": "203.0.113.50, 127.0.0.1"},
         )
         ip = get_client_ip(handler)
         assert ip == "203.0.113.50"
@@ -187,7 +188,8 @@ class TestGetClientIp:
         # Should return the direct IP, not the spoofed one
         assert ip == "192.168.1.100"
 
-    def test_cloudflare_ip(self):
+    def test_cloudflare_ip(self, monkeypatch):
+        monkeypatch.setattr(rl_base, "_CLOUDFLARE_PROXY_IPS", {"172.71.0.1"})
         handler = self._make_handler(
             remote_ip="172.71.0.1",
             headers={
@@ -198,7 +200,8 @@ class TestGetClientIp:
         ip = get_client_ip(handler)
         assert ip == "198.51.100.42"
 
-    def test_cloudflare_true_client_ip(self):
+    def test_cloudflare_true_client_ip(self, monkeypatch):
+        monkeypatch.setattr(rl_base, "_CLOUDFLARE_PROXY_IPS", {"172.71.0.1"})
         handler = self._make_handler(
             remote_ip="172.71.0.1",
             headers={

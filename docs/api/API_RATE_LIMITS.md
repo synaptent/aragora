@@ -227,6 +227,24 @@ If you're behind a load balancer or proxy, configure `ARAGORA_TRUSTED_PROXIES` s
 export ARAGORA_TRUSTED_PROXIES="10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
 ```
 
+Entries are exact IPs, CIDR ranges or `localhost` (`127.0.0.1` and `::1`); an IPv4-mapped peer such as `::ffff:10.0.0.5` matches its IPv4 entry. The rate-limit middleware and handler-level limits choose and key the client IP the same way (IPv6 clients are grouped by /64; IPv4-mapped addresses are keyed as IPv4):
+
+1. When the direct peer is listed, the rightmost `X-Forwarded-For` hop that is not itself a listed proxy is used. Earlier hops are client-supplied and never used. `X-Real-IP` is used only when `X-Forwarded-For` is absent or empty.
+2. Any other peer is keyed on its own address, whatever headers it sends.
+
+A listed proxy must add the address it saw as the last `X-Forwarded-For` hop (nginx's `$proxy_add_x_forwarded_for`, Caddy, Traefik and AWS ALB do by default); a proxy that sends no `X-Forwarded-For` must overwrite or strip a client-supplied `X-Real-IP`.
+
+### Cloudflare
+
+`CF-Connecting-IP` and `True-Client-IP` (sent with `CF-RAY`) are honoured only when the direct peer is listed in `ARAGORA_CLOUDFLARE_TRUSTED_PROXIES`, which uses the same entry syntax and is empty by default. List the peer that delivers Cloudflare traffic: the `cloudflared` address for a Cloudflare Tunnel, or Cloudflare's published edge ranges when the origin is reached directly. That peer must only carry traffic that came through Cloudflare, so never list a proxy (for example an nginx on the same host) that also accepts direct connections and passes client headers through.
+
+```bash
+# Cloudflare Tunnel: cloudflared on the same host connects straight to the API
+export ARAGORA_CLOUDFLARE_TRUSTED_PROXIES="localhost"
+```
+
+Set it before deploying behind Cloudflare. Without it, requests are keyed on the Cloudflare peer, so clients share one bucket, or, when that peer is also in `ARAGORA_TRUSTED_PROXIES` (as `cloudflared` on `localhost` is by default), on the rightmost `X-Forwarded-For` hop, which Cloudflare's edge appends. When `CF-RAY` arrives from an unlisted peer the server logs one warning per process.
+
 ## Need Higher Limits?
 
 Enterprise customers can request custom rate limits. Contact support or upgrade your tier at `/billing`.

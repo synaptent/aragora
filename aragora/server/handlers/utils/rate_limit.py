@@ -43,7 +43,6 @@ Use ``is_multi_instance()`` from other modules to check the cached result.
 
 from __future__ import annotations
 
-import ipaddress
 import logging
 import os
 import re
@@ -61,6 +60,12 @@ from aragora.server.middleware.rate_limit import (
 )
 from aragora.server.middleware.rate_limit import (
     get_rate_limiter as get_middleware_limiter,
+)
+from aragora.server.middleware.rate_limit.base import (
+    _normalize_ip,
+    header_value,
+    forwarded_client_ip,
+    is_cloudflare_trusted_proxy_address,
 )
 from aragora.server.middleware.rate_limit.distributed import (
     get_distributed_limiter,
@@ -305,6 +310,9 @@ RATE_LIMITING_DISABLED = os.environ.get("ARAGORA_DISABLE_ALL_RATE_LIMITS", "").l
     "yes",
 )
 
+# Raw entries, kept for importers. get_client_ip matches peers against the
+# middleware's parsed set instead, because exact string membership never
+# matches a CIDR entry or an IPv4-mapped peer.
 TRUSTED_PROXIES = frozenset(
     p.strip()
     for p in os.getenv("ARAGORA_TRUSTED_PROXIES", "127.0.0.1,::1,localhost").split(",")
@@ -312,21 +320,41 @@ TRUSTED_PROXIES = frozenset(
 )
 
 
-def _normalize_ip(ip_value: str) -> str:
-    """Normalize IP address string for consistent keying."""
-    if not ip_value:
-        return ""
-    ip_value = str(ip_value).strip()
-    try:
-        return str(ipaddress.ip_address(ip_value))
-    except ValueError:
-        return ip_value
+_cf_ray_warning_logged = False
+
+
+def _warn_cf_ray_from_unlisted_peer(peer: str) -> None:
+    global _cf_ray_warning_logged
+    if _cf_ray_warning_logged:
+        return
+    _cf_ray_warning_logged = True
+    logger.warning(
+        "Ignoring Cloudflare client-IP headers from peer %s, which is not listed in "
+        "ARAGORA_CLOUDFLARE_TRUSTED_PROXIES; if Cloudflare fronts this server, list "
+        "that peer there so clients are keyed on CF-Connecting-IP. Logged once.",
+        peer,
+    )
 
 
 def get_client_ip(handler: Any) -> str:
     """Extract client IP from request handler.
 
-    Only trusts X-Forwarded-For when the direct IP is a trusted proxy.
+    Uses the same rule and the same key normalization (IPv6 grouped by /64,
+    IPv4-mapped addresses as IPv4) as the rate-limit middleware
+    (``forwarded_client_ip``, ``_normalize_ip``): a direct peer in
+    ARAGORA_TRUSTED_PROXIES (IPs, CIDR ranges, ``localhost``; an IPv4-mapped
+    peer counts as its IPv4 address) is believed for the rightmost
+    X-Forwarded-For hop that is not a trusted proxy, and for X-Real-IP only
+    when X-Forwarded-For is absent or empty. Cloudflare's CF-Connecting-IP /
+    True-Client-IP (with CF-RAY) are believed only from a peer in
+    ARAGORA_CLOUDFLARE_TRUSTED_PROXIES, which is empty by default. Any other
+    peer is keyed on its own address.
+
+    Trust contract: a peer in ARAGORA_TRUSTED_PROXIES must append the address
+    it saw to X-Forwarded-For, or, if it sends none, overwrite or strip a
+    client-supplied X-Real-IP (nginx's ``X-Real-IP $remote_addr`` does); a peer in
+    ARAGORA_CLOUDFLARE_TRUSTED_PROXIES must only carry traffic that came
+    through Cloudflare, whose edge overwrites CF-Connecting-IP.
 
     Args:
         handler: HTTP request handler with headers
@@ -337,47 +365,29 @@ def get_client_ip(handler: Any) -> str:
     if handler is None:
         return "unknown"
 
-    remote_ip = ""
+    peer = ""
     client_address = getattr(handler, "client_address", None)
     if client_address and type(client_address) is tuple:
-        remote_ip = str(client_address[0])
+        peer = str(client_address[0]).strip()
 
-    remote_ip = _normalize_ip(remote_ip)
-
-    # Check for proxy headers
     headers = getattr(handler, "headers", None)
-    if headers and hasattr(headers, "get"):
+    if peer and headers and hasattr(headers, "get"):
         try:
-            # Cloudflare: trust only when a CF marker header is present
-            cf_ray = headers.get("CF-RAY") or headers.get("cf-ray")
-            cf_ip = headers.get("CF-Connecting-IP") or headers.get("cf-connecting-ip")
-            if cf_ray and cf_ip and type(cf_ip) is str:
-                return _normalize_ip(cf_ip.strip())
-
-            true_client_ip = headers.get("True-Client-IP") or headers.get("true-client-ip")
-            if cf_ray and true_client_ip and type(true_client_ip) is str:
-                return _normalize_ip(true_client_ip.strip())
-
-            if remote_ip in TRUSTED_PROXIES:
-                # X-Forwarded-For can contain multiple IPs: "client, proxy1, proxy2"
-                forwarded = headers.get("X-Forwarded-For") or headers.get("x-forwarded-for") or ""
-                if forwarded and type(forwarded) is str:
-                    # Take the first (original client) IP
-                    candidate = forwarded.split(",")[0].strip()
-                    if candidate:
-                        return _normalize_ip(candidate)
-
-                # Also check X-Real-IP (used by nginx)
-                real_ip = headers.get("X-Real-IP") or headers.get("x-real-ip") or ""
-                if real_ip and type(real_ip) is str:
-                    return _normalize_ip(real_ip.strip())
+            if header_value(headers, "CF-RAY"):
+                if is_cloudflare_trusted_proxy_address(peer):
+                    cf_ip = header_value(headers, "CF-Connecting-IP") or header_value(
+                        headers, "True-Client-IP"
+                    )
+                    if cf_ip:
+                        return _normalize_ip(cf_ip)
+                else:
+                    _warn_cf_ray_from_unlisted_peer(peer)
+            return _normalize_ip(forwarded_client_ip(headers, peer)) or "unknown"
         except (TypeError, AttributeError):
             # Handle mock objects or unusual header types
             pass
 
-    if remote_ip:
-        return remote_ip
-    return "unknown"
+    return _normalize_ip(peer) or "unknown"
 
 
 class RateLimiter:

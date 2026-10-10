@@ -548,7 +548,8 @@ second server on the same host, move all of them, for example
 
 | Variable | Required | Description | Default |
 |----------|----------|-------------|---------|
-| `ARAGORA_TRUSTED_PROXIES` | Optional | Comma-separated proxy IPs for client IP resolution | `127.0.0.1,::1,localhost` |
+| `ARAGORA_TRUSTED_PROXIES` | Optional | Comma-separated proxy IPs, CIDR ranges or `localhost` whose rightmost untrusted `X-Forwarded-For` hop (`X-Real-IP` only when `X-Forwarded-For` is absent) is the client IP | `127.0.0.1,::1,localhost` |
+| `ARAGORA_CLOUDFLARE_TRUSTED_PROXIES` | Optional | Peers (same syntax) whose `CF-Connecting-IP` / `True-Client-IP` are believed; set for Cloudflare Tunnel or direct Cloudflare traffic | (empty) |
 | `ARAGORA_WS_CONN_RATE` | Optional | WS connections per IP per minute | `30` |
 | `ARAGORA_WS_MAX_PER_IP` | Optional | Max concurrent WS connections per IP | `10` |
 | `ARAGORA_WS_MSG_RATE` | Optional | WS messages per second per connection | `10` |
