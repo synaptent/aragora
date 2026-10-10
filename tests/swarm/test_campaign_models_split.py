@@ -32,11 +32,12 @@ def test_name_is_defined_in_models_and_reexported_by_campaign(name: str) -> None
 
 
 def test_models_module_does_not_import_the_campaign_facade() -> None:
-    imported = {
-        node.module
-        for node in ast.walk(ast.parse(inspect.getsource(campaign_models)))
-        if isinstance(node, ast.ImportFrom)
-    }
+    imported: set[str] = set()
+    for node in ast.walk(ast.parse(inspect.getsource(campaign_models))):
+        if isinstance(node, ast.ImportFrom) and node.module:
+            imported.add(node.module)
+        elif isinstance(node, ast.Import):
+            imported.update(alias.name for alias in node.names)
     assert "aragora.swarm.campaign" not in imported
     assert not hasattr(campaign_models, "CampaignExecutor")
 
