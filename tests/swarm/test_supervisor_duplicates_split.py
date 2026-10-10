@@ -58,8 +58,9 @@ def test_moved_module_name_is_reexported_by_the_facade(name: str) -> None:
 def test_mixin_module_does_not_import_the_supervisor_facade() -> None:
     imported: set[str] = set()
     for node in ast.walk(ast.parse(inspect.getsource(supervisor_duplicates))):
-        if isinstance(node, ast.ImportFrom) and node.module:
-            imported.add(node.module)
+        if isinstance(node, ast.ImportFrom):
+            assert node.level == 0, f"relative import of {node.module!r} escapes this check"
+            imported.add(node.module or "")
         elif isinstance(node, ast.Import):
             imported.update(alias.name for alias in node.names)
     assert "aragora.swarm.supervisor" not in imported
