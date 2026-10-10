@@ -25,8 +25,9 @@ Every recorded user must resolve to the same single org; anything else is
 ``unknown``. ``created_by`` is backfilled for executions and runs (their
 scheduler created them) but never for plans. Only the three ownership columns
 of rows with no ownership yet are written. If the user store cannot be
-consulted the backfill writes nothing, records no version and is retried on
-the next schema setup.
+consulted, or places none of the recorded users in any org (an empty store, or
+not the one those users signed in to), the backfill writes nothing, records no
+version and is retried on the next schema setup.
 """
 
 from __future__ import annotations
@@ -38,7 +39,7 @@ from collections.abc import Iterable
 from typing import Any
 
 from aragora.storage.schema import SchemaManager, safe_add_column
-from aragora.tenancy.membership import OrgMembershipResolver
+from aragora.tenancy.membership import MembershipLookupError, OrgMembershipResolver
 
 logger = logging.getLogger(__name__)
 
@@ -88,8 +89,9 @@ def backfill_ownership(
     """Assign proven owners to unowned rows and mark the rest ``unknown``.
 
     Every decision is made before the first write, so a
-    ``MembershipLookupError`` from ``resolve_org_ids`` leaves the database
-    untouched. Returns backfilled/unknown counts per table.
+    ``MembershipLookupError`` from ``resolve_org_ids``, or one raised because
+    no recorded user resolves to any org, leaves the database untouched.
+    Returns backfilled/unknown counts per table.
     """
     users_of: dict[str, dict[str, list[str]]] = {table: {} for table in OWNED_TABLES}
     linked_users: dict[str, list[str]] = {}
@@ -123,13 +125,16 @@ def backfill_ownership(
             ]
         )
 
-    cache: dict[str, frozenset[str]] = {}
+    recorded = {user for users in users_of.values() for ids in users.values() for user in ids}
+    cache = {user_id: frozenset(resolve_org_ids(user_id)) for user_id in sorted(recorded)}
+    if recorded and not any(cache.values()):
+        # Finalizing here would mark every legacy row unknown for good, though
+        # the right store may only be unreachable from this process for now.
+        raise MembershipLookupError("the user store places none of the recorded users in an org")
 
     def proven_org(user_ids: list[str]) -> str | None:
         orgs: set[str] = set()
         for user_id in user_ids:
-            if user_id not in cache:
-                cache[user_id] = frozenset(resolve_org_ids(user_id))
             if len(cache[user_id]) != 1:
                 return None
             orgs |= cache[user_id]
