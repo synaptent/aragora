@@ -60,9 +60,53 @@ def test_keeps_only_listed_gets_preserves_components_and_rewrites_servers(inputs
     assert set(trimmed) == {"openapi", "info", "components", "servers", "paths"}
     for key in ("openapi", "info", "components"):
         assert trimmed[key] == original[key]
-    assert trimmed["paths"] == {p: {"get": original["paths"][p]["get"]} for p in ("/a", "/z")}
+    assert trimmed["paths"] == {
+        "/a": {"get": original["paths"]["/a"]["get"], "parameters": []},
+        "/z": {"get": original["paths"]["/z"]["get"]},
+    }
     assert trimmed["servers"] == [{"url": "http://localhost:8080"}]
     assert source.read_bytes() == before
+
+
+def test_path_level_parameters_and_servers_are_carried_with_the_get(inputs) -> None:
+    source, paths, output = inputs
+    spec = json.loads(source.read_text())
+    parameters = [
+        {"name": "X-Request-Id", "in": "header", "schema": {"type": "string"}},
+        {"$ref": "#/components/parameters/Page"},
+    ]
+    servers = [{"url": "http://localhost:8080/v2"}]
+    spec["paths"]["/z"].update(
+        parameters=parameters, servers=servers, summary="Docs only", description="Docs only"
+    )
+    source.write_text(json.dumps(spec))
+    result = run("--input", source, "--paths", paths, "--output", output)
+    assert result.returncode == 0, result.stderr
+    trimmed = json.loads(output.read_text())
+    assert trimmed["paths"]["/z"] == {
+        "get": spec["paths"]["/z"]["get"],
+        "parameters": parameters,
+        "servers": servers,
+    }
+    assert trimmed["servers"] == [{"url": "http://localhost:8080"}]
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [("$ref", "#/components/pathItems/Z"), ("x-internal", True), ("parameter", [])],
+)
+def test_uncarriable_path_level_key_exits_1_naming_the_path(inputs, key: str, value) -> None:
+    source, paths, output = inputs
+    spec = json.loads(source.read_text())
+    spec["paths"]["/z"][key] = value
+    source.write_text(json.dumps(spec))
+    output.write_text("previous output\n")
+    result = run("--input", source, "--paths", paths, "--output", output)
+    assert result.returncode == 1
+    assert f"/z ({key})" in result.stderr
+    assert "/a" not in result.stderr
+    assert "Traceback" not in result.stderr
+    assert output.read_text() == "previous output\n"
 
 
 def test_server_override_only_changes_server_url(inputs) -> None:

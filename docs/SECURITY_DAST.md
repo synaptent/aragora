@@ -35,7 +35,10 @@ git diff --exit-code -- docs/api/openapi-dast.json
 ```
 
 The trimmer preserves `openapi`, `info`, and all `components`, includes only the
-listed paths' GET operations, and replaces `servers`. It accepts blank lines and
+listed paths' GET operations with their path-level `parameters` and `servers`,
+and replaces the top-level `servers`. It drops other operations and path-level
+`summary`/`description`, and fails on any other path-level key (`$ref`,
+extensions), naming the path. It accepts blank lines and
 `#` comments, deduplicates paths, rejects path parameters and missing paths/GETs,
 and emits recursively sorted JSON with a final newline. Exit codes: **0** success
 or help, **1** invalid input or file I/O error, **2** invalid CLI usage.

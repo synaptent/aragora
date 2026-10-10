@@ -41,6 +41,7 @@ import argparse
 import datetime as dt
 import json
 import re
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -246,6 +247,30 @@ def _run_freeze(args: argparse.Namespace) -> int:
     return 0
 
 
+def _shown_path(path: Path) -> str:
+    if path.is_absolute():
+        try:
+            return path.relative_to(REPO_ROOT).as_posix()
+        except ValueError:
+            pass
+    return str(path)
+
+
+def _refreeze_remedy(args: argparse.Namespace) -> str:
+    """The FAIL remedy's re-freeze command for the census that was checked.
+
+    A per-app invocation gets its own --glob and --baseline echoed back, so a
+    copied command can never re-freeze the root Python baseline instead.
+    """
+    if not args.glob and args.baseline.resolve() == BASELINE_PATH.resolve():
+        return "re-freeze with 'python3 scripts/ci/check_file_sizes.py --freeze'."
+    command = ["python3", "scripts/ci/check_file_sizes.py"]
+    for pattern in args.glob or []:
+        command += ["--glob", pattern]
+    command += ["--baseline", _shown_path(args.baseline), "--freeze"]
+    return "re-freeze with:\n  " + shlex.join(command)
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
@@ -279,7 +304,7 @@ def main(argv: list[str] | None = None) -> int:
         print(
             "\nSplit the file into cohesive submodules (re-export from the "
             "original path to keep imports stable), or -- only if intentional -- "
-            "re-freeze with 'python3 scripts/ci/check_file_sizes.py --freeze'."
+            + _refreeze_remedy(args)
         )
     else:
         print(f"OK: no new {scope} files over {LIMIT} lines.")

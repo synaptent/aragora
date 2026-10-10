@@ -214,6 +214,38 @@ def test_bad_paginated_shape_aborts_before_writes(pages, map_path, monkeypatch, 
     assert gh.posts == []
 
 
+MALFORMED_ROW = {
+    "title": "Row without a number",
+    "body": "",
+    "labels": [],
+    "created_at": "2026-01-06T00:00:00Z",
+    "html_url": "https://github.com/synaptent/aragora/issues/77",
+}
+
+
+@pytest.mark.parametrize(
+    "bad_row",
+    [MALFORMED_ROW, dict(MALFORMED_ROW, number=None), dict(MALFORMED_ROW, number="77")],
+    ids=["missing", "null", "string"],
+)
+@pytest.mark.parametrize("mode", [["--apply"], []], ids=["apply", "dry-run"])
+def test_row_without_number_fails_closed_before_any_write(
+    bad_row, mode, map_path, monkeypatch, capsys
+):
+    gh = _Gh(pages=[[REST_ISSUES[0]], [bad_row]])
+    monkeypatch.setattr(mod, "run_gh", gh)
+    assert mod.main(["--map", str(map_path), *mode]) == 1
+    captured = capsys.readouterr()
+    err = captured.err.splitlines()
+    assert len(err) == 1 and err[0].startswith("ERROR: ")
+    assert "row 2 of 2" in err[0] and '"number"' in err[0]
+    assert "'Row without a number'" in err[0] and MALFORMED_ROW["html_url"] in err[0]
+    assert "Traceback" not in captured.err
+    assert "issue(s) to label" not in captured.out
+    assert len(gh.launches) == 2
+    assert gh.posts == []
+
+
 def test_paginated_gh_failure_discards_partial_results(map_path, monkeypatch, capsys):
     gh = _Gh()
 
@@ -305,3 +337,5 @@ def test_help_documents_modes(capsys):
     help_text = " ".join(out.split())
     assert "paginated" in help_text and "pull requests" in help_text
     assert "two gh launches" in help_text
+    assert "issue row without a number" in help_text
+    assert "issue row without a number" in " ".join(mod.__doc__.split())

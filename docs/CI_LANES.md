@@ -60,7 +60,7 @@ Runner queue time, classification, and the short umbrella job are not bounded by
 the worker timeout, so the end-to-end target must be measured, not inferred.
 
 `Tests` runs on every PR against `main`, with no trigger-level `paths` or
-`paths-ignore` filter. The former 19-pattern trigger allowlist now lives in
+`paths-ignore` filter. The former 21-pattern trigger allowlist now lives in
 `test-shard-scope`'s `in_scope` filter, pinned by
 `tests/ci/test_fast_gate_workflows.py`. Its `in_scope` output is true on PRs
 only when a changed file matches the allowlist, and true on every non-PR event.
@@ -140,6 +140,7 @@ When a PR is marked "Ready for review", heavy PR workflows can trigger via the
 - **Test suites:** test, e2e, integration, integration-gate, core-suites, smoke, smoke-offline, migration-tests
 - **Quality gates:** coverage, benchmark, benchmarks, load-tests, capability-gap, new-features
 - **Security:** security, security-gate
+- **DAST (advisory, warn-only):** `dast.yml` runs `dast-pr` on non-draft PRs that touch the server or API spec and `dast-nightly` on its `0 3 * * *` schedule; see [`docs/SECURITY_DAST.md`](SECURITY_DAST.md)
 - **Build/Deploy:** docker, build, lighthouse, release-readiness
 - **Governance:** contract-drift-governance, connector-registry, live-deploy-mode-gate, aragora-gauntlet, autopilot-worktree-e2e
 

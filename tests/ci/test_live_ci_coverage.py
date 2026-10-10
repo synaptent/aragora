@@ -99,6 +99,17 @@ def test_frontend_job_is_scoped_to_ready_frontend_prs() -> None:
             assert step["with"]["persist-credentials"] is False
 
 
+def test_docs_site_ci_build_job_timeout_within_nfr() -> None:
+    workflow = yaml.safe_load((ROOT / ".github/workflows/docs-site-ci.yml").read_text())
+    job = next(
+        job
+        for job in workflow["jobs"].values()
+        if job.get("name") == "Docs site quality gates and build"
+    )
+    assert isinstance(job["timeout-minutes"], int)
+    assert job["timeout-minutes"] <= 10
+
+
 def test_frontend_job_runs_every_live_gate() -> None:
     workflow = yaml.safe_load((ROOT / ".github/workflows/lint.yml").read_text())
     job = workflow["jobs"]["frontend-lint"]

@@ -30,7 +30,10 @@ Usage
 Exit codes
 ----------
     0 -- plan printed (dry run) or every planned label applied.
-    1 -- a ``gh`` call failed (the run stops at that call).
+    1 -- a ``gh`` call failed (the run stops at that call), or the issue GET
+         returned an issue row without a number: one ``ERROR:`` line names the
+         row (position, title, html_url) and nothing is written, even with
+         ``--apply``.
     2 -- usage error, bad map file, or the map targets a label that does not
          exist in the repo (checked before any write).
 """
@@ -125,15 +128,28 @@ def list_open_issues(repo: str) -> list[dict[str, object]]:
     )
     return [
         {
-            "number": row["number"],
+            "number": _issue_number(repo, row, index, len(rows)),
             "title": row.get("title"),
             "body": row.get("body"),
             "labels": [{"name": name} for name in _label_names(row.get("labels"))],
             "createdAt": row.get("created_at"),
         }
-        for row in rows
+        for index, row in enumerate(rows, start=1)
         if "pull_request" not in row
     ]
+
+
+def _issue_number(repo: str, row: Mapping[str, object], index: int, total: int) -> int:
+    """Fail closed on an issue row the POST URL cannot be built from."""
+    number = row.get("number")
+    if isinstance(number, int) and not isinstance(number, bool) and number > 0:
+        return number
+    found = f"number = {number!r}" if "number" in row else "no number key"
+    raise RuntimeError(
+        f'repos/{repo}/issues row {index} of {total} has no positive integer "number" '
+        f"({found}; title {row.get('title')!r}, html_url {row.get('html_url')!r}); "
+        "nothing was labelled"
+    )
 
 
 def list_label_names(repo: str) -> set[str]:
@@ -188,7 +204,9 @@ def build_parser() -> argparse.ArgumentParser:
         ),
         epilog=(
             "Exit codes: 0 plan printed or all labels applied; 1 a gh call failed "
-            "(run aborts at that call); 2 usage error, bad map, or unknown target label."
+            "(run aborts at that call) or returned an issue row without a number "
+            "(one ERROR: line names the row; nothing is written, even with --apply); "
+            "2 usage error, bad map, or unknown target label."
         ),
     )
     mode = parser.add_mutually_exclusive_group()

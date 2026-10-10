@@ -276,3 +276,6 @@ aragora-operator/cover.out
 # The extension's F5 launch/task files are tracked despite the global `.vscode/` rule.
 !ide/vscode-aragora/.vscode/
 !ide/vscode-aragora/.vscode/*.json
+
+# Local ZAP scan reports and copied inputs (docs/SECURITY_DAST.md local recipe).
+.zap/work/

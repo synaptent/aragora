@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import shlex
 import subprocess
 from pathlib import Path
 
@@ -278,6 +279,88 @@ def test_glob_freeze_uses_custom_baseline_and_stays_shrink_only(git_checkout, ca
     (root / rel).unlink()
     assert cfs.main([*args, "--freeze"]) == 0
     assert json.loads(baseline.read_text())["files"] == {}
+
+
+ROOT_REMEDY = (
+    "Split the file into cohesive submodules (re-export from the original path to keep "
+    "imports stable), or -- only if intentional -- re-freeze with "
+    "'python3 scripts/ci/check_file_sizes.py --freeze'."
+)
+
+
+@pytest.mark.parametrize(
+    "globs",
+    [["aragora/live/src/**/*.{ts,tsx}"], ["aragora/live/src/**/*.ts", "aragora/live/src/**/*.tsx"]],
+)
+def test_glob_remedy_echoes_the_invoking_glob_and_baseline(
+    git_checkout, monkeypatch, capsys, globs
+):
+    root, _ = git_checkout
+    monkeypatch.chdir(root)
+    rel = "aragora/live/src/__scratch_big.ts"
+    _make_file(root, rel, 2100)
+    _make_file(root, "aragora/big.py", 2100)
+    baseline = "scripts/baselines/live-file-sizes.json"
+    (root / baseline).parent.mkdir(parents=True)
+    (root / baseline).write_text(json.dumps({"files": {}}), encoding="utf-8")
+    glob_args = [arg for pattern in globs for arg in ("--glob", pattern)]
+    assert cfs.main([*glob_args, "--baseline", baseline]) == 1
+    out = capsys.readouterr().out
+    assert f"NEW {rel} (2100 lines)" in out
+    assert "aragora/big.py" not in out and "file_size_baseline" not in out
+    assert ROOT_REMEDY not in out
+    assert out.rstrip("\n").splitlines()[-2].endswith(" -- re-freeze with:")
+    remedy = out.rstrip("\n").splitlines()[-1].strip()
+    assert shlex.split(remedy) == [
+        "python3",
+        "scripts/ci/check_file_sizes.py",
+        *glob_args,
+        "--baseline",
+        baseline,
+        "--freeze",
+    ]
+    for pattern in globs:
+        assert f"--glob '{pattern}'" in remedy
+    assert f"--baseline {baseline}" in remedy
+
+
+def test_glob_with_default_baseline_names_that_baseline_in_the_remedy(
+    git_checkout, monkeypatch, capsys
+):
+    root, baseline = git_checkout
+    monkeypatch.setattr(cfs, "BASELINE_PATH", baseline)
+    _make_file(root, "operator/main.go", 2100)
+    assert cfs.main(["--glob", "operator/**/*.go"]) == 1
+    remedy = capsys.readouterr().out.rstrip("\n").splitlines()[-1].strip()
+    assert shlex.split(remedy)[2:] == [
+        "--glob",
+        "operator/**/*.go",
+        "--baseline",
+        baseline.relative_to(root).as_posix(),
+        "--freeze",
+    ]
+
+
+def test_root_custom_baseline_is_echoed(git_checkout, monkeypatch, capsys):
+    root, baseline = git_checkout
+    monkeypatch.chdir(root)
+    _make_file(root, "aragora/big.py", 2100)
+    assert cfs.main(["--baseline", "baseline.json"]) == 1
+    out = capsys.readouterr().out
+    assert ROOT_REMEDY not in out
+    remedy = out.rstrip("\n").splitlines()[-1].strip()
+    assert shlex.split(remedy)[2:] == ["--baseline", "baseline.json", "--freeze"]
+
+
+@pytest.mark.parametrize("explicit", [False, True], ids=["default", "makefile-explicit"])
+def test_root_remedy_keeps_the_plain_root_command(git_checkout, monkeypatch, capsys, explicit):
+    root, baseline = git_checkout
+    monkeypatch.setattr(cfs, "BASELINE_PATH", baseline)
+    _make_file(root, "aragora/big.py", 2100)
+    assert cfs.main(["--baseline", str(baseline)] if explicit else []) == 1
+    out = capsys.readouterr().out
+    assert out.endswith("\n\n" + ROOT_REMEDY + "\n")
+    assert "--glob" not in out and "--baseline" not in out
 
 
 def test_help_documents_glob_and_baseline(capsys):
