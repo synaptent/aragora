@@ -30,6 +30,7 @@ from ..base import (
 )
 from aragora.rbac.decorators import require_permission
 from aragora.server.handlers.utils.rate_limit import RateLimiter, get_client_ip
+from aragora.server.handlers.utils.responses import not_implemented_response
 from aragora.server.validation.query_params import safe_query_int
 
 # Knowledge processing enabled by default
@@ -45,6 +46,13 @@ _batch_upload_limiter = RateLimiter(requests_per_minute=5)
 MAX_BATCH_SIZE = 50
 MAX_FILE_SIZE_MB = 100
 MAX_TOTAL_BATCH_SIZE_MB = 500
+
+# Kept out of ``handle``'s source: the OpenAPI generator reads route literals there as
+# served GET operations, which would change the published spec for these routes.
+_UNIMPLEMENTED_READS = {
+    "/api/v1/batch": "Listing batch jobs is not implemented",
+    "/api/v1/batch/queue/status": "Batch queue status is not implemented",
+}
 
 
 class DocumentBatchHandler(BaseHandler):
@@ -125,6 +133,9 @@ class DocumentBatchHandler(BaseHandler):
             )
             model = query_params.get("model", ["gpt-4"])[0]
             return self._get_document_context(doc_id, max_tokens, model)
+
+        if path in _UNIMPLEMENTED_READS and getattr(handler, "command", "GET") == "GET":
+            return not_implemented_response(_UNIMPLEMENTED_READS[path])
 
         return None
 

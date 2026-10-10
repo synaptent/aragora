@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -22,9 +23,35 @@ logger = logging.getLogger(__name__)
 from aragora.rbac.decorators import require_permission
 from ..base import BaseHandler, HandlerResult, error_response, json_response
 from ..utils.rate_limit import RateLimiter
+from ..utils.responses import not_implemented_response
 
 # Rate limiter for cross-pollination endpoints
 _cross_pollination_limiter = RateLimiter(requests_per_minute=60)
+
+
+def _is_get(handler: Any) -> bool:
+    return getattr(handler, "command", "GET") == "GET"
+
+
+class _ReadViewDispatch:
+    """Serves a GET on the handler's route with its permission-checked ``get`` view."""
+
+    get: Callable[..., Awaitable[HandlerResult]]
+
+    def handle(self, path: str, query_params: dict[str, Any], handler: Any) -> Any:
+        # The view's permission check reads the caller's context from the request handler.
+        if path in getattr(self, "ROUTES", ()) and _is_get(handler):
+            return self.get(handler)
+        return None
+
+
+class _WriteViewDispatch:
+    """Serves a POST on the handler's route with its permission-checked ``post`` view."""
+
+    post: Callable[..., Awaitable[HandlerResult]]
+
+    def handle_post(self, path: str, query_params: dict[str, Any], handler: Any) -> Any:
+        return self.post(handler) if path in getattr(self, "ROUTES", ()) else None
 
 
 class CrossPollinationStatsHandler(BaseHandler):
@@ -54,6 +81,36 @@ class CrossPollinationStatsHandler(BaseHandler):
 
     _RESOLVE_CONFLICT_RE = re.compile(r"^/api/(?:v1/)?cross-pollination/conflicts/[^/]+/resolve$")
 
+    _NOT_IMPLEMENTED = {
+        "/api/v1/cross-pollination/conflicts": (
+            "Listing cross-pollination conflicts is not implemented"
+        ),
+        "/api/v1/cross-pollination/federation": "Cross-pollination federation is not implemented",
+        "/api/v1/cross-pollination/federation/sync": (
+            "Cross-pollination federation sync is not implemented"
+        ),
+        "/api/v1/cross-pollination/subscribe": "Cross-pollination subscription is not implemented",
+        "/api/v1/cross-pollination/sync/status": (
+            "Cross-pollination sync status is not implemented"
+        ),
+        "/api/v1/cross-pollination/sync/trigger": (
+            "Triggering cross-pollination sync is not implemented"
+        ),
+    }
+
+    def handle(self, path: str, query_params: dict[str, Any], handler: Any) -> Any:
+        """Serve the stats GET; the other listed sub-paths answer 501 after authorizing."""
+        if not _is_get(handler):
+            return None
+        if path == "/api/v1/cross-pollination/stats":
+            return self.get(handler)
+        message = self._NOT_IMPLEMENTED.get(path)
+        return self._not_implemented(handler, message) if message else None
+
+    @require_permission("cross_pollination:read")
+    def _not_implemented(self, handler: Any, message: str) -> HandlerResult:
+        return not_implemented_response(message)
+
     def handle_post(
         self, path: str, query_params: dict[str, Any], handler: Any
     ) -> HandlerResult | None:
@@ -63,19 +120,10 @@ class CrossPollinationStatsHandler(BaseHandler):
         _, perm_err = self.require_permission_or_error(handler, "cross_pollination:write")
         if perm_err:
             return perm_err
-        # Not error_response: in production it rewrites every 5xx message to "Internal server error".
-        return json_response(
-            {
-                "error": {
-                    "code": "not_implemented",
-                    "message": "Resolving cross-pollination conflicts is not implemented",
-                }
-            },
-            status=501,
-        )
+        return not_implemented_response("Resolving cross-pollination conflicts is not implemented")
 
     @require_permission("cross_pollination:read")
-    async def get(self) -> HandlerResult:
+    async def get(self, handler: Any = None) -> HandlerResult:
         """Get cross-subscriber statistics."""
         try:
             from aragora.events.cross_subscribers import get_cross_subscriber_manager
@@ -111,7 +159,7 @@ class CrossPollinationStatsHandler(BaseHandler):
             return error_response("Internal server error", status=500)
 
 
-class CrossPollinationSubscribersHandler(BaseHandler):
+class CrossPollinationSubscribersHandler(_ReadViewDispatch, BaseHandler):
     """
     Handler for GET /api/cross-pollination/subscribers.
 
@@ -121,7 +169,7 @@ class CrossPollinationSubscribersHandler(BaseHandler):
     ROUTES = ["/api/v1/cross-pollination/subscribers"]
 
     @require_permission("cross_pollination:read")
-    async def get(self) -> HandlerResult:
+    async def get(self, handler: Any = None) -> HandlerResult:
         """List all subscribers."""
         try:
             from aragora.events.cross_subscribers import get_cross_subscriber_manager
@@ -159,7 +207,7 @@ class CrossPollinationSubscribersHandler(BaseHandler):
             return error_response("Internal server error", status=500)
 
 
-class CrossPollinationBridgeHandler(BaseHandler):
+class CrossPollinationBridgeHandler(_ReadViewDispatch, BaseHandler):
     """
     Handler for GET /api/cross-pollination/bridge.
 
@@ -173,7 +221,7 @@ class CrossPollinationBridgeHandler(BaseHandler):
     ROUTES = ["/api/v1/cross-pollination/bridge"]
 
     @require_permission("cross_pollination:read")
-    async def get(self) -> HandlerResult:
+    async def get(self, handler: Any = None) -> HandlerResult:
         """Get bridge status."""
         try:
             from aragora.debate.arena_bridge import EVENT_TYPE_MAP
@@ -201,7 +249,7 @@ class CrossPollinationBridgeHandler(BaseHandler):
             return error_response("Internal server error", status=500)
 
 
-class CrossPollinationMetricsHandler(BaseHandler):
+class CrossPollinationMetricsHandler(_ReadViewDispatch, BaseHandler):
     """
     Handler for GET /api/cross-pollination/metrics.
 
@@ -211,7 +259,7 @@ class CrossPollinationMetricsHandler(BaseHandler):
     ROUTES = ["/api/v1/cross-pollination/metrics"]
 
     @require_permission("analytics:read")
-    async def get(self) -> HandlerResult:
+    async def get(self, handler: Any = None) -> HandlerResult:
         """Get cross-pollination metrics in Prometheus format."""
         try:
             from aragora.server.prometheus_cross_pollination import (
@@ -241,7 +289,7 @@ class CrossPollinationMetricsHandler(BaseHandler):
             return error_response("Internal server error", status=500)
 
 
-class CrossPollinationResetHandler(BaseHandler):
+class CrossPollinationResetHandler(_WriteViewDispatch, BaseHandler):
     """
     Handler for POST /api/cross-pollination/reset.
 
@@ -251,7 +299,7 @@ class CrossPollinationResetHandler(BaseHandler):
     ROUTES = ["/api/v1/cross-pollination/reset"]
 
     @require_permission("cross_pollination:write")
-    async def post(self) -> HandlerResult:
+    async def post(self, handler: Any = None) -> HandlerResult:
         """Reset subscriber statistics."""
         try:
             from aragora.events.cross_subscribers import get_cross_subscriber_manager
@@ -276,7 +324,7 @@ class CrossPollinationResetHandler(BaseHandler):
             return error_response("Internal server error", status=500)
 
 
-class CrossPollinationKMHandler(BaseHandler):
+class CrossPollinationKMHandler(_ReadViewDispatch, BaseHandler):
     """
     Handler for GET /api/cross-pollination/km.
 
@@ -289,7 +337,7 @@ class CrossPollinationKMHandler(BaseHandler):
     ROUTES = ["/api/v1/cross-pollination/km"]
 
     @require_permission("cross_pollination:read")
-    async def get(self) -> HandlerResult:
+    async def get(self, handler: Any = None) -> HandlerResult:
         """Get KM bidirectional integration status."""
         try:
             from aragora.events.cross_subscribers import get_cross_subscriber_manager
@@ -370,7 +418,7 @@ class CrossPollinationKMHandler(BaseHandler):
             return error_response("Internal server error", status=500)
 
 
-class CrossPollinationKMSyncHandler(BaseHandler):
+class CrossPollinationKMSyncHandler(_WriteViewDispatch, BaseHandler):
     """
     Handler for POST /api/cross-pollination/km/sync.
 
@@ -381,7 +429,7 @@ class CrossPollinationKMSyncHandler(BaseHandler):
     ROUTES = ["/api/v1/cross-pollination/km/sync"]
 
     @require_permission("cross_pollination:write")
-    async def post(self) -> HandlerResult:
+    async def post(self, handler: Any = None) -> HandlerResult:
         """Trigger manual KM adapter sync."""
         import time
 
@@ -489,7 +537,7 @@ class CrossPollinationKMSyncHandler(BaseHandler):
             return error_response("Internal server error", status=500)
 
 
-class CrossPollinationKMStalenessHandler(BaseHandler):
+class CrossPollinationKMStalenessHandler(_WriteViewDispatch, BaseHandler):
     """
     Handler for POST /api/cross-pollination/km/staleness-check.
 
@@ -499,7 +547,7 @@ class CrossPollinationKMStalenessHandler(BaseHandler):
     ROUTES = ["/api/v1/cross-pollination/km/staleness-check"]
 
     @require_permission("cross_pollination:write")
-    async def post(self) -> HandlerResult:
+    async def post(self, handler: Any = None) -> HandlerResult:
         """Trigger manual staleness check."""
         import time
 
@@ -575,7 +623,7 @@ class CrossPollinationKMStalenessHandler(BaseHandler):
             return error_response("Internal server error", status=500)
 
 
-class CrossPollinationKMCultureHandler(BaseHandler):
+class CrossPollinationKMCultureHandler(_ReadViewDispatch, BaseHandler):
     """
     Handler for GET /api/cross-pollination/km/culture.
 
@@ -585,7 +633,7 @@ class CrossPollinationKMCultureHandler(BaseHandler):
     ROUTES = ["/api/v1/cross-pollination/km/culture"]
 
     @require_permission("cross_pollination:read")
-    async def get(self) -> HandlerResult:
+    async def get(self, handler: Any = None) -> HandlerResult:
         """Get culture patterns."""
         try:
             workspace_id = (
