@@ -413,9 +413,14 @@ sequences, and `key=value` or `key: value` assignments in messages (including
 quoted keys and values as in JSON or Python reprs, and Bearer/Basic values). An
 `Authorization` or `Proxy-Authorization` value is masked whole without being
 parsed, whatever the scheme: the scheme, the credential, every parameter and the
-rest of the line, including continuation lines that start with a space or tab,
-or everything up to the closing quote when the header line is inside a JSON or
-Python-repr string. Matching fails closed, so labels such as
+rest of the line, including continuation lines that start with a space or tab.
+That holds inside a JSON or Python-repr string too, so the rest of the line after
+the header name is masked, past the string's closing quote; only a quoted key
+with a quoted value (`"Authorization": "…"`) masks just that string. A secret
+value that runs into an `Authorization` name, or whose quoted value ends where
+one starts, is also masked to the end of its line. Log objects rather than their
+repr to keep their other fields readable: mappings are redacted field by field.
+Matching fails closed, so labels such as
 `token_count: 5` are masked too. Mapping keys JSON cannot encode become strings
 with their values masked, and a container that contains itself is logged as
 `<cycle>`. When the arguments do not fit the format string or cannot be

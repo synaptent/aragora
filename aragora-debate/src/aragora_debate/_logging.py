@@ -30,8 +30,8 @@ _KEY_PATTERN = re.compile(_SECRET_KEY, re.IGNORECASE)
 _BARE = r"[^\s,;}\]]+"
 _DQ = r'"(?:\\.|[^"\\])*"'
 # key=value, key: value, and quoted keys as in JSON ("key": ...) or reprs ('key': ...).
-# An unquoted Authorization value matches empty here; _auth_value_end() finds where
-# it ends without parsing the scheme or any auth-param.
+# An unquoted Authorization value matches empty here; _redact_text() masks it to the
+# end of the line without parsing the scheme, any auth-param or any quote.
 _ASSIGNMENT = re.compile(
     r"""(?P<key>(?P<kq>["']?)[\w-]*"""
     r"(?:api[_-]?key|token|secret|password|(?P<auth>authorization))"
@@ -43,16 +43,11 @@ _ASSIGNMENT = re.compile(
 # A line break ends a header value unless the next line starts with a space or tab
 # (a folded continuation line, RFC 9112 obs-fold); a lone "\r" does not end it.
 _VALUE_LINE_END = re.compile(r"\r?\n(?![ \t])")
-# The body of a JSON or repr string up to its first unescaped quote.
-_STRING_BODY = {
-    '"': re.compile(r'(?:\\.|[^"\\\r\n])*'),
-    "'": re.compile(r"(?:\\.|[^'\\\r\n])*"),
-}
-# What follows a string's closing quote inside a container: a separator, a closing
-# bracket or the end of the line. A quote opening a quoted auth-param does not fit.
-_AFTER_STRING = re.compile(r"[^\S\r\n]*(?:[,:)\]}\r\n]|\Z)")
-# A quote opens a JSON or repr string at the start of a line or after one of these.
-_STRING_OPENERS = frozenset(("", "[", "{", "(", ",", ":", "="))
+# Another key's value can hide an Authorization name from _ASSIGNMENT: by running into
+# it, past a quote or an escaped line break in a JSON or repr string, or by ending at
+# the quote that opens it ({'url': '?token=', 'Authorization': ...} matches ', ').
+_AUTH_NAME = re.compile("authorization", re.IGNORECASE)
+_AUTH_NAME_NEXT = re.compile(r"[\w-]*authorization", re.IGNORECASE)
 _REDACTED = "***"
 _CYCLE = "<cycle>"
 _MAPPING_FIELD = re.compile(
@@ -69,72 +64,34 @@ def _mask_assignment(match: re.Match[str]) -> str:
     return f"{match.group('key')}{match.group('sep')}{quote}{_REDACTED}{quote}"
 
 
-class _OpenString:
-    """The quote of the JSON or repr string open at the end of the text fed so far."""
-
-    __slots__ = ("_escaped", "_previous", "quote")
-
-    def __init__(self) -> None:
-        self.quote = ""
-        self._previous = ""
-        self._escaped = False
-
-    def feed(self, text: str) -> None:
-        line_start = max(text.rfind("\n"), text.rfind("\r")) + 1
-        if line_start:
-            self.quote, self._previous, self._escaped = "", "", False
-        for char in text[line_start:]:
-            if self.quote:
-                if self._escaped:
-                    self._escaped = False
-                elif char == "\\":
-                    self._escaped = True
-                elif char == self.quote:
-                    self.quote, self._previous = "", char
-            elif char in "\"'" and self._previous in _STRING_OPENERS:
-                self.quote = char
-            elif not char.isspace():
-                self._previous = char
-
-
-def _auth_value_end(text: str, start: int, quote: str) -> int:
-    """Where an unquoted Authorization value starting at start ends.
-
-    That is the end of its line, after any folded continuation lines, or, when
-    the value sits in a JSON or repr string opened by quote, that string's
-    closing quote, honoring backslash escapes.
-    """
-    if quote and (body := _STRING_BODY[quote].match(text, start)):
-        close = body.end()
-        if text.startswith(quote, close) and _AFTER_STRING.match(text, close + 1):
-            return close
-    line_end = _VALUE_LINE_END.search(text, start)
-    return line_end.start() if line_end else len(text)
+def _line_end(text: str, start: int) -> int:
+    """The end of the line holding start, after any folded continuation lines."""
+    match = _VALUE_LINE_END.search(text, start)
+    return match.start() if match else len(text)
 
 
 def _redact_text(text: str) -> str:
     parts: list[str] = []
-    open_string = _OpenString()
-    fed = done = 0
+    done = 0
     while match := _ASSIGNMENT.search(text, done):
         parts.append(text[done : match.start()])
+        value_start = match.end("sep")
+        hides_auth = (
+            _AUTH_NAME.search(text, value_start, match.end()) is not None
+            or _AUTH_NAME_NEXT.match(text, match.end()) is not None
+        )
         quoted = match.group("dq") or match.group("sq")
         # Only a quoted key ("Authorization": "...") makes a quoted value the whole
-        # value; after a bare key a quote may open an auth-param or close a container.
-        if match.group("auth") is None or (quoted and match.group("kq")):
+        # value. Otherwise no quote is trusted to end an Authorization value, even the
+        # closing quote of a JSON or repr string: the rest of the line is masked.
+        if not hides_auth and (match.group("auth") is None or (quoted and match.group("kq"))):
             parts.append(_mask_assignment(match))
             done = match.end()
             continue
         parts.append(match.group("key") + match.group("sep"))
-        # Reading the output rather than the input gives a second pass the same answer.
-        for part in parts[fed:]:
-            open_string.feed(part)
-        fed = len(parts)
-        done = match.end("sep")
-        end = _auth_value_end(text, done, open_string.quote)
-        if end > done:
+        done = _line_end(text, match.end())
+        if done > value_start:
             parts.append(_REDACTED)
-            done = end
     parts.append(text[done:])
     return "".join(parts)
 
@@ -169,9 +126,11 @@ def redact(obj: Any) -> Any:
     Mapping keys other than str/int/float/None become strings, with the value
     masked, so the result is always JSON-encodable as far as keys go. A
     container that contains itself is replaced by "<cycle>" where it recurs.
-    An unquoted Authorization value is masked to the end of its line, folded
-    continuation lines included, or to the closing quote of the JSON or repr
-    string that holds it.
+    An Authorization value is masked to the end of its line, folded continuation
+    lines included, also inside a JSON or repr string, where the rest of the line
+    is masked too; only a quoted key with a quoted value masks just that string.
+    Another secret's value that runs into an Authorization name, or whose quoted
+    value ends where one starts, is likewise masked to the end of its line.
     """
     return _redact(obj, frozenset())
 
