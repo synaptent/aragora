@@ -52,6 +52,7 @@ class _RegistryMixin(HandlerRegistryMixin):
     continuum_memory = None
     cross_debate_memory = None
     knowledge_mound = None
+    _ml_handler: Any  # set by _init_handlers
 
 
 @pytest.fixture(scope="module")

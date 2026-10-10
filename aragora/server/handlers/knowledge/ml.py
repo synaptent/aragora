@@ -233,7 +233,7 @@ class MLHandler(BaseHandler):
         if path == "/api/v1/ml/export-training":
             required_permission = "ml:train"
             if not user or not has_permission(
-                user.role if hasattr(user, "role") else None, required_permission
+                getattr(user, "role", None) or "", required_permission
             ):
                 return error_response("Permission denied", 403)
             return self._handle_export_training(data)
