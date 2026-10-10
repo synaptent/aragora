@@ -495,3 +495,109 @@ class TestDeltaReversal:
             if line.strip()
         ]
         assert len(reversal_lines) == 1
+
+
+# ---------------------------------------------------------------------------
+# Per-domain slices (AGT-05: no single aggregate score for dispatch)
+# ---------------------------------------------------------------------------
+
+
+class TestDomainScores:
+    def _two_domain_store(self) -> ReputationStore:
+        store = ReputationStore()
+        store.record_delta(_delta(delta=30.0, domain=DOMAIN_PREDICTION_MARKET, resolution_id="m1"))
+        store.record_delta(_delta(delta=-10.0, domain=DOMAIN_PREDICTION_MARKET, resolution_id="m2"))
+        store.record_delta(_delta(delta=15.0, domain=DOMAIN_DEBATE_POSITION, resolution_id="d1"))
+        return store
+
+    def test_single_domain_string(self) -> None:
+        store = self._two_domain_store()
+        pm = store.domain_score("alice", DOMAIN_PREDICTION_MARKET, apply_decay=False)
+        assert pm == pytest.approx(20.0)
+        dp = store.domain_score("alice", DOMAIN_DEBATE_POSITION, apply_decay=False)
+        assert dp == pytest.approx(15.0)
+
+    def test_iterable_of_domains_sums_matching(self) -> None:
+        store = self._two_domain_store()
+        both = store.domain_score(
+            "alice",
+            frozenset({DOMAIN_PREDICTION_MARKET, DOMAIN_DEBATE_POSITION}),
+            apply_decay=False,
+        )
+        assert both == pytest.approx(store.get_score("alice", apply_decay=False))
+
+    def test_unknown_domain_or_agent_returns_zero(self) -> None:
+        store = self._two_domain_store()
+        assert store.domain_score("alice", "code_pr") == 0.0
+        assert store.domain_score("nobody", DOMAIN_PREDICTION_MARKET) == 0.0
+        assert store.domain_scores("nobody") == {}
+
+    def test_domain_scores_maps_each_domain(self) -> None:
+        store = self._two_domain_store()
+        scores = store.domain_scores("alice", apply_decay=False)
+        assert list(scores) == sorted([DOMAIN_DEBATE_POSITION, DOMAIN_PREDICTION_MARKET])
+        assert scores[DOMAIN_PREDICTION_MARKET] == pytest.approx(20.0)
+        assert scores[DOMAIN_DEBATE_POSITION] == pytest.approx(15.0)
+
+    def test_reversed_delta_excluded_from_domain_slice(self) -> None:
+        store = self._two_domain_store()
+        target = next(d for d in store.deltas_for("alice") if d.delta == pytest.approx(15.0))
+        store.reverse_delta(target.delta_id)
+        assert store.domain_score("alice", DOMAIN_DEBATE_POSITION, apply_decay=False) == 0.0
+        # A domain whose only deltas were reversed drops out of the map entirely.
+        assert DOMAIN_DEBATE_POSITION not in store.domain_scores("alice")
+        assert store.domain_scores("alice", apply_decay=False)[
+            DOMAIN_PREDICTION_MARKET
+        ] == pytest.approx(20.0)
+
+    def test_domain_score_applies_decay_with_explicit_clock(self) -> None:
+        now = datetime(2026, 10, 1, tzinfo=UTC)
+        thirty_days_ago = (now - timedelta(days=30)).isoformat().replace("+00:00", "Z")
+        store = ReputationStore()
+        store.record_delta(
+            _delta(
+                delta=100.0,
+                domain=DOMAIN_PREDICTION_MARKET,
+                decay_half_life_days=30.0,
+                applied_at=thirty_days_ago,
+                resolution_id="old",
+            )
+        )
+        store.record_delta(
+            _delta(
+                delta=100.0,
+                domain=DOMAIN_DEBATE_POSITION,
+                decay_half_life_days=None,
+                applied_at=thirty_days_ago,
+                resolution_id="nodecay",
+            )
+        )
+        # One half-life elapsed: the decaying slice is worth exactly half.
+        assert store.domain_score("alice", DOMAIN_PREDICTION_MARKET, now=now) == pytest.approx(50.0)
+        # The non-decaying slice is unaffected by the clock.
+        assert store.domain_score("alice", DOMAIN_DEBATE_POSITION, now=now) == pytest.approx(100.0)
+        # Raw sums still available per domain.
+        assert store.domain_score(
+            "alice", DOMAIN_PREDICTION_MARKET, apply_decay=False, now=now
+        ) == pytest.approx(100.0)
+        by_domain = store.domain_scores("alice", now=now)
+        assert by_domain[DOMAIN_PREDICTION_MARKET] == pytest.approx(50.0)
+        assert by_domain[DOMAIN_DEBATE_POSITION] == pytest.approx(100.0)
+
+    def test_domain_slices_sum_to_aggregate(self) -> None:
+        now = datetime(2026, 10, 1, tzinfo=UTC)
+        ten_days_ago = (now - timedelta(days=10)).isoformat().replace("+00:00", "Z")
+        store = ReputationStore()
+        for i, domain in enumerate([DOMAIN_PREDICTION_MARKET, DOMAIN_DEBATE_POSITION, "code_pr"]):
+            store.record_delta(
+                _delta(
+                    delta=40.0 - 10.0 * i,
+                    domain=domain,
+                    decay_half_life_days=20.0,
+                    applied_at=ten_days_ago,
+                    resolution_id=f"r{i}",
+                )
+            )
+        total = sum(store.domain_scores("alice", now=now).values())
+        all_domains = store.domain_score("alice", store.domain_scores("alice"), now=now)
+        assert total == pytest.approx(all_domains)
