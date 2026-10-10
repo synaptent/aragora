@@ -29,6 +29,7 @@ modules just to construct a proposal shape).
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 from collections.abc import Iterable
@@ -127,6 +128,18 @@ class FollowupProposal:
             raise ValueError(
                 "follow-up proposals must NOT carry boss-ready label (queue-governance invariant)"
             )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-serializable dict carrying every proposal field."""
+        return {
+            "source_kind": self.source_kind,
+            "source_key": self.source_key,
+            "title": self.title,
+            "body": self.body,
+            "labels": list(self.labels),
+            "rationale": self.rationale,
+            "provenance": copy.deepcopy(self.provenance),
+        }
 
     def to_gh_create_args(self, *, repo: str) -> list[str]:
         """Return the gh-CLI arguments that would file this proposal.
