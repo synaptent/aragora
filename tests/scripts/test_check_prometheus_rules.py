@@ -1,14 +1,25 @@
 from __future__ import annotations
 
 import subprocess
+import sys
+import time
 from pathlib import Path
 
+import pytest
+
 from scripts.check_prometheus_rules import (
+    DEFAULT_DOCKER_TIMEOUT_S,
     CheckResult,
     _build_docker_promtool_cmd,
     resolve_rule_files,
     run_rule_check,
 )
+
+SCRIPT = Path(__file__).resolve().parents[2] / "scripts/check_prometheus_rules.py"
+
+
+def _docker_only(name: str) -> str | None:
+    return "/usr/bin/docker" if name == "docker" else None
 
 
 def test_resolve_rule_files_splits_existing_and_missing(tmp_path: Path) -> None:
@@ -129,3 +140,80 @@ def test_run_rule_check_docker_failure_uses_yaml_fallback(tmp_path: Path) -> Non
     assert result.returncode == 0
     assert result.command == ["python", "yaml-safe-load"]
     assert "Using YAML fallback check" in result.error
+
+
+def test_docker_fallback_run_is_bounded_by_default_timeout(tmp_path: Path) -> None:
+    rule_file = tmp_path / "alerts.yml"
+    rule_file.write_text("groups: []\n", encoding="utf-8")
+    seen: list[dict[str, object]] = []
+
+    def fake_run(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        seen.append(kwargs)
+        return subprocess.CompletedProcess(cmd, 0, "ok", "")
+
+    assert run_rule_check(tmp_path, [rule_file], which=_docker_only, run=fake_run).returncode == 0
+    assert DEFAULT_DOCKER_TIMEOUT_S > 0
+    assert seen == [{"capture_output": True, "text": True, "timeout": DEFAULT_DOCKER_TIMEOUT_S}]
+
+
+def test_docker_timeout_takes_yaml_fallback_within_the_bound(tmp_path: Path) -> None:
+    rule_file = tmp_path / "alerts.yml"
+    rule_file.write_text("groups: []\n", encoding="utf-8")
+    bounds: list[float] = []
+
+    def wedged_docker(
+        cmd: list[str], *, timeout: float, **_: object
+    ) -> subprocess.CompletedProcess[str]:
+        bounds.append(timeout)
+        raise subprocess.TimeoutExpired(cmd, timeout)
+
+    started = time.monotonic()
+    result = run_rule_check(
+        tmp_path, [rule_file], which=_docker_only, run=wedged_docker, docker_timeout_s=0.5
+    )
+
+    assert time.monotonic() - started < 5
+    assert bounds == [0.5]
+    assert result.returncode == 0
+    assert result.command == ["python", "yaml-safe-load"]
+    assert "Fallback YAML validation passed" in result.output
+    assert "timed out after 0.5" in result.error
+
+
+def test_docker_timeout_with_failing_fallback_reports_the_timeout(tmp_path: Path) -> None:
+    rule_file = tmp_path / "alerts.yml"
+    rule_file.write_text("not_groups: true\n", encoding="utf-8")
+
+    def wedged_docker(
+        cmd: list[str], *, timeout: float, **_: object
+    ) -> subprocess.CompletedProcess[str]:
+        raise subprocess.TimeoutExpired(cmd, timeout)
+
+    result = run_rule_check(tmp_path, [rule_file], which=_docker_only, run=wedged_docker)
+
+    assert result.returncode != 0
+    assert f"timed out after {DEFAULT_DOCKER_TIMEOUT_S:g}" in result.error
+    assert "expected top-level `groups` list" in result.error
+
+
+def test_help_documents_the_docker_timeout_and_its_default() -> None:
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), "--help"], capture_output=True, text=True, timeout=30
+    )
+    assert result.returncode == 0
+    help_text = " ".join(result.stdout.split())
+    assert "--docker-timeout" in help_text
+    assert f"default: {DEFAULT_DOCKER_TIMEOUT_S:g} seconds" in help_text
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "nan", "inf", "soon"])
+def test_invalid_docker_timeout_is_a_usage_error(value: str) -> None:
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), "--docker-timeout", value],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 2
+    assert "--docker-timeout" in result.stderr
+    assert "Traceback" not in result.stderr

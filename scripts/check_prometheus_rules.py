@@ -2,12 +2,15 @@
 """Validate Prometheus alert rule files with promtool.
 
 The checker prefers a locally installed `promtool` binary and falls back to
-Docker (`prom/prometheus`) when promtool is unavailable.
+Docker (`prom/prometheus`) when promtool is unavailable. The Docker run is
+bounded by `--docker-timeout`; when it fails or times out, a PyYAML shape
+check is used instead.
 """
 
 from __future__ import annotations
 
 import argparse
+import math
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -21,6 +24,8 @@ DEFAULT_RULE_FILES: tuple[str, ...] = (
     "deploy/observability/alerts.yml",
 )
 DEFAULT_DOCKER_IMAGE = "prom/prometheus:v2.54.1"
+# Long enough for a cold image pull; a wedged daemon would otherwise block forever.
+DEFAULT_DOCKER_TIMEOUT_S = 120.0
 
 
 @dataclass(frozen=True)
@@ -80,8 +85,9 @@ def run_rule_check(
     which: Callable[[str], str | None] = shutil.which,
     run: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
     docker_image: str = DEFAULT_DOCKER_IMAGE,
+    docker_timeout_s: float = DEFAULT_DOCKER_TIMEOUT_S,
 ) -> CheckResult:
-    """Run promtool check using local binary or Docker fallback."""
+    """Run promtool check using local binary or a time-bounded Docker fallback."""
 
     def _yaml_fallback() -> CheckResult:
         try:
@@ -136,7 +142,21 @@ def run_rule_check(
 
     if which("docker"):
         cmd = _build_docker_promtool_cmd(repo_root, rule_files, image=docker_image)
-        proc = run(cmd, capture_output=True, text=True)
+        try:
+            proc = run(cmd, capture_output=True, text=True, timeout=docker_timeout_s)
+        except subprocess.TimeoutExpired:
+            fallback = _yaml_fallback()
+            note = f"promtool via Docker timed out after {docker_timeout_s:g} seconds"
+            if fallback.returncode == 0:
+                return CheckResult(
+                    0, fallback.command, fallback.output, f"{note}. Using YAML fallback check."
+                )
+            return CheckResult(
+                fallback.returncode,
+                fallback.command,
+                fallback.output,
+                f"{note}, and the YAML fallback check failed:\n{fallback.error}",
+            )
         output = (proc.stdout or "").strip()
         error = (proc.stderr or "").strip()
         if proc.returncode == 0:
@@ -152,6 +172,16 @@ def run_rule_check(
         return fallback
 
     return _yaml_fallback()
+
+
+def _positive_seconds(value: str) -> float:
+    try:
+        seconds = float(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected seconds, got {value!r}") from None
+    if not math.isfinite(seconds) or seconds <= 0:
+        raise argparse.ArgumentTypeError(f"expected a positive finite number, got {value!r}")
+    return seconds
 
 
 def main() -> int:
@@ -173,6 +203,16 @@ def main() -> int:
         default=DEFAULT_DOCKER_IMAGE,
         help="Docker image containing promtool for fallback mode",
     )
+    parser.add_argument(
+        "--docker-timeout",
+        type=_positive_seconds,
+        default=DEFAULT_DOCKER_TIMEOUT_S,
+        metavar="SECONDS",
+        help=(
+            "Seconds to wait for promtool via Docker before using the YAML fallback check "
+            f"(default: {DEFAULT_DOCKER_TIMEOUT_S:g} seconds)"
+        ),
+    )
     args = parser.parse_args()
 
     repo_root = Path(args.repo_root).resolve()
@@ -192,6 +232,7 @@ def main() -> int:
         repo_root,
         existing,
         docker_image=args.docker_image,
+        docker_timeout_s=args.docker_timeout,
     )
 
     if result.command:
