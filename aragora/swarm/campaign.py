@@ -7,13 +7,13 @@ import contextlib
 import json
 import logging
 import subprocess
-import uuid
+import uuid  # noqa: F401
 from datetime import datetime, timezone
 from pathlib import Path
 from collections.abc import Generator
 from typing import Any, cast
 
-from aragora.agents.base import create_agent
+from aragora.agents.base import create_agent  # noqa: F401
 from aragora.agents.errors import AgentConnectionError, CLISubprocessError
 from aragora.nomic.pipeline_bridge import NomicPipelineBridge
 from aragora.swarm.lane_telemetry import LaneTelemetryCollector, LaneTelemetryRecord
@@ -23,7 +23,7 @@ from aragora.swarm.boss_loop import (
     dispatch_bounded_spec,
 )
 from aragora.swarm.campaign_models import (
-    CampaignDependency,
+    CampaignDependency,  # noqa: F401
     CampaignExecutionState,  # noqa: F401
     CampaignManifest,
     CampaignProject,
@@ -32,10 +32,18 @@ from aragora.swarm.campaign_models import (
     CampaignReviewStatus,
     CampaignRunOutcome,
     CampaignStopReason,
-    _canonical_planner_strategy,
+    _canonical_planner_strategy,  # noqa: F401
     _canonical_review_model,
     _coerce_boolish,  # noqa: F401
     _optional_text,  # noqa: F401
+)
+from aragora.swarm.campaign_planner import (
+    CampaignPlanner,  # noqa: F401
+    _complexity_cost,  # noqa: F401
+    _gh_json,  # noqa: F401
+    _normalized_scope,  # noqa: F401
+    _parse_source_items,  # noqa: F401
+    _success_criteria_to_list,  # noqa: F401
 )
 from aragora.swarm.campaign_receipts import (
     _changed_files_from_run,
@@ -59,6 +67,15 @@ from aragora.swarm.campaign_receipts import (
     _worker_commit_from_run,  # noqa: F401
     _worker_commits_from_run,
 )
+from aragora.swarm.campaign_state import (
+    _BUDGET_EPSILON,
+    _campaign_budget_snapshot,
+    _extract_first_json_object,
+    _extract_json_list,  # noqa: F401
+    _now_iso,
+    _project_estimated_cost,
+    _refresh_execution_state,
+)
 from aragora.swarm.review_routing import ReviewRoutingError, generate_review_response
 from aragora.swarm.spec import SwarmSpec
 from aragora.swarm.supervisor import (
@@ -75,7 +92,6 @@ logger = logging.getLogger(__name__)
 UTC = timezone.utc
 _LANE_TELEMETRY = LaneTelemetryCollector()
 DEFAULT_CAMPAIGN_MANIFEST = ".aragora/campaign_manifest.yaml"
-_BUDGET_EPSILON = 1e-9
 
 
 # Statuses that represent terminal project transitions (no further retries).
@@ -145,39 +161,6 @@ def _validate_campaign_manifest(manifest: CampaignManifest) -> None:
             raise ValueError(f"Project {project.project_id} is not dispatch-bounded.")
 
 
-def _now_iso() -> str:
-    return datetime.now(UTC).isoformat()
-
-
-def _complexity_cost(label: str) -> float:
-    lowered = str(label or "").strip().lower()
-    return {"low": 0.5, "medium": 1.0, "moderate": 1.0, "high": 2.0}.get(lowered, 1.0)
-
-
-def _project_estimated_cost(project: CampaignProject) -> float:
-    return max(0.0, float(project.estimated_cost_usd or 0.0))
-
-
-def _campaign_budget_snapshot(manifest: CampaignManifest) -> dict[str, float | bool]:
-    spent = max(0.0, float(manifest.execution_state.total_cost_usd or 0.0))
-    reserved = sum(
-        _project_estimated_cost(project)
-        for project in manifest.projects
-        if project.status == CampaignProjectStatus.ACTIVE.value
-    )
-    limit = max(0.0, float(manifest.budget_limit_usd or 0.0))
-    committed = spent + reserved
-    available = max(0.0, limit - committed)
-    return {
-        "budget_limit_usd": round(limit, 4),
-        "spent_cost_usd": round(spent, 4),
-        "reserved_cost_usd": round(reserved, 4),
-        "committed_cost_usd": round(committed, 4),
-        "available_budget_usd": round(available, 4),
-        "budget_exhausted": bool(available <= _BUDGET_EPSILON),
-    }
-
-
 def _dispatchable_projects(manifest: CampaignManifest) -> list[CampaignProject]:
     completed = {
         project.project_id
@@ -198,379 +181,6 @@ def _dispatchable_projects(manifest: CampaignManifest) -> list[CampaignProject]:
         if deps.issubset(completed):
             candidates.append(project)
     return candidates
-
-
-def _success_criteria_to_list(success_criteria: dict[str, Any]) -> list[str]:
-    items: list[str] = []
-    for key, value in sorted(success_criteria.items()):
-        text = str(value).strip()
-        if text:
-            items.append(f"{key}: {text}")
-    return items
-
-
-def _normalized_scope(scope: list[str]) -> list[str]:
-    return sorted({str(item).strip() for item in scope if str(item).strip()})
-
-
-def _parse_source_items(text: str) -> list[str]:
-    lines = [line.rstrip() for line in text.splitlines()]
-    items: list[str] = []
-    current: list[str] = []
-    for raw in lines:
-        line = raw.strip()
-        if not line:
-            if current:
-                items.append("\n".join(current).strip())
-                current = []
-            continue
-        if line.startswith(("-", "*")) or line[:2].isdigit() and line[2:3] == ".":
-            if current:
-                items.append("\n".join(current).strip())
-                current = []
-            item = line.lstrip("-*0123456789. ").strip()
-            if item:
-                items.append(item)
-            continue
-        if line.startswith("#"):
-            if current:
-                items.append("\n".join(current).strip())
-                current = []
-            current.append(line.lstrip("# ").strip())
-            continue
-        current.append(line)
-    if current:
-        items.append("\n".join(current).strip())
-    return [item for item in items if item]
-
-
-def _gh_json(cmd: list[str]) -> Any:
-    proc = subprocess.run(cmd, text=True, capture_output=True, timeout=30, check=False)
-    if proc.returncode != 0:
-        raise RuntimeError(proc.stderr.strip() or "GitHub command failed")
-    return json.loads(proc.stdout)
-
-
-class CampaignPlanner:
-    """Build a persistent campaign manifest from documents or GitHub issues."""
-
-    def __init__(
-        self,
-        *,
-        repo_root: Path | None = None,
-        planner_model: str = "claude",
-        planner_strategy: str = "heuristic",
-        worker_model: str = "codex",
-        review_model: str = "claude",
-        enforce_cross_model_review: bool = True,
-        budget_limit_usd: float = 50.0,
-        max_parallel_ready_projects: int = 2,
-        decomposer: TaskDecomposer | None = None,
-        enable_model_crosscheck: bool = False,
-        experiment_id: str | None = None,
-        experiment_label: str | None = None,
-    ) -> None:
-        self.repo_root = (repo_root or Path.cwd()).resolve()
-        self.planner_model = planner_model
-        self.planner_strategy = _canonical_planner_strategy(planner_strategy)
-        self.worker_model = worker_model
-        self.enforce_cross_model_review = bool(enforce_cross_model_review)
-        self.review_model = _canonical_review_model(
-            worker_model,
-            review_model,
-            enforce_cross_model_review=self.enforce_cross_model_review,
-        )
-        self.budget_limit_usd = budget_limit_usd
-        self.max_parallel_ready_projects = max(1, int(max_parallel_ready_projects))
-        self.decomposer = decomposer or TaskDecomposer()
-        self.enable_model_crosscheck = enable_model_crosscheck
-        self.experiment_id = experiment_id
-        self.experiment_label = experiment_label
-        self._planner_fallbacks: list[str] = []
-
-    def plan_from_source_file(self, path: Path) -> CampaignManifest:
-        text = path.read_text(encoding="utf-8")
-        items = _parse_source_items(text)
-        return self.plan_from_items(items, source_kind="source_file", source_ref=str(path))
-
-    def plan_from_issue_list(
-        self, issue_numbers: list[int], *, repo: str | None = None
-    ) -> CampaignManifest:
-        items: list[str] = []
-        source_refs: list[str] = []
-        for number in issue_numbers:
-            cmd = [
-                "gh",
-                "issue",
-                "view",
-                str(number),
-                "--json",
-                "number,title,body,url",
-            ]
-            if repo:
-                cmd.extend(["--repo", repo])
-            data = _gh_json(cmd)
-            title = str(data.get("title", "")).strip()
-            body = str(data.get("body", "")).strip()
-            url = str(data.get("url", "")).strip()
-            items.append(f"[Issue #{number}] {title}\n\n{body}".strip())
-            source_refs.append(url or f"issue:{number}")
-        manifest = self.plan_from_items(
-            items,
-            source_kind="issue_list",
-            source_ref=",".join(str(num) for num in issue_numbers),
-        )
-        for project, source_ref in zip(manifest.projects, source_refs, strict=False):
-            if source_ref not in project.source_refs:
-                project.source_refs.append(source_ref)
-        return manifest
-
-    def plan_from_github_query(self, query: str, *, repo: str | None = None) -> CampaignManifest:
-        cmd = [
-            "gh",
-            "issue",
-            "list",
-            "--state",
-            "open",
-            "--limit",
-            "100",
-            "--search",
-            query,
-            "--json",
-            "number,title,body,url",
-        ]
-        if repo:
-            cmd.extend(["--repo", repo])
-        data = _gh_json(cmd)
-        items = []
-        for item in data:
-            if not isinstance(item, dict):
-                continue
-            items.append(
-                f"[Issue #{item.get('number')}] {item.get('title', '')}\n\n{item.get('body', '')}".strip()
-            )
-        return self.plan_from_items(items, source_kind="github_query", source_ref=query)
-
-    def plan_from_items(
-        self, items: list[str], *, source_kind: str, source_ref: str
-    ) -> CampaignManifest:
-        projects: list[CampaignProject] = []
-        source_findings: list[str] = []
-        self._planner_fallbacks = []
-        source_index = 0
-        for item in items:
-            source_index += 1
-            created = self._projects_from_item(item, source_index)
-            if not created:
-                source_findings.append(f"Skipped under-specified candidate: {item[:80]}")
-                continue
-            projects.extend(created)
-        source_findings.extend(self._planner_fallbacks)
-        self._apply_overlap_dependencies(projects, findings=source_findings)
-        projects = self._topological_sort_projects(projects)
-        self._renumber_projects(projects)
-        crosscheck_findings = self._crosscheck_projects(projects)
-        source_findings.extend(crosscheck_findings)
-        manifest = CampaignManifest(
-            campaign_id=f"campaign-{uuid.uuid4().hex[:12]}",
-            created_at=_now_iso(),
-            source_kind=source_kind,
-            source_ref=source_ref,
-            planner_model=self.planner_model,
-            planner_strategy=self.planner_strategy,
-            worker_model=self.worker_model,
-            review_model=self.review_model,
-            enforce_cross_model_review=self.enforce_cross_model_review,
-            experiment_id=self.experiment_id,
-            experiment_label=self.experiment_label,
-            max_parallel_ready_projects=self.max_parallel_ready_projects,
-            budget_limit_usd=self.budget_limit_usd,
-            projects=projects,
-            planning_findings=source_findings,
-        )
-        _refresh_execution_state(manifest)
-        return manifest
-
-    def _projects_from_item(self, item: str, source_index: int) -> list[CampaignProject]:
-        base_spec = SwarmSpec.from_direct_goal(
-            item,
-            budget_limit_usd=self.budget_limit_usd,
-            requires_approval=True,
-            user_expertise="developer",
-        )
-        if self.planner_strategy == "model":
-            try:
-                decomposition = self.decomposer.analyze_with_model_sync(
-                    item,
-                    planner_model=self.planner_model,
-                    file_scope_hints=base_spec.file_scope_hints or None,
-                    acceptance_criteria=base_spec.acceptance_criteria,
-                    constraints=base_spec.constraints,
-                )
-            except (RuntimeError, ValueError, OSError, KeyError, json.JSONDecodeError) as exc:
-                self._planner_fallbacks.append(
-                    f"planner fallback to heuristic for source item {source_index}: "
-                    f"{type(exc).__name__}: {exc}"
-                )
-                decomposition = self.decomposer.analyze(item)
-        else:
-            decomposition = self.decomposer.analyze(item)
-        projects: list[CampaignProject] = []
-        if decomposition.should_decompose and decomposition.subtasks:
-            subtask_id_map: dict[str, str] = {}
-            for sub_index, subtask in enumerate(decomposition.subtasks, start=1):
-                spec = self._spec_from_subtask(subtask, base_spec)
-                if not spec.is_dispatch_bounded():
-                    continue
-                project_id = f"proj-{source_index:03d}-{sub_index:02d}"
-                subtask_id_map[subtask.id] = project_id
-                projects.append(
-                    CampaignProject(
-                        project_id=project_id,
-                        title=subtask.title or project_id,
-                        source_refs=[f"{source_index}:{subtask.id}"],
-                        spec=spec,
-                        file_scope_hints=list(spec.file_scope_hints),
-                        acceptance_criteria=list(spec.acceptance_criteria),
-                        constraints=list(spec.constraints),
-                        estimated_cost_usd=_complexity_cost(subtask.estimated_complexity),
-                        review=CampaignReviewGate(
-                            required=True,
-                            review_model=self.review_model,
-                        ),
-                    )
-                )
-            for project, subtask in zip(projects, decomposition.subtasks, strict=False):
-                project.dependencies = [
-                    CampaignDependency(project_id=subtask_id_map[dep], reason="subtask_dependency")
-                    for dep in subtask.dependencies
-                    if dep in subtask_id_map
-                ]
-            if projects:
-                return projects
-
-        if not base_spec.is_dispatch_bounded():
-            return []
-        return [
-            CampaignProject(
-                project_id=f"proj-{source_index:03d}",
-                title=item.splitlines()[0][:120],
-                source_refs=[f"{source_index}"],
-                spec=base_spec,
-                file_scope_hints=list(base_spec.file_scope_hints),
-                acceptance_criteria=list(base_spec.acceptance_criteria),
-                constraints=list(base_spec.constraints),
-                estimated_cost_usd=_complexity_cost(decomposition.complexity_level),
-                review=CampaignReviewGate(required=True, review_model=self.review_model),
-            )
-        ]
-
-    def _spec_from_subtask(self, subtask: SubTask, base_spec: SwarmSpec) -> SwarmSpec:
-        criteria = _success_criteria_to_list(subtask.success_criteria)
-        if not criteria:
-            criteria = [f"Complete bounded task: {subtask.title}"]
-        return SwarmSpec(
-            raw_goal=subtask.description or base_spec.raw_goal,
-            refined_goal=subtask.title or subtask.description or base_spec.refined_goal,
-            acceptance_criteria=criteria,
-            constraints=list(base_spec.constraints),
-            budget_limit_usd=base_spec.budget_limit_usd,
-            file_scope_hints=_normalized_scope(subtask.file_scope or base_spec.file_scope_hints),
-            work_orders=[],
-            estimated_complexity=subtask.estimated_complexity or "medium",
-            requires_approval=True,
-            user_expertise="developer",
-        )
-
-    def _apply_overlap_dependencies(
-        self, projects: list[CampaignProject], *, findings: list[str]
-    ) -> None:
-        for index, project in enumerate(projects):
-            current_scope = set(project.file_scope_hints)
-            if not current_scope:
-                continue
-            for later in projects[index + 1 :]:
-                overlap = sorted(current_scope & set(later.file_scope_hints))
-                if not overlap:
-                    continue
-                existing = {dep.project_id for dep in later.dependencies}
-                if project.project_id in existing:
-                    continue
-                later.dependencies.append(
-                    CampaignDependency(
-                        project_id=project.project_id,
-                        reason=f"file_scope_overlap:{', '.join(overlap[:3])}",
-                    )
-                )
-                findings.append(
-                    f"Added dependency {later.project_id} -> {project.project_id} due to overlapping scope."
-                )
-
-    def _topological_sort_projects(self, projects: list[CampaignProject]) -> list[CampaignProject]:
-        by_id = {project.project_id: project for project in projects}
-        incoming = {
-            project.project_id: {
-                dep.project_id for dep in project.dependencies if dep.project_id in by_id
-            }
-            for project in projects
-        }
-        ready = [project.project_id for project in projects if not incoming[project.project_id]]
-        ordered: list[CampaignProject] = []
-        while ready:
-            ready.sort()
-            project_id = ready.pop(0)
-            ordered.append(by_id[project_id])
-            for other_id, deps in incoming.items():
-                if project_id in deps:
-                    deps.remove(project_id)
-                    if not deps and by_id[other_id] not in ordered and other_id not in ready:
-                        ready.append(other_id)
-        leftovers = [project for project in projects if project not in ordered]
-        return ordered + sorted(leftovers, key=lambda item: item.project_id)
-
-    def _crosscheck_projects(self, projects: list[CampaignProject]) -> list[str]:
-        findings: list[str] = []
-        for project in projects:
-            if not project.acceptance_criteria:
-                findings.append(f"{project.project_id} has no acceptance criteria.")
-        if self.enable_model_crosscheck:
-            prompt = {
-                "projects": [
-                    {
-                        "project_id": project.project_id,
-                        "title": project.title,
-                        "dependencies": [dep.to_dict() for dep in project.dependencies],
-                        "file_scope_hints": project.file_scope_hints,
-                        "acceptance_criteria": project.acceptance_criteria,
-                    }
-                    for project in projects
-                ]
-            }
-            try:
-                agent = cast(Any, create_agent)(
-                    self.review_model,
-                    name="campaign-crosscheck",
-                    role="critic",
-                )
-                response = asyncio.run(agent.generate(json.dumps(prompt, sort_keys=True)))
-                for finding in _extract_json_list(response):
-                    findings.append(f"crosscheck: {finding}")
-            except (RuntimeError, ValueError, OSError, KeyError, json.JSONDecodeError) as exc:
-                logger.debug("campaign_crosscheck_fallback: %s", exc)
-        return findings
-
-    @staticmethod
-    def _renumber_projects(projects: list[CampaignProject]) -> None:
-        id_map = {
-            project.project_id: f"proj-{index:03d}"
-            for index, project in enumerate(projects, start=1)
-        }
-        for project in projects:
-            project.project_id = id_map[project.project_id]
-        for project in projects:
-            for dependency in project.dependencies:
-                if dependency.project_id in id_map:
-                    dependency.project_id = id_map[dependency.project_id]
 
 
 _DIFF_MAX_CHARS = 50_000
@@ -1980,47 +1590,6 @@ def _first_receipt_id(run_dict: dict[str, Any]) -> str | None:
     return None
 
 
-def _refresh_execution_state(manifest: CampaignManifest) -> None:
-    manifest.execution_state.ready_queue = [
-        project.project_id
-        for project in manifest.projects
-        if project.status == CampaignProjectStatus.READY.value
-    ]
-    manifest.execution_state.active_projects = [
-        project.project_id
-        for project in manifest.projects
-        if project.status
-        in {
-            CampaignProjectStatus.ACTIVE.value,
-            CampaignProjectStatus.WAITING_FOR_PR.value,
-            CampaignProjectStatus.WAITING_FOR_MERGE.value,
-        }
-    ]
-    manifest.execution_state.completed_projects = [
-        project.project_id
-        for project in manifest.projects
-        if project.status == CampaignProjectStatus.COMPLETED.value
-    ]
-    manifest.execution_state.failed_projects = [
-        project.project_id
-        for project in manifest.projects
-        if project.status
-        in {
-            CampaignProjectStatus.FAILED.value,
-            CampaignProjectStatus.STALLED.value,
-            CampaignProjectStatus.BLOCKED.value,
-        }
-    ]
-    manifest.execution_state.skipped_projects = [
-        project.project_id
-        for project in manifest.projects
-        if project.status == CampaignProjectStatus.SKIPPED.value
-    ]
-    manifest.execution_state.reserved_cost_usd = float(
-        _campaign_budget_snapshot(manifest)["reserved_cost_usd"]
-    )
-
-
 def _manifest_summary(manifest: CampaignManifest) -> dict[str, Any]:
     counts: dict[str, int] = {}
     for project in manifest.projects:
@@ -2221,31 +1790,3 @@ def _merge_ready_projects(
             }
         )
     return ready
-
-
-def _extract_first_json_object(text: str) -> dict[str, Any]:
-    text = str(text or "").strip()
-    if not text:
-        return {}
-    try:
-        parsed = json.loads(text)
-        return parsed if isinstance(parsed, dict) else {}
-    except (json.JSONDecodeError, ValueError):
-        pass
-    start = text.find("{")
-    end = text.rfind("}")
-    if start == -1 or end == -1 or end <= start:
-        return {}
-    try:
-        parsed = json.loads(text[start : end + 1])
-        return parsed if isinstance(parsed, dict) else {}
-    except (json.JSONDecodeError, ValueError):
-        return {}
-
-
-def _extract_json_list(text: str) -> list[str]:
-    payload = _extract_first_json_object(text)
-    findings = payload.get("findings")
-    if isinstance(findings, list):
-        return [str(item) for item in findings if str(item).strip()]
-    return []
