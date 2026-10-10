@@ -3,7 +3,8 @@
 Use ``await with_timeout(1)(coroutine_or_callable)``, ``@retry(3, backoff=0.1)``,
 and ``await breaker.call(callable)``. Sync callables run in a worker thread.
 A timeout stops waiting, not the underlying thread: configure SDK transport
-timeouts too when a call must stop consuming resources.
+timeouts too when a call must stop consuming resources (the built-in agents
+set them from ``default_timeout_s()``).
 """
 
 from __future__ import annotations
@@ -55,15 +56,19 @@ async def _invoke(operation: Awaitable[_T] | Callable[[], _T | Awaitable[_T]]) -
     return result
 
 
+def default_timeout_s() -> float:
+    """Per-attempt timeout: ARAGORA_DEBATE_TIMEOUT_S, or 30 seconds if unset or invalid.
+
+    ``with_timeout()`` and the built-in agents' SDK transport timeouts share it.
+    """
+    return _env_float("ARAGORA_DEBATE_TIMEOUT_S", 30.0)
+
+
 def with_timeout(
     seconds: float | None = None,
 ) -> Callable[[Awaitable[_T] | Callable[[], _T | Awaitable[_T]]], Awaitable[_T]]:
-    """Bound one attempt, defaulting to ARAGORA_DEBATE_TIMEOUT_S or 30 seconds."""
-    limit = (
-        _env_float("ARAGORA_DEBATE_TIMEOUT_S", 30.0)
-        if seconds is None
-        else _positive_float(seconds)
-    )
+    """Bound one attempt, defaulting to default_timeout_s()."""
+    limit = default_timeout_s() if seconds is None else _positive_float(seconds)
 
     async def run(operation: Awaitable[_T] | Callable[[], _T | Awaitable[_T]]) -> _T:
         try:
@@ -130,6 +135,7 @@ class CircuitBreaker:
     Confined to one event loop at a time. Half-open allows one probe; success
     closes, failure reopens, cancellation releases the probe without counting
     a provider failure. The injectable monotonic clock makes resets testable.
+    CircuitOpenError is raised from the last counted failure, if any.
     """
 
     def __init__(
@@ -150,6 +156,7 @@ class CircuitBreaker:
         self._opened_at: float | None = None
         self._probe_active = False
         self._generation = 0
+        self._last_failure: Exception | None = None
 
     @property
     def state(self) -> str:
@@ -163,14 +170,15 @@ class CircuitBreaker:
         """Run a lazy operation unless open, counting each failed SDK attempt."""
         state = self.state
         if state == "open" or self._probe_active:
-            raise CircuitOpenError("Provider circuit is open")
+            raise CircuitOpenError("Provider circuit is open") from self._last_failure
         self._probe_active = state == "half-open"
         generation = self._generation
         try:
             result = await _invoke(operation)
-        except Exception:
+        except Exception as exc:
             if generation == self._generation:
                 self._failures += 1
+                self._last_failure = exc
                 if self._probe_active or self._failures >= self.fail_max:
                     self._opened_at = self._clock()
                     self._generation += 1
@@ -179,6 +187,7 @@ class CircuitBreaker:
         else:
             if generation == self._generation:
                 self._failures = 0
+                self._last_failure = None
                 self._opened_at = None
                 if self._probe_active:
                     self._generation += 1

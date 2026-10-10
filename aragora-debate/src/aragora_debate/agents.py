@@ -26,12 +26,17 @@ from collections.abc import Callable
 from functools import partial
 from typing import Any, ParamSpec, TypeVar, cast
 
-from aragora_debate._resilience import CircuitBreaker, retry, with_timeout
+from aragora_debate._resilience import CircuitBreaker, default_timeout_s, retry, with_timeout
 from aragora_debate.types import Agent, Critique, Message, Vote
 
 logger = logging.getLogger(__name__)
 _P = ParamSpec("_P")
 _T = TypeVar("_T")
+
+
+def _timeout_ms() -> int:
+    """default_timeout_s() in whole milliseconds, for SDKs configured in ms."""
+    return max(1, round(default_timeout_s() * 1000))
 
 
 async def _call_sdk(
@@ -154,6 +159,7 @@ class ClaudeAgent(Agent):
         self._client = anthropic.Anthropic(
             api_key=api_key or os.environ.get("ANTHROPIC_API_KEY"),
             max_retries=0,
+            timeout=default_timeout_s(),
         )
         self._breaker = CircuitBreaker()
         self._max_tokens = max_tokens
@@ -292,6 +298,7 @@ class OpenAIAgent(Agent):
         self._client = openai.OpenAI(
             api_key=api_key or os.environ.get("OPENAI_API_KEY"),
             max_retries=0,
+            timeout=default_timeout_s(),
         )
         self._breaker = CircuitBreaker()
         self._max_tokens = max_tokens
@@ -435,6 +442,7 @@ class MistralAgent(Agent):
             ) from exc
         self._client = Mistral(
             api_key=api_key or os.environ.get("MISTRAL_API_KEY", ""),
+            timeout_ms=_timeout_ms(),
         )
         self._breaker = CircuitBreaker()
         self._max_tokens = max_tokens
@@ -577,7 +585,8 @@ class GeminiAgent(Agent):
                 "google-genai package required: pip install aragora-debate[gemini]"
             ) from exc
         key = api_key or os.environ.get("GEMINI_API_KEY", "")
-        self._client = genai.Client(api_key=key)
+        # google-genai's HttpOptions.timeout is in milliseconds.
+        self._client = genai.Client(api_key=key, http_options={"timeout": _timeout_ms()})
         self._breaker = CircuitBreaker()
         self._max_tokens = max_tokens
         self._temperature = temperature

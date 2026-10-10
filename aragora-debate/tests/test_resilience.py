@@ -215,8 +215,45 @@ def test_resilience_invalid_explicit_settings_raise(factory):
         factory()
 
 
-@pytest.fixture(params=[ClaudeAgent, OpenAIAgent, MistralAgent, GeminiAgent])
-def sdk_agent(request, monkeypatch):
+@pytest.mark.asyncio
+async def test_circuit_open_error_chains_the_failure_that_opened_it(monkeypatch):
+    monkeypatch.setattr(resilience.asyncio, "sleep", AsyncMock())
+    breaker = resilience.CircuitBreaker(fail_max=2, reset_timeout=60)
+    failures = [RuntimeError("first"), RuntimeError("val-last-failure")]
+    stub = MagicMock(side_effect=failures)
+
+    # The same retry -> breaker order agents._call_sdk uses.
+    @resilience.retry(3)
+    async def attempt():
+        return await breaker.call(stub)
+
+    with pytest.raises(resilience.CircuitOpenError) as caught:
+        await attempt()
+    assert caught.value.__cause__ is failures[-1]
+    assert str(caught.value.__cause__) == "val-last-failure"
+    assert stub.call_count == 2
+    with pytest.raises(resilience.CircuitOpenError) as again:
+        await breaker.call(stub)
+    assert again.value.__cause__ is failures[-1]
+
+
+@pytest.mark.asyncio
+async def test_circuit_open_error_cause_is_cleared_after_recovery():
+    now = [0.0]
+    breaker = resilience.CircuitBreaker(1, 5, clock=lambda: now[0])
+    first, second = ValueError("first"), ValueError("second")
+    with pytest.raises(ValueError):
+        await breaker.call(MagicMock(side_effect=first))
+    now[0] = 5
+    assert await breaker.call(lambda: "ok") == "ok"
+    with pytest.raises(ValueError):
+        await breaker.call(MagicMock(side_effect=second))
+    with pytest.raises(resilience.CircuitOpenError) as caught:
+        await breaker.call(lambda: "never")
+    assert caught.value.__cause__ is second
+
+
+def _install_sdk_stubs(monkeypatch):
     module = MagicMock()
     client = MagicMock()
     for constructor in (module.Anthropic, module.OpenAI, module.Mistral, module.Client):
@@ -226,6 +263,49 @@ def sdk_agent(request, monkeypatch):
     monkeypatch.setitem(sys.modules, "mistralai", module)
     monkeypatch.setitem(sys.modules, "google", SimpleNamespace(genai=module))
     monkeypatch.setitem(sys.modules, "google.genai", module)
+    return module, client
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("setting", "seconds"), [("7.5", 7.5), (None, 30.0), ("0", 30.0)])
+@pytest.mark.parametrize("agent_class", [ClaudeAgent, OpenAIAgent, MistralAgent, GeminiAgent])
+async def test_sdk_client_transport_timeout_matches_wrapper_timeout(
+    monkeypatch, agent_class, setting, seconds
+):
+    if setting is None:
+        monkeypatch.delenv("ARAGORA_DEBATE_TIMEOUT_S", raising=False)
+    else:
+        monkeypatch.setenv("ARAGORA_DEBATE_TIMEOUT_S", setting)
+    module, _ = _install_sdk_stubs(monkeypatch)
+    agent_class("test", api_key="SECRET-ALPHA-123")
+    wait = AsyncMock(return_value="ok")
+    monkeypatch.setattr(resilience.asyncio, "wait_for", wait)
+    assert await resilience.with_timeout()(lambda: "ok") == "ok"
+    wait.call_args.args[0].close()
+    wrapper = wait.call_args.kwargs["timeout"]
+    assert wrapper == resilience.default_timeout_s() == seconds
+    milliseconds = round(wrapper * 1000)
+    if agent_class is ClaudeAgent:
+        assert module.Anthropic.call_args.kwargs | {"api_key": None} == {
+            "api_key": None,
+            "max_retries": 0,
+            "timeout": wrapper,
+        }
+    elif agent_class is OpenAIAgent:
+        assert module.OpenAI.call_args.kwargs | {"api_key": None} == {
+            "api_key": None,
+            "max_retries": 0,
+            "timeout": wrapper,
+        }
+    elif agent_class is MistralAgent:
+        assert module.Mistral.call_args.kwargs["timeout_ms"] == milliseconds
+    else:
+        assert module.Client.call_args.kwargs["http_options"] == {"timeout": milliseconds}
+
+
+@pytest.fixture(params=[ClaudeAgent, OpenAIAgent, MistralAgent, GeminiAgent])
+def sdk_agent(request, monkeypatch):
+    _, client = _install_sdk_stubs(monkeypatch)
     monkeypatch.setenv("ARAGORA_DEBATE_RETRY_ATTEMPTS", "3")
     monkeypatch.setenv("ARAGORA_DEBATE_BREAKER_FAIL_MAX", "2")
     agent = request.param("test", api_key="SECRET-ALPHA-123")
@@ -278,10 +358,12 @@ async def test_agent_sdk_retry_and_breaker_rejection(sdk_agent, monkeypatch, met
     assert await _run_agent(agent, method) is not None
     assert call.call_count == 2
     call.reset_mock()
-    call.side_effect = ValueError()
-    with pytest.raises(resilience.CircuitOpenError):
+    failures = [ValueError("first"), ValueError("opened the circuit")]
+    call.side_effect = failures
+    with pytest.raises(resilience.CircuitOpenError) as caught:
         await _run_agent(agent, method)
     assert call.call_count == 2
+    assert caught.value.__cause__ is failures[-1]
 
 
 @pytest.mark.asyncio

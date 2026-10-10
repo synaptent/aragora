@@ -373,14 +373,21 @@ All built-in Claude, OpenAI, Mistral, and Gemini `generate`, `critique`, and
    without calling the SDK. After **30 seconds**, one half-open probe is allowed;
    success closes the circuit and clears failures, failure reopens it.
    Because the breaker counts each attempt, it can stop retries early.
+   `CircuitOpenError.__cause__` is the failure that opened the circuit.
 
 `backoff` and `reset_timeout` are Python parameters, not environment variables.
 Anthropic/OpenAI SDK-internal retries are disabled to avoid multiplying attempts.
 Explicit invalid resilience parameters raise `ValueError`.
 
-A timeout stops **waiting**, not the synchronous thread or remote operation.
-Configure SDK transport timeouts too. A retry can overlap a previously timed-out
-sync operation, so consider the provider's cost and idempotency semantics.
+Each built-in agent also gives its SDK client a transport timeout equal to the
+per-attempt timeout (`ARAGORA_DEBATE_TIMEOUT_S`, read when the agent is
+constructed): `timeout=` for Anthropic and OpenAI, `timeout_ms=` for Mistral,
+and `http_options={"timeout": ...}` in milliseconds for Gemini.
+A timeout stops **waiting**, not the synchronous thread or remote operation:
+timed-out synchronous SDK calls cannot be cancelled, and the executor thread
+remains until the SDK's transport timeout expires, so the transport timeout is
+what bounds resource use. A retry can overlap a previously timed-out sync
+operation, so consider the provider's cost and idempotency semantics.
 
 ## Logging
 
