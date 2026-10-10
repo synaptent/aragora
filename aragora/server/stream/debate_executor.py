@@ -17,6 +17,7 @@ import logging
 import os
 import re
 import time
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
@@ -321,6 +322,68 @@ def _record_deadline_stop(
     )
 
 
+class _DebateEndTracker:
+    """Records the consensus and debate_end the arena's phases sent to clients.
+
+    The consensus phase sends debate_end before analytics, feedback and cleanup
+    run, all still inside Arena.run's deadline, so the executor must know
+    whether clients already have an end before it sends one of its own.
+    """
+
+    def __init__(self) -> None:
+        self.armed = False
+        self.sent = False
+        self.consensus: dict[str, Any] | None = None
+
+    def wrap(self, hooks: dict[str, Callable[..., Any]]) -> None:
+        """Wrap the consensus and debate_end hooks in place."""
+        self.armed = True
+        on_consensus = hooks.get("on_consensus")
+        on_debate_end = hooks.get("on_debate_end")
+        if on_consensus is not None:
+
+            def _on_consensus(*args: Any, **kwargs: Any) -> None:
+                on_consensus(*args, **kwargs)
+                self.consensus = kwargs
+
+            hooks["on_consensus"] = _on_consensus
+        if on_debate_end is not None:
+
+            def _on_debate_end(*args: Any, **kwargs: Any) -> None:
+                on_debate_end(*args, **kwargs)
+                self.sent = True
+
+            hooks["on_debate_end"] = _on_debate_end
+
+
+def _record_ended_before_deadline(
+    debate_id: str,
+    consensus: dict[str, Any] | None,
+    deadline_seconds: float,
+) -> None:
+    """Record a debate whose end clients already received when the deadline fired.
+
+    The deadline only stopped post-consensus work (analytics, feedback,
+    cleanup), so the debate stays completed with the answer clients were sent
+    and gets no second debate_end.
+    """
+    logger.warning(
+        "[debate] %s: post-consensus work stopped at the %.0fs deadline",
+        debate_id,
+        deadline_seconds,
+    )
+    with _active_debates_lock:
+        entry = _active_debates[debate_id]
+        entry["status"] = "completed"
+        entry["completed_at"] = time.time()
+        if consensus is not None:
+            entry["result"] = {
+                "final_answer": consensus.get("answer", ""),
+                "consensus_reached": consensus.get("reached", False),
+                "confidence": consensus.get("confidence", 0.0),
+            }
+
+
 def _filter_agent_specs_with_fallback(
     agent_specs: list[Any],
     emitter: SyncEventEmitter,
@@ -504,6 +567,7 @@ def execute_debate_thread(
         f"question={question[:50]}..., agents={agents_str}, rounds={rounds}"
     )
     thread_start_time = time.time()
+    debate_end = _DebateEndTracker()
 
     try:
         # Parse agents with bounds check
@@ -580,6 +644,7 @@ def execute_debate_thread(
 
         # Create arena with hooks
         hooks = create_arena_hooks(emitter, loop_id=debate_id)
+        debate_end.wrap(hooks)
 
         usage_tracker = None
         if user_id or org_id:
@@ -640,7 +705,10 @@ def execute_debate_thread(
 
         total_time = time.time() - thread_start_time
         if _stopped_at_deadline(result):
-            _record_deadline_stop(debate_id, result, deadline, total_time, emitter)
+            if debate_end.sent:
+                _record_ended_before_deadline(debate_id, debate_end.consensus, deadline)
+            else:
+                _record_deadline_stop(debate_id, result, deadline, total_time, emitter)
             return
         logger.info(
             f"[debate] {debate_id}: Completed in {total_time:.2f}s, "
@@ -677,6 +745,21 @@ def execute_debate_thread(
                 data={"error": safe_msg, "debate_id": debate_id},
             )
         )
+        if isinstance(e, asyncio.TimeoutError) and debate_end.armed and not debate_end.sent:
+            # The executor's backstop cancelled Arena.run, and a cancelled
+            # consensus phase leaves the terminal debate_end to its canceller.
+            emitter.emit(
+                StreamEvent(
+                    type=StreamEventType.DEBATE_END,
+                    data={
+                        "debate_id": debate_id,
+                        "status": "error",
+                        "duration": time.time() - thread_start_time,
+                        "error": safe_msg,
+                    },
+                    loop_id=debate_id,
+                )
+            )
 
 
 __all__ = [
