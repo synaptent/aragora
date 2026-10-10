@@ -281,16 +281,24 @@ command), where the count is `len(findings)`.
   has one key, `pyproject.toml::<module>::disallow_untyped_defs`, with value 1.
   The global flag must remain true; wildcard relaxations are rejected.
   Neither the global `[tool.mypy]` table nor any override block can bypass
-  the ratchet with a true `allow_untyped_defs` or with `disable_error_code`
-  containing `no-untyped-def` (list or comma-separated string): both are shape
-  errors (exit 2) naming the key and `[tool.mypy]` or the block's modules.
+  the ratchet with a true `allow_untyped_defs`, a true `ignore_errors` (which
+  silences every error, `no-untyped-def` included) or `disable_error_code`
+  containing `no-untyped-def` (list or comma-separated string): each is a
+  shape error (exit 2) naming the key and `[tool.mypy]` or the block's modules.
   "True" means every spelling mypy 2.1.0 reads as true: `true`, the strings
   `"true"`, `"yes"`, `"on"` and `"1"` (any case) and the integer `1`. The false
   spellings (`false`, `"false"`, `"no"`, `"off"`, `"0"`, `0`) pass; any other
-  `allow_untyped_defs` value is a shape error.
-  `no_disallow_untyped_defs` follows the same rules, because mypy 2.1.0's
-  config parser drops its `no_` prefix and inverts the value just as it adds
-  `dis` to `allow_untyped_defs`; no other key spelling reaches the option.
+  value of either key is a shape error.
+  `no_disallow_untyped_defs` and `no_ignore_errors` follow the same rules with
+  the value inverted (a true `no_disallow_untyped_defs` or a false
+  `no_ignore_errors` is the bypass), because mypy 2.1.0's config parser drops
+  the `no_` prefix and inverts the value just as it adds `dis` to
+  `allow_untyped_defs`; no other key spelling reaches either option.
+  The list is closed: the guard covers the pyproject keys that switch off
+  untyped-def checking for a module (the `disallow_untyped_defs` spellings,
+  `disable_error_code` containing `no-untyped-def`, and `ignore_errors`).
+  Inline `# type: ignore` comments, file-level `# mypy:` comments, `exclude`
+  and `follow_imports` are outside it.
   Other error-code-only overrides do not count. Same-count replacements
   still fail because membership, not just the total, is ratcheted.
   `--pyproject` and `--baseline` resolve relative paths from the repository

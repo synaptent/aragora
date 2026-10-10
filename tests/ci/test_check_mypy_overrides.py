@@ -274,6 +274,8 @@ def test_repository_has_one_sorted_relaxation_block() -> None:
         ("disable_error_code", '["misc", "no-untyped-def"]'),
         ("disable_error_code", '["misc", " no-untyped-def "]'),
         ("disable_error_code", '"misc, no-untyped-def"'),
+        ("ignore_errors", "true"),
+        ("no_ignore_errors", "false"),
     ],
 )
 @pytest.mark.parametrize("explicit_rule", ["", "disallow_untyped_defs = false\n"])
@@ -433,6 +435,8 @@ def test_global_tool_mypy_table_bypasses_are_rejected(
             'disable_error_code = [\n"no-untyped-def",\n',
             "no-untyped-def",
         ),
+        ("[tool.mypy]\n", "[tool.mypy]\nignore_errors = true\n", "ignore_errors"),
+        ("[tool.mypy]\n", '[tool.mypy]\nno_ignore_errors = "off"\n', "no_ignore_errors"),
     ],
 )
 def test_global_bypass_added_to_tracked_project_is_rejected(
@@ -472,6 +476,97 @@ def test_inverted_non_boolean_values_are_shape_errors(
     result = run("--pyproject", project, "--baseline", baseline)
     assert result.returncode == 2, result.stdout + result.stderr
     assert _names(key, result.stderr)
+    assert "Traceback" not in result.stderr
+
+
+# ignore_errors = true silences every mypy error for its modules, no-untyped-def
+# included. mypy 2.1.0 also reads no_ignore_errors, with the value inverted.
+SILENCING_BYPASS = [("ignore_errors", f"ignore_errors = {value}") for value in TRUE_VALUES] + [
+    ("no_ignore_errors", f"no_ignore_errors = {value}") for value in FALSE_VALUES
+]
+SILENCING_PASS = [("ignore_errors", f"ignore_errors = {value}") for value in FALSE_VALUES] + [
+    ("no_ignore_errors", f"no_ignore_errors = {value}") for value in TRUE_VALUES
+]
+SILENCING_NOT_BOOLEAN = [
+    (key, f"{key} = {value}")
+    for key in ("ignore_errors", "no_ignore_errors")
+    for value in NOT_BOOLEAN_VALUES
+]
+TABLES = [
+    (_global_table, "[tool.mypy]"),
+    (_override_block, "the override for modules ['aragora.val_probe']"),
+]
+
+
+def test_mypy_maps_exactly_these_spellings_onto_ignore_errors() -> None:
+    config_parser = pytest.importorskip("mypy.config_parser")
+    from mypy.options import Options
+
+    bases = ["ignore_errors", "errors"]
+    prefixes = ["", "no_", "dis", "no_dis", "allow_", "disallow_", "no_no_", "show_", "un"]
+    candidates = {prefix + base for prefix in prefixes for base in bases}
+    candidates |= {key.replace("_", "-") for key in candidates} | {
+        key.upper() for key in candidates
+    }
+    resolved: dict[str, tuple[bool, bool]] = {}
+    for key in sorted(candidates):
+        values = []
+        for value in (True, False):
+            results, _ = config_parser.parse_section(
+                "",
+                Options(),
+                lambda: None,
+                {key: value},
+                config_parser.toml_config_types,
+                io.StringIO(),
+            )
+            values.append(results.get("ignore_errors"))
+        if values != [None, None]:
+            resolved[key] = (values[0], values[1])
+    assert resolved == {"ignore_errors": (True, False), "no_ignore_errors": (False, True)}
+
+
+@pytest.mark.parametrize(("key", "line"), SILENCING_BYPASS)
+@pytest.mark.parametrize(("build", "where"), TABLES, ids=["global", "override"])
+def test_ignore_errors_bypass_is_rejected_naming_key_and_table(
+    adopted: tuple[Path, Path], key: str, line: str, build, where: str
+) -> None:
+    project, baseline = adopted
+    before = baseline.read_bytes()
+    project.write_text(build(line))
+    for flags in ([], ["--update"]):
+        result = run("--pyproject", project, "--baseline", baseline, *flags)
+        assert result.returncode == 2, result.stdout + result.stderr
+        assert _names(key, result.stderr)
+        assert f"in {where} bypasses the ratchet" in result.stderr
+        assert "Traceback" not in result.stderr
+        assert baseline.read_bytes() == before
+
+
+@pytest.mark.parametrize(("key", "line"), SILENCING_PASS)
+@pytest.mark.parametrize("build", [_global_table, _override_block], ids=["global", "override"])
+def test_ignore_errors_non_bypass_values_pass(
+    adopted: tuple[Path, Path], key: str, line: str, build
+) -> None:
+    project, baseline = adopted
+    project.write_text(
+        build(line)
+        + '[[tool.mypy.overrides]]\nmodule = ["pkg.a", "pkg.b"]\ndisallow_untyped_defs = false\n'
+    )
+    result = run("--pyproject", project, "--baseline", baseline)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize(("key", "line"), SILENCING_NOT_BOOLEAN)
+@pytest.mark.parametrize("build", [_global_table, _override_block], ids=["global", "override"])
+def test_ignore_errors_non_boolean_values_are_shape_errors(
+    adopted: tuple[Path, Path], key: str, line: str, build
+) -> None:
+    project, baseline = adopted
+    project.write_text(build(line))
+    result = run("--pyproject", project, "--baseline", baseline)
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert _names(key, result.stderr) and "is not a mypy boolean" in result.stderr
     assert "Traceback" not in result.stderr
 
 

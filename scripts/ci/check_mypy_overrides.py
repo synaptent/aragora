@@ -2,6 +2,11 @@
 """Ratchet the explicit modules exempted from disallow_untyped_defs.
 
 Uses check_tool_baseline's comparison, JSON format, and shrink-only updates.
+A pyproject key that switches the untyped-def check off outside the ratchet
+(allow_untyped_defs, no_disallow_untyped_defs, ignore_errors, no_ignore_errors
+or disable_error_code naming no-untyped-def) is rejected with exit 2. Inline
+``# type: ignore``, file-level ``# mypy:`` comments, exclude and follow_imports
+are outside this guard.
 Exit codes: 0 current set is a subset of baseline; 1 grew (added names printed);
 2 baseline/config shape, I/O, or usage error. Defaults are repository-relative,
 including scripts/baselines/root-mypy-overrides.json, regardless of cwd.
@@ -42,10 +47,17 @@ MODULE_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_-]*(?:\.[A-Za-z_][A-Za-z0-9_-]*)*
 # mypy's config_parser.convert_to_boolean keeps bools and looks every other
 # value up as str(value).lower() here, so "on", "yes", "1" and 1 all mean true.
 MYPY_BOOLEANS = configparser.RawConfigParser.BOOLEAN_STATES
-# mypy's config_parser.parse_section maps these keys onto disallow_untyped_defs
-# with the value inverted (an "allow" key gains "dis", a "no_" prefix is dropped),
-# so a true value switches the check off.
-INVERTED_RULE_KEYS = ("allow_untyped_defs", "no_disallow_untyped_defs")
+# Each pyproject key that switches the untyped-def check off for a module, with
+# the mypy boolean that does so. mypy's config_parser.parse_section maps the
+# inverted spellings onto the real option ("allow" gains "dis", a "no_" prefix
+# is dropped, and the value flips). ignore_errors silences every mypy error,
+# no-untyped-def included.
+BYPASS_VALUES = {
+    "allow_untyped_defs": True,
+    "no_disallow_untyped_defs": True,
+    "ignore_errors": True,
+    "no_ignore_errors": False,
+}
 
 
 def _mypy_boolean(path: Path, where: str, key: str, value: object) -> bool:
@@ -59,11 +71,11 @@ def _mypy_boolean(path: Path, where: str, key: str, value: object) -> bool:
 
 def _reject_bypasses(path: Path, table: Mapping[str, object], where: str) -> None:
     """Reject the spellings that switch the untyped-def check off for `where`."""
-    for key in INVERTED_RULE_KEYS:
+    for key, bypass in BYPASS_VALUES.items():
         if key not in table:
             continue
         value = table[key]
-        if _mypy_boolean(path, where, key, value):
+        if _mypy_boolean(path, where, key, value) is bypass:
             raise BaselineError(f"{path}: {key} = {value!r} in {where} bypasses the ratchet")
     disabled_codes = table.get("disable_error_code", [])
     if isinstance(disabled_codes, str):
