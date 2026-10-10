@@ -16,12 +16,12 @@ import asyncio
 import html
 import logging
 import os
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 from aragora.events.handler_events import emit_handler_event, COMPLETED
 from ..base import HandlerResult, error_response, json_response, handle_errors, log_request
 from ..openapi_decorator import api_endpoint
-from ..utils.rate_limit import auth_rate_limit, get_client_ip
+from ..utils.rate_limit import auth_rate_limit, get_exact_client_ip
 from .validation import validate_email, validate_password
 
 if TYPE_CHECKING:
@@ -34,7 +34,7 @@ try:
     AUDIT_AVAILABLE = True
 except ImportError:
     AUDIT_AVAILABLE = False
-    audit_security = None
+    audit_security = cast(Any, None)
 
 logger = logging.getLogger(__name__)
 
@@ -173,7 +173,7 @@ def handle_forgot_password(handler_instance: AuthHandler, handler) -> HandlerRes
         return error_response(err, 400)
 
     # Get client IP for logging
-    client_ip = get_client_ip(handler)
+    client_ip = get_exact_client_ip(handler)
 
     # Get user store to check if email exists
     user_store = handler_instance._get_user_store()
@@ -404,7 +404,7 @@ def handle_reset_password(handler_instance: AuthHandler, handler) -> HandlerResu
         return error_response(err, 400)
 
     # Get client IP for logging
-    client_ip = get_client_ip(handler)
+    client_ip = get_exact_client_ip(handler)
 
     # Validate the reset token
     store = get_password_reset_store()
@@ -445,7 +445,7 @@ def handle_reset_password(handler_instance: AuthHandler, handler) -> HandlerResu
 
     # Consume the reset token and invalidate any other tokens for this email
     store.consume_token(token)
-    store.invalidate_tokens_for_email(email)
+    store.invalidate_tokens_for_email(cast(str, email))
 
     logger.info("Password reset completed: user_id=%s, ip=%s", user.id, client_ip)
 

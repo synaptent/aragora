@@ -29,7 +29,12 @@ from aragora.server.handlers.base import (
     HandlerResult,
     json_response,
 )
-from aragora.server.handlers.utils.rate_limit import rate_limit, RateLimiter, get_client_ip
+from aragora.server.handlers.utils.rate_limit import (
+    rate_limit,
+    RateLimiter,
+    get_client_ip,
+    get_exact_client_ip,
+)
 from aragora.server.handlers.utils.tenant_validation import validate_tenant_access
 from aragora.server.validation.query_params import safe_query_int
 from aragora.rbac.decorators import require_permission
@@ -178,7 +183,7 @@ class IntegrationsHandler(BaseHandler):
             user=user,
             requested_tenant_id=tenant_id,
             endpoint=path,
-            ip_address=get_client_ip(handler),
+            ip_address=get_exact_client_ip(handler),
             allow_none=True,  # Allow None tenant_id (defaults to user's tenant)
         )
         if tenant_access_err:

@@ -572,10 +572,13 @@ def proxy_env(monkeypatch):
 
     from aragora.server.middleware.rate_limit import base as rl_base
 
-    def apply(trusted: str | None = None, cloudflare: str | None = None) -> None:
+    def apply(
+        trusted: str | None = None, cloudflare: str | None = None, header: str | None = None
+    ) -> None:
         for name, value in (
             ("ARAGORA_TRUSTED_PROXIES", trusted),
             ("ARAGORA_CLOUDFLARE_TRUSTED_PROXIES", cloudflare),
+            ("ARAGORA_TRUSTED_PROXY_HEADER", header),
         ):
             if value is None:
                 monkeypatch.delenv(name, raising=False)
@@ -597,10 +600,11 @@ def _client_ip(peer: str, headers: dict[str, str]) -> str:
 class TestGetClientIpParsedTrustedProxies:
     """One client-IP rule for the handler helper and the middleware.
 
-    A peer in ARAGORA_TRUSTED_PROXIES (IPs, CIDR ranges, localhost) is believed
-    for X-Real-IP, then the rightmost X-Forwarded-For hop that is not a trusted
-    proxy; only a peer in ARAGORA_CLOUDFLARE_TRUSTED_PROXIES is believed for
-    the Cloudflare headers.
+    With the default ARAGORA_TRUSTED_PROXY_HEADER (x-forwarded-for), a peer in
+    ARAGORA_TRUSTED_PROXIES (IPs, CIDR ranges, localhost) is believed for the
+    rightmost X-Forwarded-For hop that is not a trusted proxy, and for X-Real-IP
+    only when X-Forwarded-For is absent or empty; only a peer in
+    ARAGORA_CLOUDFLARE_TRUSTED_PROXIES is believed for the Cloudflare headers.
     """
 
     # The shipped nginx stack: CIDR-listed proxy, X-Real-IP $remote_addr,
@@ -754,6 +758,92 @@ class TestGetClientIpParsedTrustedProxies:
 
         assert _client_ip(peer, headers) == key
         assert _extract_client_ip(headers, peer) == key
+
+
+class TestTrustedProxyHeaderSetting:
+    """Each ARAGORA_TRUSTED_PROXY_HEADER mode, checked on the helper and the middleware alike."""
+
+    NGINX = TestGetClientIpParsedTrustedProxies.NGINX
+    P = "172.18.0.5"
+    # A proxy that sets X-Real-IP and passes the client's own X-Forwarded-For through.
+    REAL_IP_ONLY = {"X-Real-IP": "203.0.113.7", "X-Forwarded-For": "198.51.100.66"}
+    MULTI_HOP = {"X-Real-IP": "6.6.6.6", "X-Forwarded-For": "6.6.6.7, 203.0.113.9, 172.18.0.9"}
+    XFF_ONLY = {"X-Forwarded-For": "198.51.100.66"}
+    EMPTY_XFF = {"X-Real-IP": "203.0.113.7", "X-Forwarded-For": " , "}
+
+    @staticmethod
+    def _both(peer, headers):
+        from aragora.server.middleware.rate_limit.base import _extract_client_ip
+
+        helper = _client_ip(peer, headers)
+        assert _extract_client_ip(headers, peer) == helper
+        return helper
+
+    @pytest.mark.parametrize(
+        ("header", "peer", "headers", "expected"),
+        [
+            ("x-real-ip", P, REAL_IP_ONLY, "203.0.113.7"),
+            (" X-Real-IP ", P, MULTI_HOP, "6.6.6.6"),
+            ("x-real-ip", P, XFF_ONLY, P),
+            ("x-real-ip", P, {"X-Real-IP": " ", **XFF_ONLY}, P),
+            ("x-real-ip", "203.0.113.9", REAL_IP_ONLY, "203.0.113.9"),
+            ("x-real-ip", "::ffff:" + P, {"X-Real-IP": "2001:db8:1:2::c"}, "2001:db8:1:2::"),
+            (None, P, REAL_IP_ONLY, "198.51.100.66"),
+            ("", P, MULTI_HOP, "203.0.113.9"),
+            ("X-Forwarded-For", P, EMPTY_XFF, "203.0.113.7"),
+            ("x-forwarded-for", P, {"X-Forwarded-For": "172.18.0.8, 172.18.0.9"}, P),
+            ("x-forwarded-for", "203.0.113.9", {"X-Real-IP": "198.51.100.69"}, "203.0.113.9"),
+            ("x-forwarded-for", "::ffff:" + P, {"X-Real-IP": "2001:db8:1:2::c"}, "2001:db8:1:2::"),
+        ],
+    )
+    def test_mode_picks_the_header(self, proxy_env, header, peer, headers, expected):
+        proxy_env(self.NGINX, header=header)
+        assert self._both(peer, headers) == expected
+
+    @pytest.mark.parametrize("value", ["x-client-ip", "true"])
+    def test_unknown_value_believes_no_header_and_warns_once(self, proxy_env, caplog, value):
+        import logging
+
+        with caplog.at_level(logging.WARNING, logger="aragora.server.middleware.rate_limit.base"):
+            proxy_env(self.NGINX, header=value)
+            for headers in (self.REAL_IP_ONLY, self.MULTI_HOP, {"X-Real-IP": "203.0.113.7"}):
+                assert self._both(self.P, headers) == self.P
+        warned = [m for m in caplog.messages if "ARAGORA_TRUSTED_PROXY_HEADER" in m]
+        assert len(warned) == 1 and repr(value) in warned[0]
+
+    @pytest.mark.parametrize("header", ["x-real-ip", "bogus"])
+    def test_cloudflare_headers_unchanged_in_every_mode(self, proxy_env, header):
+        proxy_env("127.0.0.1", cloudflare="172.18.0.0/16", header=header)
+        headers = {**TestGetClientIpParsedTrustedProxies.CF, **self.REAL_IP_ONLY}
+        assert _client_ip("172.18.0.2", headers) == "198.51.100.42"
+
+
+class TestGetExactClientIp:
+    """The audit accessor names the same client as get_client_ip, without /64 grouping."""
+
+    CF6 = {"CF-RAY": "a1", "CF-Connecting-IP": "2001:db8:1:2::e"}
+
+    @pytest.mark.parametrize(
+        ("header", "peer", "headers", "exact"),
+        [
+            (None, "2001:db8:1:2::a", {}, "2001:db8:1:2::a"),
+            (None, "::ffff:198.51.100.7", {}, "198.51.100.7"),
+            (None, "172.18.0.5", {"X-Forwarded-For": "2001:db8:1:2::b"}, "2001:db8:1:2::b"),
+            (None, "::1", {"X-Forwarded-For": "::ffff:198.51.100.7"}, "198.51.100.7"),
+            ("x-real-ip", "::ffff:127.0.0.1", {"X-Real-IP": "2001:DB8:1:2::C"}, "2001:db8:1:2::c"),
+            (None, "172.18.0.2", CF6, "2001:db8:1:2::e"),
+        ],
+    )
+    def test_audit_accessor_keeps_exact_address_while_limiter_key_is_grouped(
+        self, proxy_env, header, peer, headers, exact
+    ):
+        proxy_env(TestGetClientIpParsedTrustedProxies.NGINX, cloudflare="172.18.0.2", header=header)
+        from aragora.server.handlers.utils.rate_limit import get_client_ip, get_exact_client_ip
+
+        handler = FakeHandler(client_address=(peer, 52000), headers=dict(headers))
+        assert get_exact_client_ip(handler) == exact
+        assert get_client_ip(handler) == ("2001:db8:1:2::" if ":" in exact else exact)
+        assert get_exact_client_ip(None) == "unknown"
 
 
 # ===========================================================================

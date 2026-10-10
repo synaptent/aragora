@@ -39,14 +39,14 @@ def _body(result: object) -> dict:
     """Extract JSON body dict from a HandlerResult."""
     if isinstance(result, dict):
         return result
-    return json.loads(result.body)
+    return json.loads(result.body)  # type: ignore[attr-defined]
 
 
 def _status(result: object) -> int:
     """Extract HTTP status code from a HandlerResult."""
     if isinstance(result, dict):
         return result.get("status_code", 200)
-    return result.status_code
+    return result.status_code  # type: ignore[attr-defined]
 
 
 class MockHTTPHandler:
@@ -839,6 +839,19 @@ class TestLoginAudit:
         h._handle_login(http)
         mock_audit.assert_called_once()
         assert mock_audit.call_args[1]["success"] is False
+
+    @patch("aragora.server.handlers.auth.login.AUDIT_AVAILABLE", True)
+    @patch("aragora.server.handlers.auth.login.audit_login")
+    def test_audit_records_exact_ipv6_while_lockout_key_is_grouped(
+        self, mock_audit, _patch_lockout
+    ):
+        store = SimpleUserStore(user=MockUser(), existing_email=True)
+        h = AuthHandler(server_context={"user_store": store})
+        http = MockHTTPHandler(body={"email": "user@example.com", "password": "wrong"})
+        http.client_address = ("2001:db8:1:2::a", 52000)
+        h._handle_login(http)
+        assert mock_audit.call_args[1]["ip_address"] == "2001:db8:1:2::a"
+        assert _patch_lockout._failures == [("user@example.com", "2001:db8:1:2::")]
 
     @patch("aragora.server.handlers.auth.login.AUDIT_AVAILABLE", True)
     @patch("aragora.server.handlers.auth.login.audit_security")

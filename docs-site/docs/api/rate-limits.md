@@ -232,12 +232,16 @@ If you're behind a load balancer or proxy, configure `ARAGORA_TRUSTED_PROXIES` s
 export ARAGORA_TRUSTED_PROXIES="10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
 ```
 
-Entries are exact IPs, CIDR ranges or `localhost` (`127.0.0.1` and `::1`); an IPv4-mapped peer such as `::ffff:10.0.0.5` matches its IPv4 entry. The rate-limit middleware and handler-level limits choose and key the client IP the same way (IPv6 clients are grouped by /64; IPv4-mapped addresses are keyed as IPv4):
+Entries are exact IPs, CIDR ranges or `localhost` (`127.0.0.1` and `::1`); an IPv4-mapped peer such as `::ffff:10.0.0.5` matches its IPv4 entry. List every proxy hop between the client and the API, not only the one that connects to it: an unlisted hop is taken to be the client, so all visitors behind an unlisted CDN or load balancer in front of a listed proxy share one bucket.
 
-1. When the direct peer is listed, the rightmost `X-Forwarded-For` hop that is not itself a listed proxy is used. Earlier hops are client-supplied and never used. `X-Real-IP` is used only when `X-Forwarded-For` is absent or empty.
-2. Any other peer is keyed on its own address, whatever headers it sends.
+`ARAGORA_TRUSTED_PROXY_HEADER` names the one forwarded header a listed peer is believed for. No single header is safe for every proxy, so choose the one your proxy writes:
 
-A listed proxy must add the address it saw as the last `X-Forwarded-For` hop (nginx's `$proxy_add_x_forwarded_for`, Caddy, Traefik and AWS ALB do by default); a proxy that sends no `X-Forwarded-For` must overwrite or strip a client-supplied `X-Real-IP`.
+| Value | Client IP when the direct peer is listed | Use when your proxy |
+|-------|------------------------------------------|---------------------|
+| `x-forwarded-for` (default) | The rightmost `X-Forwarded-For` hop that is not itself a listed proxy. Earlier hops are client-supplied and never used. `X-Real-IP` is used only when `X-Forwarded-For` is absent or empty. | Adds the address it saw as the last `X-Forwarded-For` hop (nginx's `$proxy_add_x_forwarded_for`, Caddy, Traefik and AWS ALB do by default). A proxy that sends no `X-Forwarded-For` must overwrite or strip a client-supplied `X-Real-IP`. |
+| `x-real-ip` | `X-Real-IP`; `X-Forwarded-For` is never read. Without `X-Real-IP`, the peer's own address. | Sets `X-Real-IP` to the address it saw (`proxy_set_header X-Real-IP $remote_addr;`) and passes the client's `X-Forwarded-For` through unchanged. Only the proxy that connects to the API is read, so behind several proxies it must resolve the client itself (for example nginx's `real_ip` module). |
+
+Any other value logs one warning at startup and no forwarded header is believed, so every request is keyed on its direct peer. A peer that is not listed is keyed on its own address, whatever headers it sends. The rate-limit middleware and handler-level limits choose and key the client IP the same way (IPv6 clients are grouped by /64; IPv4-mapped addresses are keyed as IPv4). Security audit records for login, password reset and tenant or workspace access checks keep the exact client address.
 
 ### Cloudflare
 
@@ -249,6 +253,8 @@ export ARAGORA_CLOUDFLARE_TRUSTED_PROXIES="localhost"
 ```
 
 Set it before deploying behind Cloudflare. Without it, requests are keyed on the Cloudflare peer, so clients share one bucket, or, when that peer is also in `ARAGORA_TRUSTED_PROXIES` (as `cloudflared` on `localhost` is by default), on the rightmost `X-Forwarded-For` hop, which Cloudflare's edge appends. When `CF-RAY` arrives from an unlisted peer the server logs one warning per process.
+
+When Cloudflare sits in front of a listed proxy (client → Cloudflare → nginx → API) and that proxy also accepts direct connections, leave `ARAGORA_CLOUDFLARE_TRUSTED_PROXIES` empty and add Cloudflare's published ranges (<https://www.cloudflare.com/ips/>) to `ARAGORA_TRUSTED_PROXIES` with the default `x-forwarded-for` mode. The proxy appends Cloudflare's edge address to `X-Forwarded-For`; with the edge listed, the client is the hop Cloudflare's edge appended before it.
 
 ## Need Higher Limits?
 

@@ -337,24 +337,26 @@ def _warn_cf_ray_from_unlisted_peer(peer: str) -> None:
 
 
 def get_client_ip(handler: Any) -> str:
-    """Extract client IP from request handler.
+    """Extract the client IP from a request handler as a rate-limit key.
 
-    Uses the same rule and the same key normalization (IPv6 grouped by /64,
-    IPv4-mapped addresses as IPv4) as the rate-limit middleware
-    (``forwarded_client_ip``, ``_normalize_ip``): a direct peer in
-    ARAGORA_TRUSTED_PROXIES (IPs, CIDR ranges, ``localhost``; an IPv4-mapped
-    peer counts as its IPv4 address) is believed for the rightmost
-    X-Forwarded-For hop that is not a trusted proxy, and for X-Real-IP only
-    when X-Forwarded-For is absent or empty. Cloudflare's CF-Connecting-IP /
-    True-Client-IP (with CF-RAY) are believed only from a peer in
-    ARAGORA_CLOUDFLARE_TRUSTED_PROXIES, which is empty by default. Any other
-    peer is keyed on its own address.
+    Uses the same rule and key normalization (IPv6 grouped by /64, IPv4-mapped
+    addresses as IPv4) as the rate-limit middleware: a direct peer in
+    ARAGORA_TRUSTED_PROXIES is believed for the header named by
+    ARAGORA_TRUSTED_PROXY_HEADER (see ``forwarded_client_ip``). Cloudflare's
+    CF-Connecting-IP / True-Client-IP (with CF-RAY) are believed only from a
+    peer in ARAGORA_CLOUDFLARE_TRUSTED_PROXIES, which is empty by default.
+    Any other peer is keyed on its own address.
 
-    Trust contract: a peer in ARAGORA_TRUSTED_PROXIES must append the address
-    it saw to X-Forwarded-For, or, if it sends none, overwrite or strip a
-    client-supplied X-Real-IP (nginx's ``X-Real-IP $remote_addr`` does); a peer in
-    ARAGORA_CLOUDFLARE_TRUSTED_PROXIES must only carry traffic that came
-    through Cloudflare, whose edge overwrites CF-Connecting-IP.
+    Trust contract: in ``x-forwarded-for`` mode a peer in
+    ARAGORA_TRUSTED_PROXIES must append the address it saw to X-Forwarded-For,
+    or, if it sends none, overwrite or strip a client-supplied X-Real-IP; in
+    ``x-real-ip`` mode it must overwrite X-Real-IP (nginx's
+    ``X-Real-IP $remote_addr`` does). Every proxy hop between the client and
+    this server must be listed. A peer in ARAGORA_CLOUDFLARE_TRUSTED_PROXIES
+    must only carry traffic that came through Cloudflare, whose edge
+    overwrites CF-Connecting-IP.
+
+    Audit records use ``get_exact_client_ip``, which does not group IPv6.
 
     Args:
         handler: HTTP request handler with headers
@@ -362,6 +364,20 @@ def get_client_ip(handler: Any) -> str:
     Returns:
         Client IP address string
     """
+    return _derive_client_ip(handler, group_ipv6=True)
+
+
+def get_exact_client_ip(handler: Any) -> str:
+    """Return the client ``get_client_ip`` derives, as its exact address.
+
+    IPv4-mapped addresses are given as IPv4, but IPv6 addresses are not
+    grouped by /64, so audit records keep per-host attribution. Rate-limit
+    and lockout keys use ``get_client_ip``.
+    """
+    return _derive_client_ip(handler, group_ipv6=False)
+
+
+def _derive_client_ip(handler: Any, *, group_ipv6: bool) -> str:
     if handler is None:
         return "unknown"
 
@@ -379,15 +395,16 @@ def get_client_ip(handler: Any) -> str:
                         headers, "True-Client-IP"
                     )
                     if cf_ip:
-                        return _normalize_ip(cf_ip)
+                        return _normalize_ip(cf_ip, group_ipv6=group_ipv6)
                 else:
                     _warn_cf_ray_from_unlisted_peer(peer)
-            return _normalize_ip(forwarded_client_ip(headers, peer)) or "unknown"
+            client = forwarded_client_ip(headers, peer)
+            return _normalize_ip(client, group_ipv6=group_ipv6) or "unknown"
         except (TypeError, AttributeError):
             # Handle mock objects or unusual header types
             pass
 
-    return _normalize_ip(peer) or "unknown"
+    return _normalize_ip(peer, group_ipv6=group_ipv6) or "unknown"
 
 
 class RateLimiter:
@@ -1046,6 +1063,7 @@ __all__ = [
     "auth_rate_limit",
     "user_rate_limit",
     "get_client_ip",
+    "get_exact_client_ip",
     "_get_limiter",
     "_limiters",
     "clear_all_limiters",

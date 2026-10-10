@@ -1238,6 +1238,16 @@ class TestDedupHandlers:
         "aragora.server.handlers.knowledge_base.mound.routing.validate_workspace_access_sync",
         return_value=None,
     )
+    def test_merge_duplicate_cluster_audits_exact_ipv6_client(self, mock_validate, handler):
+        h = MockHTTPHandler.with_body({"workspace_id": "default", "cluster_id": "cl-1"})
+        h.client_address = ("2001:db8:1:2::a", 52000)
+        handler._handle_merge_duplicate_cluster(h)
+        assert mock_validate.call_args.kwargs["ip_address"] == "2001:db8:1:2::a"
+
+    @patch(
+        "aragora.server.handlers.knowledge_base.mound.routing.validate_workspace_access_sync",
+        return_value=None,
+    )
     def test_merge_duplicate_cluster_missing_cluster_id(self, mock_validate, handler):
         h = MockHTTPHandler.with_body({"workspace_id": "default"})
         result = handler._handle_merge_duplicate_cluster(h)

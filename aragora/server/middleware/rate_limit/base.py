@@ -41,6 +41,17 @@ CLOUDFLARE_TRUSTED_PROXIES: frozenset[str] = frozenset(
     for p in os.environ.get("ARAGORA_CLOUDFLARE_TRUSTED_PROXIES", "").split(",")
     if p.strip()
 )
+# No forwarded header is safe behind every proxy, so the operator picks one (forwarded_client_ip).
+TRUSTED_PROXY_HEADER = (
+    os.environ.get("ARAGORA_TRUSTED_PROXY_HEADER", "").strip().lower() or "x-forwarded-for"
+)
+if TRUSTED_PROXY_HEADER not in ("x-forwarded-for", "x-real-ip"):
+    logger.warning(
+        "Unknown ARAGORA_TRUSTED_PROXY_HEADER value %r (expected x-forwarded-for or "
+        "x-real-ip); no forwarded client-IP header is believed, so every request is "
+        "keyed on its direct peer address.",
+        TRUSTED_PROXY_HEADER,
+    )
 
 
 def _unmap(
@@ -72,11 +83,12 @@ _TRUSTED_PROXY_IPS, _TRUSTED_PROXY_NETS = _parse_proxy_entries(TRUSTED_PROXIES)
 _CLOUDFLARE_PROXY_IPS, _CLOUDFLARE_PROXY_NETS = _parse_proxy_entries(CLOUDFLARE_TRUSTED_PROXIES)
 
 
-def _normalize_ip(ip_value: str) -> str:
+def _normalize_ip(ip_value: str, *, group_ipv6: bool = True) -> str:
     """Normalize IP addresses for consistent rate limiting.
 
-    - IPv4: Used as-is after validation
+    - IPv4 (and IPv4-mapped IPv6): the IPv4 address after validation
     - IPv6: Normalized to standard form, with /64 prefix grouping for fairness
+      (``group_ipv6=False`` keeps the exact address, for audit records)
     - Invalid: Returns original string (will be treated as unique key)
     """
     if not ip_value:
@@ -93,7 +105,7 @@ def _normalize_ip(ip_value: str) -> str:
 
     try:
         addr = _unmap(ipaddress.ip_address(ip_value.strip()))
-        if type(addr) is ipaddress.IPv6Address:
+        if group_ipv6 and type(addr) is ipaddress.IPv6Address:
             # Group by /64 prefix for IPv6 (standard allocation size)
             network = ipaddress.ip_network(f"{addr}/64", strict=False)
             return str(network.network_address)
@@ -146,14 +158,27 @@ def header_value(headers, name: str) -> str:
 def forwarded_client_ip(headers, remote_addr: str) -> str:
     """Return the raw client address for a request arriving from ``remote_addr``.
 
-    A peer in ARAGORA_TRUSTED_PROXIES is believed for the rightmost
-    X-Forwarded-For hop that is not itself a trusted proxy. Hops to the left
-    of that one were written by the client, so they are never used. X-Real-IP
-    is believed only when X-Forwarded-For is absent or empty, because proxies
-    that append to X-Forwarded-For often pass a client's X-Real-IP through.
+    A peer in ARAGORA_TRUSTED_PROXIES is believed for the header named by
+    ARAGORA_TRUSTED_PROXY_HEADER:
+
+    - ``x-forwarded-for`` (default): the rightmost X-Forwarded-For hop that is
+      not itself a trusted proxy. Hops to the left of that one were written by
+      the client, so they are never used. X-Real-IP is believed only when
+      X-Forwarded-For is absent or empty, because proxies that append to
+      X-Forwarded-For often pass a client's X-Real-IP through.
+    - ``x-real-ip``: X-Real-IP only; X-Forwarded-For is never read, because a
+      proxy that sets X-Real-IP may pass a client's X-Forwarded-For through.
+      Without X-Real-IP the peer is the client.
+    - any other value: no forwarded header is believed (warned at import).
+
     Any other peer is the client. Callers key the result with ``_normalize_ip``.
     """
     if not is_trusted_proxy_address(remote_addr):
+        return remote_addr
+
+    if TRUSTED_PROXY_HEADER == "x-real-ip":
+        return header_value(headers, "X-Real-IP") or remote_addr
+    if TRUSTED_PROXY_HEADER != "x-forwarded-for":
         return remote_addr
 
     hops = [h.strip() for h in header_value(headers, "X-Forwarded-For").split(",") if h.strip()]
@@ -174,10 +199,8 @@ def _extract_client_ip(
 ) -> str:
     """Extract real client IP from request headers.
 
-    Priority:
-    1. X-Forwarded-For rightmost non-trusted IP (if from trusted proxy)
-    2. X-Real-IP (if from trusted proxy and X-Forwarded-For is absent or empty)
-    3. Direct connection IP (remote_addr)
+    From a trusted proxy, the header chosen by ARAGORA_TRUSTED_PROXY_HEADER
+    (see ``forwarded_client_ip``); otherwise the direct connection IP.
     """
     if not trust_xff_from_proxies or not remote_addr:
         return _normalize_ip(remote_addr)
@@ -251,6 +274,7 @@ __all__ = [
     "BURST_MULTIPLIER",
     "TRUSTED_PROXIES",
     "CLOUDFLARE_TRUSTED_PROXIES",
+    "TRUSTED_PROXY_HEADER",
     "_normalize_ip",
     "is_trusted_proxy_address",
     "is_cloudflare_trusted_proxy_address",
