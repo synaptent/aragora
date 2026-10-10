@@ -57,6 +57,7 @@ def test_manifest_round_trips_through_the_campaign_module() -> None:
             "review_model": "codex",
             "planner_strategy": "MODEL",
             "experiment_id": " null ",
+            "execution_state": {"last_run_at": "2026-10-10T01:00:00+00:00"},
         }
     )
     assert manifest.review_model == "claude"
