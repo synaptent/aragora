@@ -391,3 +391,38 @@ class TestMalformedExpiryQuarantine:
         assert sorted(expired) == ["none-expiry", "past-due"]
         assert store.get("none-expiry").resolution_status == ResolutionStatus.EXPIRED
         assert store.get("past-due").resolution_status == ResolutionStatus.EXPIRED
+
+
+class TestExpireStaleOverflow:
+    """An expiry or grace outside the datetime range must not abort the sweep."""
+
+    def test_sentinel_expiry_does_not_block_later_overdue_claims(self):
+        store = InMemoryStakeableClaimStore()
+        store.add(_make_claim("never", expiry="9999-12-31T23:59:59+00:00"))
+        store.add(_make_claim("past-due", expiry=_past_expiry(2)))
+
+        expired = store.expire_stale()
+
+        assert expired == ["past-due"]
+        assert store.get("never").resolution_status == ResolutionStatus.OPEN
+        assert store.get("past-due").resolution_status == ResolutionStatus.EXPIRED
+
+    @pytest.mark.parametrize("grace", [float("inf"), float("-inf"), float("nan")])
+    def test_non_finite_grace_is_rejected(self, grace):
+        store = InMemoryStakeableClaimStore()
+        store.add(_make_claim("past-due", expiry=_past_expiry(2)))
+
+        with pytest.raises(ValueError, match="finite"):
+            store.expire_stale(grace=grace)
+
+        assert store.get("past-due").resolution_status == ResolutionStatus.OPEN
+
+    @pytest.mark.parametrize("grace", [1e20, 10**400], ids=["1e20", "10**400"])
+    def test_overflowing_grace_is_rejected(self, grace):
+        store = InMemoryStakeableClaimStore()
+        store.add(_make_claim("past-due", expiry=_past_expiry(2)))
+
+        with pytest.raises(ValueError, match="out of range"):
+            store.expire_stale(grace=grace)
+
+        assert store.get("past-due").resolution_status == ResolutionStatus.OPEN

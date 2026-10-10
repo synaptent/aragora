@@ -22,6 +22,7 @@ Advances: issue #6065 (AGT-04), sub-deliverable 1 — synthetic market schema.
 from __future__ import annotations
 
 import logging
+import math
 import os
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -222,11 +223,26 @@ class InMemoryStakeableClaimStore:
         Only OPEN claims transition to EXPIRED; already-settled claims are
         skipped, so a resolve-then-sweep race no-ops here.
 
+        A claim whose ``expiry + grace`` lies beyond ``datetime.max`` (for
+        example a ``9999-12-31T23:59:59+00:00`` "never" sentinel) has no
+        representable deadline and is treated as not yet past the cutoff, so
+        it stays OPEN and does not stop the sweep of later claims.
+
+        Raises:
+            ValueError: if *grace* is negative, or is a number that is not
+                finite or does not fit in a ``timedelta``.
+
         Returns the list of expired claim IDs.
         """
         _require_enabled()
         if not isinstance(grace, timedelta):
-            grace = timedelta(seconds=float(grace))
+            try:
+                seconds = float(grace)
+                if not math.isfinite(seconds):
+                    raise ValueError(f"grace must be finite, got {grace!r}")
+                grace = timedelta(seconds=seconds)
+            except OverflowError:
+                raise ValueError(f"grace is out of range, got {grace!r}") from None
         if grace < timedelta(0):
             raise ValueError(f"grace must be non-negative, got {grace!r}")
         cutoff = before_dt or datetime.now(tz=UTC)
@@ -250,7 +266,12 @@ class InMemoryStakeableClaimStore:
                     claim.expiry,
                 )
                 continue
-            if exp_dt + grace < cutoff:
+            try:
+                deadline = exp_dt + grace
+            except OverflowError:
+                # The true deadline is past datetime.max, so no cutoff can reach it.
+                continue
+            if deadline < cutoff:
                 claim.resolution_status = ResolutionStatus.EXPIRED
                 expired_ids.append(claim.claim_id)
         return expired_ids
