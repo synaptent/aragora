@@ -113,8 +113,15 @@ Enable WebSocket support in the ALB (enabled by default for Application Load Bal
 Set these when running behind a reverse proxy:
 
 ```bash
-# Trust proxy headers (required for correct client IP logging)
+# Trust proxy headers (required for correct client IP logging). From a listed
+# peer the client is X-Real-IP, then the rightmost X-Forwarded-For hop that is
+# not a listed proxy, so the proxy must set X-Real-IP $remote_addr as above.
 ARAGORA_TRUSTED_PROXIES=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+
+# Behind Cloudflare only: peers whose CF-Connecting-IP / True-Client-IP are
+# believed (empty by default). Never list a proxy, such as the nginx above,
+# that also accepts traffic not sent by Cloudflare. See docs/api/API_RATE_LIMITS.md.
+# ARAGORA_CLOUDFLARE_TRUSTED_PROXIES=<cloudflared address or Cloudflare edge CIDRs>
 
 # Set actual domain for CORS
 ARAGORA_ALLOWED_ORIGINS=https://aragora.yourdomain.com

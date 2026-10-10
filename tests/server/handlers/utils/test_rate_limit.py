@@ -128,7 +128,7 @@ class TestGetClientIP:
         handler.client_address = ("127.0.0.1", 12345)
         handler.headers = MagicMock()
         handler.headers.get = lambda h, d=None: (
-            "203.0.113.50, 10.0.0.1" if "Forwarded" in h else None
+            "203.0.113.50, 127.0.0.1" if "Forwarded" in h else None
         )
 
         ip = get_client_ip(handler)
@@ -161,10 +161,13 @@ class TestGetClientIP:
         ip = get_client_ip(handler)
         assert ip == "203.0.113.75"
 
-    def test_trusts_cloudflare_connecting_ip(self):
-        """Should trust CF-Connecting-IP when CF-RAY is present and the peer is a trusted proxy."""
+    def test_trusts_cloudflare_connecting_ip(self, monkeypatch):
+        """Should trust CF-Connecting-IP with CF-RAY from a peer listed as Cloudflare-facing."""
+        from aragora.server.middleware.rate_limit import base as rl_base
+
+        monkeypatch.setattr(rl_base, "_CLOUDFLARE_PROXY_IPS", {"192.168.1.100"})
         handler = MagicMock()
-        handler.client_address = ("127.0.0.1", 12345)
+        handler.client_address = ("192.168.1.100", 12345)
         handler.headers = MagicMock()
 
         def mock_get(header, default=None):
