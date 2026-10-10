@@ -28,6 +28,11 @@ from aragora.connectors.prediction_markets.metaculus import (
     MetaculusResolution,
     metaculus_to_market_resolution,
 )
+from aragora.connectors.prediction_markets.stake_caps import (
+    CAP_GRADUATION_FLAG,
+    StabilityRecord,
+    StakeCapSchedule,
+)
 from aragora.connectors.prediction_markets.synthetic_github import (
     DEFAULT_POSITION_CAP,
     SYNTHETIC_MARKETS_FLAG,
@@ -38,6 +43,7 @@ from aragora.connectors.prediction_markets.synthetic_github import (
 )
 
 __all__ = [
+    "CAP_GRADUATION_FLAG",
     "DEFAULT_POSITION_CAP",
     "MANIFOLD_API_BASE",
     "MANIFOLD_WRITE_FLAG",
@@ -53,6 +59,8 @@ __all__ = [
     "MetaculusQuestion",
     "MetaculusResolution",
     "SYNTHETIC_MARKETS_FLAG",
+    "StabilityRecord",
+    "StakeCapSchedule",
     "SyntheticGitHubAdapter",
     "SyntheticGitHubError",
     "manifold_to_market_resolution",
