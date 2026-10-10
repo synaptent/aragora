@@ -43,7 +43,6 @@ Use ``is_multi_instance()`` from other modules to check the cached result.
 
 from __future__ import annotations
 
-import ipaddress
 import logging
 import os
 import re
@@ -63,6 +62,7 @@ from aragora.server.middleware.rate_limit import (
     get_rate_limiter as get_middleware_limiter,
 )
 from aragora.server.middleware.rate_limit.base import (
+    _normalize_ip,
     header_value,
     forwarded_client_ip,
     is_cloudflare_trusted_proxy_address,
@@ -320,17 +320,6 @@ TRUSTED_PROXIES = frozenset(
 )
 
 
-def _normalize_ip(ip_value: str) -> str:
-    """Normalize IP address string for consistent keying."""
-    if not ip_value:
-        return ""
-    ip_value = str(ip_value).strip()
-    try:
-        return str(ipaddress.ip_address(ip_value))
-    except ValueError:
-        return ip_value
-
-
 _cf_ray_warning_logged = False
 
 
@@ -350,17 +339,20 @@ def _warn_cf_ray_from_unlisted_peer(peer: str) -> None:
 def get_client_ip(handler: Any) -> str:
     """Extract client IP from request handler.
 
-    Uses the same rule as the rate-limit middleware (``forwarded_client_ip``):
-    a direct peer in ARAGORA_TRUSTED_PROXIES (IPs, CIDR ranges, ``localhost``;
-    an IPv4-mapped peer counts as its IPv4 address) is believed for X-Real-IP,
-    then for the rightmost X-Forwarded-For hop that is not a trusted proxy.
-    Cloudflare's CF-Connecting-IP / True-Client-IP (with CF-RAY) are believed
-    only from a peer in ARAGORA_CLOUDFLARE_TRUSTED_PROXIES, which is empty by
-    default. Any other peer is keyed on its own address.
+    Uses the same rule and the same key normalization (IPv6 grouped by /64,
+    IPv4-mapped addresses as IPv4) as the rate-limit middleware
+    (``forwarded_client_ip``, ``_normalize_ip``): a direct peer in
+    ARAGORA_TRUSTED_PROXIES (IPs, CIDR ranges, ``localhost``; an IPv4-mapped
+    peer counts as its IPv4 address) is believed for the rightmost
+    X-Forwarded-For hop that is not a trusted proxy, and for X-Real-IP only
+    when X-Forwarded-For is absent or empty. Cloudflare's CF-Connecting-IP /
+    True-Client-IP (with CF-RAY) are believed only from a peer in
+    ARAGORA_CLOUDFLARE_TRUSTED_PROXIES, which is empty by default. Any other
+    peer is keyed on its own address.
 
-    Trust contract: a peer in ARAGORA_TRUSTED_PROXIES must overwrite or strip
-    a client-supplied X-Real-IP (nginx's ``X-Real-IP $remote_addr`` does) and
-    append the address it saw to X-Forwarded-For; a peer in
+    Trust contract: a peer in ARAGORA_TRUSTED_PROXIES must append the address
+    it saw to X-Forwarded-For, or, if it sends none, overwrite or strip a
+    client-supplied X-Real-IP (nginx's ``X-Real-IP $remote_addr`` does); a peer in
     ARAGORA_CLOUDFLARE_TRUSTED_PROXIES must only carry traffic that came
     through Cloudflare, whose edge overwrites CF-Connecting-IP.
 

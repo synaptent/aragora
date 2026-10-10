@@ -140,7 +140,7 @@ class TestNormalizeIp:
 
     def test_ipv6_loopback(self):
         result = _normalize_ip("::1")
-        assert result == "::1"
+        assert result == "::"
 
 
 # ============================================================================

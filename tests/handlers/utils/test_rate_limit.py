@@ -314,14 +314,15 @@ class TestNormalizeIp:
     def test_ipv6_full(self):
         from aragora.server.handlers.utils.rate_limit import _normalize_ip
 
+        # IPv6 keys are grouped by /64, as in the rate-limit middleware
         result = _normalize_ip("::1")
-        assert result == "::1"
+        assert result == "::"
 
     def test_ipv6_expanded(self):
         from aragora.server.handlers.utils.rate_limit import _normalize_ip
 
         result = _normalize_ip("0000:0000:0000:0000:0000:0000:0000:0001")
-        assert result == "::1"
+        assert result == "::"
 
     def test_empty_string(self):
         from aragora.server.handlers.utils.rate_limit import _normalize_ip
@@ -461,7 +462,7 @@ class TestGetClientIp:
         from aragora.server.handlers.utils.rate_limit import get_client_ip
 
         handler = FakeHandler(client_address=("::1", 80))
-        assert get_client_ip(handler) == "::1"
+        assert get_client_ip(handler) == "::"
 
     def test_trusted_proxy_ipv6_loopback(self):
         from aragora.server.handlers.utils.rate_limit import get_client_ip
@@ -633,10 +634,12 @@ class TestGetClientIpParsedTrustedProxies:
         headers = {"X-Forwarded-For": "198.51.100.66, 203.0.113.7, 172.18.0.9"}
         assert _client_ip("172.18.0.5", headers) == "203.0.113.7"
 
-    @pytest.mark.parametrize("peer", ["127.0.0.1", "::1", "172.18.0.5"])
-    def test_trusted_peer_outside_cloudflare_list_ignores_cf_headers(self, proxy_env, peer):
+    @pytest.mark.parametrize(
+        ("peer", "key"), [("127.0.0.1", "127.0.0.1"), ("::1", "::"), ("172.18.0.5", "172.18.0.5")]
+    )
+    def test_trusted_peer_outside_cloudflare_list_ignores_cf_headers(self, proxy_env, peer, key):
         proxy_env(self.NGINX)
-        assert _client_ip(peer, self.CF) == peer
+        assert _client_ip(peer, self.CF) == key
         assert _client_ip(peer, {**self.CF, "X-Real-IP": "203.0.113.7"}) == "203.0.113.7"
 
     @pytest.mark.parametrize("peer", ["172.18.0.2", "::ffff:172.18.0.2", "::1"])
@@ -651,13 +654,17 @@ class TestGetClientIpParsedTrustedProxies:
         assert _client_ip(peer, {"X-Real-IP": "198.51.100.44"}) == "198.51.100.44"
 
     @pytest.mark.parametrize(
-        "peer", ["203.0.113.9", "10.0.0.1", "::ffff:203.0.113.9", "2001:db8::9"]
+        ("peer", "key"),
+        [
+            ("203.0.113.9", "203.0.113.9"),
+            ("10.0.0.1", "10.0.0.1"),
+            ("::ffff:203.0.113.9", "203.0.113.9"),
+            ("2001:db8::9", "2001:db8::"),
+        ],
     )
-    def test_untrusted_peer_forged_headers_key_on_peer(self, proxy_env, peer):
-        import ipaddress
-
+    def test_untrusted_peer_forged_headers_key_on_peer(self, proxy_env, peer, key):
         proxy_env(self.NGINX, cloudflare="172.18.0.0/16")
-        assert _client_ip(peer, self.FORGED) == str(ipaddress.ip_address(peer))
+        assert _client_ip(peer, self.FORGED) == key
 
     def test_cf_ray_from_unlisted_peer_warns_once_per_process(self, proxy_env, monkeypatch, caplog):
         import logging
@@ -696,6 +703,57 @@ class TestGetClientIpParsedTrustedProxies:
         from aragora.server.middleware.rate_limit.base import _extract_client_ip
 
         assert _extract_client_ip(headers, peer) == _client_ip(peer, headers)
+
+    @pytest.mark.parametrize(
+        "xff",
+        ["203.0.113.7", "198.51.100.66, 203.0.113.7", "198.51.100.66, 203.0.113.7, 172.18.0.9"],
+    )
+    def test_x_real_ip_ignored_when_xff_present(self, proxy_env, xff):
+        proxy_env(self.NGINX)
+        from aragora.server.middleware.rate_limit.base import _extract_client_ip
+
+        headers = {"X-Real-IP": "6.6.6.6", "X-Forwarded-For": xff}
+        assert _client_ip("172.18.0.5", headers) == "203.0.113.7"
+        assert _extract_client_ip(headers, "172.18.0.5") == "203.0.113.7"
+
+    @pytest.mark.parametrize("xff", [None, "", " , "])
+    def test_x_real_ip_used_when_xff_absent_or_empty(self, proxy_env, xff):
+        proxy_env(self.NGINX)
+        from aragora.server.middleware.rate_limit.base import _extract_client_ip
+
+        headers = {"X-Real-IP": "203.0.113.7"}
+        if xff is not None:
+            headers["X-Forwarded-For"] = xff
+        assert _client_ip("172.18.0.5", headers) == "203.0.113.7"
+        assert _extract_client_ip(headers, "172.18.0.5") == "203.0.113.7"
+
+    def test_cloudflared_peer_without_cloudflare_list_keys_on_rightmost_xff_hop(self, proxy_env):
+        proxy_env()  # defaults: loopback is trusted, the Cloudflare list is empty
+        from aragora.server.middleware.rate_limit.base import _extract_client_ip
+
+        # Cloudflare's edge appends the visitor to whatever X-Forwarded-For the client sent.
+        headers = {**self.CF, "X-Real-IP": "6.6.6.6", "X-Forwarded-For": "6.6.6.7, 198.51.100.42"}
+        assert _client_ip("127.0.0.1", headers) == "198.51.100.42"
+        assert _extract_client_ip(headers, "127.0.0.1") == "198.51.100.42"
+
+    @pytest.mark.parametrize(
+        ("peer", "headers", "key"),
+        [
+            ("2001:db8:1:2::a", {}, "2001:db8:1:2::"),
+            ("::ffff:198.51.100.7", {}, "198.51.100.7"),
+            ("172.18.0.5", {"X-Forwarded-For": "2001:db8:1:2::b"}, "2001:db8:1:2::"),
+            ("::1", {"X-Forwarded-For": "::ffff:198.51.100.7"}, "198.51.100.7"),
+            ("::ffff:127.0.0.1", {"X-Real-IP": "2001:db8:1:2::c"}, "2001:db8:1:2::"),
+        ],
+    )
+    def test_helper_and_middleware_keys_agree_for_ipv6_and_mapped(
+        self, proxy_env, peer, headers, key
+    ):
+        proxy_env(self.NGINX)
+        from aragora.server.middleware.rate_limit.base import _extract_client_ip
+
+        assert _client_ip(peer, headers) == key
+        assert _extract_client_ip(headers, peer) == key
 
 
 # ===========================================================================
@@ -1611,14 +1669,10 @@ class TestEdgeCases:
         assert my_handler(self_mock, h) == "ok"
 
     def test_normalize_ip_ipv4_mapped_ipv6(self):
-        import ipaddress
-
         from aragora.server.handlers.utils.rate_limit import _normalize_ip
 
-        # IPv4-mapped IPv6 addresses get normalized by Python's ipaddress module
-        result = _normalize_ip("::ffff:192.168.1.1")
-        # Accept semantically equivalent textual forms across runtimes/plugins.
-        assert ipaddress.ip_address(result) == ipaddress.ip_address("::ffff:192.168.1.1")
+        # IPv4-mapped IPv6 addresses are keyed as their IPv4 address, as in the middleware
+        assert _normalize_ip("::ffff:192.168.1.1") == "192.168.1.1"
 
     def test_get_client_ip_no_headers_attr(self):
         """Handler without headers attribute."""

@@ -86,9 +86,9 @@ class TestNormalizeIP:
         assert _normalize_ip(" 192.168.1.1 ") == "192.168.1.1"
 
     def test_normalizes_ipv6(self):
-        """Should normalize valid IPv6 address."""
-        assert _normalize_ip("::1") == "::1"
-        assert _normalize_ip("2001:db8::1") == "2001:db8::1"
+        """Should group valid IPv6 addresses by /64, as the middleware does."""
+        assert _normalize_ip("::1") == "::"
+        assert _normalize_ip("2001:db8::1") == "2001:db8::"
 
     def test_returns_empty_for_empty_input(self):
         """Should return empty string for empty input."""

@@ -146,21 +146,22 @@ def header_value(headers, name: str) -> str:
 def forwarded_client_ip(headers, remote_addr: str) -> str:
     """Return the raw client address for a request arriving from ``remote_addr``.
 
-    A peer in ARAGORA_TRUSTED_PROXIES is believed for X-Real-IP, then for the
-    rightmost X-Forwarded-For hop that is not itself a trusted proxy. Hops to
-    the left of that one were written by the client, so they are never used.
-    Any other peer is the client. Callers normalize the result for keying.
+    A peer in ARAGORA_TRUSTED_PROXIES is believed for the rightmost
+    X-Forwarded-For hop that is not itself a trusted proxy. Hops to the left
+    of that one were written by the client, so they are never used. X-Real-IP
+    is believed only when X-Forwarded-For is absent or empty, because proxies
+    that append to X-Forwarded-For often pass a client's X-Real-IP through.
+    Any other peer is the client. Callers key the result with ``_normalize_ip``.
     """
     if not is_trusted_proxy_address(remote_addr):
         return remote_addr
 
-    x_real_ip = header_value(headers, "X-Real-IP")
-    if x_real_ip:
-        return x_real_ip
+    hops = [h.strip() for h in header_value(headers, "X-Forwarded-For").split(",") if h.strip()]
+    if not hops:
+        return header_value(headers, "X-Real-IP") or remote_addr
 
-    hops = [h.strip() for h in header_value(headers, "X-Forwarded-For").split(",")]
     for hop in reversed(hops):
-        if hop and not is_trusted_proxy_address(hop):
+        if not is_trusted_proxy_address(hop):
             return hop
 
     return remote_addr
@@ -174,8 +175,8 @@ def _extract_client_ip(
     """Extract real client IP from request headers.
 
     Priority:
-    1. X-Real-IP (if from trusted proxy)
-    2. X-Forwarded-For rightmost non-trusted IP (if from trusted proxy)
+    1. X-Forwarded-For rightmost non-trusted IP (if from trusted proxy)
+    2. X-Real-IP (if from trusted proxy and X-Forwarded-For is absent or empty)
     3. Direct connection IP (remote_addr)
     """
     if not trust_xff_from_proxies or not remote_addr:
