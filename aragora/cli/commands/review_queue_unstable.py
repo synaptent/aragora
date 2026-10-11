@@ -33,9 +33,12 @@ UNSTABLE_RECEIPT_GUARD_PATHS: frozenset[str] = frozenset(
         *UNSTABLE_ALLOWLISTED_WORKFLOW_PATHS.values(),
         ".github/workflows/required-check-priority.yml",
         "aragora/cli/commands/review_queue.py",
+        "aragora/cli/commands/review_queue_rest_fallback.py",
         "aragora/cli/commands/review_queue_unstable.py",
         "aragora/swarm/auto_merge_green.py",
+        "scripts/auto_merge_quorum_green.py",
         "scripts/check_required_check_priority_policy.py",
+        "scripts/merge_executor.py",
     }
 )
 UNSTABLE_CANCELLED_CONTEXT_VERIFIERS: dict[tuple[str, str], tuple[str, ...]] = {

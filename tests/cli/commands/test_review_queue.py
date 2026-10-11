@@ -1427,6 +1427,12 @@ class TestUnstableCancellationReceipt:
             # The packet producer computes every count and surface the proof
             # trusts, so editing it is editing the gate too.
             "aragora/cli/commands/review_queue.py",
+            # Both executors turn the proof into a merge and sit in Tier 2, so
+            # an unguarded edit would waive its own failing advisory checks.
+            "scripts/merge_executor.py",
+            "scripts/auto_merge_quorum_green.py",
+            # Resolves the repo slug whose file list the guard itself reads.
+            "aragora/cli/commands/review_queue_rest_fallback.py",
         ],
     )
     def test_rejects_pr_modifying_optional_only_unstable_predicate(
@@ -1838,6 +1844,19 @@ class TestOptionalOnlyUnstableProofInputs:
                 [[{"filename": "aragora/cli/commands/review_queue.py"}]],
                 True,
                 id="edits-proof-producer",
+            ),
+            pytest.param(
+                [[{"filename": "scripts/merge_executor.py"}]], True, id="edits-merge-executor"
+            ),
+            pytest.param(
+                [[{"filename": "scripts/auto_merge_quorum_green.py"}]],
+                True,
+                id="edits-auto-merge-sweeper",
+            ),
+            pytest.param(
+                [[{"filename": "aragora/cli/commands/review_queue_rest_fallback.py"}]],
+                True,
+                id="edits-guard-repo-slug-resolver",
             ),
             pytest.param(
                 [
