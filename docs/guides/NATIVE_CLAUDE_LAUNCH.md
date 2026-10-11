@@ -27,11 +27,26 @@ mapped VibeProxy-managed profiles in `~/.aragora/claude_launch_profiles.json`:
 {"version":1,"profiles":{"example-profile":{"email":"operator@example.invalid","account_uuid":"account-id","organization_uuid":"organization-id"}}}
 ```
 
-Keep enrollment private and outside the repository. Credential files must be
-owner-only regular files; writable shared directories, symlinks, ambiguous
-identities, malformed inputs and insufficient lifetime fail closed. Filename
-changes do not select a different account. Remaining lifetime must strictly
-exceed the requested deadline plus 300 seconds.
+Keep enrollment private and outside the repository. The enrollment file must be
+an owner-only regular file. Credential files must be regular files you own. A
+credential file counts as private when its own mode grants no group or other
+access, or when the credential directory itself is owned by you and grants no
+group or other access (`chmod 700 ~/.cli-proxy-api`) and the file has no other
+hard link. A group- or world-readable credential file in a group- or
+world-accessible directory, a symlinked file or directory, a writable shared
+directory, an ambiguous identity, a malformed enrollment and insufficient
+lifetime fail closed.
+
+Files that are not Claude credentials do not stop launch. Non-`.json` files and
+other providers' files are ignored as before. A `.json` file that is not a JSON
+object or has no string `type` is skipped and counted in a
+`skipped_unrecognized_files=<n>` diagnostic. A malformed Claude file of another
+account is skipped and counted in `skipped_invalid_other_account_files=<n>`; a
+malformed Claude file that names the enrolled email or account UUID stops
+launch, as does a missing enrolled credential. Diagnostics carry counts only,
+never file names or contents. Unsafe files stop launch whichever account they
+belong to. Filename changes do not select a different account. Remaining
+lifetime must strictly exceed the requested deadline plus 300 seconds.
 
 Private reads validate each physical ancestor through pinned directory descriptors.
 Intermediate symlinks are rejected except protected macOS `/var`, `/tmp`, and

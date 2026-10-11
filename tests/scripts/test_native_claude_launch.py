@@ -7,6 +7,7 @@ import importlib.util
 import json
 import os
 import signal
+import stat
 from pathlib import Path
 import shutil
 import subprocess
@@ -207,10 +208,198 @@ def test_unsafe_or_ambiguous_discovery_stops(launch, kind):
         source.symlink_to(target)
     elif kind == "public":
         source.chmod(0o644)
+        source.parent.chmod(0o755)
     elif kind == "missing":
         source.unlink()
     else:
         source.write_text("not-json")
+    assert_blocked(run())
+
+
+SECRET_MARKER = "never-echo-this-file-content"
+OTHER = {
+    "email": "other@example.invalid",
+    "account_uuid": "account-other",
+    "organization_uuid": IDENTITY["organization_uuid"],
+}
+
+
+def other_claude(**changes):
+    return {
+        **OTHER,
+        "type": "claude",
+        "disabled": False,
+        "access_token": SECRET_MARKER,
+        "expired": "2099-01-01T00:00:00+00:00",
+        **changes,
+    }
+
+
+def assert_launched(result):
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["result"] == "OK"
+
+
+def assert_redacted(result):
+    for value in (SECRET_MARKER, OTHER["email"], IDENTITY["email"], ".json"):
+        assert value not in result.stderr
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        b"not-json",
+        b"",
+        json.dumps(other_claude()).encode()[:40],
+        b"\xff\xfe",
+        b'{"type": "claude", "type": "claude"}',
+        json.dumps([SECRET_MARKER]).encode(),
+        json.dumps({"note": SECRET_MARKER}).encode(),
+        json.dumps({"type": 5, "note": SECRET_MARKER}).encode(),
+    ],
+)
+def test_unrecognized_json_file_is_skipped_with_redacted_diagnostic(launch, content):
+    run, source, *_ = launch
+    stray = source.with_name(OTHER["email"] + ".json")
+    stray.write_bytes(content)
+    stray.chmod(0o600)
+    result = run()
+    assert_launched(result)
+    assert "native_claude_launch: skipped_unrecognized_files=1\n" in result.stderr
+    assert_redacted(result)
+
+
+def test_other_provider_and_non_json_files_stay_silently_ignored(launch):
+    run, source, *_ = launch
+    put(source.with_name("codex-" + OTHER["email"] + ".json"), {"type": "codex"})
+    source.with_name("notes.txt").write_text("not-json")
+    result = run()
+    assert_launched(result)
+    assert "skipped" not in result.stderr
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"email": None},
+        {"organization_uuid": None},
+        {"disabled": "false"},
+        {"expired": "malformed"},
+        {"expired": "2099-01-01T00:00:00"},
+        {"access_token": ""},
+        {"access_token": 5},
+    ],
+)
+def test_invalid_claude_file_of_another_account_is_skipped(launch, changes):
+    run, source, *_ = launch
+    put(source.with_name(OTHER["email"] + ".json"), other_claude(**changes))
+    result = run()
+    assert_launched(result)
+    assert "native_claude_launch: skipped_invalid_other_account_files=1\n" in result.stderr
+    assert_redacted(result)
+
+
+def test_skip_diagnostics_report_counts_per_class(launch):
+    run, source, *_ = launch
+    for name, content in (("a.json", "not-json"), ("b.json", "[]")):
+        source.with_name(name).write_text(content)
+        source.with_name(name).chmod(0o600)
+    put(source.with_name("c.json"), other_claude(expired="malformed"))
+    result = run()
+    assert_launched(result)
+    assert "native_claude_launch: skipped_unrecognized_files=2\n" in result.stderr
+    assert "native_claude_launch: skipped_invalid_other_account_files=1\n" in result.stderr
+
+
+@pytest.mark.parametrize("named_by", ["email", "account_uuid"])
+@pytest.mark.parametrize(
+    "changes, category",
+    [
+        ({"organization_uuid": None}, "malformed_input"),
+        ({"disabled": "false"}, "malformed_input"),
+        ({"expired": "malformed"}, "malformed_input"),
+        ({"access_token": ""}, "token_type"),
+    ],
+)
+def test_invalid_claude_file_naming_enrolled_account_refuses(launch, named_by, changes, category):
+    run, source, *_ = launch
+    put(source.with_name("other.json"), other_claude(**{named_by: IDENTITY[named_by], **changes}))
+    result = run()
+    assert_blocked(result)
+    assert f"native_claude_launch: {category}\n" in result.stderr
+
+
+@pytest.mark.parametrize("content", ["not-json", "[]", json.dumps({"note": "untyped"})])
+def test_unrecognizable_enrolled_file_still_refuses(launch, content):
+    run, source, *_ = launch
+    source.write_text(content)
+    result = run()
+    assert_blocked(result)
+    assert "native_claude_launch: skipped_unrecognized_files=1\n" in result.stderr
+    assert "native_claude_launch: identity_missing\n" in result.stderr
+
+
+@pytest.mark.parametrize("mode", [0o640, 0o644])
+def test_shared_mode_file_is_private_inside_owner_only_directory(launch, mode):
+    run, source, *_ = launch
+    assert stat.S_IMODE(source.parent.stat().st_mode) == 0o700
+    source.chmod(mode)
+    assert_launched(run())
+
+
+@pytest.mark.parametrize("directory_mode", [0o710, 0o750, 0o701, 0o705, 0o755])
+def test_shared_mode_file_refuses_in_group_or_world_accessible_directory(launch, directory_mode):
+    run, source, *_ = launch
+    source.chmod(0o644)
+    source.parent.chmod(directory_mode)
+    result = run()
+    assert_blocked(result)
+    assert "native_claude_launch: unsafe_file\n" in result.stderr
+
+
+def test_directory_rule_requires_single_link(launch, tmp_path):
+    run, source, *_ = launch
+    source.chmod(0o644)
+    os.link(source, tmp_path / "exposed-link")
+    result = run()
+    assert_blocked(result)
+    assert "native_claude_launch: unsafe_file\n" in result.stderr
+
+
+def test_owner_only_file_with_another_link_is_still_private(launch, tmp_path):
+    run, source, *_ = launch
+    os.link(source, tmp_path / "second-link")
+    assert_launched(run())
+
+
+def test_directory_rule_does_not_apply_through_symlinked_directory(launch, tmp_path):
+    run, source, *_ = launch
+    source.chmod(0o644)
+    alias = tmp_path / "alias-auth"
+    alias.symlink_to(source.parent, target_is_directory=True)
+    assert_blocked(run(updates={"VIBEPROXY_AUTH_DIR": str(alias)}))
+
+
+def test_directory_rule_does_not_relax_enrollment(launch):
+    run, _, cfg, *_ = launch
+    assert stat.S_IMODE(cfg.parent.stat().st_mode) == 0o700
+    cfg.chmod(0o644)
+    result = run()
+    assert_blocked(result)
+    assert "native_claude_launch: unsafe_file\n" in result.stderr
+
+
+@pytest.mark.parametrize("kind", ["symlink", "foreign_mode"])
+def test_unsafe_unrelated_entry_still_stops(launch, tmp_path, kind):
+    run, source, *_ = launch
+    stray = source.with_name("stray.json")
+    if kind == "symlink":
+        target = tmp_path / "elsewhere.json"
+        put(target, {"type": "codex"})
+        stray.symlink_to(target)
+    else:
+        source.parent.chmod(0o755)
+        put(stray, {"type": "codex"}, mode=0o644)
     assert_blocked(run())
 
 

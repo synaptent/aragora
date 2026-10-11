@@ -99,16 +99,28 @@ def _directory(path: Path) -> None:
     os.close(_open_directory(path))
 
 
-def _json(path: Path, private: bool = True) -> dict:
+def _read(path: Path, private: bool = True, trust_owner_only_directory: bool = False) -> bytes:
     parent = _open_directory(path.parent)
     try:
+        # The pinned descriptor is the directory the file is opened from, never a
+        # symlink. A second hard link could expose the file through another
+        # directory, so the directory only stands in for a single-link file.
+        folder = os.fstat(parent)
+        owner_only_directory = (
+            trust_owner_only_directory
+            and folder.st_uid == os.getuid()
+            and not folder.st_mode & 0o077
+        )
         fd = os.open(path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent)
         with os.fdopen(fd, "rb") as stream:
             info = os.fstat(stream.fileno())
             if (
                 not stat.S_ISREG(info.st_mode)
                 or info.st_uid != os.getuid()
-                or info.st_mode & (0o077 if private else 0o022)
+                or (
+                    info.st_mode & (0o077 if private else 0o022)
+                    and not (owner_only_directory and info.st_nlink == 1)
+                )
                 or info.st_size > MAX_INPUT
             ):
                 raise LaunchError("unsafe_file")
@@ -117,6 +129,10 @@ def _json(path: Path, private: bool = True) -> dict:
         os.close(parent)
     if len(raw) > MAX_INPUT:
         raise LaunchError("input_limit")
+    return raw
+
+
+def _parse(raw: bytes) -> dict:
     try:
 
         def unique(pairs):
@@ -135,6 +151,10 @@ def _json(path: Path, private: bool = True) -> dict:
     return data
 
 
+def _json(path: Path, private: bool = True) -> dict:
+    return _parse(_read(path, private))
+
+
 def read_private_json(path: Path) -> dict:
     return _json(path)
 
@@ -149,6 +169,20 @@ def _expiry(value: Any) -> datetime:
         raise LaunchError("malformed_input") from None
 
 
+def _claude_source(data: dict, identity: dict) -> tuple[bool, datetime, str] | None:
+    if any(
+        not isinstance(data.get(key), str) or not data[key] for key in IDENTITY
+    ) or not isinstance(data.get("disabled"), bool):
+        raise LaunchError("malformed_input")
+    expiry = _expiry(data.get("expired"))
+    token = data.get("access_token")
+    if not isinstance(token, str) or not re.fullmatch(r"[!-~]+", token):
+        raise LaunchError("token_type")
+    if all(data[key] == identity[key] for key in IDENTITY):
+        return data["disabled"], expiry, token
+    return None
+
+
 def select_token(
     auth_dir: Path, identity: dict, timeout_seconds: float, now: datetime | None = None
 ) -> str:
@@ -160,24 +194,37 @@ def select_token(
     ):
         raise LaunchError("enrollment_invalid")
     matches = []
+    unrecognized = invalid_other_account = 0
     for path in sorted(auth_dir.iterdir()):
         if path.suffix != ".json":
             continue
-        data = read_private_json(path)
+        raw = _read(path, trust_owner_only_directory=True)
+        try:
+            data = _parse(raw)
+        except LaunchError:
+            unrecognized += 1
+            continue
         if not isinstance(data.get("type"), str):
-            raise LaunchError("malformed_input")
+            unrecognized += 1
+            continue
         if data["type"] != "claude":
             continue
-        if any(
-            not isinstance(data.get(key), str) or not data[key] for key in IDENTITY
-        ) or not isinstance(data.get("disabled"), bool):
-            raise LaunchError("malformed_input")
-        expiry = _expiry(data.get("expired"))
-        token = data.get("access_token")
-        if not isinstance(token, str) or not re.fullmatch(r"[!-~]+", token):
-            raise LaunchError("token_type")
-        if all(data[key] == identity.get(key) for key in IDENTITY):
-            matches.append((data["disabled"], expiry, token))
+        try:
+            source = _claude_source(data, identity)
+        except LaunchError:
+            # A broken file that names the enrolled account cannot be told apart
+            # from that account's own credential, so it still stops the launch.
+            if any(data.get(key) == identity[key] for key in ("email", "account_uuid")):
+                raise
+            invalid_other_account += 1
+            continue
+        if source is not None:
+            matches.append(source)
+    # Counts only: credential file names and contents carry account identities.
+    if unrecognized:
+        _diagnostic(f"skipped_unrecognized_files={unrecognized}")
+    if invalid_other_account:
+        _diagnostic(f"skipped_invalid_other_account_files={invalid_other_account}")
     if len(matches) != 1:
         raise LaunchError("identity_ambiguous" if matches else "identity_missing")
     disabled, expiry, token = matches[0]
