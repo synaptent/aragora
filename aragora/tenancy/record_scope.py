@@ -209,24 +209,17 @@ def not_found_body(resource: str = "Record") -> dict[str, str]:
 
 def record_not_found(resource: str = "Record") -> HandlerResult:
     """Legacy 404 for a missing, other-org or unknown-owner record."""
-    result: HandlerResult = get_server_bindings().json_response(
-        not_found_body(resource), status=404
-    )
-    return result
+    return get_server_bindings().json_response(not_found_body(resource), status=404)
 
 
 def record_not_found_error(resource: str = "Record") -> APIError:
     """FastAPI 404 (to ``raise``) for a missing, other-org or unknown-owner record."""
     body = not_found_body(resource)
-    error: APIError = get_server_bindings().api_error(
-        body["error"], status_code=404, code=body["code"]
-    )
-    return error
+    return get_server_bindings().api_error(body["error"], status_code=404, code=body["code"])
 
 
 def _denial_result(denial: ScopeDenial) -> HandlerResult:
-    result: HandlerResult = get_server_bindings().json_response(denial.body(), status=denial.status)
-    return result
+    return get_server_bindings().json_response(denial.body(), status=denial.status)
 
 
 def _bearer_token(headers: Any) -> str | None:

@@ -1,9 +1,8 @@
-"""Registers the server's auth and response helpers with :mod:`aragora.tenancy.server_bindings`.
+"""Registers the server's auth and response helpers with aragora.tenancy.server_bindings.
 
-Reached through the ``aragora.tenancy_bindings`` entry point in ``pyproject.toml`` on the
-first org-scope lookup in a process. Each helper imports its server module when called,
-so installs without the FastAPI extra never import it, and a test that replaces
-``aragora.server.auth.auth_config`` is seen on the next call.
+Each helper imports its server module when called, so installs without the FastAPI
+extra never import it, and a test that replaces ``aragora.server.auth.auth_config``
+is seen on the next call.
 """
 
 from __future__ import annotations
@@ -37,17 +36,9 @@ def _json_response(body: dict[str, Any], *, status: int) -> Any:
     return json_response(body, status=status)
 
 
-SERVER_BINDINGS = ServerBindings(
-    auth_config=_auth_config,
-    get_auth_context=_get_auth_context,
-    api_error=_api_error,
-    json_response=_json_response,
-)
+SERVER_BINDINGS = ServerBindings(_auth_config, _get_auth_context, _api_error, _json_response)
 
 
 def register_tenancy_bindings() -> None:
     """Register the server bindings; safe to call more than once."""
     register_server_bindings(SERVER_BINDINGS)
-
-
-__all__ = ["SERVER_BINDINGS", "register_tenancy_bindings"]
