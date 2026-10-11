@@ -352,7 +352,7 @@ class PostgresMigrationRunner:
                         await conn.execute(
                             # class constant table name
                             f"DELETE FROM {self.MIGRATIONS_TABLE} WHERE version = $1",
-                            version,  # table name interpolation, parameterized
+                            version,
                         )
 
                     rolled_back_count += 1

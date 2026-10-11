@@ -535,7 +535,7 @@ class InsightStore(SQLiteStore):
             cursor.execute(
                 # column constant
                 f"SELECT {INSIGHT_COLUMNS} FROM insights ORDER BY created_at DESC LIMIT ?",
-                (limit,),  # column name interpolation, parameterized
+                (limit,),
             )
             return cursor.fetchall()
 

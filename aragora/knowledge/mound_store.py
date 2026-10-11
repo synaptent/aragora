@@ -518,7 +518,7 @@ class KnowledgeMoundMetaStore(SQLiteStore):
 
             total = conn.execute(
                 f"SELECT COUNT(*) as count FROM knowledge_nodes {where}",  # internal clause
-                params,  # internal query construction
+                params,
             ).fetchone()["count"]
 
             by_type = {}
@@ -549,7 +549,7 @@ class KnowledgeMoundMetaStore(SQLiteStore):
                 conn.execute(
                     # internal clause
                     f"SELECT AVG(confidence) as avg FROM knowledge_nodes {where}",
-                    params,  # internal query construction
+                    params,
                 ).fetchone()["avg"]
                 or 0.0
             )
