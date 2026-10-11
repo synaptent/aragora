@@ -1418,11 +1418,20 @@ class TestUnstableCancellationReceipt:
 
         assert receipt == {}
 
+    @pytest.mark.parametrize(
+        "gate_file",
+        [
+            # The live gate imports its optional-only UNSTABLE proof from this
+            # module, so editing it is editing the gate.
+            "aragora/swarm/auto_merge_green.py",
+            # The packet producer computes every count and surface the proof
+            # trusts, so editing it is editing the gate too.
+            "aragora/cli/commands/review_queue.py",
+        ],
+    )
     def test_rejects_pr_modifying_optional_only_unstable_predicate(
-        self, monkeypatch: pytest.MonkeyPatch
+        self, monkeypatch: pytest.MonkeyPatch, gate_file: str
     ) -> None:
-        # The live gate imports its optional-only UNSTABLE proof from this
-        # module, so editing it is editing the gate.
         head_sha = "exact-head"
         pr = _make_pr(
             number=9034,
@@ -1438,7 +1447,7 @@ class TestUnstableCancellationReceipt:
             "aragora.cli.commands.review_queue._gh_json",
             self._gh_json_dispatch(
                 self._cancelled_build_run(head_sha),
-                files=[{"filename": "aragora/swarm/auto_merge_green.py"}],
+                files=[{"filename": gate_file}],
             ),
         )
 
@@ -1821,11 +1830,14 @@ class TestOptionalOnlyUnstableProofInputs:
     @pytest.mark.parametrize(
         ("files_listing", "modifies"),
         [
-            pytest.param(
-                [[{"filename": "aragora/cli/commands/review_queue.py"}]], False, id="unguarded"
-            ),
+            pytest.param([[{"filename": "docs/STATUS.md"}]], False, id="unguarded"),
             pytest.param(
                 [[{"filename": "aragora/swarm/auto_merge_green.py"}]], True, id="edits-proof"
+            ),
+            pytest.param(
+                [[{"filename": "aragora/cli/commands/review_queue.py"}]],
+                True,
+                id="edits-proof-producer",
             ),
             pytest.param(
                 [
@@ -1886,9 +1898,7 @@ class TestOptionalOnlyUnstableProofInputs:
         )
         monkeypatch.setattr(
             "aragora.cli.commands.review_queue._gh_json",
-            self._gh_json_for_packet(
-                pr_payload, [[{"filename": "aragora/cli/commands/review_queue.py"}]], []
-            ),
+            self._gh_json_for_packet(pr_payload, [[{"filename": "docs/STATUS.md"}]], []),
         )
 
         packet = _build_packet("9453", repo_override="synaptent/aragora")
