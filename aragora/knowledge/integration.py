@@ -22,8 +22,11 @@ logger = logging.getLogger(__name__)
 
 # Pipelines keyed by (org_id, workspace_id): workspace ids are not unique across
 # organizations, so two orgs must never share a pipeline. A None org is the
-# unscoped pipeline, whose fact reads and writes fail closed.
+# unscoped pipeline, whose fact reads and writes fail closed. Insertion order is
+# recency: get_pipeline re-inserts on every hit and, past _MAX_PIPELINES, stops
+# and drops the least recently used pipeline (it is rebuilt on its next request).
 _pipelines: dict[tuple[str | None, str], KnowledgePipeline] = {}
+_MAX_PIPELINES = 64
 _pipeline_lock = asyncio.Lock()
 
 # Thread pool for running async code from sync context
@@ -86,7 +89,7 @@ async def get_pipeline(
     org_id = org_id or None
     key = (org_id, workspace_id)
     async with _pipeline_lock:
-        pipeline = _pipelines.get(key)
+        pipeline = _pipelines.pop(key, None)
         if pipeline is None:
             config = PipelineConfig(
                 workspace_id=workspace_id,
@@ -97,8 +100,18 @@ async def get_pipeline(
             )
             pipeline = KnowledgePipeline(config)
             await pipeline.start()
-            _pipelines[key] = pipeline
             logger.info("Knowledge pipeline initialized for workspace %s", workspace_id)
+        _pipelines[key] = pipeline
+
+        while len(_pipelines) > _MAX_PIPELINES:
+            evicted_key = next(iter(_pipelines))
+            evicted = _pipelines.pop(evicted_key)
+            try:
+                await evicted.stop()
+            except (OSError, RuntimeError) as e:
+                logger.warning(
+                    "Failed to stop evicted pipeline for workspace %s: %s", evicted_key[1], e
+                )
 
         return pipeline
 

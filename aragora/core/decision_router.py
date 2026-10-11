@@ -1120,8 +1120,11 @@ class DecisionRouter:
             max_items: Maximum knowledge items to include
 
         Returns:
-            Tuple of (context_string, document_ids)
+            Tuple of (context_string, document_ids); empty, with a warning, when
+            the pipeline has no organization to confine the Mound read to.
         """
+        from aragora.knowledge.fact_store import OrgScopeRequiredError
+
         try:
             from aragora.knowledge.pipeline import KnowledgePipeline, PipelineConfig
 
@@ -1172,6 +1175,11 @@ class DecisionRouter:
 
         except ImportError:
             logger.debug("Knowledge pipeline not available for context gathering")
+            return "", []
+        except OrgScopeRequiredError as e:
+            # No verified organization reaches this router, so the debate gets no
+            # organization's Mound items rather than every organization's.
+            logger.warning("Knowledge Mound context skipped: %s", e)
             return "", []
         except (ValueError, TypeError, KeyError, AttributeError, RuntimeError, OSError) as e:
             logger.warning("Failed to gather knowledge context: %s", e)

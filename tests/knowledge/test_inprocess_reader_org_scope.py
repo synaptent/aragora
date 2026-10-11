@@ -145,12 +145,9 @@ class TestPipelineOrgScope:
             PipelineConfig(workspace_id=WS, org_id="org-a"),
             fact_store=ScopedFactStore(store, "org-b"),
         )
-        await pipeline.start()
-        try:
-            with pytest.raises(ValueError, match="scoped org"):
-                await pipeline.get_facts()
-        finally:
-            await pipeline.stop()
+        with pytest.raises(OrgScopeRequiredError, match="different organization"):
+            await pipeline.start()
+        assert pipeline._running is False
 
 
 def _chunk_pipeline(org_id: str | None, service: Any) -> KnowledgePipeline:

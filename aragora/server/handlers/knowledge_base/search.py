@@ -228,9 +228,14 @@ class SearchOperationsMixin:
     ) -> HandlerResult:
         """Handle GET /api/knowledge/search - Search chunks.
 
-        ``handler`` is unused here; ``@require_permission`` reads the request's
-        authorization context from it.
+        ``@require_permission`` reads the request's authorization context from
+        ``handler``. Results are confined to the caller's verified organization:
+        401 without authentication, 403 ``knowledge_org_required`` without an
+        organization, before any read.
         """
+        org_id, err = caller_org_or_error(self, handler, "Knowledge search")
+        if err:
+            return err
 
         query = _extract_search_query(query_params)
         if not query:
@@ -274,8 +279,11 @@ class SearchOperationsMixin:
                     logger.error("Knowledge Mound search failed: %s", e)
                     return error_response("Search operation failed", 500)
 
+                from aragora.knowledge.pipeline import mound_items_for_org
+
                 normalized = [
-                    _normalize_search_result(item) for item in _retrieved_items(retrieved)
+                    _normalize_search_result(item)
+                    for item in mound_items_for_org(_retrieved_items(retrieved), org_id)
                 ]
                 normalized = _filter_normalized_results(
                     normalized,
@@ -298,7 +306,7 @@ class SearchOperationsMixin:
         if not hasattr(engine, "search"):
             raise TypeError("Query engine does not support search")
         try:
-            results = _run_async(engine.search(query, workspace_id, limit))  # type: ignore[arg-type]
+            results = _run_async(engine.search(query, workspace_id, limit, org_id=org_id))  # type: ignore[arg-type]
         except (KeyError, ValueError, OSError, TypeError, RuntimeError) as e:
             logger.error("Search failed: %s", e)
             return error_response("Search operation failed", 500)

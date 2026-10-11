@@ -234,49 +234,65 @@ class TestHandleSearchLimitParam:
         mock_run_async.return_value = []
         handler._handle_search({"q": "test"})
         # run_async receives the coroutine; check engine.search was called with limit=10
-        handler._query_engine.search.assert_called_once_with("test", "default", 10)
+        handler._query_engine.search.assert_called_once_with(
+            "test", "default", 10, org_id="test-org-001"
+        )
 
     @patch("aragora.server.handlers.knowledge_base.search._run_async")
     def test_custom_limit(self, mock_run_async, handler):
         mock_run_async.return_value = []
         handler._handle_search({"q": "test", "limit": "25"})
-        handler._query_engine.search.assert_called_once_with("test", "default", 25)
+        handler._query_engine.search.assert_called_once_with(
+            "test", "default", 25, org_id="test-org-001"
+        )
 
     @patch("aragora.server.handlers.knowledge_base.search._run_async")
     def test_limit_clamped_to_min_1(self, mock_run_async, handler):
         mock_run_async.return_value = []
         handler._handle_search({"q": "test", "limit": "0"})
-        handler._query_engine.search.assert_called_once_with("test", "default", 1)
+        handler._query_engine.search.assert_called_once_with(
+            "test", "default", 1, org_id="test-org-001"
+        )
 
     @patch("aragora.server.handlers.knowledge_base.search._run_async")
     def test_limit_clamped_to_max_50(self, mock_run_async, handler):
         mock_run_async.return_value = []
         handler._handle_search({"q": "test", "limit": "100"})
-        handler._query_engine.search.assert_called_once_with("test", "default", 50)
+        handler._query_engine.search.assert_called_once_with(
+            "test", "default", 50, org_id="test-org-001"
+        )
 
     @patch("aragora.server.handlers.knowledge_base.search._run_async")
     def test_limit_negative_clamped_to_min(self, mock_run_async, handler):
         mock_run_async.return_value = []
         handler._handle_search({"q": "test", "limit": "-5"})
-        handler._query_engine.search.assert_called_once_with("test", "default", 1)
+        handler._query_engine.search.assert_called_once_with(
+            "test", "default", 1, org_id="test-org-001"
+        )
 
     @patch("aragora.server.handlers.knowledge_base.search._run_async")
     def test_limit_non_numeric_uses_default(self, mock_run_async, handler):
         mock_run_async.return_value = []
         handler._handle_search({"q": "test", "limit": "abc"})
-        handler._query_engine.search.assert_called_once_with("test", "default", 10)
+        handler._query_engine.search.assert_called_once_with(
+            "test", "default", 10, org_id="test-org-001"
+        )
 
     @patch("aragora.server.handlers.knowledge_base.search._run_async")
     def test_limit_exactly_1(self, mock_run_async, handler):
         mock_run_async.return_value = []
         handler._handle_search({"q": "test", "limit": "1"})
-        handler._query_engine.search.assert_called_once_with("test", "default", 1)
+        handler._query_engine.search.assert_called_once_with(
+            "test", "default", 1, org_id="test-org-001"
+        )
 
     @patch("aragora.server.handlers.knowledge_base.search._run_async")
     def test_limit_exactly_50(self, mock_run_async, handler):
         mock_run_async.return_value = []
         handler._handle_search({"q": "test", "limit": "50"})
-        handler._query_engine.search.assert_called_once_with("test", "default", 50)
+        handler._query_engine.search.assert_called_once_with(
+            "test", "default", 50, org_id="test-org-001"
+        )
 
 
 # ============================================================================
@@ -291,7 +307,9 @@ class TestHandleSearchWorkspaceParam:
     def test_custom_workspace_id(self, mock_run_async, handler):
         mock_run_async.return_value = []
         handler._handle_search({"q": "test", "workspace_id": "my-ws"})
-        handler._query_engine.search.assert_called_once_with("test", "my-ws", 10)
+        handler._query_engine.search.assert_called_once_with(
+            "test", "my-ws", 10, org_id="test-org-001"
+        )
 
     @patch("aragora.server.handlers.knowledge_base.search._run_async")
     def test_workspace_id_truncated_to_100_chars(self, mock_run_async, handler):
