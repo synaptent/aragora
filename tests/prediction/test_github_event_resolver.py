@@ -507,7 +507,9 @@ class TestCIPassResolution:
         result = r.resolve_from_event(claim, event)
         assert result.resolved is False
 
-    def test_check_run_cancelled_resolves_no(self):
+    def test_check_run_cancelled_leaves_claim_open(self):
+        # A cancelled run (for example superseded by a newer push) reached no
+        # verdict, so it must not settle the claim either way.
         r = GitHubEventResolver()
         claim = _open_claim(question_type=QuestionType.CI_PASS, target_ref="p/q#9")
         event = GitHubEventPayload(
@@ -519,8 +521,9 @@ class TestCIPassResolution:
             raw={"aggregate": True, "run_attempt": 1},
         )
         result = r.resolve_from_event(claim, event)
-        assert result.resolved is True
+        assert result.resolved is False
         assert result.resolution_value is False
+        assert "not a definitive" in result.evidence
 
     def test_single_check_run_without_aggregate_marker_waits(self):
         r = GitHubEventResolver()
@@ -945,7 +948,7 @@ class TestCIConclusionClassification:
         assert result.resolution_value is True
         assert f"conclusion={conclusion!r}" in result.evidence
 
-    @pytest.mark.parametrize("conclusion", ["failure", "cancelled", "timed_out", "startup_failure"])
+    @pytest.mark.parametrize("conclusion", ["failure", "timed_out", "startup_failure"])
     def test_failing_conclusions_resolve_no(self, conclusion):
         r = GitHubEventResolver()
         claim = _open_claim(question_type=QuestionType.CI_PASS, target_ref="a/b@main")
@@ -956,7 +959,7 @@ class TestCIConclusionClassification:
 
     @pytest.mark.parametrize(
         "conclusion",
-        ["", "unknown", "SUCCESS", " success", "action_required", "stale", None],
+        ["", "unknown", "SUCCESS", " success", "action_required", "stale", "cancelled", None],
     )
     def test_missing_or_non_definitive_conclusion_waits(self, conclusion):
         r = GitHubEventResolver()
@@ -984,6 +987,29 @@ class TestCIConclusionClassification:
         assert later.resolved is True
         store.resolve(claim.claim_id, later.resolution_value, later.evidence)
         assert store.get("ci-missing-conclusion").resolution_status == ResolutionStatus.RESOLVED_YES
+
+    def test_superseded_cancelled_first_run_leaves_store_claim_open_for_later_success(self):
+        store = InMemoryStakeableClaimStore()
+        claim = _open_claim(
+            claim_id="ci-cancelled-superseded",
+            question_type=QuestionType.CI_PASS,
+            target_ref="a/b@main",
+        )
+        store.add(claim)
+        r = GitHubEventResolver()
+        result = r.resolve_from_event(claim, _aggregate_ci_event("cancelled"))
+        assert result.resolved is False
+        assert store.get("ci-cancelled-superseded").resolution_status == ResolutionStatus.OPEN
+
+        later = r.resolve_from_event(
+            store.get("ci-cancelled-superseded"), _aggregate_ci_event("success")
+        )
+        assert later.resolved is True
+        assert later.resolution_value is True
+        store.resolve(claim.claim_id, later.resolution_value, later.evidence)
+        assert (
+            store.get("ci-cancelled-superseded").resolution_status == ResolutionStatus.RESOLVED_YES
+        )
 
     def test_first_run_startup_failure_settles_store_claim_no(self):
         # A first run that failed to start is a failed first run: the claim

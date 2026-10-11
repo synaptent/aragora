@@ -56,8 +56,8 @@ class GitHubEventPayload:
         merged: For ``pull_request`` events: whether the PR was merged.
         conclusion: For ``check_run``/``workflow_run`` events: the final
             conclusion. ``"success"``, ``"neutral"`` and ``"skipped"`` resolve
-            YES; ``"failure"``, ``"cancelled"``, ``"timed_out"`` and
-            ``"startup_failure"`` resolve NO; any other value, including a
+            YES; ``"failure"``, ``"timed_out"`` and ``"startup_failure"``
+            resolve NO; any other value, including ``"cancelled"`` and a
             missing one, leaves the claim unresolved.
         raw: Arbitrary additional fields preserved for traceability.  ``CI_PASS``
             events resolve only when ``raw["aggregate"] is True``, which means
@@ -111,17 +111,17 @@ class GitHubEventResolver:
 
     # Settlement is irreversible, so only definitive conclusions settle a CI
     # claim. neutral/skipped pass, as for required status checks and in
-    # aragora.markets.resolver. Unlike that pull-based resolver, NO is not
-    # taken from action_required (a run awaiting approval can still run) or
-    # stale; those and unknown or missing values leave the claim OPEN for a
-    # later definitive event or the sweeper. startup_failure resolves NO here
-    # (that resolver reads it as inconclusive): these claims settle only from
-    # run_attempt=1, so a first run that never started can no longer pass and
-    # would otherwise sit OPEN until the sweeper voids it.
+    # aragora.markets.resolver. Unlike that pull-based resolver, which reads
+    # the live suite state, NO is not taken from action_required (a run
+    # awaiting approval can still run), cancelled (usually a run superseded by
+    # a newer push, whose own first run gives the verdict) or stale; those and
+    # unknown or missing values leave the claim OPEN for a later definitive
+    # event or the sweeper. startup_failure resolves NO here (that resolver
+    # reads it as inconclusive): these claims settle only from run_attempt=1,
+    # so a first run that never started can no longer pass and would otherwise
+    # sit OPEN until the sweeper voids it.
     _CI_PASS_CONCLUSIONS: frozenset[str] = frozenset({"success", "neutral", "skipped"})
-    _CI_FAIL_CONCLUSIONS: frozenset[str] = frozenset(
-        {"failure", "cancelled", "timed_out", "startup_failure"}
-    )
+    _CI_FAIL_CONCLUSIONS: frozenset[str] = frozenset({"failure", "timed_out", "startup_failure"})
 
     @staticmethod
     def _normalize_target_ref(ref: str) -> str:

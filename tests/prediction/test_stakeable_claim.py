@@ -417,8 +417,8 @@ class TestExpireStaleOverflow:
 
         assert store.get("past-due").resolution_status == ResolutionStatus.OPEN
 
-    @pytest.mark.parametrize("grace", [1e20, 10**400], ids=["1e20", "10**400"])
-    def test_overflowing_grace_is_rejected(self, grace):
+    @staticmethod
+    def _assert_overflowing_grace_rejected(grace: float) -> None:
         store = InMemoryStakeableClaimStore()
         store.add(_make_claim("past-due", expiry=_past_expiry(2)))
 
@@ -426,3 +426,9 @@ class TestExpireStaleOverflow:
             store.expire_stale(grace=grace)
 
         assert store.get("past-due").resolution_status == ResolutionStatus.OPEN
+
+    def test_overflowing_float_grace_is_rejected(self):
+        self._assert_overflowing_grace_rejected(1e20)
+
+    def test_overflowing_int_grace_is_rejected(self):
+        self._assert_overflowing_grace_rejected(10**400)
