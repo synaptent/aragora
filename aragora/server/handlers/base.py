@@ -1160,6 +1160,11 @@ class BaseHandler:
     MAX_BODY_SIZE = 10 * 1024 * 1024
     _INVALID_JSON_BODY = object()
 
+    # When True, the handler registry calls handle_post(path, body, handler) with the
+    # parsed JSON object body instead of the query dict, and answers 400 itself when
+    # the body is not a JSON object.
+    HANDLE_POST_JSON_BODY = False
+
     def _read_json_body_value(self, handler: Any, max_size: int | None = None) -> Any:
         """Read and parse a JSON request body while preserving non-object payloads."""
         max_size = max_size or self.MAX_BODY_SIZE

@@ -105,6 +105,8 @@ class GmailIngestHandler(SecureHandler):
         """Initialize handler with optional context."""
         self.ctx = server_context or ctx or {}
 
+    HANDLE_POST_JSON_BODY = True
+
     RESOURCE_TYPE = "gmail"
 
     ROUTES = [

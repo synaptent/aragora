@@ -33,6 +33,8 @@ __all__ = [
     "MLCircuitBreaker",
     "get_ml_circuit_breaker_status",
     "get_local_embedding_service",
+    "embeddings_unavailable_response",
+    "texts_exceed_model_window",
     "_clear_ml_components",
 ]
 
@@ -154,13 +156,37 @@ def get_local_embedding_service() -> Any:
     try:
         # LocalEmbeddingService loads its model lazily; reading the dimension loads it.
         _ = service.dimension
-    except (ImportError, RuntimeError, OSError, ValueError) as e:
+    except (ImportError, RuntimeError, OSError, ValueError, AttributeError) as e:
         # Not recorded on the shared "embeddings" breaker: /api/v1/ml/search and
         # /api/v1/ml/models take its half-open probes without reporting an outcome,
         # so a breaker opened by load failures could stay half-open after recovery.
         logger.warning("Local embedding model not available: %s", e)
         return None
     return service
+
+
+def embeddings_unavailable_response() -> HandlerResult:
+    """The 503 both embed routes answer when the local model cannot load.
+
+    Built directly rather than with error_response, which replaces every 5xx
+    message with 'Internal server error' in production.
+    """
+    return json_response(
+        {"error": {"message": "ML embeddings not available", "code": "service_unavailable"}},
+        status=503,
+    )
+
+
+def texts_exceed_model_window(service: Any, texts: list[str]) -> bool | None:
+    """Whether the model cut any of ``texts`` to its window, or None if it cannot tell."""
+    check = getattr(service, "exceeds_max_seq_length", None)
+    if not callable(check):
+        return None
+    try:
+        return any(check(texts))
+    except (ImportError, RuntimeError, OSError, ValueError, TypeError, KeyError) as e:
+        logger.debug("Could not tell whether texts exceed the model window: %s", e)
+        return None
 
 
 def _clear_ml_components() -> None:
@@ -183,6 +209,8 @@ class MLHandler(BaseHandler):
     def __init__(self, ctx: dict | None = None):
         """Initialize handler with optional context."""
         self.ctx = ctx or {}
+
+    HANDLE_POST_JSON_BODY = True
 
     ROUTES = [
         "/api/v1/ml/route",
@@ -571,12 +599,13 @@ class MLHandler(BaseHandler):
         Response:
             {
                 "embeddings": [[0.1, 0.2, ...], ...],
-                "dimension": 384
+                "dimension": 384,
+                "truncated": false  // present when the model can tell
             }
         """
         embeddings = get_local_embedding_service()
         if not embeddings:
-            return error_response("ML embeddings not available", 503)
+            return embeddings_unavailable_response()
 
         text = data.get("text")
         texts = data.get("texts", [])
@@ -587,18 +616,21 @@ class MLHandler(BaseHandler):
         try:
             if text:
                 result = [embeddings.embed(text)]
+                truncated = texts_exceed_model_window(embeddings, [text])
             else:
                 if len(texts) > 100:
                     return error_response("Maximum 100 texts per batch", 400)
                 result = embeddings.embed_batch(texts)
+                truncated = texts_exceed_model_window(embeddings, texts)
 
-            return json_response(
-                {
-                    "embeddings": result,
-                    "dimension": len(result[0]) if result else 0,
-                    "count": len(result),
-                }
-            )
+            response: dict[str, Any] = {
+                "embeddings": result,
+                "dimension": len(result[0]) if result else 0,
+                "count": len(result),
+            }
+            if truncated is not None:
+                response["truncated"] = truncated
+            return json_response(response)
 
         except (ValueError, KeyError, TypeError) as e:
             logger.warning("Invalid ML embedding request: %s", e)
@@ -626,9 +658,9 @@ class MLHandler(BaseHandler):
                 ]
             }
         """
-        embeddings = _get_ml_component("embeddings")
+        embeddings = get_local_embedding_service()
         if not embeddings:
-            return error_response("ML embeddings not available", 503)
+            return embeddings_unavailable_response()
 
         query = data.get("query", "")
         documents = data.get("documents", [])

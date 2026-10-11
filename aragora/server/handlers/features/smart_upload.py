@@ -1059,6 +1059,8 @@ if HANDLER_BASE_AVAILABLE:
     class SmartUploadHandler(BaseHandler):
         """HTTP handler for smart file uploads."""
 
+        HANDLE_POST_JSON_BODY = True
+
         ROUTES = [
             "/api/v1/upload/smart",
             "/api/v1/upload/batch",

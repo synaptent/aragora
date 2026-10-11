@@ -396,11 +396,15 @@ class KnowledgeHandler(
                 f"'batch_size' must be an integer from 1 to {_MAX_EMBED_BATCH_SIZE}", 400
             )
 
-        from aragora.server.handlers.knowledge.ml import get_local_embedding_service
+        from aragora.server.handlers.knowledge.ml import (
+            embeddings_unavailable_response,
+            get_local_embedding_service,
+            texts_exceed_model_window,
+        )
 
         service = get_local_embedding_service()
         if service is None:
-            return error_response("ML embeddings not available", 503)
+            return embeddings_unavailable_response()
         requested_model = data.get("model")
         if requested_model is not None and requested_model != service.model_name:
             return error_response(
@@ -419,15 +423,17 @@ class KnowledgeHandler(
             logger.warning("Index embed-batch failed: %s", e)
             return _coded_error("Embedding service unavailable", "service_unavailable", 503)
 
-        return json_response(
-            {
-                "embeddings": embeddings,
-                "dimension": len(embeddings[0]),
-                "count": len(embeddings),
-                "batch_count": len(batches),
-                "model": service.model_name,
-            }
-        )
+        response: dict[str, Any] = {
+            "embeddings": embeddings,
+            "dimension": len(embeddings[0]),
+            "count": len(embeddings),
+            "batch_count": len(batches),
+            "model": service.model_name,
+        }
+        truncated = texts_exceed_model_window(service, texts)
+        if truncated is not None:
+            response["truncated"] = truncated
+        return json_response(response)
 
     def _handle_fact_routes(
         self, path: str, query_params: dict, handler: Any

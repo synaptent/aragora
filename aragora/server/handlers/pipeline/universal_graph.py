@@ -61,6 +61,8 @@ def _get_store():
 class UniversalGraphHandler(BaseHandler):
     """Handler for universal pipeline graph endpoints."""
 
+    HANDLE_POST_JSON_BODY = True
+
     ROUTES = ["/api/v1/pipeline/graphs"]
 
     def __init__(self, ctx: dict[str, Any] | None = None):

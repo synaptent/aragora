@@ -54,6 +54,8 @@ BreakpointManager: Any = getattr(_breakpoints_module, "BreakpointManager", None)
 class BreakpointsHandler(BaseHandler):
     """Handler for breakpoint management endpoints."""
 
+    HANDLE_POST_JSON_BODY = True
+
     ROUTES = [
         "/api/v1/breakpoints",
         "/api/v1/breakpoints/pending",

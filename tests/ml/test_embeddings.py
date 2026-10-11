@@ -372,6 +372,40 @@ class TestLocalEmbeddingServiceEmbedBatch:
         assert call_kwargs["batch_size"] == 16
 
 
+class TestLocalEmbeddingServiceExceedsMaxSeqLength:
+    """Tests for LocalEmbeddingService.exceeds_max_seq_length()."""
+
+    @staticmethod
+    def _service(max_seq_length: int | None, tokenizer: object | None) -> LocalEmbeddingService:
+        service = LocalEmbeddingService()
+        service._model = MagicMock(max_seq_length=max_seq_length, tokenizer=tokenizer)
+        return service
+
+    @staticmethod
+    def _word_tokenizer(texts: list[str], **kwargs: object) -> dict[str, list[list[int]]]:
+        # One id per word plus the two special tokens the model adds.
+        return {"input_ids": [[0] * (len(text.split()) + 2) for text in texts]}
+
+    def test_flags_texts_longer_than_the_model_window(self):
+        service = self._service(4, self._word_tokenizer)
+        assert service.exceeds_max_seq_length(["one two", "one two three"]) == [False, True]
+
+    def test_counts_the_special_tokens(self):
+        tokenizer = MagicMock(side_effect=self._word_tokenizer)
+        service = self._service(4, tokenizer)
+        service.exceeds_max_seq_length(["one two"])
+        assert tokenizer.call_args.kwargs["add_special_tokens"] is True
+
+    @pytest.mark.parametrize(
+        ("max_seq_length", "tokenizer"),
+        [(None, _word_tokenizer), (4, None)],
+        ids=["no-window", "no-tokenizer"],
+    )
+    def test_reports_no_truncation_when_the_model_cannot_tell(self, max_seq_length, tokenizer):
+        service = self._service(max_seq_length, tokenizer)
+        assert service.exceeds_max_seq_length(["one two three four five"]) == [False]
+
+
 # =============================================================================
 # TestLocalEmbeddingServiceSimilarity - Similarity Tests
 # =============================================================================

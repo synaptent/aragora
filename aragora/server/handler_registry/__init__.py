@@ -488,7 +488,23 @@ class HandlerRegistryMixin:
             # This handles the case where BaseHandler defines stub methods that
             # return None, while the handler routes all methods via handle().
             result = None
-            if method == "POST" and hasattr(handler, "handle_post"):
+            if (
+                method == "POST"
+                and hasattr(handler, "handle_post")
+                and getattr(handler, "HANDLE_POST_JSON_BODY", False)
+            ):
+                # These handlers take the parsed JSON body, not the query dict, as
+                # handle_post's second argument.
+                body = handler.read_json_body(self)
+                if body is None:
+                    from aragora.server.handlers.utils.responses import error_response
+
+                    result = error_response(
+                        "Request body must be a JSON object", 400, code="invalid_json_body"
+                    )
+                else:
+                    result = handler.handle_post(dispatch_path, body, self)
+            elif method == "POST" and hasattr(handler, "handle_post"):
                 result = handler.handle_post(dispatch_path, query_dict, self)
             elif method == "DELETE" and hasattr(handler, "handle_delete"):
                 result = handler.handle_delete(dispatch_path, query_dict, self)

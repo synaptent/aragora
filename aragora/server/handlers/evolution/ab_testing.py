@@ -57,6 +57,8 @@ except ImportError as e:
 class EvolutionABTestingHandler(BaseHandler):
     """Handler for evolution A/B testing endpoints."""
 
+    HANDLE_POST_JSON_BODY = True
+
     ROUTES = [
         "/api/evolution/ab-tests",
         "/api/evolution/ab-tests/",
