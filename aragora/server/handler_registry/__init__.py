@@ -487,7 +487,7 @@ class HandlerRegistryMixin:
             # then fall through to generic handle() if it returns None.
             # This handles the case where BaseHandler defines stub methods that
             # return None, while the handler routes all methods via handle().
-            result = None
+            result: Any = None
             if (
                 method == "POST"
                 and hasattr(handler, "handle_post")
