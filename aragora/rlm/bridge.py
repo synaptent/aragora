@@ -56,7 +56,7 @@ from pathlib import Path
 from typing import Any, Literal
 from collections.abc import Callable
 
-from aragora.config.secrets import get_secret_presence
+from aragora.config.secrets import get_secret_presence, is_secret_presence_available
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +72,7 @@ _BACKEND_CREDENTIAL_ENVS: dict[str, tuple[str, ...]] = {
 
 def _secret_configured(name: str) -> bool:
     """Presence-only check honoring strict-secrets mode (no value exposure)."""
-    return get_secret_presence(name).source in {"aws", "env"}
+    return is_secret_presence_available(get_secret_presence(name))
 
 
 # Check if official RLM is available.
@@ -355,7 +355,7 @@ class AragoraRLM(RLMStreamingMixin):
         if (
             self.backend_config.fallback_backend is None
             and self.backend_config.backend == "openai"
-            and get_secret_presence("OPENROUTER_API_KEY").source in {"aws", "env"}
+            and is_secret_presence_available(get_secret_presence("OPENROUTER_API_KEY"))
         ):
             self.backend_config.fallback_backend = "openrouter"
 

@@ -16,7 +16,7 @@ import re
 import time
 from typing import TYPE_CHECKING
 
-from aragora.config.secrets import get_secret_presence
+from aragora.config.secrets import get_secret_presence, is_secret_presence_available
 from aragora.models.compat import first_text_block
 
 if TYPE_CHECKING:
@@ -405,10 +405,9 @@ class DomainDetector:
                     self.keywords[domain].extend(words)
                 else:
                     self.keywords[domain] = list(words)
-        self.use_llm = use_llm and get_secret_presence("ANTHROPIC_API_KEY").source in {
-            "aws",
-            "env",
-        }
+        self.use_llm = use_llm and is_secret_presence_available(
+            get_secret_presence("ANTHROPIC_API_KEY")
+        )
         self._client = client
         self._use_cache = use_cache
 
