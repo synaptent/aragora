@@ -68,6 +68,8 @@ from aragora.cli.commands.swarm_render import (  # noqa: F401
     _render_tranche_queue_status,
 )
 from aragora.cli.commands.swarm_runner import _run_runner_action
+from aragora.cli.commands.swarm_campaign import _run_campaign_action
+from aragora.cli.commands.swarm_preflight import _run_preflight_action
 
 logger = logging.getLogger(__name__)
 
@@ -392,84 +394,12 @@ def cmd_swarm(args: argparse.Namespace) -> None:
     autonomy_level = autonomy_map.get(autonomy_str, AutonomyLevel.PROPOSE_APPROVE)
 
     if action == "preflight":
-        from aragora.swarm.credential_envelope import CredentialEnvelope
-        from aragora.swarm.preflight import (
-            evaluate_preflight_receipt_gate,
-            run_contract_preflight_receipt,
-            run_preflight,
+        _run_preflight_action(
+            args,
+            target_branch=target_branch,
+            skip_publication=skip_publication,
+            as_json=as_json,
         )
-
-        repo_root = resolve_repo_root(Path.cwd())
-        contract_arg = getattr(args, "contract", None)
-        if contract_arg:
-            contract_path = Path(str(contract_arg)).expanduser()
-            envelope = CredentialEnvelope.from_environment(os.environ)
-            receipt = run_contract_preflight_receipt(
-                repo_root=repo_root,
-                agent=str(getattr(args, "worker_model", "claude") or "claude"),
-                base_ref=str(target_branch or "main"),
-                skip_publication=skip_publication,
-                contract_path=contract_path,
-                envelope=envelope,
-            )
-            expected_contract_checksum = str(
-                receipt.artifacts.get("expected_contract_checksum", "") or ""
-            ).strip()
-            admission_gate = evaluate_preflight_receipt_gate(
-                receipt,
-                repo_root=repo_root,
-                envelope=envelope,
-                check_type="scratch" if skip_publication else "remote_publish",
-                base_ref=str(target_branch or "main"),
-                expected_contract_checksum=expected_contract_checksum,
-            )
-            failure_terminal_class = receipt.failure_terminal_class
-            payload = {
-                "mode": "swarm-preflight",
-                "receipt": receipt.to_dict(),
-                "admission_gate": admission_gate.to_dict(),
-                "failure_terminal_class": (
-                    failure_terminal_class.value if failure_terminal_class is not None else None
-                ),
-            }
-        else:
-            preflight_result = run_preflight(
-                repo_root=repo_root,
-                agent=str(getattr(args, "worker_model", "claude") or "claude"),
-                base_ref=str(target_branch or "main"),
-                skip_publication=skip_publication,
-                contract_path=None,
-            )
-            payload = {"mode": "swarm-preflight", **preflight_result.to_dict()}
-        if as_json:
-            print(json.dumps(payload, indent=2))
-        else:
-            if contract_arg:
-                receipt_payload = dict(payload.get("receipt", {}) or {})
-                gate_payload = dict(payload.get("admission_gate", {}) or {})
-                print(f"swarm preflight: {gate_payload.get('verdict', 'blocked')}")
-                print(f"receipt_id={receipt_payload.get('receipt_id', '')}")
-                print(f"check_type={receipt_payload.get('check_type', '')}")
-                print(f"passed={receipt_payload.get('passed', False)}")
-                print(f"expires_at={receipt_payload.get('expires_at', '')}")
-                failure_terminal_text = str(payload.get("failure_terminal_class", "") or "").strip()
-                if failure_terminal_text:
-                    print(f"failure_terminal_class={failure_terminal_text}")
-            else:
-                preflight_passed = bool(payload.get("passed", False))
-                print(f"swarm preflight: {'ok' if preflight_passed else 'blocked'}")
-                print(f"repo_root={payload['repo_root']}")
-                print(f"agent={payload['agent']}")
-                print(f"base_ref={payload['base_ref']}")
-                print(f"branch={payload['branch']}")
-                worker = payload.get("worker", {})
-                checksum = str(worker.get("worker_contract_checksum", "")).strip()
-                if checksum:
-                    print(f"worker_contract_checksum={checksum}")
-        if contract_arg and payload["admission_gate"]["verdict"] != "pass":
-            raise SystemExit(2)
-        if not contract_arg and not bool(payload.get("passed", False)):
-            raise SystemExit(2)
         return
 
     if action in {"coord", "assign", "claim-pr", "report", "findings"}:
@@ -1217,208 +1147,12 @@ def cmd_swarm(args: argparse.Namespace) -> None:
         return
 
     if action == "campaign":
-        from aragora.swarm.campaign import (
-            CampaignExecutor,
-            CampaignPlanner,
-            DEFAULT_CAMPAIGN_MANIFEST,
-            load_campaign_manifest,
-            locked_manifest_path,
-            save_campaign_manifest,
-        )
-
-        subaction = str(goal or "status").strip().lower()
-        manifest_path = Path(getattr(args, "manifest", None) or DEFAULT_CAMPAIGN_MANIFEST).resolve()
-        output_path = Path(getattr(args, "output", None) or manifest_path).resolve()
-
-        def _campaign_input_count() -> int:
-            return sum(
-                1
-                for value in (
-                    getattr(args, "source_file", None),
-                    getattr(args, "issue_list", None),
-                    getattr(args, "github_query", None),
-                )
-                if value
-            )
-
-        def _campaign_planner(parallel_default: int = 1):
-            return CampaignPlanner(
-                repo_root=Path.cwd(),
-                planner_model=str(getattr(args, "planner_model", "claude") or "claude"),
-                planner_strategy=str(getattr(args, "planner_strategy", "heuristic") or "heuristic"),
-                worker_model=str(getattr(args, "worker_model", "codex") or "codex"),
-                review_model=str(getattr(args, "review_model", "claude") or "claude"),
-                enforce_cross_model_review=not bool(
-                    getattr(args, "allow_same_model_review", False)
-                ),
-                budget_limit_usd=float(getattr(args, "budget_limit", 50.0) or 50.0),
-                max_parallel_ready_projects=int(
-                    getattr(args, "max_parallel_ready_projects", parallel_default)
-                    or parallel_default
-                ),
-                experiment_id=str(getattr(args, "experiment_id", "")).strip() or None,
-                experiment_label=str(getattr(args, "experiment_label", "")).strip() or None,
-            )
-
-        def _plan_campaign(planner):
-            source_file = getattr(args, "source_file", None)
-            issue_list = getattr(args, "issue_list", None)
-            github_query = getattr(args, "github_query", None)
-            if source_file:
-                return planner.plan_from_source_file(Path(source_file).resolve())
-            if issue_list:
-                issue_numbers = [
-                    int(item.strip()) for item in str(issue_list).split(",") if item.strip()
-                ]
-                return planner.plan_from_issue_list(
-                    issue_numbers,
-                    repo=getattr(args, "boss_repo", None),
-                )
-            if github_query:
-                return planner.plan_from_github_query(
-                    str(github_query),
-                    repo=getattr(args, "boss_repo", None),
-                )
-            raise ValueError(
-                "campaign plan requires exactly one of --source-file, --issue-list, or --github-query"
-            )
-
-        if subaction == "plan":
-            if _campaign_input_count() != 1:
-                raise ValueError(
-                    "campaign plan requires exactly one of --source-file, --issue-list, or --github-query"
-                )
-            planner = _campaign_planner(parallel_default=1)
-            manifest = _plan_campaign(planner)
-            with locked_manifest_path(output_path):
-                save_campaign_manifest(output_path, manifest)
-            payload = {
-                "mode": "campaign-plan",
-                "manifest_path": str(output_path),
-                **manifest.to_dict(),
-            }
-            if as_json:
-                print(json.dumps(payload, indent=2))
-            else:
-                print(f"campaign_id={manifest.campaign_id}")
-                print(f"manifest={output_path}")
-                print(
-                    f"projects={len(manifest.projects)} budget=${manifest.budget_limit_usd:.2f} "
-                    f"worker={manifest.worker_model} review={manifest.review_model}"
-                )
-                for finding in manifest.planning_findings[:5]:
-                    print(f"  finding: {finding}")
-            return
-
-        if subaction == "run":
-            # Unified pipeline: plan once into a canonical manifest, then execute exactly one iteration.
-            source_count = _campaign_input_count()
-            run_manifest_path = manifest_path
-            invocation_mode = "resumed"
-            if manifest_path.exists():
-                if source_count > 0:
-                    raise ValueError(
-                        "campaign run: cannot supply --source-file, --issue-list, or "
-                        "--github-query when resuming from an existing manifest"
-                    )
-                if not as_json:
-                    print(f"Resuming from existing manifest: {manifest_path}")
-            else:
-                if source_count == 0:
-                    raise ValueError(
-                        "campaign run requires an existing manifest or one of "
-                        "--source-file, --issue-list, --github-query"
-                    )
-                if source_count != 1:
-                    raise ValueError(
-                        "campaign run requires exactly one of --source-file, --issue-list, or "
-                        "--github-query when the manifest does not exist"
-                    )
-                planner = _campaign_planner(parallel_default=1)
-                manifest = _plan_campaign(planner)
-                run_manifest_path = output_path
-                with locked_manifest_path(run_manifest_path):
-                    save_campaign_manifest(output_path, manifest)
-                invocation_mode = "planned_then_executed"
-                if not as_json:
-                    print(f"Planned {len(manifest.projects)} projects → {run_manifest_path}")
-            executor = CampaignExecutor(
-                manifest_path=run_manifest_path,
-                repo_root=Path.cwd(),
-                target_branch=target_branch,
-            )
-            payload = {
-                "mode": "campaign-run",
-                "invocation_mode": invocation_mode,
-                "manifest_path": str(run_manifest_path),
-                **asyncio.run(executor.execute_once()),
-            }
-            with locked_manifest_path(run_manifest_path):
-                manifest = load_campaign_manifest(run_manifest_path)
-                payload["campaign_id"] = manifest.campaign_id
-            if as_json:
-                print(json.dumps(payload, indent=2))
-            else:
-                stop = payload.get("stop_reason", "")
-                dispatched = payload.get("dispatched_projects", [])
-                print(
-                    f"campaign_id={payload.get('campaign_id', '')} "
-                    f"manifest={run_manifest_path} "
-                    f"invocation_mode={invocation_mode} "
-                    f"stop_reason={stop} dispatched={len(dispatched)}"
-                )
-                for item in dispatched:
-                    if isinstance(item, dict):
-                        print(
-                            f"  {item.get('project_id')} status={item.get('status')} "
-                            f"outcome={item.get('outcome')}"
-                        )
-                    elif isinstance(item, str):
-                        print(f"  {item}")
-            return
-
-        executor = CampaignExecutor(
-            manifest_path=manifest_path,
-            repo_root=Path.cwd(),
+        _run_campaign_action(
+            args,
+            goal=goal,
             target_branch=target_branch,
+            as_json=as_json,
         )
-        if subaction == "execute":
-            payload = asyncio.run(executor.execute_once())
-        elif subaction == "status":
-            payload = executor.status()
-        elif subaction == "review":
-            target = str(getattr(args, "swarm_campaign_target", None) or "").strip()
-            if not target:
-                raise ValueError("campaign review requires a project id as the third argument")
-            payload = asyncio.run(executor.review_project(target))
-        elif subaction == "sync-issues":
-            payload = executor.sync_issue_plan()
-        else:
-            raise ValueError(
-                "campaign action must be one of: plan, run, execute, status, review, sync-issues"
-            )
-
-        if as_json:
-            print(json.dumps(payload, indent=2))
-        else:
-            if subaction == "status":
-                print(
-                    f"campaign_id={payload.get('campaign_id', '')} "
-                    f"stop_reason={payload.get('stop_reason', '')}"
-                )
-                counts = payload.get("counts", {})
-                if isinstance(counts, dict):
-                    counts_text = ", ".join(f"{k}={v}" for k, v in sorted(counts.items()))
-                    print(f"counts={counts_text}")
-                for project in payload.get("projects", [])[:10]:
-                    if not isinstance(project, dict):
-                        continue
-                    print(
-                        f"{project.get('project_id')} status={project.get('status')} "
-                        f"review={project.get('review_status')} title={project.get('title', '')}"
-                    )
-            else:
-                print(json.dumps(payload, indent=2))
         return
 
     if action == "tranche":
