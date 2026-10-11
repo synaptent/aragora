@@ -309,7 +309,8 @@ class FactStore(SQLiteStore):
         with self.connection() as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
-            cursor.execute(f"SELECT * FROM facts WHERE id = ?{clause}", (fact_id, *params))  # noqa: S608 -- fixed clause, values bound
+            # fixed clause, values bound
+            cursor.execute(f"SELECT * FROM facts WHERE id = ?{clause}", (fact_id, *params))
             row = cursor.fetchone()
 
             if not row:
@@ -397,7 +398,8 @@ class FactStore(SQLiteStore):
         with self.connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
-                f"UPDATE facts SET {', '.join(updates)} WHERE id = ?{org_sql}",  # noqa: S608 -- dynamic clause from internal state
+                # dynamic clause from internal state
+                f"UPDATE facts SET {', '.join(updates)} WHERE id = ?{org_sql}",
                 params,
             )
 
@@ -511,7 +513,7 @@ class FactStore(SQLiteStore):
             cursor = conn.cursor()
 
             org_sql, org_params = _org_clause(filters.org_id)
-            sql = f"SELECT * FROM facts WHERE 1=1{org_sql}"  # noqa: S608 -- fixed clause, values bound
+            sql = f"SELECT * FROM facts WHERE 1=1{org_sql}"  # fixed clause, values bound
             params: list[Any] = list(org_params)
 
             if filters.workspace_id:
@@ -581,7 +583,7 @@ class FactStore(SQLiteStore):
                 )
                 WHERE r.relation_type = ?
                 AND f.superseded_by IS NULL{org_sql}
-                """,  # noqa: S608 -- fixed clauses, values bound
+                """,  # fixed clauses, values bound
                 (fact_id, fact_id, FactRelationType.CONTRADICTS.value, *org_params),
             )
 
@@ -655,7 +657,7 @@ class FactStore(SQLiteStore):
                     id, source_fact_id, target_fact_id, relation_type,
                     confidence, created_by, metadata_json, created_at
                 ) SELECT ?, ?, ?, ?, ?, ?, ?, ?{scope_sql}
-                """,  # noqa: S608 -- fixed clause, values bound
+                """,  # fixed clause, values bound
                 (
                     relation_id,
                     source_fact_id,
@@ -721,7 +723,8 @@ class FactStore(SQLiteStore):
             if not conditions:
                 return []
 
-            sql = f"SELECT * FROM fact_relations r WHERE ({' OR '.join(conditions)})"  # noqa: S608 -- dynamic clause from internal state
+            # dynamic clause from internal state
+            sql = f"SELECT * FROM fact_relations r WHERE ({' OR '.join(conditions)})"
 
             if relation_type:
                 sql += " AND relation_type = ?"
@@ -769,7 +772,8 @@ class FactStore(SQLiteStore):
 
             # The fact row goes first so an org-scoped miss leaves the FTS
             # entry and relations of another org's fact untouched.
-            cursor.execute(f"DELETE FROM facts WHERE id = ?{org_sql}", (fact_id, *org_params))  # noqa: S608 -- fixed clause, values bound
+            # fixed clause, values bound
+            cursor.execute(f"DELETE FROM facts WHERE id = ?{org_sql}", (fact_id, *org_params))
             if cursor.rowcount == 0:
                 return False
 
@@ -844,7 +848,8 @@ class FactStore(SQLiteStore):
             where = f" WHERE {' AND '.join(conditions)}"
 
             # Total facts
-            cursor.execute(f"SELECT COUNT(*) as count FROM facts{where}", params)  # noqa: S608 -- internal query construction
+            # internal query construction
+            cursor.execute(f"SELECT COUNT(*) as count FROM facts{where}", params)
             total = cursor.fetchone()["count"]
 
             # By status
@@ -853,14 +858,14 @@ class FactStore(SQLiteStore):
                 SELECT validation_status, COUNT(*) as count
                 FROM facts{where}
                 GROUP BY validation_status
-                """,  # noqa: S608 -- internal query construction
+                """,  # internal query construction
                 params,
             )
             by_status = {row["validation_status"]: row["count"] for row in cursor.fetchall()}
 
             # Average confidence
             cursor.execute(
-                f"SELECT AVG(confidence) as avg FROM facts{where}",  # noqa: S608 -- internal query construction
+                f"SELECT AVG(confidence) as avg FROM facts{where}",  # internal query construction
                 params,
             )
             avg_confidence = cursor.fetchone()["avg"] or 0.0
@@ -877,7 +882,7 @@ class FactStore(SQLiteStore):
                 SELECT COUNT(*) as count FROM facts
                 WHERE validation_status IN ({placeholders})
                 {"".join(f" AND {c}" for c in conditions)}
-                """,  # noqa: S608 -- parameterized query
+                """,  # parameterized query
                 list(verified_statuses) + params,
             )
             verified = cursor.fetchone()["count"]
@@ -889,7 +894,7 @@ class FactStore(SQLiteStore):
                 JOIN facts s ON s.id = r.source_fact_id
                 JOIN facts t ON t.id = r.target_fact_id
                 WHERE {end_conditions}
-                """,  # noqa: S608 -- fixed clauses, values bound
+                """,  # fixed clauses, values bound
                 params + params,
             )
             relations = cursor.fetchone()["count"]

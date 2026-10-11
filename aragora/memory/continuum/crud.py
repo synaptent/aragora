@@ -331,7 +331,7 @@ class CrudMixin:
                 UPDATE continuum_memory
                 SET {", ".join(updates)}
                 WHERE id = ?
-                """,  # noqa: S608 -- dynamic clause from internal state
+                """,  # dynamic clause from internal state
                 tuple(params),
             )
             conn.commit()

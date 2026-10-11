@@ -156,7 +156,7 @@ class RelationshipTracker(BaseRelationshipTracker):
                             UPDATE agent_relationships
                             SET {col} = {col} + 1
                             WHERE agent_a = ? AND agent_b = ?
-                            """,  # nosec B608 - col is from controlled set  # noqa: S608
+                            """,  # nosec B608 - col is from controlled set
                             (canonical_a, canonical_b),
                         )
                     elif winner == agent_b:
@@ -166,7 +166,7 @@ class RelationshipTracker(BaseRelationshipTracker):
                             UPDATE agent_relationships
                             SET {col} = {col} + 1
                             WHERE agent_a = ? AND agent_b = ?
-                            """,  # nosec B608 - col is from controlled set  # noqa: S608
+                            """,  # nosec B608 - col is from controlled set
                             (canonical_a, canonical_b),
                         )
 
@@ -186,7 +186,7 @@ class RelationshipTracker(BaseRelationshipTracker):
                     UPDATE agent_relationships
                     SET {col} = {col} + 1
                     WHERE agent_a = ? AND agent_b = ?
-                    """,  # nosec B608 - col is from controlled set  # noqa: S608
+                    """,  # nosec B608 - col is from controlled set
                     (canonical_a, canonical_b),
                 )
 

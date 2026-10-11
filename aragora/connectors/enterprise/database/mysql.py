@@ -292,10 +292,11 @@ class MySQLConnector(EnterpriseConnector):
                             SELECT * FROM `{safe_table}`
                             WHERE `{safe_ts_column}` > %s
                             ORDER BY `{safe_ts_column}`
-                        """  # noqa: S608 -- table name interpolation, parameterized
+                        """  # table name interpolation, parameterized
                         await cursor.execute(query, (last_sync,))
                     else:
-                        query = f"SELECT * FROM `{safe_table}`"  # noqa: S608 -- table name interpolation, parameterized
+                        # table name interpolation, parameterized
+                        query = f"SELECT * FROM `{safe_table}`"
                         await cursor.execute(query)
 
                     async for row in cursor:
@@ -366,7 +367,7 @@ class MySQLConnector(EnterpriseConnector):
                                 SELECT * FROM `{safe_table}`
                                 WHERE {conditions}
                                 LIMIT %s
-                            """  # noqa: S608 -- table name interpolation, parameterized
+                            """  # table name interpolation, parameterized
                             params = [f"%{query}%"] * len(safe_columns) + [limit]
                             await cursor.execute(search_query, params)
                             rows = await cursor.fetchall()
@@ -417,7 +418,8 @@ class MySQLConnector(EnterpriseConnector):
 
             async with pool.acquire() as conn:
                 async with conn.cursor() as cursor:
-                    query = f"SELECT * FROM `{safe_table}` WHERE `{safe_pk_column}` = %s"  # noqa: S608 -- table/column name interpolation, parameterized
+                    # table/column name interpolation, parameterized
+                    query = f"SELECT * FROM `{safe_table}` WHERE `{safe_pk_column}` = %s"
                     await cursor.execute(query, (pk_value,))
                     columns = [desc[0] for desc in cursor.description]
                     row = await cursor.fetchone()
