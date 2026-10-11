@@ -184,6 +184,12 @@ analytics = "aragora.analytics.debate_events:subscribe_debate_analytics"
 [project.entry-points."aragora.workspace_stores"]
 stores = "aragora.stores.debate_registration:register_debate_workspace_stores"
 
+# Run by aragora/tenancy/server_bindings.py on the first org-scope lookup that finds
+# nothing registered, so record_scope reaches the server's auth and response helpers
+# without importing aragora.server.
+[project.entry-points."aragora.tenancy_bindings"]
+server = "aragora.server.tenancy_bindings:register_tenancy_bindings"
+
 # -----------------------------------------------------------------------------
 # uv resolver constraints — security floors for the pip-audit security gate
 # (scripts/run_pip_audit_gate.py). They bound what the lockfile may resolve
