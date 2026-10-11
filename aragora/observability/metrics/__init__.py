@@ -35,7 +35,7 @@ _metrics_server: int | None = None
 # Base utilities
 # =============================================================================
 
-from aragora.observability.metrics.base import (  # noqa: F401
+from aragora.observability.metrics.base import (
     NoOpMetric,
     get_metrics_enabled,
     ensure_metrics_initialized,
@@ -46,7 +46,7 @@ from aragora.observability.metrics.base import (  # noqa: F401
 # Core initialization and server
 # =============================================================================
 
-from aragora.observability.metrics.core import (  # noqa: F401
+from aragora.observability.metrics.core import (
     init_core_metrics,
     is_initialized,
     reset_initialization,
@@ -57,7 +57,7 @@ from aragora.observability.metrics.core import (  # noqa: F401
 # Request metrics
 # =============================================================================
 
-from aragora.observability.metrics.request import (  # noqa: F401
+from aragora.observability.metrics.request import (
     init_request_metrics,
     record_request,
     record_latency,
@@ -71,7 +71,7 @@ from aragora.observability.metrics.request import (  # noqa: F401
 # Agent metrics
 # =============================================================================
 
-from aragora.observability.metrics.agent import (  # noqa: F401
+from aragora.observability.metrics.agent import (
     init_agent_metrics,
     record_agent_call,
     record_agent_latency,
@@ -90,7 +90,7 @@ from aragora.observability.metrics.agent import (  # noqa: F401
 )
 
 # Per-provider agent metrics
-from aragora.observability.metrics.agents import (  # noqa: F401
+from aragora.observability.metrics.agents import (
     # Enums
     CircuitBreakerState,
     ErrorType,
@@ -136,7 +136,7 @@ from aragora.observability.metrics.agents import (  # noqa: F401
 # Debate metrics
 # =============================================================================
 
-from aragora.observability.metrics.debate import (  # noqa: F401
+from aragora.observability.metrics.debate import (
     init_debate_metrics,
     record_debate_completion,
     record_phase_duration,
@@ -165,7 +165,7 @@ from aragora.observability.metrics.debate import (  # noqa: F401
 # System metrics
 # =============================================================================
 
-from aragora.observability.metrics.system import (  # noqa: F401
+from aragora.observability.metrics.system import (
     init_system_metrics,
     track_websocket_connection,
     set_websocket_connections,
@@ -178,7 +178,7 @@ from aragora.observability.metrics.system import (  # noqa: F401
 # Custom/application metrics
 # =============================================================================
 
-from aragora.observability.metrics.custom import (  # noqa: F401
+from aragora.observability.metrics.custom import (
     init_custom_metrics,
     record_gauntlet_export,
     track_gauntlet_export,
@@ -202,7 +202,7 @@ from aragora.observability.metrics.custom import (  # noqa: F401
 # Cache metrics
 # =============================================================================
 
-from aragora.observability.metrics.cache import (  # noqa: F401
+from aragora.observability.metrics.cache import (
     init_cache_metrics,
     record_cache_hit,
     record_cache_miss,
@@ -222,7 +222,7 @@ from aragora.observability.metrics.cache import (  # noqa: F401
 # Memory metrics
 # =============================================================================
 
-from aragora.observability.metrics.memory import (  # noqa: F401
+from aragora.observability.metrics.memory import (
     init_memory_metrics,
     record_memory_operation,
     record_memory_coordinator_write,
@@ -236,7 +236,7 @@ from aragora.observability.metrics.memory import (  # noqa: F401
 # Convergence metrics
 # =============================================================================
 
-from aragora.observability.metrics.convergence import (  # noqa: F401
+from aragora.observability.metrics.convergence import (
     init_convergence_metrics,
     record_convergence_check,
     record_process_evaluation_bonus,
@@ -250,7 +250,7 @@ from aragora.observability.metrics.convergence import (  # noqa: F401
 # TTS metrics
 # =============================================================================
 
-from aragora.observability.metrics.tts import (  # noqa: F401
+from aragora.observability.metrics.tts import (
     init_tts_metrics,
     record_tts_synthesis,
     record_tts_latency,
@@ -263,7 +263,7 @@ from aragora.observability.metrics.tts import (  # noqa: F401
 # Workflow metrics
 # =============================================================================
 
-from aragora.observability.metrics.workflow import (  # noqa: F401
+from aragora.observability.metrics.workflow import (
     init_workflow_metrics,
     record_workflow_trigger,
     record_workflow_template_created,
@@ -279,7 +279,7 @@ from aragora.observability.metrics.workflow import (  # noqa: F401
 # Evidence metrics
 # =============================================================================
 
-from aragora.observability.metrics.evidence import (  # noqa: F401
+from aragora.observability.metrics.evidence import (
     init_evidence_metrics,
     record_evidence_stored,
     record_evidence_citation_bonus,
@@ -293,7 +293,7 @@ from aragora.observability.metrics.evidence import (  # noqa: F401
 # Ranking metrics
 # =============================================================================
 
-from aragora.observability.metrics.ranking import (  # noqa: F401
+from aragora.observability.metrics.ranking import (
     init_ranking_metrics,
     record_calibration_adjustment,
     record_learning_bonus,
@@ -332,7 +332,7 @@ from aragora.observability.metrics.ranking import (  # noqa: F401
 # Bridge metrics
 # =============================================================================
 
-from aragora.observability.metrics.bridge import (  # noqa: F401
+from aragora.observability.metrics.bridge import (
     init_bridge_metrics,
     record_bridge_sync,
     record_bridge_sync_latency,
@@ -347,7 +347,7 @@ from aragora.observability.metrics.bridge import (  # noqa: F401
 # Knowledge Mound metrics
 # =============================================================================
 
-from aragora.observability.metrics.km import (  # noqa: F401
+from aragora.observability.metrics.km import (
     init_km_metrics,
     record_km_operation,
     record_km_cache_access,
@@ -363,7 +363,7 @@ from aragora.observability.metrics.km import (  # noqa: F401
 # Consensus metrics
 # =============================================================================
 
-from aragora.observability.metrics.consensus import (  # noqa: F401
+from aragora.observability.metrics.consensus import (
     init_consensus_metrics,
     init_enhanced_consensus_metrics,
     record_consensus_ingestion,
@@ -377,7 +377,7 @@ from aragora.observability.metrics.consensus import (  # noqa: F401
 # Task queue metrics
 # =============================================================================
 
-from aragora.observability.metrics.task_queue import (  # noqa: F401
+from aragora.observability.metrics.task_queue import (
     init_task_queue_metrics,
     record_task_queue_operation,
     set_task_queue_size,
@@ -390,7 +390,7 @@ from aragora.observability.metrics.task_queue import (  # noqa: F401
 # Governance metrics
 # =============================================================================
 
-from aragora.observability.metrics.governance import (  # noqa: F401
+from aragora.observability.metrics.governance import (
     init_governance_metrics,
     record_governance_decision,
     record_governance_verification,
@@ -404,7 +404,7 @@ from aragora.observability.metrics.governance import (  # noqa: F401
 # User mapping metrics
 # =============================================================================
 
-from aragora.observability.metrics.user_mapping import (  # noqa: F401
+from aragora.observability.metrics.user_mapping import (
     init_user_mapping_metrics,
     record_user_mapping_operation,
     record_user_mapping_cache_hit,
@@ -416,7 +416,7 @@ from aragora.observability.metrics.user_mapping import (  # noqa: F401
 # Checkpoint metrics
 # =============================================================================
 
-from aragora.observability.metrics.checkpoint import (  # noqa: F401
+from aragora.observability.metrics.checkpoint import (
     init_checkpoint_metrics,
     record_checkpoint_operation,
     record_checkpoint_restore_result,
@@ -427,7 +427,7 @@ from aragora.observability.metrics.checkpoint import (  # noqa: F401
 # Notification metrics
 # =============================================================================
 
-from aragora.observability.metrics.notification import (  # noqa: F401
+from aragora.observability.metrics.notification import (
     init_notification_metrics,
     record_notification_sent,
     record_notification_error,
@@ -439,7 +439,7 @@ from aragora.observability.metrics.notification import (  # noqa: F401
 # Marketplace metrics
 # =============================================================================
 
-from aragora.observability.metrics.marketplace import (  # noqa: F401
+from aragora.observability.metrics.marketplace import (
     init_marketplace_metrics,
     set_marketplace_templates_count,
     record_marketplace_download,
@@ -453,7 +453,7 @@ from aragora.observability.metrics.marketplace import (  # noqa: F401
 # Explainability metrics
 # =============================================================================
 
-from aragora.observability.metrics.explainability import (  # noqa: F401
+from aragora.observability.metrics.explainability import (
     init_explainability_metrics,
     set_batch_explainability_jobs_active,
     record_batch_explainability_job,
@@ -466,7 +466,7 @@ from aragora.observability.metrics.explainability import (  # noqa: F401
 # Security metrics
 # =============================================================================
 
-from aragora.observability.metrics.security import (  # noqa: F401
+from aragora.observability.metrics.security import (
     init_security_metrics,
     record_encryption_operation,
     record_encryption_error,
@@ -485,7 +485,7 @@ track_rbac_check = track_rbac_evaluation
 # Webhook metrics
 # =============================================================================
 
-from aragora.observability.metrics.webhook import (  # noqa: F401
+from aragora.observability.metrics.webhook import (
     record_webhook_delivery,
     record_webhook_retry,
     set_queue_size as set_webhook_queue_size,
@@ -498,7 +498,7 @@ from aragora.observability.metrics.webhook import (  # noqa: F401
 # SLO metrics
 # =============================================================================
 
-from aragora.observability.metrics.slo import (  # noqa: F401
+from aragora.observability.metrics.slo import (
     init_slo_metrics,
     record_slo_check,
     record_slo_violation,
@@ -512,7 +512,7 @@ from aragora.observability.metrics.slo import (  # noqa: F401
 # Fabric metrics
 # =============================================================================
 
-from aragora.observability.metrics.fabric import (  # noqa: F401
+from aragora.observability.metrics.fabric import (
     init_fabric_metrics,
     set_agents_active as set_fabric_agents_active,
     set_agents_health as set_fabric_agents_health,

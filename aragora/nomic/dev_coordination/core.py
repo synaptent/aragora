@@ -181,7 +181,7 @@ from aragora.nomic.dev_coordination.work_order_maintenance import (  # noqa: F40
     _WORK_ORDER_LEASING_FAILED_ARCHIVE_GRACE_HOURS,
     WorkOrderMaintenanceMixin,
 )
-from aragora.nomic.dev_coordination.cli import (  # noqa: F401
+from aragora.nomic.dev_coordination.cli import (
     _build_parser,
     _run_command,
 )

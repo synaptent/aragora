@@ -43,7 +43,7 @@ RATCHET = {
     "max_file_loc": 5400,  # No single file above this
     "max_except_exception": 900,  # Total across aragora/
     "max_type_ignore": 700,  # Total across aragora/
-    "max_noqa": 2800,  # Total across aragora/
+    "max_noqa": 1853,  # Total across aragora/
 }
 
 # Per-file LOC exceptions: a small allowlist of known-large files with a TRACKED
