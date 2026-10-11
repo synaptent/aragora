@@ -324,6 +324,40 @@ def managed_custody_problem() -> str | None:
     return None
 
 
+def scan_rejected_mounted_secrets() -> dict[str, str]:
+    """Name each managed file in ``ARAGORA_SECRETS_DIR`` that is rejected, with the reason.
+
+    Reads the directory afresh with the secret manager's own validation. Reasons
+    never contain secret values. An unset or unusable directory yields an empty
+    result; ``managed_custody_problem()`` reports the directory itself.
+    """
+    if not os.environ.get("ARAGORA_SECRETS_DIR"):
+        return {}
+    try:
+        _, rejected = SecretManager(SecretsConfig.from_env())._load_from_mounted_directory()
+    except SecretSourceError:
+        return {}
+    return rejected
+
+
+def format_secret_custody_failure(exc: BaseException) -> str | None:
+    """Return one value-free line for an unusable-custody failure, or ``None``.
+
+    Follows explicit ``raise ... from`` chains only, so a wrapper such as an
+    authentication error raised from a ``SecretSourceError`` is recognized while
+    an unrelated error raised during handling is not.
+    """
+    current: BaseException | None = exc
+    seen: set[int] = set()
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if isinstance(current, SecretSourceError):
+            detail = " ".join(str(current).split())
+            return f"aragora: secret custody is unusable: {detail}"
+        current = current.__cause__
+    return None
+
+
 @dataclass
 class SecretsConfig:
     """Configuration for secrets management."""
@@ -438,6 +472,7 @@ class SecretManager:
         self._managed_sources_healthy = False
         self._cached_secrets: dict[str, str] = {}
         self._cached_secret_sources: dict[str, str] = {}
+        self._rejected_mounted_secrets: dict[str, str] = {}
         self._cache_timestamp: float = 0.0
         self._initialized = False
         self._lock = threading.Lock()
@@ -553,26 +588,49 @@ class SecretManager:
         finally:
             os.close(fd)
 
-    def _load_from_mounted_directory(self) -> dict[str, str]:
-        """Load present managed filenames from the configured protected directory."""
+    def _load_from_mounted_directory(self) -> tuple[dict[str, str], dict[str, str]]:
+        """Load present managed filenames from the configured protected directory.
+
+        Returns the loaded values and, separately, the managed names whose file was
+        rejected with the reason. A directory that cannot be opened safely raises
+        ``SecretSourceError`` for the whole load; a rejected file only withholds its
+        own name, because an owner-only directory already limits who can add files.
+        """
         if not self.config.secrets_dir:
-            return {}
+            return {}, {}
         directory_fd = self._open_secrets_directory()
+        secrets: dict[str, str] = {}
+        rejected: dict[str, str] = {}
         try:
-            secrets = {
-                name: value
-                for name in MANAGED_SECRETS
-                if (value := self._read_mounted_secret(directory_fd, name)) is not None
-            }
+            for name in sorted(MANAGED_SECRETS):
+                try:
+                    value = self._read_mounted_secret(directory_fd, name)
+                except SecretSourceError as exc:
+                    rejected[name] = str(exc)
+                    continue
+                if value is not None:
+                    secrets[name] = value
         finally:
             os.close(directory_fd)
-        logger.info("Loaded %d secrets from protected mounted files", len(secrets))
-        return secrets
+        logger.info(
+            "Loaded %d secrets from protected mounted files (%d rejected)",
+            len(secrets),
+            len(rejected),
+        )
+        return secrets, rejected
 
-    def _load_managed_sources(self) -> tuple[dict[str, str], dict[str, str]]:
-        """Load enabled sources and merge them in custody-precedence order."""
+    def _load_managed_sources(
+        self,
+    ) -> tuple[dict[str, str], dict[str, str], dict[str, str]]:
+        """Load enabled sources and merge them in custody-precedence order.
+
+        Returns values, their sources, and the rejected mounted names. A rejected
+        mounted name is withheld from every source so it cannot fall back to AWS.
+        """
         self._managed_sources_healthy = False
-        mounted_secrets = self._load_from_mounted_directory() if self.config.secrets_dir else {}
+        mounted_secrets, rejected = (
+            self._load_from_mounted_directory() if self.config.secrets_dir else ({}, {})
+        )
         aws_secrets = self._load_from_aws() if self.config.use_aws else {}
         if aws_secrets:
             self._last_aws_load_succeeded = True
@@ -592,10 +650,26 @@ class SecretManager:
             }
             if aws_secrets:
                 logger.warning("Preserving last known AWS secret cache after refresh failure")
+        aws_secrets = {name: value for name, value in aws_secrets.items() if name not in rejected}
         combined = {**aws_secrets, **mounted_secrets}
-        sources = {name: "aws" for name in aws_secrets}
-        sources.update({name: "mounted_file" for name in mounted_secrets})
-        return combined, sources
+        sources = dict.fromkeys(aws_secrets, "aws")
+        sources.update(dict.fromkeys(mounted_secrets, "mounted_file"))
+        return combined, sources, rejected
+
+    def _store_managed_sources(
+        self, loaded: tuple[dict[str, str], dict[str, str], dict[str, str]]
+    ) -> None:
+        """Replace the cache and rejected-file map together (caller holds the lock)."""
+        self._cached_secrets, self._cached_secret_sources, rejected = loaded
+        for name, problem in sorted(rejected.items()):
+            if self._rejected_mounted_secrets.get(name) != problem:
+                logger.warning(
+                    "Rejected mounted secret file %s; reads of that name fail until it is "
+                    "fixed: %s",
+                    name,
+                    problem,
+                )
+        self._rejected_mounted_secrets = rejected
 
     def _cached_entry(self, name: str) -> tuple[str | None, str]:
         """Return one coherent value/source snapshot across concurrent refreshes."""
@@ -605,6 +679,20 @@ class SecretManager:
             if source is None:
                 source = "managed_cache"
             return value, source
+
+    def _rejected_mounted_problem(self, name: str) -> str | None:
+        """Why the mounted file for ``name`` was rejected at the last load, if it was."""
+        with self._lock:
+            return self._rejected_mounted_secrets.get(name)
+
+    def rejected_mounted_secrets(self) -> dict[str, str]:
+        """Managed names whose mounted file was rejected at the last load, with reasons.
+
+        Reasons name the file and the rule it broke; they never contain values.
+        """
+        self._initialize()
+        with self._lock:
+            return dict(self._rejected_mounted_secrets)
 
     def _is_cache_expired(self) -> bool:
         """Check if the secret cache has expired."""
@@ -845,7 +933,7 @@ class SecretManager:
                     self.config.aws_regions,
                 )
                 if self.config.secrets_dir or self.config.use_aws:
-                    self._cached_secrets, self._cached_secret_sources = self._load_managed_sources()
+                    self._store_managed_sources(self._load_managed_sources())
                     self._cache_timestamp = time.time()
                     if self._cached_secrets:
                         logger.info(
@@ -876,7 +964,7 @@ class SecretManager:
             if not needs_refresh:
                 return
 
-            self._cached_secrets, self._cached_secret_sources = self._load_managed_sources()
+            self._store_managed_sources(self._load_managed_sources())
             self._cache_timestamp = time.time()
             logger.debug("Secrets cache refreshed, TTL: %ss", self.config.cache_ttl_seconds)
 
@@ -905,8 +993,15 @@ class SecretManager:
         Raises:
             SecretNotFoundError: If strict mode is enabled for a critical secret
                 and it's not found in approved managed custody
+            SecretSourceError: If configured custody is unusable, or this name's
+                mounted file was rejected (no AWS or environment fallback)
         """
         self._initialize()
+
+        rejected_problem = self._rejected_mounted_problem(name)
+        if rejected_problem is not None:
+            self._log_access(name, "mounted_file_rejected", False)
+            raise SecretSourceError(rejected_problem)
 
         # Determine if strict mode applies
         use_strict = strict if strict is not None else is_strict_mode()
@@ -967,6 +1062,7 @@ class SecretManager:
         - ``managed_cache``: available from a pre-seeded cache with unknown provenance.
         - ``env``: available from process environment and allowed by mode.
         - ``blocked_by_strict_mode``: present in env but strict mode forbids using it.
+        - ``mounted_file_rejected``: its mounted file was rejected; reads of it fail.
         - ``missing``: unavailable from both AWS cache and env.
         """
         self._initialize()
@@ -976,7 +1072,9 @@ class SecretManager:
         managed_value, managed_source = self._cached_entry(name)
         env_value = os.environ.get(name)
 
-        if managed_value is not None and managed_value.strip():
+        if self._rejected_mounted_problem(name) is not None:
+            source = "mounted_file_rejected"
+        elif managed_value is not None and managed_value.strip():
             source = managed_source
         elif use_strict and is_critical and env_value is not None and env_value.strip():
             source = "blocked_by_strict_mode"
@@ -1007,6 +1105,10 @@ class SecretManager:
         provider readiness without exposing or logging secret values.
         """
         self._initialize()
+
+        if self._rejected_mounted_problem(name) is not None:
+            self._log_access(name, "usable_mounted_file_rejected", False)
+            return False
 
         use_strict = strict if strict is not None else is_strict_mode()
         is_critical = is_critical_secret(name)
@@ -1175,6 +1277,11 @@ def hydrate_env_from_secrets(
 
     Returns:
         Dict of secrets hydrated into environment.
+
+    Raises:
+        SecretSourceError: If configured custody is unusable. A rejected mounted
+            file is not hydrated, and its name is removed from the environment so
+            legacy readers cannot fall back to a raw value.
     """
     hydrated: dict[str, str] = {}
     try:
@@ -1184,11 +1291,21 @@ def hydrate_env_from_secrets(
         with manager._lock:
             cached_secrets = dict(manager._cached_secrets)
             cached_sources = dict(manager._cached_secret_sources)
+            rejected = dict(manager._rejected_mounted_secrets)
             clear_unmanaged_env = manager._managed_sources_healthy or (
                 manager.config.use_aws and manager._last_aws_load_authoritative_failure
             )
         use_strict = is_strict_mode()
         for name in target_names:
+            if name in rejected:
+                manager._log_access(name, "hydrate_mounted_file_rejected", False)
+                if os.environ.pop(name, None) is not None:
+                    logger.warning(
+                        "SECURITY: Removing '%s' from the process environment because its "
+                        "mounted secret file was rejected.",
+                        name,
+                    )
+                continue
             if (
                 not overwrite
                 and os.environ.get(name)

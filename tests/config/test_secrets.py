@@ -12,6 +12,7 @@ Tests cover:
 - Cache management
 """
 
+import contextlib
 import json
 import logging
 import os
@@ -36,6 +37,7 @@ from aragora.config.secrets import (
     _mfa_prompt_allowed,
     SecretNotFoundError,
     clear_secret_cache,
+    format_secret_custody_failure,
     get_required_secret,
     get_secret,
     get_secret_presence,
@@ -47,6 +49,7 @@ from aragora.config.secrets import (
     is_strict_mode,
     get_secret_manager,
     reset_secret_manager,
+    scan_rejected_mounted_secrets,
 )
 
 
@@ -259,6 +262,7 @@ class TestSecretManager:
         ("missing", False),
         ("none", False),
         ("blocked_by_strict_mode", False),
+        ("mounted_file_rejected", False),
         ("unknown_backend", False),
     ],
 )
@@ -474,15 +478,184 @@ class TestSecretManagerMountedFiles:
             )
 
     def test_invalid_mounted_file_does_not_fallback_to_aws(self, tmp_path):
-        """An unsafe primary source fails before any secondary network lookup."""
+        """A rejected mounted name never resolves from AWS; other AWS names still do."""
         self._write_secret(tmp_path, "OPENAI_API_KEY", "unsafe", mode=0o644)
         manager = SecretManager(SecretsConfig(secrets_dir=str(tmp_path), use_aws=True))
+        aws_values = {"OPENAI_API_KEY": "aws-openai-value", "SENTRY_DSN": "aws-sentry-value"}
 
-        with patch.object(manager, "_load_from_aws") as load_from_aws:
-            with pytest.raises(SecretSourceError, match="owner-readable"):
+        with (
+            patch.object(manager, "_load_from_aws", return_value=aws_values),
+            patch.dict(os.environ, {}, clear=True),
+        ):
+            with pytest.raises(SecretSourceError, match="owner-readable") as exc_info:
                 manager.get("OPENAI_API_KEY", strict=False)
+            assert manager.get("SENTRY_DSN", strict=False) == "aws-sentry-value"
+            presence = manager.presence("OPENAI_API_KEY", strict=False)
 
-        load_from_aws.assert_not_called()
+        assert presence.source == "mounted_file_rejected"
+        assert "aws-openai-value" not in str(exc_info.value)
+
+    @pytest.mark.parametrize(
+        "layout",
+        [
+            "platform_default_mode",
+            "docker_read_only_mode",
+            "kubernetes_data_symlink",
+            "hardlink",
+            "empty",
+            "non_utf8",
+        ],
+    )
+    def test_rejected_file_fails_only_its_own_name(self, tmp_path, layout, caplog):
+        """One non-conforming file never blocks reads of the other mounted names."""
+        secret_dir = tmp_path / "secrets"
+        secret_dir.mkdir(mode=0o700)
+        self._write_secret(secret_dir, "OPENAI_API_KEY", "mounted-openai-value")
+        rejected_path = secret_dir / "ANTHROPIC_API_KEY"
+        if layout == "platform_default_mode":
+            self._write_secret(secret_dir, "ANTHROPIC_API_KEY", "unsafe-value", mode=0o644)
+        elif layout == "docker_read_only_mode":
+            self._write_secret(secret_dir, "ANTHROPIC_API_KEY", "unsafe-value", mode=0o444)
+        elif layout == "kubernetes_data_symlink":
+            data_dir = secret_dir / "..2026_10_11_00_00_00.000000000"
+            data_dir.mkdir(mode=0o700)
+            self._write_secret(data_dir, "ANTHROPIC_API_KEY", "unsafe-value", mode=0o400)
+            (secret_dir / "..data").symlink_to(data_dir.name, target_is_directory=True)
+            rejected_path.symlink_to("..data/ANTHROPIC_API_KEY")
+        elif layout == "hardlink":
+            outside = self._write_secret(tmp_path, "outside", "unsafe-value")
+            os.link(outside, rejected_path)
+        elif layout == "empty":
+            self._write_secret(secret_dir, "ANTHROPIC_API_KEY", "\n")
+        else:
+            self._write_secret(secret_dir, "ANTHROPIC_API_KEY", b"\xff\xfe")
+        manager = SecretManager(SecretsConfig(secrets_dir=str(secret_dir)))
+
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "fallback-must-not-win"}, clear=True):
+            assert manager.get("OPENAI_API_KEY", strict=False) == "mounted-openai-value"
+            with pytest.raises(SecretSourceError, match="ANTHROPIC_API_KEY") as exc_info:
+                manager.get("ANTHROPIC_API_KEY", strict=False)
+            presence = manager.presence("ANTHROPIC_API_KEY", strict=False)
+            usable = manager.is_usable("ANTHROPIC_API_KEY", strict=False)
+
+        assert presence.source == "mounted_file_rejected"
+        assert presence.available is False
+        assert usable is False
+        rejected = manager.rejected_mounted_secrets()
+        assert list(rejected) == ["ANTHROPIC_API_KEY"]
+        assert "ANTHROPIC_API_KEY" in rejected["ANTHROPIC_API_KEY"]
+        for text in (
+            str(exc_info.value),
+            caplog.text,
+            str(rejected),
+            str(manager.get_access_log()),
+        ):
+            assert "fallback-must-not-win" not in text
+            assert "unsafe-value" not in text
+
+    @pytest.mark.parametrize("overwrite", [False, True])
+    def test_hydration_skips_rejected_file_and_clears_its_env(self, tmp_path, caplog, overwrite):
+        """Bulk hydration survives one rejected file and removes that name's env fallback."""
+        self._write_secret(tmp_path, "OPENAI_API_KEY", "mounted-openai-value")
+        self._write_secret(tmp_path, "ANTHROPIC_API_KEY", "unsafe-value", mode=0o644)
+        manager = SecretManager(SecretsConfig(secrets_dir=str(tmp_path)))
+        with (
+            patch("aragora.config.secrets._manager", manager),
+            patch.dict(os.environ, {"ANTHROPIC_API_KEY": "fallback-must-not-win"}, clear=True),
+        ):
+            hydrated = hydrate_env_from_secrets(overwrite=overwrite)
+            assert hydrated == {"OPENAI_API_KEY": "mounted-openai-value"}
+            assert os.environ["OPENAI_API_KEY"] == "mounted-openai-value"
+            assert "ANTHROPIC_API_KEY" not in os.environ
+
+        assert any(
+            entry["source"] == "hydrate_mounted_file_rejected" for entry in manager.get_access_log()
+        )
+        assert "ANTHROPIC_API_KEY" in caplog.text
+        assert "fallback-must-not-win" not in caplog.text
+        assert "unsafe-value" not in caplog.text
+
+    def test_refresh_clears_rejection_once_the_file_is_fixed(self, tmp_path):
+        secret_path = self._write_secret(tmp_path, "OPENAI_API_KEY", "fixed-value", mode=0o644)
+        manager = SecretManager(SecretsConfig(secrets_dir=str(tmp_path)))
+
+        with pytest.raises(SecretSourceError, match="owner-readable"):
+            manager.get("OPENAI_API_KEY", strict=False)
+        secret_path.chmod(0o600)
+        manager.refresh()
+
+        assert manager.get("OPENAI_API_KEY", strict=False) == "fixed-value"
+        assert manager.rejected_mounted_secrets() == {}
+
+    @pytest.mark.parametrize(
+        "problem", ["relative", "missing", "symlinked", "peer_writable", "untrusted_owner"]
+    )
+    def test_directory_level_failures_stay_fatal_for_every_read(self, tmp_path, problem):
+        """Only file-level problems are isolated; directory problems fail every name."""
+        secret_dir = tmp_path / "secrets"
+        secret_dir.mkdir(mode=0o700)
+        self._write_secret(secret_dir, "OPENAI_API_KEY", "mounted-value")
+        configured = str(secret_dir)
+        ownership: contextlib.AbstractContextManager[object] = contextlib.nullcontext()
+        if problem == "relative":
+            configured = "secrets"
+        elif problem == "missing":
+            configured = str(tmp_path / "absent")
+        elif problem == "symlinked":
+            link = tmp_path / "secrets-link"
+            link.symlink_to(secret_dir, target_is_directory=True)
+            configured = str(link)
+        elif problem == "peer_writable":
+            secret_dir.chmod(0o770)
+        else:
+            directory_stat = secret_dir.stat()
+            real_fstat = os.fstat
+
+            def foreign_owner_fstat(fd):
+                result = real_fstat(fd)
+                if (result.st_dev, result.st_ino) != (directory_stat.st_dev, directory_stat.st_ino):
+                    return result
+                values = list(result[:10])
+                values[4] = os.geteuid() + 4242
+                return os.stat_result(values)
+
+            ownership = patch("aragora.config.secrets.os.fstat", side_effect=foreign_owner_fstat)
+        manager = SecretManager(SecretsConfig(secrets_dir=configured))
+
+        try:
+            with (
+                ownership,
+                patch("aragora.config.secrets._manager", manager),
+                patch.dict(os.environ, {"SENTRY_DSN": "env-sentry-value"}, clear=True),
+            ):
+                for name in ("OPENAI_API_KEY", "SENTRY_DSN"):
+                    with pytest.raises(SecretSourceError, match="ARAGORA_SECRETS_DIR"):
+                        manager.get(name, strict=False)
+                with pytest.raises(SecretSourceError, match="ARAGORA_SECRETS_DIR"):
+                    manager.presence("SENTRY_DSN", strict=False)
+                with pytest.raises(SecretSourceError, match="ARAGORA_SECRETS_DIR"):
+                    hydrate_env_from_secrets(overwrite=True)
+        finally:
+            secret_dir.chmod(0o700)
+
+    def test_scan_names_each_rejected_file_without_values(self, tmp_path):
+        self._write_secret(tmp_path, "OPENAI_API_KEY", "mounted-value")
+        self._write_secret(tmp_path, "ANTHROPIC_API_KEY", "unsafe-value", mode=0o444)
+        self._write_secret(tmp_path, "DATABASE_URL", "unsafe-value", mode=0o644)
+
+        with patch.dict(os.environ, {"ARAGORA_SECRETS_DIR": str(tmp_path)}, clear=True):
+            problems = scan_rejected_mounted_secrets()
+
+        assert sorted(problems) == ["ANTHROPIC_API_KEY", "DATABASE_URL"]
+        assert all(name in reason for name, reason in problems.items())
+        assert "unsafe-value" not in str(problems)
+        assert "mounted-value" not in str(problems)
+
+    @pytest.mark.parametrize("configured", [None, "relative/secrets"])
+    def test_scan_is_empty_without_a_usable_directory(self, configured):
+        env = {"ARAGORA_SECRETS_DIR": configured} if configured else {}
+        with patch.dict(os.environ, env, clear=True):
+            assert scan_rejected_mounted_secrets() == {}
 
     def test_unmanaged_filenames_are_ignored(self, tmp_path):
         """Directory loading never treats arbitrary filenames as secrets."""
@@ -1604,3 +1777,35 @@ async def test_rotation_monitor_survives_custody_failure(failing_phase):
         patch("aragora.config.secrets.hydrate_env_from_secrets", side_effect=hydrate_error),
     ):
         await monitor._check_and_reload()
+
+
+class TestSecretCustodyFailureLine:
+    """Entry points turn unusable custody into one value-free line."""
+
+    def test_custody_error_becomes_one_line(self):
+        line = format_secret_custody_failure(
+            SecretSourceError("ARAGORA_SECRETS_DIR must be\nan absolute directory")
+        )
+        assert line == (
+            "aragora: secret custody is unusable: ARAGORA_SECRETS_DIR must be an absolute directory"
+        )
+
+    def test_explicitly_chained_custody_error_is_recognized(self):
+        custody_error = SecretSourceError(
+            "Mounted secret 'ARAGORA_API_TOKEN' must use owner-readable, owner-only permissions"
+        )
+        wrapped = RuntimeError("Invalid ARAGORA_API_TOKEN custody configuration.")
+        wrapped.__cause__ = custody_error
+
+        line = format_secret_custody_failure(wrapped)
+
+        assert line is not None
+        assert "ARAGORA_API_TOKEN" in line
+        assert "owner-only permissions" in line
+        assert "\n" not in line
+
+    def test_unrelated_and_implicitly_chained_errors_are_not_custody_failures(self):
+        assert format_secret_custody_failure(RuntimeError("boom")) is None
+        handled = RuntimeError("unrelated failure while handling")
+        handled.__context__ = SecretSourceError("ARAGORA_SECRETS_DIR must be an absolute directory")
+        assert format_secret_custody_failure(handled) is None

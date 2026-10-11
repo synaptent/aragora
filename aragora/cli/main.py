@@ -180,7 +180,28 @@ def _try_review_queue_fast_path(argv: list[str]) -> int | None:
     return 0
 
 
+def _secret_custody_failure_line(exc: BaseException) -> str | None:
+    # A SecretSourceError can only exist once its module is loaded; checking first
+    # keeps unrelated failures from importing the secrets stack while unwinding.
+    if "aragora.config.secrets" not in sys.modules:
+        return None
+    from aragora.config.secrets import format_secret_custody_failure
+
+    return format_secret_custody_failure(exc)
+
+
 def main() -> int:
+    try:
+        return _run_cli()
+    except Exception as exc:
+        line = _secret_custody_failure_line(exc)
+        if line is None:
+            raise
+        print(line, file=sys.stderr)
+        return 1
+
+
+def _run_cli() -> int:
     fast_result = _try_review_queue_fast_path(sys.argv[1:])
     if fast_result is not None:
         return fast_result

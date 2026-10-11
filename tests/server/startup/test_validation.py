@@ -440,12 +440,62 @@ class TestStrictSecretsCustodyRequirement:
         )
         assert not [m for m in missing if "Strict secrets mode is on" in m]
 
+    @pytest.fixture
+    def fresh_custody_caches(self):
+        """Start from empty settings and secret-manager caches, as a new process does."""
+        from aragora.config.secrets import reset_secret_manager
+        from aragora.config.settings import reset_settings
+
+        reset_settings()
+        reset_secret_manager()
+        yield
+        reset_settings()
+        reset_secret_manager()
+
     @pytest.mark.parametrize("configured", ["relative/secrets", "/nonexistent/aragora-secrets"])
-    def test_unusable_mounted_directory_fails_loud(self, configured):
-        missing = self._missing({"ARAGORA_ENV": "staging", "ARAGORA_SECRETS_DIR": configured})
-        custody = [m for m in missing if "ARAGORA_SECRETS_DIR is not usable" in m]
-        assert len(custody) == 1
-        assert "Strict secrets mode is on" in custody[0]
+    def test_unusable_mounted_directory_fails_loud(self, configured, fresh_custody_caches):
+        from aragora.config.secrets import SecretSourceError
+
+        # Graceful degradation does not cover unusable custody: the settings load
+        # inside the startup checks raises instead of returning a requirement.
+        with pytest.raises(SecretSourceError, match="ARAGORA_SECRETS_DIR"):
+            self._missing({"ARAGORA_ENV": "staging", "ARAGORA_SECRETS_DIR": configured})
+
+    @pytest.mark.parametrize("configured", ["relative/secrets", "/nonexistent/aragora-secrets"])
+    def test_custody_gate_names_unusable_directory(self, configured):
+        from aragora.config.secrets import managed_custody_problem
+
+        with patch.dict(
+            "os.environ",
+            {"ARAGORA_ENV": "staging", "ARAGORA_SECRETS_DIR": configured},
+            clear=True,
+        ):
+            problem = managed_custody_problem()
+        assert problem is not None
+        assert problem.startswith("ARAGORA_SECRETS_DIR is not usable")
+
+    def test_rejected_mounted_file_is_named_at_startup(
+        self, tmp_path, caplog, fresh_custody_caches
+    ):
+        secrets_dir = tmp_path.resolve() / "secrets"
+        secrets_dir.mkdir(mode=0o700)
+        rejected = secrets_dir / "ANTHROPIC_API_KEY"
+        rejected.write_text("unsafe-mounted-value", encoding="utf-8")
+        rejected.chmod(0o644)
+
+        with caplog.at_level("WARNING", logger="aragora.server.startup.validation"):
+            missing = self._missing(
+                {"ARAGORA_ENV": "staging", "ARAGORA_SECRETS_DIR": str(secrets_dir)}
+            )
+
+        assert not [m for m in missing if "Strict secrets mode is on" in m]
+        named = [
+            record.getMessage()
+            for record in caplog.records
+            if "ANTHROPIC_API_KEY" in record.getMessage() and "rejected" in record.getMessage()
+        ]
+        assert named
+        assert "unsafe-mounted-value" not in caplog.text
 
     def test_development_is_not_strict(self):
         missing = self._missing({"ARAGORA_ENV": "development"})

@@ -2,12 +2,16 @@ from __future__ import annotations
 
 import logging
 import os
+import subprocess
+import sys
 
 import pytest
 
+from aragora.config.secrets import SecretSourceError
 from aragora.server.__main__ import (
     LOCAL_DEMO_HANDLER_TIERS,
     _configure_runtime_environment,
+    _run_main,
 )
 
 
@@ -77,3 +81,64 @@ def test_api_key_mode_leaves_demo_defaults_unset(monkeypatch):
     assert "ARAGORA_DEMO_MODE" not in os.environ
     assert "ARAGORA_HANDLER_TIERS" not in os.environ
     assert "ARAGORA_DB_BACKEND" not in os.environ
+
+
+def _custody_lines(stderr: str) -> list[str]:
+    return [line for line in stderr.splitlines() if "secret custody is unusable" in line]
+
+
+def test_unusable_custody_exits_with_one_line(monkeypatch, capsys):
+    def failing_main():
+        try:
+            raise SecretSourceError("ARAGORA_SECRETS_DIR must be an absolute directory")
+        except SecretSourceError as exc:
+            raise RuntimeError("Invalid ARAGORA_API_TOKEN custody configuration.") from exc
+
+    monkeypatch.setattr("aragora.server.__main__.main", failing_main)
+
+    assert _run_main() == 1
+
+    captured = capsys.readouterr()
+    assert _custody_lines(captured.err) == [
+        "aragora: secret custody is unusable: ARAGORA_SECRETS_DIR must be an absolute directory"
+    ]
+    assert "Traceback" not in captured.err
+
+
+def test_unrelated_server_errors_still_propagate(monkeypatch):
+    def failing_main():
+        raise RuntimeError("unrelated failure")
+
+    monkeypatch.setattr("aragora.server.__main__.main", failing_main)
+
+    with pytest.raises(RuntimeError, match="unrelated failure"):
+        _run_main()
+
+
+def test_fresh_process_exits_with_one_line(tmp_path):
+    env = {
+        "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+        "HOME": str(tmp_path),
+        "TMPDIR": str(tmp_path),
+        "PYTHONPATH": os.pathsep.join(entry for entry in sys.path if entry),
+        "ARAGORA_DATA_DIR": str(tmp_path / "data"),
+        "AWS_EC2_METADATA_DISABLED": "true",
+        "ARAGORA_SECRETS_DIR": "relative/secrets",
+        "ARAGORA_SECRETS_STRICT": "false",
+    }
+    # --help keeps the process from binding a port if custody were ever accepted.
+    result = subprocess.run(
+        [sys.executable, "-m", "aragora.server", "--help"],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=180,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert _custody_lines(result.stderr) == [
+        "aragora: secret custody is unusable: ARAGORA_SECRETS_DIR must be an absolute directory"
+    ]
+    assert "Traceback" not in result.stderr

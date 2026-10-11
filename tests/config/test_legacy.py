@@ -325,6 +325,43 @@ class TestGetApiKey:
             with pytest.raises(SecretSourceError):
                 get_api_key("OPENROUTER_API_KEY", required=False)
 
+    @pytest.mark.parametrize("required", [False, True])
+    def test_rejected_mounted_file_propagates_instead_of_using_alias(self, tmp_path, required):
+        from aragora.config.legacy import get_api_key
+        from aragora.config.secrets import SecretManager, SecretSourceError, SecretsConfig
+
+        rejected_path = tmp_path / "GEMINI_API_KEY"
+        rejected_path.write_text("unsafe-mounted-key", encoding="utf-8")
+        rejected_path.chmod(0o644)
+        manager = SecretManager(SecretsConfig(secrets_dir=str(tmp_path)))
+        with (
+            patch("aragora.config.secrets._manager", manager),
+            patch.dict(
+                os.environ,
+                {"ARAGORA_SECRETS_STRICT": "false", "GOOGLE_API_KEY": "alias-env-key"},
+                clear=True,
+            ),
+        ):
+            with pytest.raises(SecretSourceError, match="GEMINI_API_KEY"):
+                get_api_key("GEMINI_API_KEY", "GOOGLE_API_KEY", required=required)
+
+    def test_rejected_mounted_file_does_not_block_other_keys(self, tmp_path):
+        from aragora.config.legacy import get_api_key
+        from aragora.config.secrets import SecretManager, SecretsConfig
+
+        rejected_path = tmp_path / "ANTHROPIC_API_KEY"
+        rejected_path.write_text("unsafe-mounted-key", encoding="utf-8")
+        rejected_path.chmod(0o644)
+        valid_path = tmp_path / "OPENROUTER_API_KEY"
+        valid_path.write_text("mounted-openrouter-key", encoding="utf-8")
+        valid_path.chmod(0o600)
+        manager = SecretManager(SecretsConfig(secrets_dir=str(tmp_path)))
+        with (
+            patch("aragora.config.secrets._manager", manager),
+            patch.dict(os.environ, {"ARAGORA_ENV": "production"}, clear=True),
+        ):
+            assert get_api_key("OPENROUTER_API_KEY") == "mounted-openrouter-key"
+
     def test_required_strict_block_preserves_secret_error_contract(self):
         from aragora.config.legacy import get_api_key
         from aragora.config.secrets import SecretNotFoundError

@@ -11,9 +11,8 @@ import multiprocessing
 import os
 import signal
 import sys
+from collections.abc import Callable
 from pathlib import Path
-
-from aragora.server.unified_server import run_unified_server
 
 # Default to localhost for security; use ARAGORA_BIND_HOST=0.0.0.0 for external access
 DEFAULT_BIND_HOST = os.environ.get("ARAGORA_BIND_HOST", "127.0.0.1")
@@ -108,24 +107,62 @@ def _configure_runtime_environment(offline: bool, api_keys: list[str], logger) -
     logger.info("[server] API keys detected: %s", ", ".join(api_keys))
 
 
+def _exit_on_unusable_secret_custody(entry: Callable[[], object]) -> int:
+    """Run ``entry``; turn unusable secret custody into one stderr line and exit code 1.
+
+    Graceful startup degradation does not cover unusable custody, so this stays
+    fatal, but without a traceback.
+    """
+    try:
+        entry()
+    except Exception as exc:
+        line = None
+        if "aragora.config.secrets" in sys.modules:
+            from aragora.config.secrets import format_secret_custody_failure
+
+            line = format_secret_custody_failure(exc)
+        if line is None:
+            raise
+        print(line, file=sys.stderr)
+        return 1
+    return 0
+
+
 def _run_worker(http_port: int, ws_port: int, host: str, static_dir, nomic_dir):
     """Run a single server worker process."""
-    # Configure logging for this worker process
-    _configure_logging()
 
-    asyncio.run(
-        run_unified_server(
-            http_port=http_port,
-            ws_port=ws_port,
-            http_host=host,
-            ws_host=host,
-            static_dir=static_dir,
-            nomic_dir=nomic_dir,
+    def serve() -> None:
+        from aragora.server.unified_server import run_unified_server
+
+        # Configure logging for this worker process
+        _configure_logging()
+
+        asyncio.run(
+            run_unified_server(
+                http_port=http_port,
+                ws_port=ws_port,
+                http_host=host,
+                ws_host=host,
+                static_dir=static_dir,
+                nomic_dir=nomic_dir,
+            )
         )
-    )
+
+    exit_code = _exit_on_unusable_secret_custody(serve)
+    if exit_code:
+        sys.exit(exit_code)
+
+
+def _run_main() -> int:
+    return _exit_on_unusable_secret_custody(main)
 
 
 def main():
+    # Imported here rather than at module level so that the custody failure this
+    # import can raise (settings hydration at auth import) reaches _run_main. It
+    # stays first so settings still load before the runtime defaults below.
+    from aragora.server.unified_server import run_unified_server
+
     parser = argparse.ArgumentParser(
         description="Aragora Unified Server",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -245,4 +282,4 @@ Production deployment with multiple workers:
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(_run_main())

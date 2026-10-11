@@ -224,7 +224,12 @@ def get_api_key(*env_vars: str, required: bool = True) -> str | None:
     else:
         for var in env_vars:
             presence = get_secret_presence(var)
-            if not is_secret_presence_available(presence):
+            # A rejected mounted file is read so its SecretSourceError surfaces
+            # instead of reading as absent and falling through to another alias.
+            if (
+                not is_secret_presence_available(presence)
+                and presence.source != "mounted_file_rejected"
+            ):
                 continue
             if presence.source == "env" and not required:
                 value = os.getenv(var)
