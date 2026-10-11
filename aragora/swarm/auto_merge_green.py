@@ -54,6 +54,16 @@ _FAILING_CHECK_STATES = frozenset(
     {"FAILURE", "ERROR", "CANCELLED", "TIMED_OUT", "STARTUP_FAILURE", "ACTION_REQUIRED"}
 )
 
+# Rollup counts the optional-only UNSTABLE proof reads; a decision that relies on
+# the proof carries them so the merge record shows what was proven.
+_OPTIONAL_ONLY_PROOF_COUNT_KEYS = (
+    "non_green_count",
+    "non_required_non_green_count",
+    "failing_or_cancelled_count",
+    "pending_count",
+    "unverified_cancelled_non_required_count",
+)
+
 
 @dataclass(frozen=True)
 class PRMergeContext:
@@ -88,6 +98,20 @@ class MergeDecision:
     head_sha: str
     should_merge: bool
     blockers: tuple[str, ...]
+    # Set only when the optional-only UNSTABLE proof let the merge state through:
+    # the packet's proven rollup counts, and the live failing rows (by
+    # ``workflow / name``) whose veto the proof waived.
+    optional_only_unstable_proof: dict[str, int] | None = None
+    waived_failing_checks: tuple[str, ...] = ()
+
+    def waiver_record(self) -> dict[str, Any]:
+        """Merge-record fields naming what the optional-only proof waived, if anything."""
+        if self.optional_only_unstable_proof is None:
+            return {}
+        return {
+            "waived_failing_checks": list(self.waived_failing_checks),
+            "optional_only_unstable_proof": dict(self.optional_only_unstable_proof),
+        }
 
 
 def required_check_surface_proves_optional_only_unstable(check_surfaces: Any) -> bool:
@@ -97,16 +121,24 @@ def required_check_surface_proves_optional_only_unstable(check_surfaces: Any) ->
     required-check query must be available and selected with at least one
     effective required check, no required failures or pending rows, and the
     complete rollup diagnostics must classify every non-green row as
-    non-required. Missing or malformed diagnostics fail closed.
+    non-required. The rollup's non-green counts leave out cancelled non-quorum
+    rows, so the producer's separate count of cancelled non-required rows not
+    covered by a verified cancellation receipt must be zero. The PR must also be
+    known not to modify a receipt-guarded path (a PR editing this gate could
+    otherwise vouch for its own failures). Missing or malformed diagnostics fail
+    closed.
     """
     if not isinstance(check_surfaces, dict):
         return False
     required = check_surfaces.get("required_pr_checks")
     rollup = check_surfaces.get("pr_rollup")
     effective_gate = check_surfaces.get("effective_gate")
+    guard = check_surfaces.get("unstable_receipt_guard")
     if not isinstance(required, dict) or not isinstance(rollup, dict):
         return False
     if not isinstance(effective_gate, dict):
+        return False
+    if not isinstance(guard, dict) or guard.get("modifies_guarded_paths") is not False:
         return False
     if required.get("available") is not True or required.get("gate_selected") is not True:
         return False
@@ -127,24 +159,28 @@ def required_check_surface_proves_optional_only_unstable(check_surfaces: Any) ->
     if rollup.get("available") is not True:
         return False
 
-    count_keys = (
-        "non_green_count",
-        "non_required_non_green_count",
-        "failing_or_cancelled_count",
-        "pending_count",
-    )
-    counts: dict[str, int] = {}
-    for key in count_keys:
-        value = rollup.get(key)
-        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
-            return False
-        counts[key] = value
+    counts = _optional_only_proof_counts(rollup)
+    if counts is None:
+        return False
     non_green = counts["non_green_count"]
     return (
         non_green > 0
         and counts["non_required_non_green_count"] == non_green
         and counts["failing_or_cancelled_count"] + counts["pending_count"] == non_green
+        and counts["unverified_cancelled_non_required_count"] == 0
     )
+
+
+def _optional_only_proof_counts(rollup: Any) -> dict[str, int] | None:
+    if not isinstance(rollup, dict):
+        return None
+    counts: dict[str, int] = {}
+    for key in _OPTIONAL_ONLY_PROOF_COUNT_KEYS:
+        value = rollup.get(key)
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            return None
+        counts[key] = value
+    return counts
 
 
 def _live_failures_match_optional_only_proof(
@@ -156,8 +192,9 @@ def _live_failures_match_optional_only_proof(
     """Whether the live failing rows are exactly the rows the packet proved optional.
 
     The proof comes from the packet's rollup, a separate fetch from the live view,
-    so it cannot vouch for a row it never counted. Its rollup buckets skip
-    cancelled non-quorum rows entirely, so a live ``CANCELLED`` row is never
+    so it cannot vouch for a row it never counted. Its non-green buckets skip
+    cancelled non-quorum rows (the proof separately requires the packet to count
+    no unverified cancelled optional row), so a live ``CANCELLED`` row is never
     covered (verified cancellations have their own receipt path), and the live
     failing count must equal the packet's proven failing count.
 
@@ -270,22 +307,33 @@ def decide_auto_merge(
             blockers.append(f"required check not green: {name}={state or 'absent'}")
 
     failing = sorted(n for n, s in ctx.check_states.items() if s in _FAILING_CHECK_STATES)
-    if failing and not (
-        optional_only_unstable
+    failing_waived = (
+        bool(failing)
+        and optional_only_unstable
         and _live_failures_match_optional_only_proof(
             ctx.check_states, ctx.check_surfaces, failing, ctx.failing_check_identities
         )
-    ):
+    )
+    if failing and not failing_waived:
         shown = ", ".join(failing[:3])
         blockers.append(
             f"failing checks present (incl. non-required): {shown}{', …' if len(failing) > 3 else ''}"
         )
 
+    proof_counts = (
+        _optional_only_proof_counts(ctx.check_surfaces.get("pr_rollup"))
+        if optional_only_unstable
+        else None
+    )
     return MergeDecision(
         number=ctx.number,
         head_sha=ctx.head_sha,
         should_merge=not blockers,
         blockers=tuple(blockers),
+        optional_only_unstable_proof=proof_counts,
+        waived_failing_checks=(
+            tuple(sorted(ctx.failing_check_identities or ())) if failing_waived else ()
+        ),
     )
 
 
@@ -534,6 +582,8 @@ def apply_merges(
     - ``dry_run`` (default) calls ``merge_fn`` for nothing; it reports
       ``would-merge`` and still honours ``max_merges`` so the plan is accurate.
     - A failed merge does NOT consume a ``max_merges`` slot.
+    - ``would-merge``, ``merged`` and ``merge-failed`` records name any failing
+      rows the optional-only UNSTABLE proof waived, with the proof's counts.
     """
     results: list[dict[str, Any]] = []
     merged = 0
@@ -550,12 +600,14 @@ def apply_merges(
             continue
         if dry_run:
             record["action"] = "would-merge"
+            record.update(decision.waiver_record())
             results.append(record)
             merged += 1
             continue
         ok, detail = merge_fn(decision.number, decision.head_sha)
         record["action"] = "merged" if ok else "merge-failed"
         record["detail"] = detail
+        record.update(decision.waiver_record())
         results.append(record)
         if ok:
             merged += 1

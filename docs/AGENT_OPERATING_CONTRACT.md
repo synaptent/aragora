@@ -131,8 +131,11 @@ non-quorum required check pending, failing, or cancelled; AND (4) the PR is merg
 behind base and free of conflicts — with the PR non-draft and GitHub reporting `mergeable` as
 `MERGEABLE` and `mergeStateStatus` as `CLEAN` or `BLOCKED`; `UNSTABLE` is also permitted only
 when merge-packet has an available, selected required-check surface with at least one effective
-required check, every required check green, and complete rollup diagnostics proving every
-non-green context is non-required. Required-check gating comes from `gh pr checks --required` /
+required check, every required check green, complete rollup diagnostics proving every
+non-green context is non-required, no cancelled non-required context that a verified
+cancellation receipt does not cover, and a changed-files read showing the PR modifies no
+receipt-guarded path; a merge that relies on this proof records the waived failing contexts and
+the proof's counts. Required-check gating comes from `gh pr checks --required` /
 merge-packet's required-check surface, not the raw `statusCheckRollup`: non-required rollup
 failures remain advisory, but any failing non-quorum required check makes the head not
 settlement-stable. Do not add a "base unchanged" condition

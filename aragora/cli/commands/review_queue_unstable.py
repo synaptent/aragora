@@ -401,6 +401,38 @@ def attach_verified_cancellation_contexts(
     return list(receipt.get("ignored_contexts") or [])
 
 
+def attach_unstable_receipt_guard(
+    *,
+    pr: dict[str, Any],
+    pr_number: int,
+    repo_override: str | None,
+    check_surfaces: dict[str, Any],
+    non_required_non_green_count: int,
+) -> None:
+    """Record whether an UNSTABLE PR modifies a receipt-guarded path.
+
+    The optional-only UNSTABLE proof fails closed without this surface, so the
+    changed-files lookup only runs when the proof could apply: the PR reports
+    UNSTABLE and has non-required non-green rows to vouch for.
+    """
+    if str(pr.get("mergeStateStatus") or "").strip().upper() != "UNSTABLE":
+        return
+    if non_required_non_green_count <= 0:
+        return
+    backend = _review_queue_backend()
+    repo_slug = rest_fallback._repo_slug_from_pr_payload(pr, repo_override)
+    modifies = (
+        _pr_modifies_guarded_paths(
+            pr_number=pr_number,
+            repo_slug=repo_slug,
+            gh_json=backend._gh_json,
+        )
+        if repo_slug
+        else True
+    )
+    check_surfaces["unstable_receipt_guard"] = {"modifies_guarded_paths": modifies}
+
+
 def _verified_unstable_cancellation_override(packet: Any) -> bool:
     receipt = packet.check_surfaces.get("unstable_non_required_cancellation_receipt")
     if not isinstance(receipt, dict):

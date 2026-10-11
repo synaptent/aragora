@@ -208,3 +208,32 @@ invocations. Merge/apply consumers must build a fresh packet at apply time and
 pass `--match-head-commit <head>` on the merge itself, so GitHub rejects the
 merge if the head moves between packet build and merge. The conductor report
 must include this receipt.
+
+## Optional-Only `UNSTABLE` Proof
+
+Separately from the cancellation receipt, the live gate in
+`aragora/swarm/auto_merge_green.py` accepts `UNSTABLE` when the packet proves
+that every non-green rollup context is non-required (for example an optional
+security scan that failed). It fails closed unless all of these hold in the
+packet's `check_surfaces`:
+
+1. `required_pr_checks` is available, selected, and every effective required
+   check is green with none pending.
+2. `pr_rollup` counts every non-green context as non-required, and its failing
+   plus pending counts add up to the non-green count.
+3. `pr_rollup.unverified_cancelled_non_required_count` is `0`. The non-green
+   counts leave cancelled non-quorum contexts out, so this separate count names
+   the cancelled non-required contexts that the verified cancellation receipt
+   above does not cover; any such context needs a rerun or the receipt.
+4. `unstable_receipt_guard.modifies_guarded_paths` is `false`. The packet reads
+   the PR's changed files (including rename sources) only for `UNSTABLE` PRs
+   with non-required non-green contexts; a PR that edits a receipt-guarded path
+   (item 9 above), or whose file listing cannot be read, never qualifies.
+5. Each live failing context is named in the packet's non-required sample, and
+   the live failing count matches the packet's proven failing count.
+
+When the proof lets a merge through, `auto_merge_quorum_green.py` and
+`scripts/merge_executor.py` add `waived_failing_checks` (the waived contexts as
+`workflow / name`) and `optional_only_unstable_proof` (the packet counts the
+proof relied on) to the merge record, and the merge executor also writes them
+to its receipt.

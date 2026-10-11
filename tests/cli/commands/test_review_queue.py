@@ -1627,6 +1627,305 @@ class TestUnstableCancellationReceipt:
         assert receipt == {}
 
 
+# --- Optional-only UNSTABLE proof inputs (producer counts, guarded paths) ---
+
+
+def _check_row(name: str, workflow: str, conclusion: str) -> dict[str, Any]:
+    return {
+        "__typename": "CheckRun",
+        "name": name,
+        "workflowName": workflow,
+        "status": "COMPLETED",
+        "conclusion": conclusion,
+        "startedAt": "2026-10-08T00:00:00Z",
+        "completedAt": "2026-10-08T00:05:00Z",
+    }
+
+
+class TestOptionalOnlyUnstableProofInputs:
+    REQUIRED = [
+        {"name": "lint", "workflowName": "Lint"},
+        {"name": "typecheck", "workflowName": "Lint"},
+    ]
+    GREEN_REQUIRED = [
+        _check_row("lint", "Lint", "SUCCESS"),
+        _check_row("typecheck", "Lint", "SUCCESS"),
+    ]
+    OPTIONAL_FAILURE = _check_row("docs", "Docs", "FAILURE")
+    UNVERIFIED_CANCELLATION = _check_row("build", "Build Documentation (PR Check)", "CANCELLED")
+
+    @staticmethod
+    def _diagnostics(rows: list[dict[str, Any]], **kwargs: Any) -> dict[str, Any]:
+        from aragora.cli.commands.review_queue import _rollup_non_green_diagnostics
+
+        return _rollup_non_green_diagnostics(rows, **kwargs)
+
+    def test_rollup_counts_unverified_cancelled_non_required_rows(self) -> None:
+        diagnostics = self._diagnostics(
+            [*self.GREEN_REQUIRED, self.OPTIONAL_FAILURE, self.UNVERIFIED_CANCELLATION],
+            required_checks=self.REQUIRED,
+        )
+
+        # Cancelled non-quorum rows still stay out of the non-green buckets ...
+        assert diagnostics["non_green_count"] == 1
+        assert diagnostics["non_required_non_green_sample"] == ["Docs / docs"]
+        # ... and are now counted on their own, so the proof can see them.
+        assert diagnostics["unverified_cancelled_non_required_count"] == 1
+        assert diagnostics["unverified_cancelled_non_required_sample"] == [
+            "Build Documentation (PR Check) / build"
+        ]
+
+    def test_rollup_cancelled_count_skips_required_and_merge_quorum_rows(self) -> None:
+        # A cancelled required row is the required surface's to block, and a
+        # cancelled merge-quorum row already counts as failing.
+        diagnostics = self._diagnostics(
+            [
+                _check_row("lint", "Lint", "CANCELLED"),
+                _check_row("typecheck", "Lint", "SUCCESS"),
+                _check_row("aragora-merge-quorum", "Aragora Merge Quorum", "CANCELLED"),
+            ],
+            required_checks=self.REQUIRED,
+        )
+
+        assert diagnostics["unverified_cancelled_non_required_count"] == 0
+        assert diagnostics["unverified_cancelled_non_required_sample"] == []
+        assert diagnostics["failing_or_cancelled_count"] == 1
+
+    def test_rollup_cancelled_count_excludes_receipt_verified_contexts(self) -> None:
+        rows = [*self.GREEN_REQUIRED, self.UNVERIFIED_CANCELLATION]
+        covered = self._diagnostics(
+            rows,
+            required_checks=self.REQUIRED,
+            verified_cancelled_contexts=[
+                {
+                    "workflow": "Build Documentation (PR Check)",
+                    "name": "build",
+                    "conclusion": "CANCELLED",
+                }
+            ],
+        )
+        other_receipt = self._diagnostics(
+            rows,
+            required_checks=self.REQUIRED,
+            verified_cancelled_contexts=[
+                {"workflow": "Docs Consistency", "name": "Docs Consistency"}
+            ],
+        )
+
+        assert covered["unverified_cancelled_non_required_count"] == 0
+        assert covered["unverified_cancelled_non_required_sample"] == []
+        assert other_receipt["unverified_cancelled_non_required_count"] == 1
+
+    def test_rollup_without_required_surface_omits_the_cancelled_count(self) -> None:
+        diagnostics = self._diagnostics([*self.GREEN_REQUIRED, self.UNVERIFIED_CANCELLATION])
+
+        assert "unverified_cancelled_non_required_count" not in diagnostics
+        assert "unverified_cancelled_non_required_sample" not in diagnostics
+
+    def _live_gate_packet(self, rows: list[dict[str, Any]], *, guard: dict[str, Any] | None) -> Any:
+        from types import SimpleNamespace
+
+        surfaces: dict[str, Any] = {
+            "required_pr_checks": {
+                "available": True,
+                "gate_selected": True,
+                "effective_total": 2,
+                "gate_blocked_reason": "",
+                "failing_or_cancelled": [],
+                "pending": [],
+            },
+            "effective_gate": {"source": "required_pr_checks"},
+            "pr_rollup": {
+                "available": True,
+                **self._diagnostics(rows, required_checks=self.REQUIRED),
+            },
+        }
+        if guard is not None:
+            surfaces["unstable_receipt_guard"] = guard
+        return SimpleNamespace(
+            labels=[],
+            merge_state_status="UNSTABLE",
+            check_surfaces=surfaces,
+            head_sha="a" * 40,
+            unstable_non_required_contexts_ignored=[],
+            model_review_quorum={"admin_squash_allowed": True, "unresolved_dissent": False},
+        )
+
+    @pytest.mark.parametrize(
+        ("extra_rows", "blocked"),
+        [
+            pytest.param([OPTIONAL_FAILURE], False, id="S1-optional-failure-only"),
+            pytest.param(
+                [OPTIONAL_FAILURE, UNVERIFIED_CANCELLATION],
+                True,
+                id="S2-optional-failure-plus-unverified-cancellation",
+            ),
+            pytest.param([UNVERIFIED_CANCELLATION], True, id="S3-unverified-cancellation-only"),
+        ],
+    )
+    def test_live_gate_refuses_optional_only_proof_with_unverified_cancellation(
+        self, extra_rows: list[dict[str, Any]], blocked: bool
+    ) -> None:
+        from aragora.cli.commands.review_queue_unstable import admin_squash_live_gate_blockers
+
+        packet = self._live_gate_packet(
+            [*self.GREEN_REQUIRED, *extra_rows], guard={"modifies_guarded_paths": False}
+        )
+
+        assert bool(admin_squash_live_gate_blockers(packet)) is blocked
+
+    @pytest.mark.parametrize(
+        "guard",
+        [None, {"modifies_guarded_paths": True}, {"modifies_guarded_paths": None}],
+    )
+    def test_live_gate_refuses_optional_only_proof_for_guarded_path_prs(
+        self, guard: dict[str, Any] | None
+    ) -> None:
+        from aragora.cli.commands.review_queue_unstable import admin_squash_live_gate_blockers
+
+        packet = self._live_gate_packet([*self.GREEN_REQUIRED, self.OPTIONAL_FAILURE], guard=guard)
+
+        assert admin_squash_live_gate_blockers(packet) == [
+            "mergeStateStatus=UNSTABLE; admin squash requires CLEAN/BLOCKED or "
+            "authoritative optional-only UNSTABLE proof"
+        ]
+
+    @staticmethod
+    def _gh_json_for_packet(
+        pr_payload: dict[str, Any],
+        files_listing: Any,
+        calls: list[list[str]],
+    ) -> Any:
+        def fake_gh_json(args: list[str]) -> Any:
+            calls.append(list(args))
+            if args[:2] == ["pr", "view"]:
+                return pr_payload
+            if args[:2] == ["pr", "checks"]:
+                return [
+                    {"name": "lint", "state": "SUCCESS", "bucket": "pass", "workflow": "Lint"},
+                    {
+                        "name": "typecheck",
+                        "state": "SUCCESS",
+                        "bucket": "pass",
+                        "workflow": "Lint",
+                    },
+                ]
+            if args[:1] == ["api"] and args[1].endswith("/pulls/9453/files"):
+                if isinstance(files_listing, Exception):
+                    raise files_listing
+                return files_listing
+            raise AssertionError(f"unexpected gh call: {args}")
+
+        return fake_gh_json
+
+    @pytest.mark.parametrize(
+        ("files_listing", "modifies"),
+        [
+            pytest.param(
+                [[{"filename": "aragora/cli/commands/review_queue.py"}]], False, id="unguarded"
+            ),
+            pytest.param(
+                [[{"filename": "aragora/swarm/auto_merge_green.py"}]], True, id="edits-proof"
+            ),
+            pytest.param(
+                [
+                    [
+                        {
+                            "filename": "aragora/cli/commands/new_gate.py",
+                            "previous_filename": "aragora/cli/commands/review_queue_unstable.py",
+                        }
+                    ]
+                ],
+                True,
+                id="renames-guarded-file",
+            ),
+            pytest.param([[]], True, id="empty-listing"),
+            pytest.param(_RQGhError("HTTP 502"), True, id="lookup-failed"),
+        ],
+    )
+    def test_packet_records_whether_an_unstable_pr_modifies_guarded_paths(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        files_listing: Any,
+        modifies: bool,
+    ) -> None:
+        from aragora.cli.commands.review_queue_unstable import admin_squash_live_gate_blockers
+
+        pr_payload = _make_pr(
+            number=9453,
+            files=["aragora/cli/commands/review_queue.py"],
+            checks=[*self.GREEN_REQUIRED, self.OPTIONAL_FAILURE],
+            merge_state_status="UNSTABLE",
+        )
+        calls: list[list[str]] = []
+        monkeypatch.setattr(
+            "aragora.cli.commands.review_queue._gh_json",
+            self._gh_json_for_packet(pr_payload, files_listing, calls),
+        )
+
+        packet = _build_packet("9453", repo_override="synaptent/aragora")
+
+        assert packet.check_surfaces["unstable_receipt_guard"] == {
+            "modifies_guarded_paths": modifies
+        }
+        assert [call for call in calls if call[:1] == ["api"]] == [
+            ["api", "repos/synaptent/aragora/pulls/9453/files", "--paginate", "--slurp"]
+        ]
+        assert bool(admin_squash_live_gate_blockers(packet)) is modifies
+
+    def test_packet_from_the_real_builder_refuses_the_s2_shape(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from aragora.cli.commands.review_queue_unstable import admin_squash_live_gate_blockers
+
+        pr_payload = _make_pr(
+            number=9453,
+            files=["aragora/cli/commands/review_queue.py"],
+            checks=[*self.GREEN_REQUIRED, self.OPTIONAL_FAILURE, self.UNVERIFIED_CANCELLATION],
+            merge_state_status="UNSTABLE",
+        )
+        monkeypatch.setattr(
+            "aragora.cli.commands.review_queue._gh_json",
+            self._gh_json_for_packet(
+                pr_payload, [[{"filename": "aragora/cli/commands/review_queue.py"}]], []
+            ),
+        )
+
+        packet = _build_packet("9453", repo_override="synaptent/aragora")
+        rollup = packet.check_surfaces["pr_rollup"]
+
+        assert rollup["non_green_count"] == rollup["non_required_non_green_count"] == 1
+        assert rollup["unverified_cancelled_non_required_count"] == 1
+        assert packet.check_surfaces["unstable_receipt_guard"] == {"modifies_guarded_paths": False}
+        assert admin_squash_live_gate_blockers(packet) == [
+            "mergeStateStatus=UNSTABLE; admin squash requires CLEAN/BLOCKED or "
+            "authoritative optional-only UNSTABLE proof"
+        ]
+
+    @pytest.mark.parametrize("merge_state_status", ["CLEAN", "BLOCKED"])
+    def test_packet_skips_the_guarded_path_lookup_outside_unstable(
+        self, monkeypatch: pytest.MonkeyPatch, merge_state_status: str
+    ) -> None:
+        pr_payload = _make_pr(
+            number=9453,
+            files=["aragora/swarm/auto_merge_green.py"],
+            checks=[*self.GREEN_REQUIRED, self.OPTIONAL_FAILURE],
+            merge_state_status=merge_state_status,
+        )
+        calls: list[list[str]] = []
+        monkeypatch.setattr(
+            "aragora.cli.commands.review_queue._gh_json",
+            self._gh_json_for_packet(
+                pr_payload, AssertionError("guard lookup must not run"), calls
+            ),
+        )
+
+        packet = _build_packet("9453", repo_override="synaptent/aragora")
+
+        assert "unstable_receipt_guard" not in packet.check_surfaces
+        assert not [call for call in calls if call[:1] == ["api"]]
+
+
 # --- B2: --ignore-own-quorum-check (diagnostic only) -----------------------
 
 
@@ -5016,7 +5315,10 @@ class TestBuildQueueAndPacket:
                             "Security Gate / npm Security Scan",
                             "Security Gate / Security Gate Summary",
                         ],
+                        "unverified_cancelled_non_required_count": 0,
+                        "unverified_cancelled_non_required_sample": [],
                     },
+                    "unstable_receipt_guard": {"modifies_guarded_paths": False},
                 },
                 merge_state_status="UNSTABLE",
                 model_review_quorum={

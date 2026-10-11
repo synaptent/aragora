@@ -21,7 +21,9 @@ import pytest
 from aragora.swarm.auto_merge_green import (
     MAX_AUTO_MERGE_TIER,
     REQUIRED_CHECKS,
+    MergeDecision,
     PRMergeContext,
+    apply_merges,
     context_from_gh,
     decide_auto_merge,
     first_error_line,
@@ -211,8 +213,211 @@ def _optional_only_unstable_surface(**required_overrides) -> dict:
             "non_required_non_green_sample": ["npm Security Scan", "Security Gate Summary"],
             "failing_or_cancelled_count": 2,
             "pending_count": 0,
+            "unverified_cancelled_non_required_count": 0,
+            "unverified_cancelled_non_required_sample": [],
         },
+        "unstable_receipt_guard": {"modifies_guarded_paths": False},
     }
+
+
+@pytest.mark.parametrize("count", ["absent", 1, -1, True, "0", None])
+def test_unstable_proof_requires_zero_unverified_cancelled_optional_rows(count):
+    # Non-quorum cancelled rows never reach the rollup's non-green counts, so the
+    # proof needs the producer's separate count of them and fails closed without it.
+    surface = _optional_only_unstable_surface()
+    if count == "absent":
+        del surface["pr_rollup"]["unverified_cancelled_non_required_count"]
+    else:
+        surface["pr_rollup"]["unverified_cancelled_non_required_count"] = count
+    assert required_check_surface_proves_optional_only_unstable(surface) is False
+
+
+def test_unstable_with_an_unverified_cancelled_optional_row_in_the_packet_is_blocked():
+    # The live view no longer shows the cancelled row (it was rerun green), but
+    # the packet that vouches for the merge counted it unverified.
+    states = _green_checks()
+    states["npm Security Scan"] = "FAILURE"
+    states["Security Gate Summary"] = "FAILURE"
+    surface = _optional_only_unstable_surface()
+    surface["pr_rollup"]["unverified_cancelled_non_required_count"] = 1
+    surface["pr_rollup"]["unverified_cancelled_non_required_sample"] = [
+        "Build Documentation (PR Check) / build"
+    ]
+    decision = decide_auto_merge(
+        _authorized_context(
+            merge_state_status="UNSTABLE",
+            check_states=states,
+            check_surfaces=surface,
+            failing_check_identities=frozenset({"npm Security Scan", "Security Gate Summary"}),
+        )
+    )
+    assert decision.should_merge is False
+    assert any("merge state" in blocker.lower() for blocker in decision.blockers)
+    assert decision.waived_failing_checks == ()
+    assert decision.optional_only_unstable_proof is None
+
+
+@pytest.mark.parametrize(
+    "guard",
+    [
+        "absent",
+        None,
+        {},
+        {"modifies_guarded_paths": True},
+        {"modifies_guarded_paths": None},
+        {"modifies_guarded_paths": 0},
+        {"modifies_guarded_paths": "false"},
+    ],
+)
+def test_unstable_proof_refuses_prs_that_touch_or_cannot_clear_guarded_paths(guard):
+    # A PR that edits the gate (or whose file list could not be read) cannot
+    # present its own failures as optional-only.
+    surface = _optional_only_unstable_surface()
+    if guard == "absent":
+        del surface["unstable_receipt_guard"]
+    else:
+        surface["unstable_receipt_guard"] = guard
+    assert required_check_surface_proves_optional_only_unstable(surface) is False
+    states = _green_checks()
+    states["npm Security Scan"] = "FAILURE"
+    states["Security Gate Summary"] = "FAILURE"
+    decision = decide_auto_merge(
+        _authorized_context(
+            merge_state_status="UNSTABLE",
+            check_states=states,
+            check_surfaces=surface,
+            failing_check_identities=frozenset({"npm Security Scan", "Security Gate Summary"}),
+        )
+    )
+    assert decision.should_merge is False
+    assert any("merge state" in blocker.lower() for blocker in decision.blockers)
+
+
+def test_optional_only_waiver_is_recorded_in_the_decision():
+    states = _green_checks()
+    states["npm Security Scan"] = "FAILURE"
+    states["Security Gate Summary"] = "FAILURE"
+    decision = decide_auto_merge(
+        _authorized_context(
+            merge_state_status="UNSTABLE",
+            check_states=states,
+            check_surfaces=_optional_only_unstable_surface(),
+            failing_check_identities=frozenset({"Security Gate Summary", "npm Security Scan"}),
+        )
+    )
+    assert decision.should_merge is True
+    assert decision.waived_failing_checks == ("Security Gate Summary", "npm Security Scan")
+    assert decision.optional_only_unstable_proof == {
+        "non_green_count": 2,
+        "non_required_non_green_count": 2,
+        "failing_or_cancelled_count": 2,
+        "pending_count": 0,
+        "unverified_cancelled_non_required_count": 0,
+    }
+
+
+def test_optional_only_proof_without_failing_rows_records_counts_and_no_waived_rows():
+    # Optional rows that are only pending make GitHub report UNSTABLE too; the
+    # proof lets the merge state through but there is no failing row to waive.
+    surface = _optional_only_unstable_surface()
+    surface["pr_rollup"].update(failing_or_cancelled_count=0, pending_count=2)
+    decision = decide_auto_merge(
+        _authorized_context(
+            merge_state_status="UNSTABLE",
+            check_surfaces=surface,
+            failing_check_identities=frozenset(),
+        )
+    )
+    assert decision.should_merge is True
+    assert decision.waived_failing_checks == ()
+    assert decision.optional_only_unstable_proof == {
+        "non_green_count": 2,
+        "non_required_non_green_count": 2,
+        "failing_or_cancelled_count": 0,
+        "pending_count": 2,
+        "unverified_cancelled_non_required_count": 0,
+    }
+
+
+def test_decisions_outside_the_optional_only_proof_record_no_waiver():
+    merged = decide_auto_merge(_authorized_context())
+    assert merged.should_merge is True
+    assert merged.waived_failing_checks == ()
+    assert merged.optional_only_unstable_proof is None
+    assert merged.waiver_record() == {}
+
+    states = _green_checks()
+    states["npm Security Scan"] = "FAILURE"
+    blocked = decide_auto_merge(_authorized_context(check_states=states))
+    assert blocked.should_merge is False
+    assert blocked.waived_failing_checks == ()
+    assert blocked.optional_only_unstable_proof is None
+
+
+def _waiver_decision(number: int = 9453) -> MergeDecision:
+    states = _green_checks()
+    states["npm Security Scan"] = "FAILURE"
+    states["Security Gate Summary"] = "FAILURE"
+    decision = decide_auto_merge(
+        _authorized_context(
+            number=number,
+            packet_pr_number=number,
+            merge_state_status="UNSTABLE",
+            check_states=states,
+            check_surfaces=_optional_only_unstable_surface(),
+            failing_check_identities=frozenset({"npm Security Scan", "Security Gate Summary"}),
+        )
+    )
+    assert decision.should_merge is True
+    return decision
+
+
+_EXPECTED_WAIVER_RECORD = {
+    "waived_failing_checks": ["Security Gate Summary", "npm Security Scan"],
+    "optional_only_unstable_proof": {
+        "non_green_count": 2,
+        "non_required_non_green_count": 2,
+        "failing_or_cancelled_count": 2,
+        "pending_count": 0,
+        "unverified_cancelled_non_required_count": 0,
+    },
+}
+
+
+def test_apply_merges_records_waived_rows_for_would_merge_entries():
+    plain = decide_auto_merge(_authorized_context(number=8447))
+    results = apply_merges(
+        [_waiver_decision(), plain],
+        merge_fn=lambda *_args: pytest.fail("dry run must not merge"),
+        dry_run=True,
+    )
+    assert results[0]["action"] == "would-merge"
+    assert {key: results[0][key] for key in _EXPECTED_WAIVER_RECORD} == _EXPECTED_WAIVER_RECORD
+    assert results[1]["action"] == "would-merge"
+    assert "waived_failing_checks" not in results[1]
+    assert "optional_only_unstable_proof" not in results[1]
+
+
+@pytest.mark.parametrize(("merge_ok", "action"), [(True, "merged"), (False, "merge-failed")])
+def test_apply_merges_records_waived_rows_for_merge_attempts(merge_ok, action):
+    calls: list[tuple[int, str]] = []
+
+    def merger(pr: int, head: str) -> tuple[bool, str]:
+        calls.append((pr, head))
+        return merge_ok, "detail"
+
+    results = apply_merges([_waiver_decision()], merge_fn=merger, dry_run=False)
+    assert calls == [(9453, "a" * 40)]
+    assert results[0]["action"] == action
+    assert {key: results[0][key] for key in _EXPECTED_WAIVER_RECORD} == _EXPECTED_WAIVER_RECORD
+
+
+def test_apply_merges_skip_records_carry_no_waiver():
+    blocked = decide_auto_merge(_authorized_context(merge_state_status="UNSTABLE"))
+    results = apply_merges([blocked], merge_fn=lambda *_args: (True, "x"), dry_run=False)
+    assert results[0]["action"] == "skip"
+    assert "waived_failing_checks" not in results[0]
+    assert "optional_only_unstable_proof" not in results[0]
 
 
 def test_unstable_with_authoritative_required_green_surface_is_mergeable():

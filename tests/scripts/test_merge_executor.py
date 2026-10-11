@@ -87,8 +87,23 @@ def _optional_only_unstable_surface() -> dict:
             "non_required_non_green_sample": ["npm Security Scan", "Security Gate Summary"],
             "failing_or_cancelled_count": 2,
             "pending_count": 0,
+            "unverified_cancelled_non_required_count": 0,
+            "unverified_cancelled_non_required_sample": [],
         },
+        "unstable_receipt_guard": {"modifies_guarded_paths": False},
     }
+
+
+_EXPECTED_WAIVER = {
+    "waived_failing_checks": ["Security Gate Summary", "npm Security Scan"],
+    "optional_only_unstable_proof": {
+        "non_green_count": 2,
+        "non_required_non_green_count": 2,
+        "failing_or_cancelled_count": 2,
+        "pending_count": 0,
+        "unverified_cancelled_non_required_count": 0,
+    },
+}
 
 
 def _main_runs_green() -> list[dict]:
@@ -236,6 +251,45 @@ def test_9453_optional_security_failures_reach_would_merge(tmp_path):
 
     assert h.merge_calls == []
     assert _actions(summary)[100] == "would-merge"
+    record = summary["results"][0]
+    assert {key: record[key] for key in _EXPECTED_WAIVER} == _EXPECTED_WAIVER
+
+
+def test_9453_optional_security_failures_merge_with_waived_rows_in_record_and_receipt(tmp_path):
+    rollup = _rollup_all_green()
+    rollup.extend(
+        [
+            {"name": "npm Security Scan", "conclusion": "FAILURE"},
+            {"name": "Security Gate Summary", "conclusion": "FAILURE"},
+        ]
+    )
+    view = _view(mergeStateStatus="UNSTABLE", statusCheckRollup=rollup)
+    packet = _packet(tier=2, check_surfaces=_optional_only_unstable_surface())
+    h = _Harness({100: view}, {100: packet})
+
+    summary = me.run_pass(**_kwargs(h, tmp_path, apply=True))
+
+    assert h.merge_calls == [(100, HEAD)]
+    record = summary["results"][0]
+    assert record["action"] == "merged"
+    assert {key: record[key] for key in _EXPECTED_WAIVER} == _EXPECTED_WAIVER
+    receipts = list((tmp_path / "receipts").glob("*.json"))
+    assert len(receipts) == 1
+    receipt = json.loads(receipts[0].read_text())
+    assert {key: receipt[key] for key in _EXPECTED_WAIVER} == _EXPECTED_WAIVER
+
+
+def test_merges_without_the_optional_only_proof_record_no_waiver(tmp_path):
+    h = _Harness({100: _view()}, {100: _packet(tier=2)})
+
+    summary = me.run_pass(**_kwargs(h, tmp_path, apply=True))
+
+    record = summary["results"][0]
+    assert record["action"] == "merged"
+    receipt = json.loads(next((tmp_path / "receipts").glob("*.json")).read_text())
+    for key in _EXPECTED_WAIVER:
+        assert key not in record
+        assert key not in receipt
 
 
 def test_9453_shape_with_a_cancelled_optional_row_is_skipped(tmp_path):

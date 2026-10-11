@@ -2129,17 +2129,38 @@ def _rollup_non_green_diagnostics(
     checks: list,
     *,
     required_checks: list[dict[str, Any]] | None = None,
+    verified_cancelled_contexts: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     non_green: list[str] = []
     non_required_non_green: list[str] = []
     optional_runner_capacity_noise: list[str] = []
     long_queued_shadow_without_runner_metadata: list[str] = []
+    unverified_cancelled_non_required: list[str] = []
+    verified_cancelled_names = {
+        _status_check_display_name(
+            {"workflowName": context.get("workflow"), "name": context.get("name")}
+        )
+        for context in verified_cancelled_contexts or []
+        if isinstance(context, dict)
+    }
     pending = failing_or_cancelled = 0
     for check in _latest_status_check_rollup(checks):
         if not isinstance(check, dict):
             continue
         bucket = _rollup_non_green_bucket(check)
         if not bucket:
+            # The non-green buckets leave cancelled non-quorum rows out; count
+            # the non-required ones a verified receipt does not cover, so the
+            # optional-only UNSTABLE proof can refuse them.
+            if (
+                required_checks is not None
+                and not _is_current_merge_quorum_self_check(check)
+                and unstable._normalized_rollup_conclusion(check) == "CANCELLED"
+                and not _rollup_check_matches_required(check, required_checks)
+            ):
+                name = _status_check_display_name(check)
+                if name and name not in verified_cancelled_names:
+                    unverified_cancelled_non_required.append(name)
             continue
         name = _status_check_display_name(check)
         if not name:
@@ -2179,6 +2200,12 @@ def _rollup_non_green_diagnostics(
         diagnostics["long_queued_self_hosted_shadow_without_runner_metadata_sample"] = (
             long_queued_shadow_without_runner_metadata[:CHECK_SURFACE_DIAGNOSTIC_LIMIT]
         )
+        diagnostics["unverified_cancelled_non_required_count"] = len(
+            unverified_cancelled_non_required
+        )
+        diagnostics["unverified_cancelled_non_required_sample"] = unverified_cancelled_non_required[
+            :CHECK_SURFACE_DIAGNOSTIC_LIMIT
+        ]
     return diagnostics
 
 
@@ -2683,10 +2710,18 @@ def _build_packet(
         rollup_required_diagnostics = _rollup_non_green_diagnostics(
             pr.get("statusCheckRollup") or [],
             required_checks=required_pr_checks if required_available else None,
+            verified_cancelled_contexts=unstable_cancellation_contexts,
         )
         check_surfaces["pr_rollup"].update(rollup_required_diagnostics)
         non_required_non_green_count = rollup_required_diagnostics.get(
             "non_required_non_green_count", 0
+        )
+        unstable.attach_unstable_receipt_guard(
+            pr=pr,
+            pr_number=number,
+            repo_override=repo_override,
+            check_surfaces=check_surfaces,
+            non_required_non_green_count=non_required_non_green_count,
         )
 
         gate_blocked_reason = ""
