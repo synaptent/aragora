@@ -8,6 +8,7 @@ between classification and merge.
 from __future__ import annotations
 
 import datetime as dt
+import inspect
 import json
 import subprocess
 
@@ -223,56 +224,80 @@ def test_race_a_stale_verdict_cannot_be_paired_with_a_fresh_head() -> None:
 def test_merge_argv_carries_exactly_one_head_pin() -> None:
     rec = _Recorder([_proc(stdout=_view_payload(HEAD_A)), _proc()])
     snap = capture_gate_snapshot(42, "o/r", runner=rec)
-    merge_with_snapshot(snap, admin=True, delete_branch=True, runner=rec)
+    merge_with_snapshot(snap, delete_branch=True, runner=rec)
     argv = rec.calls[-1]
     assert argv.count("--match-head-commit") == 1
     assert argv[-2:] == ["--match-head-commit", HEAD_A]
 
 
 @pytest.mark.parametrize(("squash", "strategy"), [(True, "--squash"), (False, "--merge")])
-@pytest.mark.parametrize("admin", [False, True])
-def test_merge_argv_names_exactly_one_merge_strategy(squash, strategy, admin) -> None:
+def test_merge_argv_names_exactly_one_merge_strategy(squash, strategy) -> None:
     """``gh pr merge`` with no strategy flag prompts, and fails when it cannot prompt.
 
     The runner captures gh's output, so gh can never prompt: every merge must name its strategy.
     """
     rec = _Recorder([_proc(stdout=_view_payload(HEAD_A)), _proc()])
     snap = capture_gate_snapshot(42, "o/r", runner=rec)
-    outcome = merge_with_snapshot(snap, squash=squash, admin=admin, runner=rec)
+    outcome = merge_with_snapshot(snap, squash=squash, runner=rec)
 
     assert outcome.merged is True
     argv = rec.calls[-1]
     assert [flag for flag in ("--merge", "--rebase", "--squash") if flag in argv] == [strategy]
+    assert "--admin" not in argv
     assert argv[-2:] == ["--match-head-commit", HEAD_A]
 
 
-@pytest.mark.parametrize("merge_state", ["BLOCKED", "BEHIND", "DIRTY", "UNSTABLE", "UNKNOWN", None])
-def test_an_admin_merge_never_bypasses_what_the_snapshot_did_not_verify(merge_state) -> None:
-    """``--admin`` skips branch protection, including required reviews this capture never read.
+def test_a_merge_offers_no_admin_bypass() -> None:
+    """``--admin`` overrides protection this capture never verified, such as required reviews.
 
-    Green checks are all the snapshot verifies, so an admin merge may only run when GitHub
-    itself reports nothing left to bypass; anything else is blocked before ``gh pr merge``.
+    The snapshot verifies checks, not protection, and its ``mergeStateStatus`` may be stale by
+    merge time, so no caller can ask for a merge that skips what GitHub enforces.
     """
-    rec = _Recorder([_proc(stdout=_view_payload(HEAD_A, merge_state=merge_state))])
-    snap = capture_gate_snapshot(42, "o/r", runner=rec)
-    outcome = merge_with_snapshot(snap, admin=True, runner=rec)
-
-    assert (outcome.merged, outcome.action) == (False, "blocked")
-    assert "admin" in outcome.detail and str(merge_state) in outcome.detail
-    assert outcome.head_sha == HEAD_A
-    assert len(rec.calls) == 1, f"an admin merge ran at {merge_state}: {rec.calls}"
+    assert "admin" not in inspect.signature(merge_with_snapshot).parameters
+    snap = GateSnapshot(42, "o/r", HEAD_A, True, True, "OPEN", False, "CLEAN", "t")
+    rec = _Recorder([])
+    with pytest.raises(TypeError):
+        merge_with_snapshot(snap, admin=True, runner=rec)  # type: ignore[call-arg]
+    assert rec.calls == []
 
 
-@pytest.mark.parametrize("merge_state", ["CLEAN", "HAS_HOOKS", "clean"])
-def test_an_admin_merge_runs_pinned_when_github_reports_the_pr_mergeable(merge_state) -> None:
+@pytest.mark.parametrize(
+    "merge_state", ["CLEAN", "HAS_HOOKS", "BLOCKED", "BEHIND", "UNSTABLE", "UNKNOWN", None]
+)
+def test_every_merge_runs_pinned_without_admin_whatever_state_was_captured(merge_state) -> None:
+    """GitHub decides protection when the merge runs; a captured state of any age does not."""
     rec = _Recorder([_proc(stdout=_view_payload(HEAD_A, merge_state=merge_state)), _proc()])
-    outcome = merge_with_snapshot(
-        capture_gate_snapshot(42, "o/r", runner=rec), admin=True, runner=rec
-    )
+    outcome = merge_with_snapshot(capture_gate_snapshot(42, "o/r", runner=rec), runner=rec)
 
     assert outcome.merged is True
-    assert "--admin" in rec.calls[-1]
-    assert rec.calls[-1][-2:] == ["--match-head-commit", HEAD_A]
+    argv = rec.calls[-1]
+    assert argv[:2] == ["pr", "merge"]
+    assert "--admin" not in argv
+    assert argv[-2:] == ["--match-head-commit", HEAD_A]
+
+
+def test_a_stale_clean_capture_cannot_bypass_protection_that_now_blocks_the_head() -> None:
+    """Captured CLEAN, then protection blocks the same head (a re-run check fails, say).
+
+    With no ``--admin`` sent, GitHub's refusal comes back as a refusal and is not retried.
+    """
+    blocked = "Pull request o/r#42 is not mergeable: the base branch policy prohibits the merge."
+    rec = _Recorder(
+        [
+            _proc(stdout=_view_payload(HEAD_A, merge_state="CLEAN")),
+            _proc(returncode=1, stderr=blocked),
+        ]
+    )
+    stale = dt.datetime(2026, 10, 1, tzinfo=dt.timezone.utc)
+    outcome = merge_with_snapshot(
+        capture_gate_snapshot(42, "o/r", runner=rec, now=stale), runner=rec
+    )
+
+    assert (outcome.merged, outcome.action) == (False, "refused")
+    assert "base branch policy prohibits the merge" in outcome.detail
+    assert outcome.head_sha == HEAD_A
+    assert "--admin" not in rec.calls[-1]
+    assert len(rec.calls) == 2, f"a retry or re-read happened: {rec.calls}"
 
 
 def test_a_non_open_or_draft_pr_is_not_mergeable() -> None:

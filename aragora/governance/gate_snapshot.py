@@ -45,11 +45,6 @@ from aragora.swarm.merge_halt import evaluate_merge_halt
 _FULL_SHA = re.compile(r"[0-9a-f]{40}")
 _REPO_SLUG = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 
-# mergeStateStatus values under which GitHub reports every protection requirement as met.
-# Any other value (BLOCKED, BEHIND, DIRTY, UNSTABLE, UNKNOWN, absent) means ``--admin`` would
-# override something this snapshot never verified, such as a required review.
-_ADMIN_MERGEABLE_STATES = frozenset({"CLEAN", "HAS_HOOKS"})
-
 # One read. Adding a second call here would reintroduce the split that this type
 # exists to prevent: the head and the verdict must come from the same response.
 _SNAPSHOT_FIELDS = (
@@ -243,7 +238,6 @@ def merge_with_snapshot(
     snapshot: GateSnapshot | None,
     *,
     squash: bool = True,
-    admin: bool = False,
     delete_branch: bool = False,
     runner: CommandRunner | None = None,
     timeout: float = 30.0,
@@ -255,9 +249,9 @@ def merge_with_snapshot(
     always the captured head, so if the PR moved after capture GitHub rejects
     the merge and that rejection is returned rather than retried. While the
     main-red merge halt (#9216) blocks the captured head, nothing is run.
-    ``admin=True`` runs only when the captured ``mergeStateStatus`` says GitHub
-    already considers the PR mergeable, so ``--admin`` never overrides a
-    protection requirement the snapshot did not verify.
+    No merge passes ``--admin``: the snapshot verifies checks, not branch
+    protection, and its ``mergeStateStatus`` can be stale by merge time, so
+    GitHub enforces protection when the pinned merge runs.
     """
     snap = require_snapshot(snapshot)
     if not snap.mergeable_now:
@@ -267,17 +261,6 @@ def merge_with_snapshot(
             detail=(
                 f"snapshot does not authorize a merge (state={snap.state} draft={snap.is_draft} "
                 f"checks_known={snap.checks_known} green={snap.required_checks_green})"
-            ),
-            head_sha=snap.head_sha,
-        )
-    if admin and (snap.merge_state_status or "").upper() not in _ADMIN_MERGEABLE_STATES:
-        return MergeOutcome(
-            merged=False,
-            action="blocked",
-            detail=(
-                f"admin merge refused: captured mergeStateStatus={snap.merge_state_status!r} is "
-                f"not one of {sorted(_ADMIN_MERGEABLE_STATES)}, so --admin would override "
-                "requirements this snapshot did not verify"
             ),
             head_sha=snap.head_sha,
         )
@@ -291,8 +274,6 @@ def merge_with_snapshot(
     # gh refuses a merge that names no strategy when it cannot prompt, and the
     # runner captures its output, so it never can: squash=False is a merge commit.
     args.append("--squash" if squash else "--merge")
-    if admin:
-        args.append("--admin")
     if delete_branch:
         args.append("--delete-branch")
     args.extend(snap.match_head_args())
