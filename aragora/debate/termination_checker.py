@@ -307,15 +307,18 @@ Where confidence indicates how certain you are in your assessment:
 
             if conclusive and result.is_high_confidence:
                 logger.info(
-                    f"judge_termination_confident judge={judge.name} "
-                    f"confidence={confidence:.2f} reason={reason[:100]}"
+                    "judge_termination_confident judge=%s confidence=%.2f reason=%s",
+                    judge.name,
+                    confidence,
+                    reason[:100],
                 )
                 if "on_judge_termination" in self.hooks:
                     self.hooks["on_judge_termination"](judge.name, reason)
             elif conclusive:
                 logger.info(
-                    f"judge_termination_low_confidence judge={judge.name} "
-                    f"confidence={confidence:.2f} (below threshold)"
+                    "judge_termination_low_confidence judge=%s confidence=%.2f (below threshold)",
+                    judge.name,
+                    confidence,
                 )
 
             return result
@@ -479,7 +482,7 @@ Respond with only: CONTINUE or STOP
             # Apply confidence requirement
             if require_high_confidence and not judge_result.is_high_confidence:
                 logger.info(
-                    f"termination_rejected_low_confidence confidence={judge_result.confidence:.2f}"
+                    "termination_rejected_low_confidence confidence=%.2f", judge_result.confidence
                 )
                 return TerminationResult(
                     should_terminate=False,

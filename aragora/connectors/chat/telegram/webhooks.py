@@ -428,7 +428,7 @@ class TelegramWebhooksMixin:
         self,
         command: BotCommand,
         text: str,
-        blocks: list[dict[str, Any] | None] = None,
+        blocks: list[dict[str, Any]] | None = None,
         ephemeral: bool = False,
         **kwargs: Any,
     ) -> SendMessageResponse:
@@ -458,7 +458,7 @@ class TelegramWebhooksMixin:
         self,
         interaction: UserInteraction,
         text: str,
-        blocks: list[dict[str, Any] | None] = None,
+        blocks: list[dict[str, Any]] | None = None,
         replace_original: bool = False,
         **kwargs: Any,
     ) -> SendMessageResponse:

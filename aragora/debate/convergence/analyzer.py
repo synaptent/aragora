@@ -391,7 +391,7 @@ class AdvancedConvergenceAnalyzer:
         self,
         current_responses: dict[str, str],
         previous_responses: dict[str, str] | None = None,
-        response_history: list[dict[str, str] | None] = None,
+        response_history: list[dict[str, str]] | None = None,
         domain: str = "general",
     ) -> AdvancedConvergenceMetrics:
         """

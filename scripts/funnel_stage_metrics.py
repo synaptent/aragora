@@ -308,7 +308,7 @@ def run_snapshot(
         if now - created > stale_cutoff:
             stale_tail += 1
 
-    stages = {
+    stages: dict[str, dict[str, Any]] = {
         "draft": {"count": draft_count, "age_hours": age_stats(draft_ages)},
         "ready": {"count": ready_count, "age_hours": age_stats(ready_ages)},
     }

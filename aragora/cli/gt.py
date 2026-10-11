@@ -344,7 +344,7 @@ def cmd_bead_list(args: argparse.Namespace) -> int:
             if not convoy:
                 print(f"Convoy not found: {args.convoy}")
                 return 1
-            convoy_map = {bead_id: convoy.id for bead_id in convoy.bead_ids}
+            convoy_map = dict.fromkeys(convoy.bead_ids, convoy.id)
             beads = [b for b in beads if b.id in convoy_map]
         else:
             try:
@@ -631,7 +631,7 @@ def cmd_migrate(args: argparse.Namespace) -> int:
     if args.apply:
         cmd.append("--apply")
 
-    result = subprocess.run(cmd, check=False)  # noqa: S603 -- subprocess with fixed args, no shell
+    result = subprocess.run(cmd, check=False)  # subprocess with fixed args, no shell
     return result.returncode
 
 

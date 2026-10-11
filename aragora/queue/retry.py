@@ -65,7 +65,7 @@ class RetryPolicy:
 
         # Add jitter if enabled (±20%)
         if self.jitter:
-            jitter_factor = random.uniform(0.8, 1.2)  # noqa: S311 -- retry jitter
+            jitter_factor = random.uniform(0.8, 1.2)
             delay *= jitter_factor
 
         return delay

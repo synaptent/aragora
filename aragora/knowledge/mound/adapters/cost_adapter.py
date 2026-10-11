@@ -23,7 +23,7 @@ as cost data may be sensitive.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 from collections.abc import Callable
@@ -67,7 +67,7 @@ class CostAnomaly:
     actual_value: float
     variance_ratio: float  # actual/expected
     detected_at: datetime
-    metadata: dict[str, Any] = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.metadata is None:

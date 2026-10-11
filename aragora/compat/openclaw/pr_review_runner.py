@@ -463,7 +463,7 @@ class PRReviewRunner:
 
         # Parse PR URL
         repo, pr_number, error = _parse_pr_url(pr_url)
-        if error:
+        if error or repo is None or pr_number is None:
             return ReviewResult(
                 pr_url=pr_url,
                 pr_number=None,
@@ -474,7 +474,7 @@ class PRReviewRunner:
                 comment_posted=False,
                 comment_url=None,
                 receipt=None,
-                error=error,
+                error=error or f"Invalid PR URL format: {pr_url}",
             )
 
         # Step 1: Fetch diff (policy-checked)
@@ -482,7 +482,7 @@ class PRReviewRunner:
             return self._error_result(pr_url, pr_number, repo, "Policy denied: pr diff")
 
         diff, error = self._fetch_diff(repo, pr_number)
-        if error:
+        if error or diff is None:
             return self._error_result(pr_url, pr_number, repo, f"Fetch failed: {error}")
 
         # Step 2: Check diff size
@@ -494,7 +494,7 @@ class PRReviewRunner:
 
         # Step 3: Run review
         findings_data, error = await self._run_review(diff)
-        if error:
+        if error or findings_data is None:
             return self._error_result(pr_url, pr_number, repo, f"Review failed: {error}")
 
         # Step 4: Parse findings
@@ -609,7 +609,7 @@ class PRReviewRunner:
 
         # Run review
         findings_data, error = await self._run_review(diff)
-        if error:
+        if error or findings_data is None:
             return self._error_result(label, None, None, f"Review failed: {error}")
 
         # Parse findings
@@ -690,8 +690,8 @@ class PRReviewRunner:
     def _fetch_diff(self, repo: str, pr_number: int) -> tuple[str | None, str | None]:
         """Fetch PR diff via gh CLI."""
         try:
-            result = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
-                ["gh", "pr", "diff", str(pr_number), "--repo", repo],  # noqa: S607 -- fixed command
+            result = subprocess.run(  # subprocess with fixed args, no shell
+                ["gh", "pr", "diff", str(pr_number), "--repo", repo],  # fixed command
                 capture_output=True,
                 text=True,
                 timeout=self.policy.max_execution_seconds,
@@ -759,7 +759,7 @@ class PRReviewRunner:
             cmd.append("--gauntlet")
 
         try:
-            result = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
+            result = subprocess.run(  # subprocess with fixed args, no shell
                 cmd,
                 input=diff,
                 capture_output=True,
@@ -804,8 +804,8 @@ class PRReviewRunner:
         body = _format_comment(findings, agreement_score)
 
         try:
-            result = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
-                [  # noqa: S607 -- fixed command
+            result = subprocess.run(  # subprocess with fixed args, no shell
+                [  # fixed command
                     "gh",
                     "pr",
                     "comment",
@@ -834,8 +834,8 @@ class PRReviewRunner:
     ) -> tuple[list[int] | None, str | None]:
         """List open PR numbers for a repo."""
         try:
-            result = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
-                [  # noqa: S607 -- fixed command
+            result = subprocess.run(  # subprocess with fixed args, no shell
+                [  # fixed command
                     "gh",
                     "pr",
                     "list",
@@ -870,8 +870,8 @@ class PRReviewRunner:
     ) -> tuple[PRMetadata | None, str | None]:
         """Fetch public PR metadata via gh CLI."""
         try:
-            result = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
-                [  # noqa: S607 -- fixed command
+            result = subprocess.run(  # subprocess with fixed args, no shell
+                [  # fixed command
                     "gh",
                     "pr",
                     "view",

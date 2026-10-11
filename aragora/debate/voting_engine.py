@@ -522,8 +522,10 @@ class VotingEngine:
             result.user_votes_count += 1
 
             logger.debug(
-                f"user_vote user={user_vote.get('user_id', 'anon')} "
-                f"choice={choice} weight={weight:.2f}"
+                "user_vote user=%s choice=%s weight=%.2f",
+                user_vote.get("user_id", "anon"),
+                choice,
+                weight,
             )
 
         # Store results
@@ -625,8 +627,11 @@ class VotingEngine:
                 result.consensus_reached = False
                 result.consensus_strength = ConsensusStrength.NONE
                 logger.info(
-                    f"consensus_not_unanimous best={winner} "
-                    f"ratio={unanimity_ratio:.0%} votes={count}/{total_voters}"
+                    "consensus_not_unanimous best=%s ratio=%.0f%% votes=%s/%s",
+                    winner,
+                    unanimity_ratio * 100,
+                    count,
+                    total_voters,
                 )
 
         return result

@@ -106,7 +106,7 @@ def find_circular_dependencies(analysis: dict) -> list[tuple]:
     return list(set(circular))[:10]
 
 
-def find_largest_modules(analysis: dict) -> list[dict]:
+def find_largest_modules(analysis: dict) -> dict[str, list[tuple[str, int]]]:
     """Find the largest modules by various metrics."""
     modules = analysis["modules"]
 
@@ -124,7 +124,7 @@ def find_largest_modules(analysis: dict) -> list[dict]:
 def analyze_code_patterns(analysis: dict) -> dict[str, int]:
     """Analyze common code patterns used in the codebase."""
     aragora_dir = PROJECT_ROOT / "aragora"
-    patterns = defaultdict(int)
+    patterns: defaultdict[str, int] = defaultdict(int)
 
     for py_file in aragora_dir.rglob("*.py"):
         if "__pycache__" in str(py_file):

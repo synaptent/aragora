@@ -707,9 +707,12 @@ class TournamentManager:
                     confidence_weight=elo_k_multiplier,
                 )
                 logger.info(
-                    f"Updated ELO for tournament match {match_id}: "
-                    f"{agent1}={elo_changes.get(agent1, 0):+.1f}, "
-                    f"{agent2}={elo_changes.get(agent2, 0):+.1f}"
+                    "Updated ELO for tournament match %s: %s=%+.1f, %s=%+.1f",
+                    match_id,
+                    agent1,
+                    elo_changes.get(agent1, 0),
+                    agent2,
+                    elo_changes.get(agent2, 0),
                 )
             except (ValueError, TypeError, KeyError, RuntimeError, OSError) as e:
                 logger.warning("Failed to update ELO for match %s: %s", match_id, e)

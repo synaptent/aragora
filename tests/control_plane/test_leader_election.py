@@ -231,7 +231,7 @@ def _reset_leader_singleton(mock_redis):
     Also clears mock redis state to prevent stale lock data from leaking
     between tests, which can cause flaky leader election outcomes.
     """
-    import aragora.control_plane.leader as _leader_mod
+    import aragora.resilience.leader as _leader_mod
 
     original = _leader_mod._regional_leader_election
     _leader_mod._regional_leader_election = None

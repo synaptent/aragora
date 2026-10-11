@@ -755,7 +755,7 @@ class EvidenceStore(SQLiteStore):
                         SELECT 1 FROM debate_evidence de WHERE de.evidence_id = e.id
                     )
                     LIMIT ?
-                """  # noqa: S608 -- internal query construction
+                """  # internal query construction
                 cursor.execute(find_expired_query, (reliability_threshold, batch_size))
             else:
                 find_expired_query = f"""
@@ -765,7 +765,7 @@ class EvidenceStore(SQLiteStore):
                         SELECT 1 FROM debate_evidence de WHERE de.evidence_id = e.id
                     )
                     LIMIT ?
-                """  # noqa: S608 -- internal query construction
+                """  # internal query construction
                 cursor.execute(find_expired_query, (batch_size,))
 
             expired_ids = [row[0] for row in cursor.fetchall()]
@@ -781,13 +781,14 @@ class EvidenceStore(SQLiteStore):
             # Delete from FTS index first
             placeholders = ",".join("?" * len(expired_ids))
             cursor.execute(
-                f"DELETE FROM evidence_fts WHERE evidence_id IN ({placeholders})",  # noqa: S608 -- parameterized query
+                # parameterized query
+                f"DELETE FROM evidence_fts WHERE evidence_id IN ({placeholders})",
                 expired_ids,
             )
 
             # Delete the evidence records
             cursor.execute(
-                f"DELETE FROM evidence WHERE id IN ({placeholders})",  # noqa: S608 -- parameterized query
+                f"DELETE FROM evidence WHERE id IN ({placeholders})",  # parameterized query
                 expired_ids,
             )
             deleted_count = cursor.rowcount
@@ -799,7 +800,7 @@ class EvidenceStore(SQLiteStore):
                     SELECT COUNT(*) FROM evidence
                     WHERE created_at < {cutoff_query}
                     AND reliability_score >= ?
-                """,  # noqa: S608 -- internal query construction
+                """,  # internal query construction
                     (reliability_threshold,),
                 )
                 preserved_count = cursor.fetchone()[0]
@@ -811,16 +812,20 @@ class EvidenceStore(SQLiteStore):
                 SELECT COUNT(DISTINCT e.id) FROM evidence e
                 INNER JOIN debate_evidence de ON de.evidence_id = e.id
                 WHERE e.created_at < {cutoff_query}
-            """)  # noqa: S608 -- internal query construction
+            """)  # internal query construction
             linked_count = cursor.fetchone()[0]
 
             conn.commit()
 
             duration_ms = (time.time() - start_time) * 1000
             logger.info(
-                f"Evidence cleanup: deleted={deleted_count}, "
-                f"preserved_high_reliability={preserved_count}, "
-                f"preserved_linked={linked_count}, duration={duration_ms:.1f}ms"
+                "Evidence cleanup: deleted=%s, "
+                "preserved_high_reliability=%s, "
+                "preserved_linked=%s, duration=%.1fms",
+                deleted_count,
+                preserved_count,
+                linked_count,
+                duration_ms,
             )
 
             return {

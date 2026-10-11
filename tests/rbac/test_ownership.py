@@ -634,6 +634,26 @@ class TestImplicitOwnerPermissions:
 
         assert decision is None
 
+    def test_connector_owner_gets_implicit_configure(
+        self, manager, owner_context, non_owner_context
+    ):
+        """Only the connector's owner gets connectors.configure on it."""
+        manager.set_owner(ResourceType.CONNECTOR, "conn-1", "owner-user", "org-1")
+
+        decision = manager.check_owner_permission(
+            owner_context, ResourceType.CONNECTOR, "connectors.configure", "conn-1"
+        )
+        assert decision is not None
+        assert decision.allowed is True
+        assert decision.permission_key == "connectors.configure"
+
+        assert (
+            manager.check_owner_permission(
+                non_owner_context, ResourceType.CONNECTOR, "connectors.configure", "conn-1"
+            )
+            is None
+        )
+
     def test_owner_denied_non_implicit_permission(self, manager, owner_context):
         """Test owner doesn't get permissions not in implicit list."""
         manager.set_owner(ResourceType.DEBATE, "debate-1", "owner-user", "org-1")
@@ -1008,13 +1028,16 @@ class TestDefaultOwnerPermissions:
         assert "evidence.delete" in perms
 
     def test_connector_permissions(self):
-        """Test connector owner permissions are defined."""
+        """Test connector owner permissions are exactly the defined set."""
         perms = DEFAULT_OWNER_PERMISSIONS[ResourceType.CONNECTOR]
 
-        assert "connectors.read" in perms
-        assert "connectors.update" in perms
-        assert "connectors.delete" in perms
-        assert "connectors.test" in perms
+        assert set(perms) == {
+            "connectors.read",
+            "connectors.update",
+            "connectors.delete",
+            "connectors.test",
+            "connectors.configure",
+        }
 
     def test_webhook_permissions(self):
         """Test webhook owner permissions are defined."""

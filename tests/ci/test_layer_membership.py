@@ -181,12 +181,25 @@ _TRANCHES: dict[str, dict[str, tuple[str, ...]]] = {
             "stores",
         ),
     },
+    "T4b": {
+        "application": (
+            "computer_use",
+            "coordination",
+            "export",
+            "markets",
+            "plugins",
+            "prompt_engine",
+            "receipts",
+            "workspace",
+        ),
+    },
 }
 
 _SEAMS = {
     "aragora.exceptions -> aragora.connectors.exceptions",
     "aragora.exceptions -> aragora.server.handlers.exceptions",
     "aragora.utils.redis_cache -> aragora.caching.redis",
+    "aragora.exceptions -> aragora.control_plane.exceptions",
 }
 
 

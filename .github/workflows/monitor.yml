@@ -48,6 +48,7 @@ jobs:
           fi
 
       - name: Check Frontend Critical Routes
+        id: frontend
         run: |
           FRONTEND_URL="${LIVE_FRONTEND_BASE_URL:-https://aragora.ai}"
           # Retry once on transient failure
@@ -65,48 +66,67 @@ jobs:
           exit 1
 
       - name: Check Production API (Lightsail)
+        id: production_api
         run: |
           # Use /api/health (public, load-balancer friendly)
-          response=$(curl -sf -o /dev/null -w "%{http_code}" "https://api.aragora.ai/api/health" || echo "000")
-          if [ "$response" != "200" ]; then
-            echo "::error::Production API returned $response"
+          CURL_EXIT=0
+          response=$(curl -sf -o /dev/null -w "%{http_code}" "https://api.aragora.ai/api/health") || CURL_EXIT=$?
+          response=${response:-000}
+          echo "Production API: http_status=$response curl_exit=$CURL_EXIT"
+          if [ "$CURL_EXIT" -ne 0 ] || [ "$response" != "200" ]; then
+            echo "::error::Production API failed (http_status=$response curl_exit=$CURL_EXIT)"
             exit 1
           fi
           echo "Production API: OK ($response)"
 
       - name: Check Staging API (EC2)
+        id: staging_api
         # Non-blocking: Staging environment may be down during maintenance without affecting production
         continue-on-error: true
         run: |
           # Use /api/health (public, load-balancer friendly)
-          response=$(curl -sf -o /dev/null -w "%{http_code}" "http://${{ secrets.EC2_HOST }}:8080/api/health" --connect-timeout 10 || echo "000")
-          if [ "$response" != "200" ]; then
-            echo "::warning::Staging API returned $response (non-critical)"
-          else
-            echo "Staging API: OK ($response)"
+          CURL_EXIT=0
+          response=$(curl -sf -o /dev/null -w "%{http_code}" "http://${{ secrets.EC2_HOST }}:8080/api/health" --connect-timeout 10) || CURL_EXIT=$?
+          response=${response:-000}
+          echo "Staging API: http_status=$response curl_exit=$CURL_EXIT"
+          if [ "$CURL_EXIT" -ne 0 ] || [ "$response" != "200" ]; then
+            echo "::warning::Staging API failed (http_status=$response curl_exit=$CURL_EXIT; non-critical)"
+            exit 1
           fi
+          echo "Staging API: OK ($response)"
 
       - name: Check WebSocket Endpoint
+        id: websocket
         run: |
           # Basic connectivity check for WebSocket upgrade
-          response=$(curl -sf -o /dev/null -w "%{http_code}" -H "Upgrade: websocket" -H "Connection: Upgrade" "https://api.aragora.ai/ws" || echo "000")
-          # WebSocket endpoints typically return 101 or 400 for non-upgrade requests
-          if [ "$response" = "000" ]; then
-            echo "::error::WebSocket endpoint unreachable"
+          # Any HTTP response (including 400) proves reachability, so omit curl -f.
+          CURL_EXIT=0
+          response=$(curl -s -o /dev/null -w "%{http_code}" -H "Upgrade: websocket" -H "Connection: Upgrade" "https://api.aragora.ai/ws") || CURL_EXIT=$?
+          response=${response:-000}
+          echo "WebSocket endpoint: http_status=$response curl_exit=$CURL_EXIT"
+          if [ "$CURL_EXIT" -ne 0 ] || ! [[ "$response" =~ ^[1-5][0-9][0-9]$ ]]; then
+            echo "::error::WebSocket endpoint unreachable (http_status=$response curl_exit=$CURL_EXIT)"
             exit 1
           fi
           echo "WebSocket endpoint reachable ($response)"
 
       - name: Summary
         if: always()
+        env:
+          FRONTEND_OUTCOME: ${{ steps.frontend.outcome }}
+          PRODUCTION_API_OUTCOME: ${{ steps.production_api.outcome }}
+          WEBSOCKET_OUTCOME: ${{ steps.websocket.outcome }}
+          STAGING_API_OUTCOME: ${{ steps.staging_api.outcome }}
         run: |
           echo "## Health Check Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Service | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Frontend (Vercel/custom domain) | ${{ job.status == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Production API | ${{ job.status == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Timestamp | $(date -u) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Service | Status | Policy |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|--------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend (Vercel/custom domain) | ${FRONTEND_OUTCOME:-skipped} | blocking |" >> $GITHUB_STEP_SUMMARY
+          echo "| Production API | ${PRODUCTION_API_OUTCOME:-skipped} | blocking |" >> $GITHUB_STEP_SUMMARY
+          echo "| WebSocket endpoint | ${WEBSOCKET_OUTCOME:-skipped} | blocking |" >> $GITHUB_STEP_SUMMARY
+          echo "| Staging API | ${STAGING_API_OUTCOME:-skipped} | advisory (non-blocking) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Timestamp | $(date -u) | |" >> $GITHUB_STEP_SUMMARY
 
   notify-on-failure:
     needs: health-check

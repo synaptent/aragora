@@ -271,7 +271,7 @@ class YouTubeFetcher:
             raise RuntimeError(f"Download completed but audio file not found: {cache_path}")
 
         logger.info(
-            f"Downloaded audio: {cache_path} ({cache_path.stat().st_size / 1024 / 1024:.1f}MB)"
+            "Downloaded audio: %s (%.1fMB)", cache_path, cache_path.stat().st_size / 1024 / 1024
         )
         return cache_path
 

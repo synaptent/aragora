@@ -635,7 +635,8 @@ class KeyRotationScheduler:
                     if updates:
                         params.append(user_id)
                         cursor.execute(
-                            f"UPDATE gmail_tokens SET {', '.join(updates)} WHERE user_id = ?",  # noqa: S608 -- dynamic clause from internal state
+                            # dynamic clause from internal state
+                            f"UPDATE gmail_tokens SET {', '.join(updates)} WHERE user_id = ?",
                             params,
                         )
                         count += 1
@@ -706,7 +707,9 @@ class KeyRotationScheduler:
 
         logger.log(
             logging.CRITICAL if severity == "critical" else logging.WARNING,
-            f"[KEY ROTATION] {severity.upper()}: {message}",
+            "[KEY ROTATION] %s: %s",
+            severity.upper(),
+            message,
         )
 
         # Audit log the alert

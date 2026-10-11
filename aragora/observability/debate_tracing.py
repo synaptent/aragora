@@ -333,7 +333,7 @@ class Tracer:
             # Fallback to plain logging
             level = logging.DEBUG if span.status == "OK" else logging.WARNING
             attrs = " ".join(f"{k}={v}" for k, v in fields.items())
-            logger.log(level, f"span_complete {attrs}")
+            logger.log(level, "span_complete %s", attrs)
 
 
 # Global tracer instance

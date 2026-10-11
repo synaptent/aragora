@@ -102,7 +102,7 @@ def markdown_files(root: Path) -> list[Path]:
             files.append(path)
         return files
 
-    files: list[Path] = []
+    files = []
     for top in ("README.md", "CLAUDE.md", "AGENTS.md"):
         candidate = root / top
         if candidate.exists():
@@ -432,7 +432,9 @@ def check_gh_hygiene(root: Path) -> CheckResult:
                 by_code.setdefault(code, []).append(issue)
         for doc in DESIGN_DOC_RE.findall(body):
             by_doc.setdefault(doc, []).append(issue)
-        labels = {str(label.get("name", "")) for label in issue.get("labels") or [] if isinstance(label, dict)}
+        raw_labels = issue.get("labels")
+        label_rows = raw_labels if isinstance(raw_labels, list) else []
+        labels = {str(label.get("name", "")) for label in label_rows if isinstance(label, dict)}
         if "boss-ready" in labels:
             for code in sorted(expand_codes(f"{title}\n{body}").intersection(delayed)):
                 findings.append(Finding(f"#{number}", f"boss-ready issue mentions delayed-track {code}"))

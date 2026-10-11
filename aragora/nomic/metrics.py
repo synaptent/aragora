@@ -150,7 +150,7 @@ def track_phase_transition(
     # Update last transition timestamp
     NOMIC_PHASE_LAST_TRANSITION.set(time.time(), cycle_id=cycle_id)
 
-    logger.debug(f"Nomic metric: {from_phase} -> {to_phase} ({duration_seconds:.1f}s)")
+    logger.debug("Nomic metric: %s -> %s (%.1fs)", from_phase, to_phase, duration_seconds)
 
 
 def track_cycle_start(cycle_id: str = "unknown") -> None:

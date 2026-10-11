@@ -340,7 +340,7 @@ for entry in rankings:
 
 ### Replays
 
-View and export debate replays.
+List, view, and delete debate replays.
 
 ```python
 # List replays

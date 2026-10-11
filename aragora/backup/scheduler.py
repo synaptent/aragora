@@ -563,7 +563,7 @@ class BackupScheduler:
                 if next_time:
                     wait_seconds = (next_time - datetime.now(timezone.utc)).total_seconds()
                     if wait_seconds > 0:
-                        logger.info(f"Next daily backup at {next_time} ({wait_seconds:.0f}s)")
+                        logger.info("Next daily backup at %s (%.0fs)", next_time, wait_seconds)
                         await asyncio.sleep(wait_seconds)
 
                     if self._status == SchedulerStatus.RUNNING:

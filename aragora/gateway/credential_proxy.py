@@ -501,9 +501,13 @@ class CredentialProxy:
         level = logging.INFO if usage.success else logging.WARNING
         logger.log(
             level,
-            f"Credential usage: {usage.credential_id} for {usage.external_service}.{usage.operation} "
-            f"by {usage.user_id} (tenant: {usage.tenant_id}) -> "
-            f"{'success' if usage.success else 'failed: ' + usage.error_message}",
+            "Credential usage: %s for %s.%s by %s (tenant: %s) -> %s",
+            usage.credential_id,
+            usage.external_service,
+            usage.operation,
+            usage.user_id,
+            usage.tenant_id,
+            "success" if usage.success else "failed: " + usage.error_message,
         )
 
         # Call registered callbacks

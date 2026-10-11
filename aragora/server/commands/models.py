@@ -72,17 +72,17 @@ class CommandResult:
 
     success: bool
     message: str
-    blocks: list[dict[str, Any] | None] = None  # Platform-specific blocks
+    blocks: list[dict[str, Any]] | None = None  # Platform-specific blocks
     ephemeral: bool = False  # Only visible to user
     thread_reply: bool = False  # Reply in thread
-    attachments: list[dict[str, Any] | None] = None
+    attachments: list[dict[str, Any]] | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def ok(
         cls,
         message: str,
-        blocks: list[dict[str, Any] | None] = None,
+        blocks: list[dict[str, Any]] | None = None,
         ephemeral: bool = False,
         **kwargs: Any,
     ) -> CommandResult:

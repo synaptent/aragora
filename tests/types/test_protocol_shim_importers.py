@@ -25,13 +25,7 @@ SHIM_FILES = frozenset({"aragora/types/protocols.py", "aragora/type_protocols.py
 
 PENDING_TYPES_PROTOCOLS_IMPORTERS = frozenset({"aragora/server/stream/debate_executor.py"})
 
-P6_OWNED_TYPE_PROTOCOLS_IMPORTERS = frozenset(
-    {
-        "aragora/debate/phases/consensus_storage.py",
-        "aragora/storage/redis_cluster.py",
-        "aragora/storage/redis_utils.py",
-    }
-)
+PENDING_TYPE_PROTOCOLS_IMPORTERS: frozenset[str] = frozenset()
 
 # The shim's ``EventEmitterProtocol`` aliases the legacy contract, not the
 # same-named domain protocol exported by ``aragora.protocols``.
@@ -101,8 +95,8 @@ def test_types_protocols_shim_importers_are_allowlisted() -> None:
     assert _shim_importers(TYPES_PROTOCOLS_SHIM) <= PENDING_TYPES_PROTOCOLS_IMPORTERS
 
 
-def test_type_protocols_shim_importers_are_p6_owned() -> None:
-    assert _shim_importers(TYPE_PROTOCOLS_SHIM) <= P6_OWNED_TYPE_PROTOCOLS_IMPORTERS
+def test_type_protocols_shim_importers_are_allowlisted() -> None:
+    assert _shim_importers(TYPE_PROTOCOLS_SHIM) <= PENDING_TYPE_PROTOCOLS_IMPORTERS
 
 
 @pytest.mark.parametrize("rel_path", MIGRATED_LEGACY_EMITTER_MODULES)

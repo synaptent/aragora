@@ -430,7 +430,7 @@ class ArenaKnowledgeManager:
             # Apply early consensus threshold for aggressive cultures
             if "early_consensus_threshold" in hints:
                 threshold = hints["early_consensus_threshold"]
-                logger.info(f"[arena] Culture suggests early consensus at {threshold:.0%}")
+                logger.info("[arena] Culture suggests early consensus at %.0f%%", threshold * 100)
                 self._culture_early_consensus = threshold
 
             # Store domain-specific patterns

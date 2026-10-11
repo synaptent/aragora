@@ -67,7 +67,7 @@ def timer():
     yield elapsed
 
 
-def profile_function(func, iterations: int = 100, name: str = None) -> ProfileResult:
+def profile_function(func, iterations: int = 100, name: str | None = None) -> ProfileResult:
     """Profile a function over multiple iterations."""
     times = []
 

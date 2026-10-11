@@ -378,8 +378,10 @@ class PluginRevenueTracker:
             conn.commit()
 
         logger.info(
-            f"Revenue recorded: {plugin_name} ${event.gross_amount_cents / 100:.2f} "
-            f"(developer: ${event.developer_amount_cents / 100:.2f})"
+            "Revenue recorded: %s $%.2f (developer: $%.2f)",
+            plugin_name,
+            event.gross_amount_cents / 100,
+            event.developer_amount_cents / 100,
         )
         return event
 
@@ -499,8 +501,9 @@ class PluginRevenueTracker:
 
         if not balance["payout_eligible"]:
             logger.info(
-                f"Developer {developer_id} not eligible for payout "
-                f"(balance: ${balance['available_balance_cents'] / 100:.2f})"
+                "Developer %s not eligible for payout (balance: $%.2f)",
+                developer_id,
+                balance["available_balance_cents"] / 100,
             )
             return None
 
@@ -533,7 +536,7 @@ class PluginRevenueTracker:
             conn.commit()
 
         logger.info(
-            f"Payout created for developer {developer_id}: ${payout.amount_cents / 100:.2f}"
+            "Payout created for developer %s: $%.2f", developer_id, payout.amount_cents / 100
         )
         return payout
 

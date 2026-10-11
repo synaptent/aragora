@@ -64,6 +64,11 @@ class ContextDelegator:
         self._auth_context = auth_context
         self._extract_domain = extract_domain_fn or (lambda: "general")
 
+    def _require_gatherer(self) -> ContextGatherer:
+        if self.context_gatherer is None:
+            raise RuntimeError("ContextDelegator has no context_gatherer configured")
+        return self.context_gatherer
+
     def _resolve_tenant_id(self) -> str | None:
         if not self._auth_context:
             return None
@@ -95,7 +100,8 @@ class ContextDelegator:
             )
         except (ImportError, AttributeError):
             context_envelope = {}
-        context, retrieved_ids, retrieved_tiers = self.context_gatherer.get_continuum_context(
+        gatherer = self._require_gatherer()
+        context, retrieved_ids, retrieved_tiers = gatherer.get_continuum_context(
             continuum_memory=self.continuum_memory,
             domain=domain,
             task=task,
@@ -115,31 +121,33 @@ class ContextDelegator:
 
     async def perform_research(self, task: str) -> str:
         """Perform multi-source research for the debate topic."""
-        result = await self.context_gatherer.gather_all(task)
+        gatherer = self._require_gatherer()
+        result = await gatherer.gather_all(task)
         # Update cache and evidence grounder
         if self._cache:
-            self._cache.evidence_pack = self.context_gatherer.evidence_pack
+            self._cache.evidence_pack = gatherer.evidence_pack
         if self.evidence_grounder:
-            self.evidence_grounder.set_evidence_pack(self.context_gatherer.evidence_pack)
+            self.evidence_grounder.set_evidence_pack(gatherer.evidence_pack)
         return result
 
     async def gather_aragora_context(self, task: str) -> str | None:
         """Gather Aragora-specific documentation context if relevant."""
-        return await self.context_gatherer.gather_aragora_context(task)
+        return await self._require_gatherer().gather_aragora_context(task)
 
     async def gather_evidence_context(self, task: str) -> str | None:
         """Gather evidence from web, GitHub, and local docs connectors."""
-        result = await self.context_gatherer.gather_evidence_context(task)
+        gatherer = self._require_gatherer()
+        result = await gatherer.gather_evidence_context(task)
         # Update cache and evidence grounder
         if self._cache:
-            self._cache.evidence_pack = self.context_gatherer.evidence_pack
+            self._cache.evidence_pack = gatherer.evidence_pack
         if self.evidence_grounder:
-            self.evidence_grounder.set_evidence_pack(self.context_gatherer.evidence_pack)
+            self.evidence_grounder.set_evidence_pack(gatherer.evidence_pack)
         return result
 
     async def gather_trending_context(self) -> str | None:
         """Gather pulse/trending context from social platforms."""
-        return await self.context_gatherer.gather_trending_context()
+        return await self._require_gatherer().gather_trending_context()
 
     async def refresh_evidence_for_round(
         self,
@@ -161,7 +169,7 @@ class ContextDelegator:
         Returns:
             Number of new evidence snippets added
         """
-        count, updated_pack = await self.context_gatherer.refresh_evidence_for_round(
+        count, updated_pack = await self._require_gatherer().refresh_evidence_for_round(
             combined_text=combined_text,
             evidence_collector=evidence_collector,
             task=task,

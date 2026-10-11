@@ -49,10 +49,8 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
-from aragora.control_plane.leader import (
-    DistributedStateError,
-    is_distributed_state_required,
-)
+from aragora.config.distributed import is_distributed_state_required
+from aragora.control_plane.leader import DistributedStateError
 from aragora.rbac.decorators import require_permission
 
 from ..base import (

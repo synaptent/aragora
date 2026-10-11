@@ -29,6 +29,7 @@ import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
@@ -82,7 +83,7 @@ async def rank(
     max_goals: int,
     quick: bool,
     agents: list[str] | None = None,
-) -> tuple[list[dict], object | None]:
+) -> tuple[list[dict], Any | None]:
     from aragora.nomic.meta_planner import (
         MetaPlanner,
         MetaPlannerConfig,

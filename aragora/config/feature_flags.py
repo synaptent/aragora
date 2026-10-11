@@ -420,7 +420,7 @@ class FeatureFlagRegistry:
     def _get_tenant_value(self, name: str) -> Any | None:
         """Get flag value from tenant configuration."""
         try:
-            from aragora.tenancy.context import get_current_tenant
+            from aragora.config.tenant_context import get_current_tenant
 
             tenant = get_current_tenant()
             if tenant and tenant.config:

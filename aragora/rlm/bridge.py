@@ -1365,7 +1365,7 @@ Please provide an improved answer based on the feedback."""
             debate_id: Optional debate ID for context
         """
         try:
-            from aragora.audit.log import AuditCategory, AuditEvent, get_audit_log
+            from aragora.observability.audit_log import AuditCategory, AuditEvent, get_audit_log
 
             audit = get_audit_log()
             audit.log(

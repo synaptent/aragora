@@ -205,7 +205,7 @@ class SQLiteStore(BaseDatabase, ABC):
         if not id_column.replace("_", "").isalnum():
             raise ValueError(f"Invalid column name: {id_column}")
 
-        query = f"SELECT 1 FROM {table} WHERE {id_column} = ?"  # nosec B608  # noqa: S608
+        query = f"SELECT 1 FROM {table} WHERE {id_column} = ?"  # nosec B608
         row = self.fetch_one(query, (id_value,))
         return row is not None
 
@@ -268,7 +268,7 @@ class SQLiteStore(BaseDatabase, ABC):
 
         self._validate_where_clause(where, bool(params))
 
-        sql = f"SELECT COUNT(*) FROM {table}"  # nosec B608 - table validated above  # noqa: S608
+        sql = f"SELECT COUNT(*) FROM {table}"  # nosec B608 - table validated above
         if where:
             sql += f" WHERE {where}"  # nosec B608 - validated by _validate_where_clause
 
@@ -292,7 +292,7 @@ class SQLiteStore(BaseDatabase, ABC):
             raise ValueError(f"Invalid column name: {id_column}")
 
         with self.connection() as conn:
-            query = f"DELETE FROM {table} WHERE {id_column} = ?"  # nosec B608  # noqa: S608
+            query = f"DELETE FROM {table} WHERE {id_column} = ?"  # nosec B608
             cursor = conn.execute(query, (id_value,))
             return cursor.rowcount > 0
 

@@ -163,14 +163,16 @@ class OrganizationRepository:
     def get_by_id(self, org_id: str) -> Organization | None:
         """Get organization by ID."""
         with self._transaction() as cursor:
-            cursor.execute(f"SELECT {self._ORG_COLUMNS} FROM organizations WHERE id = ?", (org_id,))  # noqa: S608 -- column name interpolation, parameterized
+            # column name interpolation, parameterized
+            cursor.execute(f"SELECT {self._ORG_COLUMNS} FROM organizations WHERE id = ?", (org_id,))
             row = cursor.fetchone()
             return self._row_to_org(row) if row else None
 
     def get_by_slug(self, slug: str) -> Organization | None:
         """Get organization by slug."""
         with self._transaction() as cursor:
-            cursor.execute(f"SELECT {self._ORG_COLUMNS} FROM organizations WHERE slug = ?", (slug,))  # noqa: S608 -- column name interpolation, parameterized
+            # column name interpolation, parameterized
+            cursor.execute(f"SELECT {self._ORG_COLUMNS} FROM organizations WHERE slug = ?", (slug,))
             row = cursor.fetchone()
             return self._row_to_org(row) if row else None
 
@@ -178,7 +180,8 @@ class OrganizationRepository:
         """Get organization by Stripe customer ID."""
         with self._transaction() as cursor:
             cursor.execute(
-                f"SELECT {self._ORG_COLUMNS} FROM organizations WHERE stripe_customer_id = ?",  # noqa: S608 -- column name interpolation, parameterized
+                # column name interpolation, parameterized
+                f"SELECT {self._ORG_COLUMNS} FROM organizations WHERE stripe_customer_id = ?",
                 (stripe_customer_id,),
             )
             row = cursor.fetchone()
@@ -188,7 +191,8 @@ class OrganizationRepository:
         """Get organization by Stripe subscription ID."""
         with self._transaction() as cursor:
             cursor.execute(
-                f"SELECT {self._ORG_COLUMNS} FROM organizations WHERE stripe_subscription_id = ?",  # noqa: S608 -- column name interpolation, parameterized
+                # column name interpolation, parameterized
+                f"SELECT {self._ORG_COLUMNS} FROM organizations WHERE stripe_subscription_id = ?",
                 (subscription_id,),
             )
             row = cursor.fetchone()
@@ -233,7 +237,7 @@ class OrganizationRepository:
         values.append(org_id)
 
         with self._transaction() as cursor:
-            query = f"UPDATE organizations SET {', '.join(updates)} WHERE id = ?"  # nosec B608  # noqa: S608
+            query = f"UPDATE organizations SET {', '.join(updates)} WHERE id = ?"  # nosec B608
             cursor.execute(query, values)
             return cursor.rowcount > 0
 
@@ -280,7 +284,8 @@ class OrganizationRepository:
             raise RuntimeError("row_to_user_fn not provided to OrganizationRepository")
 
         with self._transaction() as cursor:
-            cursor.execute(f"SELECT {self._USER_COLUMNS} FROM users WHERE org_id = ?", (org_id,))  # noqa: S608 -- column name interpolation, parameterized
+            # column name interpolation, parameterized
+            cursor.execute(f"SELECT {self._USER_COLUMNS} FROM users WHERE org_id = ?", (org_id,))
             return [self._row_to_user(row) for row in cursor.fetchall()]
 
     def get_with_members(self, org_id: str) -> tuple[Organization | None, list[User]]:
@@ -297,14 +302,16 @@ class OrganizationRepository:
             raise RuntimeError("row_to_user_fn not provided to OrganizationRepository")
 
         with self._transaction() as cursor:
-            cursor.execute(f"SELECT {self._ORG_COLUMNS} FROM organizations WHERE id = ?", (org_id,))  # noqa: S608 -- column name interpolation, parameterized
+            # column name interpolation, parameterized
+            cursor.execute(f"SELECT {self._ORG_COLUMNS} FROM organizations WHERE id = ?", (org_id,))
             org_row = cursor.fetchone()
             if not org_row:
                 return None, []
 
             org = self._row_to_org(org_row)
 
-            cursor.execute(f"SELECT {self._USER_COLUMNS} FROM users WHERE org_id = ?", (org_id,))  # noqa: S608 -- column name interpolation, parameterized
+            # column name interpolation, parameterized
+            cursor.execute(f"SELECT {self._USER_COLUMNS} FROM users WHERE org_id = ?", (org_id,))
             members = [self._row_to_user(row) for row in cursor.fetchall()]
 
             return org, members
@@ -333,11 +340,11 @@ class OrganizationRepository:
 
         with self._transaction() as cursor:
             placeholders = ",".join("?" * len(unique_ids))
-            query1 = f"SELECT {self._ORG_COLUMNS} FROM organizations WHERE id IN ({placeholders})"  # nosec B608  # noqa: S608
+            query1 = f"SELECT {self._ORG_COLUMNS} FROM organizations WHERE id IN ({placeholders})"  # nosec B608
             cursor.execute(query1, unique_ids)
             orgs = {row["id"]: self._row_to_org(row) for row in cursor.fetchall()}
 
-            query2 = f"SELECT {self._USER_COLUMNS} FROM users WHERE org_id IN ({placeholders})"  # nosec B608  # noqa: S608
+            query2 = f"SELECT {self._USER_COLUMNS} FROM users WHERE org_id IN ({placeholders})"  # nosec B608
             cursor.execute(query2, unique_ids)
 
             members_by_org: dict[str, list[User]] = {oid: [] for oid in orgs}

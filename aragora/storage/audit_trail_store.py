@@ -502,7 +502,7 @@ class AuditTrailStore:
             WHERE {where_clause}
             ORDER BY created_at DESC
             LIMIT ? OFFSET ?
-            """,  # nosec B608 - where_clause built from hardcoded conditions  # noqa: S608
+            """,  # nosec B608 - where_clause built from hardcoded conditions
             tuple(params),
         )
 
@@ -542,7 +542,7 @@ class AuditTrailStore:
         where_clause = " AND ".join(conditions) if conditions else "1=1"
 
         row = self._backend.fetch_one(
-            f"SELECT COUNT(*) FROM decision_receipts WHERE {where_clause}",  # nosec B608  # noqa: S608
+            f"SELECT COUNT(*) FROM decision_receipts WHERE {where_clause}",  # nosec B608
             tuple(params),
         )
         return row[0] if row else 0

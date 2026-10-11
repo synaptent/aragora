@@ -51,7 +51,7 @@ RedTeamMode, REDTEAM_AVAILABLE = try_import_class("aragora.modes.redteam", "RedT
 create_agent, DEBATE_AVAILABLE = try_import_class("aragora.debate", "create_agent")
 
 from aragora.debate.sanitization import OutputSanitizer
-from aragora.server.errors import safe_error_message as _safe_error_message
+from aragora.api_errors import safe_error_message as _safe_error_message
 
 # =============================================================================
 # Audit Request Utilities

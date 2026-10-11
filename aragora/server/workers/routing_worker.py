@@ -168,7 +168,7 @@ class RoutingWorker:
                         "duration_seconds": duration,
                     },
                 )
-                logger.info(f"[{self.worker_id}] Delivered job {job.id} in {duration:.1f}s")
+                logger.info("[%s] Delivered job %s in %.1fs", self.worker_id, job.id, duration)
             else:
                 # Delivery failed, retry if attempts remain
                 should_retry = job.attempts < job.max_attempts

@@ -77,7 +77,7 @@ def import_rlm_guarded() -> Any:
     # a harmless no-op.
     with _RLM_IMPORT_LOCK:
         with preserve_environ():
-            import rlm  # noqa: PLC0415
+            import rlm
 
         return rlm
 

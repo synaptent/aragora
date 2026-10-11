@@ -101,7 +101,8 @@ class NomicLoopStreamServer:
     to all connected clients in real-time.
     """
 
-    def __init__(self, port: int = 8767, host: str = "0.0.0.0"):  # noqa: S104 - WS server binds all interfaces by default
+    # WS server binds all interfaces by default
+    def __init__(self, port: int = 8767, host: str = "0.0.0.0"):
         """Initialize the Nomic Loop stream server.
 
         Args:
@@ -513,7 +514,7 @@ class NomicLoopStreamServer:
             )
         )
 
-    async def emit_error(self, error: str, context: dict[str, Any] = None):
+    async def emit_error(self, error: str, context: dict[str, Any] | None = None):
         """Emit error event."""
         await self.broadcast(
             NomicLoopEvent(

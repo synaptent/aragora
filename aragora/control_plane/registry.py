@@ -644,7 +644,7 @@ class AgentRegistry:
         elif strategy == "random":
             import random
 
-            return random.choice(candidates)  # noqa: S311 -- load balancing
+            return random.choice(candidates)
         else:
             return candidates[0]
 
@@ -721,7 +721,7 @@ class AgentRegistry:
         elif strategy == "random":
             import random
 
-            return random.choice(candidates)  # noqa: S311 -- load balancing
+            return random.choice(candidates)
         else:
             return candidates[0]
 
@@ -902,5 +902,5 @@ def get_default_registry() -> AgentRegistry | None:
 
 def set_default_registry(registry: AgentRegistry | None) -> None:
     """Set (or clear) the module-level default registry."""
-    global _default_registry  # noqa: PLW0603
+    global _default_registry
     _default_registry = registry

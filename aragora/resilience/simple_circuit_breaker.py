@@ -433,7 +433,10 @@ class BaseCircuitBreaker:
                 if rate >= self.config.failure_rate_threshold:
                     should_open = True
                     logger.warning(
-                        f"[{self.name}] Opening circuit due to failure rate {rate:.2%} >= {self.config.failure_rate_threshold:.2%}"
+                        "[%s] Opening circuit due to failure rate %.2f%% >= %.2f%%",
+                        self.name,
+                        rate * 100,
+                        self.config.failure_rate_threshold * 100,
                     )
 
             if should_open and self._state != CircuitState.OPEN:

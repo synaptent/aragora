@@ -187,9 +187,7 @@ class QueryProfile:
             "total_duration_ms": self.total_duration_ms,
             "slow_queries": len(self.slow_queries),
             "potential_n_plus_one": self.potential_n_plus_one,
-            "query_type_counts": dict(
-                (q.query.strip().split()[0].upper(), 0) for q in self.queries
-            ),
+            "query_type_counts": {q.query.strip().split()[0].upper(): 0 for q in self.queries},
             "start_time": self.start_time,
             "end_time": self.end_time,
         }
@@ -310,7 +308,7 @@ class ProfiledConnection:
             duration_ms = (time.perf_counter() - start) * 1000
             if profiler:
                 profiler.record(sql, params_tuple, duration_ms)
-            logger.debug(f"Query failed after {duration_ms:.2f}ms: {e}")
+            logger.debug("Query failed after %.2fms: %s", duration_ms, e)
             raise
 
     def executemany(self, sql: str, seq_of_parameters: Iterable[Iterable[Any]]) -> sqlite3.Cursor:
@@ -332,7 +330,7 @@ class ProfiledConnection:
             duration_ms = (time.perf_counter() - start) * 1000
             if profiler:
                 profiler.record(f"{sql} (x{len(params_list)})", (), duration_ms)
-            logger.debug(f"Query batch failed after {duration_ms:.2f}ms: {e}")
+            logger.debug("Query batch failed after %.2fms: %s", duration_ms, e)
             raise
 
 

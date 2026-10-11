@@ -21,7 +21,7 @@ from pathlib import Path
 
 def find_files(root: Path, extensions: list[str]) -> list[Path]:
     """Find all files with given extensions."""
-    files = []
+    files: list[Path] = []
     for ext in extensions:
         files.extend(root.rglob(f"*{ext}"))
     return [f for f in files if ".git" not in str(f) and "node_modules" not in str(f)]

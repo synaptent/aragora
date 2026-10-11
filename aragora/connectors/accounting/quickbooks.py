@@ -122,7 +122,8 @@ class QuickBooksConnector(BaseConnector):
         if search_type in ("all", "invoices"):
             inv_limit = limit if search_type == "invoices" else max(1, limit // 2)
             inv_sql = (
-                f"SELECT * FROM Invoice WHERE DocNumber LIKE '%{sanitized}%' MAXRESULTS {inv_limit}"  # noqa: S608 -- dynamic clause from internal state
+                # dynamic clause from internal state
+                f"SELECT * FROM Invoice WHERE DocNumber LIKE '%{sanitized}%' MAXRESULTS {inv_limit}"
             )
 
             async def _invoice_request() -> Any:
@@ -177,7 +178,8 @@ class QuickBooksConnector(BaseConnector):
         if search_type in ("all", "payments"):
             pmt_limit = limit if search_type == "payments" else max(1, limit // 2)
             pmt_sql = (
-                f"SELECT * FROM Payment WHERE PaymentRefNum LIKE '%{sanitized}%' "  # noqa: S608 -- internal query construction
+                # internal query construction
+                f"SELECT * FROM Payment WHERE PaymentRefNum LIKE '%{sanitized}%' "
                 f"MAXRESULTS {pmt_limit}"
             )
 

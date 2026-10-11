@@ -923,7 +923,7 @@ class EnterpriseMeter:
                 self._connection.commit()
 
                 logger.warning(
-                    f"Budget alert for tenant {tenant_id}: {alert_level.value} ({percent:.1f}%)"
+                    "Budget alert for tenant %s: %s (%.1f%%)", tenant_id, alert_level.value, percent
                 )
 
                 # Send email notifications to configured alert recipients

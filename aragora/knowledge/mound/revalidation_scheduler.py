@@ -259,8 +259,11 @@ class RevalidationScheduler:
                 )
 
                 logger.debug(
-                    f"Created revalidation task {task_id} for node {node_id} "
-                    f"(staleness={staleness_score:.2f}, priority={priority_str})"
+                    "Created revalidation task %s for node %s (staleness=%.2f, priority=%s)",
+                    task_id,
+                    node_id,
+                    staleness_score,
+                    priority_str,
                 )
                 return task_id
 

@@ -113,7 +113,7 @@ async def _cmd_run(args: argparse.Namespace) -> None:
     """Execute a workflow."""
     workflow_id = getattr(args, "workflow_id", None)
     inputs_json = getattr(args, "inputs", None)
-    _run_async = getattr(args, "run_async", False)  # noqa: F841
+    _run_async = getattr(args, "run_async", False)
     as_json = getattr(args, "json", False)
 
     if not workflow_id:

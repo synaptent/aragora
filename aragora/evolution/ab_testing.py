@@ -402,7 +402,7 @@ class ABTestManager(SQLiteStore):
         with self.connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
-                f"SELECT {AB_TEST_COLUMNS} FROM ab_tests WHERE id = ?",  # nosec B608  # noqa: S608
+                f"SELECT {AB_TEST_COLUMNS} FROM ab_tests WHERE id = ?",  # nosec B608
                 (test_id,),
             )
             row = cursor.fetchone()
@@ -416,7 +416,7 @@ class ABTestManager(SQLiteStore):
         with self.connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
-                f"SELECT {AB_TEST_COLUMNS} FROM ab_tests WHERE agent = ? AND status = 'active'",  # nosec B608  # noqa: S608
+                f"SELECT {AB_TEST_COLUMNS} FROM ab_tests WHERE agent = ? AND status = 'active'",  # nosec B608
                 (agent,),
             )
             row = cursor.fetchone()
@@ -435,7 +435,7 @@ class ABTestManager(SQLiteStore):
                 WHERE agent = ?
                 ORDER BY started_at DESC
                 LIMIT ?
-                """,  # nosec B608 - AB_TEST_COLUMNS is a constant  # noqa: S608
+                """,  # nosec B608 - AB_TEST_COLUMNS is a constant
                 (agent, limit),
             )
 
@@ -619,7 +619,9 @@ class ABTestManager(SQLiteStore):
             },
         )
 
-        logger.info(f"Concluded A/B test {test_id}: winner={winner}, confidence={confidence:.2f}")
+        logger.info(
+            "Concluded A/B test %s: winner=%s, confidence=%.2f", test_id, winner, confidence
+        )
         self._log_event(
             "ab_test_concluded",
             test,

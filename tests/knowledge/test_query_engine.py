@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from aragora.knowledge.embeddings import ChunkMatch, InMemoryEmbeddingService
+from aragora.knowledge.embeddings import ChunkMatch, InMemoryEmbeddingService, chunk_namespace
 from aragora.knowledge.fact_store import InMemoryFactStore, ScopedFactStore
 from aragora.knowledge.query_engine import (
     AgentProtocol,
@@ -29,6 +29,8 @@ from aragora.knowledge.query_engine import (
     SimpleQueryEngine,
 )
 from aragora.knowledge.types import Fact, FactFilters, ValidationStatus
+
+ORG_WS = chunk_namespace("ws_test", "org-test")
 
 
 # =============================================================================
@@ -587,7 +589,7 @@ class TestAggregation:
                     "chunk_index": 0,
                 }
             ],
-            workspace_id="ws_test",
+            workspace_id=ORG_WS,
         )
         query_engine_with_agent._embedding_service = embedding_service
 
@@ -742,7 +744,7 @@ class TestQueryOptimization:
                     "chunk_index": 0,
                 }
             ],
-            workspace_id="ws_test",
+            workspace_id=ORG_WS,
         )
         query_engine_with_multiple_agents._embedding_service = embedding_service
 
@@ -796,7 +798,7 @@ class TestQueryOptimization:
                     "chunk_index": 0,
                 }
             ],
-            workspace_id="ws_test",
+            workspace_id=ORG_WS,
         )
         query_engine_with_agent._embedding_service = embedding_service
 
@@ -950,6 +952,7 @@ class TestErrorHandling:
         result = await engine.query(
             question="Test query",
             workspace_id="ws_test",
+            org_id="org-test",
         )
 
         assert "Query failed" in result.answer
@@ -1009,7 +1012,7 @@ class TestMultiAgentDebate:
                     "chunk_index": 0,
                 }
             ],
-            workspace_id="ws_test",
+            workspace_id=ORG_WS,
         )
         query_engine_with_multiple_agents._embedding_service = embedding_service
 
@@ -1037,7 +1040,7 @@ class TestMultiAgentDebate:
                     "chunk_index": 0,
                 }
             ],
-            workspace_id="ws_test",
+            workspace_id=ORG_WS,
         )
         query_engine_with_multiple_agents._embedding_service = embedding_service
 

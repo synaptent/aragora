@@ -90,7 +90,7 @@ def track_vector_operation(operation: str, store: str = "weaviate") -> Generator
         VECTOR_LATENCY.observe(duration, operation=operation, store=store)
         # Log slow queries (>500ms)
         if duration > 0.5:
-            logger.warning(f"Slow vector operation: {operation} on {store} took {duration:.3f}s")
+            logger.warning("Slow vector operation: %s on %s took %.3fs", operation, store, duration)
 
 
 def track_vector_search_results(

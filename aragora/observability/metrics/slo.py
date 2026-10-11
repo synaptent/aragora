@@ -805,9 +805,11 @@ def check_and_record_slo_with_recovery(
             )
 
             logger.info(
-                f"SLO recovered for {operation}: latency={latency_ms:.1f}ms "
-                f"(threshold={threshold_ms:.1f}ms), "
-                f"violation lasted {violation_duration:.1f}s"
+                "SLO recovered for %s: latency=%.1fms (threshold=%.1fms), violation lasted %.1fs",
+                operation,
+                latency_ms,
+                threshold_ms,
+                violation_duration,
             )
 
             # Clear violation state

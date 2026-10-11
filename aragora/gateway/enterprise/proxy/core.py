@@ -567,9 +567,12 @@ class EnterpriseProxy:
                     if attempt < retry_settings.max_retries:
                         delay = self._calculate_retry_delay(attempt, retry_settings)
                         logger.debug(
-                            f"Retrying {request.framework} request "
-                            f"(attempt {attempt + 1}/{retry_settings.max_retries}) "
-                            f"after {delay:.2f}s due to status {response.status_code}"
+                            "Retrying %s request (attempt %s/%s) after %.2fs due to status %s",
+                            request.framework,
+                            attempt + 1,
+                            retry_settings.max_retries,
+                            delay,
+                            response.status_code,
                         )
                         await asyncio.sleep(delay)
                         continue
@@ -587,9 +590,12 @@ class EnterpriseProxy:
                 if attempt < retry_settings.max_retries:
                     delay = self._calculate_retry_delay(attempt, retry_settings)
                     logger.debug(
-                        f"Retrying {request.framework} request "
-                        f"(attempt {attempt + 1}/{retry_settings.max_retries}) "
-                        f"after {delay:.2f}s: {e}"
+                        "Retrying %s request (attempt %s/%s) after %.2fs: %s",
+                        request.framework,
+                        attempt + 1,
+                        retry_settings.max_retries,
+                        delay,
+                        e,
                     )
                     await asyncio.sleep(delay)
                 else:
@@ -630,7 +636,7 @@ class EnterpriseProxy:
         # Apply jitter
         if settings.jitter:
             jitter_factor = 0.25
-            factor = 1.0 + (random.random() * 2 - 1) * jitter_factor  # noqa: S311 -- retry jitter
+            factor = 1.0 + (random.random() * 2 - 1) * jitter_factor
             delay = delay * factor
 
         return max(0, delay)
@@ -721,8 +727,11 @@ class EnterpriseProxy:
         sanitized_body = sanitizer.sanitize_body_for_logging(request.body)
 
         logger.info(
-            f"Proxy request: {request.method} {request.url} "
-            f"-> {response.status_code} ({response.elapsed_ms:.1f}ms)",
+            "Proxy request: %s %s -> %s (%.1fms)",
+            request.method,
+            request.url,
+            response.status_code,
+            response.elapsed_ms,
             extra={
                 "framework": request.framework,
                 "method": request.method,

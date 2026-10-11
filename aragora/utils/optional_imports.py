@@ -56,7 +56,7 @@ def try_import(
             log_on_failure=True
         )
     """
-    result = {name: None for name in names}
+    result = dict.fromkeys(names)
 
     try:
         module = importlib.import_module(module_path)

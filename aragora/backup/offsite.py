@@ -668,7 +668,8 @@ class OffsiteBackupManager:
             tables_verified = len(tables)
 
             for table in tables:
-                cursor.execute(f'SELECT COUNT(*) FROM "{table}"')  # noqa: S608 -- table name interpolation, parameterized
+                # table name interpolation, parameterized
+                cursor.execute(f'SELECT COUNT(*) FROM "{table}"')
                 rows_verified += cursor.fetchone()[0]
 
             conn.close()

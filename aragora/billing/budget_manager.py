@@ -566,7 +566,7 @@ class BudgetManager:
         conn.commit()
 
         logger.info(
-            f"Created budget {budget_id} for org {org_id}: ${amount_usd:.2f}/{period.value}"
+            "Created budget %s for org %s: $%.2f/%s", budget_id, org_id, amount_usd, period.value
         )
         return budget
 
@@ -1396,7 +1396,7 @@ class BudgetManager:
             GROUP BY period
             ORDER BY period DESC
             LIMIT ?
-        """  # nosec B608 - date_trunc is constructed from hardcoded values  # noqa: S608
+        """  # nosec B608 - date_trunc is constructed from hardcoded values
 
         cursor = conn.execute(query, (budget_id, limit))
 
@@ -1456,7 +1456,7 @@ class BudgetManager:
             GROUP BY period
             ORDER BY period DESC
             LIMIT ?
-        """  # nosec B608 - date_trunc is constructed from hardcoded values  # noqa: S608
+        """  # nosec B608 - date_trunc is constructed from hardcoded values
 
         cursor = conn.execute(query, (org_id, limit))
 

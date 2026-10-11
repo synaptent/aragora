@@ -160,8 +160,10 @@ async def run_security_debate(
     result = _apply_security_confidence_threshold(await arena.run(), confidence_threshold)
 
     logger.info(
-        f"[security_debate] Debate {result.debate_id} completed: "
-        f"consensus={result.consensus_reached}, confidence={result.confidence:.2f}"
+        "[security_debate] Debate %s completed: consensus=%s, confidence=%.2f",
+        result.debate_id,
+        result.consensus_reached,
+        result.confidence,
     )
 
     event.debate_requested = True

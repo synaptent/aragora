@@ -42,8 +42,9 @@ def api_request(
 
     try:
         payload = json.dumps(data).encode("utf-8") if data is not None else None
-        req = urllib.request.Request(url, data=payload, method=method, headers=headers)  # noqa: S310 -- CLI server URL
-        with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310 -- CLI server URL
+        # CLI server URL
+        req = urllib.request.Request(url, data=payload, method=method, headers=headers)
+        with urllib.request.urlopen(req, timeout=30) as resp:  # CLI server URL
             body = resp.read() or b"{}"
             result: dict[str, Any] = json.loads(body)
             return result
