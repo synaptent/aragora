@@ -63,9 +63,7 @@ from aragora.server.middleware.rate_limit import (
 )
 from aragora.server.middleware.rate_limit.base import (
     _normalize_ip,
-    header_value,
     forwarded_client_ip,
-    is_cloudflare_trusted_proxy_address,
 )
 from aragora.server.middleware.rate_limit.distributed import (
     get_distributed_limiter,
@@ -320,32 +318,16 @@ TRUSTED_PROXIES = frozenset(
 )
 
 
-_cf_ray_warning_logged = False
-
-
-def _warn_cf_ray_from_unlisted_peer(peer: str) -> None:
-    global _cf_ray_warning_logged
-    if _cf_ray_warning_logged:
-        return
-    _cf_ray_warning_logged = True
-    logger.warning(
-        "Ignoring Cloudflare client-IP headers from peer %s, which is not listed in "
-        "ARAGORA_CLOUDFLARE_TRUSTED_PROXIES; if Cloudflare fronts this server, list "
-        "that peer there so clients are keyed on CF-Connecting-IP. Logged once.",
-        peer,
-    )
-
-
 def get_client_ip(handler: Any) -> str:
     """Extract the client IP from a request handler as a rate-limit key.
 
-    Uses the same rule and key normalization (IPv6 grouped by /64, IPv4-mapped
-    addresses as IPv4) as the rate-limit middleware: a direct peer in
-    ARAGORA_TRUSTED_PROXIES is believed for the header named by
-    ARAGORA_TRUSTED_PROXY_HEADER (see ``forwarded_client_ip``). Cloudflare's
-    CF-Connecting-IP / True-Client-IP (with CF-RAY) are believed only from a
-    peer in ARAGORA_CLOUDFLARE_TRUSTED_PROXIES, which is empty by default.
-    Any other peer is keyed on its own address.
+    Uses the same rule (``forwarded_client_ip``) and key normalization (IPv6
+    grouped by /64, IPv4-mapped addresses as IPv4) as the rate-limit
+    middleware: Cloudflare's CF-Connecting-IP / True-Client-IP (with CF-RAY)
+    are believed only from a peer in ARAGORA_CLOUDFLARE_TRUSTED_PROXIES, which
+    is empty by default; otherwise a direct peer in ARAGORA_TRUSTED_PROXIES is
+    believed for the header named by ARAGORA_TRUSTED_PROXY_HEADER. Any other
+    peer is keyed on its own address.
 
     Trust contract: in ``x-forwarded-for`` mode a peer in
     ARAGORA_TRUSTED_PROXIES must append the address it saw to X-Forwarded-For,
@@ -389,15 +371,6 @@ def _derive_client_ip(handler: Any, *, group_ipv6: bool) -> str:
     headers = getattr(handler, "headers", None)
     if peer and headers and hasattr(headers, "get"):
         try:
-            if header_value(headers, "CF-RAY"):
-                if is_cloudflare_trusted_proxy_address(peer):
-                    cf_ip = header_value(headers, "CF-Connecting-IP") or header_value(
-                        headers, "True-Client-IP"
-                    )
-                    if cf_ip:
-                        return _normalize_ip(cf_ip, group_ipv6=group_ipv6)
-                else:
-                    _warn_cf_ray_from_unlisted_peer(peer)
             client = forwarded_client_ip(headers, peer)
             return _normalize_ip(client, group_ipv6=group_ipv6) or "unknown"
         except (TypeError, AttributeError):

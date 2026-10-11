@@ -14,7 +14,7 @@ import threading
 from collections import OrderedDict
 from typing import Any
 
-from .base import _extract_client_ip, sanitize_rate_limit_key_component
+from .base import CLIENT_IP_HEADERS, _extract_client_ip, sanitize_rate_limit_key_component
 from .bucket import TokenBucket
 from .limiter import RateLimitResult
 
@@ -48,10 +48,7 @@ def determine_auth_tier(handler: Any) -> tuple[str, str]:
         if isinstance(h, dict):
             headers = h
         else:
-            headers = {
-                "X-Forwarded-For": h.get("X-Forwarded-For", "") if h else "",
-                "X-Real-IP": h.get("X-Real-IP", "") if h else "",
-            }
+            headers = {name: h.get(name, "") if h else "" for name in CLIENT_IP_HEADERS}
 
     client_ip = _extract_client_ip(headers, remote_ip)
     fallback_key = sanitize_rate_limit_key_component(client_ip)

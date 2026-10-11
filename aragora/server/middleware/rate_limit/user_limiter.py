@@ -14,6 +14,7 @@ from collections import OrderedDict
 from typing import Any
 
 from .base import (
+    CLIENT_IP_HEADERS,
     BURST_MULTIPLIER,
     _extract_client_ip,
     sanitize_rate_limit_key_component,
@@ -233,10 +234,7 @@ def check_user_rate_limit(
 
     headers = {}
     if hasattr(handler, "headers"):
-        headers = {
-            "X-Forwarded-For": handler.headers.get("X-Forwarded-For", ""),
-            "X-Real-IP": handler.headers.get("X-Real-IP", ""),
-        }
+        headers = {name: handler.headers.get(name, "") for name in CLIENT_IP_HEADERS}
 
     client_ip = sanitize_rate_limit_key_component(_extract_client_ip(headers, remote_ip))
     client_key = f"ip:{client_ip}" if client_ip != "anon" else "anon"

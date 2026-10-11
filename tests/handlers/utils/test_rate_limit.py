@@ -674,12 +674,13 @@ class TestGetClientIpParsedTrustedProxies:
         import logging
         import sys
 
-        rl_module = sys.modules["aragora.server.handlers.utils.rate_limit"]
+        rl_module = sys.modules["aragora.server.middleware.rate_limit.base"]
         monkeypatch.setattr(rl_module, "_cf_ray_warning_logged", False, raising=False)
         proxy_env(self.NGINX)
         with caplog.at_level(logging.WARNING, logger=rl_module.__name__):
             for peer in ("172.18.0.5", "172.18.0.6", "203.0.113.9", "172.18.0.5"):
                 _client_ip(peer, self.CF)
+                rl_module._extract_client_ip(self.CF, peer)
         warned = [
             r for r in caplog.records if "ARAGORA_CLOUDFLARE_TRUSTED_PROXIES" in r.getMessage()
         ]
@@ -815,7 +816,60 @@ class TestTrustedProxyHeaderSetting:
     def test_cloudflare_headers_unchanged_in_every_mode(self, proxy_env, header):
         proxy_env("127.0.0.1", cloudflare="172.18.0.0/16", header=header)
         headers = {**TestGetClientIpParsedTrustedProxies.CF, **self.REAL_IP_ONLY}
-        assert _client_ip("172.18.0.2", headers) == "198.51.100.42"
+        assert self._both("172.18.0.2", headers) == "198.51.100.42"
+
+
+class TestMiddlewareCloudflareHeaders:
+    """The middleware callers choose the same client as the helper, Cloudflare headers included."""
+
+    NGINX = TestGetClientIpParsedTrustedProxies.NGINX
+    CF = TestGetClientIpParsedTrustedProxies.CF
+    FWD = {"X-Real-IP": "203.0.113.7", "X-Forwarded-For": "198.51.100.66, 203.0.113.8"}
+
+    @staticmethod
+    def _keys(peer, headers):
+        """The helper's key and the key of each middleware path, all sanitized alike."""
+        from aragora.server.middleware.rate_limit.base import _extract_client_ip
+        from aragora.server.middleware.rate_limit.base import sanitize_rate_limit_key_component
+        from aragora.server.middleware.rate_limit.default_limiter import determine_auth_tier
+        from aragora.server.middleware.rate_limit.limiter import RateLimiter
+        from aragora.server.middleware.rate_limit.tenant_limiter import _extract_tenant_id
+
+        handler = FakeHandlerWithDictHeaders((peer, 52000), DictHeaders(dict(headers)))
+        return {
+            sanitize_rate_limit_key_component(_client_ip(peer, headers)),
+            sanitize_rate_limit_key_component(_extract_client_ip(dict(headers), peer)),
+            RateLimiter().get_client_key(handler),
+            determine_auth_tier(handler)[1],
+            _extract_tenant_id(handler),
+        }
+
+    @pytest.mark.parametrize("peer", ["198.18.0.1", "::ffff:198.18.0.1"])
+    @pytest.mark.parametrize(
+        ("headers", "expected"),
+        [
+            (CF, "198.51.100.42"),
+            ({**CF, "CF-Connecting-IP": ""}, "198.51.100.45"),
+            ({**CF, **FWD}, "198.51.100.42"),
+        ],
+    )
+    def test_middleware_keys_on_cloudflare_headers_from_listed_peer(
+        self, proxy_env, peer, headers, expected
+    ):
+        proxy_env("127.0.0.1", cloudflare="198.18.0.0/15")
+        assert self._keys(peer, headers) == {expected}
+
+    @pytest.mark.parametrize(("peer", "key"), [("172.18.0.5", "203.0.113.8"), ("203.0.113.9",) * 2])
+    def test_peer_outside_cloudflare_list_ignores_both_headers(self, proxy_env, peer, key):
+        proxy_env(self.NGINX, cloudflare="198.18.0.0/15")
+        assert self._keys(peer, {**self.CF, **self.FWD}) == {key}
+
+    @pytest.mark.parametrize("header", [None, "x-real-ip"])
+    @pytest.mark.parametrize("peer", ["198.18.0.1", "172.18.0.5", "203.0.113.9"])
+    @pytest.mark.parametrize("headers", [FWD, {**CF, **FWD}, {"CF-RAY": "a1", **FWD}])
+    def test_helper_and_middleware_agree_in_both_modes(self, proxy_env, header, peer, headers):
+        proxy_env(self.NGINX, cloudflare="198.18.0.0/15", header=header)
+        assert len(self._keys(peer, headers)) == 1
 
 
 class TestGetExactClientIp:

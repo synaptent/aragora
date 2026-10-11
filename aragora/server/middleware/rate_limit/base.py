@@ -155,10 +155,36 @@ def header_value(headers, name: str) -> str:
     return value.strip() if type(value) is str else ""
 
 
+# The request headers forwarded_client_ip reads; middleware callers copy these.
+CLIENT_IP_HEADERS = ("X-Forwarded-For", "X-Real-IP", "CF-RAY", "CF-Connecting-IP", "True-Client-IP")
+_cf_ray_warning_logged = False
+
+
+def _cloudflare_client_ip(headers, remote_addr: str) -> str:
+    global _cf_ray_warning_logged
+    if not header_value(headers, "CF-RAY"):
+        return ""
+    if is_cloudflare_trusted_proxy_address(remote_addr):
+        return header_value(headers, "CF-Connecting-IP") or header_value(headers, "True-Client-IP")
+    if not _cf_ray_warning_logged:
+        _cf_ray_warning_logged = True
+        logger.warning(
+            "Ignoring Cloudflare client-IP headers from peer %s, which is not listed in "
+            "ARAGORA_CLOUDFLARE_TRUSTED_PROXIES; if Cloudflare fronts this server, list "
+            "that peer there so clients are keyed on CF-Connecting-IP. Logged once.",
+            remote_addr,
+        )
+    return ""
+
+
 def forwarded_client_ip(headers, remote_addr: str) -> str:
     """Return the raw client address for a request arriving from ``remote_addr``.
 
-    A peer in ARAGORA_TRUSTED_PROXIES is believed for the header named by
+    A request carrying CF-RAY from a peer in ARAGORA_CLOUDFLARE_TRUSTED_PROXIES
+    is keyed on CF-Connecting-IP, else True-Client-IP, in every mode; CF-RAY
+    from any other peer is ignored (logged once per process).
+
+    Otherwise a peer in ARAGORA_TRUSTED_PROXIES is believed for the header named by
     ARAGORA_TRUSTED_PROXY_HEADER:
 
     - ``x-forwarded-for`` (default): the rightmost X-Forwarded-For hop that is
@@ -173,6 +199,9 @@ def forwarded_client_ip(headers, remote_addr: str) -> str:
 
     Any other peer is the client. Callers key the result with ``_normalize_ip``.
     """
+    cf_ip = _cloudflare_client_ip(headers, remote_addr)
+    if cf_ip:
+        return cf_ip
     if not is_trusted_proxy_address(remote_addr):
         return remote_addr
 
@@ -199,8 +228,10 @@ def _extract_client_ip(
 ) -> str:
     """Extract real client IP from request headers.
 
-    From a trusted proxy, the header chosen by ARAGORA_TRUSTED_PROXY_HEADER
-    (see ``forwarded_client_ip``); otherwise the direct connection IP.
+    The client ``forwarded_client_ip`` chooses: the Cloudflare headers from a
+    peer in ARAGORA_CLOUDFLARE_TRUSTED_PROXIES, the header chosen by
+    ARAGORA_TRUSTED_PROXY_HEADER from a trusted proxy, otherwise the direct
+    connection IP. Callers pass the CLIENT_IP_HEADERS of the request.
     """
     if not trust_xff_from_proxies or not remote_addr:
         return _normalize_ip(remote_addr)
@@ -275,6 +306,7 @@ __all__ = [
     "TRUSTED_PROXIES",
     "CLOUDFLARE_TRUSTED_PROXIES",
     "TRUSTED_PROXY_HEADER",
+    "CLIENT_IP_HEADERS",
     "_normalize_ip",
     "is_trusted_proxy_address",
     "is_cloudflare_trusted_proxy_address",
