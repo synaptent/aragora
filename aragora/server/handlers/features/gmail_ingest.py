@@ -178,7 +178,7 @@ class GmailIngestHandler(SecureHandler):
 
         # SECURITY: Extract user_id from JWT token, not from query params
         user_id, org_id, auth_error = self._get_authenticated_user(handler)
-        if auth_error:
+        if auth_error is not None or user_id is None:
             return auth_error
 
         if path == "/api/v1/gmail/status":
@@ -233,7 +233,7 @@ class GmailIngestHandler(SecureHandler):
 
         # SECURITY: Extract user_id from JWT token, not from body
         user_id, org_id, auth_error = self._get_authenticated_user(handler)
-        if auth_error:
+        if auth_error is not None or user_id is None:
             return auth_error
 
         if path == "/api/v1/gmail/connect":

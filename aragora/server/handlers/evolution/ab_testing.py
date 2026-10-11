@@ -43,14 +43,13 @@ _VALID_STATUSES = frozenset({"active", "concluded", "cancelled"})
 _DEBATE_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_\-]{1,128}$")
 
 # Try to import A/B testing module
-ABTestManager: Any
 try:
     from aragora.evolution.ab_testing import ABTestManager
 
     AB_TESTING_AVAILABLE = True
 except ImportError as e:
+    # ABTestManager stays undefined; it is only used when AB_TESTING_AVAILABLE.
     AB_TESTING_AVAILABLE = False
-    ABTestManager = None
     logger.debug("A/B testing module not available: %s", e)
 
 
@@ -255,7 +254,10 @@ class EvolutionABTestingHandler(BaseHandler):
         """
         from aragora.evolution.ab_testing import AB_TEST_COLUMNS, ABTest
 
-        with get_db_connection(str(self.manager.db_path)) as conn:
+        manager = self.manager
+        if manager is None:
+            return []
+        with get_db_connection(str(manager.db_path)) as conn:
             cursor = conn.cursor()
 
             if status:
