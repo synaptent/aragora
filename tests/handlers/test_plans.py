@@ -27,6 +27,7 @@ from aragora.pipeline.decision_plan.core import (
     PlanStatus,
 )
 from aragora.pipeline.execution_mode import ExecutionMode
+from aragora.pipeline.execution_ownership import ExecutionNotAuthorizedError
 from aragora.server.handlers.plans import PlansHandler
 
 
@@ -780,6 +781,36 @@ class TestApprovePlan:
         assert body["execution_scheduled"] is False
         assert body["execution_error"] == FAIL_CLOSED_BACKBONE_MESSAGE
 
+    def test_approve_plan_auto_execute_refusal_keeps_approval(
+        self, handler, mock_store, http_post_factory
+    ):
+        plan = _make_plan(id="dp-autorefused", status=PlanStatus.AWAITING_APPROVAL)
+        mock_store.get.return_value = plan
+
+        http_handler = http_post_factory(body={"auto_execute": True})
+
+        with (
+            patch("aragora.server.handlers.plans._fire_plan_notification") as mock_notify,
+            patch(
+                "aragora.pipeline.canonical_execution.queue_plan_execution",
+                side_effect=ExecutionNotAuthorizedError(
+                    "execution_org_mismatch", "Plan belongs to a different organization"
+                ),
+            ),
+            patch("aragora.pipeline.canonical_execution.schedule_coroutine") as mock_schedule,
+        ):
+            result = handler.handle_post("/api/v1/plans/dp-autorefused/approve", {}, http_handler)
+
+        body = _body(result)
+        assert _status(result) == 200
+        assert body["status"] == "approved"
+        assert body["execution_scheduled"] is False
+        assert body["execution_error"] == "Execution is not authorized for this organization"
+        assert "execution_id" not in body
+        assert plan.status == PlanStatus.APPROVED
+        mock_schedule.assert_not_called()
+        assert [c.args[0] for c in mock_notify.call_args_list] == ["approved"]
+
     def test_approve_plan_with_conditions(self, handler, mock_store, http_post_factory):
         plan = _make_plan(id="dp-cond", status=PlanStatus.AWAITING_APPROVAL)
         mock_store.get.return_value = plan
@@ -1041,6 +1072,30 @@ class TestExecutePlan:
 
         assert _status(result) == 503
         assert _body(result)["error"] == FAIL_CLOSED_BACKBONE_MESSAGE
+
+    def test_execute_plan_refusal_returns_not_found(self, handler, mock_store, http_post_factory):
+        plan = _make_plan(id="dp-refused", status=PlanStatus.APPROVED)
+        mock_store.get.return_value = plan
+
+        http_handler = http_post_factory(body={})
+
+        with (
+            patch("aragora.server.handlers.plans._fire_plan_notification") as mock_notify,
+            patch(
+                "aragora.pipeline.canonical_execution.queue_plan_execution",
+                side_effect=ExecutionNotAuthorizedError(
+                    "execution_org_mismatch", "Plan belongs to a different organization"
+                ),
+            ),
+            patch("aragora.pipeline.canonical_execution.schedule_coroutine") as mock_schedule,
+        ):
+            result = handler.handle_post("/api/v1/plans/dp-refused/execute", {}, http_handler)
+
+        assert _status(result) == 404
+        assert _body(result) == {"error": "Plan not found", "code": "not_found"}
+        assert plan.status == PlanStatus.APPROVED
+        mock_schedule.assert_not_called()
+        mock_notify.assert_not_called()
 
     def test_execute_plan_with_execution_mode(self, handler, mock_store, http_post_factory):
         plan = _make_plan(id="dp-mode", status=PlanStatus.APPROVED)

@@ -23,6 +23,7 @@ from aragora.pipeline.backbone_errors import (
 )
 from aragora.pipeline.backbone_runtime import BackboneRuntime
 from aragora.pipeline.execution_mode import ExecutionMode as SafetyMode
+from aragora.pipeline.execution_ownership import ExecutionNotAuthorizedError
 from aragora.server.handlers.base import (
     BaseHandler,
     HandlerResult,
@@ -389,6 +390,9 @@ class PlansHandler(BaseHandler):
             except BackbonePersistenceError as exc:
                 logger.warning("Auto-execution blocked for plan %s: %s", plan_id, exc)
                 execution_error = FAIL_CLOSED_BACKBONE_MESSAGE
+            except ExecutionNotAuthorizedError as exc:
+                logger.warning("Auto-execution refused for plan %s: %s", plan_id, exc.code)
+                execution_error = "Execution is not authorized for this organization"
             except (ImportError, RuntimeError, AttributeError, ValueError, TypeError) as exc:
                 logger.warning("Auto-execution scheduling failed for plan %s: %s", plan_id, exc)
                 execution_error = str(exc)
@@ -480,6 +484,7 @@ class PlansHandler(BaseHandler):
         background task and returns immediately with status 202 Accepted.
         """
         from aragora.pipeline.decision_plan.core import PlanStatus
+        from aragora.tenancy.record_scope import record_not_found
 
         user, perm_err = self.require_permission_or_error(self._current_handler, "plans:approve")
         if perm_err:
@@ -535,6 +540,9 @@ class PlansHandler(BaseHandler):
         except BackbonePersistenceError as exc:
             logger.warning("Interactive execution blocked for plan %s: %s", plan_id, exc)
             return error_response(FAIL_CLOSED_BACKBONE_MESSAGE, 503)
+        except ExecutionNotAuthorizedError as exc:
+            logger.warning("Execution refused for plan %s: %s", plan_id, exc.code)
+            return record_not_found("Plan")
         except (ImportError, RuntimeError, AttributeError, ValueError, TypeError) as exc:
             logger.error("Failed to schedule execution for plan %s: %s", plan_id, exc)
             return error_response(f"Failed to schedule execution: {exc}", 500)

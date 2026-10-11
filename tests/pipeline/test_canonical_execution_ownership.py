@@ -181,6 +181,35 @@ class TestQueuePersistsOwner:
 
         assert store.list_execution_records(plan_id=plan.id) == []
 
+    @pytest.mark.parametrize("scheduler_org", [ORG_B, None])
+    def test_queue_org_mismatch_refuses_new_plan_owned_by_other_org(
+        self, store: PlanStore, scheduler_org: str | None
+    ) -> None:
+        plan = _build_plan()
+        plan.org_id, plan.created_by = ORG_A, USER_A
+
+        with pytest.raises(ExecutionNotAuthorizedError) as excinfo:
+            queue_plan_execution(plan, auth_context=_auth(scheduler_org, "user-b"))
+
+        assert excinfo.value.code == EXECUTION_ORG_MISMATCH
+        assert store.get(plan.id) is None
+        assert store.list_execution_records(plan_id=plan.id) == []
+        assert store.list_runs(plan_id=plan.id) == []
+        assert (plan.org_id, plan.created_by) == (ORG_A, USER_A)
+
+    def test_queue_org_mismatch_control_new_plan_of_scheduler_org_is_queued(
+        self, store: PlanStore
+    ) -> None:
+        plan = _build_plan()
+        plan.org_id, plan.created_by = ORG_A, USER_A
+
+        launch = queue_plan_execution(plan, auth_context=_auth())
+
+        record = store.get_execution_record(launch["execution_id"])
+        assert record is not None
+        assert record["org_id"] == ORG_A
+        assert store.get_for_org(plan.id, ORG_A) is not None
+
     def test_decision_backbone_run_carries_scheduler_org(self, store: PlanStore) -> None:
         plan = _build_plan()
 
