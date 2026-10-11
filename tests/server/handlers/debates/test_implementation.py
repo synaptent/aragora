@@ -990,6 +990,50 @@ class TestWorkflowBackbone:
         assert status == 404
         assert body == not_found_body("Plan")
 
+    @pytest.mark.parametrize(
+        ("org_id", "expected_owner"),
+        [("org-a", ("org-a", "user-1")), (None, (None, None))],
+    )
+    def test_workflow_plan_is_stored_with_the_caller_as_owner(
+        self, handler, mock_storage, mock_package, org_id, expected_owner
+    ):
+        handler._body = {"execution_mode": "workflow"}
+        handler.get_current_user = lambda h: MagicMock(org_id=org_id, user_id="user-1")
+
+        from aragora.pipeline.decision_plan import ApprovalMode, DecisionPlan
+
+        plan = DecisionPlan(debate_id="debate-001", task="t", approval_mode=ApprovalMode.NEVER)
+        stored_owners = []
+
+        with (
+            patch("aragora.server.handlers.debates.implementation.run_async") as mock_run,
+            patch(
+                "aragora.server.handlers.debates.implementation._persist_receipt",
+                return_value=None,
+            ),
+            patch(
+                "aragora.pipeline.decision_plan.DecisionPlanFactory.from_debate_result",
+                return_value=plan,
+            ),
+            patch(
+                "aragora.server.handlers.debates.implementation.ensure_decision_plan_backbone_run",
+                return_value="run-workflow-owner",
+            ),
+            patch(
+                "aragora.server.handlers.debates.implementation.sync_decision_plan_backbone_receipt",
+                return_value=True,
+            ),
+            patch(
+                "aragora.pipeline.executor.store_plan",
+                side_effect=lambda p: stored_owners.append((p.org_id, p.created_by)),
+            ),
+        ):
+            mock_run.side_effect = [mock_package]
+            result = handler._create_decision_integrity(None, "debate-001")
+
+        assert parse_result(result)[1] == 200
+        assert stored_owners == [expected_owner]
+
 
 # =============================================================================
 # Tests for execute mode

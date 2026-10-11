@@ -32,7 +32,10 @@ from aragora.pipeline.decision_integrity import (
     coerce_debate_result,
 )
 from aragora.pipeline.execution_mode import ExecutionMode as SafetyMode
-from aragora.pipeline.execution_ownership import ExecutionNotAuthorizedError
+from aragora.pipeline.execution_ownership import (
+    ExecutionNotAuthorizedError,
+    resolve_execution_owner,
+)
 from aragora.pipeline.decision_integrity_utils import (
     ensure_decision_plan_backbone_run,
     execute_decision_plan_with_backbone,
@@ -677,6 +680,7 @@ class ImplementationOperationsMixin:
             implement_plan=package.plan,
             implementation_profile=implementation_profile,
         )
+        plan.org_id, plan.created_by = resolve_execution_owner(user)
         run_id = ensure_decision_plan_backbone_run(
             plan,
             auth_context=user,
