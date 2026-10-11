@@ -91,7 +91,7 @@ from aragora.nomic.dev_coordination.utils import (  # noqa: E402, F401
     _status_paths,
     _utcnow,
 )
-from aragora.nomic.dev_coordination import core as _core  # noqa: E402
+from aragora.nomic.dev_coordination import core as _core
 from aragora.nomic.dev_coordination.core import (  # noqa: E402, F401
     DevCoordinationStore,
     _glob_overlap,

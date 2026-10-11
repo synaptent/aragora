@@ -1088,7 +1088,7 @@ class RhetoricalAnalysisObserver:
         if templates:
             import random
 
-            template = random.choice(templates)  # noqa: S311 -- cosmetic text selection
+            template = random.choice(templates)
             return template.format(agent=agent)
 
         return f"{agent} employs {pattern.value} in their argument"

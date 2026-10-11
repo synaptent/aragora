@@ -62,7 +62,7 @@ def shuffle_proposals(
         New dict with shuffled key order
     """
     items = list(proposals.items())
-    rng = random.Random(seed)  # noqa: S311 -- position shuffling for fairness
+    rng = random.Random(seed)
     rng.shuffle(items)
     return dict(items)
 
