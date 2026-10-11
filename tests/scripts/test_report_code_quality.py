@@ -333,20 +333,33 @@ def _fake_package_root(tmp_path: Path) -> Path:
     [
         ('"aragora/*/timeouts.py" = ["G004"]\n', ["utils"]),
         ('"aragora/**/timeouts.py" = ["BLE001"]\n', ["utils"]),
+        ('"aragora/**/utils/*.py" = ["BLE001", "G004"]\n', ["utils"]),
+        ('"**/utils/*.py" = ["BLE001", "G004"]\n', ["utils"]),
+        ('"aragora/utils/**" = ["BLE001", "G004"]\n', ["utils"]),
+        ('"./aragora/utils/*.py" = ["G004"]\n', ["utils"]),
         ('"timeouts.py" = ["G004"]\n', ["utils"]),
         ('"aragora/{events,shared}/*" = ["BLE001"]\n', ["events", "shared"]),
         (
             '"!aragora/{caching,events,protocols,resilience,shared,types}/*" = ["G004"]\n',
             ["utils"],
         ),
+        (
+            '"!aragora/**/utils/*.py" = ["G004"]\n',
+            sorted(SEEDED_PACKAGES - {"utils"}),
+        ),
         ('"aragora/*/no_such_module.py" = ["BLE001"]\n', []),
     ],
     ids=[
         "wildcard-package-segment",
-        "double-star",
+        "double-star-one-directory",
+        "double-star-zero-directories",
+        "leading-double-star",
+        "trailing-double-star",
+        "dot-slash-prefix",
         "file-name-only",
         "brace-alternatives",
         "negated",
+        "negated-double-star",
         "matches-no-file",
     ],
 )
@@ -367,6 +380,34 @@ def test_ruff_carve_out_detection_follows_ruff_key_globs(
     assert summary[RUFF_KEY]["missing"] == expected_missing
     assert summary[MYPY_KEY]["missing"] == []
     assert len(violations) == (1 if expected_missing else 0)
+
+
+@pytest.mark.parametrize(
+    ("key", "path", "applies"),
+    [
+        ("aragora/**/utils/*.py", "aragora/utils/timeouts.py", True),
+        ("aragora/**/utils/*.py", "aragora/server/handlers/utils/auth.py", True),
+        ("aragora/**/utils/*.py", "aragora/futils/timeouts.py", False),
+        ("**/utils/*.py", "utils/timeouts.py", True),
+        ("**/utils/*.py", "aragora/utils/timeouts.py", True),
+        ("**/timeouts.py", "aragora/utils/timeouts.py", True),
+        ("aragora/utils/**", "aragora/utils/timeouts.py", True),
+        ("aragora/utils/**", "aragora/utilsx/timeouts.py", False),
+        ("aragora/**/**/utils/*.py", "aragora/utils/timeouts.py", True),
+        ("aragora/**/events/**/*.py", "aragora/events/dispatcher.py", True),
+        ("aragora/u*/**/*.py", "aragora/utils/timeouts.py", True),
+        ("aragora/**/[u]tils/*.py", "aragora/utils/timeouts.py", True),
+        ("aragora/**", "aragora/utils/timeouts.py", True),
+        ("**", "aragora/utils/timeouts.py", True),
+        ("aragora/**.py", "aragora/utils/timeouts.py", True),
+        ("./aragora/utils/*.py", "aragora/utils/timeouts.py", True),
+        ("./timeouts.py", "aragora/utils/timeouts.py", False),
+        ("!aragora/**/utils/*.py", "aragora/utils/timeouts.py", False),
+        ("!aragora/**/utils/*.py", "aragora/events/dispatcher.py", True),
+    ],
+)
+def test_ruff_key_applies_follows_ruff_recursive_globs(key: str, path: str, applies: bool) -> None:
+    assert report_code_quality._ruff_key_applies(key, path) is applies
 
 
 @pytest.mark.parametrize(
