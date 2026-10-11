@@ -161,7 +161,7 @@ class AuditRepository:
                 WHERE {where_clause}
                 ORDER BY timestamp DESC
                 LIMIT ? OFFSET ?
-                """  # nosec B608 - where_clause built from hardcoded conditions  # noqa: S608
+                """  # nosec B608 - where_clause built from hardcoded conditions
             cursor.execute(query, params)
             return [
                 {
@@ -212,6 +212,6 @@ class AuditRepository:
         where_clause = " AND ".join(conditions) if conditions else "1=1"
 
         with self._transaction() as cursor:
-            query = f"SELECT COUNT(*) FROM audit_log WHERE {where_clause}"  # nosec B608  # noqa: S608
+            query = f"SELECT COUNT(*) FROM audit_log WHERE {where_clause}"  # nosec B608
             cursor.execute(query, params)
             return cursor.fetchone()[0]
