@@ -53,7 +53,7 @@ class KnowledgeMixin:
 
         # 1. Check if Knowledge Mound module is available
         try:
-            from aragora.knowledge.mound import KnowledgeMound  # noqa: F401
+            from aragora.knowledge.mound import KnowledgeMound
             from aragora.knowledge.mound.types import MoundConfig  # noqa: F401
 
             components["module"] = {

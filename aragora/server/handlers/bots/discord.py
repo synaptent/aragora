@@ -38,8 +38,8 @@ from aragora.server.handlers.utils.rate_limit import rate_limit
 
 # RBAC imports - optional dependency
 try:
-    from aragora.rbac.checker import check_permission  # noqa: F401
-    from aragora.rbac.models import AuthorizationContext  # noqa: F401
+    from aragora.rbac.checker import check_permission
+    from aragora.rbac.models import AuthorizationContext
 
     RBAC_AVAILABLE = True
 except ImportError:
