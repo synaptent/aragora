@@ -143,6 +143,25 @@ class TestGmailIngestAuthentication:
             assert org_id == "org456"
             assert error is None
 
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("method", ["handle", "handle_post"])
+    async def test_no_user_and_no_auth_error_answers_401(self, method):
+        handler = GmailIngestHandler({})
+        with (
+            patch(
+                "aragora.server.handlers.features.gmail_ingest._gmail_limiter.is_allowed",
+                return_value=True,
+            ),
+            patch.object(handler, "get_auth_context", new=AsyncMock(return_value=MagicMock())),
+            patch.object(handler, "check_permission"),
+            patch.object(handler, "_get_authenticated_user", return_value=(None, None, None)),
+        ):
+            result = await getattr(handler, method)("/api/v1/gmail/status", {}, MagicMock())
+
+        assert result is not None
+        assert result.status_code == 401
+        assert b"Authentication required" in result.body
+
     def test_is_configured_no_env_vars(self):
         """Test _is_configured returns False when no env vars set."""
         handler = GmailIngestHandler({})

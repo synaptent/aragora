@@ -117,6 +117,23 @@ HANDLERS_AVAILABLE = all(
 )
 
 
+def _request_declares_body(request_handler: Any) -> bool:
+    """Whether the request announces a body: a positive Content-Length or chunked encoding.
+
+    Reading the socket of a request that announces neither waits on a keep-alive
+    connection until the client sends more or closes it.
+    """
+    headers = getattr(request_handler, "headers", None)
+    if headers is None:
+        return False
+    if "chunked" in (headers.get("Transfer-Encoding", "") or "").lower():
+        return True
+    try:
+        return int(headers.get("Content-Length", "") or 0) > 0
+    except (TypeError, ValueError):
+        return False
+
+
 class HandlerRegistryMixin:
     """
     Mixin providing modular HTTP handler initialization and routing.
@@ -495,7 +512,7 @@ class HandlerRegistryMixin:
             ):
                 # These handlers take the parsed JSON body, not the query dict, as
                 # handle_post's second argument.
-                body = handler.read_json_body(self)
+                body = handler.read_json_body(self) if _request_declares_body(self) else {}
                 if body is None:
                     from aragora.server.handlers.utils.responses import error_response
 

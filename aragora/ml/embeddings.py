@@ -211,7 +211,14 @@ class LocalEmbeddingService:
         tokenizer = getattr(self._model, "tokenizer", None)
         if not texts or not isinstance(max_seq_length, int) or not callable(tokenizer):
             return [False] * len(texts)
-        encoded = tokenizer(list(texts), add_special_tokens=True, truncation=False)
+        # One token past the window is enough to tell, and it bounds the ids built
+        # for an arbitrarily long text to the window's size.
+        encoded = tokenizer(
+            list(texts),
+            add_special_tokens=True,
+            truncation=True,
+            max_length=max_seq_length + 1,
+        )
         return [len(ids) > max_seq_length for ids in encoded["input_ids"]]
 
     async def embed_async(self, text: str) -> list[float]:

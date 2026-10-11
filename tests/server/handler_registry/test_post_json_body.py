@@ -80,6 +80,8 @@ def _dispatch(
     path: str,
     raw: bytes,
     role: str = "member",
+    content_length: str | None = None,
+    rfile: Any = None,
 ) -> tuple[int, dict[str, Any]]:
     instance: Any = registry_cls()
     token = create_access_token(
@@ -88,11 +90,14 @@ def _dispatch(
     instance.command = "POST"
     instance.path = path
     instance.headers = {
-        "Content-Length": str(len(raw)),
         "Content-Type": "application/json",
         "Authorization": f"Bearer {token}",
     }
-    instance.rfile = io.BytesIO(raw)
+    if content_length != "":
+        instance.headers["Content-Length"] = (
+            str(len(raw)) if content_length is None else content_length
+        )
+    instance.rfile = io.BytesIO(raw) if rfile is None else rfile
     instance.wfile = io.BytesIO()
     instance.send_response = MagicMock()
     instance.send_header = MagicMock()
@@ -188,6 +193,29 @@ def test_body_reading_post_handler_rejects_a_body_that_is_not_a_json_object(regi
     assert payload == {
         "error": {"message": "Request body must be a JSON object", "code": "invalid_json_body"}
     }
+
+
+@pytest.mark.parametrize("content_length", ["0", ""], ids=["zero", "absent"])
+def test_bodyless_post_is_not_read_from_the_socket(registry_cls, content_length):
+    # A keep-alive socket with nothing more to send blocks on read().
+    blocking_rfile = MagicMock()
+    blocking_rfile.read.side_effect = AssertionError("rfile.read on a bodyless POST")
+
+    with patch(
+        "aragora.server.handlers.knowledge.ml.get_local_embedding_service",
+        return_value=_FakeEmbeddingService(),
+    ):
+        status, payload = _dispatch(
+            registry_cls,
+            "/api/v1/ml/embed",
+            b"",
+            content_length=content_length,
+            rfile=blocking_rfile,
+        )
+
+    blocking_rfile.read.assert_not_called()
+    assert status == 400
+    assert "text or texts is required" in json.dumps(payload)
 
 
 def test_post_handlers_without_the_declaration_keep_the_query_dict(registry_cls, monkeypatch):

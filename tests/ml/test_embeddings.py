@@ -18,6 +18,7 @@ Tests cover:
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import numpy as np
@@ -395,6 +396,22 @@ class TestLocalEmbeddingServiceExceedsMaxSeqLength:
         service = self._service(4, tokenizer)
         service.exceeds_max_seq_length(["one two"])
         assert tokenizer.call_args.kwargs["add_special_tokens"] is True
+
+    def test_never_tokenizes_more_than_one_token_past_the_window(self):
+        def bounded_tokenizer(texts: list[str], **kwargs: Any) -> dict[str, list[list[int]]]:
+            encoded = self._word_tokenizer(texts)["input_ids"]
+            if kwargs.get("truncation"):
+                encoded = [ids[: kwargs["max_length"]] for ids in encoded]
+            return {"input_ids": encoded}
+
+        tokenizer = MagicMock(side_effect=bounded_tokenizer)
+        service = self._service(4, tokenizer)
+
+        flags = service.exceeds_max_seq_length(["one two", "word " * 100_000])
+
+        assert flags == [False, True]
+        assert tokenizer.call_args.kwargs["truncation"] is True
+        assert tokenizer.call_args.kwargs["max_length"] == 5
 
     @pytest.mark.parametrize(
         ("max_seq_length", "tokenizer"),
