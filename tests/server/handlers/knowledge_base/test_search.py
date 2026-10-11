@@ -183,7 +183,7 @@ class SearchHandler(SearchOperationsMixin):
         self._query_engine = query_engine
         self._fact_store = fact_store
         self._knowledge_mound = knowledge_mound
-        self.ctx = {}
+        self.ctx: dict[str, Any] = {}
 
     def _get_query_engine(self):
         return self._query_engine

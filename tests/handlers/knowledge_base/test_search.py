@@ -24,14 +24,14 @@ from aragora.server.handlers.knowledge_base.search import SearchOperationsMixin
 # ---------------------------------------------------------------------------
 
 
-def _body(result: object) -> dict:
+def _body(result: Any) -> dict:
     """Extract JSON body dict from a HandlerResult."""
     if isinstance(result, dict):
         return result
     return json.loads(result.body)
 
 
-def _status(result: object) -> int:
+def _status(result: Any) -> int:
     """Extract HTTP status code from a HandlerResult."""
     if isinstance(result, dict):
         return result.get("status_code", 200)
