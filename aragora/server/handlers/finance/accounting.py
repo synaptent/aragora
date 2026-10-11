@@ -377,7 +377,7 @@ async def handle_accounting_callback(request: web.Request) -> web.Response:
     try:
         code = request.query.get("code")
         realm_id = request.query.get("realmId")
-        _state = request.query.get("state")  # (for CSRF validation)
+        _state = request.query.get("state")  # noqa: F841 (for CSRF validation)
         error = request.query.get("error")
 
         if error:
