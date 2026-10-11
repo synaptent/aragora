@@ -561,7 +561,7 @@ class PersistentOriginStore:
             WHERE {" AND ".join(conditions)}
             ORDER BY created_at DESC
             LIMIT ${len(params)}
-        """  # noqa: S608 -- dynamic clause from internal state
+        """  # dynamic clause from internal state
 
         results = []
         async with self._require_pool().acquire() as conn:
@@ -688,7 +688,7 @@ class PersistentOriginStore:
             WHERE {" AND ".join(conditions)}
             ORDER BY created_at DESC
             LIMIT ?
-        """  # noqa: S608 -- dynamic clause from internal state
+        """  # dynamic clause from internal state
 
         with sqlite3.connect(self._require_sqlite_path()) as conn:
             cursor = conn.execute(query, params)

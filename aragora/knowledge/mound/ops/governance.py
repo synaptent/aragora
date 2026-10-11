@@ -788,7 +788,7 @@ class AuditTrail:
                 WHERE {where_clause}
                 ORDER BY timestamp DESC
                 LIMIT ? OFFSET ?
-            """  # noqa: S608 -- dynamic clause from internal state
+            """  # dynamic clause from internal state
             params.extend([limit, offset])
 
             entries = []
