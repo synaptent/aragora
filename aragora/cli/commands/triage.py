@@ -491,7 +491,7 @@ async def _run_gmail_auth() -> None:
                 auth_code_holder["error"] = error
                 self.wfile.write(f"OAuth error: {error}".encode())
 
-        def log_message(self, format: str, *args: object) -> None:  # noqa: A002
+        def log_message(self, format: str, *args: object) -> None:
             pass
 
     try:

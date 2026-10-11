@@ -36,7 +36,7 @@ class RetryConfig:
         """Calculate delay for a retry attempt with exponential backoff."""
         delay = min(self.backoff_factor * (2**attempt), self.max_backoff)
         if self.jitter:
-            delay = delay * (0.5 + random.random())  # noqa: S311 -- retry jitter
+            delay = delay * (0.5 + random.random())
         return delay
 
 

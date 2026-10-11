@@ -954,7 +954,7 @@ class ConsensusMemory(SQLiteStore):
             SELECT debate_id, data FROM dissent
             WHERE debate_id IN ({placeholders})
             ORDER BY timestamp DESC
-        """  # noqa: S608 -- parameterized query
+        """  # parameterized query
 
         result: dict[str, list[DissentRecord]] = {cid: [] for cid in consensus_ids}
 

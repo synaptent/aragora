@@ -169,7 +169,7 @@ class ScopeGuard:
         """Detect the track from the current or specified branch name."""
         if branch is None:
             result = subprocess.run(
-                ["git", "rev-parse", "--abbrev-ref", "HEAD"],  # noqa: S607 -- fixed command
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"],  # fixed command
                 capture_output=True,
                 text=True,
                 cwd=self.repo_path,
@@ -195,8 +195,8 @@ class ScopeGuard:
 
     def get_changed_files(self, base_branch: str = "main") -> list[str]:
         """Get files changed in current branch relative to base."""
-        result = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
-            ["git", "diff", "--name-only", f"{base_branch}...HEAD"],  # noqa: S607 -- fixed command
+        result = subprocess.run(  # subprocess with fixed args, no shell
+            ["git", "diff", "--name-only", f"{base_branch}...HEAD"],  # fixed command
             capture_output=True,
             text=True,
             cwd=self.repo_path,
@@ -205,7 +205,7 @@ class ScopeGuard:
         if result.returncode != 0:
             # Fallback: staged + unstaged changes
             result = subprocess.run(
-                ["git", "diff", "--name-only", "HEAD"],  # noqa: S607 -- fixed command
+                ["git", "diff", "--name-only", "HEAD"],  # fixed command
                 capture_output=True,
                 text=True,
                 cwd=self.repo_path,

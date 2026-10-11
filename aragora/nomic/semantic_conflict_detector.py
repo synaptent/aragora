@@ -132,8 +132,8 @@ class SemanticConflictDetector:
         """
         try:
             # Get list of changed Python files
-            result = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
-                ["git", "diff", "--name-only", f"{base}...{branch}", "--", "*.py"],  # noqa: S607 -- fixed command
+            result = subprocess.run(  # subprocess with fixed args, no shell
+                ["git", "diff", "--name-only", f"{base}...{branch}", "--", "*.py"],  # fixed command
                 cwd=self.repo_path,
                 capture_output=True,
                 text=True,
@@ -147,8 +147,8 @@ class SemanticConflictDetector:
 
             for file_path in files:
                 try:
-                    content_result = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
-                        ["git", "show", f"{branch}:{file_path}"],  # noqa: S607 -- fixed command
+                    content_result = subprocess.run(  # subprocess with fixed args, no shell
+                        ["git", "show", f"{branch}:{file_path}"],  # fixed command
                         cwd=self.repo_path,
                         capture_output=True,
                         text=True,

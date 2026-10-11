@@ -586,6 +586,7 @@ class TranscriptionHandler(BaseHandler):
                             workspace_id=job.workspace_id or "default",
                             async_processing=True,
                             metadata=ingest_metadata,
+                            org_id=job.org_id,
                         )
                     except ImportError:
                         logger.warning(

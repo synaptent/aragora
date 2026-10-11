@@ -578,13 +578,13 @@ def calculate_backoff_delay(
 
     # Apply jitter
     if jitter_mode == JitterMode.ADDITIVE:
-        jitter = random.random() * base_delay * jitter_factor  # noqa: S311 -- retry jitter
+        jitter = random.random() * base_delay * jitter_factor
         delay = delay + jitter
     elif jitter_mode == JitterMode.MULTIPLICATIVE:
-        factor = 1.0 + (random.random() * 2 - 1) * jitter_factor  # noqa: S311 -- retry jitter
+        factor = 1.0 + (random.random() * 2 - 1) * jitter_factor
         delay = delay * factor
     elif jitter_mode == JitterMode.FULL:
-        delay = random.random() * delay  # noqa: S311 -- retry jitter
+        delay = random.random() * delay
     # NONE: no jitter applied
 
     return float(max(0.0, delay))

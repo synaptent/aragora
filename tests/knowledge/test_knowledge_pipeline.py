@@ -8,6 +8,7 @@ import pytest
 from pathlib import Path
 from typing import Optional
 
+from aragora.knowledge.embeddings import chunk_namespace
 from aragora.knowledge import (
     ChunkMatch,
     DatasetQueryEngine,
@@ -252,7 +253,7 @@ class TestKnowledgePipelineIntegration:
                     "document_id": "doc_001",
                 }
             ],
-            workspace_id="ws_test",
+            workspace_id=chunk_namespace("ws_test", "org-test"),
         )
 
         engine = DatasetQueryEngine(
@@ -432,7 +433,7 @@ class TestEndToEndWorkflow:
                     "document_id": "doc_001",
                 }
             ],
-            workspace_id="ws_test",
+            workspace_id=chunk_namespace("ws_test", "org-test"),
         )
 
         # Step 3: Extract facts
@@ -470,6 +471,7 @@ class TestPipelineConfiguration:
         """Test pipeline with custom configuration."""
         config = PipelineConfig(
             workspace_id="ws_custom",
+            org_id="org-test",
             use_weaviate=False,
             extract_facts=False,
             min_fact_confidence=0.7,

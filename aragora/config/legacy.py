@@ -25,7 +25,7 @@ import warnings
 from pathlib import Path
 from typing import Any
 
-from aragora.persistence.db_config import get_default_data_dir
+from aragora.config.data_dir import get_default_data_dir
 
 # Emit deprecation warning on import
 warnings.warn(
@@ -540,7 +540,7 @@ def get_db_path(name: str, ensure_dir: bool = True) -> Path:
 
     # Check if we should use consolidated mode
     try:
-        from aragora.persistence.db_config import (
+        from aragora.config.data_dir import (
             CONSOLIDATED_DB_MAPPING,
             LEGACY_DB_NAMES,
             DatabaseMode,

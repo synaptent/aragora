@@ -39,6 +39,9 @@ from aragora.server.handlers.email_services import (
     _snoozed_emails,
     _snoozed_emails_lock,
 )
+from aragora.server.handlers.email.email_services import _followup_owners
+from aragora.services.followup_tracker import FollowUpPriority
+from aragora.services.snooze_recommender import SnoozeReason
 
 
 # ===========================================================================
@@ -84,9 +87,10 @@ class MockFollowUpItem:
     expected_by: datetime | None = None
     status: MockFollowUpStatus = MockFollowUpStatus.AWAITING
     days_waiting: int = 2
-    urgency_score: float = 0.5
+    priority: FollowUpPriority = FollowUpPriority.NORMAL
     reminder_count: int = 0
     resolved_at: datetime | None = None
+    updated_at: datetime = field(default_factory=datetime.now)
 
     def __post_init__(self):
         if self.expected_by is None:
@@ -106,9 +110,8 @@ class MockSnoozeSuggestion:
 
     snooze_until: datetime
     label: str = "Tomorrow morning"
-    reason: str = "work_hours"
+    reason: SnoozeReason = SnoozeReason.WORK_HOURS
     confidence: float = 0.85
-    source: str = "schedule"
 
 
 @dataclass
@@ -165,8 +168,9 @@ class MockFollowUpTracker:
         user_id: str = "default",
         include_resolved: bool = False,
         sort_by: str = "urgency",
+        only_ids: set[str] | None = None,
     ) -> list[MockFollowUpItem]:
-        items = list(self._followups.values())
+        items = [i for i in self._followups.values() if only_ids is None or i.id in only_ids]
         if not include_resolved:
             items = [
                 i
@@ -187,7 +191,9 @@ class MockFollowUpTracker:
             item.resolved_at = datetime.now()
         return item
 
-    async def check_for_replies(self, thread_ids: list[str]) -> list[MockFollowUpItem]:
+    async def check_for_replies(
+        self, thread_ids: list[str], only_ids: set[str] | None = None
+    ) -> list[MockFollowUpItem]:
         # Return empty list - no replies detected
         return []
 
@@ -263,6 +269,7 @@ class MockAuthContext:
     """Mock authorization context for testing."""
 
     user_id: str = "test_user"
+    org_id: str = "test_org"
     tenant_id: str = "test_tenant"
     roles: list[str] = field(default_factory=lambda: ["admin"])
     permissions: list[str] = field(
@@ -310,7 +317,7 @@ def mock_followup_tracker():
     import asyncio
 
     _loop = asyncio.new_event_loop()
-    _loop.run_until_complete(
+    item = _loop.run_until_complete(
         tracker.mark_awaiting_reply(
             email_id="email_001",
             thread_id="thread_001",
@@ -320,7 +327,9 @@ def mock_followup_tracker():
             expected_by=datetime.now() + timedelta(days=1),
         )
     )
-    return tracker
+    owner = (MockAuthContext.user_id, MockAuthContext.org_id)
+    with patch.dict(_followup_owners, {item.id: owner}, clear=True):
+        yield tracker
 
 
 @pytest.fixture
@@ -546,22 +555,6 @@ class TestEmailServicesValidation:
         assert result.status_code == 400
         body = unwrap_response(json.loads(result.body))
         assert "invalid" in body.get("error", "").lower()
-
-    @pytest.mark.asyncio
-    async def test_category_feedback_missing_fields(self, mock_auth_context):
-        """Test category feedback missing required fields returns 400."""
-        with patch("aragora.server.handlers.email_services.get_email_categorizer") as mock_get:
-            mock_get.return_value = MockEmailCategorizer()
-
-            result = await handle_category_feedback(
-                data={"email_id": "e1"},  # Missing predicted_category and correct_category
-                user_id="test_user",
-                auth_context=mock_auth_context,
-            )
-
-            assert result.status_code == 400
-            body = unwrap_response(json.loads(result.body))
-            assert "required" in body.get("error", "").lower()
 
 
 # ===========================================================================
@@ -872,11 +865,9 @@ class TestCategoryFeedback:
     """Test category feedback endpoint."""
 
     @pytest.mark.asyncio
-    async def test_category_feedback_success(self, mock_auth_context):
-        """Test submitting category feedback."""
+    async def test_category_feedback_is_not_implemented(self, mock_auth_context):
+        """Authorized category feedback answers 501 without touching a categorizer."""
         with patch("aragora.server.handlers.email_services.get_email_categorizer") as mock_get:
-            mock_get.return_value = MockEmailCategorizer()
-
             result = await handle_category_feedback(
                 data={
                     "email_id": "email_123",
@@ -887,10 +878,9 @@ class TestCategoryFeedback:
                 auth_context=mock_auth_context,
             )
 
-            assert result.status_code == 200
-            body = unwrap_response(json.loads(result.body))
-            assert body["email_id"] == "email_123"
-            assert body["feedback_recorded"] is True
+            assert result.status_code == 501
+            assert json.loads(result.body)["error"]["code"] == "not_implemented"
+            mock_get.assert_not_called()
 
 
 # ===========================================================================

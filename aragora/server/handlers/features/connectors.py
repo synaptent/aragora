@@ -112,6 +112,15 @@ def _mask_secrets(value: Any) -> Any:
     return value
 
 
+def _contains_mask(value: Any) -> bool:
+    """Whether the mask appears anywhere in ``value``."""
+    if isinstance(value, dict):
+        return any(_contains_mask(v) for v in value.values())
+    if isinstance(value, list):
+        return any(_contains_mask(v) for v in value)
+    return value == CONFIG_SECRET_MASK
+
+
 def _mask_inside_list(value: Any, in_list: bool = False) -> bool:
     """Whether the mask appears anywhere inside a list element of ``value``."""
     if isinstance(value, dict):
@@ -304,9 +313,12 @@ class ConnectorsHandler(SecureHandler):
         """Check if this handler can handle the given path."""
         if not path.startswith("/api/v1/connectors/"):
             return False
-        # Per-connector health and test are ConnectorManagementHandler's routes;
-        # declining them lets the route index fall through to it.
+        # The runtime-registry summary and per-connector health and test are
+        # ConnectorManagementHandler's routes; declining them lets the route
+        # index fall through to it.
         segments = path[len("/api/v1/connectors/") :].split("/")
+        if segments == ["summary"]:
+            return False
         return not (len(segments) == 2 and segments[1] in ("health", "test"))
 
     async def handle(
@@ -554,7 +566,7 @@ class ConnectorsHandler(SecureHandler):
             body = await self._get_json_body(request)
         except (ValueError, KeyError, TypeError) as e:
             logger.warning("Handler error: %s", e)
-            return self._error_response(400, "Invalid request body")
+            return self._error_response(400, "Invalid JSON body")
 
         connector_type = body.get("type")
         if not connector_type:
@@ -566,11 +578,18 @@ class ConnectorsHandler(SecureHandler):
         if CONNECTOR_TYPES[connector_type].get("coming_soon"):
             return self._error_response(400, f"Connector type {connector_type} is coming soon")
 
+        config = body.get("config", {})
+        # A new connector has no stored secret for the mask to stand for.
+        if _contains_mask(config):
+            return self._error_response(
+                400,
+                f"config contains the secret mask {CONFIG_SECRET_MASK}; send the real values",
+            )
+
         # Create connector
         connector_id = str(uuid4())
         type_meta = CONNECTOR_TYPES[connector_type]
         name = body.get("name", type_meta.get("name", connector_type))
-        config = body.get("config", {})
 
         # Save to persistent store if available
         store = await _get_store()
@@ -635,7 +654,7 @@ class ConnectorsHandler(SecureHandler):
             body = await self._get_json_body(request)
         except (ValueError, KeyError, TypeError) as e:
             logger.warning("Handler error: %s", e)
-            return self._error_response(400, "Invalid request body")
+            return self._error_response(400, "Invalid JSON body")
 
         if "config" in body and _mask_inside_list(body["config"]):
             return self._error_response(
@@ -796,7 +815,7 @@ class ConnectorsHandler(SecureHandler):
             body = await self._get_json_body(request)
         except (ValueError, KeyError, TypeError) as e:
             logger.warning("Handler error: %s", e)
-            return self._error_response(400, "Invalid request body")
+            return self._error_response(400, "Invalid JSON body")
 
         connector_id = body.get("connector_id")
 
@@ -1135,7 +1154,9 @@ class ConnectorsHandler(SecureHandler):
 
         Wraps parse_json_body and returns just the dict, raising on error.
         """
-        body, _err = await parse_json_body(request, context="connectors")
+        body, err = await parse_json_body(request, context="connectors")
+        if err is not None:
+            raise ValueError("Invalid JSON body")
         return body if body is not None else {}
 
     def _json_response(self, status: int, data: Any) -> dict[str, Any]:

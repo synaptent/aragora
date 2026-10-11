@@ -801,7 +801,7 @@ class PostgresStore(ABC):
         if not id_column.replace("_", "").isalnum():
             raise ValueError(f"Invalid column name: {id_column}")
 
-        query = f"SELECT 1 FROM {table} WHERE {id_column} = $1"  # nosec B608  # noqa: S608
+        query = f"SELECT 1 FROM {table} WHERE {id_column} = $1"  # nosec B608
         row = await self.fetch_one(query, id_value)
         return row is not None
 
@@ -871,7 +871,7 @@ class PostgresStore(ABC):
 
         self._validate_where_clause(where, bool(args))
 
-        sql = f"SELECT COUNT(*) FROM {table}"  # nosec B608 - table validated above  # noqa: S608
+        sql = f"SELECT COUNT(*) FROM {table}"  # nosec B608 - table validated above
         if where:
             sql += f" WHERE {where}"  # nosec B608 - validated by _validate_where_clause
 
@@ -900,7 +900,7 @@ class PostgresStore(ABC):
         if not id_column.replace("_", "").isalnum():
             raise ValueError(f"Invalid column name: {id_column}")
 
-        query = f"DELETE FROM {table} WHERE {id_column} = $1"  # nosec B608  # noqa: S608
+        query = f"DELETE FROM {table} WHERE {id_column} = $1"  # nosec B608
         result = await self.execute(query, id_value)
         # Result is like "DELETE 1" or "DELETE 0"
         return result.endswith(" 0") is False

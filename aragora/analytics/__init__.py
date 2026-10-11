@@ -53,6 +53,9 @@ from .outcome_analytics import (
     AgentContribution,
     get_outcome_analytics,
 )
+from .debate_events import subscribe_debate_analytics
+
+subscribe_debate_analytics()
 
 __all__ = [
     "AnalyticsDashboard",

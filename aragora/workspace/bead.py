@@ -164,7 +164,7 @@ class BeadManager:
                     auto_commit=False,
                 )
 
-    async def _ensure_nomic_store(self) -> None:
+    async def _ensure_nomic_store(self) -> NomicBeadStore:
         if self._nomic_store is None:
             if self._canonical_stores is None:
                 bead_dir = str(self._storage_dir) if self._storage_dir else None
@@ -174,9 +174,11 @@ class BeadManager:
                     auto_commit=False,
                 )
             self._nomic_store = await self._canonical_stores.bead_store()
-        if self._nomic_store and not self._nomic_initialized:
-            await self._nomic_store.initialize()
+        store = self._nomic_store
+        if not self._nomic_initialized:
+            await store.initialize()
             self._nomic_initialized = True
+        return store
 
     def _to_nomic_status(self, status: BeadStatus) -> NomicBeadStatus:
         return workspace_bead_status_to_nomic(status)
@@ -214,34 +216,34 @@ class BeadManager:
             payload=payload or {},
             depends_on=depends_on or [],
         )
-        await self._ensure_nomic_store()
-        await self._nomic_store.create(self._to_nomic_bead(bead))
+        store = await self._ensure_nomic_store()
+        await store.create(self._to_nomic_bead(bead))
         return bead
 
     async def get_bead(self, bead_id: str) -> Bead | None:
         """Get a bead by ID."""
-        await self._ensure_nomic_store()
-        nomic_bead = await self._nomic_store.get(bead_id)
+        store = await self._ensure_nomic_store()
+        nomic_bead = await store.get(bead_id)
         return self._from_nomic_bead(nomic_bead) if nomic_bead else None
 
     async def assign_bead(self, bead_id: str, agent_id: str) -> Bead | None:
         """Assign a bead to an agent."""
-        await self._ensure_nomic_store()
-        success = await self._nomic_store.claim(bead_id, agent_id)
+        store = await self._ensure_nomic_store()
+        success = await store.claim(bead_id, agent_id)
         if not success:
             return None
-        nomic_bead = await self._nomic_store.get(bead_id)
+        nomic_bead = await store.get(bead_id)
         if not nomic_bead:
             return None
         nomic_bead.metadata.update({"workspace_status": BeadStatus.ASSIGNED.value})
-        await self._nomic_store.update(nomic_bead)
+        await store.update(nomic_bead)
         return self._from_nomic_bead(nomic_bead)
 
     async def start_bead(self, bead_id: str) -> Bead | None:
         """Mark a bead as running."""
-        await self._ensure_nomic_store()
-        await self._nomic_store.update_status(bead_id, NomicBeadStatus.RUNNING)
-        nomic_bead = await self._nomic_store.get(bead_id)
+        store = await self._ensure_nomic_store()
+        await store.update_status(bead_id, NomicBeadStatus.RUNNING)
+        nomic_bead = await store.get(bead_id)
         if not nomic_bead:
             return None
         nomic_bead.metadata.update(
@@ -250,7 +252,7 @@ class BeadManager:
                 "started_at": time.time(),
             }
         )
-        await self._nomic_store.update(nomic_bead)
+        await store.update(nomic_bead)
         return self._from_nomic_bead(nomic_bead)
 
     async def complete_bead(
@@ -259,9 +261,9 @@ class BeadManager:
         result: dict[str, Any] | None = None,
     ) -> Bead | None:
         """Mark a bead as done with an optional result."""
-        await self._ensure_nomic_store()
-        await self._nomic_store.update_status(bead_id, NomicBeadStatus.COMPLETED)
-        nomic_bead = await self._nomic_store.get(bead_id)
+        store = await self._ensure_nomic_store()
+        await store.update_status(bead_id, NomicBeadStatus.COMPLETED)
+        nomic_bead = await store.get(bead_id)
         if not nomic_bead:
             return None
         nomic_bead.metadata.update(
@@ -271,14 +273,14 @@ class BeadManager:
                 "completed_at": time.time(),
             }
         )
-        await self._nomic_store.update(nomic_bead)
+        await store.update(nomic_bead)
         return self._from_nomic_bead(nomic_bead)
 
     async def fail_bead(self, bead_id: str, error: str) -> Bead | None:
         """Mark a bead as failed."""
-        await self._ensure_nomic_store()
-        await self._nomic_store.update_status(bead_id, NomicBeadStatus.FAILED, error_message=error)
-        nomic_bead = await self._nomic_store.get(bead_id)
+        store = await self._ensure_nomic_store()
+        await store.update_status(bead_id, NomicBeadStatus.FAILED, error_message=error)
+        nomic_bead = await store.get(bead_id)
         if not nomic_bead:
             return None
         nomic_bead.metadata.update(
@@ -287,7 +289,7 @@ class BeadManager:
                 "completed_at": time.time(),
             }
         )
-        await self._nomic_store.update(nomic_bead)
+        await store.update(nomic_bead)
         return self._from_nomic_bead(nomic_bead)
 
     async def list_beads(
@@ -297,8 +299,8 @@ class BeadManager:
         agent_id: str | None = None,
     ) -> list[Bead]:
         """List beads with optional filters."""
-        await self._ensure_nomic_store()
-        beads = await self._nomic_store.list_all()
+        store = await self._ensure_nomic_store()
+        beads = await store.list_all()
         results: list[Bead] = []
         for nomic_bead in beads:
             workspace_bead = self._from_nomic_bead(nomic_bead)
@@ -313,8 +315,8 @@ class BeadManager:
 
     async def get_ready_beads(self, convoy_id: str) -> list[Bead]:
         """Get beads that are ready to execute (dependencies met)."""
-        await self._ensure_nomic_store()
-        ready = await self._nomic_store.list_pending_runnable()
+        store = await self._ensure_nomic_store()
+        ready = await store.list_pending_runnable()
         results: list[Bead] = []
         for nomic_bead in ready:
             workspace_bead = self._from_nomic_bead(nomic_bead)

@@ -39,11 +39,15 @@ sys.path.insert(0, str(REPO_ROOT))
 from aragora.agents.claude_pool_health import (  # noqa: E402
     build_snapshot,
     classify_probe,
+    classify_probe_reason,
     is_healthy,
 )
 
 DEFAULT_PROFILES = tuple(f"max-{i:02d}" for i in range(1, 14))
 SNAPSHOT_PATH = REPO_ROOT / ".aragora" / "claude_pool_health.json"
+_STDERR_REASONS_OVERRIDING_REPLY = frozenset(
+    {"auth_missing", "auth_revoked", "auth_expired", "quota_exhausted", "invalid_response"}
+)
 
 
 def _configured_profiles() -> list[str]:
@@ -80,6 +84,12 @@ def _profile_email(profile_tool: Path, profile: str) -> str:
 
 
 def _probe(profile_tool: Path, profile: str, prompt: str, timeout: int) -> str:
+    return _probe_with_reason(profile_tool, profile, prompt, timeout)[0]
+
+
+def _probe_with_reason(
+    profile_tool: Path, profile: str, prompt: str, timeout: int
+) -> tuple[str, str]:
     try:
         proc = subprocess.run(
             [str(profile_tool), "exec", profile, "--", "claude", "--print", "-p", "-"],
@@ -90,9 +100,11 @@ def _probe(profile_tool: Path, profile: str, prompt: str, timeout: int) -> str:
             check=False,
         )
     except subprocess.TimeoutExpired:
-        return "unauthenticated"
-    except OSError as exc:
-        return classify_probe(str(exc))
+        return "unauthenticated", "transport_timeout"
+    except FileNotFoundError:
+        return "not_configured", "auth_missing"
+    except OSError:
+        return "expired", "unknown_failure"
     # Strip the claude_profile.sh wrapper preamble before classifying.
     lines = [
         ln
@@ -100,9 +112,20 @@ def _probe(profile_tool: Path, profile: str, prompt: str, timeout: int) -> str:
         if not (ln.startswith("Using profile home:") or ln.startswith("Command:"))
     ]
     combined = "\n".join(lines)
-    if not combined.strip():
-        combined = proc.stderr or ""
-    return classify_probe(combined, returncode=proc.returncode)
+    stderr = proc.stderr or ""
+    stderr_reason = classify_probe_reason(stderr) if stderr.strip() else "ok"
+    # The CLI can log timeouts, retried 5xx responses or other errors on stderr and
+    # still answer; only credential, quota or malformed-response signals outrank a reply.
+    real_reply = proc.returncode == 0 and classify_probe_reason(combined, returncode=0) == "ok"
+    if not combined.strip() or (
+        stderr_reason != "ok"
+        and (not real_reply or stderr_reason in _STDERR_REASONS_OVERRIDING_REPLY)
+    ):
+        combined = stderr
+    return (
+        classify_probe(combined, returncode=proc.returncode),
+        classify_probe_reason(combined, returncode=proc.returncode),
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -123,12 +146,13 @@ def main(argv: list[str] | None = None) -> int:
 
     records: list[dict] = []
     for profile in profiles:
-        state = _probe(profile_tool, profile, args.prompt, args.timeout)
+        state, reason = _probe_with_reason(profile_tool, profile, args.prompt, args.timeout)
         records.append(
             {
                 "name": profile,
                 "email": _profile_email(profile_tool, profile),
                 "state": state,
+                "reason_code": reason,
             }
         )
 
@@ -145,11 +169,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Claude pool verify — {snapshot['healthy']}/{snapshot['total']} healthy")
         for p in snapshot["profiles"]:
             flag = "ok " if is_healthy(p["state"]) else "DEAD"
-            print(f"  [{flag}] {p['name']:9} {p['state']:15} {p['email']}")
+            print(f"  [{flag}] {p['name']:9} {p['state']:15} {p['email']} {p['reason_code']}")
         print(f"\nSnapshot: {snapshot_path}")
-        dead = [p["name"] for p in snapshot["profiles"] if not is_healthy(p["state"])]
-        if dead:
-            print(f"Re-auth needed: {', '.join(dead)}")
+        for label, reasons in (
+            ("Re-auth needed", {"auth_revoked", "auth_expired", "auth_missing"}),
+            ("Quota exhausted", {"quota_exhausted"}),
+        ):
+            names = [p["name"] for p in snapshot["profiles"] if p["reason_code"] in reasons]
+            if names:
+                print(f"{label}: {', '.join(names)}")
 
     # Non-zero when any configured profile is unusable, for cron alerting.
     return 0 if snapshot["healthy"] == snapshot["total"] else 1

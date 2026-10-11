@@ -148,8 +148,8 @@ class PRReviewerSkill(Skill):
             return None, f"Invalid PR URL format: {pr_url}"
 
         try:
-            result = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
-                ["gh", "pr", "diff", pr_number, "--repo", owner_repo],  # noqa: S607 -- fixed command
+            result = subprocess.run(  # subprocess with fixed args, no shell
+                ["gh", "pr", "diff", pr_number, "--repo", owner_repo],  # fixed command
                 capture_output=True,
                 text=True,
                 timeout=30,
@@ -175,7 +175,7 @@ class PRReviewerSkill(Skill):
     ) -> tuple[dict[str, Any] | None, str | None]:
         """Run ``aragora review`` as a subprocess and parse its JSON output."""
         try:
-            result = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
+            result = subprocess.run(  # subprocess with fixed args, no shell
                 self._review_command(),
                 input=diff,
                 capture_output=True,
@@ -238,8 +238,8 @@ class PRReviewerSkill(Skill):
         comment_body = self._format_comment(findings)
 
         try:
-            result = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
-                [  # noqa: S607 -- fixed command
+            result = subprocess.run(  # subprocess with fixed args, no shell
+                [  # fixed command
                     "gh",
                     "pr",
                     "comment",

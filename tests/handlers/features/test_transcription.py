@@ -24,7 +24,7 @@ import json
 import time
 from dataclasses import dataclass, field
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -1590,3 +1590,36 @@ class TestParseUploadDispatch:
         )
         assert err is not None
         assert err.code == TranscriptionErrorCode.INVALID_FILENAME
+
+
+class TestKnowledgeOrgScope:
+    """Transcript ingestion is scoped to the org of the user who uploaded the file."""
+
+    @pytest.mark.asyncio
+    async def test_transcript_knowledge_uses_job_org(self, handler):
+        job = handler._create_job(
+            "call.mp3", 1024, metadata={"org_id": "test-org-001", "workspace_id": "ws1"}
+        )
+        connector = MagicMock(is_available=True)
+        connector.transcribe = AsyncMock(
+            return_value=MagicMock(
+                id="t1",
+                text="Quarterly revenue grew.",
+                language="en",
+                duration_seconds=1.0,
+                word_count=3,
+                segments=[],
+            )
+        )
+        with (
+            patch("aragora.connectors.whisper.WhisperConnector", return_value=connector),
+            patch(
+                "aragora.server.handlers.features.transcription.KNOWLEDGE_PROCESSING_DEFAULT",
+                True,
+            ),
+            patch("aragora.knowledge.integration.process_uploaded_text") as mock_process,
+        ):
+            await handler._process_transcription(job.id, b"audio", "call.mp3")
+
+        assert mock_process.call_args.kwargs["org_id"] == "test-org-001"
+        assert mock_process.call_args.kwargs["workspace_id"] == "ws1"

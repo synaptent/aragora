@@ -138,8 +138,8 @@ class StrategyPolicy(Policy):
     def act(self, state: PolicyState) -> str:
         """Select strategy based on state."""
         # Epsilon-greedy exploration
-        if random.random() < self.exploration_rate:  # noqa: S311 -- ML exploration/sampling
-            return random.choice(self.strategies)  # noqa: S311 -- ML exploration/sampling
+        if random.random() < self.exploration_rate:
+            return random.choice(self.strategies)
 
         probs = self.get_action_probs(state)
         return max(probs.keys(), key=lambda k: probs[k])

@@ -168,7 +168,7 @@ def create_tracked_task(coro_or_factory: TrackedTaskInput, name: str) -> asyncio
         current = None
 
     # 1. Find the persistent main server loop
-    main_loop = None
+    main_loop: asyncio.AbstractEventLoop | None = None
     try:
         from aragora.server.unified_server import get_main_event_loop
 
@@ -177,7 +177,7 @@ def create_tracked_task(coro_or_factory: TrackedTaskInput, name: str) -> asyncio
         pass
     if main_loop is None:
         try:
-            from aragora.storage.pool_manager import get_pool_event_loop
+            from aragora.utils.async_utils import get_pool_event_loop
 
             main_loop = get_pool_event_loop()
         except ImportError:

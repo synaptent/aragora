@@ -1109,7 +1109,8 @@ class BackupManager:
         # Get row counts
         row_counts = {}
         for table in tables:
-            cursor.execute(f'SELECT COUNT(*) FROM "{table}"')  # noqa: S608 -- table name interpolation, parameterized
+            # table name interpolation, parameterized
+            cursor.execute(f'SELECT COUNT(*) FROM "{table}"')
             row_counts[table] = cursor.fetchone()[0]
 
         conn.close()
@@ -1340,7 +1341,8 @@ class BackupManager:
                             continue
 
                         cursor.execute(
-                            f'SELECT COUNT(*) FROM "{safe_table}" WHERE "{safe_col}" IS NULL'  # noqa: S608 -- table name interpolation, parameterized
+                            # table name interpolation, parameterized
+                            f'SELECT COUNT(*) FROM "{safe_table}" WHERE "{safe_col}" IS NULL'
                         )
                         null_count = cursor.fetchone()[0]
                         if null_count > 0:
@@ -1383,7 +1385,8 @@ class BackupManager:
 
                 # Get all data sorted by rowid for deterministic hash
                 try:
-                    cursor.execute(f'SELECT * FROM "{safe_table}" ORDER BY rowid')  # noqa: S608 -- table name interpolation, parameterized
+                    # table name interpolation, parameterized
+                    cursor.execute(f'SELECT * FROM "{safe_table}" ORDER BY rowid')
                     rows = cursor.fetchall()
 
                     # Create hash from serialized rows

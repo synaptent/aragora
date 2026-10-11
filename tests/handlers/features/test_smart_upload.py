@@ -1558,6 +1558,76 @@ class TestQueueKnowledge:
         assert result is None
 
 
+class TestKnowledgeOrgScope:
+    """Knowledge ingestion is scoped to the verified org, never to a client-supplied one."""
+
+    @pytest.mark.asyncio
+    async def test_attach_auth_metadata_overrides_client_org(self, handler):
+        options = await handler._attach_auth_metadata(
+            MockHTTPHandler(command="POST"), {"metadata": {"org_id": "org-b"}}
+        )
+        assert options["metadata"]["org_id"] == "test-org-001"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("path", ["/api/v1/upload/smart", "/api/v1/upload/batch"])
+    async def test_upload_passes_verified_org(self, handler, path):
+        file_body = {
+            "content": base64.b64encode(b"Hello world").decode(),
+            "filename": "hello.txt",
+            "options": {"metadata": {"org_id": "org-b"}},
+        }
+        body = file_body if path.endswith("smart") else {"files": [file_body]}
+        uploaded = UploadResult(
+            id="u1",
+            filename="hello.txt",
+            size=11,
+            category=FileCategory.DOCUMENT,
+            action=ProcessingAction.EXTRACT,
+            status="completed",
+        )
+        with patch(
+            "aragora.server.handlers.features.smart_upload.smart_upload",
+            new_callable=AsyncMock,
+            return_value=uploaded,
+        ) as mock_upload:
+            result = await handler.handle_post(path, body, MockHTTPHandler(command="POST"))
+
+        assert _status(result) == 200
+        assert mock_upload.call_args.kwargs["org_id"] == "test-org-001"
+
+    @pytest.mark.asyncio
+    async def test_smart_upload_forwards_org_to_knowledge(self):
+        with patch(
+            "aragora.server.handlers.features.smart_upload._queue_knowledge_from_result",
+            new_callable=AsyncMock,
+            return_value=None,
+        ) as mock_queue:
+            await smart_upload(
+                b"Hello world", "hello.txt", options={"process_knowledge": True}, org_id="org-a"
+            )
+        assert mock_queue.call_args.kwargs["org_id"] == "org-a"
+
+    @pytest.mark.asyncio
+    async def test_knowledge_uses_only_the_given_org(self):
+        from aragora.server.handlers.features.smart_upload import _queue_knowledge_from_result
+
+        kwargs: dict[str, Any] = {
+            "options": {"metadata": {"org_id": "org-b"}},
+            "category": FileCategory.DOCUMENT,
+            "action": ProcessingAction.EXTRACT,
+            "filename": "doc.txt",
+            "processing_result": {"text": "Real extracted text content"},
+        }
+        with patch(
+            "aragora.knowledge.integration.process_uploaded_text",
+            return_value={"knowledge_processing": {"status": "queued"}},
+        ) as mock_process:
+            await _queue_knowledge_from_result(**kwargs, org_id="org-a")
+            await _queue_knowledge_from_result(**kwargs)
+
+        assert [c.kwargs["org_id"] for c in mock_process.call_args_list] == ["org-a", None]
+
+
 # ===========================================================================
 # Archive expansion tests
 # ===========================================================================
