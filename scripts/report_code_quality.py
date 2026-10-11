@@ -9,21 +9,30 @@ Produces a JSON report of:
 - Largest files per subsystem
 - Test-to-app file ratios
 - Boss loop success metrics (from metrics JSONL)
+- Strict-enrollment floor (#8261): packages that must stay enrolled in mypy
+  check_untyped_defs and ruff BLE001/G004
 
 Usage:
     python scripts/report_code_quality.py                    # Print summary
     python scripts/report_code_quality.py --json             # Machine-readable
     python scripts/report_code_quality.py --check            # Exit 1 if ratchet violated
+    python scripts/report_code_quality.py --enrolled-count KEY  # Live count of one enrollment metric
 """
 
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
 import re
 import sys
 from pathlib import Path
 from typing import Any
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:  # pragma: no cover - the lint job accepts Python 3.10 runners
+    import tomli as tomllib
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -64,6 +73,22 @@ LAST_RECORDED_BASELINE: dict[str, Any] = {
     "global_suppressions": {
         "except_exception": 770,
     },
+}
+
+PYPROJECT = "pyproject.toml"
+HEALTH_BASELINE = "docs/audits/2026-06-12-codebase-health-baseline.json"
+
+# Grow-only strict enrollment (#8261). Each metric's ``packages`` list in
+# HEALTH_BASELINE is its floor: a listed package that leaves the live set is a
+# ratchet violation, and new packages are reported so the floor can be raised.
+MYPY_ENROLLMENT_METRIC = "mypy_check_untyped_defs_packages"
+RUFF_ENROLLMENT_METRIC = "ruff_strict_enrolled_packages"
+ENROLLMENT_METRICS = (MYPY_ENROLLMENT_METRIC, RUFF_ENROLLMENT_METRIC)
+
+# Ruff selectors are code prefixes, so each of these enables or exempts the code.
+_STRICT_RUFF_SELECTORS = {
+    "BLE001": frozenset({"ALL", "BLE", "BLE0", "BLE00", "BLE001"}),
+    "G004": frozenset({"ALL", "G", "G0", "G00", "G004"}),
 }
 
 _SUPPRESSION_PATTERNS = {
@@ -224,6 +249,193 @@ def check_ratchet(global_suppressions: dict[str, int], subsystems: list[dict]) -
     return violations
 
 
+def load_pyproject() -> dict[str, Any]:
+    with (REPO_ROOT / PYPROJECT).open("rb") as fh:
+        return tomllib.load(fh)
+
+
+def load_enrollment_floor() -> dict[str, dict[str, Any]]:
+    """Return the HEALTH_BASELINE metric entries for the enrollment metrics."""
+    try:
+        data = json.loads((REPO_ROOT / HEALTH_BASELINE).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return {
+        metric["key"]: metric
+        for metric in data.get("metrics", [])
+        if isinstance(metric, dict) and metric.get("key") in ENROLLMENT_METRICS
+    }
+
+
+def _override_modules(override: dict[str, Any]) -> list[str]:
+    modules = override.get("module", [])
+    if isinstance(modules, str):
+        return [modules]
+    return [module for module in modules if isinstance(module, str)]
+
+
+def mypy_enrolled_packages(pyproject: dict[str, Any]) -> set[str]:
+    """Return the packages whose whole tree mypy checks with ``check_untyped_defs``.
+
+    A package counts when an override sets ``check_untyped_defs = true`` for the
+    exact pattern ``aragora.<pkg>.*`` (mypy also applies it to the package
+    ``__init__``); single-module overrides do not count. It drops out when any
+    override for the package or a module inside it sets ``check_untyped_defs =
+    false`` or ``ignore_errors = true``, since that turns checking back off for
+    part of the package.
+    """
+    overrides = pyproject.get("tool", {}).get("mypy", {}).get("overrides", [])
+    enrolled: set[str] = set()
+    opted_out: set[str] = set()
+    for override in overrides:
+        modules = _override_modules(override)
+        if override.get("check_untyped_defs") is True:
+            enrolled.update(
+                module[len("aragora.") : -len(".*")]
+                for module in modules
+                if module.startswith("aragora.")
+                and module.endswith(".*")
+                and module.count(".") == 2
+            )
+        if override.get("check_untyped_defs") is False or override.get("ignore_errors") is True:
+            opted_out.update(
+                module.split(".")[1] for module in modules if module.startswith("aragora.")
+            )
+    return enrolled - opted_out
+
+
+def _expand_braces(pattern: str) -> list[str]:
+    match = re.search(r"\{([^{}]*)\}", pattern)
+    if match is None:
+        return [pattern]
+    head, tail = pattern[: match.start()], pattern[match.end() :]
+    return [
+        expanded
+        for option in match.group(1).split(",")
+        for expanded in _expand_braces(head + option + tail)
+    ]
+
+
+def _package_files(root: Path, package: str) -> list[str]:
+    """Return repo-relative paths of the package's Python files, plus its ``__init__``.
+
+    The ``__init__`` probe is included even when absent so a broad key still
+    covers a package that has no files yet.
+    """
+    base = root / "aragora" / package
+    files = {f"aragora/{package}/__init__.py"}
+    if base.is_dir():
+        files.update(
+            path.relative_to(root).as_posix()
+            for path in base.rglob("*")
+            if path.suffix in {".py", ".pyi"} and path.is_file()
+        )
+    return sorted(files)
+
+
+def _ruff_key_covers(key: str, package: str, files: list[str]) -> bool:
+    """Return whether a per-file-ignores key applies to any file of the package.
+
+    Follows ruff's key rules: ``*`` also matches ``/``, ``{a,b}`` alternatives,
+    a key without ``/`` also matches the file name alone, and a leading ``!``
+    applies the codes to every file the pattern does not match. A key naming a
+    path inside the package counts even when that file does not exist yet.
+    """
+    negated = key.startswith("!")
+    patterns = _expand_braces(key.removeprefix("!"))
+    if not negated and any(pattern.startswith(f"aragora/{package}/") for pattern in patterns):
+        return True
+
+    def matches(path: str) -> bool:
+        name = path.rsplit("/", 1)[-1]
+        return any(
+            fnmatch.fnmatchcase(path, pattern)
+            or ("/" not in pattern and fnmatch.fnmatchcase(name, pattern))
+            for pattern in patterns
+        )
+
+    return any(matches(path) != negated for path in files)
+
+
+def ruff_strict_packages(
+    pyproject: dict[str, Any], enrolled: set[str], root: Path | None = None
+) -> set[str]:
+    """Return the enrolled packages that ruff checks for both BLE001 and G004.
+
+    No package counts when either code is not selected or is ignored globally.
+    A package drops out when a ``per-file-ignores`` or ``extend-per-file-ignores``
+    key that applies to any of its files under ``root`` exempts either code,
+    including broad or wildcard keys such as ``aragora/*`` or
+    ``aragora/*/timeouts.py`` and selectors such as ``BLE``, ``G`` or ``ALL``.
+    """
+    root = REPO_ROOT if root is None else root
+    lint = pyproject.get("tool", {}).get("ruff", {}).get("lint", {})
+    selected = {*lint.get("select", []), *lint.get("extend-select", [])}
+    ignored = {*lint.get("ignore", []), *lint.get("extend-ignore", [])}
+    for selectors in _STRICT_RUFF_SELECTORS.values():
+        if not selectors & selected or selectors & ignored:
+            return set()
+    exempting = frozenset().union(*_STRICT_RUFF_SELECTORS.values())
+    keys = [
+        key
+        for table in ("per-file-ignores", "extend-per-file-ignores")
+        for key, codes in lint.get(table, {}).items()
+        if exempting & set(codes)
+    ]
+    strict: set[str] = set()
+    for package in enrolled:
+        files = _package_files(root, package)
+        if not any(_ruff_key_covers(key, package, files) for key in keys):
+            strict.add(package)
+    return strict
+
+
+def measure_enrollment(pyproject: dict[str, Any], root: Path | None = None) -> dict[str, set[str]]:
+    mypy_packages = mypy_enrolled_packages(pyproject)
+    return {
+        MYPY_ENROLLMENT_METRIC: mypy_packages,
+        RUFF_ENROLLMENT_METRIC: ruff_strict_packages(pyproject, mypy_packages, root),
+    }
+
+
+def check_enrollment_floor(
+    live: dict[str, set[str]], floor: dict[str, dict[str, Any]]
+) -> tuple[list[str], dict[str, dict[str, Any]]]:
+    """Compare the live enrolled packages with the recorded floor.
+
+    Returns the violations and a per-metric summary. Each floor record must
+    list its packages, and its ``value`` must equal their count, so swapping one
+    package for another fails as well as shrinking the set.
+    """
+    violations: list[str] = []
+    summary: dict[str, dict[str, Any]] = {}
+    for key in ENROLLMENT_METRICS:
+        current = live.get(key, set())
+        record = floor.get(key, {})
+        packages = record.get("packages")
+        if not isinstance(packages, list) or record.get("value") != len(packages):
+            violations.append(
+                f"{key}: {HEALTH_BASELINE} must record the floor as a packages list "
+                "whose length equals value"
+            )
+            continue
+        missing = sorted(set(packages) - current)
+        added = sorted(current - set(packages))
+        summary[key] = {
+            "floor": len(packages),
+            "current": len(current),
+            "packages": sorted(current),
+            "missing": missing,
+            "added": added,
+        }
+        if missing:
+            violations.append(
+                f"{key}: {', '.join(missing)} left the enrollment "
+                f"({len(current)} enrolled, floor {len(packages)})"
+            )
+    return violations, summary
+
+
 def build_comparison(global_suppressions: dict[str, int]) -> dict[str, object]:
     baseline = dict(LAST_RECORDED_BASELINE)
     compared: dict[str, dict[str, int]] = {}
@@ -249,12 +461,26 @@ def main() -> None:
         action="store_true",
         help="Show deltas versus the last recorded suppression baseline",
     )
+    parser.add_argument(
+        "--enrolled-count",
+        choices=ENROLLMENT_METRICS,
+        help="Print the live package count for one strict-enrollment metric and exit",
+    )
     args = parser.parse_args()
+
+    enrollment = measure_enrollment(load_pyproject())
+    if args.enrolled_count:
+        print(len(enrollment[args.enrolled_count]))
+        return
 
     subsystems = [scan_subsystem(name, path) for name, path in SUBSYSTEMS.items()]
     global_suppressions = scan_all_aragora()
     boss_metrics = scan_boss_metrics()
     violations = check_ratchet(global_suppressions, subsystems)
+    enrollment_violations, enrollment_summary = check_enrollment_floor(
+        enrollment, load_enrollment_floor()
+    )
+    violations.extend(enrollment_violations)
     comparison = build_comparison(global_suppressions) if args.compare else None
 
     report = {
@@ -262,6 +488,7 @@ def main() -> None:
         "global_suppressions": global_suppressions,
         "boss_metrics": boss_metrics,
         "ratchet_thresholds": RATCHET,
+        "strict_enrollment": enrollment_summary,
         "ratchet_violations": violations,
     }
     if comparison is not None:
@@ -286,6 +513,15 @@ def main() -> None:
             threshold = RATCHET.get(f"max_{k}", "")
             marker = f" (limit: {threshold})" if threshold else ""
             print(f"  {k:20s} {v:5d}{marker}")
+
+        print(f"\nStrict Enrollment (#8261, floor in {HEALTH_BASELINE}):")
+        for key, entry in enrollment_summary.items():
+            print(f"  {key:34s} {entry['current']:3d} enrolled (floor: {entry['floor']})")
+            if entry["added"]:
+                print(
+                    f"    new: {', '.join(entry['added'])}; add to its packages list "
+                    "and value to raise the floor"
+                )
 
         if boss_metrics.get("available"):
             print("\nBoss Loop Metrics:")
