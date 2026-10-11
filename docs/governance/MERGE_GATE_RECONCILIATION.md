@@ -175,13 +175,22 @@ Exact head: <full 40-character head SHA>
   with a trailing colon. Park markers: `Current-head repeat-blocker park`,
   `Current-head evidence blocker`, `Evidence safety correction`. A marker in
   bold, quoted, or followed by other text on the same line is not recognized.
-- The head line is `Exact head:`, `Current head:` or `Head:` (or `=`)
+- The head line starts with `Exact head:`, `Current head:` or `Head:` (or `=`)
   followed by the full 40-character SHA, optionally in backticks. `Head SHA:`,
   `head_sha:` and abbreviated SHAs are not recognized.
+- The head line belongs to the marker: it must come after the marker line and
+  before the next heading or marker line. A head named elsewhere in the
+  comment does not count.
+- Lines inside ```` ``` ```` or `~~~` code fences, indented code blocks and
+  `>` quotes are ignored, so quoting this template (or the lift template) in a
+  comment neither parks nor lifts a head.
 - A park applies only to the head it names; a new push clears it. A later
   supportive review of the same head does not lift it.
 
-Lift (comment author association `OWNER` only):
+Lift (the Tier 4 operator trust that `scripts/settle_tier4_pr.py` uses:
+comment author association `OWNER`; `MEMBER` whose login is on the trusted
+operator allowlist; or `COLLABORATOR` on that allowlist whose live repository
+permission is `admin`):
 
 ```text
 ## Current-head park lift
@@ -191,8 +200,17 @@ Exact head: <full 40-character head SHA>
 <reason>
 ```
 
-`Current-head park override` is accepted as the lift marker too. For one head,
-the latest park or lift comment wins.
+`Current-head park override` is accepted as the lift marker too. The same
+marker, head-line and quoting rules apply as for a park. For one head, the
+latest park or lift comment wins.
+
+- The allowlist is the comma-separated `ARAGORA_TIER4_TRUSTED_OPERATORS`
+  variable, which `scripts/settle_tier4_pr.py` also reads; when it is unset or
+  empty, the allowlist is `scarmani`. Logins compare case-insensitively.
+- The `COLLABORATOR` check reads
+  `repos/<owner>/<repo>/collaborators/<login>/permission` while
+  `review-queue merge-packet` builds the packet. If the lookup fails, the lift
+  is ignored and the park stands. An allowlisted `MEMBER` lift needs no lookup.
 
 ## Rollout order
 

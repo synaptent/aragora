@@ -7517,6 +7517,61 @@ class TestBuildQueueAndPacket:
         assert "parked label" in packet.machine_recommendation_reason.lower()
         assert "parked label (blocked)" in packet.risk_flags
 
+    @pytest.mark.parametrize(
+        ("lift_association", "permission_response", "expected_blocked", "expected_lookups"),
+        [
+            ("MEMBER", None, False, 0),
+            ("COLLABORATOR", {"permission": "admin"}, False, 1),
+            ("COLLABORATOR", {"permission": "write"}, True, 1),
+            ("COLLABORATOR", "gh-error", True, 1),
+        ],
+    )
+    def test_build_packet_park_lift_uses_operator_trust(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        lift_association: str,
+        permission_response: Any,
+        expected_blocked: bool,
+        expected_lookups: int,
+    ) -> None:
+        from aragora.cli.commands.review_queue_transport import _GhError
+
+        head = "a" * 40
+        pr_payload = _make_pr(number=103)
+        pr_payload["headRefOid"] = head
+        pr_payload["comments"] = [
+            {
+                "body": f"## Current-head repeat-blocker park\n\nExact head: `{head}`\n",
+                "createdAt": "2026-07-08T05:20:08Z",
+                "authorAssociation": "MEMBER",
+                "author": {"login": "an0mium"},
+            },
+            {
+                "body": f"## Current-head park lift\n\nExact head: `{head}`\n",
+                "createdAt": "2026-07-08T05:30:00Z",
+                "authorAssociation": lift_association,
+                "author": {"login": "scarmani"},
+            },
+        ]
+        permission_args = ["api", "repos/synaptent/aragora/collaborators/scarmani/permission"]
+        lookups: list[list[str]] = []
+
+        def fake_gh_json(args: list[str]) -> Any:
+            if args == permission_args:
+                lookups.append(args)
+                if permission_response == "gh-error":
+                    raise _GhError("gh api failed: HTTP 403")
+                return permission_response
+            return pr_payload
+
+        monkeypatch.delenv("ARAGORA_TIER4_TRUSTED_OPERATORS", raising=False)
+        monkeypatch.setattr("aragora.cli.commands.review_queue._gh_json", fake_gh_json)
+
+        packet = _build_packet("103", repo_override=None)
+
+        assert packet.park_record["blocked"] is expected_blocked
+        assert len(lookups) == expected_lookups
+
     def test_build_packet_pending_checks_need_attention(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:

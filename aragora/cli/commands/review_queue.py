@@ -54,7 +54,10 @@ from aragora.cli.commands.review_queue_comment_verdicts import (
     has_blocking_or_negative_verdict as _has_blocking_or_negative_verdict,
     highest_blocking_severity as _highest_blocking_severity,
 )
-from aragora.cli.commands.review_queue_park_records import current_head_park_record
+from aragora.cli.commands.review_queue_park_records import (
+    collaborator_admin_permission_checker,
+    current_head_park_record,
+)
 from aragora.cli.commands.review_queue_transport import (
     _GhError,
     _gh_error_kind,
@@ -3022,6 +3025,10 @@ def _build_packet(
         park_record=current_head_park_record(
             pr.get("comments") or [],
             head_sha=str(pr.get("headRefOid", "") or "").strip(),
+            admin_permission_checker=collaborator_admin_permission_checker(
+                rest_fallback._repo_slug_from_pr_payload(pr, repo_override),
+                gh_json=_gh_json,
+            ),
         ),
         unstable_non_required_contexts_ignored=unstable_cancellation_contexts,
     )
