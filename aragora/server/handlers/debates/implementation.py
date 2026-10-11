@@ -32,6 +32,7 @@ from aragora.pipeline.decision_integrity import (
     coerce_debate_result,
 )
 from aragora.pipeline.execution_mode import ExecutionMode as SafetyMode
+from aragora.pipeline.execution_ownership import ExecutionNotAuthorizedError
 from aragora.pipeline.decision_integrity_utils import (
     ensure_decision_plan_backbone_run,
     execute_decision_plan_with_backbone,
@@ -43,6 +44,7 @@ from aragora.pipeline.execution_notifier import ExecutionNotifier
 from aragora.autonomous.loop_enhancement import ApprovalStatus
 from aragora.server.handlers.autonomous.approvals import get_approval_flow
 from aragora.rbac.checker import get_permission_checker
+from aragora.tenancy.record_scope import record_not_found
 
 from ..base import HandlerResult, error_response, handle_errors, json_response, require_storage
 from ..openapi_decorator import api_endpoint
@@ -768,6 +770,9 @@ class ImplementationOperationsMixin:
                         exc,
                     )
                     return error_response(FAIL_CLOSED_BACKBONE_MESSAGE, 503)
+                except ExecutionNotAuthorizedError as exc:
+                    logger.warning("Execution refused for debate %s: %s", debate_id, exc.code)
+                    return record_not_found("Plan")
                 response_payload["workflow_execution"] = {
                     "status": "completed" if outcome.success else "failed",
                     "run_id": launch.get("run_id"),
