@@ -213,7 +213,7 @@ class DevOpsAgent:
         logger.info("Executing: %s", command[:120])
 
         try:
-            result = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
+            result = subprocess.run(  # subprocess with fixed args, no shell
                 shlex.split(command),
                 shell=False,
                 capture_output=True,

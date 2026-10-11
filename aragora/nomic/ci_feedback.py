@@ -72,7 +72,7 @@ class CIResultCollector:
             return
         try:
             result = subprocess.run(
-                ["gh", "repo", "view", "--json", "owner,name"],  # noqa: S607 -- fixed command
+                ["gh", "repo", "view", "--json", "owner,name"],  # fixed command
                 capture_output=True,
                 text=True,
                 timeout=10,
@@ -136,8 +136,8 @@ class CIResultCollector:
             return None
 
         try:
-            result = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
-                [  # noqa: S607 -- fixed command
+            result = subprocess.run(  # subprocess with fixed args, no shell
+                [  # fixed command
                     "gh",
                     "api",
                     f"repos/{self.repo_slug}/actions/runs",
@@ -168,8 +168,8 @@ class CIResultCollector:
     def _fetch_run(self, branch: str, sha: str) -> CIResult | None:
         """Fetch a specific run matching branch and sha."""
         try:
-            result = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
-                [  # noqa: S607 -- fixed command
+            result = subprocess.run(  # subprocess with fixed args, no shell
+                [  # fixed command
                     "gh",
                     "api",
                     f"repos/{self.repo_slug}/actions/runs",

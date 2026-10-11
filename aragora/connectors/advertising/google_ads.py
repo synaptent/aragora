@@ -561,7 +561,7 @@ class GoogleAdsConnector:
                 campaign_budget.amount_micros
             FROM campaign
             WHERE campaign.id = {campaign_id}
-        """  # noqa: S608 -- internal query construction
+        """  # internal query construction
         results = await self._search(query)
         if not results:
             raise GoogleAdsError(f"Campaign {campaign_id} not found")
@@ -588,7 +588,7 @@ class GoogleAdsConnector:
             SELECT campaign.campaign_budget
             FROM campaign
             WHERE campaign.id = {campaign_id}
-        """  # noqa: S608 -- internal query construction
+        """  # internal query construction
         results = await self._search(query)
         if not results:
             raise GoogleAdsError(f"Campaign {campaign_id} not found")
@@ -705,7 +705,7 @@ class GoogleAdsConnector:
             FROM ad_group_criterion
             WHERE ad_group_criterion.ad_group = 'customers/{self.credentials.customer_id}/adGroups/{ad_group_id}'
             AND ad_group_criterion.type = 'KEYWORD'
-        """  # noqa: S608 -- internal query construction
+        """  # internal query construction
         results = await self._search(query)
         return [Keyword.from_api(r) for r in results]
 
@@ -786,7 +786,7 @@ class GoogleAdsConnector:
                 metrics.cost_per_conversion
             FROM campaign
             WHERE segments.date BETWEEN '{start_date.isoformat()}' AND '{end_date.isoformat()}'
-        """  # noqa: S608 -- internal query construction
+        """  # internal query construction
 
         if campaign_ids:
             ids_str = ", ".join(campaign_ids)
@@ -815,7 +815,7 @@ class GoogleAdsConnector:
             FROM search_term_view
             WHERE segments.date BETWEEN '{start_date.isoformat()}' AND '{end_date.isoformat()}'
             AND metrics.impressions > {min_impressions}
-        """  # noqa: S608 -- internal query construction
+        """  # internal query construction
 
         if campaign_id:
             query += f" AND campaign.id = {campaign_id}"
@@ -845,7 +845,7 @@ class GoogleAdsConnector:
             FROM keyword_view
             WHERE ad_group_criterion.ad_group = 'customers/{self.credentials.customer_id}/adGroups/{ad_group_id}'
             AND segments.date BETWEEN '{start_date.isoformat()}' AND '{end_date.isoformat()}'
-        """  # noqa: S608 -- internal query construction
+        """  # internal query construction
         return await self._search(query)
 
     # =========================================================================

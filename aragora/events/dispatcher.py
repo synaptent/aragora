@@ -289,7 +289,7 @@ def dispatch_webhook(
             headers["X-Aragora-Correlation-ID"] = correlation_id
 
         # Build request
-        request = Request(  # noqa: S310 -- registered webhook URL
+        request = Request(  # registered webhook URL
             webhook.url,
             data=payload_json.encode("utf-8"),
             headers=headers,
@@ -298,7 +298,7 @@ def dispatch_webhook(
 
         # Send request
         start_time = time.time()
-        with urlopen(request, timeout=timeout) as response:  # noqa: S310 -- registered webhook URL
+        with urlopen(request, timeout=timeout) as response:  # registered webhook URL
             status_code = response.status
             duration_ms = (time.time() - start_time) * 1000
 
