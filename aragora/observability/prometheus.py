@@ -34,7 +34,7 @@ from aragora.observability.prometheus_definitions import (  # noqa: F401, E402
 
 # Make generate_latest and REGISTRY available if prometheus is installed
 if PROMETHEUS_AVAILABLE:
-    from prometheus_client import (  # noqa: F401
+    from prometheus_client import (
         REGISTRY,
         generate_latest,
     )
