@@ -75,6 +75,12 @@ New verifier records additionally include a sanitized `reason_code`: `ok`,
 `unknown_failure`. Raw provider errors are not stored in this field. The CLI
 reports quota exhaustion separately from profiles requiring reauthentication.
 
+A probe that exits 0 but reports a service failure (`service_unavailable`) or an
+unusable reply (`invalid_response`) also reads as unavailable (`unauthenticated`)
+until the next verify run or until the snapshot ages past the TTL, so a
+provider-wide outage during the hourly verify run can drop Claude profiles from
+review and debate routing for up to 1 h.
+
 Unknown states and contradictory state/reason pairs are normalized to an existing
 unhealthy state rather than being advertised as healthy to older readers. Records
 without a reason remain compatible. The review router still requires a fresh
