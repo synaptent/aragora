@@ -2,9 +2,8 @@
 
 Covers the search and stats mixin methods:
 - _handle_search: query parameter validation, engine search, result serialization, error handling
-- _handle_stats: fact store statistics, workspace filtering, caching
+- _handle_stats: fact store statistics, workspace filtering
 - SearchHandlerProtocol: protocol shape
-- CACHE_TTL_STATS: constant value
 - Edge cases: empty results, long queries, boundary limit values, engine errors
 """
 
@@ -17,10 +16,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from aragora.knowledge.embeddings import ChunkMatch
-from aragora.server.handlers.knowledge_base.search import (
-    CACHE_TTL_STATS,
-    SearchOperationsMixin,
-)
+from aragora.server.handlers.knowledge_base.search import SearchOperationsMixin
 
 
 # ---------------------------------------------------------------------------
@@ -82,6 +78,9 @@ class ConcreteSearchHandler(SearchOperationsMixin):
     def _get_query_engine(self):
         return self._query_engine
 
+    def require_auth_or_error(self, handler):
+        return MagicMock(org_id="test-org-001"), None
+
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -116,21 +115,6 @@ def handler(mock_fact_store, mock_query_engine):
         fact_store=mock_fact_store,
         query_engine=mock_query_engine,
     )
-
-
-# ============================================================================
-# Tests: CACHE_TTL_STATS constant
-# ============================================================================
-
-
-class TestCacheTTLStats:
-    """Verify the cache TTL constant."""
-
-    def test_cache_ttl_stats_value(self):
-        assert CACHE_TTL_STATS == 300
-
-    def test_cache_ttl_stats_is_int(self):
-        assert isinstance(CACHE_TTL_STATS, int)
 
 
 # ============================================================================
@@ -454,11 +438,11 @@ class TestHandleStatsBasic:
 
     def test_stats_calls_store_with_workspace(self, handler, mock_fact_store):
         handler._handle_stats("ws-abc")
-        mock_fact_store.get_statistics.assert_called_once_with("ws-abc")
+        mock_fact_store.get_statistics.assert_called_once_with("ws-abc", org_id="test-org-001")
 
     def test_stats_calls_store_with_none(self, handler, mock_fact_store):
         handler._handle_stats(None)
-        mock_fact_store.get_statistics.assert_called_once_with(None)
+        mock_fact_store.get_statistics.assert_called_once_with(None, org_id="test-org-001")
 
 
 # ============================================================================

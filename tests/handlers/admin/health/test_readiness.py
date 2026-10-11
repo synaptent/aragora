@@ -56,7 +56,7 @@ _UNIFIED_SERVER_MOD = "aragora.server.unified_server"
 _HANDLER_REGISTRY_MOD = "aragora.server.handler_registry.core"
 _REDIS_CACHE_MOD = "aragora.utils.redis_config"
 _PG_POOL_MOD = "aragora.storage.postgres_pool"
-_LEADER_MOD = "aragora.control_plane.leader"
+_DISTRIBUTED_MOD = "aragora.config.distributed"
 _STARTUP_MOD = "aragora.server.startup"
 
 
@@ -642,7 +642,7 @@ class TestDependenciesIntegration:
             sys.modules,
             {
                 _DEGRADED_MOD: None,
-                _LEADER_MOD: None,
+                _DISTRIBUTED_MOD: None,
                 _STARTUP_MOD: None,
             },
         ):
@@ -739,7 +739,7 @@ class TestDependenciesIntegration:
             sys.modules,
             {
                 _DEGRADED_MOD: mock_degraded_mod,
-                _LEADER_MOD: None,
+                _DISTRIBUTED_MOD: None,
                 _STARTUP_MOD: None,
             },
         ):
@@ -766,7 +766,7 @@ class TestDependenciesIntegration:
         assert _status(result) == 200
 
     def test_dependencies_redis_check_skipped(self):
-        """When leader module is not importable, redis check is skipped."""
+        """When the distributed-policy module is not importable, redis check is skipped."""
         h = _make_handler_with_mocks()
         result = self._run_deps_probe(h)
         body = _body(result)

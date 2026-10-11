@@ -45,40 +45,21 @@ def _bypass_require_permission(permission):
     return decorator
 
 
-# Also bypass ttl_cache to avoid caching issues in tests
-def _bypass_ttl_cache(**kwargs):
-    """No-op decorator for testing."""
-
-    def decorator(func):
-        return func
-
-    return decorator
-
-
 # Patch decorators before importing the mixin, then stop to avoid
 # leaking into other test modules.
 _p1 = patch("aragora.rbac.decorators.require_permission", _bypass_require_permission)
 _p2 = patch(
     "aragora.server.handlers.knowledge_base.search.require_permission", _bypass_require_permission
 )
-_p3 = patch("aragora.server.handlers.base.ttl_cache", _bypass_ttl_cache)
-_p4 = patch("aragora.server.handlers.knowledge_base.search.ttl_cache", _bypass_ttl_cache)
 _p1.start()
 _p2.start()
-_p3.start()
-_p4.start()
 
 import pytest
 
-from aragora.server.handlers.knowledge_base.search import (  # noqa: E402
-    CACHE_TTL_STATS,
-    SearchOperationsMixin,
-)
+from aragora.server.handlers.knowledge_base.search import SearchOperationsMixin  # noqa: E402
 
 _p1.stop()
 _p2.stop()
-_p3.stop()
-_p4.stop()
 
 
 def parse_response(result) -> dict[str, Any]:
@@ -177,7 +158,9 @@ class MockFactStore:
             "indexed_workspaces": 3,
         }
 
-    def get_statistics(self, workspace_id: str | None = None) -> dict[str, Any]:
+    def get_statistics(
+        self, workspace_id: str | None = None, *, org_id: str | None = None
+    ) -> dict[str, Any]:
         result = self._stats.copy()
         if workspace_id:
             result["workspace_id"] = workspace_id
@@ -206,6 +189,9 @@ class SearchHandler(SearchOperationsMixin):
 
     def _get_knowledge_mound(self):
         return self._knowledge_mound
+
+    def require_auth_or_error(self, handler):
+        return MagicMock(org_id="test-org-001"), None
 
 
 # =============================================================================
@@ -320,12 +306,6 @@ class TestImports:
         from aragora.server.handlers.knowledge_base.search import SearchOperationsMixin
 
         assert SearchOperationsMixin is not None
-
-    def test_import_cache_ttl_constant(self):
-        """Test that CACHE_TTL_STATS constant is exported."""
-        from aragora.server.handlers.knowledge_base.search import CACHE_TTL_STATS
-
-        assert CACHE_TTL_STATS == 300  # 5 minutes
 
     def test_mixin_has_required_methods(self):
         """Test that mixin exposes required methods."""
@@ -666,11 +646,7 @@ class TestHandleStats:
 
     def test_stats_without_workspace_filter(self, handler):
         """Test stats endpoint without workspace filter."""
-        with patch(
-            "aragora.server.handlers.knowledge_base.search.ttl_cache",
-            lambda **k: lambda f: f,
-        ):
-            result = handler._handle_stats(workspace_id=None)
+        result = handler._handle_stats(workspace_id=None)
 
         assert result.status_code == 200
         body = parse_response(result)
@@ -680,11 +656,7 @@ class TestHandleStats:
 
     def test_stats_with_workspace_filter(self, handler):
         """Test stats endpoint with workspace filter."""
-        with patch(
-            "aragora.server.handlers.knowledge_base.search.ttl_cache",
-            lambda **k: lambda f: f,
-        ):
-            result = handler._handle_stats(workspace_id="ws-123")
+        result = handler._handle_stats(workspace_id="ws-123")
 
         assert result.status_code == 200
         body = parse_response(result)
@@ -692,11 +664,7 @@ class TestHandleStats:
 
     def test_stats_response_includes_store_stats(self, handler):
         """Test stats response includes all store statistics."""
-        with patch(
-            "aragora.server.handlers.knowledge_base.search.ttl_cache",
-            lambda **k: lambda f: f,
-        ):
-            result = handler._handle_stats(workspace_id=None)
+        result = handler._handle_stats(workspace_id=None)
 
         assert result.status_code == 200
         body = parse_response(result)
@@ -709,30 +677,22 @@ class TestHandleStats:
 
     def test_stats_no_fact_store(self, handler_no_store):
         """Test stats when fact store is not available."""
-        with patch(
-            "aragora.server.handlers.knowledge_base.search.ttl_cache",
-            lambda **k: lambda f: f,
-        ):
-            # When _get_fact_store returns None, calling get_statistics
-            # on None will raise AttributeError, which should be caught
-            # by @handle_errors and return 500
-            try:
-                result = handler_no_store._handle_stats(workspace_id=None)
-                # If handler returns a valid response, the mock store must have been used
-                # This indicates the fixture is providing a fallback mock store
-                assert result.status_code in (200, 500)
-            except (AttributeError, TypeError):
-                # Expected if _get_fact_store returns None and code tries to use it
-                # without @handle_errors catching it
-                pass
+        # When _get_fact_store returns None, calling get_statistics
+        # on None will raise AttributeError, which should be caught
+        # by @handle_errors and return 500
+        try:
+            result = handler_no_store._handle_stats(workspace_id=None)
+            # If handler returns a valid response, the mock store must have been used
+            # This indicates the fixture is providing a fallback mock store
+            assert result.status_code in (200, 500)
+        except (AttributeError, TypeError):
+            # Expected if _get_fact_store returns None and code tries to use it
+            # without @handle_errors catching it
+            pass
 
     def test_stats_response_format(self, handler):
         """Test stats response has correct format."""
-        with patch(
-            "aragora.server.handlers.knowledge_base.search.ttl_cache",
-            lambda **k: lambda f: f,
-        ):
-            result = handler._handle_stats(workspace_id="test-ws")
+        result = handler._handle_stats(workspace_id="test-ws")
 
         assert result.status_code == 200
         body = parse_response(result)
@@ -758,30 +718,9 @@ class TestRBACDecorator:
         # The decorator wraps the function, so check for wrapper attributes
         assert callable(method)
 
-    def test_stats_has_cache_decorator(self):
-        """Test that _handle_stats has ttl_cache decorator."""
-        method = SearchOperationsMixin._handle_stats
-        assert callable(method)
-
-
-# =============================================================================
-# Test Cache Configuration
-# =============================================================================
-
-
-class TestCacheConfiguration:
-    """Tests for cache configuration."""
-
-    def test_stats_cache_ttl_value(self):
-        """Test that stats cache TTL is configured correctly."""
-        assert CACHE_TTL_STATS == 300  # 5 minutes
-
-    def test_stats_cache_ttl_is_reasonable(self):
-        """Test that cache TTL is within reasonable bounds."""
-        # Cache should be at least 60 seconds
-        assert CACHE_TTL_STATS >= 60
-        # Cache should be at most 1 hour
-        assert CACHE_TTL_STATS <= 3600
+    def test_stats_is_not_cached(self):
+        """Stats are per organization, so no shared response cache wraps them."""
+        assert not hasattr(SearchOperationsMixin._handle_stats, "cache_clear")
 
 
 # =============================================================================

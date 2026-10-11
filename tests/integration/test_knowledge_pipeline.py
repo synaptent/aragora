@@ -146,10 +146,11 @@ class TestKnowledgePipelineIntegration:
                 content=sample_document_content,
                 filename="employment_contract.txt",
                 workspace_id=temp_workspace,
+                org_id="org-test",
             )
 
         # Clean up cached pipeline to avoid cross-test leakage
-        _pipelines.pop(temp_workspace, None)
+        _pipelines.pop(("org-test", temp_workspace), None)
 
         assert result.success is True
         assert result.document_id is not None
@@ -170,6 +171,7 @@ class TestKnowledgePipelineIntegration:
             content=sample_document_content,
             filename="employment_contract.txt",
             workspace_id=temp_workspace,
+            org_id="org-test",
         )
 
         assert job_id is not None
@@ -555,7 +557,7 @@ class TestKnowledgeAuditIntegration:
             },
         ]
 
-        enriched = await adapter.enrich_chunks(chunks, temp_workspace)
+        enriched = await adapter.enrich_chunks(chunks, temp_workspace, org_id="org-test")
 
         assert len(enriched) == 2
         assert enriched[0].chunk_id == "chunk_1"
@@ -588,10 +590,11 @@ class TestFullPipelineIntegration:
                 content=sample_document_content,
                 filename="contract.txt",
                 workspace_id=temp_workspace,
+                org_id="org-test",
             )
 
         # Clean up cached pipeline to avoid cross-test leakage
-        _pipelines.pop(temp_workspace, None)
+        _pipelines.pop(("org-test", temp_workspace), None)
 
         assert result.success is True
 

@@ -26,17 +26,42 @@ MigrationAuditProvider = Callable[..., Any]
 
 _migration_audit_provider: MigrationAuditProvider | None = None
 
+_MISSING_PROVIDER_REMEDY = (
+    "call aragora.ops.security_edge_adapters.register_security_migration_adapters() "
+    "or register_migration_audit_provider() before rotating keys"
+)
+
 
 def register_migration_audit_provider(provider: MigrationAuditProvider | None) -> None:
-    """Register the higher-layer security audit provider."""
+    """Register the provider that emits key-rotation security audit events.
+
+    This module must not import the audit layer, so the composition root
+    supplies the provider. Server startup and the ``aragora security`` CLI
+    commands call
+    ``aragora.ops.security_edge_adapters.register_security_migration_adapters()``,
+    which routes events to ``aragora.audit.unified.audit_security``. Embedded
+    callers of :func:`rotate_encryption_key` must do the same, or pass their own
+    callable here. The provider receives keyword arguments only
+    (``event_type``, ``actor_id`` and event-specific fields). Pass ``None`` to
+    unregister.
+    """
     global _migration_audit_provider
     _migration_audit_provider = provider
+
+
+def get_migration_audit_provider() -> MigrationAuditProvider | None:
+    """Return the registered migration audit provider, or ``None`` if none is set."""
+    return _migration_audit_provider
 
 
 def _audit_security(**kwargs: Any) -> Any:
     """Emit a security audit event through the registered provider."""
     if _migration_audit_provider is None:
-        logger.warning("Migration audit provider not registered; security event was not emitted")
+        logger.warning(
+            "Migration audit provider not registered; security event %r was not emitted (%s)",
+            kwargs.get("event_type"),
+            _MISSING_PROVIDER_REMEDY,
+        )
         return None
     return _migration_audit_provider(**kwargs)
 
@@ -660,6 +685,12 @@ def rotate_encryption_key(
     Returns:
         KeyRotationResult with statistics
 
+    Audit:
+        Emits a ``key_rotation`` security event through the provider set with
+        :func:`register_migration_audit_provider`. Without a provider the event
+        is dropped and a warning is logged, so embedded callers must register
+        one before calling this function.
+
     Environment Variables:
         ARAGORA_KEY_ROTATION_OVERLAP_DAYS: Days to keep old key valid (default: 7)
     """
@@ -687,12 +718,18 @@ def rotate_encryption_key(
             old_version,
             old_version + 1,
         )
-        # Audit log would go here
-        _audit_security(
-            event_type="key_rotation",
-            actor_id="system",
-            reason="dry_run_key_rotation",
-        )
+        try:
+            _audit_security(
+                event_type="key_rotation",
+                actor_id="system",
+                reason="dry_run_key_rotation",
+            )
+        except ImportError as e:
+            logger.warning(
+                "Migration audit provider could not load its audit backend; "
+                "dry-run key rotation event was not emitted: %s",
+                e,
+            )
         return result
 
     try:
@@ -713,8 +750,12 @@ def rotate_encryption_key(
                 old_version=old_version,
                 new_version=new_key.version,
             )
-        except ImportError:
-            pass
+        except ImportError as e:
+            logger.warning(
+                "Migration audit provider could not load its audit backend; "
+                "key rotation event was not emitted: %s",
+                e,
+            )
 
         # Re-encrypt stores
         stores_to_process = stores or ["integration", "gmail", "sync"]
@@ -874,6 +915,7 @@ __all__ = [
     "MigrationResult",
     "KeyRotationResult",
     "StartupMigrationConfig",
+    "get_migration_audit_provider",
     "register_migration_audit_provider",
     "is_field_encrypted",
     "needs_migration",

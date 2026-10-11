@@ -65,6 +65,10 @@ class _RegistryMixin(HandlerRegistryMixin):
 class _ServerChecks(AuthChecksMixin, _RegistryMixin):
     """The registry behind the server's pre-dispatch RBAC and auth checks."""
 
+    @property
+    def rbac(self) -> Any:
+        return unified_server.UnifiedHandler._get_rbac()
+
 
 class _FakeConnectorRegistry:
     """Runtime connector registry that knows exactly one connector, ``known_conn``."""
@@ -82,6 +86,9 @@ class _FakeConnectorRegistry:
 
     def health_check(self, name: str) -> ConnectorStatus:
         return ConnectorStatus.HEALTHY
+
+    def get_summary(self) -> dict[str, Any]:
+        return {"total": 1, "by_type": {"github": 1}, "by_status": {"healthy": 1}}
 
 
 _client_ips = itertools.count(1)
@@ -281,6 +288,8 @@ EXPECTED: dict[str, dict[str, int]] = {
     [
         ("/api/v1/connectors/probe_conn/health", ConnectorManagementHandler),
         ("/api/v1/connectors/probe_conn/test", ConnectorManagementHandler),
+        ("/api/v1/connectors/summary", ConnectorManagementHandler),
+        ("/api/v1/connectors", ConnectorsHandler),
         ("/api/v1/connectors/health", ConnectorsHandler),
         ("/api/v1/connectors/test", ConnectorsHandler),
         ("/api/v1/connectors/probe-conn", ConnectorsHandler),
@@ -910,3 +919,117 @@ def test_workspace_usage_answers_501_not_implemented(registry_cls) -> None:
 def test_invalid_json_body_is_a_client_error(registry_cls) -> None:
     status, body = _dispatch(registry_cls, "POST", "/api/v1/connectors", raw_body=b"{not json")
     assert status == 400, body
+
+
+# RBAC v2 grants connectors.read, connectors.create and connectors.configure to owner
+# and admin only; the server's route rules and both handlers' own checks agree.
+_OWNER_ADMIN_CELLS = {
+    "owner": 200,
+    "admin": 200,
+    "member": 403,
+    "analyst": 403,
+    "viewer": 403,
+    "anon": 401,
+}
+_READ_PATHS = {
+    "list": "/api/v1/connectors",
+    "detail": "/api/v1/connectors/c1",
+    "summary": "/api/v1/connectors/summary",
+}
+
+
+@pytest.mark.no_auto_auth
+@pytest.mark.parametrize("caller", CALLERS)
+@pytest.mark.parametrize("server_checks", [False, True], ids=["handler", "server"])
+@pytest.mark.parametrize("route", sorted(_READ_PATHS))
+def test_list_and_detail_stay_configured_connectors_and_summary_is_the_runtime_registry(
+    registry_cls, auth_on, route: str, server_checks: bool, caller: str
+) -> None:
+    connectors_module._connectors["c1"] = {
+        "id": "c1",
+        "type": "github",
+        "name": "C1",
+        "status": "configured",
+        "config": {},
+    }
+    dispatcher = _ServerChecks if server_checks else registry_cls
+    status, body = _dispatch(dispatcher, "GET", _READ_PATHS[route], caller=caller)
+    assert status == _OWNER_ADMIN_CELLS[caller], (route, caller, body)
+    if status != 200:
+        return
+    if route == "list":
+        assert [c["id"] for c in body["connectors"]] == ["c1"], body
+    elif route == "detail":
+        assert (body["id"], body["name"]) == ("c1", "C1"), body
+    else:
+        assert body == _FakeConnectorRegistry().get_summary()
+
+
+_MASKED_CREATE_CELLS = {**_OWNER_ADMIN_CELLS, "owner": 400, "admin": 400}
+
+
+@pytest.mark.no_auto_auth
+@pytest.mark.parametrize("caller", CALLERS)
+@pytest.mark.parametrize("server_checks", [False, True], ids=["handler", "server"])
+def test_create_with_a_masked_config_value_is_refused_for_every_caller(
+    registry_cls, auth_on, memory_store, server_checks: bool, caller: str
+) -> None:
+    dispatcher = _ServerChecks if server_checks else registry_cls
+    status, body = _dispatch(
+        dispatcher,
+        "POST",
+        "/api/v1/connectors",
+        {"type": "github", "name": "Repo", "config": {"org": "a", "api_key": _MASK}},
+        caller=caller,
+    )
+    assert status == _MASKED_CREATE_CELLS[caller], (caller, body)
+    assert (connectors_module._connectors, memory_store.rows) == ({}, {})
+
+
+@pytest.mark.parametrize(
+    "config",
+    [
+        pytest.param({"org": "a", "api_key": _MASK}, id="secret-key"),
+        pytest.param({"auth": {"user": "u", "client_secret": _MASK}}, id="nested"),
+        pytest.param({"accounts": [{"name": "n", "token": _MASK}]}, id="in-a-list"),
+        pytest.param({"org": _MASK}, id="plain-key"),
+        pytest.param(_MASK, id="whole-config"),
+    ],
+)
+def test_create_refuses_the_mask_anywhere_in_the_config(
+    registry_cls, memory_store, config: Any
+) -> None:
+    status, body = _dispatch(
+        registry_cls, "POST", "/api/v1/connectors", {"type": "github", "config": config}
+    )
+    assert status == 400, body
+    assert _MASK in body["error"], body
+    assert (connectors_module._connectors, memory_store.rows) == ({}, {})
+
+
+_MALFORMED_UPDATE_CELLS = {**_OWNER_ADMIN_CELLS, "owner": 400, "admin": 400}
+
+
+@pytest.mark.no_auto_auth
+@pytest.mark.parametrize("caller", CALLERS)
+@pytest.mark.parametrize("server_checks", [False, True], ids=["handler", "server"])
+@pytest.mark.parametrize("method", ["PATCH", "PUT"])
+def test_malformed_json_update_is_a_client_error_and_changes_nothing(
+    registry_cls, auth_on, memory_store, method: str, server_checks: bool, caller: str
+) -> None:
+    asyncio.run(memory_store.save_connector("stored-1", "github", "Stored", {"org": "a"}))
+    dispatcher = _ServerChecks if server_checks else registry_cls
+    status, body = _dispatch(
+        dispatcher,
+        method,
+        "/api/v1/connectors/stored-1",
+        caller=caller,
+        raw_body=b'{"name": "Renamed", "config": {"org": "b"}',
+    )
+    assert status == _MALFORMED_UPDATE_CELLS[caller], (caller, body)
+    if status == 400:
+        assert body == {"error": "Invalid JSON body"}
+    stored = memory_store.rows["stored-1"]
+    assert (stored.name, stored.config) == ("Stored", {"org": "a"})
+    in_memory = connectors_module._connectors.get("stored-1")
+    assert in_memory is None or (in_memory["name"], in_memory["config"]) == ("Stored", {"org": "a"})

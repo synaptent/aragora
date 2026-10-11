@@ -15,7 +15,7 @@ from uuid import uuid4
 
 from aiohttp import web
 
-from aragora.server.errors import safe_error_message
+from aragora.api_errors import safe_error_message
 from aragora.server.handlers.utils import parse_json_body
 from aragora.server.handlers.utils.aiohttp_responses import web_error_response
 from aragora.observability.metrics import track_handler

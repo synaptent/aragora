@@ -157,10 +157,32 @@ class FactStore(SQLiteStore):
             description="Add nullable facts.org_id; existing facts stay unassigned",
         )
 
+    _DUPLICATE_QUERY = """
+        SELECT * FROM facts
+        WHERE statement_hash = ? AND workspace_id = ? AND org_id IS ?
+        ORDER BY created_at, rowid
+        LIMIT 1
+    """
+
     def _compute_statement_hash(self, statement: str) -> str:
         """Compute hash for statement deduplication."""
         normalized = " ".join(statement.lower().split())
         return hashlib.sha256(normalized.encode()).hexdigest()[:32]
+
+    def find_duplicate(
+        self, statement: str, workspace_id: str, *, org_id: str | None = None
+    ) -> Fact | None:
+        """Return the fact ``add_fact`` would reuse for this statement, or None.
+
+        Raises:
+            OrgScopeRequiredError: org_id is missing
+        """
+        _require_org(org_id)
+        params = (self._compute_statement_hash(statement), workspace_id, org_id)
+        with self.connection() as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(self._DUPLICATE_QUERY, params).fetchone()
+        return self._row_to_fact(row) if row else None
 
     def add_fact(
         self,
@@ -212,15 +234,7 @@ class FactStore(SQLiteStore):
 
             # Check for existing fact with same statement in workspace
             if deduplicate:
-                cursor.execute(
-                    """
-                    SELECT * FROM facts
-                    WHERE statement_hash = ? AND workspace_id = ? AND org_id IS ?
-                    ORDER BY created_at, rowid
-                    LIMIT 1
-                    """,
-                    (statement_hash, workspace_id, org_id),
-                )
+                cursor.execute(self._DUPLICATE_QUERY, (statement_hash, workspace_id, org_id))
                 existing = cursor.fetchone()
                 if existing:
                     logger.debug("Fact deduplicated: %s", existing["id"])
@@ -941,6 +955,14 @@ class InMemoryFactStore:
         org = _require_org(org_id)
         return fact is not None and fact.org_id == org
 
+    def find_duplicate(
+        self, statement: str, workspace_id: str, *, org_id: str | None = None
+    ) -> Fact | None:
+        """Return the fact ``add_fact`` would reuse for this statement, or None."""
+        _require_org(org_id)
+        fact_id = self._statement_hashes.get(self._compute_hash(statement, workspace_id, org_id))
+        return self._facts.get(fact_id) if fact_id else None
+
     def add_fact(
         self,
         statement: str,
@@ -1325,6 +1347,11 @@ class ScopedFactStore:
             deduplicate,
             org_id=self._org(org_id),
         )
+
+    def find_duplicate(
+        self, statement: str, workspace_id: str, *, org_id: str | None = None
+    ) -> Fact | None:
+        return self._store.find_duplicate(statement, workspace_id, org_id=self._org(org_id))
 
     def get_fact(self, fact_id: str, *, org_id: str | None = None) -> Fact | None:
         return self._store.get_fact(fact_id, org_id=self._org(org_id))

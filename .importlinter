@@ -9,7 +9,9 @@
 #   application     workflow, pipeline, nomic, swarm, gauntlet, goals,
 #                   implement, modes, verticals, autonomous, broadcast, canvas,
 #                   spectate, analytics, audit, control_plane, golden, inbox,
-#                   marketplace, services, skills, stores
+#                   marketplace, services, skills, stores, computer_use,
+#                   coordination, export, markets, plugins, prompt_engine,
+#                   receipts, workspace
 #   domain          debate, agents, memory, knowledge, ranking, reasoning,
 #                   evidence, evaluation, explainability, learning, ml,
 #                   advocates, analysis, audience, blockchain, compliance,
@@ -48,15 +50,15 @@
 # module_tiers cross-check (VAL-P0-006)
 # ----------------------------------------------------------------------------
 # Every layer assignment above was cross-checked against aragora/module_tiers.yaml
-# (first on 2026-06-12, last on 2026-10-06). Outcome: 0 discrepancies. All 125
+# (first on 2026-06-12, last on 2026-10-09). Outcome: 0 discrepancies. All 133
 # layered names resolve to a real top-level module in the local source tree; the
-# 103 that are directory packages all appear in module_tiers.yaml (21 core, 67
-# integrated, 14 experimental, 1 deprecated: metrics, a deprecated re-export
+# 111 that are directory packages all appear in module_tiers.yaml (21 core, 76
+# integrated, 13 experimental, 1 deprecated: metrics, a deprecated re-export
 # shim kept until it is retired), and the 22 that are single-file modules (for
 # example api_errors, core_types, exceptions, errors, cache, container, golden,
 # http_client, logging_config) are real importable modules that module_tiers.yaml
 # does not track because it enumerates package directories only (not a
-# discrepancy). The other 41 module_tiers packages are not layered yet;
+# discrepancy). The other 33 module_tiers packages are not layered yet;
 # tranches add names only by appending them to the existing layer lines.
 # Because the discrepancy count is zero, no operator Decision line is required.
 # ============================================================================
@@ -83,7 +85,7 @@ ignore_imports =
     aragora.exceptions -> aragora.control_plane.exceptions
 layers =
     server : cli : mcp : gateway : bots : channels : integrations : connectors
-    workflow : pipeline : nomic : swarm : gauntlet : goals : implement : modes : verticals : autonomous : broadcast : canvas : spectate : analytics : audit : control_plane : golden : inbox : marketplace : services : skills : stores
+    workflow : pipeline : nomic : swarm : gauntlet : goals : implement : modes : verticals : autonomous : broadcast : canvas : spectate : analytics : audit : control_plane : golden : inbox : marketplace : services : skills : stores : computer_use : coordination : export : markets : plugins : prompt_engine : receipts : workspace
     debate : agents : memory : knowledge : ranking : reasoning : evidence : evaluation : explainability : learning : ml : advocates : analysis : audience : blockchain : compliance : container : core : deliberation : documents : embeddings : epistemic : evolution : genesis : heterogeneity : insights : introspection : metrics : moderation : prompts : pulse : replay : reputation : rlm : routing : templates : tools : tournaments : training : uncertainty : verification : visualization : work
     storage : resilience : events : observability : security : queue : db : caching : billing : backup : migrations : cache : deletion_coordinator : fabric : maintenance : monitoring : performance : resilience_config : resilience_patterns : runtime : sandbox : streaming : telemetry : transcription : auth : logging_config : notifications : persistence : privacy : rbac : tenancy
     api_errors : config : core_types : exceptions : errors : utils : protocols : types : __version__ : _lazy_imports : core_protocols : docs_only : http_client : models : serialization : task_brief : topic_handler : topic_spec : topics : type_protocols : shared
