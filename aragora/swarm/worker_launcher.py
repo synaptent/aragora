@@ -220,8 +220,8 @@ class WorkerLauncher(WorkerLauncherCommandMixin, WorkerLauncherGitMixin):
 
         if self.config.detach:
             log_dir = Path(worktree_path)
-            stdout_file = open(log_dir / ".swarm_worker_stdout.log", "w")  # noqa: SIM115
-            stderr_file = open(log_dir / ".swarm_worker_stderr.log", "w")  # noqa: SIM115
+            stdout_file = open(log_dir / ".swarm_worker_stdout.log", "w")
+            stderr_file = open(log_dir / ".swarm_worker_stderr.log", "w")
             try:
                 proc = await asyncio.create_subprocess_exec(
                     *cmd,
@@ -1434,7 +1434,7 @@ class WorkerLauncher(WorkerLauncherCommandMixin, WorkerLauncherGitMixin):
             if not isinstance(stream, asyncio.StreamReader):
                 continue
             log_path = Path(worktree_path) / f".swarm_worker_{stream_name}.log"
-            handle = open(log_path, "wb")  # noqa: SIM115
+            handle = open(log_path, "wb")
             handles[stream_name] = handle
             tasks[stream_name] = asyncio.create_task(
                 self._tee_stream_to_log(stream, handle, stream_name=stream_name)
