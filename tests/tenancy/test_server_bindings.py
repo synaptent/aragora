@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import subprocess
 import sys
 import tomllib
@@ -61,11 +62,8 @@ async def test_helpers_call_the_registered_bindings(no_bindings: None) -> None:
     config = SimpleNamespace(api_token="static", validate_token=lambda token: token == "signed")
     register_server_bindings(_fake(config))
 
-    assert record_scope.record_not_found("Plan") == (
-        "json",
-        {"error": "Plan not found", "code": "not_found"},
-        404,
-    )
+    body = {"error": "Plan not found", "code": "not_found"}
+    assert record_scope.record_not_found("Plan") == ("json", body, 404)
     assert record_scope.record_not_found_error("Plan").args == ("Plan not found", 404, "not_found")
     assert [
         record_scope.carries_static_api_token({"Authorization": f"Bearer {token}"})
@@ -110,3 +108,29 @@ def test_a_fresh_process_reaches_the_server_bindings() -> None:
     )
     assert proc.returncode == 0, proc.stderr
     assert proc.stdout.strip().splitlines()[-1] == "404"
+
+
+def test_tenancy_has_no_runtime_import_of_the_server_package() -> None:
+    """Function-scope imports count too; only ``if TYPE_CHECKING:`` blocks are exempt."""
+    offenders: list[str] = []
+    for path in sorted((REPO_ROOT / "aragora" / "tenancy").rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        exempt = {
+            id(child)
+            for node in ast.walk(tree)
+            if isinstance(node, ast.If) and "TYPE_CHECKING" in ast.unparse(node.test)
+            for child in ast.walk(node)
+        }
+        for node in ast.walk(tree):
+            if id(node) in exempt:
+                continue
+            if isinstance(node, ast.Import):
+                names = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.level == 0:
+                names = [f"{node.module}.{alias.name}" for alias in node.names]
+            else:
+                names = []
+            offenders += [
+                f"{path.name}: {n}" for n in names if f"{n}.".startswith("aragora.server.")
+            ]
+    assert offenders == []

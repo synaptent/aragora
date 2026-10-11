@@ -1,8 +1,7 @@
 """Registers the server's auth and response helpers with aragora.tenancy.server_bindings.
 
-Each helper imports its server module when called, so installs without the FastAPI
-extra never import it, and a test that replaces ``aragora.server.auth.auth_config``
-is seen on the next call.
+Each helper imports its server module when called, so installs without the FastAPI extra
+never import it and a replaced ``aragora.server.auth.auth_config`` is seen on the next call.
 """
 
 from __future__ import annotations
