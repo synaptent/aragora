@@ -22,7 +22,7 @@ from .handler import EcommerceHandler
 from .models import SUPPORTED_PLATFORMS
 from .models import UnifiedOrder
 from .models import UnifiedProduct
-from .models import _platform_credentials
+from .models import _platform_credentials  # noqa: F401
 from .models import _platform_connectors
 from .validation import _validate_platform_id
 from .validation import _validate_resource_id

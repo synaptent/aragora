@@ -221,9 +221,8 @@ def _verify_token_via_tokeninfo(token: str) -> bool | None:
     url = f"https://oauth2.googleapis.com/tokeninfo?access_token={token}"
 
     try:
-        # hardcoded Google OAuth URL
-        req = urllib.request.Request(url, headers={"Accept": "application/json"})
-        with urllib.request.urlopen(req, timeout=5) as resp:  # hardcoded Google OAuth URL
+        req = urllib.request.Request(url, headers={"Accept": "application/json"})  # noqa: S310 -- hardcoded Google OAuth URL
+        with urllib.request.urlopen(req, timeout=5) as resp:  # noqa: S310 -- hardcoded Google OAuth URL
             data = json.loads(resp.read().decode("utf-8"))
 
         # Check email is a Google Chat service account
