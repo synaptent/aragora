@@ -268,8 +268,8 @@ class CurriculumAwareFeedbackLoop:
         # Check if we should try the main task
         if self._planner.should_attempt_target(curriculum.id):
             logger.info(
-                f"Curriculum complete with {curriculum.success_rate:.0%} success rate. "
-                f"Returning to main task."
+                "Curriculum complete with %.0f%% success rate. Returning to main task.",
+                curriculum.success_rate * 100,
             )
             del self._active_curricula[subtask_id]
             return {
@@ -312,7 +312,7 @@ class CurriculumAwareFeedbackLoop:
 
         # Curriculum failed (insufficient success rate)
         logger.warning(
-            f"Curriculum failed with {curriculum.success_rate:.0%} success rate. Escalating."
+            "Curriculum failed with %.0f%% success rate. Escalating.", curriculum.success_rate * 100
         )
         del self._active_curricula[subtask_id]
         return {

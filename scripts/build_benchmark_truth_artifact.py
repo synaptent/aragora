@@ -1160,7 +1160,7 @@ def build_benchmark_truth_artifact(
                 # `closedByPullRequestsReferences` GraphQL edge. Forensic
                 # references (unrelated merged PRs that merely cite the
                 # issue in their body/comments) are no longer credited.
-                # See docs/benchmarks/corpus_honesty_audit_2026-04-17.md.
+                # See docs/archive/benchmarks/corpus_honesty_audit_2026-04-17.md.
                 reconcile_issue_truth(repo, aggregate, truth_client, strict_linkage=True),
                 expected_status=expected_by_number.get(
                     aggregate.issue_number,

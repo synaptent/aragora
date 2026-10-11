@@ -373,7 +373,7 @@ class PhaseExecutor:
                 )
 
                 duration_ms = (time.time() - start_time) * 1000
-                logger.debug(f"Completed phase '{phase_name}' in {duration_ms:.1f}ms")
+                logger.debug("Completed phase '%s' in %.1fms", phase_name, duration_ms)
 
                 # Add phase-specific attributes to span
                 self._add_phase_span_attributes(span, phase_name, context)
@@ -449,7 +449,7 @@ class PhaseExecutor:
             )
 
             duration_ms = (time.time() - start_time) * 1000
-            logger.debug(f"Completed phase '{phase_name}' in {duration_ms:.1f}ms")
+            logger.debug("Completed phase '%s' in %.1fms", phase_name, duration_ms)
 
             if self._config.metrics_callback:
                 self._config.metrics_callback(f"phase_{phase_name}_duration_ms", duration_ms)

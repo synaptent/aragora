@@ -30,7 +30,7 @@ until an external design partner supplies the activation evidence.
 
 ## Revision 2026-08-26 — External research intake (X bookmarks + likes)
 
-Founder bookmark triage ([`docs/research/2026-08-26-x-bookmarks-triage.md`](research/2026-08-26-x-bookmarks-triage.md))
+Founder bookmark triage (`2026-08-26-x-bookmarks-triage.md`, archived dated research brief)
 established a standing intake pipeline for externally sourced ideas. These rows are capability
 backlog, **not** dispatch priority — the ODR tranche remains the execution spine. Dogfooding rule:
 intake candidates are ranked by an Aragora debate and every filed issue links the DecisionReceipt.

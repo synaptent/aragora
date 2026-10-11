@@ -520,13 +520,13 @@ class SharingNotifier:
 
         try:
             data = json.dumps({"event": event, **payload}).encode("utf-8")
-            req = Request(  # noqa: S310 -- config webhook URL
+            req = Request(  # config webhook URL
                 webhook_url,
                 data=data,
                 headers={"Content-Type": "application/json"},
                 method="POST",
             )
-            with urlopen(req, timeout=10) as response:  # noqa: S310 -- config webhook URL
+            with urlopen(req, timeout=10) as response:  # config webhook URL
                 response.read()
             return True
         except (URLError, TimeoutError) as e:

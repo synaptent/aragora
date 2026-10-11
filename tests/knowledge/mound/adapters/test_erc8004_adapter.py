@@ -1319,3 +1319,47 @@ class TestErrorHandling:
 
         assert len(result.errors) > 0
         assert any("Error processing agent" in e for e in result.errors)
+
+
+class TestPushReputationOnChainAgentId:
+    """push_reputation resolves the on-chain token id from metadata before reverse sync."""
+
+    @pytest.mark.parametrize(
+        "metadata",
+        [
+            None,
+            {},
+            {"on_chain_agent_id": None},
+            {"on_chain_agent_id": "abc"},
+            {"on_chain_agent_id": -1},
+        ],
+    )
+    def test_unresolvable_id_stays_local(self, metadata):
+        adapter = ERC8004Adapter(
+            provider=_make_mock_provider(), signer=_make_mock_signer(), enable_reverse_sync=True
+        )
+        adapter._emit_event = MagicMock()
+        mock_rep_contract = MagicMock()
+
+        with patch.object(adapter, "_get_reputation_contract", return_value=mock_rep_contract):
+            assert adapter.push_reputation("claude", 80, metadata=metadata) is True
+
+        mock_rep_contract.give_feedback.assert_not_called()
+        record = adapter._emit_event.call_args[0][1]
+        assert record["status"] == "local_only"
+        assert record["error"] == "on_chain_agent_id is required for reverse sync"
+
+    @pytest.mark.parametrize("raw_id", [7, "7"])
+    def test_metadata_id_is_pushed_on_chain(self, raw_id):
+        adapter = ERC8004Adapter(
+            provider=_make_mock_provider(), signer=_make_mock_signer(), enable_reverse_sync=True
+        )
+        adapter._emit_event = MagicMock()
+        mock_rep_contract = MagicMock()
+        mock_rep_contract.give_feedback.return_value = "0xrep"
+
+        with patch.object(adapter, "_get_reputation_contract", return_value=mock_rep_contract):
+            adapter.push_reputation("claude", 80, metadata={"on_chain_agent_id": raw_id})
+
+        assert mock_rep_contract.give_feedback.call_args.kwargs["agent_id"] == 7
+        assert adapter._emit_event.call_args[0][1]["status"] == "on_chain"

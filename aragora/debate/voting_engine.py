@@ -26,7 +26,7 @@ from collections.abc import Callable
 if TYPE_CHECKING:
     from aragora.core import Vote
     from aragora.debate.convergence import SimilarityBackend
-    from aragora.debate.protocol import DebateProtocol
+    from aragora.protocols.debate import DebateProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -439,7 +439,7 @@ class VotingEngine:
     def count_votes(
         self,
         votes: list[Vote],
-        user_votes: list[dict[str, Any] | None] = None,
+        user_votes: list[dict[str, Any]] | None = None,
         require_majority: bool = False,
         min_margin: float = 0.0,
     ) -> VoteResult:
@@ -522,8 +522,10 @@ class VotingEngine:
             result.user_votes_count += 1
 
             logger.debug(
-                f"user_vote user={user_vote.get('user_id', 'anon')} "
-                f"choice={choice} weight={weight:.2f}"
+                "user_vote user=%s choice=%s weight=%.2f",
+                user_vote.get("user_id", "anon"),
+                choice,
+                weight,
             )
 
         # Store results
@@ -625,8 +627,11 @@ class VotingEngine:
                 result.consensus_reached = False
                 result.consensus_strength = ConsensusStrength.NONE
                 logger.info(
-                    f"consensus_not_unanimous best={winner} "
-                    f"ratio={unanimity_ratio:.0%} votes={count}/{total_voters}"
+                    "consensus_not_unanimous best=%s ratio=%.0f%% votes=%s/%s",
+                    winner,
+                    unanimity_ratio * 100,
+                    count,
+                    total_voters,
                 )
 
         return result

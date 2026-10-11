@@ -19,7 +19,7 @@ from aragora.debate.phases._phase_invariant import require_phase_result
 if TYPE_CHECKING:
     from aragora.debate.context import DebateContext
     from aragora.memory.consensus import ConsensusStrength
-    from aragora.type_protocols import ConsensusMemoryProtocol
+    from aragora.protocols import ConsensusMemoryProtocol
 
 logger = logging.getLogger(__name__)
 

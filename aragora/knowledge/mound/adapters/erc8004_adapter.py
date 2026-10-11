@@ -388,7 +388,7 @@ class ERC8004Adapter(KnowledgeMoundAdapter):
 
     def _get_identity_bridge(self) -> Any:
         """Get the blockchain identity bridge for agent ID mappings."""
-        from aragora.control_plane.blockchain_identity import get_blockchain_identity_bridge
+        from aragora.blockchain.agent_registry import get_blockchain_identity_bridge
 
         bridge = get_blockchain_identity_bridge()
         # Ensure the bridge uses our provider if set
@@ -844,8 +844,9 @@ class ERC8004Adapter(KnowledgeMoundAdapter):
         if isinstance(agent_id, int):
             resolved_agent_id = agent_id if agent_id >= 0 else None
         elif isinstance(metadata, dict):
+            raw_agent_id = metadata.get("on_chain_agent_id")
             try:
-                candidate = int(metadata.get("on_chain_agent_id"))
+                candidate = int(raw_agent_id) if raw_agent_id is not None else None
             except (TypeError, ValueError):
                 candidate = None
             if candidate is not None and candidate >= 0:

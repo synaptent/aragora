@@ -164,7 +164,7 @@ class ExponentialBackoff:
         # Add jitter (±25%)
         if self.config.jitter:
             jitter_range = delay * 0.25
-            delay = delay + random.uniform(-jitter_range, jitter_range)  # noqa: S311 -- retry jitter
+            delay = delay + random.uniform(-jitter_range, jitter_range)
             delay = max(self.config.initial_delay_seconds, delay)
 
         self._last_delay = delay
@@ -970,8 +970,12 @@ def with_retry(
 
                     delay = backoff.get_delay(attempt)
                     logger.warning(
-                        f"[Retry] {func.__name__} attempt {attempt + 1}/{cfg.max_retries + 1} "
-                        f"failed: {e}. Retrying in {delay:.2f}s"
+                        "[Retry] %s attempt %s/%s failed: %s. Retrying in %.2fs",
+                        func.__name__,
+                        attempt + 1,
+                        cfg.max_retries + 1,
+                        e,
+                        delay,
                     )
                     await asyncio.sleep(delay)
 

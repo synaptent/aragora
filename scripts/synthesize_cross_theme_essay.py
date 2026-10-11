@@ -28,14 +28,23 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 
 # =============================================================================
 # Theme Configuration
 # =============================================================================
 
-THEME_CONFIG = {
+
+class ThemeConfig(TypedDict):
+    name: str
+    short_name: str
+    narrative_position: int
+    introduction: str
+    keywords: list[str]
+
+
+THEME_CONFIG: dict[str, ThemeConfig] = {
     "ai_risk_evolution": {
         "name": "AI Risk, Evolution, and Instrumental Convergence",
         "short_name": "AI & Evolution",

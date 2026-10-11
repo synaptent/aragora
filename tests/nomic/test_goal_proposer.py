@@ -178,6 +178,22 @@ class TestSignalSlowCycles:
         cost_candidates = [c for c in candidates if "cost" in c.goal_text.lower()]
         assert len(cost_candidates) >= 1
 
+    def test_slow_cycles_name_most_common_agent(self):
+        records = [
+            self._make_record(cycle_time=100.0, agents=["codex", "claude"]),
+            self._make_record(cycle_time=100.0, agents=["claude"]),
+            self._make_record(cycle_time=10.0),
+            self._make_record(cycle_time=10.0),
+            self._make_record(cycle_time=10.0),
+            self._make_record(cycle_time=10.0),
+            self._make_record(cycle_time=10.0),
+            self._make_record(cycle_time=10.0),
+        ]
+        proposer = GoalProposer(telemetry=self._make_telemetry(records))
+        slow = [c for c in proposer._signal_slow_cycles() if "slow" in c.goal_text.lower()]
+        assert len(slow) == 1
+        assert slow[0].metadata["top_slow_agent"] == "claude"
+
     def test_signal_source_tag(self):
         records = [
             self._make_record(cycle_time=100.0),

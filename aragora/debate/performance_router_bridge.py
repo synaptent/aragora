@@ -181,9 +181,12 @@ class PerformanceRouterBridge:
         self._routing_scores[agent_name] = score
 
         logger.debug(
-            f"routing_score agent={agent_name} overall={score.overall_score:.2f} "
-            f"latency={score.latency_score:.2f} quality={score.quality_score:.2f} "
-            f"consistency={score.consistency_score:.2f}"
+            "routing_score agent=%s overall=%.2f latency=%.2f quality=%.2f consistency=%.2f",
+            agent_name,
+            score.overall_score,
+            score.latency_score,
+            score.quality_score,
+            score.consistency_score,
         )
 
         return score

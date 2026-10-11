@@ -338,7 +338,7 @@ class PulseAdapter(FusionMixin, SemanticSearchMixin, KnowledgeMoundAdapter):
     def store_trending_topic(
         self,
         topic: TrendingTopic,
-        min_quality: float = None,
+        min_quality: float | None = None,
     ) -> str | None:
         """
         Store a trending topic in the Knowledge Mound.

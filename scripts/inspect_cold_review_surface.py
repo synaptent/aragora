@@ -64,7 +64,7 @@ def main() -> int:
     required_files = [
         "README.md",
         "docs/README.md",
-        "docs/COLD_REVIEWER_GUIDE.md",
+        "docs/guides/COLD_REVIEWER_GUIDE.md",
         "docs/api/SUPPORTED_SURFACE.md",
         "docs/CANONICAL_GOALS.md",
         "docs/THESIS.md",
@@ -81,7 +81,7 @@ def main() -> int:
         require_file(relative_path)
 
     require_contains("README.md", "auditable execution control plane")
-    require_contains("README.md", "docs/COLD_REVIEWER_GUIDE.md")
+    require_contains("README.md", "docs/guides/COLD_REVIEWER_GUIDE.md")
     require_not_contains("README.md", "github.com/an0mium/aragora")
 
     require_contains(
@@ -91,9 +91,9 @@ def main() -> int:
     require_contains("docs/README.md", "Cold Reviewer Guide")
     require_contains("docs/README.md", "Supported API Surface")
 
-    require_contains("docs/COLD_REVIEWER_GUIDE.md", "What Aragora Is Good For Today")
-    require_contains("docs/COLD_REVIEWER_GUIDE.md", "What Is Still Aspirational")
-    require_contains("docs/COLD_REVIEWER_GUIDE.md", "Fast Verification")
+    require_contains("docs/guides/COLD_REVIEWER_GUIDE.md", "What Aragora Is Good For Today")
+    require_contains("docs/guides/COLD_REVIEWER_GUIDE.md", "What Is Still Aspirational")
+    require_contains("docs/guides/COLD_REVIEWER_GUIDE.md", "Fast Verification")
     require_contains("docs/api/SUPPORTED_SURFACE.md", "Stability Tiers")
     require_contains("docs/api/SUPPORTED_SURFACE.md", "Promotion Checklist")
 

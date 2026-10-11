@@ -1,7 +1,7 @@
 # Aragora: Control Plane for Multi-Agent Vetted Decisionmaking
 
 > **Note:** This is an archived copy from the `docs/status/` tracking directory (v2.5.x era).
-> For the current version, see [`docs/OMNIVOROUS_ROADMAP.md`](../OMNIVOROUS_ROADMAP.md).
+> For the current vision, see [`docs/CANONICAL_GOALS.md`](../CANONICAL_GOALS.md).
 
 ## Mission Statement
 

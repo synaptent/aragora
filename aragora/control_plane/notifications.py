@@ -69,7 +69,7 @@ class RetryConfig:
         if self.jitter:
             import random
 
-            delay = delay * (0.5 + random.random())  # noqa: S311 -- retry jitter
+            delay = delay * (0.5 + random.random())
         return delay
 
 
@@ -510,8 +510,11 @@ class NotificationDispatcher:
             if attempt < retry_config.max_retries:
                 delay = retry_config.get_delay(attempt)
                 logger.info(
-                    f"Notification to {channel.value} failed, retrying in {delay:.1f}s "
-                    f"(attempt {attempt + 1}/{retry_config.max_retries})"
+                    "Notification to %s failed, retrying in %.1fs (attempt %s/%s)",
+                    channel.value,
+                    delay,
+                    attempt + 1,
+                    retry_config.max_retries,
                 )
                 self._metrics["total_retried"] += 1
 
@@ -619,7 +622,7 @@ class NotificationDispatcher:
             try:
                 await self._worker_task
             except asyncio.CancelledError:
-                logger.debug("Notification worker task cancelled cleanly")  # noqa: PERF203 -- expected on shutdown
+                logger.debug("Notification worker task cancelled cleanly")  # expected on shutdown
             self._worker_task = None
         logger.info("Notification worker stopped")
 

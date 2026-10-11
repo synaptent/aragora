@@ -360,7 +360,7 @@ def check_multi_instance_readiness() -> dict[str, bool]:
 
     # Check audit log - critical for compliance
     try:
-        from aragora.audit.log import get_audit_log
+        from aragora.observability.audit_log import get_audit_log
 
         audit_log = get_audit_log()
         # Note: AuditLog currently uses SQLite backend for simplicity.

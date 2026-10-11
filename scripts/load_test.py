@@ -307,7 +307,7 @@ async def run_load_test(
         frac = idx - lower
         return sorted_vals[lower] * (1 - frac) + sorted_vals[upper] * frac
 
-    summary = {
+    summary: dict[str, Any] = {
         "total_requests": total_requests,
         "successful_requests": total_successful,
         "failed_requests": total_failed,

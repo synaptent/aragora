@@ -15,7 +15,6 @@ events/
 ├── batch_dispatcher.py      # Batch webhook delivery
 ├── security_dispatcher.py   # Security-focused events
 ├── security_events.py       # Security event definitions
-├── arena_bridge.py          # Arena event integration
 ├── dead_letter_queue.py     # Failed event handling
 ├── webhook_verify.py        # Webhook signature verification
 ├── subscribers/             # Event subscriber implementations

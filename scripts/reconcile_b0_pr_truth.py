@@ -456,7 +456,7 @@ def extract_pr_numbers_from_issue(
     This is the honesty-audit-mandated linkage source for the benchmark truth
     surface: it ensures forensic-reference PRs (unrelated merged PRs that
     merely cite the issue in their bodies or comments) are not credited as
-    success signals. See ``docs/benchmarks/corpus_honesty_audit_2026-04-17.md``.
+    success signals. See ``docs/archive/benchmarks/corpus_honesty_audit_2026-04-17.md``.
 
     In non-strict mode (default; used by the B0 cohort reconciliation flow),
     we also fall back to parsing PR URLs out of issue comments.

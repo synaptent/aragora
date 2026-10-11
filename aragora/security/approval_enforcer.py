@@ -33,6 +33,12 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Protocol
 
+from aragora.security.approval_mappings import (
+    PolicyActionType,
+    resolve_policy_action_type,
+    unknown_action_type_reason,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -165,7 +171,7 @@ class ApprovalWorkflowAdapter(Protocol):
 class PolicyActionRequest:
     """Layer-neutral policy request compatible with action policy engines."""
 
-    action_type: _PolicyActionType
+    action_type: PolicyActionType
     user_id: str
     session_id: str
     workspace_id: str
@@ -176,37 +182,12 @@ class PolicyActionRequest:
     tenant_id: str | None
 
 
-class _PolicyActionType(str, Enum):
-    """Enum-compatible action types expected by policy implementations."""
-
-    SHELL = "shell"
-    FILE_READ = "file_read"
-    FILE_WRITE = "file_write"
-    FILE_DELETE = "file_delete"
-    BROWSER = "browser"
-    API = "api"
-    SCREENSHOT = "screenshot"
-    KEYBOARD = "keyboard"
-    MOUSE = "mouse"
-
-
 class _StructuralPolicyEvaluationAdapter:
     """Evaluate policy objects through their existing structural interface."""
 
     @staticmethod
     def _request(request: EnforcementRequest) -> PolicyActionRequest | None:
-        action_type_map = {
-            "shell": _PolicyActionType.SHELL,
-            "file_read": _PolicyActionType.FILE_READ,
-            "file_write": _PolicyActionType.FILE_WRITE,
-            "file_delete": _PolicyActionType.FILE_DELETE,
-            "browser": _PolicyActionType.BROWSER,
-            "api": _PolicyActionType.API,
-            "screenshot": _PolicyActionType.SCREENSHOT,
-            "keyboard": _PolicyActionType.KEYBOARD,
-            "mouse": _PolicyActionType.MOUSE,
-        }
-        action_type = action_type_map.get(request.action_type)
+        action_type = resolve_policy_action_type(request.action_type)
         if action_type is None:
             return None
         return PolicyActionRequest(
@@ -226,7 +207,7 @@ class _StructuralPolicyEvaluationAdapter:
         if policy_request is None:
             return PolicyEvaluation(
                 result=EnforcementResult.ALLOWED,
-                reason=f"Unknown action type '{request.action_type}'; not policy-controlled",
+                reason=unknown_action_type_reason(request.action_type),
             )
 
         result = policy.evaluate(policy_request)
@@ -251,8 +232,60 @@ class _StructuralPolicyEvaluationAdapter:
         return getattr(result.decision, "value", result.decision) == "require_approval"
 
 
-class _StructuralApprovalWorkflowAdapter:
-    """Use approval workflows that expose layer-neutral construction metadata."""
+class ApprovalCapabilityUnavailable(LookupError):
+    """An approval workflow or adapter lacks what an approval operation needs.
+
+    The enforcer treats this as "not approved": routing leaves the decision
+    pending without an approval request, and waiting or token checks fail.
+    """
+
+
+def _callable_member(owner: Any, name: str, kind: str) -> Any:
+    member = getattr(owner, name, None)
+    if not callable(member):
+        raise ApprovalCapabilityUnavailable(f"approval {kind} has no callable {name}()")
+    return member
+
+
+def _route_label(value: Any) -> str:
+    return str(getattr(value, "value", value))
+
+
+@dataclass(frozen=True)
+class ExternalApprovalWorkflowAdapter:
+    """Adapt an approval workflow whose vocabulary is supplied explicitly.
+
+    Pass an instance as ``UnifiedApprovalEnforcer(approval_workflow_adapter=...)``
+    (or to :func:`register_approval_workflow_adapter`) for a workflow that does
+    not expose the ``approval_*`` metadata attributes. Each operation needs
+    only its own workflow method and fields:
+
+    - routing calls ``workflow.request_approval(context=..., priority=...)``
+      and needs ``context_factory`` (called with the ``task_id``,
+      ``action_type``, ``action_details``, ``category``, ``reason``,
+      ``risk_level``, ``user_id`` and ``tenant_id`` keywords), ``priority``
+      and ``unknown_category``; ``category_map`` maps
+      ``EnforcementRequest.source`` to a category. The returned request must
+      have an ``id``.
+    - waiting calls ``workflow.wait_for_decision(request_id, timeout=...)``
+      and needs ``approved_status``.
+    - token checks call ``workflow.get_request(approval_id)`` and need
+      ``approved_status``; the returned record must expose ``status`` and
+      ``is_expired()``.
+
+    Any other status counts as not approved. A missing workflow method,
+    adapter field or record member raises :class:`ApprovalCapabilityUnavailable`.
+    """
+
+    approved_status: Any = None
+    context_factory: Any = None
+    priority: Any = None
+    category_map: dict[str, Any] = field(default_factory=dict)
+    unknown_category: Any = None
+
+    def _require_approved_status(self, operation: str) -> None:
+        if self.approved_status is None:
+            raise ApprovalCapabilityUnavailable(f"{operation} needs approved_status")
 
     async def request_approval(
         self,
@@ -260,12 +293,13 @@ class _StructuralApprovalWorkflowAdapter:
         request: EnforcementRequest,
         reason: str,
     ) -> ApprovalRoute:
-        context_type = workflow.approval_context_type
-        category = workflow.approval_category_map.get(
-            request.source,
-            workflow.approval_category_unknown,
-        )
-        context = context_type(
+        submit = _callable_member(workflow, "request_approval", "workflow")
+        if self.context_factory is None or self.priority is None or self.unknown_category is None:
+            raise ApprovalCapabilityUnavailable(
+                "request_approval needs context_factory, priority and unknown_category"
+            )
+        category = (self.category_map or {}).get(request.source, self.unknown_category)
+        context = self.context_factory(
             task_id=request.session_id or str(uuid.uuid4()),
             action_type=request.action_type,
             action_details=request.details,
@@ -275,14 +309,14 @@ class _StructuralApprovalWorkflowAdapter:
             user_id=request.actor_id,
             tenant_id=request.tenant_id,
         )
-        approval_request = await workflow.request_approval(
-            context=context,
-            priority=workflow.approval_priority_high,
-        )
+        approval_request = await submit(context=context, priority=self.priority)
+        approval_request_id = getattr(approval_request, "id", None)
+        if approval_request_id is None:
+            raise ApprovalCapabilityUnavailable("approval workflow returned a request without id")
         return ApprovalRoute(
-            approval_request_id=approval_request.id,
-            category=category.value,
-            priority=workflow.approval_priority_high.value,
+            approval_request_id=approval_request_id,
+            category=_route_label(category),
+            priority=_route_label(self.priority),
         )
 
     async def wait_for_approval(
@@ -291,17 +325,68 @@ class _StructuralApprovalWorkflowAdapter:
         approval_request_id: str,
         timeout: float | None,
     ) -> bool:
-        status = await workflow.wait_for_decision(
-            approval_request_id,
-            timeout=timeout,
-        )
-        return status == workflow.approval_status_approved
+        wait = _callable_member(workflow, "wait_for_decision", "workflow")
+        self._require_approved_status("wait_for_approval")
+        status = await wait(approval_request_id, timeout=timeout)
+        return bool(status == self.approved_status)
 
     async def is_approval_valid(self, workflow: Any, approval_id: str) -> bool:
-        request = await workflow.get_request(approval_id)
-        if not request:
+        lookup = _callable_member(workflow, "get_request", "workflow")
+        self._require_approved_status("is_approval_valid")
+        record = await lookup(approval_id)
+        if not record:
             return False
-        return request.status == workflow.approval_status_approved and not request.is_expired()
+        is_expired = _callable_member(record, "is_expired", "request record")
+        status = getattr(record, "status", None)
+        return bool(status == self.approved_status and not is_expired())
+
+
+class _StructuralApprovalWorkflowAdapter:
+    """Read adapter vocabulary from ``approval_*`` workflow attributes.
+
+    Only the attributes an operation needs are required, so a workflow that
+    supports waiting or token lookup does not also have to describe routing.
+    """
+
+    _ROUTING_METADATA = {
+        "context_factory": "approval_context_type",
+        "priority": "approval_priority_high",
+        "category_map": "approval_category_map",
+        "unknown_category": "approval_category_unknown",
+    }
+    _DECISION_METADATA = {"approved_status": "approval_status_approved"}
+
+    @staticmethod
+    def _adapter(workflow: Any, metadata: dict[str, str]) -> ExternalApprovalWorkflowAdapter:
+        missing = [attr for attr in metadata.values() if not hasattr(workflow, attr)]
+        if missing:
+            raise ApprovalCapabilityUnavailable(
+                f"approval workflow lacks metadata: {', '.join(missing)}"
+            )
+        values = {name: getattr(workflow, attr) for name, attr in metadata.items()}
+        return ExternalApprovalWorkflowAdapter(**values)
+
+    async def request_approval(
+        self,
+        workflow: Any,
+        request: EnforcementRequest,
+        reason: str,
+    ) -> ApprovalRoute:
+        adapter = self._adapter(workflow, self._ROUTING_METADATA)
+        return await adapter.request_approval(workflow, request, reason)
+
+    async def wait_for_approval(
+        self,
+        workflow: Any,
+        approval_request_id: str,
+        timeout: float | None,
+    ) -> bool:
+        adapter = self._adapter(workflow, self._DECISION_METADATA)
+        return await adapter.wait_for_approval(workflow, approval_request_id, timeout)
+
+    async def is_approval_valid(self, workflow: Any, approval_id: str) -> bool:
+        adapter = self._adapter(workflow, self._DECISION_METADATA)
+        return await adapter.is_approval_valid(workflow, approval_id)
 
 
 _structural_policy_adapter = _StructuralPolicyEvaluationAdapter()
@@ -310,19 +395,14 @@ _policy_evaluation_adapter: PolicyEvaluationAdapter | None = None
 _approval_workflow_adapter: ApprovalWorkflowAdapter | None = None
 
 
-def _resolve_approval_workflow_adapter(workflow: Any) -> ApprovalWorkflowAdapter | None:
+def _resolve_approval_workflow_adapter(
+    explicit: ApprovalWorkflowAdapter | None = None,
+) -> ApprovalWorkflowAdapter:
+    if explicit is not None:
+        return explicit
     if _approval_workflow_adapter is not None:
         return _approval_workflow_adapter
-    required_metadata = (
-        "approval_context_type",
-        "approval_priority_high",
-        "approval_category_map",
-        "approval_category_unknown",
-        "approval_status_approved",
-    )
-    if all(hasattr(workflow, name) for name in required_metadata):
-        return _structural_approval_adapter
-    return None
+    return _structural_approval_adapter
 
 
 def register_policy_evaluation_adapter(adapter: PolicyEvaluationAdapter | None) -> None:
@@ -343,6 +423,11 @@ class UnifiedApprovalEnforcer:
     Evaluates all sensitive actions against the OpenClaw policy engine and
     routes REQUIRE_APPROVAL decisions to the appropriate approval workflow.
     Emits structured audit events for every decision.
+
+    ``approval_workflow_adapter`` takes precedence over the adapter registered
+    with :func:`register_approval_workflow_adapter`; without either, the
+    workflow's ``approval_*`` attributes are used per operation. Workflows that
+    cannot be adapted fail closed.
     """
 
     def __init__(
@@ -350,9 +435,11 @@ class UnifiedApprovalEnforcer:
         policy: Any | None = None,
         approval_workflow: Any | None = None,
         audit_enabled: bool = True,
+        approval_workflow_adapter: ApprovalWorkflowAdapter | None = None,
     ) -> None:
         self._policy = policy
         self._approval_workflow = approval_workflow
+        self._approval_workflow_adapter = approval_workflow_adapter
         self._audit_enabled = audit_enabled
         self._decision_log: list[EnforcementDecision] = []
         self._max_log_size = 10_000
@@ -404,18 +491,14 @@ class UnifiedApprovalEnforcer:
         if not self._approval_workflow:
             return False
 
-        adapter = _resolve_approval_workflow_adapter(self._approval_workflow)
-        if adapter is None:
-            return False
-
+        adapter = _resolve_approval_workflow_adapter(self._approval_workflow_adapter)
         try:
-            return await adapter.wait_for_approval(
-                self._approval_workflow,
-                approval_request_id,
-                timeout,
-            )
-        except ImportError:
+            wait = _callable_member(adapter, "wait_for_approval", "adapter")
+            approved = await wait(self._approval_workflow, approval_request_id, timeout)
+        except (ImportError, TypeError, ApprovalCapabilityUnavailable) as e:
+            logger.warning("Approval wait unavailable: %s", e)
             return False
+        return approved is True
 
     async def verify_not_bypassed(
         self,
@@ -589,28 +672,36 @@ class UnifiedApprovalEnforcer:
             # No workflow configured - keep as pending
             return decision
 
-        adapter = _resolve_approval_workflow_adapter(self._approval_workflow)
-        if adapter is None:
-            logger.warning("Approval workflow adapter not available")
-            return decision
-
+        adapter = _resolve_approval_workflow_adapter(self._approval_workflow_adapter)
         try:
-            route = await adapter.request_approval(
+            submit = _callable_member(adapter, "request_approval", "adapter")
+            route = await submit(
                 self._approval_workflow,
                 request,
                 decision.reason,
             )
 
-            decision.approval_request_id = route.approval_request_id
-            decision.metadata["approval_context"] = {
-                "category": route.category,
-                "priority": route.priority,
-            }
+            # Read every route field before mutating the decision so a malformed
+            # route never publishes partial approval metadata.
+            try:
+                approval_request_id = route.approval_request_id
+                approval_context = {"category": route.category, "priority": route.priority}
+            except AttributeError as e:
+                logger.warning("Approval workflow adapter returned a malformed route: %s", e)
+                return decision
+
+            decision.approval_request_id = approval_request_id
+            decision.metadata["approval_context"] = approval_context
 
             return decision
 
         except ImportError:
             logger.warning("Computer-use approval module not available")
+            return decision
+        except (TypeError, ApprovalCapabilityUnavailable) as e:
+            # TypeError here means an adapter or workflow callable has the wrong
+            # signature; leave the decision pending instead of failing open or crashing.
+            logger.warning("Approval workflow adapter not available: %s", e)
             return decision
 
     async def _action_requires_approval(self, request: EnforcementRequest) -> bool:
@@ -634,14 +725,13 @@ class UnifiedApprovalEnforcer:
         if not self._approval_workflow:
             return False
 
-        adapter = _resolve_approval_workflow_adapter(self._approval_workflow)
-        if adapter is None:
-            return False
-
+        adapter = _resolve_approval_workflow_adapter(self._approval_workflow_adapter)
         try:
-            return await adapter.is_approval_valid(self._approval_workflow, approval_id)
-        except (ImportError, AttributeError):
+            check = _callable_member(adapter, "is_approval_valid", "adapter")
+            valid = await check(self._approval_workflow, approval_id)
+        except (ImportError, AttributeError, TypeError, ApprovalCapabilityUnavailable):
             return False
+        return valid is True
 
     async def _record_decision(self, decision: EnforcementDecision) -> None:
         """Record decision in log and emit audit event."""
@@ -714,6 +804,8 @@ __all__ = [
     "ApprovalRoute",
     "PolicyEvaluationAdapter",
     "ApprovalWorkflowAdapter",
+    "ApprovalCapabilityUnavailable",
+    "ExternalApprovalWorkflowAdapter",
     "UnifiedApprovalEnforcer",
     "register_policy_evaluation_adapter",
     "register_approval_workflow_adapter",

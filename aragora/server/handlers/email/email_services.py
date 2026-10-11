@@ -16,7 +16,7 @@ Endpoints:
 - DELETE /api/v1/email/{id}/snooze - Cancel snooze
 - GET /api/v1/email/snoozed - List snoozed emails
 - GET /api/v1/email/categories - List available categories
-- POST /api/v1/email/categories/learn - Submit category feedback
+- POST /api/v1/email/categories/learn - Category feedback (501: learning is not implemented)
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ from aragora.server.handlers.base import (
     handle_errors,
 )
 from aragora.server.handlers.secure import SecureHandler, UnauthorizedError, ForbiddenError
-from aragora.server.handlers.utils.responses import HandlerResult
+from aragora.server.handlers.utils.responses import HandlerResult, json_response
 
 logger = logging.getLogger(__name__)
 
@@ -90,9 +90,72 @@ _snooze_recommender_lock = threading.Lock()
 _email_categorizer: Any | None = None
 _email_categorizer_lock = threading.Lock()
 
-# In-memory snooze storage (replace with DB in production)
-_snoozed_emails: dict[str, dict[str, Any]] = {}
+# In-memory snooze storage (replace with DB in production), keyed by (user_id, org_id, email_id)
+# so one caller's snooze of an email id can neither block nor reveal another caller's.
+_snoozed_emails: dict[tuple[str, str | None, str], dict[str, Any]] = {}
 _snoozed_emails_lock = threading.Lock()
+# Follow-up id -> (user_id, org_id) of the principal that created it
+_followup_owners: dict[str, tuple[str, str | None]] = {}
+_followup_owners_lock = threading.Lock()
+
+_RESOLUTION_STATUSES = {
+    "replied": "received",
+    "received": "received",
+    "no_longer_needed": "cancelled",
+    "cancelled": "cancelled",
+    "manually_resolved": "resolved",
+    "resolved": "resolved",
+}
+_PRIORITY_URGENCY = {"urgent": 1.0, "high": 0.75, "normal": 0.5, "low": 0.25}
+
+
+def _owner(auth_context: Any) -> tuple[str, str | None]:
+    """(user_id, org_id) of the authenticated caller.
+
+    The module functions keep their legacy ``user_id`` argument, but ownership of
+    follow-ups, snoozes and category feedback always comes from this context.
+    """
+    return auth_context.user_id, getattr(auth_context, "org_id", None)
+
+
+def _owns(entry: dict[str, Any], owner: tuple[str, str | None]) -> bool:
+    return (entry.get("user_id"), entry.get("org_id")) == owner
+
+
+def _owned_followups(owner: tuple[str, str | None]) -> set[str]:
+    with _followup_owners_lock:
+        return {fid for fid, who in _followup_owners.items() if who == owner}
+
+
+def _record_followup_owner(followup_ids: list[str], owner: tuple[str, str | None]) -> None:
+    with _followup_owners_lock:
+        _followup_owners.update(dict.fromkeys(followup_ids, owner))
+
+
+def _naive_local(value: str) -> datetime:
+    """Parse ISO-8601 (``Z`` allowed) as naive local time, the clock the services compare with."""
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    return parsed.astimezone().replace(tzinfo=None) if parsed.tzinfo else parsed
+
+
+# Ceilings keep timedelta(days=...) from overflowing into a 500: a year of days, as the
+# inbox action-items window (8,760 hours), and the Gmail query handler's 100-result limit.
+_MAX_DAYS = 365
+_MAX_SUGGESTIONS = 100
+
+
+def _bounded(value: Any, kind: type, low: float, high: float | None = None) -> Any:
+    """``kind(value)`` if it lies in [low, high], else None (query values arrive as strings)."""
+    try:
+        number = kind(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return number if low <= number <= (number if high is None else high) else None
+
+
+def _urgency_score(followup: Any) -> float:
+    score = _PRIORITY_URGENCY.get(followup.priority.value, 0.5)
+    return max(score, 0.9) if followup.is_overdue else score
 
 
 def get_followup_tracker():
@@ -173,20 +236,26 @@ async def handle_mark_followup(
         subject = data.get("subject", "")
         recipient = data.get("recipient", "")
         sent_at_str = data.get("sent_at")
-        expected_days = data.get("expected_reply_days", 3)
+        expected_days = _bounded(data.get("expected_reply_days", 3), int, 0, _MAX_DAYS)
 
         if not email_id or not thread_id:
             return error_response("email_id and thread_id are required", status=400)
+        if expected_days is None:
+            return error_response(
+                f"expected_reply_days must be an integer from 0 to {_MAX_DAYS}", status=400
+            )
 
         # Parse sent_at
         sent_at = datetime.now()
-        if sent_at_str:
-            try:
-                sent_at = datetime.fromisoformat(sent_at_str.replace("Z", "+00:00"))
-            except ValueError:
-                pass
-
-        expected_by = sent_at + timedelta(days=expected_days)
+        try:
+            if sent_at_str:
+                try:
+                    sent_at = _naive_local(sent_at_str)
+                except ValueError:
+                    pass
+            expected_by = sent_at + timedelta(days=expected_days)
+        except OverflowError:
+            return error_response("sent_at is out of range", status=400)
 
         followup = await tracker.mark_awaiting_reply(
             email_id=email_id,
@@ -195,8 +264,8 @@ async def handle_mark_followup(
             recipient=recipient,
             sent_at=sent_at,
             expected_by=expected_by,
-            user_id=user_id,
         )
+        _record_followup_owner([followup.id], _owner(auth_context))
 
         return success_response(
             {
@@ -240,9 +309,9 @@ async def handle_get_pending_followups(
         tracker = get_followup_tracker()
 
         followups = await tracker.get_pending_followups(
-            user_id=user_id,
             include_resolved=include_resolved,
             sort_by=sort_by,
+            only_ids=_owned_followups(_owner(auth_context)),
         )
 
         return success_response(
@@ -258,7 +327,7 @@ async def handle_get_pending_followups(
                         "expected_by": f.expected_by.isoformat() if f.expected_by else None,
                         "status": f.status.value,
                         "days_waiting": f.days_waiting,
-                        "urgency_score": f.urgency_score,
+                        "urgency_score": _urgency_score(f),
                         "reminder_count": f.reminder_count,
                     }
                     for f in followups
@@ -294,14 +363,21 @@ async def handle_resolve_followup(
         return perm_error
 
     try:
+        from aragora.services.followup_tracker import FollowUpStatus
+
         tracker = get_followup_tracker()
 
-        status = data.get("status", "manually_resolved")
+        status = _RESOLUTION_STATUSES.get(str(data.get("status", "manually_resolved")))
         notes = data.get("notes", "")
+        if status is None:
+            allowed = ", ".join(sorted(_RESOLUTION_STATUSES))
+            return error_response(f"status must be one of: {allowed}", status=400)
+        if _followup_owners.get(followup_id) != _owner(auth_context):
+            return error_response("Follow-up not found", status=404)
 
         followup = await tracker.resolve_followup(
             followup_id=followup_id,
-            status=status,
+            status=FollowUpStatus(status),
             notes=notes,
         )
 
@@ -312,7 +388,7 @@ async def handle_resolve_followup(
             {
                 "followup_id": followup.id,
                 "status": followup.status.value,
-                "resolved_at": followup.resolved_at.isoformat() if followup.resolved_at else None,
+                "resolved_at": followup.updated_at.isoformat(),
                 "notes": notes,
             }
         )
@@ -332,7 +408,7 @@ async def handle_check_replies(
     POST /api/v1/email/followups/check-replies
     """
     # Check RBAC permission
-    perm_error = _check_email_permission(auth_context, "email:read")
+    perm_error = _check_email_permission(auth_context, "email:update")
     if perm_error:
         return perm_error
 
@@ -340,14 +416,16 @@ async def handle_check_replies(
         tracker = get_followup_tracker()
 
         # Get pending follow-ups
-        pending = await tracker.get_pending_followups(user_id=user_id)
+        pending = await tracker.get_pending_followups(
+            only_ids=_owned_followups(_owner(auth_context))
+        )
         thread_ids = [f.thread_id for f in pending]
 
         if not thread_ids:
             return success_response({"replied": [], "still_pending": 0})
 
         # Check for replies
-        replied = await tracker.check_for_replies(thread_ids)
+        replied = await tracker.check_for_replies(thread_ids, only_ids={f.id for f in pending})
 
         return success_response(
             {
@@ -357,7 +435,9 @@ async def handle_check_replies(
                         "email_id": f.email_id,
                         "subject": f.subject,
                         "recipient": f.recipient,
-                        "replied_at": f.resolved_at.isoformat() if f.resolved_at else None,
+                        "replied_at": (
+                            f.reply_received_at.isoformat() if f.reply_received_at else None
+                        ),
                     }
                     for f in replied
                 ],
@@ -389,10 +469,11 @@ async def handle_auto_detect_followups(
     try:
         tracker = get_followup_tracker()
 
-        detected = await tracker.auto_detect_sent_emails(
-            days_back=days_back,
-            user_id=user_id,
-        )
+        days = _bounded(days_back, int, 1, _MAX_DAYS)
+        if days is None:
+            return error_response(f"days_back must be an integer from 1 to {_MAX_DAYS}", status=400)
+        detected = await tracker.auto_detect_sent_emails(days_back=days)
+        _record_followup_owner([f.id for f in detected], _owner(auth_context))
 
         return success_response(
             {
@@ -454,9 +535,20 @@ async def handle_get_snooze_suggestions(
             "received_at": data.get("received_at", datetime.now().isoformat()),
         }
 
+        max_suggestions = _bounded(data.get("max_suggestions", 5), int, 1, _MAX_SUGGESTIONS)
+        priority_score = None
+        if data.get("priority") is not None:
+            priority_score = _bounded(data["priority"], float, 0.0, 1.0)
+        if max_suggestions is None or (data.get("priority") is not None and priority_score is None):
+            return error_response(
+                f"max_suggestions must be an integer from 1 to {_MAX_SUGGESTIONS} "
+                "and priority a number from 0 to 1",
+                status=400,
+            )
+
         # Build priority result if provided
         priority_result = None
-        if data.get("priority") is not None:
+        if priority_score is not None:
             from aragora.services.email_prioritization import (
                 EmailPriority,
                 EmailPriorityResult,
@@ -464,7 +556,6 @@ async def handle_get_snooze_suggestions(
             )
 
             # Map priority score to EmailPriority enum
-            priority_score = data.get("priority", 0.5)
             if priority_score >= 0.8:
                 priority_enum = EmailPriority.CRITICAL
             elif priority_score >= 0.6:
@@ -484,8 +575,6 @@ async def handle_get_snooze_suggestions(
                 rationale="User-provided priority",
             )
 
-        max_suggestions = data.get("max_suggestions", 5)
-
         recommendation = await recommender.recommend_snooze(
             email=email,
             priority_result=priority_result,
@@ -499,9 +588,9 @@ async def handle_get_snooze_suggestions(
                     {
                         "snooze_until": s.snooze_until.isoformat(),
                         "label": s.label,
-                        "reason": s.reason,
+                        "reason": s.reason.value,
                         "confidence": s.confidence,
-                        "source": s.source,
+                        "source": s.reason.value,
                     }
                     for s in recommendation.suggestions
                 ],
@@ -509,7 +598,7 @@ async def handle_get_snooze_suggestions(
                     {
                         "snooze_until": recommendation.recommended.snooze_until.isoformat(),
                         "label": recommendation.recommended.label,
-                        "reason": recommendation.recommended.reason,
+                        "reason": recommendation.recommended.reason.value,
                     }
                     if recommendation.recommended
                     else None
@@ -548,17 +637,19 @@ async def handle_apply_snooze(
             return error_response("snooze_until is required", status=400)
 
         try:
-            snooze_until = datetime.fromisoformat(snooze_until_str.replace("Z", "+00:00"))
-        except ValueError:
+            snooze_until = _naive_local(snooze_until_str)
+        except (ValueError, OverflowError):
             return error_response("Invalid snooze_until format", status=400)
 
         label = data.get("label", "Snoozed")
+        owner = _owner(auth_context)
 
         # Store snooze (in production, use Gmail API or database)
         with _snoozed_emails_lock:
-            _snoozed_emails[email_id] = {
+            _snoozed_emails[(*owner, email_id)] = {
                 "email_id": email_id,
-                "user_id": user_id,
+                "user_id": owner[0],
+                "org_id": owner[1],
                 "snooze_until": snooze_until,
                 "label": label,
                 "snoozed_at": datetime.now(),
@@ -610,16 +701,14 @@ async def handle_cancel_snooze(
     DELETE /api/v1/email/{id}/snooze
     """
     # Check RBAC permission
-    perm_error = _check_email_permission(auth_context, "email:delete")
+    perm_error = _check_email_permission(auth_context, "email:update")
     if perm_error:
         return perm_error
 
     try:
         with _snoozed_emails_lock:
-            if email_id not in _snoozed_emails:
+            if _snoozed_emails.pop((*_owner(auth_context), email_id), None) is None:
                 return error_response("Email not snoozed", status=404)
-
-            del _snoozed_emails[email_id]
 
         # Try to remove Gmail snooze label
         try:
@@ -680,7 +769,7 @@ async def handle_get_snoozed_emails(
                     "is_due": s["snooze_until"] <= now,
                 }
                 for s in _snoozed_emails.values()
-                if s.get("user_id") == user_id
+                if _owns(s, _owner(auth_context))
             ]
 
         # Sort by snooze_until
@@ -719,14 +808,14 @@ async def handle_process_due_snoozes(
 
         with _snoozed_emails_lock:
             due_emails = [
-                (eid, s)
-                for eid, s in _snoozed_emails.items()
-                if s.get("user_id") == user_id and s["snooze_until"] <= now
+                (key, s)
+                for key, s in _snoozed_emails.items()
+                if _owns(s, _owner(auth_context)) and s["snooze_until"] <= now
             ]
 
-            for email_id, snooze_data in due_emails:
-                del _snoozed_emails[email_id]
-                processed.append(email_id)
+            for key, snooze_data in due_emails:
+                del _snoozed_emails[key]
+                processed.append(snooze_data["email_id"])
 
         # Try to unarchive in Gmail
         for email_id in processed:
@@ -805,54 +894,25 @@ async def handle_category_feedback(
     auth_context: Any | None = None,
 ) -> HandlerResult:
     """
-    Submit feedback on email categorization to improve learning.
+    Refuse category feedback, because nothing learns from it yet.
 
     POST /api/v1/email/categories/learn
-    Body: {
-        email_id: str,
-        predicted_category: str,
-        correct_category: str,
-        email_metadata: dict (optional)
-    }
+    A caller holding ``email:update`` gets 501 ``not_implemented``, so a correction
+    is never acknowledged as recorded. The request body is not read.
     """
-    # Check RBAC permission
     perm_error = _check_email_permission(auth_context, "email:update")
     if perm_error:
         return perm_error
-
-    try:
-        categorizer = get_email_categorizer()
-
-        email_id = data.get("email_id")
-        predicted = data.get("predicted_category")
-        correct = data.get("correct_category")
-
-        if not email_id or not predicted or not correct:
-            return error_response(
-                "email_id, predicted_category, and correct_category are required",
-                status=400,
-            )
-
-        # Record feedback for learning
-        await categorizer.record_feedback(
-            email_id=email_id,
-            predicted_category=predicted,
-            correct_category=correct,
-            user_id=user_id,
-        )
-
-        return success_response(
-            {
-                "email_id": email_id,
-                "feedback_recorded": True,
-                "predicted": predicted,
-                "correct": correct,
+    # Not error_response: in production it rewrites every 5xx message to "Internal server error".
+    return json_response(
+        {
+            "error": {
+                "code": "not_implemented",
+                "message": "Learning from category feedback is not implemented",
             }
-        )
-
-    except (TypeError, ValueError, KeyError, AttributeError, OSError):
-        logger.exception("Error recording category feedback")
-        return error_response("Feedback recording failed", status=500)
+        },
+        status=501,
+    )
 
 
 def _get_category_description(category) -> str:
@@ -960,8 +1020,13 @@ class EmailServicesHandler(SecureHandler):
                 return True
         return False
 
-    def handle(self, path: str, query_params: dict[str, Any], handler: Any) -> HandlerResult | None:
+    async def handle(
+        self, path: str, query_params: dict[str, Any], handler: Any
+    ) -> HandlerResult | None:
         """Route email services endpoint requests."""
+        # The modular dispatcher calls ``handle`` for GET; it has no ``handle_get`` hook.
+        if getattr(handler, "command", "GET") == "GET":
+            return await self.handle_get(path, query_params, handler)
         return None
 
     @handle_errors("email services creation")
@@ -1001,24 +1066,26 @@ class EmailServicesHandler(SecureHandler):
         user_id = auth_context.user_id
 
         if path == "/api/v1/email/followups/mark":
-            return await handle_mark_followup(data, user_id=user_id)
+            return await handle_mark_followup(data, user_id=user_id, auth_context=auth_context)
         elif path == "/api/v1/email/followups/check-replies":
-            return await handle_check_replies()
+            return await handle_check_replies(auth_context=auth_context)
         elif path == "/api/v1/email/followups/auto-detect":
             days_back = data.get("days_back", 7)
-            return await handle_auto_detect_followups(days_back=days_back)
+            return await handle_auto_detect_followups(
+                days_back=days_back, auth_context=auth_context
+            )
         elif path.endswith("/resolve"):
             parts = path.split("/")
             if len(parts) >= 5:
-                return await handle_resolve_followup(parts[-2], data)
+                return await handle_resolve_followup(parts[-2], data, auth_context=auth_context)
         elif path.endswith("/snooze") and "process-due" not in path:
             parts = path.split("/")
             if len(parts) >= 5:
-                return await handle_apply_snooze(parts[-2], data)
+                return await handle_apply_snooze(parts[-2], data, auth_context=auth_context)
         elif path == "/api/v1/email/snooze/process-due":
-            return await handle_process_due_snoozes()
+            return await handle_process_due_snoozes(auth_context=auth_context)
         elif path == "/api/v1/email/categories/learn":
-            return await handle_category_feedback(data)
+            return await handle_category_feedback(data, auth_context=auth_context)
         return error_response("Not found", status=404)
 
     async def handle_get(
@@ -1028,12 +1095,6 @@ class EmailServicesHandler(SecureHandler):
         handler: Any,
     ) -> HandlerResult | None:
         """Handle GET requests with RBAC protection."""
-        # Categories endpoint is public (static reference data)
-        if path == "/api/v1/email/categories":
-            user_id = query_params.get("user_id", "default")
-            return await handle_get_categories(user_id=user_id)
-
-        # All other read operations require authentication
         try:
             auth_context = await self.get_auth_context(handler, require_auth=True)
         except UnauthorizedError:
@@ -1050,18 +1111,21 @@ class EmailServicesHandler(SecureHandler):
 
         user_id = auth_context.user_id
 
-        if path == "/api/v1/email/followups/pending":
+        if path == "/api/v1/email/categories":
+            return await handle_get_categories(user_id=user_id, auth_context=auth_context)
+        elif path == "/api/v1/email/followups/pending":
             return await handle_get_pending_followups(
                 user_id=user_id,
                 include_resolved=query_params.get("include_resolved", "false").lower() == "true",
+                auth_context=auth_context,
             )
         elif path == "/api/v1/email/snoozed":
-            return await handle_get_snoozed_emails(user_id=user_id)
+            return await handle_get_snoozed_emails(user_id=user_id, auth_context=auth_context)
         elif "snooze-suggestions" in path:
             parts = path.split("/")
             if len(parts) >= 5:
                 return await handle_get_snooze_suggestions(
-                    parts[-2], data=query_params, user_id=user_id
+                    parts[-2], data=query_params, user_id=user_id, auth_context=auth_context
                 )
         return error_response("Not found", status=404)
 
@@ -1093,5 +1157,7 @@ class EmailServicesHandler(SecureHandler):
         if "/snooze" in path:
             parts = path.split("/")
             if len(parts) >= 5:
-                return await handle_cancel_snooze(parts[-2], user_id=user_id)
+                return await handle_cancel_snooze(
+                    parts[-2], user_id=user_id, auth_context=auth_context
+                )
         return error_response("Not found", status=404)

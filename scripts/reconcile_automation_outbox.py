@@ -476,6 +476,7 @@ def _merged_pr_commit_preservation_proof(
     desired_heads: set[str] = set()
     worktree_paths: list[str] = []
     common_upstream: Mapping[str, Any] | None = None
+    proof: dict[str, Any] | None
 
     for record in records:
         desired_head = str(record.get("desired_head_sha") or "").strip()
@@ -726,10 +727,10 @@ def _remote_branch_preservation_lookup_failed_reason(
         if not isinstance(proof, Mapping):
             continue
         if proof.get("reason") == "remote_branch_lookup_failed":
-            remote = proof.get("remote")
+            proof_remote = proof.get("remote")
             reason = ""
-            if isinstance(remote, Mapping):
-                reason = str(remote.get("reason") or "").strip()
+            if isinstance(proof_remote, Mapping):
+                reason = str(proof_remote.get("reason") or "").strip()
             detail = f": {reason}" if reason else ""
             return (
                 f"branch no longer exists locally, but live remote branch state for "

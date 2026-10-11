@@ -107,7 +107,7 @@ _distributed_rate_limiter: Any = None
 
 def _get_distributed_rate_limiter() -> Any:
     """Get the distributed email rate limiter, if available."""
-    global _distributed_rate_limiter  # noqa: PLW0603
+    global _distributed_rate_limiter
     if _distributed_rate_limiter is not None:
         return _distributed_rate_limiter
     try:

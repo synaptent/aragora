@@ -500,10 +500,13 @@ ufw deny 6379/tcp   # Block Redis
 ## Related Documentation
 
 - [ENVIRONMENT.md](../reference/ENVIRONMENT.md) - Full environment variable reference (70+ variables)
-- [DEPLOYMENT.md](../deployment/DEPLOYMENT.md) - Detailed deployment guide
+- [DEPLOYMENT.md](../DEPLOYMENT.md) - Detailed deployment guide
 - [SUPABASE_SETUP.md](SUPABASE_SETUP.md) - Supabase configuration
 - [API_REFERENCE.md](../api/API_REFERENCE.md) - API documentation
 - [TEST_COVERAGE_SLOS.md](../observability/TEST_COVERAGE_SLOS.md) - Test coverage targets
+- [SELF_HOSTED_COMPLETE_GUIDE.md](SELF_HOSTED_COMPLETE_GUIDE.md) - Simple, SME and Production (Kubernetes HA) deployment profiles, security and TLS, monitoring, operations and troubleshooting
+- [PRODUCTION_RUNBOOK.md](../operations/PRODUCTION_RUNBOOK.md) - Production operations: health checks, scaling, troubleshooting, backup and recovery, key rotation, monitoring and step-by-step runbook procedures
+- [REVERSE_PROXY.md](../operations/REVERSE_PROXY.md) - Reverse proxy configs for Nginx, Caddy, Traefik and AWS ALB (SSL termination, API and WebSocket routing)
 
 ---
 

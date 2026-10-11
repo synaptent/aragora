@@ -100,7 +100,7 @@ class TestFixerWorker:
             await self._store.complete(
                 job.id, result={"duration_seconds": duration, **result.to_dict()}
             )
-            logger.info(f"[{self.worker_id}] Completed job {job.id} in {duration:.1f}s")
+            logger.info("[%s] Completed job %s in %.1fs", self.worker_id, job.id, duration)
         except (RuntimeError, OSError, ConnectionError, TimeoutError, ValueError) as exc:
             logger.error("[%s] Job %s failed: %s", self.worker_id, job.id, exc, exc_info=True)
             should_retry = job.attempts < job.max_attempts

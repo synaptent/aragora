@@ -29,8 +29,8 @@ def _ensure_supabase() -> bool:
     try:
         import supabase as _mod
 
-        Client = _mod.Client
-        create_client = _mod.create_client
+        Client = getattr(_mod, "Client")
+        create_client = getattr(_mod, "create_client")
         SUPABASE_AVAILABLE = True
     except (ImportError, AttributeError):
         SUPABASE_AVAILABLE = False
@@ -61,8 +61,11 @@ def _log_slow_query(operation: str, elapsed: float, context: str = "") -> None:
     if elapsed > SLOW_QUERY_THRESHOLD:
         ctx = f" [{context}]" if context else ""
         logger.warning(
-            f"Slow query ({elapsed:.3f}s): {operation}{ctx} "
-            f"(threshold: {SLOW_QUERY_THRESHOLD:.3f}s)"
+            "Slow query (%.3fs): %s%s (threshold: %.3fs)",
+            elapsed,
+            operation,
+            ctx,
+            SLOW_QUERY_THRESHOLD,
         )
 
 

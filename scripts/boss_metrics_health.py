@@ -26,7 +26,7 @@ import json
 import sys
 from collections import Counter
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeGuard
 
 # Skip-suggesting terminal_class values (the loop did not produce a deliverable).
 SKIP_TERMINAL_CLASSES: frozenset[str] = frozenset(
@@ -71,7 +71,7 @@ def _row_is_skip(row: dict[str, Any]) -> bool:
     return False
 
 
-def _valid_issue_number(value: Any) -> bool:
+def _valid_issue_number(value: Any) -> TypeGuard[int]:
     return isinstance(value, int) and not isinstance(value, bool) and value > 0
 
 

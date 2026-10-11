@@ -311,13 +311,11 @@ async def load_agent_stats(
     Returns:
         Dict with agent stats for GraphQL schema
     """
-    if loaders is None:
-        # Fallback to defaults
-        data = AgentData.default(agent_name)
-    else:
+    data: AgentData | None = None
+    if loaders is not None:
         data = await loaders.agent_loader.load(agent_name)
-        if data is None:
-            data = AgentData.default(agent_name)
+    if data is None:
+        data = AgentData.default(agent_name)
 
     return {
         "totalGames": data.total_games,
@@ -373,9 +371,10 @@ async def load_agents_batch(
 
     agents = await loaders.agent_loader.load_many(agent_names)
 
-    results = []
+    results: list[dict[str, Any]] = []
     for i, name in enumerate(agent_names):
-        data = agents[i] if agents[i] else AgentData.default(name)
+        loaded = agents[i]
+        data = loaded if loaded else AgentData.default(name)
         results.append(
             {
                 "id": data.id,

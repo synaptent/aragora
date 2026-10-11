@@ -138,6 +138,7 @@ stats = await mound.get_stats()
 
 # Sync with connected memory systems
 sync_result = await mound.sync_all()
+# Fact sync is closed without an organization: sync_result["facts"].errors == ["facts:org_scope_required"]
 ```
 
 ### 2. Semantic Store

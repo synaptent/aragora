@@ -146,10 +146,11 @@ class TestKnowledgePipelineIntegration:
                 content=sample_document_content,
                 filename="employment_contract.txt",
                 workspace_id=temp_workspace,
+                org_id="org-test",
             )
 
         # Clean up cached pipeline to avoid cross-test leakage
-        _pipelines.pop(temp_workspace, None)
+        _pipelines.pop(("org-test", temp_workspace), None)
 
         assert result.success is True
         assert result.document_id is not None
@@ -170,13 +171,14 @@ class TestKnowledgePipelineIntegration:
             content=sample_document_content,
             filename="employment_contract.txt",
             workspace_id=temp_workspace,
+            org_id="org-test",
         )
 
         assert job_id is not None
 
         # Wait for processing to complete (with timeout)
         max_wait = 10  # seconds
-        waited = 0
+        waited = 0.0
         while waited < max_wait:
             status = get_job_status(job_id)
             if status and status.get("status") in ("completed", "failed"):
@@ -269,10 +271,11 @@ class TestQueryEngine:
             InMemoryEmbeddingService,
             InMemoryFactStore,
             QueryOptions,
+            ScopedFactStore,
         )
 
         # Setup
-        fact_store = InMemoryFactStore()
+        fact_store = ScopedFactStore(InMemoryFactStore(), "org-test")
         embedding_service = InMemoryEmbeddingService()
 
         # Add a test fact (sync method - no await)
@@ -315,9 +318,10 @@ class TestQueryEngine:
             InMemoryEmbeddingService,
             InMemoryFactStore,
             QueryOptions,
+            ScopedFactStore,
         )
 
-        fact_store = InMemoryFactStore()
+        fact_store = ScopedFactStore(InMemoryFactStore(), "org-test")
         embedding_service = InMemoryEmbeddingService()
 
         # Add multiple facts (sync method - no await)
@@ -363,9 +367,9 @@ class TestFactStore:
     @pytest.mark.asyncio
     async def test_add_and_retrieve_fact(self, temp_workspace: str):
         """Test adding and retrieving facts."""
-        from aragora.knowledge import InMemoryFactStore
+        from aragora.knowledge import InMemoryFactStore, ScopedFactStore
 
-        store = InMemoryFactStore()
+        store = ScopedFactStore(InMemoryFactStore(), "org-test")
 
         # add_fact returns a Fact object, not an ID
         created_fact = store.add_fact(
@@ -389,10 +393,10 @@ class TestFactStore:
     @pytest.mark.asyncio
     async def test_list_facts_with_filters(self, temp_workspace: str):
         """Test listing facts with various filters."""
-        from aragora.knowledge import InMemoryFactStore
+        from aragora.knowledge import InMemoryFactStore, ScopedFactStore
         from aragora.knowledge.types import FactFilters
 
-        store = InMemoryFactStore()
+        store = ScopedFactStore(InMemoryFactStore(), "org-test")
 
         # Add facts with different confidence levels (sync method)
         store.add_fact(
@@ -426,10 +430,10 @@ class TestFactStore:
     @pytest.mark.asyncio
     async def test_search_facts(self, temp_workspace: str):
         """Test searching facts by keyword."""
-        from aragora.knowledge import InMemoryFactStore
+        from aragora.knowledge import InMemoryFactStore, ScopedFactStore
         from aragora.knowledge.types import FactFilters
 
-        store = InMemoryFactStore()
+        store = ScopedFactStore(InMemoryFactStore(), "org-test")
 
         store.add_fact(
             statement="The company revenue was $45 million in Q4",
@@ -470,6 +474,7 @@ class TestKnowledgeAuditIntegration:
             AuditKnowledgeAdapter,
             KnowledgeAuditConfig,
         )
+        from aragora.knowledge import InMemoryFactStore, ScopedFactStore
         from aragora.audit.document_auditor import (
             AuditFinding,
             AuditSession,
@@ -487,6 +492,7 @@ class TestKnowledgeAuditIntegration:
 
         adapter = AuditKnowledgeAdapter(config)
         await adapter.initialize()
+        adapter._fact_store = ScopedFactStore(InMemoryFactStore(), "org-test")  # type: ignore[assignment]
 
         # Create a mock finding
         finding = AuditFinding(
@@ -524,6 +530,7 @@ class TestKnowledgeAuditIntegration:
             AuditKnowledgeAdapter,
             KnowledgeAuditConfig,
         )
+        from aragora.knowledge import InMemoryFactStore, ScopedFactStore
 
         config = KnowledgeAuditConfig(
             enrich_with_facts=True,
@@ -532,6 +539,7 @@ class TestKnowledgeAuditIntegration:
 
         adapter = AuditKnowledgeAdapter(config)
         await adapter.initialize()
+        adapter._fact_store = ScopedFactStore(InMemoryFactStore(), "org-test")  # type: ignore[assignment]
 
         # Enrich some test chunks
         chunks = [
@@ -549,7 +557,7 @@ class TestKnowledgeAuditIntegration:
             },
         ]
 
-        enriched = await adapter.enrich_chunks(chunks, temp_workspace)
+        enriched = await adapter.enrich_chunks(chunks, temp_workspace, org_id="org-test")
 
         assert len(enriched) == 2
         assert enriched[0].chunk_id == "chunk_1"
@@ -573,6 +581,7 @@ class TestFullPipelineIntegration:
             InMemoryEmbeddingService,
             InMemoryFactStore,
             QueryOptions,
+            ScopedFactStore,
         )
 
         # Step 1: Process document (disable Knowledge Mound to avoid external API calls)
@@ -581,15 +590,16 @@ class TestFullPipelineIntegration:
                 content=sample_document_content,
                 filename="contract.txt",
                 workspace_id=temp_workspace,
+                org_id="org-test",
             )
 
         # Clean up cached pipeline to avoid cross-test leakage
-        _pipelines.pop(temp_workspace, None)
+        _pipelines.pop(("org-test", temp_workspace), None)
 
         assert result.success is True
 
         # Step 2: Setup query engine
-        fact_store = InMemoryFactStore()
+        fact_store = ScopedFactStore(InMemoryFactStore(), "org-test")
         embedding_service = InMemoryEmbeddingService()
 
         engine = DatasetQueryEngine(

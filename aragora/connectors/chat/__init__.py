@@ -57,6 +57,12 @@ from .thread_manager import (
     ThreadManager,
     ThreadNotFoundError,
 )
+from aragora.core.decision_route_hooks import (
+    register_tts_bridge_factory as _register_tts_bridge_factory,
+)
+
+# The core decision router synthesizes voice responses through this registration.
+_register_tts_bridge_factory(get_tts_bridge)
 
 __all__ = [
     # Base class

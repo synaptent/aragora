@@ -201,9 +201,12 @@ class AgentPerformanceMonitor:
         # Log performance data
         status = "success" if success else f"error={error}"
         logger.info(
-            f"perf_complete agent={metric.agent_name} op={metric.operation} "
-            f"duration={metric.duration_ms:.0f}ms status={status} "
-            f"response_len={metric.response_length}"
+            "perf_complete agent=%s op=%s duration=%.0fms status=%s response_len=%s",
+            metric.agent_name,
+            metric.operation,
+            metric.duration_ms,
+            status,
+            metric.response_length,
         )
 
     def get_performance_insights(self) -> dict[str, Any]:

@@ -12,7 +12,7 @@ import logging
 import time
 from typing import Any, TYPE_CHECKING
 
-from aragora.rbac.decorators import require_permission  # noqa: F401 - Required for RBAC consistency
+from aragora.rbac.decorators import require_permission  # Required for RBAC consistency
 from aragora.events.handler_events import emit_handler_event, COMPLETED
 
 # Permission constant - used by parent MemoryHandler

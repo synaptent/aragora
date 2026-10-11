@@ -598,7 +598,7 @@ These variables exist in the settings schema but are not currently wired into ru
 | `ARAGORA_HOST` | Optional | Legacy bind host used by deployment templates | `0.0.0.0` |
 | `ARAGORA_PORT` | Optional | Legacy HTTP port used by deployment templates | `8080` |
 
-These are not read by the CLI server directly; prefer `aragora serve --api-port/--ws-port` in local dev.
+These are not read by the CLI server directly; prefer `aragora serve --api-port` and `--ws-port` in local dev.
 
 ### Environment Mode
 

@@ -6,6 +6,8 @@ hybrid search, filter queries, error handling, and edge cases using mocked
 weaviate-client.
 """
 
+import uuid
+
 import pytest
 from unittest.mock import MagicMock, patch, PropertyMock
 
@@ -78,6 +80,17 @@ def _make_store(config, mock_client):
     store._client = mock_client
     store._connected = True
     return store
+
+
+def _make_batch_store(config, mock_client):
+    """Helper: create a connected store whose collection yields a mock dynamic batch."""
+    store = _make_store(config, mock_client)
+    mock_collection = MagicMock()
+    mock_batch = MagicMock()
+    mock_collection.batch.dynamic.return_value.__enter__ = MagicMock(return_value=mock_batch)
+    mock_collection.batch.dynamic.return_value.__exit__ = MagicMock(return_value=False)
+    store._collections["test_collection"] = mock_collection
+    return store, mock_batch
 
 
 def _embedding(dim=1536, val=0.1):
@@ -477,6 +490,52 @@ class TestWeaviateUpsert:
 
         assert ids == ["b1", "b2"]
         assert mock_batch.add_object.call_count == 2
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "item",
+        [
+            {"embedding": [0.1], "content": "no id key"},
+            {"id": None, "embedding": [0.1], "content": "explicit None id"},
+        ],
+        ids=["missing-key", "none-value"],
+    )
+    async def test_upsert_batch_generates_uuid_for_id_less_item(
+        self, config, mock_weaviate_env, item
+    ):
+        """An item without an id gets a UUID4 that is both sent to Weaviate and returned."""
+        mock_client, _ = mock_weaviate_env
+        store, mock_batch = _make_batch_store(config, mock_client)
+
+        ids = await store.upsert_batch([item])
+
+        assert len(ids) == 1
+        assert isinstance(ids[0], str)
+        assert uuid.UUID(ids[0]).version == 4
+        assert mock_batch.add_object.call_args.kwargs["uuid"] == ids[0]
+
+    @pytest.mark.asyncio
+    async def test_upsert_batch_mixed_ids_keep_explicit_ids(self, config, mock_weaviate_env):
+        """Explicit ids pass through unchanged; each id-less item gets its own UUID."""
+        mock_client, _ = mock_weaviate_env
+        store, mock_batch = _make_batch_store(config, mock_client)
+
+        items = [
+            {"id": "keep-1", "embedding": [0.1], "content": "a"},
+            {"embedding": [0.2], "content": "b"},
+            {"id": "keep-3", "embedding": [0.3], "content": "c"},
+            {"embedding": [0.4], "content": "d"},
+        ]
+
+        ids = await store.upsert_batch(items)
+
+        sent = [call.kwargs["uuid"] for call in mock_batch.add_object.call_args_list]
+        assert ids == sent
+        assert ids[0] == "keep-1"
+        assert ids[2] == "keep-3"
+        assert uuid.UUID(ids[1]).version == 4
+        assert uuid.UUID(ids[3]).version == 4
+        assert ids[1] != ids[3]
 
     @pytest.mark.asyncio
     async def test_upsert_batch_not_connected(self, config, mock_weaviate_env):

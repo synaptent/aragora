@@ -278,6 +278,7 @@ class NarrowGitHubClient:
             return None, "github disabled"
         if branch in self._pr_cache:
             return self._pr_cache[branch]
+        result: tuple[list[dict[str, Any]] | None, str | None]
         owner, repo_error = _github_repo_owner(self.github_repo)
         if repo_error is not None:
             result = (None, repo_error)
@@ -286,7 +287,6 @@ class NarrowGitHubClient:
         head = f"{owner}:{quote(branch, safe='')}"
         per_page = 100
         items: list[dict[str, Any]] = []
-        result: tuple[list[dict[str, Any]] | None, str | None]
         max_pages = 20
         for page in range(1, max_pages + 1):
             endpoint = (
@@ -317,6 +317,7 @@ class NarrowGitHubClient:
             return None, "github disabled"
         if pr_number in self._pr_number_cache:
             return self._pr_number_cache[pr_number]
+        result: tuple[dict[str, Any] | None, str | None]
         _, repo_error = _github_repo_owner(self.github_repo)
         if repo_error is not None:
             result = (None, repo_error)
@@ -339,6 +340,7 @@ class NarrowGitHubClient:
             return None, "github disabled"
         if branch in self._ref_cache:
             return self._ref_cache[branch]
+        result: tuple[dict[str, Any] | None, str | None]
         _, repo_error = _github_repo_owner(self.github_repo)
         if repo_error is not None:
             result = (None, repo_error)
@@ -532,20 +534,26 @@ def _possible_unpushed_marker(
         if value == "possible_unpushed_work" or "possible unpushed work" in value:
             return "possible_unpushed_work"
     for key in marker_keys:
-        value = payload.get(key)
-        if value is True:
+        marker = payload.get(key)
+        if marker is True:
             return "possible_unpushed_work"
-        if isinstance(value, int) and value > 0:
+        if isinstance(marker, int) and marker > 0:
             return "possible_unpushed_work"
-        if isinstance(value, str):
-            string_marker = _local_work_string_marker(value)
+        if isinstance(marker, str):
+            string_marker = _local_work_string_marker(marker)
             if string_marker is True:
                 return "possible_unpushed_work"
-        if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)) and value:
+        if (
+            isinstance(marker, Sequence)
+            and not isinstance(marker, (str, bytes, bytearray))
+            and marker
+        ):
             return "possible_unpushed_work"
     for key in ("stale_claim_advisory", "owner_liveness", "cleanup_safety"):
-        value = payload.get(key)
-        if isinstance(value, Mapping) and _possible_unpushed_marker(value, marker_keys=marker_keys):
+        section = payload.get(key)
+        if isinstance(section, Mapping) and _possible_unpushed_marker(
+            section, marker_keys=marker_keys
+        ):
             return "possible_unpushed_work"
     advisory = payload.get("stale_claim_advisory")
     if isinstance(advisory, Mapping) and advisory.get("available") is True:
@@ -1225,8 +1233,10 @@ def _exact_open_pr_from_payload(
         return None
     if not desired_head:
         return None
-    head = item.get("head") if isinstance(item.get("head"), Mapping) else {}
-    base = item.get("base") if isinstance(item.get("base"), Mapping) else {}
+    raw_head = item.get("head")
+    raw_base = item.get("base")
+    head = raw_head if isinstance(raw_head, Mapping) else {}
+    base = raw_base if isinstance(raw_base, Mapping) else {}
     head_ref = str(head.get("ref") or item.get("head_ref") or item.get("headRefName") or "").strip()
     if expected_branch and head_ref != expected_branch:
         return None
@@ -1244,8 +1254,10 @@ def _exact_open_pr_from_payload(
 
 
 def _compact_open_pr(item: Mapping[str, Any]) -> dict[str, Any]:
-    head = item.get("head") if isinstance(item.get("head"), Mapping) else {}
-    base = item.get("base") if isinstance(item.get("base"), Mapping) else {}
+    raw_head = item.get("head")
+    raw_base = item.get("base")
+    head = raw_head if isinstance(raw_head, Mapping) else {}
+    base = raw_base if isinstance(raw_base, Mapping) else {}
     head_ref = str(head.get("ref") or item.get("head_ref") or item.get("headRefName") or "").strip()
     head_sha = str(head.get("sha") or item.get("head_sha") or item.get("headRefOid") or "").strip()
     base_ref = str(base.get("ref") or item.get("base_ref") or item.get("baseRefName") or "").strip()
@@ -1294,13 +1306,12 @@ def load_queue_cap_evidence(
         payload = next((item for item in reversed(payload) if isinstance(item, dict)), None)
     if not isinstance(payload, dict):
         return QueueCapEvidence(available=False)
-    github_queue = (
-        payload.get("github_queue") if isinstance(payload.get("github_queue"), Mapping) else {}
-    )
-    limits = payload.get("limits") if isinstance(payload.get("limits"), Mapping) else {}
-    pressure = (
-        github_queue.get("pressure") if isinstance(github_queue.get("pressure"), Mapping) else {}
-    )
+    raw_github_queue = payload.get("github_queue")
+    raw_limits = payload.get("limits")
+    github_queue = raw_github_queue if isinstance(raw_github_queue, Mapping) else {}
+    limits = raw_limits if isinstance(raw_limits, Mapping) else {}
+    raw_pressure = github_queue.get("pressure")
+    pressure = raw_pressure if isinstance(raw_pressure, Mapping) else {}
     generated_at = str(payload.get("generated_at") or "") or None
     generated_dt = _parse_datetime(generated_at)
     cache_age_seconds = None
@@ -1919,21 +1930,21 @@ def _steering_branch_tokens(payload: Mapping[str, Any]) -> set[str]:
         if value:
             tokens.add(value)
     for key in ("branches", "branch_names"):
-        value = payload.get(key)
-        if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
-            tokens.update(str(item).strip() for item in value if str(item).strip())
+        names = payload.get(key)
+        if isinstance(names, Sequence) and not isinstance(names, (str, bytes, bytearray)):
+            tokens.update(str(item).strip() for item in names if str(item).strip())
     for key in text_keys:
         tokens.update(_branch_tokens_from_text(str(payload.get(key) or "")))
     for key in ("metadata", "context", "evidence"):
-        value = payload.get(key)
-        if not isinstance(value, Mapping):
+        section = payload.get(key)
+        if not isinstance(section, Mapping):
             continue
         for nested_key in exact_keys:
-            nested = str(value.get(nested_key) or "").strip()
+            nested = str(section.get(nested_key) or "").strip()
             if nested:
                 tokens.add(nested)
         for nested_key in text_keys:
-            tokens.update(_branch_tokens_from_text(str(value.get(nested_key) or "")))
+            tokens.update(_branch_tokens_from_text(str(section.get(nested_key) or "")))
     return tokens
 
 

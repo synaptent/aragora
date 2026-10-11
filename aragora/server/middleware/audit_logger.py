@@ -535,7 +535,11 @@ class AuditLogger:
         log_level = self._severity_to_log_level(severity)
         logger.log(
             log_level,
-            f"AUDIT: {action} by {actor} on {resource or 'system'} -> {outcome}",
+            "AUDIT: %s by %s on %s -> %s",
+            action,
+            actor,
+            resource or "system",
+            outcome,
             extra={"audit_event_id": event.event_id, "audit_action": action},
         )
 

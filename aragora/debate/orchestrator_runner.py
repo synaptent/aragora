@@ -27,6 +27,12 @@ from aragora.debate.complexity_governor import (
     get_complexity_governor,
 )
 from aragora.debate.context import DebateContext
+from aragora.events.debate_completion import (
+    AgentActivity,
+    DebateCompletedEvent,
+    DebateCompletedNotSubscribedError,
+    emit_debate_completed,
+)
 from aragora.logging_config import LogContext, get_logger as get_structured_logger
 from aragora.observability.tracing import add_span_attributes
 from aragora.pipeline.execution_mode import ExecutionMode as SafetyMode
@@ -400,7 +406,7 @@ async def _record_debate_telemetry(
     arena: Arena,
     state: _DebateExecutionState,
 ) -> None:
-    """Persist debate completion into the billing and analytics stores."""
+    """Record debate usage in billing and emit the debate-completed event."""
 
     def _coerce_optional_str(value: Any) -> str | None:
         if value is None:
@@ -458,7 +464,7 @@ async def _record_debate_telemetry(
     if org_id:
         try:
             from aragora.billing.usage_metering_integration import record_debate_tokens
-            from aragora.services.usage_metering import get_usage_meter
+            from aragora.billing.usage_metering import get_usage_meter
 
             usage_summary = await record_debate_tokens(
                 org_id=org_id,
@@ -477,71 +483,83 @@ async def _record_debate_telemetry(
             logger.debug("usage_metering_record_failed (non-critical): %s", e)
 
     try:
-        from aragora.analytics.debate_analytics import get_debate_analytics
         from aragora.billing.usage import calculate_token_cost
 
-        analytics = get_debate_analytics()
         total_cost = Decimal(
             str(_coerce_non_negative_float(getattr(result, "total_cost_usd", 0.0)))
         )
-        await analytics.record_debate(
-            debate_id=state.debate_id,
-            rounds=rounds_used,
-            consensus_reached=bool(getattr(result, "consensus_reached", False)),
-            duration_seconds=duration_seconds,
-            agents=[getattr(agent, "name", str(agent)) for agent in arena.agents],
-            status=state.debate_status,
-            org_id=org_id or None,
-            user_id=user_id,
-            protocol=_coerce_optional_str(
-                getattr(getattr(arena, "protocol", None), "consensus", None)
-            ),
-            total_messages=total_messages,
-            total_votes=total_votes,
-            total_cost=total_cost,
+        task = _coerce_optional_str(getattr(result, "task", None)) or (
+            _coerce_optional_str(getattr(getattr(arena, "env", None), "task", None)) or ""
         )
 
-        governor = get_complexity_governor()
-        per_agent_cost = (
-            getattr(result, "per_agent_cost", {}) if isinstance(result.per_agent_cost, dict) else {}
-        )
-        for agent in arena.agents:
-            agent_name = getattr(agent, "name", str(agent))
-            tokens_in, tokens_out = _extract_agent_token_usage(agent)
-            governor_metrics = getattr(governor, "agent_metrics", {}).get(agent_name)
-            response_time_ms = (
-                _coerce_non_negative_float(getattr(governor_metrics, "avg_latency_ms", 0.0))
-                if governor_metrics is not None
-                else 0.0
-            )
-            provider = (
-                _coerce_optional_str(
-                    getattr(agent, "provider", None) or getattr(agent, "agent_type", "unknown")
+        # Collected separately so a failure here loses only the agent activity not yet
+        # collected, never the debate record (the debate row used to be written first).
+        agent_activity: list[AgentActivity] = []
+        try:
+            governor = get_complexity_governor()
+            raw_per_agent_cost = getattr(result, "per_agent_cost", None)
+            per_agent_cost = raw_per_agent_cost if isinstance(raw_per_agent_cost, dict) else {}
+            for agent in arena.agents:
+                agent_name = getattr(agent, "name", str(agent))
+                tokens_in, tokens_out = _extract_agent_token_usage(agent)
+                governor_metrics = getattr(governor, "agent_metrics", {}).get(agent_name)
+                response_time_ms = (
+                    _coerce_non_negative_float(getattr(governor_metrics, "avg_latency_ms", 0.0))
+                    if governor_metrics is not None
+                    else 0.0
                 )
-                or "unknown"
-            )
-            model = _coerce_optional_str(getattr(agent, "model", "unknown")) or "unknown"
+                provider = (
+                    _coerce_optional_str(
+                        getattr(agent, "provider", None) or getattr(agent, "agent_type", "unknown")
+                    )
+                    or "unknown"
+                )
+                model = _coerce_optional_str(getattr(agent, "model", "unknown")) or "unknown"
 
-            if agent_name in per_agent_cost:
-                cost = Decimal(str(_coerce_non_negative_float(per_agent_cost[agent_name])))
-            else:
-                cost = calculate_token_cost(provider, model, tokens_in, tokens_out)
+                if agent_name in per_agent_cost:
+                    cost = Decimal(str(_coerce_non_negative_float(per_agent_cost[agent_name])))
+                else:
+                    cost = calculate_token_cost(provider, model, tokens_in, tokens_out)
 
-            if tokens_in <= 0 and tokens_out <= 0 and response_time_ms <= 0 and cost <= 0:
-                continue
+                if tokens_in <= 0 and tokens_out <= 0 and response_time_ms <= 0 and cost <= 0:
+                    continue
 
-            await analytics.record_agent_activity(
-                agent_id=agent_name,
+                agent_activity.append(
+                    AgentActivity(
+                        agent_id=agent_name,
+                        response_time_ms=response_time_ms,
+                        tokens_in=tokens_in,
+                        tokens_out=tokens_out,
+                        cost=cost,
+                        provider=str(provider),
+                        model=str(model),
+                    )
+                )
+        except (ImportError, RuntimeError, ValueError, TypeError, AttributeError, OSError) as e:
+            logger.debug("debate_agent_activity_failed (non-critical): %s", e)
+
+        await emit_debate_completed(
+            DebateCompletedEvent(
                 debate_id=state.debate_id,
-                response_time_ms=response_time_ms,
-                tokens_in=tokens_in,
-                tokens_out=tokens_out,
-                cost=cost,
-                error=False,
-                agent_name=agent_name,
-                provider=str(provider),
-                model=str(model),
+                task=task,
+                rounds=rounds_used,
+                consensus_reached=bool(getattr(result, "consensus_reached", False)),
+                duration_seconds=duration_seconds,
+                agents=tuple(getattr(agent, "name", str(agent)) for agent in arena.agents),
+                status=state.debate_status,
+                org_id=org_id or None,
+                user_id=user_id,
+                protocol=_coerce_optional_str(
+                    getattr(getattr(arena, "protocol", None), "consensus", None)
+                ),
+                total_messages=total_messages,
+                total_votes=total_votes,
+                total_cost=total_cost,
+                agent_activity=tuple(agent_activity),
             )
+        )
+    except DebateCompletedNotSubscribedError as e:
+        logger.debug("debate_completed_not_subscribed (non-critical): %s", e)
     except (ImportError, RuntimeError, ValueError, TypeError, AttributeError, OSError) as e:
         logger.debug("debate_analytics_record_failed (non-critical): %s", e)
 

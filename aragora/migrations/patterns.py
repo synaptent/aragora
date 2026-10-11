@@ -131,7 +131,7 @@ def get_table_row_count(backend: DatabaseBackend, table: str) -> int:
         return int(result[0]) if result and result[0] >= 0 else 0
     else:
         # SQLite - COUNT(*) is the only option
-        result = backend.fetch_one(f"SELECT COUNT(*) FROM {qt}")  # noqa: S608 -- internal query construction
+        result = backend.fetch_one(f"SELECT COUNT(*) FROM {qt}")  # internal query construction
         return int(result[0]) if result else 0
 
 
@@ -391,12 +391,13 @@ def backfill_column(
                 SET {qc} = {value}
                 WHERE ctid IN (SELECT ctid FROM batch)
                 RETURNING 1
-                """  # noqa: S608 -- internal query construction
+                """  # internal query construction
             )
 
             if not result:
                 # No more rows to update
-                count = backend.fetch_one(f"SELECT COUNT(*) FROM {qt} WHERE {condition}")  # noqa: S608 -- internal query construction
+                # internal query construction
+                count = backend.fetch_one(f"SELECT COUNT(*) FROM {qt} WHERE {condition}")
                 if count and count[0] == 0:
                     break
                 # Retry if there were locked rows
@@ -426,11 +427,12 @@ def backfill_column(
                     WHERE {condition}
                     LIMIT {batch_size}
                 )
-                """  # noqa: S608 -- internal query construction
+                """  # internal query construction
             )
 
             # Check how many were updated (SQLite doesn't have RETURNING in older versions)
-            remaining = backend.fetch_one(f"SELECT COUNT(*) FROM {qt} WHERE {condition}")  # noqa: S608 -- internal query construction
+            # internal query construction
+            remaining = backend.fetch_one(f"SELECT COUNT(*) FROM {qt} WHERE {condition}")
 
             if not remaining or remaining[0] == 0:
                 break
@@ -466,11 +468,13 @@ def safe_set_not_null(
     qc = quote_identifier(column, "column")
 
     # First, ensure no NULLs remain
-    null_count = backend.fetch_one(f"SELECT COUNT(*) FROM {qt} WHERE {qc} IS NULL")  # noqa: S608 -- internal query construction
+    # internal query construction
+    null_count = backend.fetch_one(f"SELECT COUNT(*) FROM {qt} WHERE {qc} IS NULL")
     if null_count and null_count[0] > 0:
         if default is not None:
             # Backfill remaining NULLs with default
-            backend.execute_write(f"UPDATE {qt} SET {qc} = {default} WHERE {qc} IS NULL")  # noqa: S608 -- internal query construction
+            # internal query construction
+            backend.execute_write(f"UPDATE {qt} SET {qc} = {default} WHERE {qc} IS NULL")
             logger.info("Backfilled %s remaining NULLs in %s.%s", null_count[0], table, column)
         else:
             raise ValueError(

@@ -520,9 +520,8 @@ def collect_local_merge_executor_receipt_metric(
         if isinstance(payload.get("pr"), int):
             prs.append(int(payload["pr"]))
         head_sha = str(payload.get("head_sha") or "").strip()
-        packet = (
-            payload.get("packet_entry") if isinstance(payload.get("packet_entry"), dict) else {}
-        )
+        raw_packet = payload.get("packet_entry")
+        packet = raw_packet if isinstance(raw_packet, dict) else {}
         packet_head = str(packet.get("head_sha") or "").strip()
         if head_sha and packet_head and head_sha == packet_head:
             exact_head_count += 1

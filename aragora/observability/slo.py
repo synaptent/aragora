@@ -1147,9 +1147,11 @@ class SLOAlertMonitor:
 
                 self._record_alert(alert.slo_name, alert.severity)
                 logger.warning(
-                    f"SLO breach: {alert.slo_name} ({alert.severity}) - "
-                    f"error budget: {result.error_budget_remaining:.1f}%, "
-                    f"burn rate: {result.burn_rate:.2f}x"
+                    "SLO breach: %s (%s) - error budget: %.1f%%, burn rate: %.2fx",
+                    alert.slo_name,
+                    alert.severity,
+                    result.error_budget_remaining,
+                    result.burn_rate,
                 )
 
         except Exception as e:  # noqa: BLE001 - observability must not crash app
@@ -1197,10 +1199,13 @@ class SLOAlertMonitor:
 def log_alert_callback(breach: SLOBreach) -> None:
     """Simple logging callback for SLO alerts."""
     logger.warning(
-        f"SLO ALERT [{breach.severity.upper()}]: {breach.slo_name} - "
-        f"{breach.message} (current: {breach.current_value:.4f}, "
-        f"target: {breach.target_value:.4f}, "
-        f"error_budget: {breach.error_budget_remaining:.1f}%)"
+        "SLO ALERT [%s]: %s - %s (current: %.4f, target: %.4f, error_budget: %.1f%%)",
+        breach.severity.upper(),
+        breach.slo_name,
+        breach.message,
+        breach.current_value,
+        breach.target_value,
+        breach.error_budget_remaining,
     )
 
 

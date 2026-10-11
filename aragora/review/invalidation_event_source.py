@@ -706,7 +706,7 @@ def _read_rows(
     # row-factory configuration identical to writers and avoids the
     # journal-mode mismatch flagged in the calibration module
     # docstring.
-    with store._connection() as conn:  # noqa: SLF001 — intentional in-package read
+    with store._connection() as conn:  # intentional in-package read
         rows = conn.execute(query, tuple(params)).fetchall()
     return list(rows)
 

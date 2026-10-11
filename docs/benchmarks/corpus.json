@@ -49,7 +49,7 @@
     {
       "revision": 3,
       "recorded_on": "2026-04-17",
-      "change": "Honesty pass: retire all five rev-2 entries (#873, #1064, #1641, #2712, #5756) — each was closed by a founder-driven Claude Code / Codex CLI PR or manually as stale, and none represent autonomous execution. The rev-2 headline `truth_success_rate: 1.0` was an artifact of lenient PR-linkage bookkeeping. Seed rev-3 with OPEN bounded issues that have been recorded as dispatched to the boss loop (at least one `worker_outcome` in .aragora/overnight/boss_metrics.jsonl). See docs/benchmarks/corpus_honesty_audit_2026-04-17.md for the full per-entry review."
+      "change": "Honesty pass: retire all five rev-2 entries (#873, #1064, #1641, #2712, #5756) — each was closed by a founder-driven Claude Code / Codex CLI PR or manually as stale, and none represent autonomous execution. The rev-2 headline `truth_success_rate: 1.0` was an artifact of lenient PR-linkage bookkeeping. Seed rev-3 with OPEN bounded issues that have been recorded as dispatched to the boss loop (at least one `worker_outcome` in .aragora/overnight/boss_metrics.jsonl). See docs/archive/benchmarks/corpus_honesty_audit_2026-04-17.md for the full per-entry review."
     },
     {
       "revision": 2,

@@ -5,6 +5,7 @@ Endpoints:
 - GET /api/critiques/patterns - Get high-impact critique patterns
 - GET /api/critiques/archive - Get archive statistics
 - GET /api/reputation/all - Get all agent reputations
+- GET /api/reputation/:name - Get specific agent reputation
 - GET /api/agent/:name/reputation - Get specific agent reputation
 """
 
@@ -39,7 +40,7 @@ _critique_limiter = RateLimiter(requests_per_minute=60)
 # Check if CritiqueStore is available
 CRITIQUE_STORE_AVAILABLE = is_critique_store_available()
 
-from aragora.server.errors import safe_error_message as _safe_error_message
+from aragora.api_errors import safe_error_message as _safe_error_message
 
 
 class CritiqueHandler(BaseHandler):
@@ -62,10 +63,21 @@ class CritiqueHandler(BaseHandler):
         path = strip_version_prefix(path)
         if path in self.ROUTES:
             return True
-        # Dynamic route for agent reputation
+        # Dynamic routes for agent reputation
         if path.startswith("/api/agent/") and path.endswith("/reputation"):
             return True
+        if self._is_reputation_by_name_path(path):
+            return True
         return False
+
+    @staticmethod
+    def _is_reputation_by_name_path(path: str) -> bool:
+        """True for /api/reputation/{name}; the exact ROUTES literals are matched first."""
+        prefix = "/api/reputation/"
+        if not path.startswith(prefix):
+            return False
+        segment = path[len(prefix) :]
+        return bool(segment) and "/" not in segment
 
     @require_permission("critiques:read")
     def handle(self, path: str, query_params: dict, handler: Any) -> HandlerResult | None:
@@ -112,7 +124,22 @@ class CritiqueHandler(BaseHandler):
                 return error_response("Invalid agent name", 400)
             return self._get_agent_reputation(nomic_dir, agent_name)
 
+        if self._is_reputation_by_name_path(path):
+            agent_name = self._extract_reputation_agent_name(path)
+            if agent_name is None:
+                return error_response("Invalid agent name", 400)
+            return self._get_agent_reputation(nomic_dir, agent_name)
+
         return None
+
+    @staticmethod
+    def _extract_reputation_agent_name(path: str) -> str | None:
+        """Extract and validate the agent name from /api/reputation/{name}."""
+        if ".." in path:
+            return None
+        agent = path[len("/api/reputation/") :]
+        is_valid, _ = validate_agent_name_with_version(agent)
+        return agent if is_valid else None
 
     def _extract_agent_name(self, path: str) -> str | None:
         """Extract and validate agent name from path."""

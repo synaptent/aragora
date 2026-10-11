@@ -798,7 +798,7 @@ class TestModuleFunctions:
         """Test get_embedding_cache returns global cache with warning."""
         from aragora.debate.cache.embeddings_lru import get_embedding_cache
 
-        with patch("aragora.debate.cache.embeddings_lru.logger") as mock_logger:
+        with patch("aragora.shared.embedding_cache.logger") as mock_logger:
             cache = get_embedding_cache()
 
             assert cache is not None
@@ -810,7 +810,7 @@ class TestModuleFunctions:
         from aragora.debate.cache.embeddings_lru import get_embedding_cache
 
         # Suppress warning for test
-        with patch("aragora.debate.cache.embeddings_lru.logger"):
+        with patch("aragora.shared.embedding_cache.logger"):
             cache1 = get_embedding_cache()
             cache2 = get_embedding_cache()
 
@@ -824,7 +824,7 @@ class TestModuleFunctions:
             reset_embedding_cache,
         )
 
-        with patch("aragora.debate.cache.embeddings_lru.logger"):
+        with patch("aragora.shared.embedding_cache.logger"):
             global_cache = get_embedding_cache()
             global_cache.put("text", np.array([1.0], dtype=np.float32))
 
@@ -834,7 +834,7 @@ class TestModuleFunctions:
         reset_embedding_cache()
 
         # After reset, getting global cache creates new one
-        with patch("aragora.debate.cache.embeddings_lru.logger"):
+        with patch("aragora.shared.embedding_cache.logger"):
             new_global = get_embedding_cache()
             assert new_global.get("text") is None
 
@@ -932,14 +932,14 @@ class TestNumpyRequirement:
 
     def test_require_numpy_function(self):
         """Test _require_numpy raises when numpy not available."""
-        from aragora.debate.cache.embeddings_lru import _require_numpy
+        from aragora.shared.embedding_cache import _require_numpy
 
         # This should not raise when numpy is available
         _require_numpy("test operation")
 
     def test_require_numpy_raises_without_numpy(self):
         """Test _require_numpy raises ImportError when numpy unavailable."""
-        from aragora.debate.cache import embeddings_lru
+        from aragora.shared import embedding_cache as embeddings_lru
 
         original_has_numpy = embeddings_lru.HAS_NUMPY
         try:

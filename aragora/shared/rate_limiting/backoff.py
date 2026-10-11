@@ -51,7 +51,7 @@ class ExponentialBackoff:
         with self._lock:
             delay = min(self.base_delay * (2**self.failure_count), self.max_delay)
             jitter_amount = delay * self.jitter
-            return cast(float, delay + random.uniform(0, jitter_amount))  # noqa: S311 -- retry jitter
+            return cast(float, delay + random.uniform(0, jitter_amount))
 
     def record_failure(self) -> float:
         """Record a failure and return the delay to wait.
@@ -67,8 +67,8 @@ class ExponentialBackoff:
             self.failure_count += 1
             delay = min(self.base_delay * (2**self.failure_count), self.max_delay)
             jitter_amount = delay * self.jitter
-            final_delay: float = delay + random.uniform(0, jitter_amount)  # noqa: S311 -- retry jitter
-            logger.info(f"backoff_failure count={self.failure_count} delay={final_delay:.1f}s")
+            final_delay: float = delay + random.uniform(0, jitter_amount)
+            logger.info("backoff_failure count=%s delay=%.1fs", self.failure_count, final_delay)
             return final_delay
 
     def reset(self) -> None:

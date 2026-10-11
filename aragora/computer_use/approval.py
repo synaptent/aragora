@@ -23,6 +23,11 @@ from enum import Enum
 from typing import Any
 from collections.abc import Callable
 
+from aragora.security.approval_mappings import (
+    APPROVAL_CATEGORY_UNKNOWN,
+    APPROVAL_SOURCE_CATEGORIES,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -306,11 +311,10 @@ class ApprovalWorkflow:
     approval_context_type = ApprovalContext
     approval_priority_high = ApprovalPriority.HIGH
     approval_category_map = {
-        "gateway": ApprovalCategory.SYSTEM_MODIFICATION,
-        "device": ApprovalCategory.EXTERNAL_SYSTEM,
-        "computer_use": ApprovalCategory.DESTRUCTIVE_ACTION,
+        source: ApprovalCategory(category)
+        for source, category in APPROVAL_SOURCE_CATEGORIES.items()
     }
-    approval_category_unknown = ApprovalCategory.UNKNOWN
+    approval_category_unknown = ApprovalCategory(APPROVAL_CATEGORY_UNKNOWN)
     approval_status_approved = ApprovalStatus.APPROVED
 
     def __init__(

@@ -31,9 +31,9 @@ from __future__ import annotations
 
 import base64
 import binascii
+import inspect
 import logging
 import threading
-from datetime import datetime
 from typing import Any, TypeAlias
 from collections.abc import Awaitable
 
@@ -47,7 +47,11 @@ from aragora.server.handlers.base import (
 )
 from aragora.server.handlers.utils.decorators import require_permission
 from aragora.server.handlers.utils.rate_limit import rate_limit
-from aragora.server.validation.query_params import safe_query_int
+from aragora.server.validation.query_params import (
+    parse_date_range_params,
+    parse_iso_datetime,
+    safe_query_int,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -109,10 +113,11 @@ def get_expense_tracker():
 
 
 @rate_limit(requests_per_minute=30)
-@require_permission("expenses:write")
+@require_permission("finance:write")
 async def handle_upload_receipt(
     data: dict[str, Any],
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Upload and process a receipt image.
@@ -206,10 +211,11 @@ async def handle_upload_receipt(
 
 
 @rate_limit(requests_per_minute=60)
-@require_permission("expenses:write")
+@require_permission("finance:write")
 async def handle_create_expense(
     data: dict[str, Any],
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Create an expense manually.
@@ -271,7 +277,7 @@ async def handle_create_expense(
             if not isinstance(date_str, str):
                 return error_response("date must be a string", status=400)
             try:
-                date = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+                date = parse_iso_datetime(date_str)
             except ValueError:
                 return error_response("Invalid date format", status=400)
 
@@ -342,10 +348,11 @@ async def handle_create_expense(
 
 
 @rate_limit(requests_per_minute=120)
-@require_permission("expenses:read")
+@require_permission("finance:read")
 async def handle_list_expenses(
     query_params: dict[str, Any],
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     List expenses with filters.
@@ -361,6 +368,10 @@ async def handle_list_expenses(
         limit: int (default 100)
         offset: int (default 0)
     """
+    start_date, end_date, date_error = parse_date_range_params(query_params)
+    if date_error:
+        return error_response(date_error, status=400)
+
     cb = get_expense_circuit_breaker()
 
     # Check circuit breaker before proceeding
@@ -391,22 +402,6 @@ async def handle_list_expenses(
                 status = ExpenseStatus(status_str)
             except ValueError:
                 logger.debug("Invalid status filter '%s', ignoring", status_str)
-
-        start_date = None
-        start_date_str = query_params.get("start_date")
-        if start_date_str:
-            try:
-                start_date = datetime.fromisoformat(start_date_str.replace("Z", "+00:00"))
-            except ValueError:
-                logger.debug("Invalid start_date format '%s', ignoring", start_date_str)
-
-        end_date = None
-        end_date_str = query_params.get("end_date")
-        if end_date_str:
-            try:
-                end_date = datetime.fromisoformat(end_date_str.replace("Z", "+00:00"))
-            except ValueError:
-                logger.debug("Invalid end_date format '%s', ignoring", end_date_str)
 
         limit = safe_query_int(query_params, "limit", default=100, max_val=1000)
         offset = safe_query_int(query_params, "offset", default=0, min_val=0, max_val=100000)
@@ -439,10 +434,11 @@ async def handle_list_expenses(
 
 
 @rate_limit(requests_per_minute=120)
-@require_permission("expenses:read")
+@require_permission("finance:read")
 async def handle_get_expense(
     expense_id: str,
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Get expense by ID.
@@ -481,11 +477,12 @@ async def handle_get_expense(
 
 
 @rate_limit(requests_per_minute=60)
-@require_permission("expenses:write")
+@require_permission("finance:write")
 async def handle_update_expense(
     expense_id: str,
     data: dict[str, Any],
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Update an expense.
@@ -605,10 +602,11 @@ async def handle_update_expense(
 
 
 @rate_limit(requests_per_minute=30)
-@require_permission("admin:audit")
+@require_permission("finance:write")
 async def handle_delete_expense(
     expense_id: str,
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Delete an expense.
@@ -652,10 +650,11 @@ async def handle_delete_expense(
 
 
 @rate_limit(requests_per_minute=60)
-@require_permission("expenses:approve")
+@require_permission("finance:write")
 async def handle_approve_expense(
     expense_id: str,
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Approve an expense for sync.
@@ -699,11 +698,12 @@ async def handle_approve_expense(
 
 
 @rate_limit(requests_per_minute=60)
-@require_permission("expenses:approve")
+@require_permission("finance:write")
 async def handle_reject_expense(
     expense_id: str,
     data: dict[str, Any],
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Reject an expense.
@@ -755,9 +755,10 @@ async def handle_reject_expense(
 
 
 @rate_limit(requests_per_minute=120)
-@require_permission("expenses:read")
+@require_permission("finance:read")
 async def handle_get_pending_approvals(
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Get expenses pending approval.
@@ -798,10 +799,11 @@ async def handle_get_pending_approvals(
 
 
 @rate_limit(requests_per_minute=30)
-@require_permission("expenses:write")
+@require_permission("finance:write")
 async def handle_categorize_expenses(
     data: dict[str, Any],
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Auto-categorize expenses.
@@ -871,6 +873,7 @@ async def handle_categorize_expenses(
 async def handle_sync_to_qbo(
     data: dict[str, Any],
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Sync expenses to QuickBooks Online.
@@ -937,10 +940,11 @@ async def handle_sync_to_qbo(
 
 
 @rate_limit(requests_per_minute=120)
-@require_permission("expenses:read")
+@require_permission("finance:read")
 async def handle_get_expense_stats(
     query_params: dict[str, Any],
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Get expense statistics.
@@ -950,6 +954,10 @@ async def handle_get_expense_stats(
         start_date: str (ISO format)
         end_date: str (ISO format)
     """
+    start_date, end_date, date_error = parse_date_range_params(query_params)
+    if date_error:
+        return error_response(date_error, status=400)
+
     cb = get_expense_circuit_breaker()
 
     # Check circuit breaker before proceeding
@@ -962,23 +970,10 @@ async def handle_get_expense_stats(
     try:
         tracker = get_expense_tracker()
 
-        start_date = None
-        start_date_str = query_params.get("start_date")
-        if start_date_str:
-            try:
-                start_date = datetime.fromisoformat(start_date_str.replace("Z", "+00:00"))
-            except ValueError:
-                logger.debug("Invalid start_date format '%s' in stats, ignoring", start_date_str)
-
-        end_date = None
-        end_date_str = query_params.get("end_date")
-        if end_date_str:
-            try:
-                end_date = datetime.fromisoformat(end_date_str.replace("Z", "+00:00"))
-            except ValueError:
-                logger.debug("Invalid end_date format '%s' in stats, ignoring", end_date_str)
-
-        stats = await tracker.get_stats(start_date=start_date, end_date=end_date)
+        # ExpenseTracker.get_stats is synchronous; async test doubles are still accepted.
+        stats = tracker.get_stats(start_date=start_date, end_date=end_date)
+        if inspect.isawaitable(stats):
+            stats = await stats
 
         # Handle both dict and object with to_dict()
         if hasattr(stats, "to_dict"):
@@ -996,10 +991,11 @@ async def handle_get_expense_stats(
 
 
 @rate_limit(requests_per_minute=30)
-@require_permission("admin:audit")
+@require_permission("finance:export")
 async def handle_export_expenses(
     query_params: dict[str, Any],
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Export expenses to CSV or JSON.
@@ -1010,6 +1006,10 @@ async def handle_export_expenses(
         start_date: str (ISO format)
         end_date: str (ISO format)
     """
+    start_date, end_date, date_error = parse_date_range_params(query_params)
+    if date_error:
+        return error_response(date_error, status=400)
+
     cb = get_expense_circuit_breaker()
 
     # Check circuit breaker before proceeding
@@ -1025,22 +1025,6 @@ async def handle_export_expenses(
         export_format = query_params.get("format", "csv")
         if export_format not in ["csv", "json"]:
             return error_response("format must be 'csv' or 'json'", status=400)
-
-        start_date = None
-        start_date_str = query_params.get("start_date")
-        if start_date_str:
-            try:
-                start_date = datetime.fromisoformat(start_date_str.replace("Z", "+00:00"))
-            except ValueError:
-                logger.debug("Invalid start_date format '%s' in export, ignoring", start_date_str)
-
-        end_date = None
-        end_date_str = query_params.get("end_date")
-        if end_date_str:
-            try:
-                end_date = datetime.fromisoformat(end_date_str.replace("Z", "+00:00"))
-            except ValueError:
-                logger.debug("Invalid end_date format '%s' in export, ignoring", end_date_str)
 
         data = await tracker.export_expenses(
             format=export_format,
@@ -1062,6 +1046,15 @@ async def handle_export_expenses(
         return error_response("Expense export failed", status=500)
 
 
+async def _reject_invalid_body(permission: str, handler: Any) -> HandlerResult:
+    """Answer a malformed body with 400 only after the route permission passes."""
+
+    async def invalid(handler: Any = None) -> HandlerResult:
+        return error_response("Invalid JSON body", status=400)
+
+    return await require_permission(permission)(invalid)(handler=handler)
+
+
 # =============================================================================
 # Handler Class for Router Registration
 # =============================================================================
@@ -1079,20 +1072,16 @@ class ExpenseHandler(BaseHandler):
     - RBAC permission checks
     """
 
-    @staticmethod
-    def _extract_request_body(query_params: Any) -> dict[str, Any]:
-        """Extract request body from query_params for backwards compatibility."""
-        return query_params if isinstance(query_params, dict) else {}
+    def _extract_request_body(self, query_params: Any, handler: Any) -> dict[str, Any] | None:
+        """Read the HTTP JSON body; direct calls without a handler pass the body dict."""
+        if handler is None:
+            return query_params if isinstance(query_params, dict) else {}
+        return self.read_json_body(handler)
 
     def __init__(self, ctx: dict | None = None):
         """Initialize handler with optional context."""
         self.ctx = ctx or {}
         self._circuit_breaker = get_expense_circuit_breaker()
-
-    # RBAC permission keys
-    EXPENSE_READ_PERMISSION = "expense.read"
-    EXPENSE_WRITE_PERMISSION = "expense.write"
-    EXPENSE_APPROVE_PERMISSION = "expense.approve"
 
     ROUTES = {
         "/api/v1/accounting/expenses/upload": ["POST"],
@@ -1103,6 +1092,10 @@ class ExpenseHandler(BaseHandler):
         "/api/v1/accounting/expenses/pending": ["GET"],
         "/api/v1/accounting/expenses/export": ["GET"],
     }
+
+    # Contract discovery reads list-shaped metadata; the dynamic-ID canary
+    # cannot distinguish this collection from a broad prefix match.
+    GET_ROUTES = ["/api/v1/accounting/expenses"]
 
     # Dynamic routes with path params
     DYNAMIC_ROUTES = {
@@ -1146,47 +1139,6 @@ class ExpenseHandler(BaseHandler):
             return parts[5]
         return None
 
-    def _check_auth(self, handler: Any) -> HandlerResult | None:
-        """Check authentication and return error response if not authenticated."""
-        try:
-            from aragora.billing.jwt_auth import extract_user_from_request
-
-            user_ctx = extract_user_from_request(handler, None)
-            if not user_ctx or not user_ctx.is_authenticated:
-                return error_response("Authentication required", status=401)
-            return None
-        except (ImportError, AttributeError, ValueError) as e:
-            logger.debug("Auth check failed: %s", e)
-            return error_response("Authentication required", status=401)
-
-    def _check_permission(self, handler: Any, permission: str) -> HandlerResult | None:
-        """Check RBAC permission and return error response if denied."""
-        try:
-            from aragora.billing.jwt_auth import extract_user_from_request
-            from aragora.rbac.checker import get_permission_checker
-            from aragora.rbac.models import AuthorizationContext
-
-            user_ctx = extract_user_from_request(handler, None)
-            if not user_ctx or not user_ctx.is_authenticated:
-                return error_response("Authentication required", status=401)
-
-            auth_ctx = AuthorizationContext(
-                user_id=user_ctx.user_id,
-                user_email=user_ctx.email,
-                org_id=user_ctx.org_id,
-                workspace_id=None,
-                roles={user_ctx.role} if user_ctx.role else {"member"},
-            )
-            checker = get_permission_checker()
-            decision = checker.check_permission(auth_ctx, permission)
-            if not decision.allowed:
-                logger.warning("Permission denied: %s", permission)
-                return error_response("Permission denied", status=403)
-            return None
-        except (ImportError, AttributeError, ValueError) as e:
-            logger.debug("Permission check failed: %s", e)
-            return error_response("Authentication required", status=401)
-
     async def handle(  # type: ignore[override]
         self,
         path: str,
@@ -1194,28 +1146,22 @@ class ExpenseHandler(BaseHandler):
         handler: Any,
     ) -> MaybeAsyncHandlerResult:
         """Handle GET requests."""
-        # Check authentication for all GET requests
-        if handler:
-            auth_error = self._check_auth(handler)
-            if auth_error:
-                return auth_error
-
         if path == "/api/v1/accounting/expenses":
-            return await handle_list_expenses(query_params)
+            return await handle_list_expenses(query_params, handler=handler)
 
         if path == "/api/v1/accounting/expenses/stats":
-            return await handle_get_expense_stats(query_params)
+            return await handle_get_expense_stats(query_params, handler=handler)
 
         if path == "/api/v1/accounting/expenses/pending":
-            return await handle_get_pending_approvals()
+            return await handle_get_pending_approvals(handler=handler)
 
         if path == "/api/v1/accounting/expenses/export":
-            return await handle_export_expenses(query_params)
+            return await handle_export_expenses(query_params, handler=handler)
 
         # Dynamic: /api/v1/accounting/expenses/{expense_id}
         expense_id = self._extract_expense_id(path)
         if expense_id and "/approve" not in path and "/reject" not in path:
-            return await handle_get_expense(expense_id)
+            return await handle_get_expense(expense_id, handler=handler)
 
         return error_response("Route not found", status=404)
 
@@ -1237,38 +1183,29 @@ class ExpenseHandler(BaseHandler):
         handler: Any = None,
     ) -> MaybeAsyncHandlerResult:
         """Handle POST requests."""
-        # Extract data from query_params for backwards compatibility
-        data = self._extract_request_body(query_params)
-
-        # Check write permission for all POST requests
-        if handler:
-            # Approve/reject need special permission
-            if "/approve" in path or "/reject" in path:
-                perm_error = self._check_permission(handler, self.EXPENSE_APPROVE_PERMISSION)
-            else:
-                perm_error = self._check_permission(handler, self.EXPENSE_WRITE_PERMISSION)
-            if perm_error:
-                return perm_error
+        data = self._extract_request_body(query_params, handler)
+        if data is None:
+            return await _reject_invalid_body("finance:write", handler)
 
         if path == "/api/v1/accounting/expenses/upload":
-            return await handle_upload_receipt(data)
+            return await handle_upload_receipt(data, handler=handler)
 
         if path == "/api/v1/accounting/expenses":
-            return await handle_create_expense(data)
+            return await handle_create_expense(data, handler=handler)
 
         if path == "/api/v1/accounting/expenses/categorize":
-            return await handle_categorize_expenses(data)
+            return await handle_categorize_expenses(data, handler=handler)
 
         if path == "/api/v1/accounting/expenses/sync":
-            return await handle_sync_to_qbo(data)
+            return await handle_sync_to_qbo(data, handler=handler)
 
         # Dynamic routes
         expense_id = self._extract_expense_id(path)
         if expense_id:
             if "/approve" in path:
-                return await handle_approve_expense(expense_id)
+                return await handle_approve_expense(expense_id, handler=handler)
             if "/reject" in path:
-                return await handle_reject_expense(expense_id, data)
+                return await handle_reject_expense(expense_id, data, handler=handler)
 
         return error_response("Route not found", status=404)
 
@@ -1280,18 +1217,13 @@ class ExpenseHandler(BaseHandler):
         handler: Any = None,
     ) -> MaybeAsyncHandlerResult:
         """Handle PUT requests."""
-        # Extract data from query_params for backwards compatibility
-        data = self._extract_request_body(query_params)
-
-        # Check write permission for all PUT requests
-        if handler:
-            perm_error = self._check_permission(handler, self.EXPENSE_WRITE_PERMISSION)
-            if perm_error:
-                return perm_error
+        data = self._extract_request_body(query_params, handler)
+        if data is None:
+            return await _reject_invalid_body("finance:write", handler)
 
         expense_id = self._extract_expense_id(path)
         if expense_id:
-            return await handle_update_expense(expense_id, data)
+            return await handle_update_expense(expense_id, data, handler=handler)
 
         return error_response("Route not found", status=404)
 
@@ -1304,15 +1236,8 @@ class ExpenseHandler(BaseHandler):
     ) -> MaybeAsyncHandlerResult:
         """Handle DELETE requests."""
         _ = query_params  # retained for signature compatibility
-        # Note: handle_delete_expense already has @require_permission("admin:audit")
-        # But we also check at handler level for consistency
-        if handler:
-            perm_error = self._check_permission(handler, "admin:audit")
-            if perm_error:
-                return perm_error
-
         expense_id = self._extract_expense_id(path)
         if expense_id:
-            return await handle_delete_expense(expense_id)
+            return await handle_delete_expense(expense_id, handler=handler)
 
         return error_response("Route not found", status=404)

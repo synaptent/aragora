@@ -6,6 +6,16 @@ This document tracks breaking changes specific to the Aragora TypeScript SDK. Fo
 
 ## Version 2.x
 
+### Unreleased (2026-10-03)
+
+#### Breaking Changes
+
+The flat-client method `AragoraClient.exportReplay(replayId, format)` is removed,
+with no replacement, because it called `GET /api/v1/replays/{replayId}/export`,
+a route no handler serves (it is absent from both OpenAPI documents and rejected
+by `ReplaysHandler.can_handle`, and the 2026-09-03 batch already removed the same
+route from `ReplaysAPI.export`).
+
 ### Unreleased (2026-09-28)
 
 #### Breaking Changes

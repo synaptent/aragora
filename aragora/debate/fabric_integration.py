@@ -48,7 +48,7 @@ from aragora.fabric.models import (
 if TYPE_CHECKING:
     from aragora.core import Agent
     from aragora.core_types import DebateResult, Environment
-    from aragora.debate.protocol import DebateProtocol
+    from aragora.protocols.debate import DebateProtocol
     from aragora.fabric import AgentFabric
 
 logger = logging.getLogger(__name__)
@@ -148,8 +148,10 @@ class FabricUsageTracker:
         # Check budget limit
         if self.budget_limit_usd and self._total_cost > self.budget_limit_usd:
             logger.warning(
-                f"Debate {self.debate_id} exceeded budget: "
-                f"${self._total_cost:.4f} > ${self.budget_limit_usd:.4f}"
+                "Debate %s exceeded budget: $%.4f > $%.4f",
+                self.debate_id,
+                self._total_cost,
+                self.budget_limit_usd,
             )
             return False
 
@@ -263,7 +265,7 @@ class FabricAgentAdapter:
             duration = time.time() - start_time
             await self.fabric.complete_task(handle.task_id, result=result)
 
-            logger.debug(f"Agent {self.agent_id} generated response in {duration:.2f}s")
+            logger.debug("Agent %s generated response in %.2fs", self.agent_id, duration)
             return result
 
         except (RuntimeError, ValueError, TypeError, OSError, ConnectionError, TimeoutError) as e:
@@ -313,7 +315,7 @@ class FabricDebateRunner:
             TimeoutError: If debate exceeds timeout
         """
         from aragora.debate.orchestrator import Arena
-        from aragora.debate.protocol import DebateProtocol
+        from aragora.protocols.debate import DebateProtocol
 
         config = config or FabricDebateConfig(pool_id=pool_id)
         debate_id = f"debate-{uuid4().hex[:8]}"
@@ -435,8 +437,10 @@ class FabricDebateRunner:
             await self.fabric.complete_task(handle.task_id, result=result)
 
             logger.info(
-                f"Debate {debate_id} completed: confidence={result.confidence:.2f}, "
-                f"cost=${result.total_cost_usd:.4f}"
+                "Debate %s completed: confidence=%.2f, cost=$%.4f",
+                debate_id,
+                result.confidence,
+                result.total_cost_usd,
             )
 
             return result

@@ -71,12 +71,12 @@ def _log_due_settlement(event: Any) -> None:
 
     # Also record in the audit subsystem if available
     try:
-        from aragora.audit.log import AuditCategory, AuditEvent, get_audit_log
+        from aragora.observability.audit_log import AuditCategory, AuditEvent, get_audit_log
 
         audit = get_audit_log()
         audit.log(
             AuditEvent(
-                category=AuditCategory.DATA_ACCESS,
+                category=AuditCategory.DEBATE,
                 action="settlement_review_due",
                 actor_id="system",
                 resource_type="debate",

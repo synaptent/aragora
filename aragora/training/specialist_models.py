@@ -929,8 +929,11 @@ class SpecialistTrainingPipeline:
                 )
 
                 logger.info(
-                    f"Gauntlet evaluation complete for {model_id}: "
-                    f"ELO={elo_rating}, accuracy={vertical_accuracy:.2f}, win_rate={win_rate:.2f}"
+                    "Gauntlet evaluation complete for %s: ELO=%s, accuracy=%.2f, win_rate=%.2f",
+                    model_id,
+                    elo_rating,
+                    vertical_accuracy,
+                    win_rate,
                 )
 
             except (RuntimeError, ValueError, OSError, TypeError) as e:

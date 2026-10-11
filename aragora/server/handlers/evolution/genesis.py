@@ -57,7 +57,7 @@ _genome_imports, GENOME_AVAILABLE = try_import(
 GenomeStore = _genome_imports["GenomeStore"]
 AgentGenome = _genome_imports["AgentGenome"]
 
-from aragora.server.errors import safe_error_message as _safe_error_message
+from aragora.api_errors import safe_error_message as _safe_error_message
 
 
 class GenesisHandler(BaseHandler):

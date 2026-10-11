@@ -73,7 +73,7 @@ class InvitationRepository:
                     invitation.invited_by,
                     invitation.status,
                     invitation.created_at.isoformat(),
-                    invitation.expires_at.isoformat(),
+                    invitation.expires_at.isoformat() if invitation.expires_at else None,
                 ),
             )
         return True
@@ -82,7 +82,8 @@ class InvitationRepository:
         """Get invitation by ID."""
         with self._transaction() as cursor:
             cursor.execute(
-                f"SELECT {self._INVITATION_COLUMNS} FROM org_invitations WHERE id = ?",  # noqa: S608 -- column name interpolation, parameterized
+                # column name interpolation, parameterized
+                f"SELECT {self._INVITATION_COLUMNS} FROM org_invitations WHERE id = ?",
                 (invitation_id,),
             )
             row = cursor.fetchone()
@@ -92,7 +93,8 @@ class InvitationRepository:
         """Get invitation by token."""
         with self._transaction() as cursor:
             cursor.execute(
-                f"SELECT {self._INVITATION_COLUMNS} FROM org_invitations WHERE token = ?",  # noqa: S608 -- column name interpolation, parameterized
+                # column name interpolation, parameterized
+                f"SELECT {self._INVITATION_COLUMNS} FROM org_invitations WHERE token = ?",
                 (token,),
             )
             row = cursor.fetchone()
@@ -106,7 +108,7 @@ class InvitationRepository:
                 SELECT {self._INVITATION_COLUMNS} FROM org_invitations
                 WHERE org_id = ? AND email = ? AND status = 'pending'
                 ORDER BY created_at DESC LIMIT 1
-                """,  # noqa: S608 -- column name interpolation, parameterized
+                """,  # column name interpolation, parameterized
                 (org_id, email.lower()),
             )
             row = cursor.fetchone()
@@ -116,7 +118,8 @@ class InvitationRepository:
         """Get all invitations for an organization."""
         with self._transaction() as cursor:
             cursor.execute(
-                f"SELECT {self._INVITATION_COLUMNS} FROM org_invitations WHERE org_id = ? ORDER BY created_at DESC",  # noqa: S608 -- column name interpolation, parameterized
+                # column name interpolation, parameterized
+                f"SELECT {self._INVITATION_COLUMNS} FROM org_invitations WHERE org_id = ? ORDER BY created_at DESC",
                 (org_id,),
             )
             return [self._row_to_invitation(row) for row in cursor.fetchall()]
@@ -129,7 +132,7 @@ class InvitationRepository:
                 SELECT {self._INVITATION_COLUMNS} FROM org_invitations
                 WHERE email = ? AND status = 'pending'
                 ORDER BY created_at DESC
-                """,  # noqa: S608 -- column name interpolation, parameterized
+                """,  # column name interpolation, parameterized
                 (email.lower(),),
             )
             return [self._row_to_invitation(row) for row in cursor.fetchall()]
@@ -209,6 +212,6 @@ class InvitationRepository:
             invited_by=row["invited_by"],
             status=row["status"],
             created_at=datetime.fromisoformat(row["created_at"]),
-            expires_at=datetime.fromisoformat(row["expires_at"]),
+            expires_at=datetime.fromisoformat(row["expires_at"]) if row["expires_at"] else None,
             accepted_at=datetime.fromisoformat(row["accepted_at"]) if row["accepted_at"] else None,
         )

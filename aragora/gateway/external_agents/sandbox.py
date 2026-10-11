@@ -385,7 +385,7 @@ class DockerSandbox(SandboxBackend):
             cmd.extend(["-v", f"{host_path}:{container_path}:ro"])
 
         # Add tmpfs for /tmp
-        cmd.extend(["--tmpfs", "/tmp:rw,noexec,nosuid,size=100m"])  # noqa: S108 - container-internal tmpfs mount
+        cmd.extend(["--tmpfs", "/tmp:rw,noexec,nosuid,size=100m"])  # container-internal tmpfs mount
 
         # Image
         cmd.append(config.docker_image)

@@ -25,6 +25,7 @@ import random
 import sys
 import uuid
 from datetime import datetime, timedelta, timezone
+from typing import TypedDict
 
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 logger = logging.getLogger("seed_demo_data")
@@ -81,7 +82,16 @@ DEMO_USERS = [
 DEMO_PASSWORD_HASH = hashlib.sha256(b"demo123").hexdigest()
 DEMO_PASSWORD_SALT = "demo_salt_not_for_production"
 
-DEMO_DEBATES = [
+
+class DemoDebate(TypedDict):
+    question: str
+    decision: str | None
+    confidence: float
+    agents: list[str]
+    outcome: str
+
+
+DEMO_DEBATES: list[DemoDebate] = [
     {
         "question": "Should we adopt microservices or keep the monolith?",
         "decision": "Adopt microservices with a phased migration starting from the billing module.",

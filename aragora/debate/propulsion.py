@@ -444,8 +444,11 @@ class PropulsionEngine:
             # Exponential backoff
             delay = backoff_base * (2**attempt)
             logger.info(
-                f"Retrying propulsion {payload.id} in {delay:.1f}s "
-                f"(attempt {attempt + 2}/{max_attempts})"
+                "Retrying propulsion %s in %.1fs (attempt %s/%s)",
+                payload.id,
+                delay,
+                attempt + 2,
+                max_attempts,
             )
             self._stats["retried"] += 1
             await asyncio.sleep(delay)

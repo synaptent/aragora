@@ -48,6 +48,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from aragora.tenancy.server_bindings import get_server_bindings
+
 if TYPE_CHECKING:
     from starlette.requests import Request
 
@@ -142,9 +144,7 @@ def carries_static_api_token(headers: Any) -> bool:
     if not token:
         return False
 
-    from aragora.server import auth as server_auth
-
-    config = server_auth.auth_config
+    config = get_server_bindings().auth_config()
     api_token = getattr(config, "api_token", None)
     if not isinstance(api_token, str) or not api_token:
         return False
@@ -183,14 +183,13 @@ def require_org_scope(
 async def require_org_scope_fastapi(request: Request) -> OrgScope:
     """FastAPI dependency with the same semantics as :func:`require_org_scope`.
 
-    Identity comes from ``aragora.server.fastapi.dependencies.auth.get_auth_context``.
-    Denials are raised as ``APIError`` so the app's exception handler renders
-    the same ``{"error", "code"}`` body as the legacy helper.
+    Identity comes from the server's FastAPI auth context (see
+    :mod:`aragora.tenancy.server_bindings`). Denials are raised as ``APIError``
+    so the app's exception handler renders the same ``{"error", "code"}`` body
+    as the legacy helper.
     """
-    from aragora.server.fastapi.dependencies.auth import get_auth_context
-    from aragora.server.fastapi.middleware.error_handling import APIError
-
-    auth = await get_auth_context(request)
+    bindings = get_server_bindings()
+    auth = await bindings.get_auth_context(request)
     user_id = auth.user_id if auth.user_id != _ANONYMOUS_USER_ID else None
     outcome = resolve_org_scope(
         user_id=user_id,
@@ -199,7 +198,7 @@ async def require_org_scope_fastapi(request: Request) -> OrgScope:
         static_token=user_id is None and carries_static_api_token(request.headers),
     )
     if isinstance(outcome, ScopeDenial):
-        raise APIError(outcome.message, status_code=outcome.status, code=outcome.code)
+        raise bindings.api_error(outcome.message, status_code=outcome.status, code=outcome.code)
     return outcome
 
 
@@ -210,23 +209,17 @@ def not_found_body(resource: str = "Record") -> dict[str, str]:
 
 def record_not_found(resource: str = "Record") -> HandlerResult:
     """Legacy 404 for a missing, other-org or unknown-owner record."""
-    from aragora.server.handlers.utils.responses import json_response
-
-    return json_response(not_found_body(resource), status=404)
+    return get_server_bindings().json_response(not_found_body(resource), status=404)
 
 
 def record_not_found_error(resource: str = "Record") -> APIError:
     """FastAPI 404 (to ``raise``) for a missing, other-org or unknown-owner record."""
-    from aragora.server.fastapi.middleware.error_handling import APIError
-
     body = not_found_body(resource)
-    return APIError(body["error"], status_code=404, code=body["code"])
+    return get_server_bindings().api_error(body["error"], status_code=404, code=body["code"])
 
 
 def _denial_result(denial: ScopeDenial) -> HandlerResult:
-    from aragora.server.handlers.utils.responses import json_response
-
-    return json_response(denial.body(), status=denial.status)
+    return get_server_bindings().json_response(denial.body(), status=denial.status)
 
 
 def _bearer_token(headers: Any) -> str | None:

@@ -359,4 +359,4 @@ hyperparams = {
 - [MEMORY_STRATEGY.md](MEMORY_STRATEGY.md) - Developer architecture documentation
 - [MEMORY_ANALYTICS.md](MEMORY_ANALYTICS.md) - Analytics and ROI tracking
 - [DATABASE.md](../reference/DATABASE.md) - Database operations guide
-- [OPERATIONS.md](../OPERATIONS.md) - General operations runbook
+- [OPERATIONS.md](../operations/OPERATIONS.md) - General operations runbook

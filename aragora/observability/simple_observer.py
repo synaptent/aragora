@@ -108,7 +108,7 @@ class SimpleObserver:
             "start_time": time.time(),
             "status": "in_progress",
         }
-        self._logger.info(f"Agent attempt started: {agent} (timeout={timeout}s)")
+        self._logger.info("Agent attempt started: %s (timeout=%ss)", agent, timeout)
         return attempt_id
 
     def record_agent_completion(
@@ -147,7 +147,7 @@ class SimpleObserver:
             self._logger.error("Agent %s failed: %s", record["agent"], error)
         else:
             record["status"] = "success"
-            self._logger.info(f"Agent {record['agent']} completed in {record['duration']:.2f}s")
+            self._logger.info("Agent %s completed in %.2fs", record["agent"], record["duration"])
 
     def record_loop_id_issue(self, ws_id: str, present: bool, source: str) -> None:
         """Record a loop_id issue in WebSocket communication.

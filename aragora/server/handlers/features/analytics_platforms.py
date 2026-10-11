@@ -35,9 +35,10 @@ from uuid import uuid4
 
 from aragora.resilience import CircuitBreaker
 from aragora.server.handlers.secure import SecureHandler, ForbiddenError, UnauthorizedError
-from aragora.server.handlers.utils.responses import error_dict, error_response
+from aragora.server.handlers.utils.responses import HandlerResult, error_dict, error_response
 from aragora.server.handlers.utils import parse_json_body
 from aragora.server.handlers.utils.rate_limit import rate_limit
+from aragora.server.handlers.utils.routing import call_request_handler
 from aragora.server.validation.query_params import safe_query_int
 
 logger = logging.getLogger(__name__)
@@ -173,6 +174,14 @@ class AnalyticsPlatformsHandler(SecureHandler):
         """Check if this handler can handle the given path."""
         return path.startswith("/api/v1/analytics/")
 
+    async def handle(
+        self, path: str, query_params: dict[str, Any], handler: Any
+    ) -> HandlerResult | None:
+        """Serve modular-dispatch requests through handle_request."""
+        return await call_request_handler(
+            self.handle_request, path, query_params, handler, self.read_json_body
+        )
+
     @rate_limit(requests_per_minute=60)
     async def handle_request(self, request: Any) -> dict[str, Any]:
         """Route request to appropriate handler."""
@@ -191,6 +200,8 @@ class AnalyticsPlatformsHandler(SecureHandler):
 
         # Route to handlers
         if path.endswith("/platforms") and method == "GET":
+            if err := await self._check_permission(request, "analytics:read"):
+                return err
             return await self._list_platforms(request)
 
         elif path.endswith("/connect") and method == "POST":
@@ -257,6 +268,21 @@ class AnalyticsPlatformsHandler(SecureHandler):
             if err := await self._check_permission(request, "analytics:read"):
                 return err
             return await self._get_retention(request, platform)
+
+        elif (
+            len(parts) == 3 and parts[0] == "workspace" and parts[2] == "usage" and method == "GET"
+        ):
+            if err := await self._check_permission(request, "analytics:read"):
+                return err
+            return self._json_response(
+                501,
+                {
+                    "error": {
+                        "message": "Workspace usage analytics are not implemented",
+                        "code": "not_implemented",
+                    }
+                },
+            )
 
         return self._error_response(404, "Endpoint not found")
 

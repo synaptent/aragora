@@ -311,7 +311,10 @@ def gather_metrics() -> MetricsSnapshot:
             key="rbac_unique_permissions",
             label="Unique permission strings",
             value=unique_permissions,
-            command='git grep -h -o -E "@require_permission\\([\'\\"][^\'\\"]+[\'\\"]\\)" -- aragora | sed -E "s/.*[\'\\"]([^\'\\"]+)[\'\\"].*/\\1/" | sort -u | wc -l',
+            # Same .py-only pathspec as the calls row: permission strings quoted
+            # in tracked prose (README/YAML) would otherwise add values the
+            # generator never counts.
+            command='git grep -h -o -E "@require_permission\\([\'\\"][^\'\\"]+[\'\\"]\\)" -- \'aragora/*.py\' | sed -E "s/.*[\'\\"]([^\'\\"]+)[\'\\"].*/\\1/" | sort -u | wc -l',
             source="aragora/",
         )
     )

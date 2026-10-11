@@ -46,7 +46,7 @@ from aragora.resilience import (
     CircuitOpenError,
     get_circuit_breaker,
 )
-from aragora.server.errors import safe_error_message
+from aragora.api_errors import safe_error_message
 from aragora.server.handlers.base import (
     BaseHandler,
     HandlerResult,

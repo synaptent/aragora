@@ -56,8 +56,8 @@ class WorktreeLifecycleService:
     ) -> subprocess.CompletedProcess[str]:
         if git_runner is not None:
             return git_runner(*args, cwd=cwd, check=check)
-        return subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
-            ["git", *args],  # noqa: S607 -- fixed command
+        return subprocess.run(  # subprocess with fixed args, no shell
+            ["git", *args],  # fixed command
             cwd=cwd or self.repo_root,
             capture_output=True,
             text=True,

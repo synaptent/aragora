@@ -578,13 +578,13 @@ def calculate_backoff_delay(
 
     # Apply jitter
     if jitter_mode == JitterMode.ADDITIVE:
-        jitter = random.random() * base_delay * jitter_factor  # noqa: S311 -- retry jitter
+        jitter = random.random() * base_delay * jitter_factor
         delay = delay + jitter
     elif jitter_mode == JitterMode.MULTIPLICATIVE:
-        factor = 1.0 + (random.random() * 2 - 1) * jitter_factor  # noqa: S311 -- retry jitter
+        factor = 1.0 + (random.random() * 2 - 1) * jitter_factor
         delay = delay * factor
     elif jitter_mode == JitterMode.FULL:
-        delay = random.random() * delay  # noqa: S311 -- retry jitter
+        delay = random.random() * delay
     # NONE: no jitter applied
 
     return float(max(0.0, delay))
@@ -762,8 +762,12 @@ def with_retry(
                     delay = config.calculate_delay(attempt)
                     provider_name = config.provider_name or func.__name__
                     logger.debug(
-                        f"Retry {attempt + 1}/{config.max_retries} for {provider_name} "
-                        f"after {delay:.2f}s: {e}"
+                        "Retry %s/%s for %s after %.2fs: %s",
+                        attempt + 1,
+                        config.max_retries,
+                        provider_name,
+                        delay,
+                        e,
                     )
 
                     if config.on_retry:
@@ -864,8 +868,12 @@ def with_retry_sync(
                     delay = config.calculate_delay(attempt)
                     provider_name = config.provider_name or func.__name__
                     logger.debug(
-                        f"Retry {attempt + 1}/{config.max_retries} for {provider_name} "
-                        f"after {delay:.2f}s: {e}"
+                        "Retry %s/%s for %s after %.2fs: %s",
+                        attempt + 1,
+                        config.max_retries,
+                        provider_name,
+                        delay,
+                        e,
                     )
 
                     if config.on_retry:

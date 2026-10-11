@@ -198,10 +198,11 @@ class CalibrationCostBridge:
         self._cache_timestamp = datetime.now()
 
         logger.debug(
-            f"cost_efficiency_computed agent={agent_name} "
-            f"efficiency={result.efficiency_score:.2f} "
-            f"calibration={result.calibration_score:.2f} "
-            f"recommendation={result.recommendation}"
+            "cost_efficiency_computed agent=%s efficiency=%.2f calibration=%.2f recommendation=%s",
+            agent_name,
+            result.efficiency_score,
+            result.calibration_score,
+            result.recommendation,
         )
 
         return result

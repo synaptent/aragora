@@ -100,7 +100,7 @@ def wilson_interval(
 
 
 def _class_counts(results: Sequence[PromptProbeResult]) -> dict[str, int]:
-    counts = {name: 0 for name in ALL_PROMPT_CLASSES}
+    counts = dict.fromkeys(ALL_PROMPT_CLASSES, 0)
     for result in results:
         counts[result.prompt_class] = counts.get(result.prompt_class, 0) + 1
     return counts

@@ -1,61 +1,31 @@
 """
-Threat Intelligence Integration Service.
+Threat Intelligence Integration Service (compatibility re-export).
 
-Provides unified access to external threat intelligence feeds for:
-- URL/attachment scanning (VirusTotal)
-- IP reputation checking (AbuseIPDB)
-- Phishing URL detection (PhishTank)
-- Malware URL detection (URLhaus)
-
-Features:
-- Async API clients with rate limiting
-- Tiered caching (1h for IPs, 24h for URLs) with Redis backend option
-- Confidence scoring and threat classification
-- Batch scanning capabilities with dict[str, ThreatResult] return
-- Aggregate scoring from multiple sources with weighted confidence
-- Event emission for high-risk findings
-- Integration with email prioritization
-- Fallback handling when APIs are unavailable
+The implementation moved to :mod:`aragora.security.threat_intelligence`; every
+name below is the identical object.
 
 Usage:
-    from aragora.services.threat_intelligence import ThreatIntelligenceService
-
-    service = ThreatIntelligenceService(
-        virustotal_api_key="your-key",
-        abuseipdb_api_key="your-key",
-    )
-
-    # Check a URL
-    result = await service.check_url("https://suspicious-site.com")
-    if result.is_malicious:
-        print(f"Threat detected: {result.threat_type}")
+    from aragora.security.threat_intelligence import ThreatIntelligenceService
 """
 
 from __future__ import annotations
 
-# Re-export all public symbols for backward compatibility.
-# Previously this was a single 2164-line file; it has been split into:
-#   enums.py   - ThreatType, ThreatSeverity, ThreatSource, pattern constants
-#   models.py  - ThreatResult, SourceResult, ThreatAssessment, etc.
-#   config.py  - ThreatIntelConfig, ThreatEventHandler
-#   service.py - ThreatIntelligenceService, check_threat()
-
-from .config import ThreatEventHandler, ThreatIntelConfig
-from .enums import (
+from aragora.security.threat_intelligence import (
     MALICIOUS_URL_PATTERNS,
     SUSPICIOUS_TLDS,
-    ThreatSeverity,
-    ThreatSource,
-    ThreatType,
-)
-from .models import (
     FileHashResult,
     IPReputationResult,
     SourceResult,
     ThreatAssessment,
+    ThreatEventHandler,
+    ThreatIntelConfig,
+    ThreatIntelligenceService,
     ThreatResult,
+    ThreatSeverity,
+    ThreatSource,
+    ThreatType,
+    check_threat,
 )
-from .service import ThreatIntelligenceService, check_threat
 
 __all__ = [
     # Enums & constants

@@ -12,7 +12,7 @@ vetting the product sells. The receipt path printed at the end is meant to be
 linked from every issue filed for an adopted candidate.
 
 Usage:
-    python scripts/rank_research_candidates.py docs/research/2026-08-26-x-bookmarks-triage.md \
+    python scripts/rank_research_candidates.py docs/archive/research/2026-08-26-x-bookmarks-triage.md \
         --objective "Rank these externally sourced candidates by expected impact" \
         [--quick] [--max-goals 10] [--output-dir .aragora/research_intake]
 
@@ -29,6 +29,7 @@ import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
@@ -82,7 +83,7 @@ async def rank(
     max_goals: int,
     quick: bool,
     agents: list[str] | None = None,
-) -> tuple[list[dict], object | None]:
+) -> tuple[list[dict], Any | None]:
     from aragora.nomic.meta_planner import (
         MetaPlanner,
         MetaPlannerConfig,

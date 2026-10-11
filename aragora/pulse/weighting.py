@@ -275,7 +275,7 @@ class SourceWeightingSystem:
 
         self.source_weights[platform.lower()] = updated
         logger.info(
-            f"Updated source weight for {platform}: credibility={updated.base_credibility:.2f}"
+            "Updated source weight for %s: credibility=%.2f", platform, updated.base_credibility
         )
 
         return updated

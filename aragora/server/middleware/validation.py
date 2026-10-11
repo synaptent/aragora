@@ -110,7 +110,9 @@ class RouteValidation:
     body_schema: dict | None = None
     query_rules: dict[str, tuple[int, int]] = field(default_factory=dict)
     required_params: list[str] = field(default_factory=list)
-    path_validators: dict[str, Callable[[str], tuple[bool, str]]] = field(default_factory=dict)
+    path_validators: dict[str, Callable[[str], tuple[bool, str | None]]] = field(
+        default_factory=dict
+    )
     max_body_size: int = 1_048_576  # 1MB default
 
     def __post_init__(self) -> None:
@@ -1084,7 +1086,10 @@ class ValidationMiddleware:
             log_level = logging.WARNING if not self.config.blocking else logging.ERROR
             logger.log(
                 log_level,
-                f"Validation failed for {method} {path}: {result.error_message}",
+                "Validation failed for %s %s: %s",
+                method,
+                path,
+                result.error_message,
             )
 
             # Emit audit event for validation failures (security/compliance requirement)

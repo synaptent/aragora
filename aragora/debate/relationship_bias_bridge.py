@@ -172,9 +172,11 @@ class RelationshipBiasBridge:
         high_alliance_pairs = list(set(high_alliance_pairs))
 
         logger.debug(
-            f"team_echo_risk team={team} risk={overall_risk:.2f} "
-            f"high_alliance_pairs={len(high_alliance_pairs)} "
-            f"recommendation={recommendation}"
+            "team_echo_risk team=%s risk=%.2f high_alliance_pairs=%s recommendation=%s",
+            team,
+            overall_risk,
+            len(high_alliance_pairs),
+            recommendation,
         )
 
         return EchoChamberRisk(
@@ -232,8 +234,11 @@ class RelationshipBiasBridge:
                 penalty = metrics.alliance_score * self.config.alliance_vote_penalty
                 adjustments[voter] = 1.0 - penalty
                 logger.debug(
-                    f"alliance_vote_penalty voter={voter} choice={choice} "
-                    f"alliance={metrics.alliance_score:.2f} penalty={penalty:.2f}"
+                    "alliance_vote_penalty voter=%s choice=%s alliance=%.2f penalty=%.2f",
+                    voter,
+                    choice,
+                    metrics.alliance_score,
+                    penalty,
                 )
             else:
                 adjustments[voter] = 1.0

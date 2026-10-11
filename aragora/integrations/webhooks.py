@@ -112,9 +112,9 @@ class AragoraJSONEncoder(json.JSONEncoder):
 
     def default(self, obj: Any) -> Any:
         if isinstance(obj, set):
-            return sorted(list(obj))
+            return sorted(obj)
         if isinstance(obj, frozenset):
-            return sorted(list(obj))
+            return sorted(obj)
         if isinstance(obj, datetime):
             return obj.isoformat()
         if hasattr(obj, "to_dict") and callable(obj.to_dict):
@@ -610,12 +610,15 @@ class WebhookDispatcher:
                     if retry_after and retry_after.isdigit():
                         backoff = min(float(retry_after), 60.0)  # Cap at 60s
                     else:
-                        backoff = cfg.backoff_base_s * (2**attempt) + random.uniform(0, 0.5)  # noqa: S311 -- retry jitter
+                        backoff = cfg.backoff_base_s * (2**attempt) + random.uniform(0, 0.5)
 
                     if attempt < cfg.max_retries - 1:
                         logger.debug(
-                            f"Webhook {cfg.name} attempt {attempt + 1} got {resp.status_code}, "
-                            f"retrying in {backoff:.1f}s"
+                            "Webhook %s attempt %s got %s, retrying in %.1fs",
+                            cfg.name,
+                            attempt + 1,
+                            resp.status_code,
+                            backoff,
                         )
                         time.sleep(backoff)
                         continue
@@ -641,10 +644,13 @@ class WebhookDispatcher:
             except (TimeoutError, ConnectionError, OSError) as e:
                 # Network errors (stdlib): retry
                 if attempt < cfg.max_retries - 1:
-                    backoff = cfg.backoff_base_s * (2**attempt) + random.uniform(0, 0.5)  # noqa: S311 -- retry jitter
+                    backoff = cfg.backoff_base_s * (2**attempt) + random.uniform(0, 0.5)
                     logger.debug(
-                        f"Webhook {cfg.name} attempt {attempt + 1} failed: {e}, "
-                        f"retrying in {backoff:.1f}s"
+                        "Webhook %s attempt %s failed: %s, retrying in %.1fs",
+                        cfg.name,
+                        attempt + 1,
+                        e,
+                        backoff,
                     )
                     time.sleep(backoff)
                     continue
@@ -655,10 +661,13 @@ class WebhookDispatcher:
 
                 if isinstance(e, _httpx.TransportError):
                     if attempt < cfg.max_retries - 1:
-                        backoff = cfg.backoff_base_s * (2**attempt) + random.uniform(0, 0.5)  # noqa: S311 -- retry jitter
+                        backoff = cfg.backoff_base_s * (2**attempt) + random.uniform(0, 0.5)
                         logger.debug(
-                            f"Webhook {cfg.name} attempt {attempt + 1} transport error: {e}, "
-                            f"retrying in {backoff:.1f}s"
+                            "Webhook %s attempt %s transport error: %s, retrying in %.1fs",
+                            cfg.name,
+                            attempt + 1,
+                            e,
+                            backoff,
                         )
                         time.sleep(backoff)
                         continue

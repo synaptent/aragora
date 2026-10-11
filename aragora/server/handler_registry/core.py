@@ -423,14 +423,14 @@ def _run_handler_coroutine(coro: Any) -> Any:
     """
     # Try to use the main event loop (where asyncpg pool was created)
     try:
-        from aragora.storage.pool_manager import get_pool_event_loop
+        from aragora.utils.async_utils import get_pool_event_loop
 
         main_loop = get_pool_event_loop()
         if main_loop is not None and main_loop.is_running():
             future = asyncio.run_coroutine_threadsafe(coro, main_loop)
             return future.result(timeout=60)
     except ImportError:
-        # pool_manager not available - use fallback below
+        # async utilities not available - use fallback below
         pass
     except TimeoutError:
         # Timeout waiting for coroutine - close it and re-raise

@@ -372,7 +372,9 @@ class TestCaptureMessage:
             capture_message("Info message", level="info")
 
             # Should log at INFO level
-            mock_logger.log.assert_called_with(logging.INFO, "Uncaptured message: Info message")
+            mock_logger.log.assert_called_with(
+                logging.INFO, "Uncaptured message: %s", "Info message"
+            )
 
     def test_capture_message_with_context(self):
         """Test capture message with context."""

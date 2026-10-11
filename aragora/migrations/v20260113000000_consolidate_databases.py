@@ -251,7 +251,8 @@ class DatabaseConsolidator:
             return 0
 
         # Read source data (validated_source already checked)
-        cursor = source_conn.execute(f"SELECT * FROM {validated_source}")  # noqa: S608 -- internal query construction
+        # internal query construction
+        cursor = source_conn.execute(f"SELECT * FROM {validated_source}")
         rows = cursor.fetchall()
 
         if not rows:
@@ -286,7 +287,8 @@ class DatabaseConsolidator:
                 try:
                     # validated_target already checked against whitelist
                     target_conn.execute(
-                        f"INSERT OR REPLACE INTO {validated_target} ({col_list}) VALUES ({placeholders})",  # noqa: S608 -- column name interpolation, parameterized
+                        # column name interpolation, parameterized
+                        f"INSERT OR REPLACE INTO {validated_target} ({col_list}) VALUES ({placeholders})",
                         values,
                     )
                     copied += 1
@@ -803,7 +805,8 @@ class DatabaseConsolidator:
                     # Validate table name against whitelist before DELETE
                     try:
                         validated_table = _validate_table_name(table)
-                        cursor.execute(f"DELETE FROM {validated_table}")  # noqa: S608 -- table name interpolation, parameterized
+                        # table name interpolation, parameterized
+                        cursor.execute(f"DELETE FROM {validated_table}")
                         logger.info("Cleared %s/%s", db_name, validated_table)
                     except ValueError as e:
                         logger.warning("Skipping unknown table %s: %s", table, e)

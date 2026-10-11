@@ -309,7 +309,10 @@ class BudgetCoordinator:
                     user_id=self.user_id or None,
                 )
                 logger.info(
-                    f"debate_cost_recorded org_id={self.org_id} debate_id={debate_id} cost=${actual_cost_usd:.4f}"
+                    "debate_cost_recorded org_id=%s debate_id=%s cost=$%.4f",
+                    self.org_id,
+                    debate_id,
+                    actual_cost_usd,
                 )
 
         except ImportError:

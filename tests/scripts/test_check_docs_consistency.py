@@ -52,7 +52,7 @@ def test_check_1_fix_uses_strategy_index_single_candidate(tmp_path: Path) -> Non
     root = tmp_path
     _write(root / "docs" / "strategy" / "PRECISION_AND_TERMS.md", "## Part 1: Glossary")
     _write(
-        root / "docs" / "STRATEGY_INDEX.md",
+        root / "docs" / "strategy" / "STRATEGY_INDEX.md",
         """
         | Old file | New location |
         |----------|-------------|
@@ -91,8 +91,8 @@ def test_check_2_flags_live_archive_refs_except_allowed_sources(tmp_path: Path) 
     root = tmp_path
     _write(root / "docs" / "archive" / "README.md", "# Archive")
     _write(root / "docs" / "archive" / "OLD.md", "# Old")
-    _write(root / "docs" / "STRATEGY_INDEX.md", "[old](archive/OLD.md)")
-    _write(root / "docs" / "OMNIVOROUS_ROADMAP.md", "[snapshot](archive/OLD.md)")
+    _write(root / "docs" / "strategy" / "STRATEGY_INDEX.md", "[old](../archive/OLD.md)")
+    _write(root / "docs" / "status" / "COMMERCIAL_POSITIONING.md", "[snapshot](../archive/OLD.md)")
     _write(root / "docs" / "live.md", "[snapshot](archive/OLD.md)")
 
     findings = check_archive_references(root)

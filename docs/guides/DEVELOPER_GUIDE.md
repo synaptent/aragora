@@ -61,7 +61,7 @@ for await (const event of client.streamDebate(debate.id)) {
 |------|---------------|
 | Run a debate | [SDK Quickstart (Python)](./python-quickstart.md) / [TypeScript](./typescript-quickstart.md) |
 | Connect Slack | [Integration Guide](../integrations/INTEGRATIONS.md) |
-| Deploy self-hosted | [Deployment Guide](../deployment/DEPLOYMENT.md) |
+| Deploy self-hosted | [Deployment Guide](../DEPLOYMENT.md) |
 | Use the REST API | [API Reference](../api/API_REFERENCE.md) |
 | Understand the architecture | [Architecture Overview](../architecture/ARCHITECTURE.md) |
 | Contribute | [Contributing Guide](CONTRIBUTING.md) |

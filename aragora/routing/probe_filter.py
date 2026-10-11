@@ -283,7 +283,10 @@ class ProbeFilter:
             # Check exclusion criteria
             if profile.vulnerability_rate > max_vulnerability_rate:
                 logger.debug(
-                    f"Excluding {agent}: vulnerability rate {profile.vulnerability_rate:.0%} > {max_vulnerability_rate:.0%}"
+                    "Excluding %s: vulnerability rate %.0f%% > %.0f%%",
+                    agent,
+                    profile.vulnerability_rate * 100,
+                    max_vulnerability_rate * 100,
                 )
                 continue
 

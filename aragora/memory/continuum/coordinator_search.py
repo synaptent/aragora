@@ -182,7 +182,7 @@ class CoordinatorSearchMixin:
                   {keyword_clause}
                 ORDER BY score DESC
                 LIMIT ?
-                """,  # noqa: S608 -- dynamic clause from internal state
+                """,  # dynamic clause from internal state
                 (*tier_values, min_importance, *keyword_params, limit),
             )
 
@@ -269,7 +269,7 @@ class CoordinatorSearchMixin:
                        COALESCE(red_line, 0), COALESCE(red_line_reason, '')
                 FROM continuum_memory
                 WHERE id IN ({placeholders})
-                """,  # noqa: S608 -- parameterized query
+                """,  # parameterized query
                 tuple(ordered),
             )
             rows: list[tuple[Any, ...]] = cursor.fetchall()
@@ -368,7 +368,7 @@ class CoordinatorSearchMixin:
                   {tenant_clause}
                 ORDER BY created_at DESC
                 LIMIT ?
-                """,  # noqa: S608 -- dynamic clause from internal state
+                """,  # dynamic clause from internal state
                 (
                     *tier_values,
                     min_importance,
@@ -393,7 +393,7 @@ class CoordinatorSearchMixin:
                   {tenant_clause}
                 ORDER BY created_at ASC
                 LIMIT ?
-                """,  # noqa: S608 -- dynamic clause from internal state
+                """,  # dynamic clause from internal state
                 (
                     *tier_values,
                     min_importance,
