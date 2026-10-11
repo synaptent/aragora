@@ -1,0 +1,1689 @@
+{
+  "browser-extension/background.js": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "browser-extension/popup.js": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "e2e/mobile/mobile-audit.spec.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "e2e/production/fixtures.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "e2e/production/login.prod.spec.ts": {
+    "@typescript-eslint/naming-convention": {
+      "count": 1
+    },
+    "complexity": {
+      "count": 1
+    }
+  },
+  "scripts/generate-sdk.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/HomePage.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/ab-testing/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/admin/billing/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/admin/dedup/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/admin/forensic/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/admin/knowledge/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/admin/landing/page.tsx": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/app/(app)/admin/nomic/page.tsx": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/app/(app)/admin/observability/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/admin/organizations/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/admin/page.tsx": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/app/(app)/admin/queue/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/admin/security/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/admin/usage/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/admin/verticals/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/admin/workspace/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/agent-evolution/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/agent/[[...name]]/AgentProfileWrapper.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/agents/performance/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/analytics/decisions/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/analytics/outcomes/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/analytics/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/analytics/spend/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/api-docs/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/arena/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/argument-analysis/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/audit-trail/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/audit/view/AuditSessionDetail.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/auth/callback/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/auth/error/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/backup/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/beliefs/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/billing/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/blockchain/page.tsx": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/app/(app)/broadcast/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/budgets/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/compliance/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/connectors/page.tsx": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/app/(app)/consensus/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/control-plane/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/coordination/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/data-classification/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/debates/[id]/DebateDetailClient.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/debates/[id]/normalizeDecisionPackage.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/debates/compare/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/demo/pipeline/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/developer/page.tsx": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/app/(app)/differentiation/page.tsx": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "src/app/(app)/elo-analytics/page.tsx": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "src/app/(app)/evaluation/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/feature-flags/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/feedback-hub/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/genesis/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/get-started/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/inbox/page.tsx": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/app/(app)/integrations/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/intelligence/page.tsx": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/app/(app)/interrogate/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/introspection/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/knowledge-flow/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/knowledge/KnowledgeGraphView.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/knowledge/page.tsx": {
+    "complexity": {
+      "count": 4
+    }
+  },
+  "src/app/(app)/marketplace/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/memory-gateway/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/memory/page.tsx": {
+    "@typescript-eslint/naming-convention": {
+      "count": 2
+    },
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/mission-control/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/moments/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/nomic-control/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/observability/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/organization/members/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/outcome-dashboard/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/pipeline/page.tsx": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/app/(app)/playbooks/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/policy/page.tsx": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "src/app/(app)/prompt-engine/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/pulse-scheduler/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/queue/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/reasoning/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/receipts/page.tsx": {
+    "complexity": {
+      "count": 4
+    }
+  },
+  "src/app/(app)/repository/page.tsx": {
+    "@typescript-eslint/naming-convention": {
+      "count": 1
+    },
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/review-queue/packets/[receiptId]/PacketsClient.tsx": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/app/(app)/self-improve/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/settings/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/settlements/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/shared-inbox/page.tsx": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/app/(app)/spectate/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/speech/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/spend/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/swarm-status/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/system-intelligence/page.tsx": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "src/app/(app)/system-status/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/training/explorer/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/training/models/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/transcribe/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/uncertainty/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/workflows/builder/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(app)/workflows/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(standalone)/debate/[[...id]]/DebateViewerWrapper.tsx": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/app/(standalone)/debate/[[...id]]/fetchDebate.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(standalone)/demo/page.tsx": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/app/(standalone)/eu-ai-act/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/(standalone)/status/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/global-error.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/app/try/page.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/ABTestResultsPanel.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/AgentComparePanel.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/AgentDetailPanel.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/AgentNetworkPanel.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/AgentPanel.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/AgentTabs.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/AnalyticsDashboard.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/ApiExplorerPanel.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/BatchExplainabilityPanel.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/BeliefNetworkGraph.tsx": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/components/ConsensusKnowledgeBase.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/ConsensusQualityDashboard.tsx": {
+    "@typescript-eslint/naming-convention": {
+      "count": 1
+    }
+  },
+  "src/components/CruxPanel.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/DebateInput.tsx": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/components/DebateResultPreview.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/DocumentPreviewPanel.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/DocumentUpload.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/EvaluationPanel.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/EvidencePanel.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/EvidenceVisualizerPanel.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/EvolutionPanel.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/EvolutionTimeline.tsx": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/components/FeatureGuard.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/FindingDetailDrawer.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/FolderUploadDialog.tsx": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/components/GauntletDashboard.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/GauntletHeatmap.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/GauntletRunner.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/GlobalConnectionStatus.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/HistoryPanel.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/ImpasseDetectionPanel.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/InfluenceGraph.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/InsightsPanel.tsx": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/components/LaboratoryPanel.tsx": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/components/LandingPage.tsx": {
+    "complexity": {
+      "count": 4
+    }
+  },
+  "src/components/LeaderboardPanel.tsx": {
+    "complexity": {
+      "count": 4
+    }
+  },
+  "src/components/LineageBrowser.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/MLDashboard.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/MediaUpload.tsx": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "src/components/MemoryAnalyticsPanel.tsx": {
+    "@typescript-eslint/naming-convention": {
+      "count": 2
+    }
+  },
+  "src/components/MemoryExplorerPanel.tsx": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/components/MetricsCards.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/MetricsPanel.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/Oracle.tsx": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/components/PluginMarketplacePanel.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/PluginRunModal.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/ProbeReportsPanel.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/ProofTreeVisualization.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/ProofVisualizerPanel.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/PublicGallery.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/PulseSchedulerControlPanel.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/QualityDashboard.tsx": {
+    "@typescript-eslint/naming-convention": {
+      "count": 1
+    }
+  },
+  "src/components/RedTeamAnalysisPanel.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/SchedulerDashboard.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/SelectionDashboard.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/TemplateMarketplace.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/TokenStreamViewer.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/TournamentPanel.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/TournamentViewerPanel.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/TrainingExportPanel.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/TrendingTopicsPanel.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/UserParticipation.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/VerdictCard.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/VerificationHistoryPanel.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/VerticalSelector.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/VoiceInput.tsx": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/components/VoiceRecorder.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/YouTubeInput.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/__tests__/LandingPage.test.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/accounting/DiscrepancyQueue.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/accounting/ReconciliationProgress.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/action-canvas/ActionNode.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/action-canvas/useActionCanvas.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/admin/AdminLayout.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/admin/CostBreakdownChart.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/admin/MemberTable.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/admin/TrainingExportPanel.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/admin/UsageChart.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/agent-tabs/IndividualAgentTab.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/analytics/TrendChart.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/audit/DecisionReceiptViewer.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/auth/OrganizationSwitcher.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/auth/UserMenu.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/autonomous/AutonomousDashboard.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/billing/SubscriptionCard.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/billing/TrialStatusWidget.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/billing/UsageMetrics.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/code-analysis/CodeIntelligencePanel.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/code-analysis/SecurityFindingsPanel.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/code-review/CodeReviewWorkflow.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/codebase/DependencySecurityPanel.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/codebase/MetricsDashboard.tsx": {
+    "@typescript-eslint/naming-convention": {
+      "count": 1
+    },
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/codebase/SecurityDashboard.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/command/InputDetector.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/control-plane/ActivityFeed/ActivityFeed.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/control-plane/AgentCatalog/AgentCard.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/control-plane/ConnectorDashboard/ConnectorConfigModal.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/control-plane/FineTuning/FineTuningDashboard.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/control-plane/FineTuning/JobMonitor.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/control-plane/KnowledgeExplorer/FederationStatus.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/control-plane/KnowledgeExplorer/KnowledgeExplorer.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/control-plane/KnowledgeExplorer/PruningTab.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/control-plane/KnowledgeExplorer/RegionDialog.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/control-plane/RoutingRulesBuilder/RoutingRulesBuilder.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/control-plane/SystemHealthDashboard/SystemHealthDashboard.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/control-plane/WorkspaceManager/WorkspaceManager.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/costs/BudgetForecast.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/costs/EfficiencyMetrics.tsx": {
+    "@typescript-eslint/naming-convention": {
+      "count": 1
+    }
+  },
+  "src/components/dashboard/ExecutiveSummary.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/dashboard/ROIMetrics.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/dashboard/UsageBreakdown.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/debate-viewer/DebateInitializationProgress.tsx": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/components/debate-viewer/DebateTimeline.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/debate-viewer/EvidenceLinkGraph.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/debate-viewer/InterventionPanel.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/debate-viewer/LiveDebateView.tsx": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "src/components/debate-viewer/StreamingMessageCard.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/debate-viewer/TranscriptMessageCard.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/debate/ArgumentGraph.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/debate/InterventionPanel.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/debate/LiveDebateStream.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/debates/DecisionPackageView.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/deep-audit/useAuditData.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/gauntlet/AttackFeed.tsx": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/components/gauntlet/GauntletLive.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/graph-debate/index.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/inbox/EmailDetailModal.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/inbox/InboxIntelligencePanel.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/inbox/PriorityInboxList.tsx": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/components/inbox/SharedInboxView.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/inbox/SnoozePanel.tsx": {
+    "@typescript-eslint/naming-convention": {
+      "count": 1
+    }
+  },
+  "src/components/inbox/SyncProgressBar.tsx": {
+    "@typescript-eslint/naming-convention": {
+      "count": 4
+    }
+  },
+  "src/components/integrations/GmailAppWizard.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/integrations/SlackAppWizard.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/integrations/TeamsAppWizard.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/knowledge/AnalyticsDashboard.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/knowledge/KMAdapterActivity.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/landing/CompactDebateResult.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/landing/HeroSection.tsx": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "src/components/landing/LiveDebatePanel.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/landing/LiveDemoSection.tsx": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/components/layout/LeftSidebar.tsx": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/components/leaderboard/EloTrendChart.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/leaderboard/MindsTabPanel.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/leaderboard/StatsTabPanel.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/mission-control/AgentCard.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/mobile/MobileMenu.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/mobile/TouchButton.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/observability/PlatformHealthWidget.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/onboarding/FirstDebateStep.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/orchestration-canvas/OrchNode.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/pipeline-canvas/ExecutionProgressOverlay.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/pipeline-canvas/FeedbackLoopPanel.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/pipeline-canvas/PipelineCanvas.tsx": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/components/pipeline-canvas/ProvenanceNodeDetailPanel.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/pipeline-canvas/UnifiedPipelineCanvas.tsx": {
+    "complexity": {
+      "count": 4
+    }
+  },
+  "src/components/pipeline-canvas/editors/PipelinePropertyEditor.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/pipeline-canvas/nodes/OrchestrationNode.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/pipeline-canvas/types.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/pipeline/StageTransitionGate.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/playground/PlaygroundDebate.tsx": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/components/playground/PostDebatePrompt.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/provenance/ProvenanceGraph.tsx": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/components/pulse/TrendingTopicsGrid.tsx": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/components/queue/QueueMonitoringPanel.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/review-queue/BriefPanel.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/review-queue/ReviewQueueCard.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/review-queue/ReviewQueueList.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/scenario-matrix/ScenarioCard.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/scenario-matrix/index.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/self-improve/NomicMetricsDashboard.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/session/SessionSelector.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/settings-panel/ApiKeysTab.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/settings/MFASettings.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/settings/ProviderPreferencesTab.tsx": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/components/shared/PanelTemplate.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/spectate/SummaryView.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/system-health/ResilienceDashboard.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/try/TeaserResult.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/ui/AdaptiveModeToggle.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/ui/AudioTranscriber.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/ui/FileUploader.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/ui/VoiceInput.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/unified-dag/nodes/ExecutionDAGNode.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/upload/CloudStoragePicker.tsx": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/components/upload/UnifiedMediaUploader.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/wizards/UseCaseWizard.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/components/workflow-builder/WorkflowCanvas.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/config.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/context/AuthContext.tsx": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/context/KeyboardShortcutsContext.tsx": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/hooks/debate-websocket/eventHandlers/lifecycleEvents.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/hooks/debate-websocket/eventHandlers/messageEvents.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/hooks/debate-websocket/eventHandlers/systemEvents.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/hooks/debate-websocket/useDebateWebSocket.ts": {
+    "complexity": {
+      "count": 3
+    }
+  },
+  "src/hooks/useApiExplorer.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/hooks/useAuthenticatedFetch.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/hooks/useCommandPaletteSearch.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/hooks/useControlPlaneWebSocket.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/hooks/useDebateWebSocketStore.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/hooks/useDecisionIntegrity.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/hooks/useErrorHandler.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/hooks/useEventStream.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/hooks/useFineTuning.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/hooks/useGauntletWebSocket.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/hooks/useKnowledgeQuery.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/hooks/useMissionControl.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/hooks/useNomicLoopWebSocket.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/hooks/useOracleWebSocket.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/hooks/usePipelineWebSocket.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/hooks/useReviewQueue.ts": {
+    "@typescript-eslint/naming-convention": {
+      "count": 1
+    }
+  },
+  "src/hooks/useReviewQueueFromPacket.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/hooks/useSwipeGesture.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/hooks/useUnifiedDAG.ts": {
+    "complexity": {
+      "count": 6
+    }
+  },
+  "src/hooks/useWorkflowWebSocket.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/hooks/useWorkflows.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/hooks/useWorkspaces.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/lib/api-error.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/lib/aragora-client.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/lib/aragora-client/apis/base.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/lib/review/__tests__/types.test.ts": {
+    "@typescript-eslint/naming-convention": {
+      "count": 3
+    }
+  },
+  "src/lib/shortcuts/utils.ts": {
+    "complexity": {
+      "count": 2
+    }
+  },
+  "src/store/onboardingStore.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/store/workflowBuilder/index.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
+  "src/types/api.generated.ts": {
+    "@typescript-eslint/naming-convention": {
+      "count": 4
+    }
+  }
+}

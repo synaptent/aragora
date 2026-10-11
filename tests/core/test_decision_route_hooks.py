@@ -12,8 +12,12 @@ from __future__ import annotations
 
 import ast
 import importlib.metadata
+import json
+import os
 import re
+import subprocess
 import sys
+import textwrap
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -275,6 +279,306 @@ def test_source_checkout_declarations_come_only_from_aragoras_pyproject(monkeypa
     assert hooks._source_checkout_registrations() == []
     monkeypatch.setattr(hooks, "_SOURCE_PYPROJECT", tmp_path / "missing.toml")
     assert hooks._source_checkout_registrations() == []
+
+
+# ---------------------------------------------------------------------------
+# Declared registrations never replace what a caller registered first
+# ---------------------------------------------------------------------------
+
+
+def test_declared_registrations_only_fill_what_the_caller_left_missing(
+    undiscovered_hooks, monkeypatch
+):
+    workflow, sink = AsyncMock(), MagicMock()
+    hooks.register_route_target(hooks.ROUTE_WORKFLOW, workflow)
+    hooks.register_decision_audit_sink(sink)
+    declared_workflow, declared_gauntlet = AsyncMock(), AsyncMock()
+    declared_sink, declared_builder = MagicMock(), AsyncMock()
+
+    def register():
+        hooks.register_route_target(hooks.ROUTE_WORKFLOW, declared_workflow)
+        hooks.register_route_target(hooks.ROUTE_GAUNTLET, declared_gauntlet)
+        hooks.register_decision_audit_sink(declared_sink)
+        hooks.register_decision_integrity_builder(declared_builder)
+
+    _declare(monkeypatch, register)
+
+    assert hooks.get_route_target(hooks.ROUTE_GAUNTLET) is declared_gauntlet
+    assert hooks.get_route_target(hooks.ROUTE_WORKFLOW) is workflow
+    assert hooks.get_decision_audit_sink() is sink
+    assert hooks.get_decision_integrity_builder() is declared_builder
+
+    # Outside discovery, registering again still replaces the entry.
+    hooks.register_route_target(hooks.ROUTE_WORKFLOW, declared_workflow)
+    hooks.register_decision_audit_sink(declared_sink)
+    assert hooks.get_route_target(hooks.ROUTE_WORKFLOW) is declared_workflow
+    assert hooks.get_decision_audit_sink() is declared_sink
+
+
+def test_the_first_declared_registration_of_a_key_wins(undiscovered_hooks, monkeypatch):
+    first, second = MagicMock(), MagicMock()
+    _declare(
+        monkeypatch,
+        lambda: hooks.register_decision_audit_sink(first),
+        lambda: hooks.register_decision_audit_sink(second),
+    )
+
+    assert hooks.get_decision_audit_sink() is first
+
+
+def test_registering_replaces_again_after_a_declared_registration_fails(
+    undiscovered_hooks, monkeypatch
+):
+    class PluginBug(Exception):
+        pass
+
+    def broken():
+        raise PluginBug("plugin defect")
+
+    _declare(monkeypatch, broken)
+    with pytest.raises(PluginBug):
+        hooks.get_route_target(hooks.ROUTE_WORKFLOW)
+
+    first, second = AsyncMock(), AsyncMock()
+    hooks.register_route_target(hooks.ROUTE_WORKFLOW, first)
+    hooks.register_route_target(hooks.ROUTE_WORKFLOW, second)
+    assert hooks.get_route_target(hooks.ROUTE_WORKFLOW) is second
+
+
+_EXPLICIT_REGISTRATION_CALLER = """
+    import asyncio, json, sys
+
+    from aragora.core import decision_route_hooks as hooks
+    from aragora.core.decision import (
+        DecisionConfig,
+        DecisionRequest,
+        DecisionResult,
+        DecisionRouter,
+        DecisionType,
+    )
+
+    scenario = sys.argv[1]
+    called = []
+
+    async def custom_workflow(router, request, span):
+        called.append(request.request_id)
+        return DecisionResult(
+            request_id=request.request_id,
+            decision_type=DecisionType.WORKFLOW,
+            answer="custom-workflow",
+            confidence=1.0,
+            consensus_reached=True,
+        )
+
+    class Sink:
+        def __init__(self):
+            self.events = []
+
+        def log_decision_started(self, *, request_id, **_kwargs):
+            self.events.append(["started", request_id])
+
+        def log_decision_completed(self, *, request_id, **_kwargs):
+            self.events.append(["completed", request_id])
+
+    sink = Sink()
+    hooks.register_route_target(hooks.ROUTE_WORKFLOW, custom_workflow)
+    if scenario == "sink":
+        hooks.register_decision_audit_sink(sink)
+        # A route miss runs the declared registrations after both caller registrations.
+        hooks.get_route_target(hooks.ROUTE_GAUNTLET)
+
+    request = DecisionRequest(
+        content="Run the thing",
+        decision_type=DecisionType.WORKFLOW,
+        config=DecisionConfig(agents=[]),
+    )
+    router = DecisionRouter(
+        workflow_engine=object(), enable_caching=False, enable_deduplication=False
+    )
+    result = asyncio.run(router.route(request))
+    audit = hooks.get_decision_audit_sink()
+    print(json.dumps({
+        "server_loaded": "aragora.server.decision_routes" in sys.modules,
+        "called": called == [request.request_id],
+        "result": [result.success, result.answer, result.error],
+        "workflow_kept": hooks.get_registered_routes()[hooks.ROUTE_WORKFLOW] is custom_workflow,
+        "gauntlet": hooks.get_route_target(hooks.ROUTE_GAUNTLET).__module__,
+        "audit": "caller" if audit is sink else type(audit).__module__,
+        "sink_events": sink.events == [
+            ["started", request.request_id], ["completed", request.request_id]
+        ],
+    }))
+"""
+
+
+def _run_core_only_caller(
+    scenario: str, tmp_path: Path, script: str = _EXPLICIT_REGISTRATION_CALLER
+) -> dict:
+    env = {
+        **os.environ,
+        "PYTHONPATH": str(REPO_ROOT),
+        "ARAGORA_DATA_DIR": str(tmp_path / "data"),
+        "AWS_CONFIG_FILE": "/dev/null",
+        "AWS_SHARED_CREDENTIALS_FILE": "/dev/null",
+        "AWS_EC2_METADATA_DISABLED": "true",
+        "ARAGORA_SECRETS_STRICT": "false",
+    }
+    proc = subprocess.run(
+        [sys.executable, "-W", "ignore", "-c", textwrap.dedent(script), scenario],
+        capture_output=True,
+        text=True,
+        cwd=str(tmp_path),
+        env=env,
+        timeout=300,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr[-4000:]
+    return json.loads(proc.stdout.strip().splitlines()[-1])
+
+
+def test_core_only_caller_keeps_its_workflow_target_when_routing(tmp_path):
+    out = _run_core_only_caller("route", tmp_path)
+
+    # The audit sink miss ran the declared registrations, which filled only the
+    # keys the caller left empty.
+    assert out["server_loaded"] is True
+    assert out["called"] is True
+    assert out["result"] == [True, "custom-workflow", None]
+    assert out["workflow_kept"] is True
+    assert out["gauntlet"] == "aragora.gauntlet.decision_route"
+    assert out["audit"] == "aragora.server.decision_routes"
+
+
+def test_core_only_caller_keeps_its_audit_sink_through_a_route_miss(tmp_path):
+    out = _run_core_only_caller("sink", tmp_path)
+
+    assert out["server_loaded"] is True
+    assert out["called"] is True
+    assert out["result"] == [True, "custom-workflow", None]
+    assert out["workflow_kept"] is True
+    assert out["gauntlet"] == "aragora.gauntlet.decision_route"
+    assert out["audit"] == "caller"
+    assert out["sink_events"] is True
+
+
+# ---------------------------------------------------------------------------
+# The server's middleware audit logger follows the same rule
+# ---------------------------------------------------------------------------
+
+
+def test_declared_registrations_running_is_true_only_inside_a_declared_registration(
+    undiscovered_hooks, monkeypatch
+):
+    seen = []
+    _declare(monkeypatch, lambda: seen.append(hooks.declared_registrations_running()))
+
+    assert hooks.declared_registrations_running() is False
+    with pytest.raises(hooks.DecisionRouteNotRegisteredError):
+        hooks.get_decision_audit_sink()
+    assert seen == [True]
+    assert hooks.declared_registrations_running() is False
+
+
+def test_registering_the_middleware_audit_logger_without_replace_keeps_the_first(monkeypatch):
+    from aragora.observability import unified_audit
+
+    first, second = MagicMock(), MagicMock()
+    monkeypatch.setattr(unified_audit, "_middleware_logger_factory", None)
+
+    unified_audit.register_middleware_audit_logger(first, replace=False)
+    unified_audit.register_middleware_audit_logger(second, replace=False)
+    assert unified_audit._middleware_logger_factory is first
+
+    unified_audit.register_middleware_audit_logger(second)
+    assert unified_audit._middleware_logger_factory is second
+
+
+def test_declared_server_registration_keeps_a_caller_middleware_audit_logger(
+    undiscovered_hooks, monkeypatch
+):
+    from aragora.observability import unified_audit
+    from aragora.server.decision_routes import register_decision_routes
+    from aragora.server.middleware.audit_logger import get_audit_logger
+
+    caller_factory = MagicMock()
+    monkeypatch.setattr(unified_audit, "_middleware_logger_factory", caller_factory)
+    _declare(monkeypatch, register_decision_routes)
+
+    hooks.get_route_target(hooks.ROUTE_GAUNTLET)
+    assert unified_audit._middleware_logger_factory is caller_factory
+
+    # Called explicitly (server startup), the registration still replaces it.
+    register_decision_routes()
+    assert unified_audit._middleware_logger_factory is get_audit_logger
+
+
+def test_declared_server_registration_fills_a_missing_middleware_audit_logger(
+    undiscovered_hooks, monkeypatch
+):
+    from aragora.observability import unified_audit
+    from aragora.server.decision_routes import register_decision_routes
+    from aragora.server.middleware.audit_logger import get_audit_logger
+
+    monkeypatch.setattr(unified_audit, "_middleware_logger_factory", None)
+    _declare(monkeypatch, register_decision_routes)
+
+    hooks.get_route_target(hooks.ROUTE_GAUNTLET)
+    assert unified_audit._middleware_logger_factory is get_audit_logger
+
+
+_MIDDLEWARE_LOGGER_CALLER = """
+    import json, sys
+
+    from aragora.core import decision_route_hooks as hooks
+    from aragora.core.decision import DecisionRouter  # noqa: F401
+    from aragora.observability import unified_audit
+
+    scenario = sys.argv[1]
+    caller_logger = object()
+
+    def caller_factory():
+        return caller_logger
+
+    def name(obj):
+        return f"{getattr(obj, '__module__', None)}.{getattr(obj, '__qualname__', None)}"
+
+    server_loaded_before = "aragora.server.decision_routes" in sys.modules
+    if scenario == "custom":
+        unified_audit.register_middleware_audit_logger(caller_factory)
+    # A route miss runs the declared registrations.
+    gauntlet = hooks.get_route_target(hooks.ROUTE_GAUNTLET)
+    factory = unified_audit._middleware_logger_factory
+    middleware = unified_audit.UnifiedAuditLogger(
+        enable_compliance=False, enable_privacy=False, enable_rbac=False, enable_immutable=False
+    )._get_middleware_logger()
+    print(json.dumps({
+        "server_loaded_before": server_loaded_before,
+        "server_loaded": "aragora.server.decision_routes" in sys.modules,
+        "gauntlet": gauntlet.__module__,
+        "factory": "caller" if factory is caller_factory else name(factory),
+        "middleware": "caller" if middleware is caller_logger else type(middleware).__module__,
+    }))
+"""
+
+
+def test_core_only_caller_keeps_its_middleware_audit_logger_through_a_route_miss(tmp_path):
+    out = _run_core_only_caller("custom", tmp_path, _MIDDLEWARE_LOGGER_CALLER)
+
+    assert out["server_loaded_before"] is False
+    assert out["server_loaded"] is True
+    assert out["gauntlet"] == "aragora.gauntlet.decision_route"
+    assert out["factory"] == "caller"
+    assert out["middleware"] == "caller"
+
+
+def test_core_only_caller_gets_the_server_middleware_audit_logger_from_discovery(tmp_path):
+    out = _run_core_only_caller("default", tmp_path, _MIDDLEWARE_LOGGER_CALLER)
+
+    assert out["server_loaded_before"] is False
+    assert out["server_loaded"] is True
+    assert out["gauntlet"] == "aragora.gauntlet.decision_route"
+    assert out["factory"] == "aragora.server.middleware.audit_logger.get_audit_logger"
+    assert out["middleware"] == "aragora.server.middleware.audit_logger"
 
 
 def _function_calls(path: Path, function_name: str) -> set[str]:

@@ -462,7 +462,7 @@ class PostgresAuditStorage(AuditStorage):
                 WHERE {" AND ".join(conditions)}
                 ORDER BY timestamp DESC
                 LIMIT ${param_idx} OFFSET ${param_idx + 1}
-                """,  # noqa: S608 -- dynamic clause from internal state
+                """,  # dynamic clause from internal state
                 *params,
             )
             return [self._row_to_record(row) for row in rows]
@@ -497,7 +497,7 @@ class PostgresAuditStorage(AuditStorage):
                 SELECT * FROM gateway_audit_records
                 WHERE {" AND ".join(conditions)}
                 ORDER BY timestamp ASC
-                """,  # noqa: S608 -- dynamic clause from internal state
+                """,  # dynamic clause from internal state
                 *params,
             )
             return [self._row_to_record(row) for row in rows]
@@ -537,7 +537,7 @@ class PostgresAuditStorage(AuditStorage):
                 f"""
                 SELECT COUNT(*) as count FROM gateway_audit_records
                 WHERE {" AND ".join(conditions)}
-                """,  # noqa: S608 -- dynamic clause from internal state
+                """,  # dynamic clause from internal state
                 *params,
             )
             return row["count"] if row else 0

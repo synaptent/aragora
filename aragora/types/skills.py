@@ -1,8 +1,10 @@
 """
-Skills System Base Module.
+Skills System Base Types.
 
 Inspired by ClawdBot's skills architecture, this module provides the foundational
-types and interfaces for pluggable skill capabilities in Aragora.
+types and interfaces for pluggable skill capabilities in Aragora. They live in the
+foundation layer so the debate engine can use them without importing
+``aragora.skills``; ``aragora.skills`` and ``aragora.skills.base`` re-export them.
 
 A Skill is a modular, self-contained capability that can:
 - Be dynamically loaded and registered
@@ -496,3 +498,15 @@ class SyncSkill(Skill):
             input_data,
             context,
         )
+
+
+__all__ = [
+    "CapabilityLevel",
+    "Skill",
+    "SkillCapability",
+    "SkillContext",
+    "SkillManifest",
+    "SkillResult",
+    "SkillStatus",
+    "SyncSkill",
+]

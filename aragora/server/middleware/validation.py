@@ -110,7 +110,9 @@ class RouteValidation:
     body_schema: dict | None = None
     query_rules: dict[str, tuple[int, int]] = field(default_factory=dict)
     required_params: list[str] = field(default_factory=list)
-    path_validators: dict[str, Callable[[str], tuple[bool, str]]] = field(default_factory=dict)
+    path_validators: dict[str, Callable[[str], tuple[bool, str | None]]] = field(
+        default_factory=dict
+    )
     max_body_size: int = 1_048_576  # 1MB default
 
     def __post_init__(self) -> None:

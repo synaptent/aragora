@@ -1,14 +1,21 @@
 """CLI command: ``aragora coherence-scan``.
 
 DIC-26 operator surface for the belief coherence monitor (issue #6220).
+DIC-17 bridge: ``--emit-followup`` flag forwards error-severity coherence
+issues to the follow-up proposal bridge (issue #6027).
 
 Reads a JSON file where each element is a BeliefEntry dict:
     {"belief_id": "...", "subject": "...", "confidence": 0.8,
      "status": "pass", "evidence_paths": ["docs/status/foo.md"]}
 
-Flag: ``ARAGORA_COHERENCE_MONITOR_ENABLED`` (default OFF).
-Live queue effect: none — read-only operator report.
-Advances: issue #6220 (DIC-26).
+Flags:
+  ``ARAGORA_COHERENCE_MONITOR_ENABLED`` (default OFF) — gate for scanning.
+  ``ARAGORA_EPISTEMIC_FOLLOWUP_ENABLED`` (default OFF) — gate for proposals;
+  also required when ``--emit-followup`` is passed.
+
+Live queue effect: none — read-only operator report; proposals are printed
+but never filed.
+Advances: issues #6220 (DIC-26) and #6027 (DIC-17).
 """
 
 from __future__ import annotations
@@ -20,8 +27,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from aragora.epistemic import epistemic_followup_enabled
 from aragora.epistemic.coherence import (
     BeliefEntry,
+    CoherenceReport,
     coherence_monitor_enabled,
     scan_coherence,
 )
@@ -59,6 +68,24 @@ def _load_entries(path: Path) -> list[BeliefEntry]:
     return entries
 
 
+def _render_proposals(report: CoherenceReport) -> None:
+    """Print DIC-17 follow-up proposals to stdout (text mode only)."""
+    if not report.proposals:
+        return
+    print()
+    print(f"  follow-up proposals ({len(report.proposals)}):")
+    for p in report.proposals:
+        prov = p.provenance or {}
+        kind = prov.get("kind", "?")
+        ids_list = prov.get("belief_ids") or []
+        ids_str = ", ".join(str(i) for i in ids_list)
+        print(f"    [{kind}] {p.title[:100]}")
+        print(f"      beliefs: {ids_str}")
+        print(f"      labels : {', '.join(p.labels or [])}")
+    print()
+    print("  (proposals printed, not filed — no live queue effect)")
+
+
 def cmd_coherence_scan(args: argparse.Namespace) -> int:
     """Handle the ``aragora coherence-scan`` subcommand."""
     if not coherence_monitor_enabled():
@@ -79,11 +106,19 @@ def cmd_coherence_scan(args: argparse.Namespace) -> int:
         print(f"error: failed to load {input_path}: {exc}", file=sys.stderr)
         return 1
 
+    emit_followup: bool = getattr(args, "emit_followup", False)
+    if emit_followup and not epistemic_followup_enabled():
+        print(
+            "WARNING: --emit-followup is set but ARAGORA_EPISTEMIC_FOLLOWUP_ENABLED is disabled;"
+            " proposals suppressed.",
+            file=sys.stderr,
+        )
     report = scan_coherence(
         entries,
         contradiction_gap=float(getattr(args, "contradiction_gap", _DEFAULT_GAP)),
         min_confidence=float(getattr(args, "min_confidence", _DEFAULT_MIN_CONFIDENCE)),
         enabled=True,
+        emit_followup_proposals=emit_followup,
     )
 
     as_json: bool = getattr(args, "json", False)
@@ -103,4 +138,6 @@ def cmd_coherence_scan(args: argparse.Namespace) -> int:
             ids = ", ".join(issue.belief_ids)
             print(f"  [{issue.severity}] {issue.kind.value}: {ids}")
             print(f"    {issue.detail}")
+    if emit_followup and not as_json:
+        _render_proposals(report)
     return 0

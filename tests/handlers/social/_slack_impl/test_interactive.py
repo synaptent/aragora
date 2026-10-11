@@ -480,7 +480,7 @@ class TestHandleVoteAction:
             mock_storage = MagicMock()
             mock_storage.get_debates_db.return_value = mock_db
             with patch(
-                "aragora.server.storage.get_debates_db",
+                "aragora.storage.debate_storage.get_debates_db",
                 return_value=mock_db,
                 create=True,
             ):
@@ -624,7 +624,7 @@ class TestHandleViewDetails:
         action = _view_details_action("d42")
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
             create=True,
         ):
@@ -656,7 +656,7 @@ class TestHandleViewDetails:
         action = _view_details_action("d42")
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
             create=True,
         ):
@@ -686,7 +686,7 @@ class TestHandleViewDetails:
         action = _view_details_action("d42")
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
             create=True,
         ):
@@ -718,7 +718,7 @@ class TestHandleViewDetails:
         action = _view_details_action("d42")
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
             create=True,
         ):
@@ -746,7 +746,7 @@ class TestHandleViewDetails:
         mock_db.get.return_value = debate_data
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
             create=True,
         ):
@@ -774,7 +774,7 @@ class TestHandleViewDetails:
         mock_db.get.return_value = debate_data
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
             create=True,
         ):
@@ -802,7 +802,7 @@ class TestHandleViewDetails:
         mock_db.get.return_value = debate_data
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
             create=True,
         ):
@@ -830,7 +830,7 @@ class TestHandleViewDetails:
         mock_db.get.return_value = debate_data
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
             create=True,
         ):
@@ -858,7 +858,7 @@ class TestHandleViewDetails:
         mock_db.get.return_value = debate_data
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
             create=True,
         ):
@@ -889,7 +889,7 @@ class TestHandleViewDetails:
         mock_db.get.return_value = debate_data
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
             create=True,
         ):
@@ -921,7 +921,7 @@ class TestHandleViewDetails:
         mock_db.get.return_value = debate_data
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
             create=True,
         ):
@@ -950,7 +950,7 @@ class TestHandleViewDetails:
         mock_db.get.return_value = debate_data
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
             create=True,
         ):
@@ -974,7 +974,7 @@ class TestHandleViewDetails:
             "builtins.__import__",
             side_effect=lambda name, *a, **kw: (
                 (_ for _ in ()).throw(ImportError("no storage"))
-                if "aragora.server.storage" in name
+                if "aragora.storage.debate_storage" in name
                 else __import__(name, *a, **kw)
             ),
         ):
@@ -992,7 +992,7 @@ class TestHandleViewDetails:
         action = _view_details_action("d42")
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=None,
             create=True,
         ):
@@ -1009,7 +1009,7 @@ class TestHandleViewDetails:
         mock_db.get.return_value = debate_data
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
             create=True,
         ):
@@ -1041,7 +1041,7 @@ class TestHandleViewDetails:
         mock_db.get.return_value = debate_data
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
             create=True,
         ):
@@ -1068,7 +1068,7 @@ class TestHandleViewDetails:
         mock_db.get.return_value = debate_data
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
             create=True,
         ):
@@ -1096,7 +1096,7 @@ class TestHandleViewDetails:
         mock_db.get.return_value = debate_data
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
             create=True,
         ):
@@ -1124,7 +1124,7 @@ class TestHandleViewDetails:
         mock_db.get.return_value = debate_data
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
             create=True,
         ):
@@ -1156,7 +1156,7 @@ class TestHandleViewDetails:
         mock_db.get.return_value = debate_data
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
             create=True,
         ):
@@ -1184,7 +1184,7 @@ class TestHandleViewDetails:
         mock_db.get.return_value = debate_data
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
             create=True,
         ):
@@ -1337,7 +1337,7 @@ class TestInteractiveVoteFlow:
         h = _make_interactive_handler(payload=payload)
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
             create=True,
         ):

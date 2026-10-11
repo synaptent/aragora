@@ -293,7 +293,7 @@ def _cmd_start(args: argparse.Namespace) -> None:
     # Check if Docker is running
     try:
         result = subprocess.run(
-            ["docker", "info"],  # noqa: S607 -- fixed command
+            ["docker", "info"],  # fixed command
             capture_output=True,
             text=True,
             timeout=10,
@@ -355,7 +355,7 @@ def _cmd_start(args: argparse.Namespace) -> None:
         print(f"  [DRY-RUN] Would run: {' '.join(compose_cmd)} -f {compose_file} pull")
     else:
         print("  Pulling images (this may take a few minutes)...")
-        result = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
+        result = subprocess.run(  # subprocess with fixed args, no shell
             [*compose_cmd, "-f", compose_file, "pull"],
             cwd=project_root,
             capture_output=True,
@@ -371,7 +371,7 @@ def _cmd_start(args: argparse.Namespace) -> None:
     if dry_run:
         print(f"  [DRY-RUN] Would run: {' '.join(compose_cmd)} -f {compose_file} up -d")
     else:
-        result = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
+        result = subprocess.run(  # subprocess with fixed args, no shell
             [*compose_cmd, "-f", compose_file, "up", "-d"],
             cwd=project_root,
             capture_output=True,
@@ -455,7 +455,8 @@ def _cmd_stop(args: argparse.Namespace) -> None:
         cmd.append("-v")
         print("  (including volumes)")
 
-    result = subprocess.run(cmd, cwd=project_root, capture_output=True, text=True)  # noqa: S603 -- subprocess with fixed args, no shell
+    # subprocess with fixed args, no shell
+    result = subprocess.run(cmd, cwd=project_root, capture_output=True, text=True)
 
     if result.returncode != 0:
         print(f"\nError stopping services: {result.stderr}")
@@ -488,7 +489,7 @@ def _get_compose_command() -> list[str] | None:
     # Try docker compose (v2)
     try:
         result = subprocess.run(
-            ["docker", "compose", "version"],  # noqa: S607 -- fixed command
+            ["docker", "compose", "version"],  # fixed command
             capture_output=True,
             text=True,
             timeout=5,
@@ -555,11 +556,12 @@ def _wait_for_health(compose_cmd: list[str], compose_file: str, project_root: st
         try:
             import urllib.request
 
-            req = urllib.request.Request(  # noqa: S310 -- hardcoded localhost health check
+            req = urllib.request.Request(  # hardcoded localhost health check
                 "http://localhost:8080/api/health",
                 headers={"User-Agent": "aragora-deploy"},
             )
-            with urllib.request.urlopen(req, timeout=5) as response:  # noqa: S310 -- hardcoded localhost health check
+            # hardcoded localhost health check
+            with urllib.request.urlopen(req, timeout=5) as response:
                 if response.status == 200:
                     print("  [+] Health check passed")
                     return

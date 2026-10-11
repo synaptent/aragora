@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import io
 import json
 import sqlite3
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -192,7 +194,52 @@ def test_v2_import_binds_the_org_and_scopes_skip_existing(world) -> None:
     assert _acme_view(world) == before
 
 
-V2_CLOSED = [
+def test_v2_retries_reuse_the_callers_fact_and_never_another_orgs(world) -> None:
+    beta = world.callers["beta"].org_id
+    before = _acme_view(world)
+    body = {"statement": "Acme acquires Northwind", "workspace_id": "acme-research"}
+    client, hdr = _v2(world), {"Authorization": f"Bearer {_token(world, 'beta')}"}
+    created = [client.post(V2 + "/facts", json=body, headers=hdr) for _ in range(2)]
+    assert [r.status_code for r in created] == [201, 201], created[-1].text
+    fact_id = created[0].json()["id"]
+    assert created[1].json()["id"] == fact_id != world.acme_fact.id
+
+    request = {"facts": [body], "merge_strategy": "skip_existing"}
+    imported = [client.post(V2 + "/import", json=request, headers=hdr) for _ in range(2)]
+    counts = [(r.status_code, r.json()["imported"], r.json()["skipped"]) for r in imported]
+    assert counts == [(201, 0, 1), (201, 0, 1)], imported[-1].text
+    beta_facts = ScopedFactStore(world.store, beta).list_facts(
+        FactFilters(include_superseded=True, limit=1000)
+    )
+    assert [f.id for f in beta_facts] == [fact_id]
+    assert _acme_view(world) == before
+
+
+def test_v2_import_body_requires_an_org(world) -> None:
+    from aragora.rbac.models import AuthorizationContext
+    from aragora.server.fastapi.middleware.error_handling import APIError
+    from aragora.server.fastapi.routes import knowledge_base as routes
+
+    before = _rows(world.store)
+    request = routes.ImportRequest(
+        facts=[{"statement": "Orphan import"}],
+        workspace_id="default",
+        merge_strategy="skip_existing",
+    )
+    with pytest.raises(APIError) as raised:
+        asyncio.run(
+            routes.import_knowledge_base(
+                body=request,
+                auth=AuthorizationContext(user_id=world.callers["no-org"].user_id, org_id=None),
+                store=world.store,
+            )
+        )
+    assert (raised.value.status_code, raised.value.code) == (403, "knowledge_org_required")
+    assert _rows(world.store) == before
+
+
+# Routes naming a fact answer 404 to another org; the others answer 200 without its facts.
+V2_FACT_ROUTES = [
     ("GET", "/facts", None),
     ("GET", "/facts?workspace_id=acme-research", None),
     ("GET", "/facts/{fid}", None),
@@ -213,33 +260,57 @@ V2_CLOSED = [
 ]
 
 
-@pytest.mark.parametrize(("method", "path", "body"), V2_CLOSED)
-def test_v2_fact_reads_and_edits_are_closed_for_an_owner_with_an_org(
-    world, method, path, body
-) -> None:
+@pytest.mark.parametrize(("method", "path", "body"), V2_FACT_ROUTES)
+def test_v2_fact_routes_never_reach_another_orgs_fact(world, method, path, body) -> None:
+    fid = world.acme_fact.id
+    payload = json.loads(json.dumps(body).replace("{fid}", fid)) if body else None
+    before = _acme_view(world)
+    for bearer in (_token(world, "beta"), world.key):
+        hdr = {"Authorization": f"Bearer {bearer}"}
+        r = _v2(world).request(method, V2 + path.replace("{fid}", fid), json=payload, headers=hdr)
+        assert r.status_code == (404 if path.startswith("/facts/") else 200), r.text
+        assert world.acme_fact.statement not in r.text
+        if not path.startswith("/facts/"):
+            assert fid not in r.text
+        assert _acme_view(world) == before
+
+
+@pytest.mark.parametrize(("method", "path", "body"), V2_FACT_ROUTES)
+def test_v2_fact_routes_never_reach_an_unassigned_legacy_fact(world, method, path, body) -> None:
+    fid = world.acme_fact.id
+    with sqlite3.connect(world.store.db_path) as conn:
+        conn.execute("UPDATE facts SET org_id = NULL WHERE id = ?", (fid,))
+    payload = json.loads(json.dumps(body).replace("{fid}", fid)) if body else None
+    hdr = {"Authorization": f"Bearer {_token(world, 'acme')}"}
+    r = _v2(world).request(method, V2 + path.replace("{fid}", fid), json=payload, headers=hdr)
+    assert r.status_code == (404 if path.startswith("/facts/") else 200), r.text
+    assert world.acme_fact.statement not in r.text
+    with sqlite3.connect(world.store.db_path) as conn:
+        row = conn.execute("SELECT org_id, confidence FROM facts WHERE id = ?", (fid,)).fetchone()
+    assert row == (None, world.acme_fact.confidence)
+
+
+@pytest.mark.parametrize(("method", "path", "body"), V2_FACT_ROUTES)
+def test_v2_fact_routes_serve_the_callers_own_org(world, method, path, body) -> None:
     fid = world.acme_fact.id
     payload = json.loads(json.dumps(body).replace("{fid}", fid)) if body else None
     hdr = {"Authorization": f"Bearer {_token(world, 'acme')}"}
-    before = _acme_view(world)
     r = _v2(world).request(method, V2 + path.replace("{fid}", fid), json=payload, headers=hdr)
-    assert r.status_code == 403, r.text
-    assert r.json()["code"] == "knowledge_fact_access_closed"
-    assert "Northwind" not in r.text
-    assert _acme_view(world) == before
+    assert 200 <= r.status_code < 300, r.text
 
 
-def _v1_closed_calls(handler, fid: str, req):
+def _v1_scoped_calls(handler, fid: str, req):
     rel = {"source_fact_id": fid, "target_fact_id": fid, "relation_type": "supports"}
     return {
-        "list": lambda: handler._handle_list_facts({}),
-        "get": lambda: handler._handle_get_fact(fid),
-        "update": lambda: handler._handle_update_fact(fid, req({"confidence": 0.9})),
-        "delete": lambda: handler._handle_delete_fact(fid, req(None)),
-        "contradictions": lambda: handler._handle_get_contradictions(fid),
-        "relations": lambda: handler._handle_get_relations(fid, {}),
-        "add_relation": lambda: handler._handle_add_relation(fid, req(rel)),
-        "add_relation_bulk": lambda: handler._handle_add_relation_bulk(req(rel)),
-        "stats": lambda: handler._handle_stats(None),
+        "list": (lambda: handler._handle_list_facts({}, req(None)), 200),
+        "get": (lambda: handler._handle_get_fact(fid, req(None)), 404),
+        "update": (lambda: handler._handle_update_fact(fid, req({"confidence": 0.9})), 404),
+        "delete": (lambda: handler._handle_delete_fact(fid, req(None)), 404),
+        "contradictions": (lambda: handler._handle_get_contradictions(fid, req(None)), 404),
+        "relations": (lambda: handler._handle_get_relations(fid, {}, req(None)), 404),
+        "add_relation": (lambda: handler._handle_add_relation(fid, req(rel)), 404),
+        "add_relation_bulk": (lambda: handler._handle_add_relation_bulk(req(rel)), 404),
+        "stats": (lambda: handler._handle_stats(None, req(None)), 200),
     }
 
 
@@ -257,18 +328,17 @@ def _v1_closed_calls(handler, fid: str, req):
         "stats",
     ],
 )
-def test_v1_fact_routes_are_closed_at_handler_level(world, route) -> None:
-    acme = world.callers["acme"]
-    handler = _v1(world, org_id=acme.org_id)
-    bearer = _token(world, "acme")
+def test_v1_fact_routes_never_reach_another_orgs_fact(world, route) -> None:
     before = _acme_view(world)
-    result = _v1_closed_calls(handler, world.acme_fact.id, lambda b: _Request(world, bearer, b))[
-        route
-    ]()
-    assert result.status_code == 403, result.body
-    assert _v1_code(_body(result)) == "knowledge_fact_access_closed"
-    assert b"Northwind" not in result.body
-    assert _acme_view(world) == before
+    for bearer in (_token(world, "beta"), world.key):
+        handler = _v1(world)
+        call, status = _v1_scoped_calls(
+            handler, world.acme_fact.id, lambda b, bearer=bearer: _Request(world, bearer, b)
+        )[route]
+        result = call()
+        assert result.status_code == status, result.body
+        assert b"Northwind" not in result.body
+        assert _acme_view(world) == before
 
 
 def test_mound_fact_sync_route_is_closed_and_writes_no_node(world) -> None:
@@ -284,10 +354,13 @@ def test_mound_fact_sync_route_is_closed_and_writes_no_node(world) -> None:
     assert mound.mock_calls == []
 
 
-def test_ara_api_keys_keep_todays_reachability(world) -> None:
+def test_ara_api_keys_create_facts_in_the_key_owners_org(world) -> None:
     body = {"statement": "Key-authenticated create", "workspace_id": "default"}
     r = _v2(world).post(V2 + "/facts", json=body, headers={"Authorization": f"Bearer {world.key}"})
-    assert r.status_code == 401
+    assert r.status_code == 201, r.text
+    fact_id = r.json()["id"]
+    assert ScopedFactStore(world.store, world.callers["beta"].org_id).get_fact(fact_id) is not None
+    assert ScopedFactStore(world.store, world.callers["acme"].org_id).get_fact(fact_id) is None
     result = _v1(world)._handle_create_fact(_Request(world, world.key, body))
     assert result.status_code == 201, result.body
 
@@ -311,55 +384,76 @@ def _assert_only_operator_sees(world, fid: str, rows: tuple[int, int]) -> None:
     assert _rows(world.store) == rows
 
 
-def test_v2_default_provider_closes_reads_and_creates_cannot_be_read_back(
-    world, monkeypatch
-) -> None:
+def test_v2_default_provider_scopes_reads_to_the_creators_org(world, monkeypatch) -> None:
     from aragora.server.fastapi.routes import knowledge_base as routes
 
     monkeypatch.setattr(routes, "_fact_store_instance", None)
     monkeypatch.setattr(routes, "FactStore", lambda: _world_store(world))
     client = _v2(world)
     client.app.state.context.pop("fact_store")  # type: ignore[attr-defined]
-    hdr = {"Authorization": f"Bearer {_token(world, 'acme')}"}
-    r = client.get(V2 + "/facts", headers=hdr)
-    assert r.status_code == 403 and r.json()["code"] == "knowledge_fact_access_closed"
+    acme = {"Authorization": f"Bearer {_token(world, 'acme')}"}
+    beta = {"Authorization": f"Bearer {_token(world, 'beta')}"}
     before = _rows(world.store)
     body = {"statement": "Acme renews Contoso", "workspace_id": "acme-research"}
-    r = client.post(V2 + "/facts", json=body, headers=hdr)
+    r = client.post(V2 + "/facts", json=body, headers=acme)
     assert r.status_code == 201, r.text
     _assert_unscoped_world_store(routes._fact_store_instance, world)
     fid, after = r.json()["id"], _rows(world.store)
     assert after[0] == before[0] + 1
+    assert client.get(f"{V2}/facts/{fid}", headers=acme).status_code == 200
     for method in ("GET", "DELETE"):
-        r = client.request(method, f"{V2}/facts/{fid}", headers=hdr)
-        assert r.status_code == 403 and r.json()["code"] == "knowledge_fact_access_closed"
+        r = client.request(method, f"{V2}/facts/{fid}", headers=beta)
+        assert r.status_code == 404 and "Contoso" not in r.text
     _assert_only_operator_sees(world, fid, after)
 
 
-def test_v1_default_provider_closes_reads_and_creates_cannot_be_read_back(
-    world, monkeypatch
-) -> None:
+def test_v1_default_provider_scopes_reads_to_the_creators_org(world, monkeypatch) -> None:
     from aragora.server.handlers.knowledge_base import handler as handler_module
 
     monkeypatch.setattr(handler_module, "FactStore", lambda: _world_store(world))
-    handler = _v1(world, org_id=world.callers["acme"].org_id)
+    handler = _v1(world)
     handler._fact_store = None
-    bearer = _token(world, "acme")
-    result = handler._handle_list_facts({})
-    assert result.status_code == 403
-    assert _v1_code(_body(result)) == "knowledge_fact_access_closed"
+    acme, beta = _token(world, "acme"), _token(world, "beta")
     before = _rows(world.store)
     body = {"statement": "Acme renews Contoso", "workspace_id": "acme-research"}
-    result = handler._handle_create_fact(_Request(world, bearer, body))
+    result = handler._handle_create_fact(_Request(world, acme, body))
     assert result.status_code == 201, result.body
     _assert_unscoped_world_store(handler._fact_store, world)
     created = _body(result)
     fid, after = created.get("data", created)["id"], _rows(world.store)
     assert after[0] == before[0] + 1
+    assert handler._handle_get_fact(fid, _Request(world, acme, None)).status_code == 200
     for result in (
-        handler._handle_get_fact(fid),
-        handler._handle_delete_fact(fid, _Request(world, bearer, None)),
+        handler._handle_get_fact(fid, _Request(world, beta, None)),
+        handler._handle_delete_fact(fid, _Request(world, beta, None)),
     ):
-        assert result.status_code == 403
-        assert _v1_code(_body(result)) == "knowledge_fact_access_closed"
+        assert result.status_code == 404 and b"Contoso" not in result.body
     _assert_only_operator_sees(world, fid, after)
+
+
+def test_search_reads_only_the_callers_org_chunks_once_reopened(world) -> None:
+    """GET /search stays closed here; once org scoping reopens it, it is scoped by verified auth."""
+    from aragora.knowledge.embeddings import chunk_namespace
+    from aragora.server.fastapi.routes.knowledge_base import _fact_access_closed
+
+    client = _v2(world)
+    app: Any = client.app
+    service = app.state.context["query_engine"]._embedding_service
+    for who in ("acme", "beta"):
+        chunk = {"chunk_id": f"{who}-chunk", "document_id": who, "content": f"{who} invoices"}
+        asyncio.run(service.embed_chunks([chunk], chunk_namespace("ws", world.callers[who].org_id)))
+
+    def search(who: str, workspace_id: str = "ws") -> tuple[int, Any]:
+        params = {"q": "invoices", "workspace_id": workspace_id}
+        hdr = {"Authorization": f"Bearer {_token(world, who)}"}
+        r = client.get(V2 + "/search", params=params, headers=hdr)
+        if r.status_code != 200:
+            return r.status_code, r.json().get("code")
+        return 200, [(m["chunk_id"], m["workspace_id"]) for m in r.json()["results"]]
+
+    assert search("acme") == (403, "knowledge_fact_access_closed")
+    app.dependency_overrides[_fact_access_closed] = lambda: None
+    assert search("acme") == (200, [("acme-chunk", "ws")])
+    assert search("beta") == (200, [("beta-chunk", "ws")])
+    assert search("beta", chunk_namespace("ws", world.callers["acme"].org_id)) == (200, [])
+    assert search("no-org") == (403, "knowledge_org_required")

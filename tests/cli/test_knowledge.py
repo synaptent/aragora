@@ -397,38 +397,16 @@ class TestCmdQuery:
         assert "facts_used" not in field_names
         assert "chunks_used" not in field_names
 
-    def test_query_real_engine_text_output(self, query_args, capsys):
-        """cmd_query runs end-to-end on the real in-memory engine (text)."""
-        result = cmd_query(query_args)
+    @pytest.mark.parametrize("flag", [None, "json", "debate"])
+    def test_query_real_engine_fails_closed_without_org(self, query_args, capsys, flag):
+        """The real engine searches no chunks: the CLI has no authenticated organization."""
+        if flag:
+            setattr(query_args, flag, True)
 
-        assert result == 0
+        assert cmd_query(query_args) == 2
         captured = capsys.readouterr()
-        assert "ANSWER" in captured.out
-        assert "Facts used:" in captured.out
-        assert "Chunks used:" in captured.out
-
-    def test_query_real_engine_json_output(self, query_args, capsys):
-        """cmd_query runs end-to-end on the real in-memory engine (JSON)."""
-        query_args.json = True
-
-        result = cmd_query(query_args)
-
-        assert result == 0
-        captured = capsys.readouterr()
-        output = json.loads(captured.out)
-        assert set(output) == {"answer", "confidence", "facts_used", "chunks_used"}
-        assert isinstance(output["facts_used"], int)
-        assert isinstance(output["chunks_used"], int)
-
-    def test_query_real_engine_debate_flag(self, query_args, capsys):
-        """cmd_query with --debate does not crash during options construction."""
-        query_args.debate = True
-
-        result = cmd_query(query_args)
-
-        assert result == 0
-        captured = capsys.readouterr()
-        assert "ANSWER" in captured.out
+        assert captured.out == ""
+        assert "require an organization" in captured.err
 
 
 # ===========================================================================

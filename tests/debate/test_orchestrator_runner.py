@@ -1064,6 +1064,60 @@ class TestHandleDebateCompletion:
         assert execution_state.ctx.result.metadata == {}
 
     @pytest.mark.asyncio
+    async def test_record_debate_telemetry_records_debate_without_per_agent_cost(
+        self, mock_arena, execution_state
+    ):
+        """A result without per_agent_cost still records the debate and agent activity."""
+        result = execution_state.ctx.result
+        result.metadata = {}
+        del result.per_agent_cost
+        mock_arena.org_id = ""
+        mock_arena.agents = mock_arena.agents[:1]
+        mock_arena.agents[0].metrics = SimpleNamespace(total_input_tokens=10, total_output_tokens=5)
+        analytics = SimpleNamespace(record_debate=AsyncMock(), record_agent_activity=AsyncMock())
+
+        with (
+            patch(
+                "aragora.analytics.debate_analytics.get_debate_analytics",
+                return_value=analytics,
+            ),
+            patch(
+                "aragora.billing.usage.calculate_token_cost",
+                return_value=Decimal("0.01"),
+            ),
+        ):
+            await _record_debate_telemetry(mock_arena, execution_state)
+
+        analytics.record_debate.assert_awaited_once()
+        analytics.record_agent_activity.assert_awaited_once()
+        assert analytics.record_agent_activity.await_args.kwargs["cost"] == Decimal("0.01")
+
+    @pytest.mark.asyncio
+    async def test_record_debate_telemetry_keeps_debate_when_agent_activity_fails(
+        self, mock_arena, execution_state
+    ):
+        """A failure while collecting agent activity loses only that activity."""
+        execution_state.ctx.result.metadata = {}
+        mock_arena.org_id = ""
+        analytics = SimpleNamespace(record_debate=AsyncMock(), record_agent_activity=AsyncMock())
+
+        with (
+            patch(
+                "aragora.analytics.debate_analytics.get_debate_analytics",
+                return_value=analytics,
+            ),
+            patch(
+                "aragora.debate.orchestrator_runner.get_complexity_governor",
+                side_effect=RuntimeError("governor unavailable"),
+            ),
+        ):
+            await _record_debate_telemetry(mock_arena, execution_state)
+
+        analytics.record_debate.assert_awaited_once()
+        assert analytics.record_debate.await_args.kwargs["debate_id"] == execution_state.debate_id
+        analytics.record_agent_activity.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_run_cross_verification_attaches_metadata(self, mock_agents):
         """Cross-verification attaches grounding metadata to the result."""
         result = DebateResult(task="Test task", final_answer="Test answer")

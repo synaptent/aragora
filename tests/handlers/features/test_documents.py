@@ -1693,6 +1693,33 @@ class TestEdgeCases:
         assert captured_kwargs.get("workspace_id") == "my-workspace"
 
     @patch("aragora.server.handlers.features.documents.validate_file_upload")
+    def test_upload_scopes_knowledge_to_authenticated_org(self, mock_validate, handler, store):
+        """The knowledge pipeline gets the authenticated user's org, not a request value."""
+        mock_validate.return_value = MagicMock(valid=True)
+        http_handler = _make_http_handler(content=b"x" * 20, filename="test.txt")
+        knowledge_mod = MagicMock()
+        knowledge_mod.process_uploaded_document.return_value = {}
+
+        with patch.dict(
+            "sys.modules",
+            {
+                "aragora.server.documents": MagicMock(
+                    SUPPORTED_EXTENSIONS={".txt"},
+                    parse_document=MagicMock(return_value=MockDocument()),
+                ),
+                "aragora.knowledge.integration": knowledge_mod,
+            },
+        ):
+            result = handler.handle_post(
+                "/api/v1/documents/upload",
+                {"workspace_id": ["ws"], "org_id": ["org-b"], "process_knowledge": ["true"]},
+                http_handler,
+            )
+
+        assert _status(result) == 200
+        assert knowledge_mod.process_uploaded_document.call_args.kwargs["org_id"] == "test-org-001"
+
+    @patch("aragora.server.handlers.features.documents.validate_file_upload")
     def test_upload_type_error_during_store(self, mock_validate, handler, store):
         """TypeError during store.add maps to storage_failed."""
         mock_validate.return_value = MagicMock(valid=True)

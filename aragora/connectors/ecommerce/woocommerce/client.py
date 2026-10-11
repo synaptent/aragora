@@ -148,7 +148,10 @@ class WooCommerceConnector(EnterpriseConnector):
     @property
     def circuit_breaker(self) -> CircuitBreaker:
         """Get the circuit breaker instance."""
-        return self._circuit_breaker
+        breaker = self._circuit_breaker
+        if breaker is None:
+            raise RuntimeError("WooCommerce circuit breaker is not initialized")
+        return breaker
 
     async def _request(
         self,
@@ -175,9 +178,11 @@ class WooCommerceConnector(EnterpriseConnector):
             ConnectorCircuitOpenError: If the circuit breaker is open
             ConnectorAPIError: If the API returns an error
         """
+        breaker = self.circuit_breaker
+
         # Check circuit breaker
-        if not self._circuit_breaker.can_proceed():
-            cooldown = self._circuit_breaker.cooldown_remaining()
+        if not breaker.can_proceed():
+            cooldown = breaker.cooldown_remaining()
             raise ConnectorCircuitOpenError(
                 "WooCommerce API circuit breaker is open due to repeated failures",
                 connector_name="woocommerce",
@@ -197,17 +202,17 @@ class WooCommerceConnector(EnterpriseConnector):
                         error_text = await resp.text()
                         # Record failure for circuit breaker on server errors or rate limits
                         if resp.status >= 500 or resp.status == 429:
-                            self._circuit_breaker.record_failure()
+                            breaker.record_failure()
                         raise ConnectorAPIError(
                             f"WooCommerce API error: {error_text}",
                             connector_name="woocommerce",
                             status_code=resp.status,
                         )
                     # Record success
-                    self._circuit_breaker.record_success()
+                    breaker.record_success()
                     return await resp.json()
         except asyncio.TimeoutError:
-            self._circuit_breaker.record_failure()
+            breaker.record_failure()
             raise ConnectorTimeoutError(
                 f"WooCommerce API request timed out after {request_timeout}s",
                 connector_name="woocommerce",

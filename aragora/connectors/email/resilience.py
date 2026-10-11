@@ -229,7 +229,7 @@ class RetryExecutor:
         delay = min(delay, self.config.max_delay_seconds)
 
         if self.config.jitter:
-            delay *= 0.5 + random.random()  # noqa: S311 -- retry jitter
+            delay *= 0.5 + random.random()
 
         return delay
 

@@ -34,7 +34,7 @@ class StabilityBenchmarkResult:
 def _fallback_stability(votes: list[str]) -> float:
     if not votes:
         return 0.0
-    counts = {}
+    counts: dict[str, int] = {}
     for vote in votes:
         counts[vote] = counts.get(vote, 0) + 1
     return max(counts.values()) / len(votes)

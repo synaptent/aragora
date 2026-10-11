@@ -173,7 +173,7 @@ def extract_prompts(
 
 def deduplicate(prompts: list[dict], similarity_threshold: float = 0.8) -> list[dict]:
     """Remove near-duplicate prompts (same text repeated across sessions)."""
-    seen_texts = []
+    seen_texts: list[str] = []
     unique = []
 
     for p in prompts:
