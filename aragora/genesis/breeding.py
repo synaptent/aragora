@@ -115,7 +115,7 @@ class GenomeBreeder:
             )
 
         # Model preference: random selection from parents
-        model = random.choice([parent_a.model_preference, parent_b.model_preference])  # noqa: S311 -- genetic algorithm
+        model = random.choice([parent_a.model_preference, parent_b.model_preference])
 
         # Generate name if not provided
         if not name:
@@ -153,36 +153,36 @@ class GenomeBreeder:
 
         # Mutate traits
         for trait in list(new_traits.keys()):
-            if random.random() < rate:  # noqa: S311 -- genetic algorithm
+            if random.random() < rate:
                 # Add/subtract up to 0.2
-                delta = random.uniform(-0.2, 0.2)  # noqa: S311 -- genetic algorithm
+                delta = random.uniform(-0.2, 0.2)
                 new_traits[trait] = max(0, min(1, new_traits[trait] + delta))
 
         # Possibly add new trait
-        if random.random() < rate / 2:  # noqa: S311 -- genetic algorithm
+        if random.random() < rate / 2:
             available = [t for t in PERSONALITY_TRAITS if t not in new_traits]
             if available:
-                new_trait = random.choice(available)  # noqa: S311 -- genetic algorithm
-                new_traits[new_trait] = random.uniform(0.3, 0.7)  # noqa: S311 -- genetic algorithm
+                new_trait = random.choice(available)
+                new_traits[new_trait] = random.uniform(0.3, 0.7)
 
         # Mutate expertise
         for domain in list(new_expertise.keys()):
-            if random.random() < rate:  # noqa: S311 -- genetic algorithm
-                delta = random.uniform(-0.15, 0.15)  # noqa: S311 -- genetic algorithm
+            if random.random() < rate:
+                delta = random.uniform(-0.15, 0.15)
                 new_expertise[domain] = max(0, min(1, new_expertise[domain] + delta))
 
         # Possibly add new expertise
-        if random.random() < rate / 2:  # noqa: S311 -- genetic algorithm
+        if random.random() < rate / 2:
             available = [d for d in EXPERTISE_DOMAINS if d not in new_expertise]
             if available:
-                new_domain = random.choice(available)  # noqa: S311 -- genetic algorithm
-                new_expertise[new_domain] = random.uniform(0.3, 0.6)  # noqa: S311 -- genetic algorithm
+                new_domain = random.choice(available)
+                new_expertise[new_domain] = random.uniform(0.3, 0.6)
 
         # Possibly mutate model preference
         model = genome.model_preference
-        if random.random() < rate / 3:  # noqa: S311 -- genetic algorithm
+        if random.random() < rate / 3:
             models = ["claude", "gemini", "grok", "codex"]
-            model = random.choice([m for m in models if m != model])  # noqa: S311 -- genetic algorithm
+            model = random.choice([m for m in models if m != model])
 
         return AgentGenome(
             genome_id=generate_genome_id(
@@ -263,7 +263,7 @@ class GenomeBreeder:
         # Add mutations
         for _ in range(mutate_n):
             if sorted_genomes:
-                parent = random.choice(sorted_genomes[: max(1, len(sorted_genomes) // 2)])  # noqa: S311 -- genetic algorithm
+                parent = random.choice(sorted_genomes[: max(1, len(sorted_genomes) // 2)])
                 mutant = self.mutate(parent)
                 new_genomes.append(mutant)
 

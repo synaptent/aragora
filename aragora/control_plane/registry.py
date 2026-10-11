@@ -644,7 +644,7 @@ class AgentRegistry:
         elif strategy == "random":
             import random
 
-            return random.choice(candidates)  # noqa: S311 -- load balancing
+            return random.choice(candidates)
         else:
             return candidates[0]
 
@@ -721,7 +721,7 @@ class AgentRegistry:
         elif strategy == "random":
             import random
 
-            return random.choice(candidates)  # noqa: S311 -- load balancing
+            return random.choice(candidates)
         else:
             return candidates[0]
 

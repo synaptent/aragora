@@ -69,7 +69,7 @@ class RetryConfig:
         if self.jitter:
             import random
 
-            delay = delay * (0.5 + random.random())  # noqa: S311 -- retry jitter
+            delay = delay * (0.5 + random.random())
         return delay
 
 

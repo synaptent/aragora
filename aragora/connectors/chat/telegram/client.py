@@ -207,7 +207,7 @@ class TelegramConnectorBase(ChatPlatformConnector):
                         # Check if retryable
                         if error_code in {500, 502, 503, 504} and attempt < max_retries - 1:
                             delay = min(1.0 * (2**attempt), 30.0)
-                            jitter = random.uniform(0, delay * 0.1)  # noqa: S311 -- retry jitter
+                            jitter = random.uniform(0, delay * 0.1)
                             logger.warning(
                                 "[telegram] %s server error %s (attempt %s/%s)",
                                 operation,

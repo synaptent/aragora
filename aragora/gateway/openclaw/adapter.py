@@ -1066,7 +1066,7 @@ class OpenClawAdapter:
 
 # Re-export OpenClawGatewayAdapter for backward compatibility.
 # Imported after OpenClawAdapter is defined to avoid circular imports.
-from .gateway_adapter import OpenClawGatewayAdapter  # noqa: E402
+from .gateway_adapter import OpenClawGatewayAdapter
 
 
 # ============================================================================
