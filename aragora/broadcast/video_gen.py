@@ -144,7 +144,9 @@ def _validate_audio_file(audio_path: Path) -> bool:
     file_size = audio_path.stat().st_size
     if file_size > MAX_AUDIO_FILE_SIZE:
         logger.error(
-            f"Audio file too large: {file_size:,} bytes > {MAX_AUDIO_FILE_SIZE:,} bytes limit"
+            "Audio file too large: %s bytes > %s bytes limit",
+            format(file_size, ","),
+            format(MAX_AUDIO_FILE_SIZE, ","),
         )
         return False
 

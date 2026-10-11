@@ -111,7 +111,8 @@ def test_native_fixture_exports_to_the_signed_odr_fixture(odr_doc):
     receipt reproduces the ODR document byte-for-byte (minus signatures)."""
     native = json.loads(NATIVE_PATH.read_text(encoding="utf-8"))
     receipt = DecisionReceipt.from_dict(native)
-    exported = decision_receipt_to_odr(receipt)
+    # The committed fixture is a v0.1 document; the library default is v0.2.
+    exported = decision_receipt_to_odr(receipt, odr_version="0.1")
     assert {k: v for k, v in exported.items() if k != "signatures"} == {
         k: v for k, v in odr_doc.items() if k != "signatures"
     }

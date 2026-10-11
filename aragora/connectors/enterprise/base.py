@@ -580,7 +580,6 @@ class EnterpriseConnector(BaseConnector):
                 except (OSError, ValueError, TypeError, RuntimeError, KeyError) as e:
                     items_failed += 1
                     error_msg = f"Failed to ingest {item.id}: {e}"
-                    errors.append(error_msg)
                     state.errors.append(error_msg)
                     logger.warning("[%s] %s", self.name, error_msg)
 
@@ -612,7 +611,9 @@ class EnterpriseConnector(BaseConnector):
             items_skipped=items_skipped,
             items_failed=items_failed,
             duration_ms=duration_ms,
-            errors=errors,
+            # state.errors is reset at the start of the run, so it holds only this
+            # run's ingest failures and those recorded by sync_items.
+            errors=[*state.errors, *errors],
             new_cursor=state.cursor,
         )
 

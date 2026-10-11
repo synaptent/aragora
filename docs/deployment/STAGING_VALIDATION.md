@@ -359,7 +359,7 @@ Production Deploy Date: ________________
 
 ## Related Documentation
 
-- [DEPLOYMENT.md](DEPLOYMENT.md) - Full deployment guide
+- [DEPLOYMENT.md](../DEPLOYMENT.md) - Full deployment guide
 - [RUNBOOK.md](RUNBOOK.md) - Operational procedures
 - [SLA.md](../enterprise/SLA.md) - Service level agreements
 - [DISASTER_RECOVERY.md](DISASTER_RECOVERY.md) - Recovery procedures

@@ -94,7 +94,7 @@ All marketing copy has been drafted in the repo:
 - `docs/outreach/BUYER_ANALYST_FAQ.md` — FAQ content
 - `docs/outreach/FOUNDER_PROOF_POINTS_LIBRARY.md` — evidence claims
 - `docs/strategy/BOUNDARIES_AND_SCOPE.md` Part 1 — what Aragora is NOT (absorbed `NON_GOALS_LEDGER.md`)
-- `docs/strategy/PRECISION_AND_TERMS.md` Part 1 — product terminology (absorbed `TERMINOLOGY_GLOSSARY.md`; see `docs/STRATEGY_INDEX.md`)
+- `docs/strategy/PRECISION_AND_TERMS.md` Part 1 — product terminology (absorbed `TERMINOLOGY_GLOSSARY.md`; see `docs/strategy/STRATEGY_INDEX.md`)
 
 ---
 

@@ -23,6 +23,7 @@ import json
 import re
 import sys
 from pathlib import Path
+from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -58,7 +59,7 @@ MAX_FILE_LOC_EXCEPTIONS = {
     "aragora/cli/commands/review_queue.py": 6000,
 }
 
-LAST_RECORDED_BASELINE = {
+LAST_RECORDED_BASELINE: dict[str, Any] = {
     "date": "2026-04-12",
     "global_suppressions": {
         "except_exception": 770,
@@ -314,8 +315,8 @@ def main() -> None:
 
         if violations:
             print(f"\nRatchet Violations ({len(violations)}):")
-            for v in violations:
-                print(f"  FAIL: {v}")
+            for violation in violations:
+                print(f"  FAIL: {violation}")
         else:
             print("\nRatchet: PASS (all thresholds met)")
 

@@ -342,12 +342,14 @@ def execute_lane_merge(
     branch: str | None,
     registry: PullRequestRegistry | Any,
     required_checks_green: bool,
+    head_sha: str | None,
     allow_admin: bool = False,
 ) -> dict[str, Any]:
     merge_call = github.merge_pr(
         pr_url,
         required_checks_green=required_checks_green,
         allow_admin=allow_admin,
+        head_sha=head_sha,
     )
     if hasattr(merge_call, "to_dict"):
         result = dict(merge_call.to_dict())
@@ -653,10 +655,12 @@ async def integrate_lane(
         register_pr(pr_url, branch, registry_obj)
 
     gate_payload: dict[str, Any] | None = None
+    gate_head_sha: str | None = None
     checks = "checks_pending"
     if pr_url:
         snapshot = github_obj.fetch_gate_snapshot(pr_url)
         gate_payload = snapshot.to_dict() if hasattr(snapshot, "to_dict") else None
+        gate_head_sha = getattr(snapshot, "head_sha", None)
         checks = classify_check_results(
             list(getattr(snapshot, "required_checks", []))
             + list(getattr(snapshot, "advisory_checks", []))
@@ -773,6 +777,7 @@ async def integrate_lane(
                 branch=branch,
                 registry=registry_obj,
                 required_checks_green=checks == "checks_passed",
+                head_sha=gate_head_sha,
                 allow_admin=allow_admin,
             )
             assessment["executed"] = bool(merge_result.get("merged", False))

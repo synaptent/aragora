@@ -20,6 +20,14 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from aragora.swarm.terminal_truth import TerminalClass  # noqa: E402
 from aragora.utils.git_paths import git_common_repo_root  # noqa: E402
+
+# Reuse the TW-03 ledger reader so both status surfaces agree on when the
+# rescue event ledger counts as read in full.
+from scripts.publish_rescue_productization_report import (  # noqa: E402
+    DEFAULT_RESCUE_LEDGER_PATH,
+    RescueLedgerValidationError,
+    _read_validated_rescue_ledger,
+)
 from scripts.reconcile_b0_pr_truth import (  # noqa: E402
     DEFAULT_METRICS_PATH,
     GitHubTruthClient,
@@ -42,6 +50,16 @@ DEFAULT_PUBLISH_DIR = REPO_ROOT / ".aragora" / "benchmark_truth_artifacts"
 EXPECTED_STATUS_VERIFIED = "verified"
 EXPECTED_STATUS_IN_PROGRESS = "in_progress"
 VALID_EXPECTED_STATUSES = frozenset({EXPECTED_STATUS_VERIFIED, EXPECTED_STATUS_IN_PROGRESS})
+
+# Fields whose values assert an absence of rescue. They are non-authoritative
+# whenever rescue history was not observed in full.
+RESCUE_DEPENDENT_FIELDS = (
+    "failure_class_distribution",
+    "rescue_counts_by_type",
+    "primary_metrics.no_rescue_truth_success_rate",
+    "issues[].had_rescue",
+    "issues[].no_rescue_truth_success",
+)
 
 
 def load_corpus(path: Path) -> dict[str, Any]:
@@ -167,6 +185,188 @@ def _missing_corpus_issue_numbers(
         and expected_by_number.get(aggregate.issue_number, EXPECTED_STATUS_VERIFIED)
         == EXPECTED_STATUS_VERIFIED
     ]
+
+
+def row_observes_execution(row: dict[str, Any]) -> bool:
+    """Whether a metrics row records a dispatched attempt rather than a placeholder.
+
+    Recurrence writes ``issue_already_resolved`` rows for closed corpus issues
+    and ``dispatch_skip_reason`` rows for label-skipped ones. Neither ran a
+    worker, so neither can observe elapsed time or a rescue.
+    """
+    if resolve_terminal_class(row) is TerminalClass.ISSUE_ALREADY_RESOLVED:
+        return False
+    return not str(row.get("dispatch_skip_reason") or "").strip()
+
+
+def has_elapsed_sample(row: dict[str, Any]) -> bool:
+    elapsed = row.get("elapsed_seconds")
+    return isinstance(elapsed, (int, float)) and not isinstance(elapsed, bool) and elapsed > 0
+
+
+def elapsed_time_status(rows: list[dict[str, Any]]) -> str:
+    """Classify how completely ``rows`` observed elapsed time.
+
+    Elapsed aggregates only average positive samples, so a 0.0 aggregate over
+    rows without samples is a placeholder, not a measured zero-duration run.
+    """
+    if not any(has_elapsed_sample(row) for row in rows):
+        return "unmeasured"
+    if any(row_observes_execution(row) and not has_elapsed_sample(row) for row in rows):
+        return "incomplete"
+    return "measured"
+
+
+def _issue_refs(issue_numbers: list[int]) -> str:
+    return ", ".join(f"#{number}" for number in issue_numbers)
+
+
+def _ledger_number(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.strip().lstrip("#").isdigit():
+        return int(value.strip().lstrip("#"))
+    return None
+
+
+def observe_rescue_ledger(
+    path: Path | None,
+    *,
+    corpus_issue_numbers: set[int],
+    corpus_issue_number_by_pr: dict[int, int],
+) -> dict[str, Any]:
+    """Summarize the rescue event ledger as provenance for ``rescue_history``.
+
+    Producers attribute a rescue by ``issue_number`` (RescuePlanner) or only by
+    ``pr_number`` (the agent-bridge supervisor), so an event counts against a
+    corpus issue through either key. An event carrying neither cannot be ruled
+    out as a corpus intervention and is counted as unattributed.
+    """
+    if path is None:
+        return {"status": "not_consulted"}
+    try:
+        source, raw = _read_validated_rescue_ledger(path)
+    except RescueLedgerValidationError as exc:
+        return {"path": _repo_stable_path(path), "status": "unavailable", "error_code": exc.code}
+    corpus_event_issue_numbers: set[int] = set()
+    unattributed_event_count = 0
+    for line in raw.decode("utf-8").splitlines():
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            # Blank lines, plus the one torn trailing record the reader
+            # tolerates; the latter is reported via its skipped-line count.
+            continue
+        if not isinstance(event, dict):
+            continue
+        issue_number = _ledger_number(event.get("issue_number"))
+        pr_number = _ledger_number(event.get("pr_number"))
+        if issue_number is None and pr_number is None:
+            unattributed_event_count += 1
+            continue
+        if issue_number is not None and issue_number in corpus_issue_numbers:
+            corpus_event_issue_numbers.add(issue_number)
+        if pr_number is not None and pr_number in corpus_issue_number_by_pr:
+            corpus_event_issue_numbers.add(corpus_issue_number_by_pr[pr_number])
+    return {
+        "path": _repo_stable_path(path),
+        "status": "available",
+        "event_count": int(source["event_count"]),
+        "sha256": str(source["sha256"]),
+        "skipped_trailing_partial_line_count": int(
+            source.get("skipped_trailing_partial_line_count") or 0
+        ),
+        "corpus_event_issue_numbers": sorted(corpus_event_issue_numbers),
+        "unattributed_event_count": unattributed_event_count,
+    }
+
+
+def build_observation_markers(
+    *,
+    corpus_rows: list[dict[str, Any]],
+    records: list[IssueTruthRecord],
+    rescue_ledger: dict[str, Any],
+) -> dict[str, Any]:
+    """Derive ``observation_status``/``observation_limits`` from the inputs read.
+
+    ``had_rescue`` is only observed for an issue with an executed attempt in
+    the metrics window, and human interventions only via a fully read rescue
+    ledger. Anything short of that leaves the rescue-dependent fields
+    non-authoritative rather than a verified absence of rescue.
+    """
+    executed_issue_numbers = {
+        row["issue_number"] for row in corpus_rows if row_observes_execution(row)
+    }
+    issues_without_executed_attempt = sorted(
+        record.issue_number
+        for record in records
+        if not record.had_rescue and record.issue_number not in executed_issue_numbers
+    )
+    reasons: list[str] = []
+    ledger_status = rescue_ledger.get("status")
+    if ledger_status == "not_consulted":
+        reasons.append(
+            "No rescue event ledger was consulted, so human interventions on corpus "
+            "issues were not observed."
+        )
+    elif ledger_status != "available":
+        reasons.append(
+            f"The rescue event ledger could not be read (`{rescue_ledger.get('error_code')}`), "
+            "so human interventions on corpus issues were not observed."
+        )
+    else:
+        skipped = int(rescue_ledger.get("skipped_trailing_partial_line_count") or 0)
+        if skipped:
+            reasons.append(
+                f"{skipped} torn trailing rescue ledger record(s) could not be parsed "
+                "and were not observed."
+            )
+        ledger_issue_numbers = list(rescue_ledger.get("corpus_event_issue_numbers") or [])
+        if ledger_issue_numbers:
+            reasons.append(
+                "The rescue event ledger records interventions on corpus issue(s) "
+                f"{_issue_refs(ledger_issue_numbers)} or their linked PRs, which the "
+                "metrics-derived rescue fields do not count."
+            )
+        unattributed = int(rescue_ledger.get("unattributed_event_count") or 0)
+        if unattributed:
+            reasons.append(
+                f"{unattributed} rescue event ledger record(s) carry neither an issue nor a "
+                "PR number, so they cannot be ruled out as interventions on corpus issues."
+            )
+    if issues_without_executed_attempt:
+        reasons.append(
+            f"Corpus issue(s) {_issue_refs(issues_without_executed_attempt)} have no executed "
+            "attempt in the metrics window (only pre-resolved, dispatch-skipped or no rows), "
+            "so their rescue history was not observed."
+        )
+    markers: dict[str, Any] = {
+        "observation_status": {
+            # The builder cannot run without reading the metrics file.
+            "raw_inputs": "available",
+            "elapsed_time": elapsed_time_status(corpus_rows),
+            "rescue_history": "incomplete" if reasons else "complete",
+            # No independent replay of the raw inputs happens at build time.
+            "raw_input_replay": "unmeasured",
+        }
+    }
+    if not reasons:
+        return markers
+    limits: dict[str, Any] = {
+        "reason": " ".join([*reasons, "Independent raw-input replay was not performed."]),
+        "value_semantics": (
+            "Listed fields describe only the observations available to this snapshot. "
+            "Empty rescue counts and false rescue flags do not establish that no rescue "
+            "occurred and do not retract rescues recorded in earlier snapshots."
+        ),
+        "non_authoritative_fields": list(RESCUE_DEPENDENT_FIELDS),
+    }
+    if issues_without_executed_attempt:
+        limits["issues_without_executed_attempt"] = issues_without_executed_attempt
+    markers["observation_limits"] = limits
+    return markers
 
 
 def _corpus_freshness(
@@ -930,6 +1130,7 @@ def build_benchmark_truth_artifact(
     client: GitHubTruthClient | None = None,
     generated_at: str | None = None,
     freshness_map_path: Path | None = None,
+    rescue_ledger_path: Path | None = None,
 ) -> dict[str, Any]:
     normalized_generated_at = normalize_generated_at(generated_at)
     rows = load_metrics_rows(metrics_file)
@@ -959,7 +1160,7 @@ def build_benchmark_truth_artifact(
                 # `closedByPullRequestsReferences` GraphQL edge. Forensic
                 # references (unrelated merged PRs that merely cite the
                 # issue in their body/comments) are no longer credited.
-                # See docs/benchmarks/corpus_honesty_audit_2026-04-17.md.
+                # See docs/archive/benchmarks/corpus_honesty_audit_2026-04-17.md.
                 reconcile_issue_truth(repo, aggregate, truth_client, strict_linkage=True),
                 expected_status=expected_by_number.get(
                     aggregate.issue_number,
@@ -1000,9 +1201,29 @@ def build_benchmark_truth_artifact(
         aggregates, expected_by_number=expected_by_number
     )
     run_complete = not missing_issue_numbers
+    corpus_issue_numbers = {aggregate.issue_number for aggregate in aggregates}
     failure_class_distribution, rescue_counts_by_type = _failure_distributions(
         rows,
-        corpus_issue_numbers={aggregate.issue_number for aggregate in aggregates},
+        corpus_issue_numbers=corpus_issue_numbers,
+    )
+    rescue_ledger = observe_rescue_ledger(
+        rescue_ledger_path,
+        corpus_issue_numbers=corpus_issue_numbers,
+        corpus_issue_number_by_pr={
+            linked_pr.number: record.issue_number
+            for record in records
+            for linked_pr in record.linked_prs
+        },
+    )
+    observation_markers = build_observation_markers(
+        corpus_rows=[
+            row
+            for row in rows
+            if isinstance(row.get("issue_number"), int)
+            and row["issue_number"] in corpus_issue_numbers
+        ],
+        records=records,
+        rescue_ledger=rescue_ledger,
     )
     issue_records: list[dict[str, Any]] = []
     for record in records:
@@ -1086,6 +1307,8 @@ def build_benchmark_truth_artifact(
         },
         "failure_class_distribution": failure_class_distribution,
         "rescue_counts_by_type": rescue_counts_by_type,
+        "rescue_ledger": rescue_ledger,
+        **observation_markers,
         "corpus_freshness": _corpus_freshness(records, expected_by_number=expected_by_number),
         "issues": issue_records,
     }
@@ -1162,6 +1385,15 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"Tracked benchmark corpus freshness map (default: {DEFAULT_FRESHNESS_MAP_PATH})",
     )
     parser.add_argument(
+        "--rescue-ledger",
+        type=Path,
+        default=DEFAULT_RESCUE_LEDGER_PATH,
+        help=(
+            "RescueEvent ledger consulted for rescue-history completeness "
+            f"(default: {DEFAULT_RESCUE_LEDGER_PATH})"
+        ),
+    )
+    parser.add_argument(
         "--ensure-issues",
         action="store_true",
         help="Create or relink a bounded follow-up issue when stale closed corpus issues are detected.",
@@ -1185,6 +1417,7 @@ def main(argv: list[str] | None = None) -> int:
         corpus_path=corpus_path,
         client=truth_client,
         freshness_map_path=args.freshness_map.resolve(),
+        rescue_ledger_path=args.rescue_ledger.expanduser().resolve(),
     )
     if args.ensure_issues:
         issue_drafts = [

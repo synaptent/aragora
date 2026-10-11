@@ -394,7 +394,7 @@ class SlackConnector(EnterpriseConnector):
         message: SlackMessage,
         channel: SlackChannel,
         user: SlackUser | None,
-        replies: list[SlackMessage] = None,
+        replies: list[SlackMessage] | None = None,
     ) -> str:
         """Format a message with context."""
         parts = []

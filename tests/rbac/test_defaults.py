@@ -9,6 +9,8 @@ Tests cover:
 - Role templates
 """
 
+import hashlib
+
 import pytest
 
 from aragora.rbac.defaults import (
@@ -33,6 +35,7 @@ from aragora.rbac.defaults import (
     ROLE_VIEWER,
     # Sample permissions for testing
     PERM_ADMIN_ALL,
+    PERM_CONNECTOR_TEST,
     PERM_DEBATE_CREATE,
     PERM_DEBATE_READ,
     PERM_DEBATE_RUN,
@@ -343,6 +346,52 @@ class TestGetRolePermissions:
         # Member inherits from viewer
         if "viewer" in ROLE_HIERARCHY.get("member", []):
             assert viewer_perms.issubset(member_perms)
+
+
+def _permission_set_fingerprint(permissions: set[str]) -> tuple[int, str]:
+    joined = "\n".join(sorted(permissions)).encode("utf-8")
+    return len(permissions), hashlib.sha256(joined).hexdigest()
+
+
+# Effective (inherited) permission set of every system role before admin was granted
+# connectors.test, as (count, sha256 of the sorted keys joined by newlines).
+_ROLE_FINGERPRINTS_BEFORE_ADMIN_CONNECTOR_TEST = {
+    "admin": (208, "efb3a0c66bbbd48cae51ea4ab484d91d7d6dd2f588eb7157c76b237ed75a5678"),
+    "analyst": (20, "86bb6d41ea84271be1c2067dcc53a4d75809ff374143b592feb251d1e50b286b"),
+    "compliance_officer": (
+        46,
+        "1cd961bcaf18249a7d4142481c76d32dff01e295ed5cf4ba4b295e30c1178172",
+    ),
+    "debate_creator": (91, "e2f07371a5821585e5aec33ffb6e1953ae48eb780402117a825864450071e3ae"),
+    "developer": (72, "ef0588ce9fbbe5425f9c248739c582a7a6232eedd23c99daa1a6cdc40894735b"),
+    "member": (71, "d78ee48bca88b6fa0eca8fcfa03dfe2a8c34f07a77260da4296fe4d381002ea7"),
+    "ops_reviewer": (21, "5bbc38b88c87ba7af84e4dfe6a8d5904d06fcee3d1a068b156dfd2a9fcb9a8a8"),
+    "owner": (407, "9b4bb2b5979aab3c896360879c0e49c7976b9f7ea4ed6e974bec2d3e9aeb7a86"),
+    "team_lead": (83, "d3fbda5b1fda95170d527419433ce75ead712dc44804c6cfa0529e2b536853dd"),
+    "viewer": (6, "d2fce120a3ae82e4dfe79c8fb99bb26c12a4613db6e5bb78fe53c4e2f891a1e1"),
+}
+
+
+class TestAdminConnectorTestGrant:
+    """Admin may test connectors; no other role's permission set changes with it."""
+
+    def test_admin_holds_connectors_test_directly(self):
+        assert PERM_CONNECTOR_TEST.key == "connectors.test"
+        assert PERM_CONNECTOR_TEST.key in ROLE_ADMIN.permissions
+
+    @pytest.mark.parametrize("role_name", sorted(_ROLE_FINGERPRINTS_BEFORE_ADMIN_CONNECTOR_TEST))
+    def test_role_sets_differ_from_the_prior_grants_only_by_admin_connectors_test(self, role_name):
+        added = {"admin": {PERM_CONNECTOR_TEST.key}}.get(role_name, set())
+        effective = get_role_permissions(role_name, include_inherited=True)
+        prior = _ROLE_FINGERPRINTS_BEFORE_ADMIN_CONNECTOR_TEST[role_name]
+        if role_name == "owner":
+            # Owner already held every system permission, connectors.test included.
+            assert PERM_CONNECTOR_TEST.key in effective
+        assert added <= effective
+        assert _permission_set_fingerprint(effective - added) == prior
+
+    def test_every_system_role_is_pinned(self):
+        assert set(SYSTEM_ROLES) == set(_ROLE_FINGERPRINTS_BEFORE_ADMIN_CONNECTOR_TEST)
 
 
 class TestCreateCustomRole:

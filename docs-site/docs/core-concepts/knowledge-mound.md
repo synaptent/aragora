@@ -143,6 +143,7 @@ stats = await mound.get_stats()
 
 # Sync with connected memory systems
 sync_result = await mound.sync_all()
+# Fact sync is closed without an organization: sync_result["facts"].errors == ["facts:org_scope_required"]
 ```
 
 ### 2. Semantic Store
@@ -491,7 +492,7 @@ await adapter.sync()  # Sync critique patterns to mound
 The Knowledge Mound supports bidirectional integration with all major subsystems through specialized adapters. These adapters enable:
 
 <!-- metrics:begin km-adapter-specs -->
-- **41 registered adapter specs** wired via `aragora/knowledge/mound/adapters/factory.py`
+- **42 registered adapter specs** wired via `aragora/knowledge/mound/adapters/factory.py`
 <!-- metrics:end -->
 - **Additional adapter files** present but not factory-registered (`extraction`, `nomic_cycle`, `openclaw`, `ranking`)
 

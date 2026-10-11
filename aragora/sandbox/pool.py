@@ -380,7 +380,7 @@ class ContainerPool:
         failed = count - successful
 
         duration = time.time() - start
-        logger.info(f"Warmup complete: {successful} created, {failed} failed in {duration:.2f}s")
+        logger.info("Warmup complete: %s created, %s failed in %.2fs", successful, failed, duration)
 
     # ==========================================================================
     # Container Acquisition
@@ -426,8 +426,10 @@ class ContainerPool:
                 duration_ms = (time.time() - start) * 1000
                 self._record_acquire_time(duration_ms)
                 logger.debug(
-                    f"Acquired container {container.container_id} for {session_id} "
-                    f"in {duration_ms:.1f}ms"
+                    "Acquired container %s for %s in %.1fms",
+                    container.container_id,
+                    session_id,
+                    duration_ms,
                 )
                 return container
 
@@ -570,7 +572,7 @@ class ContainerPool:
                 duration_ms = (time.time() - start) * 1000
                 self._record_creation_time(duration_ms)
 
-                logger.debug(f"Created container {container_id} in {duration_ms:.1f}ms")
+                logger.debug("Created container %s in %.1fms", container_id, duration_ms)
                 return container
 
             except asyncio.TimeoutError:

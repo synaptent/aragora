@@ -6,7 +6,6 @@
 
 interface TenantsClientInterface {
   listTenants(params?: { limit?: number; offset?: number }): Promise<any>;
-  createTenant(body: CreateTenantRequest): Promise<any>;
   addTenantMember(tenantId: string, body: { email: string; role?: string }): Promise<any>;
   removeTenantMember(tenantId: string, userId: string): Promise<void>;
 }
@@ -24,15 +23,6 @@ export interface Tenant {
 }
 
 /**
- * Create tenant request.
- */
-export interface CreateTenantRequest {
-  name: string;
-  plan?: string;
-  metadata?: Record<string, unknown>;
-}
-
-/**
  * Tenant member.
  */
 export interface TenantMember {
@@ -46,7 +36,7 @@ export interface TenantMember {
  * Tenants API namespace.
  *
  * Provides methods for multi-tenancy management:
- * - Listing and creating tenants
+ * - Listing tenants
  * - Member management
  */
 export class TenantsAPI {
@@ -58,14 +48,6 @@ export class TenantsAPI {
    */
   async list(params?: { limit?: number; offset?: number }): Promise<{ tenants: Tenant[] }> {
     return this.client.listTenants(params);
-  }
-
-  /**
-   * Create a new tenant.
-   * @route POST /api/v1/tenants
-   */
-  async create(body: CreateTenantRequest): Promise<Tenant> {
-    return this.client.createTenant(body);
   }
 
   /**

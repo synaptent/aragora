@@ -48,15 +48,6 @@ export interface SubscriptionResult {
 }
 
 /**
- * Unsubscription result
- */
-export interface UnsubscriptionResult {
-  success: boolean;
-  debate_id: string;
-  message?: string;
-}
-
-/**
  * Cross-pollination bridge status
  */
 export interface CrossPollinationBridge {
@@ -294,26 +285,6 @@ export class CrossPollinationAPI {
       json.min_confidence = options.minConfidence;
     }
     return this.client.request('POST', '/api/v1/cross-pollination/subscribe', { json });
-  }
-
-  /**
-   * Unsubscribe a debate from cross-pollination.
-   *
-   * Removes a debate's subscription, stopping it from receiving cross-pollinated insights.
-   *
-   * @param debateId - Debate ID to unsubscribe
-   * @returns Unsubscription result
-   *
-   * @example
-   * ```typescript
-   * const result = await client.crossPollination.unsubscribe('debate-123');
-   * if (result.success) {
-   *   console.log('Successfully unsubscribed');
-   * }
-   * ```
-   */
-  async unsubscribe(debateId: string): Promise<UnsubscriptionResult> {
-    return this.client.delete(`/api/v1/cross-pollination/subscribers/${encodeURIComponent(debateId)}`);
   }
 
   // ===========================================================================

@@ -361,7 +361,12 @@ class S3Connector(EnterpriseConnector):
         return []
 
     async def fetch(self, evidence_id: str) -> Any:
-        """Fetch a specific document by S3 key."""
+        """Fetch a specific document by S3 key.
+
+        Not implemented: evidence IDs carry a hash of the key, which cannot be
+        reversed, so this always returns None. None here does not mean the
+        object does not exist.
+        """
         if not evidence_id.startswith("s3:"):
             return None
 

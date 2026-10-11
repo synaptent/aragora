@@ -154,7 +154,7 @@ print(f"Verdict: {receipt.verdict} ({receipt.confidence:.0%})")
 
 ## Next Steps
 
-- [Developer Quickstart](../../docs/QUICKSTART_DEVELOPER.md) -- full setup guide
+- [Quickstart](../../docs/quickstart.md) -- full setup guide
 - [Gauntlet Guide](../../docs/debate/GAUNTLET.md) -- adversarial stress-testing
 - [SDK Guide](../../docs/SDK_GUIDE.md) -- Python and TypeScript SDKs
 - [API Reference](../../docs/api/API_REFERENCE.md) -- REST API documentation

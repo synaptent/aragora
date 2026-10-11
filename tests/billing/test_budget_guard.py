@@ -138,6 +138,131 @@ def test_default_store_path_is_stable_across_process_working_directories(tmp_pat
     assert float(second_spend) == pytest.approx(12.5)
 
 
+def test_store_path_exact_override_is_not_anchored_or_expanded(tmp_path, monkeypatch):
+    _clear_store_path_env(monkeypatch)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("ARAGORA_BUDGET_GUARD_STORE", "  relative/exact-ledger.json  ")
+    monkeypatch.setenv("ARAGORA_DATA_DIR", str(tmp_path / "data"))
+
+    assert budget_guard._store_path() == Path("relative/exact-ledger.json")
+
+
+@pytest.mark.parametrize("blank", ["", "   ", "\t\n"])
+def test_store_path_whitespace_only_data_dir_falls_through_to_nomic_dir(
+    tmp_path, monkeypatch, blank
+):
+    _clear_store_path_env(monkeypatch)
+    nomic_dir = tmp_path / "configured-nomic"
+    monkeypatch.setenv("ARAGORA_DATA_DIR", blank)
+    monkeypatch.setenv("ARAGORA_NOMIC_DIR", str(nomic_dir))
+
+    assert budget_guard._store_path() == nomic_dir / "budget_guard.json"
+
+
+def test_store_path_whitespace_only_data_dirs_fall_through_to_home_default(tmp_path, monkeypatch):
+    _clear_store_path_env(monkeypatch)
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("ARAGORA_DATA_DIR", "   ")
+    monkeypatch.setenv("ARAGORA_NOMIC_DIR", " \t ")
+
+    assert budget_guard._store_path() == home / ".aragora" / "budget_guard.json"
+
+
+def test_store_path_strips_surrounding_whitespace_from_configured_data_dir(tmp_path, monkeypatch):
+    _clear_store_path_env(monkeypatch)
+    data_dir = tmp_path / "configured-data"
+    monkeypatch.setenv("ARAGORA_DATA_DIR", f"  {data_dir}\n")
+
+    assert budget_guard._store_path() == data_dir / "budget_guard.json"
+
+
+@pytest.mark.parametrize("env_name", ["ARAGORA_DATA_DIR", "ARAGORA_NOMIC_DIR"])
+def test_store_path_anchors_relative_configured_data_dir_under_home(
+    tmp_path, monkeypatch, env_name
+):
+    _clear_store_path_env(monkeypatch)
+    home = tmp_path / "home"
+    cwd = tmp_path / "unrelated-cwd"
+    cwd.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.chdir(cwd)
+    monkeypatch.setenv(env_name, ".nomic")
+
+    path = budget_guard._store_path()
+
+    assert path.is_absolute()
+    assert path == home / ".nomic" / "budget_guard.json"
+
+
+def test_store_path_expands_user_in_configured_data_dir(tmp_path, monkeypatch):
+    _clear_store_path_env(monkeypatch)
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("ARAGORA_DATA_DIR", "~/aragora-data")
+
+    assert budget_guard._store_path() == home / "aragora-data" / "budget_guard.json"
+
+
+def test_relative_configured_store_path_is_stable_across_process_working_directories(
+    tmp_path,
+):
+    home = tmp_path / "home"
+    first_cwd = tmp_path / "worktree-one"
+    second_cwd = tmp_path / "worktree-two"
+    first_cwd.mkdir()
+    second_cwd.mkdir()
+    repo_root = Path(budget_guard.__file__).resolve().parents[2]
+    env = os.environ.copy()
+    env["HOME"] = str(home)
+    env["PYTHONPATH"] = str(repo_root)
+    env["ARAGORA_MONTHLY_BUDGET_USD"] = "100"
+    env.pop("ARAGORA_BUDGET_GUARD_STORE", None)
+    env.pop("ARAGORA_NOMIC_DIR", None)
+    env["ARAGORA_DATA_DIR"] = "relative-data"
+
+    first = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "from aragora.billing.budget_guard import _store_path, record_spend; "
+                "record_spend(7.5); print(_store_path())"
+            ),
+        ],
+        cwd=first_cwd,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    second_path, second_spend = (
+        subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "from aragora.billing.budget_guard import _store_path, current_spend_usd; "
+                    "print(f'{_store_path()}|{current_spend_usd()}')"
+                ),
+            ],
+            cwd=second_cwd,
+            env=env,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        .stdout.strip()
+        .split("|", maxsplit=1)
+    )
+
+    expected = str(home / "relative-data" / "budget_guard.json")
+    assert first == expected
+    assert second_path == expected
+    assert float(second_spend) == pytest.approx(7.5)
+    assert not (first_cwd / "relative-data").exists()
+
+
 def test_enabled_allows_under_cap(store, monkeypatch):
     monkeypatch.setenv("ARAGORA_MONTHLY_BUDGET_USD", "100")
     assert budget_guard.is_enabled() is True

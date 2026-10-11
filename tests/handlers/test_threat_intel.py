@@ -474,7 +474,7 @@ class TestCheckUrlsBatch:
     async def test_batch_urls_success(self, handler, mock_service):
         r1 = _make_threat_result("https://a.com")
         r2 = _make_threat_result("https://b.com")
-        mock_service.check_urls_batch.return_value = [r1, r2]
+        mock_service.check_urls_batch.return_value = {r1.target: r1, r2.target: r2}
 
         req = _make_request(
             "POST",
@@ -495,7 +495,7 @@ class TestCheckUrlsBatch:
         r2 = _make_threat_result(
             "https://bad.com", is_malicious=True, threat_type=ThreatType.PHISHING
         )
-        mock_service.check_urls_batch.return_value = [r1, r2]
+        mock_service.check_urls_batch.return_value = {r1.target: r1, r2.target: r2}
 
         req = _make_request(
             "POST",
@@ -513,7 +513,7 @@ class TestCheckUrlsBatch:
         r1 = _make_threat_result(
             "https://sus.com", is_malicious=False, threat_type=ThreatType.SUSPICIOUS
         )
-        mock_service.check_urls_batch.return_value = [r1]
+        mock_service.check_urls_batch.return_value = {r1.target: r1}
 
         req = _make_request(
             "POST",
@@ -535,7 +535,7 @@ class TestCheckUrlsBatch:
         r1 = _make_threat_result(
             "https://bad.com", is_malicious=True, threat_type=ThreatType.SUSPICIOUS
         )
-        mock_service.check_urls_batch.return_value = [r1]
+        mock_service.check_urls_batch.return_value = {r1.target: r1}
 
         req = _make_request(
             "POST",
@@ -576,7 +576,7 @@ class TestCheckUrlsBatch:
     async def test_batch_urls_exactly_50(self, handler, mock_service):
         urls = [f"https://site{i}.com" for i in range(50)]
         results = [_make_threat_result(u) for u in urls]
-        mock_service.check_urls_batch.return_value = results
+        mock_service.check_urls_batch.return_value = {r.target: r for r in results}
 
         req = _make_request("POST", "/api/v1/threat/urls", {"urls": urls})
         result = await handler.check_urls_batch(req)
@@ -586,7 +586,7 @@ class TestCheckUrlsBatch:
     @pytest.mark.asyncio
     async def test_batch_urls_max_concurrent_capped(self, handler, mock_service):
         r1 = _make_threat_result("https://a.com")
-        mock_service.check_urls_batch.return_value = [r1]
+        mock_service.check_urls_batch.return_value = {r1.target: r1}
 
         req = _make_request(
             "POST",
@@ -604,7 +604,7 @@ class TestCheckUrlsBatch:
     @pytest.mark.asyncio
     async def test_batch_urls_default_concurrent(self, handler, mock_service):
         r1 = _make_threat_result("https://a.com")
-        mock_service.check_urls_batch.return_value = [r1]
+        mock_service.check_urls_batch.return_value = {r1.target: r1}
 
         req = _make_request(
             "POST",
@@ -636,7 +636,7 @@ class TestCheckUrlsBatch:
     async def test_batch_urls_results_serialized(self, handler, mock_service):
         r1 = _make_threat_result("https://a.com")
         r2 = _make_threat_result("https://b.com")
-        mock_service.check_urls_batch.return_value = [r1, r2]
+        mock_service.check_urls_batch.return_value = {r1.target: r1, r2.target: r2}
 
         req = _make_request(
             "POST",
@@ -1363,7 +1363,7 @@ class TestEdgeCases:
     @pytest.mark.asyncio
     async def test_batch_urls_single_item(self, handler, mock_service):
         r1 = _make_threat_result("https://only.com")
-        mock_service.check_urls_batch.return_value = [r1]
+        mock_service.check_urls_batch.return_value = {r1.target: r1}
 
         req = _make_request(
             "POST",
@@ -1378,7 +1378,7 @@ class TestEdgeCases:
     @pytest.mark.asyncio
     async def test_batch_urls_max_concurrent_small_value(self, handler, mock_service):
         r1 = _make_threat_result("https://a.com")
-        mock_service.check_urls_batch.return_value = [r1]
+        mock_service.check_urls_batch.return_value = {r1.target: r1}
 
         req = _make_request(
             "POST",
@@ -1433,7 +1433,7 @@ class TestEdgeCases:
     @pytest.mark.asyncio
     async def test_batch_urls_all_malicious(self, handler, mock_service):
         results = [_make_threat_result(f"https://bad{i}.com", is_malicious=True) for i in range(3)]
-        mock_service.check_urls_batch.return_value = results
+        mock_service.check_urls_batch.return_value = {r.target: r for r in results}
 
         req = _make_request(
             "POST",

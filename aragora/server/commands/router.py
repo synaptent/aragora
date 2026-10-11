@@ -74,9 +74,12 @@ class CommandRouter:
             duration_ms = (time.time() - start_time) * 1000
 
             logger.info(
-                f"Command executed: /{command_name} by {ctx.user_id} "
-                f"on {ctx.platform} in {duration_ms:.1f}ms - "
-                f"success={result.success}"
+                "Command executed: /%s by %s on %s in %.1fms - success=%s",
+                command_name,
+                ctx.user_id,
+                ctx.platform,
+                duration_ms,
+                result.success,
             )
 
             return result

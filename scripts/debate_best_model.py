@@ -50,8 +50,8 @@ class FairDebateArena:
         self.task = task
         self.context = context
         self.rounds = rounds
-        self.transcript = []
-        self.start_time = None
+        self.transcript: list[str] = []
+        self.start_time: float | None = None
 
     def log(self, text: str):
         """Log to both console and transcript."""
@@ -82,7 +82,7 @@ class FairDebateArena:
         # Track all proposals through rounds
         proposals = {}
         all_rounds = []
-        context_msgs = []
+        context_msgs: list[Message] = []
 
         # === ROUND 0: Initial Proposals ===
         self.log("## Round 0: Initial Proposals")
@@ -111,7 +111,7 @@ Be honest about limitations but frame them constructively. This is a debate - ma
         results = await asyncio.gather(*[t[1] for t in proposal_tasks], return_exceptions=True)
 
         for (name, _), result in zip(proposal_tasks, results):
-            if isinstance(result, Exception):
+            if isinstance(result, BaseException):
                 proposals[name] = f"[ERROR: {result}]"
                 self.log(f"### {name}")
                 self.log(f"**ERROR**: {result}")
@@ -307,7 +307,7 @@ HYBRID_ROLES:
         self.log("### Vote Tally")
         self.log("")
 
-        vote_counts = {}
+        vote_counts: dict[str, int] = {}
         for voter, vote in votes.items():
             vote_counts[vote] = vote_counts.get(vote, 0) + 1
             self.log(f"- **{voter}** voted for: **{vote}**")
@@ -365,7 +365,7 @@ Be gracious in victory or defeat. Focus on what's best for developers."""
                 self.log("")
 
         # === SUMMARY ===
-        duration = time.time() - self.start_time
+        duration = time.time() - (self.start_time or time.time())
 
         self.log("---")
         self.log("")

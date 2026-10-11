@@ -1148,6 +1148,7 @@ class TestSyncRoutes:
         assert result is not None
         assert _status(result) == 200
 
+    @pytest.mark.xfail(strict=True, reason="fact sync closed until mound is org-scoped")
     def test_sync_facts(self, handler, mock_mound):
         """POST /sync/facts syncs from fact store."""
         http = MockHTTPHandler.post({})

@@ -443,15 +443,17 @@ a drift-guard test so it cannot silently fall out of sync with the emitter.
 
 ### 9.5 Path to v1.0 GA (current status)
 
-ODR v0.2 is a **staged rollout**, not one coordinated release. The schemas and
-both in-repo verifiers accept v0.2 first; the emitter defaults to 0.1 and emits
-0.2 **on request** (`odr_version="0.2"` in the library; `--odr-version 0.2` on
-the CLIs once the bridge lands) until `aragora-verify` **0.2.0** is published
-on PyPI. The default flips afterwards, for release 2.11.0.
+ODR v0.2 was a **staged rollout**, not one coordinated release. The schemas and
+both in-repo verifiers accepted v0.2 first, and the emitter emitted 0.2 only on
+request until `aragora-verify` **0.2.0** was published on PyPI. As of release
+2.11.0 the emitter **defaults to 0.2**; 0.1 is still emitted **on request**
+(`odr_version="0.1"` in the library; `--odr-version 0.1` on the CLIs;
+`ARAGORA_ODR_PROFILE_VERSION=0.1`; `?odr_version=0.1` on the export endpoint).
 Published `aragora-verify` 0.1.1 fails a v0.2 document at `schema_conformance`
-(`odr_version: must be '0.1'`); use either in-repo verifier for opt-in v0.2
-until 0.2.0 publishes. Every v0.1 document keeps verifying unchanged with every
-verifier throughout. This remains the **stability contract that v1.0 will honour**.
+(`odr_version: must be '0.1'`); verify v0.2 with `aragora-verify` 0.2.0 or later,
+or request 0.1 for a 0.1.x verifier. Every v0.1 document keeps verifying
+unchanged with every verifier. This remains the **stability contract that v1.0
+will honour**.
 
 ### 9.6 Changelog — what 0.2 adds
 
@@ -473,7 +475,7 @@ first.
   `attestation.mechanism` and the signer-committed `signatures[]` metadata of
   §6.
 
-Rollout is opt-in: 0.2 is emitted on request (`--odr-version 0.2`) until `aragora-verify` 0.2.0 is published; the default flips in release 2.11.0 (§9.5).
+Rollout: 0.2 is the default as of release 2.11.0, now that `aragora-verify` 0.2.0 is published; 0.1 is emitted on request (`--odr-version 0.1`) (§9.5).
 
 ## 10. Reference emitter
 

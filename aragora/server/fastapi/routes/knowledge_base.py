@@ -33,6 +33,15 @@ Migration Notes:
     Note: The existing ``knowledge.py`` routes cover the Knowledge Mound
     (higher-level knowledge items, adapters, gap detection). This module
     covers the lower-level FactStore API (facts, relations, queries, search).
+
+Organization scoping:
+    Every fact route reads, matches and changes only facts of the caller's
+    authenticated organization; a caller without one gets 403
+    ``knowledge_org_required``. A fact that is missing, belongs to another
+    organization or has no organization answers the same 404. Reads need
+    ``knowledge:read``. GET /search is not organization-scoped yet and answers
+    401 to anonymous callers and 403 ``knowledge_fact_access_closed`` to every
+    authenticated caller.
 """
 
 from __future__ import annotations
@@ -41,19 +50,21 @@ import asyncio
 import inspect
 import logging
 import time
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from aragora.rbac.models import AuthorizationContext
 
 from ..dependencies.auth import require_authenticated, require_permission
-from ..middleware.error_handling import NotFoundError
+from ..middleware.error_handling import APIError, NotFoundError
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v2/knowledge-base", tags=["Knowledge Base"])
+
+_WORKSPACE_ID_MAX_LENGTH = 100
 
 
 # =============================================================================
@@ -280,11 +291,32 @@ class ImportRequest(BaseModel):
     """Request body for POST /import."""
 
     facts: list[dict[str, Any]] = Field(..., description="List of fact dicts to import")
-    workspace_id: str = Field("default", max_length=100, description="Target workspace")
-    merge_strategy: str = Field(
-        "skip_existing",
-        description="How to handle duplicates: skip_existing, overwrite, merge",
+    workspace_id: str = Field(
+        "default", max_length=_WORKSPACE_ID_MAX_LENGTH, description="Target workspace"
     )
+    merge_strategy: Literal["skip_existing"] = Field(
+        "skip_existing",
+        description=(
+            "How to handle an entry that is already stored: only skip_existing is "
+            "supported (the entry is counted in skipped)"
+        ),
+    )
+
+    @field_validator("facts")
+    @classmethod
+    def _entry_workspace_is_a_short_string(
+        cls, facts: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        for index, fact in enumerate(facts):
+            if "workspace_id" not in fact:
+                continue
+            workspace_id = fact["workspace_id"]
+            if not isinstance(workspace_id, str) or len(workspace_id) > _WORKSPACE_ID_MAX_LENGTH:
+                raise ValueError(
+                    f"facts[{index}].workspace_id must be a string of at most "
+                    f"{_WORKSPACE_ID_MAX_LENGTH} characters"
+                )
+        return facts
 
 
 class ImportResponse(BaseModel):
@@ -315,6 +347,27 @@ def _require_knowledge() -> None:
     """Raise 503 if the knowledge subsystem is not available."""
     if not _KNOWLEDGE_AVAILABLE:
         raise HTTPException(status_code=503, detail="Knowledge subsystem not available")
+
+
+FACT_ACCESS_CLOSED_MESSAGE = "Knowledge fact access is disabled until org scoping is available"
+FACT_ACCESS_CLOSED_CODE = "knowledge_fact_access_closed"
+
+
+async def _fact_access_closed(
+    auth: AuthorizationContext = Depends(require_authenticated),
+) -> None:
+    """Answer 403 to every authenticated caller of a route that touches stored facts.
+
+    Organization scoping has not landed for these routes yet, so none of them
+    may touch stored facts. Route-level dependencies run before the
+    route's own parameters are resolved, so this answers before the route's
+    permission check and before the fact store or query engine is created;
+    anonymous callers still get 401 from ``require_authenticated``.
+    """
+    raise APIError(FACT_ACCESS_CLOSED_MESSAGE, status_code=403, code=FACT_ACCESS_CLOSED_CODE)
+
+
+_CLOSED_UNTIL_ORG_SCOPING = [Depends(_fact_access_closed)]
 
 
 _fact_store_instance: Any = None
@@ -455,6 +508,17 @@ async def _call_store(store: Any, method_name: str, *args: Any, **kwargs: Any) -
     return result
 
 
+def _caller_org(auth: AuthorizationContext, action: str = "Knowledge fact access") -> str:
+    """The organization every fact route is confined to: only the verified auth context."""
+    if not auth.org_id:
+        raise APIError(
+            f"{action} requires an organization",
+            status_code=403,
+            code="knowledge_org_required",
+        )
+    return auth.org_id
+
+
 # =============================================================================
 # Fact CRUD Endpoints
 # =============================================================================
@@ -470,7 +534,7 @@ async def list_facts(
     include_superseded: bool = Query(False, description="Include superseded facts"),
     limit: int = Query(50, ge=1, le=200, description="Max results"),
     offset: int = Query(0, ge=0, le=10000, description="Pagination offset"),
-    auth: AuthorizationContext = Depends(require_authenticated),
+    auth: AuthorizationContext = Depends(require_permission("knowledge:read")),
     store: Any = Depends(get_fact_store),
 ) -> FactListResponse:
     """
@@ -479,6 +543,7 @@ async def list_facts(
     Returns facts from the knowledge base matching the specified filters.
     Supports filtering by workspace, topic, confidence, and validation status.
     """
+    org_id = _caller_org(auth)
     try:
         filters = FactFilters(
             workspace_id=workspace_id,
@@ -488,6 +553,7 @@ async def list_facts(
             include_superseded=include_superseded,
             limit=limit,
             offset=offset,
+            org_id=org_id,
         )
 
         facts = await _call_store(store, "list_facts", filters)
@@ -508,7 +574,7 @@ async def list_facts(
 @router.get("/facts/{fact_id}", response_model=FactDetail)
 async def get_fact(
     fact_id: str,
-    auth: AuthorizationContext = Depends(require_authenticated),
+    auth: AuthorizationContext = Depends(require_permission("knowledge:read")),
     store: Any = Depends(get_fact_store),
 ) -> FactDetail:
     """
@@ -516,8 +582,9 @@ async def get_fact(
 
     Returns the full details of a fact including evidence and metadata.
     """
+    org_id = _caller_org(auth)
     try:
-        fact = await _call_store(store, "get_fact", fact_id)
+        fact = await _call_store(store, "get_fact", fact_id, org_id=org_id)
         if not fact:
             raise NotFoundError(f"Fact not found: {fact_id}")
         return _fact_to_detail(fact)
@@ -540,6 +607,7 @@ async def create_fact(
     Adds a fact to the knowledge base with the given statement, confidence,
     topics, and metadata. Requires ``knowledge:write`` permission.
     """
+    org_id = _caller_org(auth, "Creating knowledge facts")
     try:
         fact = await _call_store(
             store,
@@ -551,6 +619,7 @@ async def create_fact(
             confidence=body.confidence,
             topics=body.topics,
             metadata=body.metadata,
+            org_id=org_id,
         )
         return _fact_to_detail(fact)
     except HTTPException:
@@ -573,6 +642,7 @@ async def update_fact(
     Partially updates the specified fields of a fact.
     Requires ``knowledge:write`` permission.
     """
+    org_id = _caller_org(auth)
     try:
         kwargs: dict[str, Any] = {}
         if body.confidence is not None:
@@ -588,7 +658,7 @@ async def update_fact(
         if body.superseded_by is not None:
             kwargs["superseded_by"] = body.superseded_by
 
-        updated = await _call_store(store, "update_fact", fact_id, **kwargs)
+        updated = await _call_store(store, "update_fact", fact_id, **kwargs, org_id=org_id)
         if not updated:
             raise NotFoundError(f"Fact not found: {fact_id}")
 
@@ -614,8 +684,9 @@ async def delete_fact(
     Permanently removes a fact from the knowledge base.
     Requires ``knowledge:delete`` permission.
     """
+    org_id = _caller_org(auth)
     try:
-        deleted = await _call_store(store, "delete_fact", fact_id)
+        deleted = await _call_store(store, "delete_fact", fact_id, org_id=org_id)
         if not deleted:
             raise NotFoundError(f"Fact not found: {fact_id}")
         return {"deleted": True, "fact_id": fact_id}
@@ -647,8 +718,9 @@ async def verify_fact(
 
     Requires ``knowledge:write`` permission.
     """
+    org_id = _caller_org(auth)
     try:
-        fact = await _call_store(store, "get_fact", fact_id)
+        fact = await _call_store(store, "get_fact", fact_id, org_id=org_id)
         if not fact:
             raise NotFoundError(f"Fact not found: {fact_id}")
 
@@ -663,6 +735,7 @@ async def verify_fact(
                     "_pending_verification": True,
                     "_verification_queued_at": time.time(),
                 },
+                org_id=org_id,
             )
             return VerifyFactResponse(
                 fact_id=fact_id,
@@ -675,7 +748,7 @@ async def verify_fact(
             )
 
         try:
-            verified = await _await_if_needed(engine.verify_fact(fact_id))
+            verified = await _await_if_needed(engine.verify_fact(fact_id, org_id=org_id))
         except (KeyError, ValueError, OSError, TypeError, RuntimeError) as e:
             logger.error("Verification failed: %s", e)
             raise HTTPException(status_code=500, detail="Verification failed")
@@ -705,7 +778,7 @@ async def verify_fact(
 @router.get("/facts/{fact_id}/contradictions", response_model=ContradictionsResponse)
 async def get_contradictions(
     fact_id: str,
-    auth: AuthorizationContext = Depends(require_authenticated),
+    auth: AuthorizationContext = Depends(require_permission("knowledge:read")),
     store: Any = Depends(get_fact_store),
 ) -> ContradictionsResponse:
     """
@@ -714,12 +787,13 @@ async def get_contradictions(
     Returns a list of facts in the knowledge base that are identified as
     contradicting the specified fact.
     """
+    org_id = _caller_org(auth)
     try:
-        fact = await _call_store(store, "get_fact", fact_id)
+        fact = await _call_store(store, "get_fact", fact_id, org_id=org_id)
         if not fact:
             raise NotFoundError(f"Fact not found: {fact_id}")
 
-        contradictions = await _call_store(store, "get_contradictions", fact_id)
+        contradictions = await _call_store(store, "get_contradictions", fact_id, org_id=org_id)
         return ContradictionsResponse(
             fact_id=fact_id,
             contradictions=[_fact_to_summary(c) for c in contradictions],
@@ -740,7 +814,7 @@ async def get_relations(
     ),
     as_source: bool = Query(True, description="Include relations where fact is source"),
     as_target: bool = Query(True, description="Include relations where fact is target"),
-    auth: AuthorizationContext = Depends(require_authenticated),
+    auth: AuthorizationContext = Depends(require_permission("knowledge:read")),
     store: Any = Depends(get_fact_store),
 ) -> FactRelationsResponse:
     """
@@ -749,8 +823,9 @@ async def get_relations(
     Returns relations where this fact is a source and/or target,
     optionally filtered by relation type.
     """
+    org_id = _caller_org(auth)
     try:
-        fact = await _call_store(store, "get_fact", fact_id)
+        fact = await _call_store(store, "get_fact", fact_id, org_id=org_id)
         if not fact:
             raise NotFoundError(f"Fact not found: {fact_id}")
 
@@ -762,6 +837,7 @@ async def get_relations(
             relation_type=rel_type,
             as_source=as_source,
             as_target=as_target,
+            org_id=org_id,
         )
 
         return FactRelationsResponse(
@@ -791,15 +867,16 @@ async def add_relation(
 
     Requires ``knowledge:write`` permission.
     """
+    org_id = _caller_org(auth)
     try:
         rel_type = FactRelationType(body.relation_type)
     except (ValueError, KeyError):
         raise HTTPException(status_code=400, detail=f"Invalid relation_type: {body.relation_type}")
 
     try:
-        if not await _call_store(store, "get_fact", fact_id):
+        if not await _call_store(store, "get_fact", fact_id, org_id=org_id):
             raise NotFoundError(f"Source fact not found: {fact_id}")
-        if not await _call_store(store, "get_fact", body.target_fact_id):
+        if not await _call_store(store, "get_fact", body.target_fact_id, org_id=org_id):
             raise NotFoundError(f"Target fact not found: {body.target_fact_id}")
 
         relation = await _call_store(
@@ -811,7 +888,10 @@ async def add_relation(
             confidence=body.confidence,
             created_by=body.created_by,
             metadata=body.metadata,
+            org_id=org_id,
         )
+        if relation is None:
+            raise NotFoundError("Source or target fact not found")
         return _relation_to_model(relation)
     except NotFoundError:
         raise
@@ -834,6 +914,7 @@ async def add_relation_bulk(
     Both source and target fact IDs are specified in the request body.
     Requires ``knowledge:write`` permission.
     """
+    org_id = _caller_org(auth)
     try:
         rel_type = FactRelationType(body.relation_type)
     except (ValueError, KeyError):
@@ -849,8 +930,13 @@ async def add_relation_bulk(
             confidence=body.confidence,
             created_by=body.created_by,
             metadata=body.metadata,
+            org_id=org_id,
         )
+        if relation is None:
+            raise NotFoundError("Source or target fact not found")
         return _relation_to_model(relation)
+    except NotFoundError:
+        raise
     except HTTPException:
         raise
     except (RuntimeError, ValueError, TypeError, OSError, KeyError, AttributeError) as e:
@@ -866,7 +952,7 @@ async def add_relation_bulk(
 @router.post("/query", response_model=QueryResponse)
 async def query_knowledge_base(
     body: QueryRequest,
-    auth: AuthorizationContext = Depends(require_authenticated),
+    auth: AuthorizationContext = Depends(require_permission("knowledge:read")),
     engine: Any = Depends(get_query_engine),
 ) -> QueryResponse:
     """
@@ -875,6 +961,7 @@ async def query_knowledge_base(
     Runs a question through the query engine, which uses facts and embeddings
     to produce an answer with citations.
     """
+    org_id = _caller_org(auth, "Querying knowledge")
     try:
         options_data = body.options
         options = QueryOptions(
@@ -886,7 +973,9 @@ async def query_knowledge_base(
         )
 
         try:
-            result = await _await_if_needed(engine.query(body.question, body.workspace_id, options))
+            result = await _await_if_needed(
+                engine.query(body.question, body.workspace_id, options, org_id=org_id)
+            )
         except (KeyError, ValueError, OSError, TypeError, RuntimeError) as e:
             logger.error("Query execution failed: %s", e)
             raise HTTPException(status_code=500, detail="Query execution failed")
@@ -911,7 +1000,7 @@ async def query_knowledge_base(
         raise HTTPException(status_code=500, detail="Failed to execute query")
 
 
-@router.get("/search", response_model=SearchResponse)
+@router.get("/search", response_model=SearchResponse, dependencies=_CLOSED_UNTIL_ORG_SCOPING)
 async def search_knowledge_base(
     q: str = Query(..., min_length=1, max_length=500, description="Search query"),
     workspace_id: str = Query("default", max_length=100, description="Workspace to search"),
@@ -922,9 +1011,11 @@ async def search_knowledge_base(
     """
     Search knowledge base chunks via embeddings.
 
-    Performs a vector similarity search over knowledge base chunks and
-    returns ranked results.
+    Performs a vector similarity search over the caller's organization's
+    chunks and returns ranked results; a caller without an organization
+    gets 403 ``knowledge_org_required``.
     """
+    org_id = _caller_org(auth, "Searching knowledge")
     try:
         if not hasattr(engine, "search"):
             raise HTTPException(
@@ -933,7 +1024,7 @@ async def search_knowledge_base(
             )
 
         try:
-            results = await _await_if_needed(engine.search(q, workspace_id, limit))
+            results = await _await_if_needed(engine.search(q, workspace_id, limit, org_id=org_id))
         except (KeyError, ValueError, OSError, TypeError, RuntimeError) as e:
             logger.error("Search failed: %s", e)
             raise HTTPException(status_code=500, detail="Search operation failed")
@@ -955,7 +1046,7 @@ async def search_knowledge_base(
 @router.get("/stats", response_model=StatsResponse)
 async def get_stats(
     workspace_id: str | None = Query(None, max_length=100, description="Filter by workspace"),
-    auth: AuthorizationContext = Depends(require_authenticated),
+    auth: AuthorizationContext = Depends(require_permission("knowledge:read")),
     store: Any = Depends(get_fact_store),
 ) -> StatsResponse:
     """
@@ -964,8 +1055,9 @@ async def get_stats(
     Returns aggregate statistics about facts, relations, and topics,
     optionally scoped to a specific workspace.
     """
+    org_id = _caller_org(auth)
     try:
-        stats = await _call_store(store, "get_statistics", workspace_id)
+        stats = await _call_store(store, "get_statistics", workspace_id, org_id=org_id)
         return StatsResponse(
             workspace_id=workspace_id,
             **stats,
@@ -984,7 +1076,7 @@ async def get_stats(
 async def export_knowledge_base(
     workspace_id: str | None = Query(None, max_length=100, description="Workspace to export"),
     format: str = Query("json", description="Export format (json)"),
-    auth: AuthorizationContext = Depends(require_authenticated),
+    auth: AuthorizationContext = Depends(require_permission("knowledge:read")),
     store: Any = Depends(get_fact_store),
 ) -> ExportResponse:
     """
@@ -993,6 +1085,7 @@ async def export_knowledge_base(
     Returns all facts (optionally filtered by workspace) in the requested
     format for backup or transfer purposes.
     """
+    org_id = _caller_org(auth)
     try:
         from datetime import datetime, timezone
 
@@ -1002,6 +1095,7 @@ async def export_knowledge_base(
             include_superseded=True,
             limit=10000,
             offset=0,
+            org_id=org_id,
         )
         facts = await _call_store(store, "list_facts", filters)
         fact_dicts = [f.to_dict() if hasattr(f, "to_dict") else f for f in facts]
@@ -1027,10 +1121,16 @@ async def import_knowledge_base(
     Import knowledge entries.
 
     Accepts a list of fact dictionaries and imports them into the knowledge
-    base. Supports merge strategies: ``skip_existing``, ``overwrite``, ``merge``.
+    base. The only merge strategy is ``skip_existing`` (the default); any
+    other value answers 422 before the fact store is read or written.
+    Every fact is bound to the caller's organization. An entry whose ``id``
+    is already stored in that organization, or whose statement is already
+    stored in that organization and workspace, is counted in ``skipped``,
+    not ``imported``.
 
     Requires ``knowledge:write`` permission.
     """
+    org_id = _caller_org(auth, "Creating knowledge facts")
     imported = 0
     skipped = 0
     errors = 0
@@ -1044,24 +1144,29 @@ async def import_knowledge_base(
                 details.append(f"Skipped entry without statement: {fact_data.get('id', 'unknown')}")
                 continue
 
-            # Check for existing fact by ID if merge strategy requires it
             fact_id = fact_data.get("id")
-            if fact_id and body.merge_strategy == "skip_existing":
-                existing = await _call_store(store, "get_fact", fact_id)
+            if fact_id:
+                existing = await _call_store(store, "get_fact", fact_id, org_id=org_id)
                 if existing:
                     skipped += 1
                     continue
+
+            workspace_id = fact_data.get("workspace_id", body.workspace_id)
+            if await _call_store(store, "find_duplicate", statement, workspace_id, org_id=org_id):
+                skipped += 1
+                continue
 
             await _call_store(
                 store,
                 "add_fact",
                 statement=statement,
-                workspace_id=fact_data.get("workspace_id", body.workspace_id),
+                workspace_id=workspace_id,
                 evidence_ids=fact_data.get("evidence_ids", []),
                 source_documents=fact_data.get("source_documents", []),
                 confidence=fact_data.get("confidence", 0.5),
                 topics=fact_data.get("topics", []),
                 metadata=fact_data.get("metadata", {}),
+                org_id=org_id,
             )
             imported += 1
 

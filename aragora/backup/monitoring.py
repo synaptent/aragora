@@ -239,7 +239,10 @@ def record_backup_created(
     _update_compliance_status()
 
     logger.info(
-        f"Backup created: type={backup_type}, size={size_bytes}, duration={duration_seconds:.2f}s"
+        "Backup created: type=%s, size=%s, duration=%.2fs",
+        backup_type,
+        size_bytes,
+        duration_seconds,
     )
 
 
@@ -290,7 +293,7 @@ def record_restore_completed(
     # Update RTO compliance
     _update_compliance_status()
 
-    logger.info(f"Restore completed: success={success}, duration={duration_seconds:.2f}s")
+    logger.info("Restore completed: success=%s, duration=%.2fs", success, duration_seconds)
 
 
 def update_backup_age() -> float | None:
@@ -825,7 +828,10 @@ class RecoveryProgressMonitor:
             self._completed_recoveries = self._completed_recoveries[-self._max_history_size :]
 
         logger.info(
-            f"Recovery {recovery_id} completed: success={success}, duration={duration_seconds:.2f}s"
+            "Recovery %s completed: success=%s, duration=%.2fs",
+            recovery_id,
+            success,
+            duration_seconds,
         )
 
         if self._progress_callback:

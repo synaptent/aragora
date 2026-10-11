@@ -118,8 +118,11 @@ class PulseIngestor(ABC):
                 last_error = e
                 delay = self.base_retry_delay * (2**attempt)
                 logger.warning(
-                    f"Attempt {attempt + 1}/{self.max_retries} failed: {e}. "
-                    f"Retrying in {delay:.1f}s"
+                    "Attempt %s/%s failed: %s. Retrying in %.1fs",
+                    attempt + 1,
+                    self.max_retries,
+                    e,
+                    delay,
                 )
                 if attempt < self.max_retries - 1:
                     await asyncio.sleep(delay)
@@ -1325,8 +1328,11 @@ class PulseManager:
             self._outcomes = self._outcomes[-self._max_outcomes :]
 
         logger.info(
-            f"[pulse] Recorded debate outcome: {platform}/{topic[:50]}... "
-            f"(consensus={consensus_reached}, confidence={confidence:.2f})"
+            "[pulse] Recorded debate outcome: %s/%s... (consensus=%s, confidence=%.2f)",
+            platform,
+            topic[:50],
+            consensus_reached,
+            confidence,
         )
 
         return outcome

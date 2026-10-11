@@ -57,6 +57,11 @@ from .permissions import (
     PERM_ANALYTICS_EXPORT,
     PERM_PERFORMANCE_READ,
     PERM_PERFORMANCE_WRITE,
+    PERM_ANALYTICS_CONFIGURE,
+    PERM_ANALYTICS_QUERY,
+    # Cross-pollination
+    PERM_CROSS_POLLINATION_READ,
+    PERM_CROSS_POLLINATION_WRITE,
     # Introspection & History
     PERM_INTROSPECTION_READ,
     PERM_HISTORY_READ,
@@ -91,6 +96,8 @@ from .permissions import (
     PERM_CONNECTOR_READ,
     PERM_CONNECTOR_CREATE,
     PERM_CONNECTOR_DELETE,
+    PERM_CONNECTOR_TEST,
+    PERM_CONNECTOR_CONFIGURE,
     # Bot & Feedback
     PERM_BOTS_READ,
     PERM_FEEDBACK_READ,
@@ -351,6 +358,11 @@ ROLE_ADMIN = Role(
         # Analytics
         PERM_ANALYTICS_READ.key,
         PERM_ANALYTICS_EXPORT.key,
+        PERM_ANALYTICS_CONFIGURE.key,
+        PERM_ANALYTICS_QUERY.key,
+        # Cross-pollination
+        PERM_CROSS_POLLINATION_READ.key,
+        PERM_CROSS_POLLINATION_WRITE.key,
         # Training
         PERM_TRAINING_READ.key,
         PERM_TRAINING_CREATE.key,
@@ -366,6 +378,8 @@ ROLE_ADMIN = Role(
         PERM_CONNECTOR_READ.key,
         PERM_CONNECTOR_CREATE.key,
         PERM_CONNECTOR_DELETE.key,
+        PERM_CONNECTOR_TEST.key,
+        PERM_CONNECTOR_CONFIGURE.key,
         # Bots
         PERM_BOTS_READ.key,
         # Feedback (all operations including admin)
@@ -585,6 +599,8 @@ ROLE_ANALYST = Role(
         PERM_WORKFLOW_READ.key,
         PERM_ANALYTICS_READ.key,
         PERM_ANALYTICS_EXPORT.key,
+        PERM_ANALYTICS_QUERY.key,
+        PERM_CROSS_POLLINATION_READ.key,
         PERM_TRAINING_READ.key,
         PERM_EVIDENCE_READ.key,
         PERM_DOCUMENTS_READ.key,
@@ -640,6 +656,7 @@ ROLE_MEMBER = Role(
         PERM_EVIDENCE_READ.key,
         PERM_EVIDENCE_CREATE.key,
         PERM_ANALYTICS_READ.key,
+        PERM_CROSS_POLLINATION_READ.key,
         PERM_INTROSPECTION_READ.key,
         PERM_HISTORY_READ.key,
         PERM_REASONING_READ.key,

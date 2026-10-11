@@ -203,7 +203,7 @@ def extract_user_voice(text: str) -> str:
 
 def deduplicate(prompts: list[dict], threshold: float = 0.65) -> list[dict]:
     """Remove near-duplicate prompts using word overlap."""
-    seen = []
+    seen: list[str] = []
     unique = []
     for p in prompts:
         text = p["text"][:400].lower()

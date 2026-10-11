@@ -169,8 +169,10 @@ class TransactionManager:
                 if self._is_deadlock_error(e) and attempt < max_retries:
                     delay = self._calculate_deadlock_delay(attempt)
                     logger.warning(
-                        f"Deadlock detected (attempt {attempt + 1}/{max_retries + 1}), "
-                        f"retrying in {delay:.2f}s"
+                        "Deadlock detected (attempt %s/%s), retrying in %.2fs",
+                        attempt + 1,
+                        max_retries + 1,
+                        delay,
                     )
                     await asyncio.sleep(delay)
                 elif self._is_deadlock_error(e):

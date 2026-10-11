@@ -693,7 +693,7 @@ class AccountingAuditor(BaseAuditor):
         }
 
         # Count first digits
-        digit_counts = {d: 0 for d in range(1, 10)}
+        digit_counts = dict.fromkeys(range(1, 10), 0)
         total = 0
 
         for amt in amounts:

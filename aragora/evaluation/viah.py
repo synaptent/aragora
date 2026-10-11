@@ -14,7 +14,8 @@ The metric:
         - failed_claims_promoted_without_repair * 1.0
     ) / agent_hours
 
-Inputs are derived from the existing :class:`aragora.swarm.shift_ledger.
+Inputs are read from any ledger satisfying the structural
+:class:`ViahLedger` protocol, such as :class:`aragora.evaluation.shift_ledger.
 ShiftLedger`. Signals that depend on AGT-05 wiring (crux correctness,
 prediction resolutions, failed claims) are accepted as optional sidecar
 counts so this module can land before AGT-05 settlement is live; counts
@@ -30,13 +31,50 @@ from __future__ import annotations
 import logging
 import math
 import os
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import Any
-
-from aragora.swarm.shift_ledger import LedgerEntry, ShiftLedger
+from pathlib import Path
+from typing import Any, Protocol, TypeVar, runtime_checkable
 
 logger = logging.getLogger(__name__)
+
+
+@runtime_checkable
+class ViahLedgerEntry(Protocol):
+    """One ledger row as VIAH reads it."""
+
+    @property
+    def entry_type(self) -> str: ...
+
+    @property
+    def timestamp(self) -> str: ...
+
+    @property
+    def payload(self) -> dict[str, Any]: ...
+
+
+_EntryT = TypeVar("_EntryT", bound=ViahLedgerEntry)
+_EntryT_co = TypeVar("_EntryT_co", bound=ViahLedgerEntry, covariant=True)
+
+
+@runtime_checkable
+class ViahLedger(Protocol[_EntryT_co]):
+    """Ledger surface VIAH reads from and appends snapshots to.
+
+    :class:`aragora.evaluation.shift_ledger.ShiftLedger` satisfies this protocol
+    structurally; VIAH depends only on the protocol.
+    """
+
+    @property
+    def path(self) -> Path: ...
+
+    def read_all(self) -> Sequence[_EntryT_co]: ...
+
+    def read_by_type(self, entry_type: str) -> Sequence[_EntryT_co]: ...
+
+    def append(self, entry_type: str, **payload: Any) -> _EntryT_co: ...
+
 
 # Default coefficients matching the AGT-06 plan
 DEFAULT_PR_WEIGHT = 1.0
@@ -136,7 +174,7 @@ def viah_score(
 
 def compute_viah(
     *,
-    ledger: ShiftLedger,
+    ledger: ViahLedger[ViahLedgerEntry],
     window_hours: float = 168.0,
     now: datetime | None = None,
     cruxes_correctly_detected: int = 0,
@@ -144,7 +182,7 @@ def compute_viah(
     failed_claims_promoted_without_repair: int = 0,
     coefficients: ViahCoefficients | None = None,
 ) -> ViahReport:
-    """Compute a VIAH report from a :class:`ShiftLedger` over ``window_hours``.
+    """Compute a VIAH report from a :class:`ViahLedger` over ``window_hours``.
 
     Signals derived from the ledger:
 
@@ -224,12 +262,12 @@ def _parse_iso(value: str) -> datetime | None:
 
 
 def _entries_within(
-    entries: list[LedgerEntry],
+    entries: Sequence[ViahLedgerEntry],
     *,
     start: datetime,
     end: datetime,
-) -> list[LedgerEntry]:
-    out: list[LedgerEntry] = []
+) -> list[ViahLedgerEntry]:
+    out: list[ViahLedgerEntry] = []
     for entry in entries:
         ts = _parse_iso(entry.timestamp)
         if ts is None:
@@ -239,7 +277,7 @@ def _entries_within(
     return out
 
 
-def _sum_rescue_counts(entries: list[LedgerEntry]) -> int:
+def _sum_rescue_counts(entries: Sequence[ViahLedgerEntry]) -> int:
     """Sum rescue_count payloads from cycle_tick entries.
 
     Older shifts may not have written rescue_count; missing values
@@ -259,7 +297,7 @@ def _sum_rescue_counts(entries: list[LedgerEntry]) -> int:
 
 
 def _agent_hours_from_shifts(
-    entries: list[LedgerEntry],
+    entries: Sequence[ViahLedgerEntry],
     *,
     start: datetime,
     end: datetime,
@@ -399,7 +437,7 @@ def _trend_direction(points: list[ViahTrendPoint]) -> str:
 
 def rolling_viah_trend(
     *,
-    ledger: ShiftLedger,
+    ledger: ViahLedger[ViahLedgerEntry],
     weeks: int = 4,
     week_hours: float = 168.0,
     now: datetime | None = None,
@@ -461,10 +499,13 @@ VIAH_SNAPSHOT_ENTRY_TYPE = "viah_snapshot"
 
 def persist_viah_snapshot(
     *,
-    ledger: ShiftLedger,
+    ledger: ViahLedger[_EntryT],
     report: ViahReport,
-) -> LedgerEntry:
-    """Persist a ViahReport to the ShiftLedger as a ``viah_snapshot`` entry.
+) -> _EntryT:
+    """Persist a ViahReport to the ledger as a ``viah_snapshot`` entry.
+
+    Returns whatever ``ledger.append`` returns (a ``LedgerEntry`` for a
+    :class:`aragora.evaluation.shift_ledger.ShiftLedger`).
 
     Gated behind ``ARAGORA_VIAH_TREND_ENABLED`` — the same flag that guards
     :func:`rolling_viah_trend`.  Raises ``RuntimeError`` when the flag is
@@ -495,7 +536,7 @@ def persist_viah_snapshot(
 
 def read_viah_snapshots(
     *,
-    ledger: ShiftLedger,
+    ledger: ViahLedger[ViahLedgerEntry],
     max_count: int | None = None,
 ) -> list[dict[str, Any]]:
     """Return persisted VIAH snapshot payloads from the ledger, newest-last.
@@ -504,7 +545,8 @@ def read_viah_snapshots(
     an empty ledger simply returns an empty list.
 
     Args:
-        ledger: The :class:`~aragora.swarm.shift_ledger.ShiftLedger` to read.
+        ledger: The :class:`ViahLedger` to read (for example a
+            :class:`~aragora.evaluation.shift_ledger.ShiftLedger`).
         max_count: If given, return at most this many most-recent snapshots.
     """
     entries = ledger.read_by_type(VIAH_SNAPSHOT_ENTRY_TYPE)
@@ -524,6 +566,8 @@ __all__ = [
     "VIAH_SNAPSHOT_ENTRY_TYPE",
     "VIAH_TREND_FLAG",
     "ViahCoefficients",
+    "ViahLedger",
+    "ViahLedgerEntry",
     "ViahReport",
     "ViahTrend",
     "ViahTrendPoint",

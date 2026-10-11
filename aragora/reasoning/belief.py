@@ -814,7 +814,7 @@ class BeliefNetwork:
             return {}
 
         # Initialize with uniform centrality
-        centralities = {nid: 1.0 / n for nid in self.nodes}
+        centralities = dict.fromkeys(self.nodes, 1.0 / n)
 
         # Iterate PageRank-style
         damping = 0.85

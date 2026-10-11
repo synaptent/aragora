@@ -513,8 +513,11 @@ class SlackMessageQueue:
                     self._store.mark_failed(message.id, error, next_retry)
                     stats["failed"] += 1
                     logger.info(
-                        f"Message {message.id} retry scheduled in {delay:.0f}s "
-                        f"(attempt {message.retries + 1}/{self._max_retries})"
+                        "Message %s retry scheduled in %.0fs (attempt %s/%s)",
+                        message.id,
+                        delay,
+                        message.retries + 1,
+                        self._max_retries,
                     )
 
         return stats

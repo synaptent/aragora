@@ -139,8 +139,11 @@ class MigrationContext:
         self._completed = True
         elapsed = (datetime.now() - self._started_at).total_seconds() if self._started_at else 0
         logger.info(
-            f"Migration {self._migration_id} completed in {elapsed:.2f}s "
-            f"(nodes: {len(self._created_node_ids)}, relationships: {len(self._created_relationship_ids)})"
+            "Migration %s completed in %.2fs (nodes: %s, relationships: %s)",
+            self._migration_id,
+            elapsed,
+            len(self._created_node_ids),
+            len(self._created_relationship_ids),
         )
         return False
 

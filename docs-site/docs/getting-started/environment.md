@@ -96,6 +96,50 @@ For best performance with Mistral models, use the direct API:
 - `codestral` agent for code-specialized tasks
 - Falls back to OpenRouter if direct API fails
 
+## Model Transport (VibeProxy)
+
+Routes `openai-api` agents (and the Claude consult/review harnesses under
+`scripts/`) through a local VibeProxy gateway instead of calling the provider
+directly. Trust model and diagnostics: [VibeProxy guide](../guides/VIBEPROXY.md).
+
+| Variable | Required | Description | Default |
+|----------|----------|-------------|---------|
+| `ARAGORA_MODEL_TRANSPORT` | Optional | `direct`, `vibeproxy-prefer` or `vibeproxy-required` (behavior below). For `openai-api`, an unknown value or invalid VibeProxy settings degrade to `direct` with a warning, except under `vibeproxy-required`, where invalid VibeProxy settings fail agent construction. | `direct` |
+| `ARAGORA_VIBEPROXY_BASE_URL` | Optional | VibeProxy endpoint, path empty or `/v1`. Plaintext `http` only on a literal loopback IP; remote endpoints need `https` and `ARAGORA_VIBEPROXY_API_KEY`. Port `8317` is always rejected. Ignored in `direct` mode. | `http://127.0.0.1:8318` |
+| `ARAGORA_VIBEPROXY_API_KEY` | Optional | Key sent to VibeProxy. Required for remote endpoints. | `vibeproxy-local` on loopback |
+| `ARAGORA_VIBEPROXY_MODEL_MAP` | Optional | JSON object mapping `provider:model` to a proxy model ID. Invalid JSON is a configuration error. | empty (exact model IDs only) |
+| `ARAGORA_VIBEPROXY_CATALOG_TTL_SECONDS` | Optional | Cache lifetime of the proxy model catalog (`GET /v1/models`). | `60` |
+
+Mode behavior for the `openai-api` agent:
+
+- `direct`: every request goes to the OpenAI endpoint (`OPENAI_BASE_URL` or
+  `https://api.openai.com/v1`) with `OPENAI_API_KEY`.
+- `vibeproxy-prefer`: exact, non-streaming chat requests go to VibeProxy.
+  Web-search requests, streaming, custom endpoints and proxy failures fall back
+  to the direct path, so this mode still needs a real `OPENAI_API_KEY`.
+- `vibeproxy-required`: an egress boundary; nothing falls back to the direct
+  OpenAI endpoint.
+  - Streaming callers (the server wraps every debate agent for token
+    streaming) receive the non-streaming VibeProxy answer as a single chunk.
+  - Web-search auto-detection is off. Prompts that match the web-search
+    patterns (URLs, "online", "article", "news", ...) are sent without the
+    `web_search` tool, and the first such prompt logs one warning per
+    process: `web search disabled under vibeproxy-required`.
+  - Still refused with `vibeproxy-required cannot serve this request`:
+    a custom `OPENAI_BASE_URL` and tool-bearing payloads. Proxy errors,
+    timeouts and models missing from the proxy catalog raise
+    `required VibeProxy OpenAI request failed`.
+
+**Placeholder `OPENAI_API_KEY` under `vibeproxy-required`:** creating an
+`openai-api` agent requires `OPENAI_API_KEY` (or an OpenRouter fallback key),
+but in `vibeproxy-required` mode the agent never sends it: proxy requests use
+`ARAGORA_VIBEPROXY_API_KEY`. Set a non-secret placeholder such as
+`OPENAI_API_KEY=vibeproxy-local` when no OpenAI key exists, and leave
+`OPENAI_BASE_URL` unset. Do not use a placeholder with `direct` or
+`vibeproxy-prefer`. Other features that call OpenAI directly with
+`OPENAI_API_KEY` (for example OpenAI embeddings) will get `401` with a
+placeholder and use their fallbacks.
+
 ## Web Research (Experimental)
 
 Enable external web research during debates (set the keys below):
@@ -470,6 +514,16 @@ explicitly if you need consistent pooling across subsystems.
 | `ARAGORA_DEFAULT_HOST` | Optional | Fallback host for link generation | `localhost:8080` |
 | `ARAGORA_NOTIFICATION_WORKER` | Optional | Enable notification worker (`0` to disable) | `1` |
 | `ARAGORA_NOTIFICATION_CONCURRENCY` | Optional | Max concurrent notification deliveries | `20` |
+| `ARAGORA_CONTROL_PLANE_WS_PORT` | Optional | Port of the control plane WebSocket listener started next to the main server | `8766` |
+| `ARAGORA_NOMIC_LOOP_WS_PORT` | Optional | Port of the nomic loop WebSocket listener | `8767` |
+| `ARAGORA_CANVAS_WS_PORT` | Optional | Port of the canvas WebSocket listener | `8768` |
+
+Besides the HTTP port and the main WebSocket port, `python -m aragora.server`
+binds the three extra WebSocket listeners above and, unless
+`METRICS_ENABLED=false`, the Prometheus endpoint on port `9090`. To run a
+second server on the same host, move all of them, for example
+`--http-port 8190 --port 8195` with
+`ARAGORA_CONTROL_PLANE_WS_PORT=8196 ARAGORA_NOMIC_LOOP_WS_PORT=8197 ARAGORA_CANVAS_WS_PORT=8198 METRICS_ENABLED=false`.
 
 ## Debate Defaults
 
@@ -549,7 +603,7 @@ These variables exist in the settings schema but are not currently wired into ru
 | `ARAGORA_HOST` | Optional | Legacy bind host used by deployment templates | `0.0.0.0` |
 | `ARAGORA_PORT` | Optional | Legacy HTTP port used by deployment templates | `8080` |
 
-These are not read by the CLI server directly; prefer `aragora serve --api-port/--ws-port` in local dev.
+These are not read by the CLI server directly; prefer `aragora serve --api-port` and `--ws-port` in local dev.
 
 ### Environment Mode
 
@@ -1297,17 +1351,22 @@ See [BOT_INTEGRATIONS.md](../guides/bot-integrations) for detailed setup guides.
   `ARAGORA_SECRET_NAME` still falls back to `aragora/production` when Secrets Manager is enabled.
 - Mounted secret paths must resolve to owner-readable regular files with mode `0400` or `0600`; symlinks, hard links, and platform-default `0444`/`0644` modes are rejected.
 - `ARAGORA_ENV` or `ARAGORA_ENVIRONMENT` values `production`, `prod`, `staging`, and `stage` enable strict custody and mandatory managed `ARAGORA_API_TOKEN` authentication.
+- Strict mode treats provider keys (`OPENAI_API_KEY`, `XAI_API_KEY`, `ANTHROPIC_API_KEY`, ...) as
+  critical secrets that must come from managed custody (`ARAGORA_SECRETS_DIR` or Secrets Manager).
+  A local server that takes its keys from the shell (for example a VibeProxy-routed development
+  server) should set `ARAGORA_USE_SECRETS_MANAGER=false ARAGORA_SECRETS_STRICT=false` explicitly
+  so an inherited environment cannot switch either on.
 - Use `python3 -m aragora.cli.main secrets health --json` to verify source status without printing secret values.
 
 ### ODR Receipt Signing
 
 | Variable | Required | Description | Default |
 |----------|----------|-------------|---------|
-| `ARAGORA_ODR_PROFILE_VERSION` | Optional | ODR export profile (`0.1` or `0.2`) for `aragora receipt export --format odr` and `scripts/emit_pr_receipt.py`. `--odr-version` overrides it; empty means unset; invalid values fail with usage exit 2 before writing. Default stays 0.1 until aragora-verify 0.2.0 is published. | `0.1` |
+| `ARAGORA_ODR_PROFILE_VERSION` | Optional | ODR export profile (`0.1` or `0.2`) for `aragora receipt export --format odr`, `scripts/emit_pr_receipt.py`, `aragora review --emit-odr` and the server's `GET /api/v2/receipts/\{id\}/export?format=odr`. `--odr-version` (or `?odr_version=`) overrides it; empty means unset; invalid values are rejected before anything is written. Default is 0.2 as of release 2.11.0; set `0.1` for consumers still on aragora-verify 0.1.x. | `0.1` |
 | `ARAGORA_ODR_SIGNING_KEY_FILE` | Optional | Path to a PKCS#8 Ed25519 private-key PEM; empty means unset; unusable files fail closed. POSIX group/other-writable files are rejected; readable files warn. | - |
 | `ARAGORA_ODR_SIGNING_KEY_SECRET` | Optional | AWS Secrets Manager SecretId holding the signing PEM; used when no key file is configured. An explicit loader secret-name argument overrides the file. | `aragora/odr-signing-key` |
 | `ARAGORA_ODR_SIGNING_KEY_STRICT_MODE` | Optional | Reject POSIX group/other-readable key files instead of warning when true (`true`, `1`, `yes`, `on`, case-insensitive). | `false` |
-| `ARAGORA_ODR_SIGNING_ISSUER` | Optional | `signatures[].issuer` written by `aragora receipt export --format odr --odr-version 0.2` and `scripts/emit_pr_receipt.py` on v0.2 documents (signer-committed, spec §6); empty means unset. Ignored for v0.1 documents, which keep the three-member entry. | `aragora` |
+| `ARAGORA_ODR_SIGNING_ISSUER` | Optional | `signatures[].issuer` written by `aragora receipt export --format odr` and `scripts/emit_pr_receipt.py` on v0.2 documents (the default; signer-committed, spec §6); empty means unset. Ignored for v0.1 documents, which keep the three-member entry. | `aragora` |
 | `ARAGORA_ENABLE_PUBLIC_ODR_EXPORT` | Optional | Serve `GET /api/v2/receipts/\{id\}/export?format=odr` to a caller carrying no authorization context on an authentication-enabled deployment (`true`, `1`, `yes`, `on`, case-insensitive). Default off: such a caller is answered `401 auth_required`. A caller that does carry a context still needs `receipts.read` either way, and an authentication-disabled deployment is unaffected. The public-receipts deployment sets it true. | `false` |
 
 ## Knowledge System
@@ -1340,6 +1399,7 @@ See [BOT_INTEGRATIONS.md](../guides/bot-integrations) for detailed setup guides.
 |----------|----------|-------------|---------|
 | `ARAGORA_N1_DETECTION` | Optional | N+1 query detection mode: `off`, `warn`, `error` | `off` |
 | `ARAGORA_N1_THRESHOLD` | Optional | N+1 query threshold per table | `5` |
+| `METRICS_ENABLED` | Optional | Start the Prometheus metrics server (port `9090`) during server startup (`true`, `1`, `yes` enable; anything else disables). Forced off when `ARAGORA_OFFLINE` is true. | `true` |
 
 ## CLI & Process Settings
 

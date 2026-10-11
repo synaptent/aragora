@@ -84,7 +84,7 @@ if TYPE_CHECKING:
         Vote as VoteType,
     )
     from aragora.debate.context import DebateContext as DebateContextType
-    from aragora.debate.protocol import DebateProtocol as DebateProtocolType
+    from aragora.protocols.debate import DebateProtocol as DebateProtocolType
 else:
     # Runtime type aliases (strings for forward references)
     AgentType = "Agent"

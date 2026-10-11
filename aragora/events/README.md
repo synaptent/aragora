@@ -15,7 +15,6 @@ events/
 ├── batch_dispatcher.py      # Batch webhook delivery
 ├── security_dispatcher.py   # Security-focused events
 ├── security_events.py       # Security event definitions
-├── arena_bridge.py          # Arena event integration
 ├── dead_letter_queue.py     # Failed event handling
 ├── webhook_verify.py        # Webhook signature verification
 ├── subscribers/             # Event subscriber implementations
@@ -169,8 +168,8 @@ Connect Arena debates to the event system:
 ```python
 from aragora.debate.arena_bridge import ArenaEventBridge, create_arena_bridge
 
-# Create bridge for an arena
-bridge = create_arena_bridge(arena)
+# Create a bridge for the arena's EventBus
+bridge = create_arena_bridge(arena.event_bus)
 
 # Events are automatically routed:
 # - debate_start -> webhook subscribers

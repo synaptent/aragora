@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from aragora.debate.protocol import RoundPhase
+from aragora.protocols.debate import RoundPhase
 
 __all__ = [
     "ESSAY_AGENT_ROLES",

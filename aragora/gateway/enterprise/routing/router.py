@@ -772,8 +772,11 @@ class TenantRouter:
         )
 
         logger.debug(
-            f"Routed tenant {resolved_tenant_id} to {endpoint.url} "
-            f"(fallback={used_fallback}, time={decision_time_ms:.2f}ms)"
+            "Routed tenant %s to %s (fallback=%s, time=%.2fms)",
+            resolved_tenant_id,
+            endpoint.url,
+            used_fallback,
+            decision_time_ms,
         )
 
         return decision

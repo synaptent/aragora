@@ -21,6 +21,8 @@ Tests cover:
 from __future__ import annotations
 
 import asyncio
+import sqlite3
+import threading
 from collections import deque
 from datetime import datetime
 from typing import Any, Optional
@@ -1923,6 +1925,114 @@ class TestLifecycleManagement:
         await arena._cleanup_debate_persistence()
 
         assert DatabaseManager.instance_paths() == baseline
+
+    @pytest.mark.asyncio
+    async def test_cleanup_debate_persistence_drains_dispatcher_before_webhook_store_reset(
+        self, environment, agents, tmp_path, monkeypatch
+    ):
+        """An in-flight webhook delivery is recorded before test cleanup closes its store."""
+        from aragora.events import dispatcher as dispatcher_module
+        from aragora.storage import webhook_config_store as store_module
+
+        arena = Arena(environment, agents)
+        store = store_module.SQLiteWebhookConfigStore(tmp_path / "webhooks.db")
+        webhook = store.register(url="https://hooks.example.test/arena", events=["debate_end"])
+        dispatcher = dispatcher_module.WebhookDispatcher(max_workers=1)
+        monkeypatch.setattr(store_module, "_webhook_config_store", store)
+        monkeypatch.setattr(
+            dispatcher_module, "_webhook_store_provider", store_module.get_webhook_config_store
+        )
+        monkeypatch.setattr(dispatcher_module, "_dispatcher", dispatcher)
+        monkeypatch.setattr(dispatcher_module, "get_event_rate_limiter", lambda: None)
+
+        release_delivery = threading.Event()
+        delivery_started = threading.Event()
+        delivery_recorded = threading.Event()
+        outcomes: list[str] = []
+
+        def deliver(webhook, payload, **kwargs):
+            delivery_started.set()
+            release_delivery.wait(timeout=10)
+            return dispatcher_module.DeliveryResult(success=True, status_code=200)
+
+        original_record_delivery = store.record_delivery
+
+        def record_delivery(**kwargs):
+            try:
+                original_record_delivery(**kwargs)
+                outcomes.append("recorded")
+            except sqlite3.Error as exc:
+                outcomes.append(f"error:{type(exc).__name__}")
+                raise
+            finally:
+                delivery_recorded.set()
+
+        original_close = store.close
+
+        def close():
+            original_close()
+            release_delivery.set()
+
+        original_shutdown = dispatcher.shutdown
+
+        def shutdown(wait: bool = True):
+            release_delivery.set()
+            original_shutdown(wait=wait)
+
+        monkeypatch.setattr(dispatcher_module, "dispatch_webhook_with_retry", deliver)
+        monkeypatch.setattr(store, "record_delivery", record_delivery)
+        monkeypatch.setattr(store, "close", close)
+        monkeypatch.setattr(dispatcher, "shutdown", shutdown)
+
+        try:
+            # The single worker caches its SQLite connection on first use, so a
+            # later delivery on that thread reuses whatever close() has closed.
+            release_delivery.set()
+            dispatcher_module.dispatch_event("debate_end", {"debate_id": "warmup"})
+            assert delivery_recorded.wait(timeout=10)
+
+            release_delivery.clear()
+            delivery_started.clear()
+            delivery_recorded.clear()
+            dispatcher_module.dispatch_event("debate_end", {"debate_id": "in-flight"})
+            assert delivery_started.wait(timeout=10)
+
+            await arena._cleanup_debate_persistence()
+        finally:
+            release_delivery.set()
+            original_shutdown(wait=True)
+            original_close()
+
+        assert outcomes == ["recorded", "recorded"]
+        conn = sqlite3.connect(tmp_path / "webhooks.db")
+        try:
+            (delivery_count,) = conn.execute(
+                "SELECT delivery_count FROM webhook_configs WHERE id = ?", (webhook.id,)
+            ).fetchone()
+        finally:
+            conn.close()
+        assert delivery_count == 2
+
+    @pytest.mark.asyncio
+    async def test_cleanup_debate_persistence_outside_pytest_keeps_global_services(
+        self, environment, agents, monkeypatch
+    ):
+        """Production cleanup leaves the webhook dispatcher and shared stores running."""
+        arena = Arena(environment, agents)
+        monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+
+        with (
+            patch("aragora.events.dispatcher.shutdown_dispatcher") as shutdown_dispatcher,
+            patch("aragora.storage.receipt_store.close_receipt_store") as close_receipt_store,
+            patch(
+                "aragora.storage.webhook_config_store.reset_webhook_config_store"
+            ) as reset_webhook_config_store,
+        ):
+            await arena._cleanup_debate_persistence()
+
+        shutdown_dispatcher.assert_not_called()
+        close_receipt_store.assert_not_called()
+        reset_webhook_config_store.assert_not_called()
 
 
 # =============================================================================

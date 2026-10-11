@@ -14,17 +14,18 @@ from typing import Optional
 
 from aragora.evaluation.viah import (
     VIAH_TREND_FLAG,
+    ViahLedger,
+    ViahLedgerEntry,
     compute_viah,
     rolling_viah_trend,
     viah_trend_enabled,
 )
-from aragora.swarm.shift_ledger import ShiftLedger
 
 __all__ = ["generate_viah_status_report"]
 
 
 def generate_viah_status_report(
-    ledger: ShiftLedger,
+    ledger: ViahLedger[ViahLedgerEntry],
     *,
     weeks: int = 4,
     now: Optional[datetime] = None,

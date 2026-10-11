@@ -451,6 +451,15 @@ print(f"State: {breaker.state}")  # closed, open, or half_open
 print(f"Failure count: {breaker.failure_count}")
 ```
 
+For the full error-handling picture, see
+[Error Handling Patterns](../reference/ERROR_HANDLING.md): the `AragoraError`
+exception hierarchy, how error categories map to HTTP status codes, per-provider
+circuit breaker defaults and multi-entity mode, retry strategies with backoff,
+and fallback chains. To capture and alert on errors in production, see
+[Error Tracking Setup](../reference/ERROR_TRACKING.md), which covers Sentry setup
+for the backend and frontend, sensitive data filtering, alerting rules and
+release tracking.
+
 ## 17. Run a Graph Debate
 
 Non-linear debates with counterfactual branching.

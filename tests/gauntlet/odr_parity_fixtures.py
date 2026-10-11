@@ -21,6 +21,16 @@ class ODRSignatureParityCase:
     expected_signature_status: str
 
 
+@dataclass(frozen=True)
+class ODRAuthenticityStateParityCase:
+    name: str
+    doc: dict[str, Any]
+    public_key_pem: bytes | None
+    expected_ok: bool
+    expected_signature_status: str
+    expected_authenticity_unverified: bool
+
+
 def valid_odr() -> dict[str, Any]:
     return {
         "odr_version": "0.1",
@@ -97,6 +107,35 @@ def signature_parity_cases(
         ODRSignatureParityCase("relabeled_key", relabeled_key, public_key_pem, False, "fail"),
         ODRSignatureParityCase(
             "mixed_multi_signature", mixed_multi_signature, public_key_pem, True, "pass"
+        ),
+    )
+
+
+def authenticity_state_parity_cases(
+    content_digest: Callable[[dict[str, Any]], str],
+    compute_key_id: Callable[[Any], str],
+) -> tuple[ODRAuthenticityStateParityCase, ...]:
+    private_key = Ed25519PrivateKey.generate()
+    public_key = private_key.public_key()
+    public_key_pem = public_key.public_bytes(
+        serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo
+    )
+    other_key = Ed25519PrivateKey.generate().public_key()
+    other_key_pem = other_key.public_bytes(
+        serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo
+    )
+
+    unsigned = valid_odr()
+    signed = _sign(valid_odr(), private_key, content_digest, compute_key_id)
+
+    return (
+        ODRAuthenticityStateParityCase("unsigned_no_pubkey", unsigned, None, True, "warn", False),
+        ODRAuthenticityStateParityCase(
+            "unsigned_supplied_pubkey", unsigned, public_key_pem, True, "skip", True
+        ),
+        ODRAuthenticityStateParityCase("signed_no_pubkey", signed, None, True, "skip", True),
+        ODRAuthenticityStateParityCase(
+            "signed_wrong_pubkey", signed, other_key_pem, False, "fail", False
         ),
     )
 

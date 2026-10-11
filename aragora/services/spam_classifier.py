@@ -2,14 +2,14 @@
 ML-Enhanced Spam Classification Service.
 
 This module is a backwards-compatibility shim that re-exports all public
-APIs from the ``aragora.services.spam`` package.  The implementation has
+APIs from the ``aragora.moderation.spam`` package.  The implementation has
 been refactored into focused submodules:
 
-- ``aragora.services.spam.models``    -- data classes and enums
-- ``aragora.services.spam.patterns``  -- pattern constants and word lists
-- ``aragora.services.spam.features``  -- feature extraction engine
-- ``aragora.services.spam.model``     -- Naive Bayes ML classifier
-- ``aragora.services.spam.classifier``-- main SpamClassifier and convenience functions
+- ``aragora.moderation.spam.models``    -- data classes and enums
+- ``aragora.moderation.spam.patterns``  -- pattern constants and word lists
+- ``aragora.moderation.spam.features``  -- feature extraction engine
+- ``aragora.moderation.spam.model``     -- Naive Bayes ML classifier
+- ``aragora.moderation.spam.classifier``-- main SpamClassifier and convenience functions
 
 All names previously importable from ``aragora.services.spam_classifier``
 remain importable from this module.
@@ -41,10 +41,10 @@ Usage (unchanged):
 
 # Re-export everything from the spam package for backwards compatibility.
 # All public APIs that were previously defined in this module are now
-# implemented in aragora.services.spam submodules.
+# implemented in aragora.moderation.spam submodules.
 
 # Models and data types
-from aragora.services.spam.models import (  # noqa: F401
+from aragora.moderation.spam.models import (  # noqa: F401
     EmailFeatures,
     SpamCategory,
     SpamClassificationResult,
@@ -53,7 +53,7 @@ from aragora.services.spam.models import (  # noqa: F401
 )
 
 # Pattern constants
-from aragora.services.spam.patterns import (  # noqa: F401
+from aragora.moderation.spam.patterns import (  # noqa: F401
     DANGEROUS_EXTENSIONS,
     FREE_EMAIL_PROVIDERS,
     KNOWN_SPAM_DOMAINS,
@@ -67,13 +67,13 @@ from aragora.services.spam.patterns import (  # noqa: F401
 )
 
 # Feature extraction
-from aragora.services.spam.features import SpamFeatures  # noqa: F401
+from aragora.moderation.spam.features import SpamFeatures  # noqa: F401
 
 # ML model
-from aragora.services.spam.model import NaiveBayesClassifier  # noqa: F401
+from aragora.moderation.spam.model import NaiveBayesClassifier  # noqa: F401
 
 # Classifier and convenience functions
-from aragora.services.spam.classifier import (  # noqa: F401
+from aragora.moderation.spam.classifier import (  # noqa: F401
     SpamClassifier,
     classify_email,
     classify_email_spam,

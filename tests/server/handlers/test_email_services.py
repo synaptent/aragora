@@ -158,7 +158,7 @@ class TestFollowUpHandlers:
         assert "thread_id" in result.get("error", "")
 
     @pytest.mark.asyncio
-    async def test_get_pending_followups(self, mock_tracker):
+    async def test_get_pending_followups(self, mock_tracker, admin_auth):
         """Should return pending follow-ups."""
         mock_item = MagicMock()
         mock_item.id = "fu_123"
@@ -176,7 +176,7 @@ class TestFollowUpHandlers:
 
         mock_tracker.get_pending_followups = AsyncMock(return_value=[mock_item])
 
-        result = parse_result(await handle_get_pending_followups(user_id="user_1"))
+        result = parse_result(await handle_get_pending_followups(auth_context=admin_auth))
 
         assert result["success"] is True
         assert len(result["data"]["followups"]) == 1
@@ -184,6 +184,10 @@ class TestFollowUpHandlers:
         assert result["data"]["overdue_count"] == 0
 
     @pytest.mark.asyncio
+    @patch.dict(
+        "aragora.server.handlers.email_services._followup_owners",
+        {"fu_123": ("test-user-001", "test-org-001")},
+    )
     async def test_resolve_followup_success(self, mock_tracker, admin_auth):
         """Should resolve follow-up successfully."""
         mock_item = MagicMock()
@@ -222,12 +226,12 @@ class TestFollowUpHandlers:
         assert result["_status_code"] == 404
 
     @pytest.mark.asyncio
-    async def test_check_replies(self, mock_tracker):
+    async def test_check_replies(self, mock_tracker, admin_auth):
         """Should check for replies."""
         mock_tracker.get_pending_followups = AsyncMock(return_value=[])
         mock_tracker.check_for_replies = AsyncMock(return_value=[])
 
-        result = parse_result(await handle_check_replies(user_id="user_1"))
+        result = parse_result(await handle_check_replies(auth_context=admin_auth))
 
         assert result["success"] is True
         assert result["data"]["replied"] == []
@@ -251,9 +255,8 @@ class TestSnoozeHandlers:
         mock_suggestion = MagicMock()
         mock_suggestion.snooze_until = datetime.now() + timedelta(hours=2)
         mock_suggestion.label = "In 2 hours"
-        mock_suggestion.reason = "Quick reminder"
+        mock_suggestion.reason.value = "work_hours"
         mock_suggestion.confidence = 0.8
-        mock_suggestion.source = "quick"
 
         mock_recommendation = MagicMock()
         mock_recommendation.suggestions = [mock_suggestion]
@@ -328,7 +331,7 @@ class TestSnoozeHandlers:
             auth_context=admin_auth,
         )
 
-        result = parse_result(await handle_get_snoozed_emails(user_id="user_1"))
+        result = parse_result(await handle_get_snoozed_emails(auth_context=admin_auth))
 
         assert result["success"] is True
         assert "snoozed" in result["data"]
@@ -390,19 +393,9 @@ class TestCategoryHandlers:
         assert "name" in cat
         assert "description" in cat
 
-    @pytest.fixture
-    def mock_categorizer(self):
-        """Create mock email categorizer."""
-        with patch("aragora.server.handlers.email_services.get_email_categorizer") as mock:
-            categorizer = MagicMock()
-            mock.return_value = categorizer
-            yield categorizer
-
     @pytest.mark.asyncio
-    async def test_category_feedback_success(self, mock_categorizer, admin_auth):
-        """Should record category feedback."""
-        mock_categorizer.record_feedback = AsyncMock()
-
+    async def test_category_feedback_is_not_implemented(self, admin_auth):
+        """Authorized category feedback answers 501; nothing is learned."""
         result = parse_result(
             await handle_category_feedback(
                 data={
@@ -415,22 +408,8 @@ class TestCategoryHandlers:
             )
         )
 
-        assert result["success"] is True
-        assert result["data"]["feedback_recorded"] is True
-
-    @pytest.mark.asyncio
-    async def test_category_feedback_missing_fields(self, mock_categorizer, admin_auth):
-        """Should fail when missing required fields."""
-        result = parse_result(
-            await handle_category_feedback(
-                data={"email_id": "email_123"},
-                auth_context=admin_auth,
-            )
-        )
-
-        assert result["success"] is False or "error" in result
-        error_msg = result.get("error", "").lower()
-        assert "required" in error_msg or "missing" in error_msg
+        assert result["_status_code"] == 501
+        assert result["error"]["code"] == "not_implemented"
 
 
 class TestProcessDueSnoozes:

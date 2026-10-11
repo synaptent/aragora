@@ -204,7 +204,7 @@ def run_gate(
         depth, outbox_missing = count_outbox_depth(outbox_dir)
     except (RuntimeError, OSError, ValueError, subprocess.SubprocessError) as exc:
         detail = str(exc)[:300]
-        payload = {
+        payload: dict[str, Any] = {
             "mode": MODE_SHEPHERD,
             "reasons": [f"gate_failure:{detail}"],
             "open_prs": None,

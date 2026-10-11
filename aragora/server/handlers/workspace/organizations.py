@@ -692,7 +692,11 @@ class OrganizationsHandler(SecureHandler):
         # User doesn't exist - create invitation
         # Check if there's already a pending invitation for this email
         existing_invite = self._get_invitation_by_email(org_id, email)
-        if existing_invite and existing_invite.is_pending:
+        if (
+            existing_invite
+            and existing_invite.is_pending
+            and existing_invite.expires_at is not None
+        ):
             return error_response(
                 f"An invitation has already been sent to {email}. "
                 "It expires on " + existing_invite.expires_at.strftime("%Y-%m-%d"),
@@ -700,12 +704,13 @@ class OrganizationsHandler(SecureHandler):
             )
 
         # Create new invitation
+        expires_at = datetime.now(timezone.utc) + timedelta(days=7)
         invitation = OrganizationInvitation(
             org_id=org_id,
             email=email,
             role=role,
             invited_by=user.id,
-            expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+            expires_at=expires_at,
         )
 
         # Store invitation in persistent database
@@ -732,7 +737,7 @@ class OrganizationsHandler(SecureHandler):
             {
                 "message": f"Invitation sent to {email}",
                 "invitation_id": invitation.id,
-                "expires_at": invitation.expires_at.isoformat(),
+                "expires_at": expires_at.isoformat(),
                 "invite_link": f"/invite/{invitation.token}",
             },
             status=201,

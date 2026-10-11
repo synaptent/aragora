@@ -92,7 +92,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: synaptent/aragora@main
+      - uses: synaptent/aragora@486a10d835be5da00df488b5bef6c1e708da8f10
         with:
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}

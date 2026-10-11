@@ -540,10 +540,8 @@ async def _persist_approval_request(request: OperationApprovalRequest) -> None:
                 await result
     except (TypeError, ValueError, KeyError, AttributeError, RuntimeError, OSError) as e:
         # In distributed mode, persistence failure is critical
-        from aragora.control_plane.leader import (
-            DistributedStateError,
-            is_distributed_state_required,
-        )
+        from aragora.config.distributed import is_distributed_state_required
+        from aragora.control_plane.leader import DistributedStateError
 
         if is_distributed_state_required():
             raise DistributedStateError(

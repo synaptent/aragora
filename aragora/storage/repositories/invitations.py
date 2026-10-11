@@ -73,7 +73,7 @@ class InvitationRepository:
                     invitation.invited_by,
                     invitation.status,
                     invitation.created_at.isoformat(),
-                    invitation.expires_at.isoformat(),
+                    invitation.expires_at.isoformat() if invitation.expires_at else None,
                 ),
             )
         return True
@@ -209,6 +209,6 @@ class InvitationRepository:
             invited_by=row["invited_by"],
             status=row["status"],
             created_at=datetime.fromisoformat(row["created_at"]),
-            expires_at=datetime.fromisoformat(row["expires_at"]),
+            expires_at=datetime.fromisoformat(row["expires_at"]) if row["expires_at"] else None,
             accepted_at=datetime.fromisoformat(row["accepted_at"]) if row["accepted_at"] else None,
         )

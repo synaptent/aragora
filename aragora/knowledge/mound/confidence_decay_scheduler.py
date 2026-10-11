@@ -320,7 +320,7 @@ class ConfidenceDecayScheduler:
                 hours_since = (datetime.now() - last_run).total_seconds() / 3600
                 if hours_since < self._decay_interval_hours:
                     logger.debug(
-                        f"Skipping decay for {workspace_id}, last run {hours_since:.1f}h ago"
+                        "Skipping decay for %s, last run %.1fh ago", workspace_id, hours_since
                     )
                     return None
 

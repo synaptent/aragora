@@ -2,7 +2,7 @@
 Open Decision Receipt (ODR) exporter.
 
 Maps the native :class:`aragora.gauntlet.receipt_models.DecisionReceipt` onto
-ODR v0.1 or v0.2 (default v0.1 until aragora-verify 0.2.0 is published), defined in
+ODR v0.1 or v0.2 (default v0.2 since release 2.11.0; v0.1 on request), defined in
 ``docs/specs/OPEN_DECISION_RECEIPT.md`` and machine-validated by
 ``aragora/gauntlet/odr_schema.json`` (JSON Schema draft 2020-12).
 
@@ -39,12 +39,20 @@ from aragora.gauntlet.odr_jcs import jcs_canonicalize, odr_content_digest
 if TYPE_CHECKING:
     from aragora.gauntlet.receipt_models import DecisionReceipt
 
-ODR_DEFAULT_VERSION = "0.1"
+#: Profile emitted when no version is requested. 0.2 since release 2.11.0, once
+#: ``aragora-verify`` 0.2.0 was published (spec §9.5); 0.1 stays available on
+#: request (``odr_version="0.1"``, ``--odr-version 0.1`` or
+#: ``ARAGORA_ODR_PROFILE_VERSION=0.1``) and every v0.1 document keeps verifying.
+ODR_DEFAULT_VERSION = "0.2"
 ODR_VERSIONS = ("0.1", "0.2")
 ODR_PROFILE_URIS = {
     "0.1": "https://aragora.ai/specs/open-decision-receipt/v0.1",
     "0.2": "https://aragora.ai/specs/open-decision-receipt/v0.2",
 }
+#: Back-compat aliases for the *default* profile (what
+#: :func:`decision_receipt_to_odr` emits when no version is requested), so they
+#: name 0.2 alongside ``aragora_verify.ODR_VERSION``. Code that needs a specific
+#: profile should use ``ODR_PROFILE_URIS[version]``.
 ODR_VERSION = ODR_DEFAULT_VERSION
 ODR_PROFILE_URI = ODR_PROFILE_URIS[ODR_DEFAULT_VERSION]
 
@@ -299,7 +307,7 @@ def decision_receipt_to_odr(
 ) -> dict[str, Any]:
     """Map a :class:`DecisionReceipt` onto ODR v0.1 or v0.2.
 
-    Default v0.1 until aragora-verify 0.2.0 is published.
+    Defaults to v0.2 (:data:`ODR_DEFAULT_VERSION`); pass ``odr_version="0.1"`` for v0.1.
 
     Args:
         receipt: The source receipt. Fields are copied, never invented.

@@ -11,9 +11,14 @@ Design rules (mirroring the emitter's "never fabricate" contract):
 - **Pure and side-effect-free.** It copies fields off the outcome; it makes no
   network calls and mutates nothing. The Action / settlement layer decides what
   to do with the receipt.
-- **No invented clearance.** The verdict and quorum reflect only posted,
-  supportive evidence when no reviewer dissent is present. Prepared evidence
-  must remain merge-blocking in the portable receipt.
+- **No invented clearance.** By default (``decision_basis="posted"``) the
+  verdict and quorum reflect only posted, supportive evidence when no reviewer
+  dissent is present, so prepared evidence stays merge-blocking in the portable
+  receipt. A caller that never posts evidence by design (the GitHub Action)
+  passes ``decision_basis="reviews"``: the decision is then reached when the
+  counted, supportive reviewer verdicts satisfy the tier's quorum rule with no
+  dissent, and the basis is recorded in the signed mechanism so a verifier can
+  see what "reached" means.
 - **Internally consistent quorum.** Posted supporting and dissenting families
   are carried into ``consensus_proof``; ``odr_export`` records all reviewers as
   participants, so the verifier's quorum-consistency check holds
@@ -43,7 +48,11 @@ from aragora.swarm.quorum_evidence import (
     tier_quorum_rule,
 )
 
-__all__ = ["collect_outcome_to_decision_receipt"]
+__all__ = ["DECISION_BASES", "collect_outcome_to_decision_receipt"]
+
+#: "posted": reached only when supportive evidence was posted (merge-quorum default).
+#: "reviews": reached when the reviewer verdicts themselves satisfy the tier rule.
+DECISION_BASES = ("posted", "reviews")
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +60,9 @@ logger = logging.getLogger(__name__)
 _ODR_SEVERITIES = frozenset({"P0", "P1", "P2", "P3"})
 
 
-def _odr_content(outcome: CollectOutcome, raw: dict[str, Any]) -> dict[str, Any]:
+def _odr_content(
+    outcome: CollectOutcome, raw: dict[str, Any], decision_basis: str = "posted"
+) -> dict[str, Any]:
     rule = tier_quorum_rule(outcome.tier, tiered_gate=outcome.tiered_gate)
     verdicts, findings = [], []
     for item in outcome.items:
@@ -123,6 +134,10 @@ def _odr_content(outcome: CollectOutcome, raw: dict[str, Any]) -> dict[str, Any]
     }
     if outcome.items and len({item.severity_gated for item in outcome.items}) == 1:
         content["mechanism"]["severity_gated"] = outcome.items[0].severity_gated
+    if decision_basis != "posted":
+        # Recorded only when it differs from the default, so posted-basis receipts
+        # (and the committed vectors) keep their exact bytes.
+        content["mechanism"]["decision_basis"] = decision_basis
     if outcome.adjudication is not None:
         adjudication = deepcopy(outcome.adjudication)
         if "verdict" in adjudication:
@@ -137,12 +152,19 @@ def _odr_content(outcome: CollectOutcome, raw: dict[str, Any]) -> dict[str, Any]
 
 def collect_outcome_to_decision_receipt(
     outcome: CollectOutcome | dict[str, Any],
+    *,
+    decision_basis: str = "posted",
 ) -> DecisionReceipt:
     """Map a merge-quorum :class:`CollectOutcome` onto a :class:`DecisionReceipt`.
 
     The returned receipt is ready for ``decision_receipt_to_odr`` and carries the
     PR's provenance (repo, number, head SHA, tier) under ``settlement_metadata``.
+    ``decision_basis`` selects what "reached" means (see :data:`DECISION_BASES`).
     """
+    if decision_basis not in DECISION_BASES:
+        raise ValueError(
+            f"decision_basis must be one of {', '.join(DECISION_BASES)}; got {decision_basis!r}"
+        )
     raw = outcome if isinstance(outcome, dict) else outcome.to_dict()
     if isinstance(outcome, dict):
         outcome = collect_outcome_from_dict(outcome)
@@ -152,11 +174,21 @@ def collect_outcome_to_decision_receipt(
     counting = list(outcome.counting_families)
     posted = {str(family).strip() for family in outcome.posted if str(family).strip()}
     posted_supportive = [family for family in supportive if family in posted]
-    posted_quorum = bool(posted) and tier_quorum_rule(
-        outcome.tier,
-        tiered_gate=outcome.tiered_gate,
-    ).is_satisfied_by(posted_supportive)
-    reached = outcome.action == "post" and posted_quorum and not dissenting
+    rule = tier_quorum_rule(outcome.tier, tiered_gate=outcome.tiered_gate)
+    if decision_basis == "reviews":
+        supporting_agents = supportive
+        reached = rule.is_satisfied_by(supportive) and not dissenting
+        verdict_reasoning = (
+            f"decided on reviewer verdicts (decision_basis=reviews): supportive "
+            f"{sorted(supportive)}, dissenting {sorted(dissenting)}, quorum rule "
+            f"{'satisfied' if rule.is_satisfied_by(supportive) else 'not satisfied'}; "
+            f"evidence action={outcome.action}: {outcome.action_reason}"
+        )
+    else:
+        posted_quorum = bool(posted) and rule.is_satisfied_by(posted_supportive)
+        supporting_agents = posted_supportive
+        reached = outcome.action == "post" and posted_quorum and not dissenting
+        verdict_reasoning = outcome.action_reason
 
     confidence = (len(supportive) / len(counting)) if counting else 0.0
     verdict = "PASS" if reached else "CHANGES_REQUESTED"
@@ -195,12 +227,12 @@ def collect_outcome_to_decision_receipt(
         verdict=verdict,
         confidence=confidence,
         robustness_score=confidence,
-        verdict_reasoning=outcome.action_reason,
+        verdict_reasoning=verdict_reasoning,
         dissenting_views=dissenting_views,
         consensus_proof=ConsensusProof(
             reached=reached,
             confidence=confidence,
-            supporting_agents=posted_supportive,
+            supporting_agents=supporting_agents,
             dissenting_agents=dissenting,
             method="merge-quorum",
         ),
@@ -213,6 +245,7 @@ def collect_outcome_to_decision_receipt(
             "action": outcome.action,
             "tiered_gate": outcome.tiered_gate,
             **({"base_sha": raw["base_sha"]} if "base_sha" in raw else {}),
-            "odr": _odr_content(outcome, raw),
+            **({"decision_basis": decision_basis} if decision_basis != "posted" else {}),
+            "odr": _odr_content(outcome, raw, decision_basis),
         },
     )

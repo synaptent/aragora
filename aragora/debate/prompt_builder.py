@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from aragora.agents.calibration import CalibrationTracker
     from aragora.agents.personas import PersonaManager
     from aragora.core import Agent, Environment
-    from aragora.debate.protocol import DebateProtocol
+    from aragora.protocols.debate import DebateProtocol
     from aragora.debate.roles import RoleAssignment, RoleRotator
     from aragora.evidence.collector import EvidencePack
     from aragora.insights.flip_detector import FlipDetector
@@ -42,8 +42,12 @@ AbstractionLevel: Any
 RLMContextAdapter: Any
 
 try:
-    from aragora.rlm import AbstractionLevel, RLMContextAdapter, HAS_OFFICIAL_RLM
+    from aragora.rlm import AbstractionLevel as _AbstractionLevel
+    from aragora.rlm import RLMContextAdapter as _RLMContextAdapter
+    from aragora.rlm import HAS_OFFICIAL_RLM
 
+    AbstractionLevel = _AbstractionLevel
+    RLMContextAdapter = _RLMContextAdapter
     HAS_RLM = True
 except ImportError:
     HAS_RLM = False

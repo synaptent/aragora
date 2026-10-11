@@ -190,7 +190,7 @@ class ChannelUserMixin:
         self,
         user_id: str,
         text: str,
-        blocks: list[dict[str, Any] | None] = None,
+        blocks: list[dict[str, Any]] | None = None,
         **kwargs: Any,
     ) -> SendMessageResponse:
         """
@@ -364,7 +364,7 @@ class ChannelUserMixin:
         channel_id: str,
         message_id: str,
         text: str,
-        blocks: list[dict[str, Any] | None] = None,
+        blocks: list[dict[str, Any]] | None = None,
         thread_name: str | None = None,
         **kwargs: Any,
     ) -> SendMessageResponse:

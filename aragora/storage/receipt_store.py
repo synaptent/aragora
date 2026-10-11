@@ -439,6 +439,8 @@ class ReceiptStore:
             backend = (
                 "postgresql" if (actual_url and is_postgres_backend(env_backend)) else "sqlite"
             )
+        elif is_postgres_backend(backend):
+            backend = "postgresql"
 
         self.backend_type = backend
         self._backend: DatabaseBackend | None = None

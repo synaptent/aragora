@@ -128,7 +128,7 @@ class DiscordConnector(ChatPlatformConnector):
         self,
         channel_id: str,
         text: str,
-        blocks: list[dict[str, Any] | None] | None = None,
+        blocks: list[dict[str, Any]] | None = None,
         thread_id: str | None = None,
         **kwargs: Any,
     ) -> SendMessageResponse:
@@ -188,7 +188,7 @@ class DiscordConnector(ChatPlatformConnector):
         channel_id: str,
         message_id: str,
         text: str,
-        blocks: list[dict[str, Any] | None] | None = None,
+        blocks: list[dict[str, Any]] | None = None,
         **kwargs: Any,
     ) -> SendMessageResponse:
         """Update a Discord message with circuit breaker protection."""
@@ -293,7 +293,7 @@ class DiscordConnector(ChatPlatformConnector):
         channel_id: str,
         user_id: str,
         text: str,
-        blocks: list[dict[str, Any] | None] | None = None,
+        blocks: list[dict[str, Any]] | None = None,
         **kwargs: Any,
     ) -> SendMessageResponse:
         """Send ephemeral message (only works in interaction responses)."""
@@ -306,7 +306,7 @@ class DiscordConnector(ChatPlatformConnector):
         self,
         command: BotCommand,
         text: str,
-        blocks: list[dict[str, Any] | None] | None = None,
+        blocks: list[dict[str, Any]] | None = None,
         ephemeral: bool = True,
         **kwargs: Any,
     ) -> SendMessageResponse:
@@ -329,7 +329,7 @@ class DiscordConnector(ChatPlatformConnector):
         self,
         interaction: UserInteraction,
         text: str,
-        blocks: list[dict[str, Any] | None] | None = None,
+        blocks: list[dict[str, Any]] | None = None,
         replace_original: bool = False,
         **kwargs: Any,
     ) -> SendMessageResponse:
@@ -359,7 +359,7 @@ class DiscordConnector(ChatPlatformConnector):
         interaction_id: str,
         interaction_token: str,
         text: str,
-        blocks: list[dict[str, Any] | None] | None = None,
+        blocks: list[dict[str, Any]] | None = None,
         ephemeral: bool = False,
         response_type: int = 4,  # CHANNEL_MESSAGE_WITH_SOURCE
     ) -> SendMessageResponse:
@@ -547,7 +547,7 @@ class DiscordConnector(ChatPlatformConnector):
         self,
         title: str | None = None,
         body: str | None = None,
-        fields: list[tuple[str, str] | None] | None = None,
+        fields: list[tuple[str, str]] | None = None,
         actions: list[MessageButton] | None = None,
         **kwargs: Any,
     ) -> list[dict[str, Any]]:

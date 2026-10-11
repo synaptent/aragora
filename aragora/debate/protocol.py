@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import logging
-import os
 import warnings
 
 warnings.warn(
@@ -13,6 +11,7 @@ warnings.warn(
     stacklevel=2,
 )
 
+from aragora.debate.protocol_resolver import resolve_default_protocol  # noqa: E402
 from aragora.protocols.debate import (  # noqa: E402
     ARAGORA_AI_LIGHT_PROTOCOL,
     ARAGORA_AI_PROTOCOL,
@@ -23,8 +22,6 @@ from aragora.protocols.debate import (  # noqa: E402
     user_vote_multiplier,
 )
 from aragora.resilience import CircuitBreaker  # noqa: E402
-
-logger = logging.getLogger(__name__)
 
 __all__ = [
     "ARAGORA_AI_LIGHT_PROTOCOL",
@@ -37,22 +34,3 @@ __all__ = [
     "resolve_default_protocol",
     "user_vote_multiplier",
 ]
-
-
-def resolve_default_protocol(
-    protocol: DebateProtocol | None = None,
-) -> DebateProtocol:
-    """Resolve the default protocol, honoring debate profile overrides."""
-    if protocol is not None:
-        return protocol
-
-    profile = os.environ.get("ARAGORA_DEBATE_PROFILE", "").lower()
-    if profile in {"full", "nomic", "structured"}:
-        try:
-            from aragora.nomic.debate_profile import NomicDebateProfile
-
-            return NomicDebateProfile.from_env().to_protocol()
-        except (ImportError, RuntimeError, ValueError, TypeError, AttributeError, OSError) as exc:
-            logger.warning("Failed to apply debate profile '%s': %s", profile, exc)
-
-    return DebateProtocol()

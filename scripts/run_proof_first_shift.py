@@ -1407,6 +1407,7 @@ def run_shift_cycle(
         repeated_failure_classes.append(MERGE_RESTART_FAILURE)
         service_failures.append(RECOVERY_STOP_REASONS[MERGE_RESTART_FAILURE])
 
+    merge_report: dict[str, Any]
     if effective_merge_limit == 0:
         reason = "dry_run" if dry_run else "no_merge"
         merge_report = {"merged": [], "skipped": True, "reason": reason}

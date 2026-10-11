@@ -536,8 +536,9 @@ class BaseConnector(ABC):
         if not can:
             remaining = cb.cooldown_remaining()
             logger.warning(
-                f"[{getattr(self, 'name', self.__class__.__name__)}] "
-                f"Circuit breaker open, cooldown remaining: {remaining:.1f}s"
+                "[%s] Circuit breaker open, cooldown remaining: %.1fs",
+                getattr(self, "name", self.__class__.__name__),
+                remaining,
             )
         return can
 
@@ -720,8 +721,10 @@ class BaseConnector(ABC):
         if circuit_breaker is not None and not circuit_breaker.can_proceed():
             cooldown = circuit_breaker.cooldown_remaining()
             logger.warning(
-                f"[{self.name}] Circuit breaker open for {operation}, "
-                f"cooldown remaining: {cooldown:.1f}s"
+                "[%s] Circuit breaker open for %s, cooldown remaining: %.1fs",
+                self.name,
+                operation,
+                cooldown,
             )
             raise ConnectorCircuitOpenError(
                 f"{operation} blocked by circuit breaker",
@@ -827,7 +830,7 @@ class BaseConnector(ABC):
                         delay = min(retry_after, self._max_delay)
                         # Add small jitter to Retry-After
                         delay += delay * 0.1 * random.uniform(0, 1)  # noqa: S311 -- retry jitter
-                        logger.info(f"[{self.name}] Waiting {delay:.1f}s (Retry-After)")
+                        logger.info("[%s] Waiting %.1fs (Retry-After)", self.name, delay)
                         await asyncio.sleep(delay)
                         continue
 
@@ -903,8 +906,12 @@ class BaseConnector(ABC):
             if attempt < self._max_retries:
                 delay = self._calculate_retry_delay(attempt)
                 logger.info(
-                    f"[{self.name}] Retrying {operation} in {delay:.1f}s "
-                    f"(attempt {attempt + 2}/{self._max_retries + 1})"
+                    "[%s] Retrying %s in %.1fs (attempt %s/%s)",
+                    self.name,
+                    operation,
+                    delay,
+                    attempt + 2,
+                    self._max_retries + 1,
                 )
                 await asyncio.sleep(delay)
 
@@ -950,6 +957,11 @@ class BaseConnector(ABC):
 
         Returns:
             List of Evidence objects
+
+        Error handling is not uniform across implementations: some connectors
+        raise when the request fails, others log the error and return an empty
+        list. A caller that must tell a failure from "no results" has to check
+        the specific connector.
         """
         raise NotImplementedError("Subclasses must implement search method")
 
@@ -963,6 +975,11 @@ class BaseConnector(ABC):
 
         Returns:
             Evidence object or None if not found
+
+        Error handling is not uniform across implementations: some connectors
+        raise when the request fails, others log the error and return None, so
+        None does not always mean "not found". A caller that must tell the two
+        apart has to check the specific connector.
         """
         raise NotImplementedError("Subclasses must implement fetch method")
 

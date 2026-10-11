@@ -339,9 +339,8 @@ class EvidenceFetchSkill(Skill):
 
         Uses the Google Fact Check Tools API (free, no API key required for
         the ClaimSearch endpoint) to find existing fact-checks for a claim.
-
-        Falls back to searching the Knowledge Mound fact store if the
-        external API is unavailable.
+        There is no local fact-store fallback: the skill has no trusted
+        organization to read organization-owned facts with.
         """
         results: list[dict[str, Any]] = []
 
@@ -385,30 +384,6 @@ class EvidenceFetchSkill(Skill):
             logger.debug("http_client_pool not available for fact checking")
         except (OSError, ConnectionError, TimeoutError, RuntimeError, ValueError) as e:
             logger.debug("Google Fact Check API error: %s", e)
-
-        # 2. Fallback: check local fact store if available
-        try:
-            from aragora.knowledge.fact_store import InMemoryFactStore
-
-            store = InMemoryFactStore()
-            facts = store.query_facts(claim)[:5]
-            for fact in facts:
-                validation_status = getattr(fact, "validation_status", None)
-                status_value = (
-                    validation_status.value if hasattr(validation_status, "value") else "unknown"
-                )
-                results.append(
-                    {
-                        "claim": getattr(fact, "statement", str(fact)),
-                        "confidence": getattr(fact, "confidence", 0.0),
-                        "status": status_value,
-                        "source_type": "local_fact_store",
-                    }
-                )
-        except (ImportError, AttributeError):
-            logger.debug("Local fact store not available")
-        except (RuntimeError, ValueError, OSError) as e:
-            logger.debug("Local fact store query failed: %s", e)
 
         return results
 

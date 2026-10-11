@@ -49,6 +49,7 @@ from aragora.swarm.auto_merge_green import (  # noqa: E402
     context_from_gh,
     decide_auto_merge,
 )
+from aragora.swarm.merge_halt import DEFAULT_HALT_FILE, SHARED_REPO_ROOT  # noqa: E402
 
 
 def _load_amqg() -> Any:
@@ -71,8 +72,10 @@ _amqg = _load_amqg()
 DEFAULT_MAX_MERGES = 1
 
 DEFAULT_RECEIPT_DIR = _REPO_ROOT / ".aragora" / "merge_executor" / "receipts"
-DEFAULT_HALT_FILE = _REPO_ROOT / ".aragora" / "merge_executor.halt"
-DEFAULT_DISARM_FILE = _REPO_ROOT / ".aragora" / "merge_executor.disarm"
+# DEFAULT_HALT_FILE comes from the shared guard so the arming lane, this executor
+# and every other merge path read one marker. The disarm file must resolve the
+# same way, or a disarm placed beside the halt would not stop a worktree run.
+DEFAULT_DISARM_FILE = SHARED_REPO_ROOT / ".aragora" / "merge_executor.disarm"
 
 # REST check-runs conclusions that make a required check on main "red".
 _RED_CONCLUSIONS = frozenset(

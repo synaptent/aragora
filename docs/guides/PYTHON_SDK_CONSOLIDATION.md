@@ -13,4 +13,4 @@
 
 - `sdk/python/README.md` (official Python SDK: `aragora-sdk`)
 - `docs/guides/MIGRATION_GUIDE.md` (`aragora-client` -> `aragora-sdk`)
-- `docs/PYTHON_SDK_CONSOLIDATION.md` (historical consolidation roadmap)
+- The historical consolidation roadmap (February 2026) is archived under `docs/archive/`; see the archive index.

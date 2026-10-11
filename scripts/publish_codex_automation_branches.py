@@ -124,6 +124,7 @@ except Exception:  # pragma: no cover - fallback for partially bootstrapped scri
     def gh_subprocess_run(
         args: Sequence[str],
         *,
+        cwd: Path | None = None,
         timeout: float = 30.0,
         prefer_app: bool = True,
         write_op: bool = False,
@@ -136,6 +137,7 @@ except Exception:  # pragma: no cover - fallback for partially bootstrapped scri
         del prefer_app, write_op, max_retries, base_backoff, max_backoff, sleep
         return subprocess.run(
             ["gh", *list(args)],
+            cwd=cwd,
             capture_output=True,
             text=True,
             timeout=timeout,

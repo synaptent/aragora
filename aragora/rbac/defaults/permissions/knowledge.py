@@ -11,6 +11,7 @@ Contains permissions related to:
 - RLM (Recursive Language Models)
 - Codebase analysis
 - Evolution
+- Cross-pollination
 """
 
 from __future__ import annotations
@@ -174,6 +175,18 @@ PERM_PERFORMANCE_WRITE = _permission(
     "Update Performance",
     "Modify agent performance data and ELO adjustments",
 )
+PERM_ANALYTICS_CONFIGURE = _permission(
+    ResourceType.ANALYTICS,
+    Action.CONFIGURE,
+    "Configure Analytics Platforms",
+    "Connect and disconnect external analytics platforms",
+)
+PERM_ANALYTICS_QUERY = _permission(
+    ResourceType.ANALYTICS,
+    Action.QUERY,
+    "Query Analytics Platforms",
+    "Run queries and generate reports on connected analytics platforms",
+)
 
 # ============================================================================
 # INTROSPECTION & HISTORY PERMISSIONS
@@ -227,6 +240,23 @@ PERM_EVOLUTION_READ = _permission(
 )
 
 # ============================================================================
+# CROSS-POLLINATION PERMISSIONS
+# ============================================================================
+
+PERM_CROSS_POLLINATION_READ = _permission(
+    ResourceType.CROSS_POLLINATION,
+    Action.READ,
+    "View Cross-Pollination",
+    "View cross-pollination stats, subscribers, bridge and knowledge mound sync status",
+)
+PERM_CROSS_POLLINATION_WRITE = _permission(
+    ResourceType.CROSS_POLLINATION,
+    Action.WRITE,
+    "Manage Cross-Pollination",
+    "Reset cross-pollination metrics and trigger knowledge mound sync and staleness checks",
+)
+
+# ============================================================================
 # PULSE PERMISSIONS
 # ============================================================================
 
@@ -275,6 +305,8 @@ __all__ = [
     "PERM_ANALYTICS_EXPORT",
     "PERM_PERFORMANCE_READ",
     "PERM_PERFORMANCE_WRITE",
+    "PERM_ANALYTICS_CONFIGURE",
+    "PERM_ANALYTICS_QUERY",
     # Introspection & History
     "PERM_INTROSPECTION_READ",
     "PERM_HISTORY_READ",
@@ -287,6 +319,9 @@ __all__ = [
     "PERM_CODEBASE_WRITE",
     # Evolution
     "PERM_EVOLUTION_READ",
+    # Cross-pollination
+    "PERM_CROSS_POLLINATION_READ",
+    "PERM_CROSS_POLLINATION_WRITE",
     # Pulse
     "PERM_PULSE_READ",
     "PERM_PULSE_CREATE",

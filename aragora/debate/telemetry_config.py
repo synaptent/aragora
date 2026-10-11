@@ -77,7 +77,7 @@ class TelemetryConfig:
         """
         # Try ServiceRegistry first (preferred)
         try:
-            from aragora.services import ServiceRegistry
+            from aragora.runtime.service_registry import ServiceRegistry
 
             registry = ServiceRegistry.get()
             if registry.has(cls):
@@ -103,7 +103,7 @@ class TelemetryConfig:
         """
         # Clear from ServiceRegistry
         try:
-            from aragora.services import ServiceRegistry
+            from aragora.runtime.service_registry import ServiceRegistry
 
             registry = ServiceRegistry.get()
             if registry.has(cls):

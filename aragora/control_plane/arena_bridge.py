@@ -109,7 +109,7 @@ record_agent_utilization: _RecordAgentUtilizationProto | None = None
 
 # Audit logging (optional)
 try:
-    from aragora.control_plane.audit import (
+    from aragora.control_plane.audit import (  # type: ignore[no-redef]
         log_deliberation_started,
         log_deliberation_completed,
         log_deliberation_sla_event,
@@ -121,7 +121,7 @@ except ImportError:
 
 # Prometheus metrics (optional)
 try:
-    from aragora.server.prometheus_control_plane import (
+    from aragora.server.prometheus_control_plane import (  # type: ignore[no-redef]
         record_deliberation_complete,
         record_deliberation_sla,
         record_agent_utilization,
@@ -556,7 +556,7 @@ class ArenaControlPlaneBridge:
         """
         from aragora.core import Environment
         from aragora.debate.orchestrator import Arena
-        from aragora.debate.protocol import DebateProtocol
+        from aragora.protocols.debate import DebateProtocol
 
         task.metrics.started_at = time.time()
 

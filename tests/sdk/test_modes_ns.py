@@ -27,18 +27,6 @@ class TestModesAPI:
         mock_client.request.assert_called_once_with("GET", "/api/v1/modes")
         assert result == {"modes": []}
 
-    def test_get_mode(self, api, mock_client):
-        api.get_mode("architect")
-        mock_client.request.assert_called_once_with("GET", "/api/v1/modes/architect")
-
-    def test_get_mode_coder(self, api, mock_client):
-        api.get_mode("coder")
-        mock_client.request.assert_called_once_with("GET", "/api/v1/modes/coder")
-
-    def test_get_mode_reviewer(self, api, mock_client):
-        api.get_mode("reviewer")
-        mock_client.request.assert_called_once_with("GET", "/api/v1/modes/reviewer")
-
     def test_async_class_exists(self):
         """Verify AsyncModesAPI can be instantiated."""
         mock_client = MagicMock()

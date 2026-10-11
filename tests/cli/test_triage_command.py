@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
+import contextlib
 import io
 import json
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -391,6 +394,174 @@ async def test_shutdown_triage_storage_closes_http_pool_and_resets_singletons():
     reset_inbox_trust_wedge_service.assert_called_once()
     reset_inbox_trust_wedge_store.assert_called_once()
     sleep.assert_awaited_once_with(0.05)
+
+
+def _patch_triage_cleanup(order: list[str], shutdown_dispatcher) -> contextlib.ExitStack:
+    stack = contextlib.ExitStack()
+    stack.enter_context(
+        patch("aragora.events.dispatcher.shutdown_dispatcher", side_effect=shutdown_dispatcher)
+    )
+    stack.enter_context(
+        patch(
+            "aragora.server.startup.database.close_postgres_pool",
+            new=AsyncMock(side_effect=lambda: order.append("postgres")),
+        )
+    )
+    stack.enter_context(
+        patch("aragora.observability.http_client_pool.close_http_pool", new=AsyncMock())
+    )
+    stack.enter_context(
+        patch("aragora.agents.api_agents.common.close_shared_connector", new=AsyncMock())
+    )
+    stack.enter_context(
+        patch(
+            "aragora.storage.connection_factory.close_all_pools",
+            new=AsyncMock(side_effect=lambda: order.append("connection-pools")),
+        )
+    )
+    stack.enter_context(
+        patch(
+            "aragora.storage.webhook_config_store.reset_webhook_config_store",
+            side_effect=lambda: order.append("store"),
+        )
+    )
+    stack.enter_context(patch("aragora.inbox.trust_wedge.reset_inbox_trust_wedge_service"))
+    stack.enter_context(patch("aragora.inbox.trust_wedge.reset_inbox_trust_wedge_store"))
+    stack.enter_context(patch("aragora.cli.commands.triage.asyncio.sleep", new=AsyncMock()))
+    return stack
+
+
+@pytest.mark.asyncio
+async def test_shutdown_triage_storage_drains_dispatcher_before_closing_webhook_store_dependencies():
+    """In-flight webhook workers finish before their pools and store close."""
+    order: list[str] = []
+
+    with _patch_triage_cleanup(order, lambda *, wait: order.append(f"dispatcher:{wait}")):
+        await triage_cmd._shutdown_triage_storage()
+
+    assert order == ["dispatcher:True", "postgres", "connection-pools", "store"]
+
+
+@pytest.mark.asyncio
+async def test_shutdown_triage_storage_still_closes_pools_when_dispatcher_drain_fails():
+    order: list[str] = []
+
+    def fail_drain(*, wait):
+        order.append("dispatcher-failed")
+        raise RuntimeError("executor unavailable")
+
+    with _patch_triage_cleanup(order, fail_drain):
+        await triage_cmd._shutdown_triage_storage()
+
+    assert order == ["dispatcher-failed", "postgres", "connection-pools", "store"]
+
+
+class _LoopBoundPool:
+    """asyncpg-style pool: usable only on the loop that created it, and only until closed."""
+
+    def __init__(self, loop: asyncio.AbstractEventLoop) -> None:
+        self.loop = loop
+        self.closed = False
+        self.writes: list[tuple] = []
+
+    @contextlib.asynccontextmanager
+    async def acquire(self):
+        if self.closed:
+            raise RuntimeError("pool is closed")
+        if asyncio.get_running_loop() is not self.loop:
+            raise RuntimeError("pool is bound to a different event loop")
+        yield self
+
+    async def execute(self, query, *args):
+        self.writes.append(args)
+        return "UPDATE 1"
+
+
+@pytest.mark.asyncio
+async def test_shutdown_triage_storage_records_in_flight_delivery_on_shared_pool(monkeypatch):
+    """A delivery still running at shutdown is recorded through triage's loop-bound pool."""
+    from aragora.events import dispatcher as dispatcher_module
+    from aragora.storage import webhook_config_store as store_module
+    from aragora.utils import async_utils
+
+    loop = asyncio.get_running_loop()
+    pool = _LoopBoundPool(loop)
+    store = store_module.PostgresWebhookConfigStore(pool)
+    webhook = store_module.WebhookConfig(
+        id="wh-triage",
+        url="https://hooks.example.test/triage",
+        events=["debate_end"],
+        secret="secret",
+    )
+    dispatcher = dispatcher_module.WebhookDispatcher(max_workers=1)
+
+    # Triage opens the shared pool on its own loop, so sync store calls made by
+    # dispatcher threads are routed back onto that loop until the pool closes.
+    monkeypatch.setattr(
+        async_utils, "_pool_event_loop_provider", lambda: None if pool.closed else loop
+    )
+    # A blocked loop would otherwise hold the worker for run_async's 30s default.
+    monkeypatch.setattr(
+        store_module, "run_async", lambda coro: async_utils.run_async(coro, timeout=2.0)
+    )
+    monkeypatch.setattr(store, "get_for_event", lambda event_type: [webhook])
+    monkeypatch.setattr(dispatcher_module, "_webhook_store_provider", lambda: store)
+    monkeypatch.setattr(dispatcher_module, "_dispatcher", dispatcher)
+    monkeypatch.setattr(dispatcher_module, "get_event_rate_limiter", lambda: None)
+
+    release_delivery = threading.Event()
+    delivery_started = threading.Event()
+    outcomes: list[str] = []
+
+    def deliver(webhook, payload, **kwargs):
+        delivery_started.set()
+        release_delivery.wait(timeout=10)
+        return dispatcher_module.DeliveryResult(success=True, status_code=200)
+
+    original_record_delivery = store.record_delivery
+
+    def record_delivery(**kwargs):
+        try:
+            original_record_delivery(**kwargs)
+        except Exception as exc:
+            outcomes.append(f"error:{type(exc).__name__}")
+            raise
+        outcomes.append("recorded")
+
+    original_shutdown = dispatcher.shutdown
+
+    def shutdown(wait: bool = True):
+        release_delivery.set()
+        original_shutdown(wait=wait)
+
+    async def close_shared_pool():
+        pool.closed = True
+
+    monkeypatch.setattr(dispatcher_module, "dispatch_webhook_with_retry", deliver)
+    monkeypatch.setattr(store, "record_delivery", record_delivery)
+    monkeypatch.setattr(dispatcher, "shutdown", shutdown)
+
+    try:
+        dispatcher_module.dispatch_event("debate_end", {"debate_id": "in-flight"})
+        assert delivery_started.wait(timeout=10)
+
+        with (
+            patch("aragora.server.startup.database.close_postgres_pool", new=close_shared_pool),
+            patch("aragora.observability.http_client_pool.close_http_pool", new=AsyncMock()),
+            patch("aragora.agents.api_agents.common.close_shared_connector", new=AsyncMock()),
+            patch("aragora.storage.connection_factory.close_all_pools", new=AsyncMock()),
+            patch("aragora.storage.webhook_config_store.reset_webhook_config_store"),
+            patch("aragora.inbox.trust_wedge.reset_inbox_trust_wedge_service"),
+            patch("aragora.inbox.trust_wedge.reset_inbox_trust_wedge_store"),
+        ):
+            await triage_cmd._shutdown_triage_storage()
+    finally:
+        release_delivery.set()
+        original_shutdown(wait=True)
+
+    assert outcomes == ["recorded"]
+    assert pool.writes == [(200, "wh-triage")]
+    assert pool.closed
 
 
 def test_get_gmail_connector_loads_refresh_token_from_home_file(tmp_path, monkeypatch):

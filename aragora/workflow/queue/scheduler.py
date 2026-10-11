@@ -173,7 +173,7 @@ class DependencyGraph:
 
         Tasks with no dependencies come first.
         """
-        in_degree: dict[str, int] = {tid: 0 for tid in self._tasks}
+        in_degree: dict[str, int] = dict.fromkeys(self._tasks, 0)
 
         for task_id in self._tasks:
             for dep_id in self._dependencies.get(task_id, set()):

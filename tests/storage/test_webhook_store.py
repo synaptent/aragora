@@ -386,6 +386,84 @@ class TestConcurrentProcessing:
         assert len(errors) == 0
         store.close()
 
+    def test_sqlite_simultaneous_first_connections(self, tmp_path):
+        """Threads opening their first connection at the same instant must not lock."""
+        rounds = 25
+        thread_count = 8
+        errors: list[Exception] = []
+        seen: list[bool] = []
+        sizes: list[int] = []
+
+        # Each round uses a fresh database so every thread's first connection
+        # races against the others; a single round only hits the race sometimes.
+        for round_idx in range(rounds):
+            store = SQLiteWebhookStore(db_path=tmp_path / f"first_conn_{round_idx}.db")
+            barrier = threading.Barrier(thread_count, timeout=30)
+
+            def first_ops(thread_id, store=store, barrier=barrier, round_idx=round_idx):
+                try:
+                    barrier.wait()
+                    event_id = f"evt_first_{round_idx}_{thread_id}"
+                    store.mark_processed(event_id)
+                    seen.append(store.is_processed(event_id))
+                except Exception as e:
+                    errors.append(e)
+
+            threads = [threading.Thread(target=first_ops, args=(i,)) for i in range(thread_count)]
+            try:
+                for t in threads:
+                    t.start()
+                for t in threads:
+                    t.join()
+                sizes.append(store.size())
+            finally:
+                store.close()
+
+        assert errors == []
+        assert seen == [True] * (rounds * thread_count)
+        assert sizes == [thread_count] * rounds
+
+    def test_sqlite_concurrent_construction_on_new_file(self, tmp_path):
+        """Stores constructed at the same instant on a new file must not lock."""
+        rounds = 25
+        thread_count = 8
+        errors: list[Exception] = []
+        sizes: list[int] = []
+        stores_lock = threading.Lock()
+
+        for round_idx in range(rounds):
+            db_path = tmp_path / f"ctor_{round_idx}.db"
+            barrier = threading.Barrier(thread_count, timeout=30)
+            stores: list[SQLiteWebhookStore] = []
+
+            def construct_and_write(thread_id, db_path=db_path, barrier=barrier, stores=stores):
+                try:
+                    barrier.wait()
+                    store = SQLiteWebhookStore(db_path=db_path)
+                    with stores_lock:
+                        stores.append(store)
+                    event_id = f"evt_ctor_{thread_id}"
+                    store.mark_processed(event_id)
+                    assert store.is_processed(event_id)
+                except Exception as e:
+                    errors.append(e)
+
+            threads = [
+                threading.Thread(target=construct_and_write, args=(i,)) for i in range(thread_count)
+            ]
+            try:
+                for t in threads:
+                    t.start()
+                for t in threads:
+                    t.join()
+                sizes.append(stores[0].size() if stores else -1)
+            finally:
+                for store in stores:
+                    store.close()
+
+        assert errors == []
+        assert sizes == [thread_count] * rounds
+
 
 # =============================================================================
 # Test: SQLite backend initialization
@@ -454,6 +532,70 @@ class TestSQLiteBackendInitialization:
         assert journal_mode == "wal"
 
         store.close()
+
+    def test_database_file_is_wal_before_first_store_connection(self, tmp_path):
+        """Construction should leave the file in WAL mode before any store connection opens."""
+        db_path = tmp_path / "wal_at_init.db"
+        store = SQLiteWebhookStore(db_path=db_path)
+        try:
+            assert store._connections == set()
+            conn = sqlite3.connect(str(db_path))
+            try:
+                journal_mode = conn.execute("PRAGMA journal_mode").fetchone()[0].lower()
+            finally:
+                conn.close()
+            assert journal_mode == "wal"
+        finally:
+            store.close()
+
+    def test_init_retries_when_schema_setup_hits_a_lock(self, tmp_path, monkeypatch):
+        """A lock during WAL and schema setup is retried instead of failing construction."""
+        original = SQLiteWebhookStore._init_schema_once
+        calls: list[int] = []
+
+        def locked_twice(self):
+            calls.append(1)
+            if len(calls) < 3:
+                raise sqlite3.OperationalError("database is locked")
+            original(self)
+
+        monkeypatch.setattr(SQLiteWebhookStore, "_init_schema_once", locked_twice)
+        store = SQLiteWebhookStore(db_path=tmp_path / "retry.db")
+        try:
+            assert len(calls) == 3
+            store.mark_processed("evt_retry")
+            assert store.is_processed("evt_retry")
+        finally:
+            store.close()
+
+    def test_init_does_not_retry_other_operational_errors(self, tmp_path, monkeypatch):
+        """Only lock errors are retried during initialization."""
+        calls: list[int] = []
+
+        def broken(self):
+            calls.append(1)
+            raise sqlite3.OperationalError("disk I/O error")
+
+        monkeypatch.setattr(SQLiteWebhookStore, "_init_schema_once", broken)
+        with pytest.raises(sqlite3.OperationalError, match="disk I/O error"):
+            SQLiteWebhookStore(db_path=tmp_path / "broken.db")
+        assert len(calls) == 1
+
+    def test_init_gives_up_when_the_lock_persists(self, tmp_path, monkeypatch):
+        """Initialization raises the lock error once the retry deadline passes."""
+        import aragora.storage.webhook_store as webhook_store_module
+
+        monkeypatch.setattr(webhook_store_module, "_SQLITE_INIT_RETRY_SECONDS", 0.2)
+        calls: list[int] = []
+
+        def always_locked(self):
+            calls.append(1)
+            raise sqlite3.OperationalError("database is locked")
+
+        monkeypatch.setattr(SQLiteWebhookStore, "_init_schema_once", always_locked)
+        with pytest.raises(sqlite3.OperationalError, match="database is locked"):
+            SQLiteWebhookStore(db_path=tmp_path / "stuck.db")
+        assert len(calls) >= 2
 
     def test_reopens_existing_database(self, tmp_path):
         """Should work with existing database."""

@@ -11,7 +11,7 @@ TypeScript SDKs, and self-hosting the full platform.
 This page used to also cover CLI usage, the REST API, the Gauntlet, and
 troubleshooting in full; each of those now has its own maintained canonical doc:
 
-- CLI commands and flags: [CLI Reference](../reference/CLI_REFERENCE.md)
+- CLI commands and flags: [CLI Reference](../CLI_REFERENCE.md)
 - REST API usage: [API Reference](../api/API_REFERENCE.md)
 - Gauntlet adversarial stress-testing: [Gauntlet Guide](../debate/GAUNTLET.md)
 - Common issues: [Troubleshooting](TROUBLESHOOTING.md)
@@ -22,7 +22,7 @@ The maintained quickstart now lives at [Quickstart](../quickstart.md).
 
 ## CLI User Guide
 
-CLI commands and flags now live in the [CLI Reference](../reference/CLI_REFERENCE.md).
+CLI commands and flags now live in the [CLI Reference](../CLI_REFERENCE.md).
 
 ## REST API
 

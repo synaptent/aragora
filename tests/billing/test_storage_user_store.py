@@ -17,6 +17,7 @@ import tempfile
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from unittest.mock import patch
@@ -24,6 +25,7 @@ from unittest.mock import patch
 import pytest
 
 from aragora.billing.models import Organization, SubscriptionTier, User, hash_password
+from aragora.storage.repositories import OrganizationRepository
 from aragora.storage.user_store import UserStore
 
 
@@ -535,6 +537,69 @@ class TestConcurrentAccess:
         assert len(orgs_created) == 5
         # All slugs should be unique
         assert len(set(orgs_created)) == 5
+
+    def test_concurrent_org_creation_after_interleaved_slug_check(self, store, sample_user_data):
+        """Two creators paused after their first transaction must still get distinct slugs.
+
+        Each thread blocks on a barrier once its first repository transaction has
+        committed, so both creators have observed the organizations table before
+        either proceeds. Any slug choice made outside the INSERT's transaction
+        then collides deterministically.
+        """
+        owners = [
+            store.create_user(**{**sample_user_data, "email": f"race{i}@example.com"})
+            for i in range(2)
+        ]
+        barrier = threading.Barrier(2, timeout=10)
+        paused = threading.local()
+
+        @contextmanager
+        def paused_transaction():
+            with store._transaction() as cursor:
+                yield cursor
+            if not getattr(paused, "done", False):
+                paused.done = True
+                barrier.wait()
+
+        repo = OrganizationRepository(paused_transaction, store._row_to_user)
+        slugs: list[str] = []
+        errors: list[str] = []
+        lock = threading.Lock()
+
+        def create_org(index):
+            try:
+                org = repo.create("Test Org", owners[index].id)
+                with lock:
+                    slugs.append(org.slug)
+            except Exception as e:
+                with lock:
+                    errors.append(f"{type(e).__name__}: {e}")
+
+        threads = [threading.Thread(target=create_org, args=(i,)) for i in range(2)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=30)
+
+        assert not any(t.is_alive() for t in threads)
+        assert errors == []
+        assert len(slugs) == 2
+        assert len(set(slugs)) == 2
+        assert "test-org" in slugs
+
+    def test_explicit_duplicate_slug_still_rejected(self, store, sample_user_data):
+        """A caller-supplied slug that already exists fails and changes nothing."""
+        first_owner = store.create_user(**sample_user_data)
+        second_owner = store.create_user(**{**sample_user_data, "email": "second@example.com"})
+        store.create_organization("First Org", first_owner.id, slug="shared-slug")
+
+        with pytest.raises(sqlite3.IntegrityError, match="organizations.slug"):
+            store.create_organization("Second Org", second_owner.id, slug="shared-slug")
+
+        assert store.get_organization_by_slug("shared-slug").owner_id == first_owner.id
+        reloaded = store.get_user_by_id(second_owner.id)
+        assert reloaded.org_id is None
+        assert reloaded.role == "member"
 
 
 class TestAuditLog:

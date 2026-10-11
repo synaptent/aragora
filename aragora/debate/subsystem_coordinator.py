@@ -49,7 +49,7 @@ if TYPE_CHECKING:
     from aragora.core import DebateResult
     from aragora.insights.flip_detector import FlipDetector
     from aragora.debate.context import DebateContext
-    from aragora.debate.protocol import DebateProtocol
+    from aragora.protocols.debate import DebateProtocol
     from aragora.memory.consensus import ConsensusMemory, DissentRetriever
     from aragora.memory.continuum import ContinuumMemory
     from aragora.memory.tier_analytics import TierAnalyticsTracker
@@ -682,10 +682,13 @@ class SubsystemCoordinator:
 
     def _wire_feedback_to_team_selector(self) -> None:
         """Wire SelectionFeedbackLoop into TeamSelector for feedback-weighted scoring."""
+        team_selector = self.team_selector
+        if team_selector is None:
+            return
         try:
-            self.team_selector.feedback_loop = self.selection_feedback_loop
-            if hasattr(self.team_selector, "config"):
-                self.team_selector.config.enable_feedback_weights = True
+            team_selector.feedback_loop = self.selection_feedback_loop
+            if hasattr(team_selector, "config"):
+                team_selector.config.enable_feedback_weights = True
             logger.debug("Wired SelectionFeedbackLoop into TeamSelector")
         except (AttributeError, TypeError) as e:
             logger.debug("Failed to wire feedback loop to TeamSelector: %s", e)
@@ -1137,6 +1140,7 @@ class SubsystemCoordinator:
             try:
                 participants = [a.name for a in ctx.agents] if ctx.agents else []
                 winner = getattr(result, "winner", None)
+                winner_name: str | None
                 if isinstance(winner, str):
                     winner_name = winner
                 else:

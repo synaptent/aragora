@@ -590,6 +590,19 @@ class TestFallbackToKnowledgeMound:
 
         assert result == []
 
+    @pytest.mark.asyncio
+    async def test_fallback_without_mound_returns_none(self, caplog):
+        """Should skip the mound fallback when no knowledge mound is configured."""
+        from aragora.knowledge.mound.revalidation_scheduler import RevalidationScheduler
+
+        scheduler = RevalidationScheduler(knowledge_mound=None, task_scheduler=None)
+
+        with caplog.at_level("WARNING", logger="aragora.knowledge.mound.revalidation_scheduler"):
+            result = await scheduler._create_revalidation_task(MockStaleItem(node_id="node-1"))
+
+        assert result is None
+        assert "no knowledge mound configured" in caplog.text
+
 
 class TestHandleRevalidationTask:
     """Tests for handle_revalidation_task routing."""
@@ -760,7 +773,7 @@ class TestRevalidateViaDebate:
         mock_core_types = ModuleType("aragora.core_types")
         mock_core_types.Environment = MagicMock()
 
-        mock_debate_protocol = ModuleType("aragora.debate.protocol")
+        mock_debate_protocol = ModuleType("aragora.protocols.debate")
         mock_debate_protocol.DebateProtocol = MagicMock()
 
         mock_debate_orchestrator = ModuleType("aragora.debate.orchestrator")
@@ -784,7 +797,7 @@ class TestRevalidateViaDebate:
             sys.modules,
             {
                 "aragora.core_types": mock_core_types,
-                "aragora.debate.protocol": mock_debate_protocol,
+                "aragora.protocols.debate": mock_debate_protocol,
                 "aragora.debate.orchestrator": mock_debate_orchestrator,
                 "aragora.agents.factory": mock_agents_factory,
             },
@@ -814,7 +827,7 @@ class TestRevalidateViaDebate:
         mock_core_types = ModuleType("aragora.core_types")
         mock_core_types.Environment = MagicMock()
 
-        mock_debate_protocol = ModuleType("aragora.debate.protocol")
+        mock_debate_protocol = ModuleType("aragora.protocols.debate")
         mock_debate_protocol.DebateProtocol = MagicMock()
 
         mock_debate_orchestrator = ModuleType("aragora.debate.orchestrator")
@@ -838,7 +851,7 @@ class TestRevalidateViaDebate:
             sys.modules,
             {
                 "aragora.core_types": mock_core_types,
-                "aragora.debate.protocol": mock_debate_protocol,
+                "aragora.protocols.debate": mock_debate_protocol,
                 "aragora.debate.orchestrator": mock_debate_orchestrator,
                 "aragora.agents.factory": mock_agents_factory,
             },
@@ -860,7 +873,7 @@ class TestRevalidateViaDebate:
         mock_core_types = ModuleType("aragora.core_types")
         mock_core_types.Environment = MagicMock()
 
-        mock_debate_protocol = ModuleType("aragora.debate.protocol")
+        mock_debate_protocol = ModuleType("aragora.protocols.debate")
         mock_debate_protocol.DebateProtocol = MagicMock()
 
         mock_debate_orchestrator = ModuleType("aragora.debate.orchestrator")
@@ -884,7 +897,7 @@ class TestRevalidateViaDebate:
             sys.modules,
             {
                 "aragora.core_types": mock_core_types,
-                "aragora.debate.protocol": mock_debate_protocol,
+                "aragora.protocols.debate": mock_debate_protocol,
                 "aragora.debate.orchestrator": mock_debate_orchestrator,
                 "aragora.agents.factory": mock_agents_factory,
             },
@@ -906,7 +919,7 @@ class TestRevalidateViaDebate:
         mock_core_types = ModuleType("aragora.core_types")
         mock_core_types.Environment = MagicMock()
 
-        mock_debate_protocol = ModuleType("aragora.debate.protocol")
+        mock_debate_protocol = ModuleType("aragora.protocols.debate")
         mock_debate_protocol.DebateProtocol = MagicMock()
 
         mock_debate_orchestrator = ModuleType("aragora.debate.orchestrator")
@@ -921,7 +934,7 @@ class TestRevalidateViaDebate:
             sys.modules,
             {
                 "aragora.core_types": mock_core_types,
-                "aragora.debate.protocol": mock_debate_protocol,
+                "aragora.protocols.debate": mock_debate_protocol,
                 "aragora.debate.orchestrator": mock_debate_orchestrator,
                 "aragora.agents.factory": mock_agents_factory,
             },

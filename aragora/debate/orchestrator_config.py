@@ -24,7 +24,7 @@ if TYPE_CHECKING:
         MLConfig,
         SupermemoryConfig,
     )
-    from aragora.debate.protocol import DebateProtocol
+    from aragora.protocols.debate import DebateProtocol
 
 
 class MergedConfig:

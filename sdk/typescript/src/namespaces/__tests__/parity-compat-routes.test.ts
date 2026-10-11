@@ -48,7 +48,7 @@ describe('Parity Compatibility Routes', () => {
     expect(mockClient.request).toHaveBeenNthCalledWith(1, 'GET', '/api/debates/stats', {
       params: { period: 'week' },
     });
-    expect(mockClient.request).toHaveBeenNthCalledWith(2, 'GET', '/api/debates/stats/agents', {
+    expect(mockClient.request).toHaveBeenNthCalledWith(2, 'GET', '/api/v1/debates/stats/agents', {
       params: { limit: 25 },
     });
   });

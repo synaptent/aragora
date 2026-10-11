@@ -215,12 +215,12 @@ def timed_query(
         if elapsed_ms > threshold_ms:
             # Truncate query for logging
             short_query = query[:200] + "..." if len(query) > 200 else query
-            logger.warning(f"Slow query ({elapsed_ms:.1f}ms): {operation_name}: {short_query}")
+            logger.warning("Slow query (%.1fms): %s: %s", elapsed_ms, operation_name, short_query)
 
         return cursor
     except sqlite3.Error:
         elapsed_ms = (time.monotonic() - start) * 1000
-        logger.error(f"Query failed after {elapsed_ms:.1f}ms: {operation_name}")
+        logger.error("Query failed after %.1fms: %s", elapsed_ms, operation_name)
         raise
 
 

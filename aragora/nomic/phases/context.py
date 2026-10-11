@@ -10,6 +10,7 @@ Phase 0: Gather codebase understanding
 from __future__ import annotations
 
 import asyncio
+import inspect
 import os
 import time
 from pathlib import Path
@@ -36,6 +37,15 @@ def set_metrics_recorder(
     global _metrics_recorder, _agent_metrics_recorder
     _metrics_recorder = phase_recorder
     _agent_metrics_recorder = agent_recorder
+
+
+def _accepts_agent_kwarg(fn: Callable[..., Any]) -> bool:
+    # Logger.info declares **kwargs but rejects unknown keys, so only an
+    # explicitly named ``agent`` parameter is trusted.
+    try:
+        return "agent" in inspect.signature(fn).parameters
+    except (TypeError, ValueError):
+        return False
 
 
 class ContextPhase:
@@ -91,7 +101,8 @@ class ContextPhase:
         self.kilocode_agent_factory = kilocode_agent_factory
         self.cycle_count = cycle_count
         self._log: Callable[..., None] = log_fn or print
-        self._stream_emit: Callable[..., None] = stream_emit_fn or (lambda *args: None)
+        self._log_accepts_agent = _accepts_agent_kwarg(self._log)
+        self._stream_emit: Callable[..., None] = stream_emit_fn or (lambda *args, **kwargs: None)
         self._get_features = get_features_fn or (lambda: "No features available")
         self._context_builder = context_builder
 
@@ -372,6 +383,13 @@ CRITICAL RULES:
 3. Check for partial implementations (e.g., WebSocket streaming exists even if not fully featured)
 4. NEVER propose something that could be a configuration change to existing code"""
 
+    def _log_agent(self, message: str, agent: str) -> None:
+        """Log a per-agent message; the agent name is already part of ``message``."""
+        if self._log_accepts_agent:
+            self._log(message, agent=agent)
+        else:
+            self._log(message)
+
     async def _gather_with_agent(self, agent: Any, name: str, harness: str) -> tuple[str, str, str]:
         """Run exploration with one agent."""
         from aragora.server.stream.arena_hooks import streaming_task_context
@@ -380,7 +398,7 @@ CRITICAL RULES:
         heartbeat_task: asyncio.Task | None = None
         done_event = asyncio.Event()
         try:
-            self._log(f"  {name} ({harness}): exploring codebase...", agent=name)
+            self._log_agent(f"  {name} ({harness}): exploring codebase...", name)
             prompt = self._build_explore_prompt()
             task_id = f"{name}:nomic_context"
             with streaming_task_context(task_id):
@@ -394,13 +412,13 @@ CRITICAL RULES:
                 if timeout is None:
                     timeout = getattr(agent, "timeout", None)
                 if timeout is None:
-                    self._log(
+                    self._log_agent(
                         f"  {name}: no timeout configured; set NOMIC_CONTEXT_AGENT_TIMEOUT "
                         "to enforce a limit",
-                        agent=name,
+                        name,
                     )
                 else:
-                    self._log(f"  {name}: timeout={timeout}s", agent=name)
+                    self._log_agent(f"  {name}: timeout={timeout}s", name)
 
                 async def _heartbeat() -> None:
                     while not done_event.is_set():
@@ -408,7 +426,7 @@ CRITICAL RULES:
                         if done_event.is_set():
                             break
                         elapsed = time.perf_counter() - agent_start
-                        self._log(f"  {name}: still running ({elapsed:.0f}s)...", agent=name)
+                        self._log_agent(f"  {name}: still running ({elapsed:.0f}s)...", name)
 
                 heartbeat_task = asyncio.create_task(_heartbeat())
 
@@ -419,17 +437,17 @@ CRITICAL RULES:
                     )
                 else:
                     result = await agent.generate(prompt, context=[])
-            self._log(f"  {name}: complete ({len(result) if result else 0} chars)", agent=name)
+            self._log_agent(f"  {name}: complete ({len(result) if result else 0} chars)", name)
             # Emit agent's full exploration result
             if not result:
                 return (name, harness, "Error: empty response")
             self._stream_emit("on_log_message", result, level="info", phase="context", agent=name)
             return (name, harness, result)
         except asyncio.TimeoutError:
-            self._log(f"  {name}: timeout exceeded", agent=name)
+            self._log_agent(f"  {name}: timeout exceeded", name)
             return (name, harness, "Error: timeout exceeded")
         except (RuntimeError, OSError, ConnectionError, TimeoutError) as e:
-            self._log(f"  {name}: error - {type(e).__name__}: {e}", agent=name)
+            self._log_agent(f"  {name}: error - {type(e).__name__}: {e}", name)
             return (name, harness, f"Error: {type(e).__name__}: {e}")
         finally:
             done_event.set()

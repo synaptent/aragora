@@ -168,7 +168,9 @@ def regenerate_receipt(
     """Regenerate one ODR receipt through the canonical collector pipeline."""
     outcome = build_outcome(pr, head_sha, title, tier, reviewers)
     receipt = collect_outcome_to_decision_receipt(outcome)
-    odr = decision_receipt_to_odr(receipt)
+    # The committed M8 receipts are v0.1 documents; pin the profile so a replay
+    # reproduces them now that the library default is v0.2 (release 2.11.0).
+    odr = decision_receipt_to_odr(receipt, odr_version="0.1")
     digest = odr_content_digest(odr)
 
     out_path = SCRIPT_DIR / f"pr-{pr}-receipt.odr.json"

@@ -40,7 +40,7 @@ from typing import Any, TYPE_CHECKING
 from uuid import uuid4
 
 if TYPE_CHECKING:
-    from aragora.services.spam_classifier import SpamClassifier, SpamClassificationResult
+    from aragora.moderation.spam import SpamClassificationResult, SpamClassifier
 
 logger = logging.getLogger(__name__)
 
@@ -349,7 +349,7 @@ class SpamModerationIntegration:
 
         if self._classifier is None:
             try:
-                from aragora.services.spam_classifier import SpamClassifier
+                from aragora.moderation.spam import SpamClassifier
 
                 self._classifier = SpamClassifier()
                 await self._classifier.initialize()

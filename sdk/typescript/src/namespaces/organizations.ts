@@ -289,16 +289,4 @@ export class OrganizationsAPI {
     return this.client.request('GET', '/api/v1/tenants', { params: params as Record<string, unknown> });
   }
 
-  /**
-   * Create a new tenant.
-   *
-   * @route POST /api/v1/tenants
-   */
-  async createTenant(body: {
-    name: string;
-    slug?: string;
-    settings?: Record<string, unknown>;
-  }): Promise<Record<string, unknown>> {
-    return this.client.request('POST', '/api/v1/tenants', { json: body });
-  }
 }

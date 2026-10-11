@@ -71,6 +71,8 @@ class Migration:
         up_fn: Python function to apply migration (alternative to up_sql)
         down_fn: Python function to rollback migration (alternative to down_sql)
         checksum: Optional pre-computed checksum (computed automatically if not provided)
+        previous_checksums: Checksums of earlier revisions that databases may have
+            recorded; verification accepts them (see MIGRATION_GUIDE.md)
     """
 
     version: int
@@ -80,6 +82,7 @@ class Migration:
     up_fn: Callable[[DatabaseBackend], None] | None = None
     down_fn: Callable[[DatabaseBackend], None] | None = None
     checksum: str | None = field(default=None, repr=False)
+    previous_checksums: tuple[str, ...] = field(default=(), repr=False)
 
     def __post_init__(self) -> None:
         if not self.up_sql and not self.up_fn:
@@ -422,7 +425,12 @@ class MigrationRunner:
                     f"SELECT checksum FROM {self.MIGRATIONS_TABLE} WHERE version = ?",  # noqa: S608 -- table name interpolation, parameterized
                     (migration.version,),
                 )
-                if row and row[0] and row[0] != current_checksum:
+                if (
+                    row
+                    and row[0]
+                    and row[0] != current_checksum
+                    and row[0] not in migration.previous_checksums
+                ):
                     mismatches.append((migration.version, row[0], current_checksum))
 
         return mismatches

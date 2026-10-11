@@ -277,6 +277,17 @@ async def _initialize_triage_storage() -> None:
 
 async def _shutdown_triage_storage() -> None:
     """Best-effort shutdown for triage-owned database resources."""
+    # Webhook workers record delivery results through the pool-backed store,
+    # and the shared pool created by _initialize_triage_storage runs those
+    # writes on this loop. Drain them before any pool closes, and off the loop
+    # so their writes can still run instead of timing out.
+    try:
+        from aragora.events.dispatcher import shutdown_dispatcher
+
+        await asyncio.to_thread(shutdown_dispatcher, wait=True)
+    except (ImportError, OSError, RuntimeError) as exc:
+        logger.debug("Triage dispatcher shutdown skipped: %s", exc)
+
     try:
         from aragora.server.startup.database import close_postgres_pool
 
@@ -304,13 +315,6 @@ async def _shutdown_triage_storage() -> None:
         await close_all_pools()
     except (ImportError, OSError, RuntimeError) as exc:
         logger.debug("Triage connection-factory shutdown skipped: %s", exc)
-
-    try:
-        from aragora.events.dispatcher import shutdown_dispatcher
-
-        shutdown_dispatcher(wait=True)
-    except (ImportError, OSError, RuntimeError) as exc:
-        logger.debug("Triage dispatcher shutdown skipped: %s", exc)
 
     try:
         from aragora.storage.webhook_config_store import reset_webhook_config_store

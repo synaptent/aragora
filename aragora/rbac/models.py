@@ -156,6 +156,7 @@ class ResourceType(str, Enum):
     FEATURES = "features"  # Feature flag management
     DR = "dr"  # Disaster recovery (alias for handlers)
     EVOLUTION = "evolution"  # Prompt evolution operations
+    CROSS_POLLINATION = "cross_pollination"  # Cross-subsystem event bridge and KM sync
 
     # External gateway integrations
     GATEWAY = "gateway"  # External AI runtime gateways (OpenClaw, etc.)
@@ -235,6 +236,9 @@ class Action(str, Enum):
     IMPORT = "import"  # Import from marketplace
     RATE = "rate"  # Rate templates
     REVIEW = "review"  # Write reviews
+
+    # Analytics-specific
+    QUERY = "query"  # Run queries against connected analytics platforms
 
     # Explainability-specific
     BATCH = "batch"  # Run batch operations

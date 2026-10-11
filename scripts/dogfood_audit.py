@@ -61,7 +61,7 @@ def analyze_with_chunking(documents: list[dict]) -> dict[str, Any]:
     chunker = SemanticChunking(ChunkingConfig(chunk_size=500, overlap=50))
     counter = TokenCounter()
 
-    results = {
+    results: dict[str, Any] = {
         "total_documents": len(documents),
         "total_chars": 0,
         "total_tokens": 0,
@@ -123,8 +123,8 @@ def run_consistency_audit(chunks: list[dict]) -> list[dict]:
                         "category": category,
                         "document": doc_id,
                         "chunk": chunk_id,
-                        "key": match.group(1) if match.lastindex >= 1 else "date",
-                        "value": match.group(2) if match.lastindex >= 2 else match.group(0),
+                        "key": match.group(1) if (match.lastindex or 0) >= 1 else "date",
+                        "value": match.group(2) if (match.lastindex or 0) >= 2 else match.group(0),
                         "text": match.group(0),
                     }
                 )
@@ -138,8 +138,8 @@ def run_consistency_audit(chunks: list[dict]) -> list[dict]:
                         "category": category,
                         "document": doc_id,
                         "chunk": chunk_id,
-                        "key": match.group(1) if match.lastindex >= 1 else "number",
-                        "value": match.group(2) if match.lastindex >= 2 else match.group(0),
+                        "key": match.group(1) if (match.lastindex or 0) >= 1 else "number",
+                        "value": match.group(2) if (match.lastindex or 0) >= 2 else match.group(0),
                         "text": match.group(0),
                     }
                 )
@@ -153,8 +153,8 @@ def run_consistency_audit(chunks: list[dict]) -> list[dict]:
                         "category": category,
                         "document": doc_id,
                         "chunk": chunk_id,
-                        "key": match.group(1) if match.lastindex >= 1 else "term",
-                        "value": match.group(2) if match.lastindex >= 2 else match.group(0),
+                        "key": match.group(1) if (match.lastindex or 0) >= 1 else "term",
+                        "value": match.group(2) if (match.lastindex or 0) >= 2 else match.group(0),
                         "text": match.group(0)[:100],
                     }
                 )
@@ -183,7 +183,7 @@ def find_contradictions(findings: list[dict]) -> list[dict]:
             continue
 
         # Get unique values
-        values = {}
+        values: dict[Any, list[dict]] = {}
         for item in items:
             val = item.get("value", "")
             if val not in values:
@@ -212,7 +212,7 @@ def find_contradictions(findings: list[dict]) -> list[dict]:
 
 def check_documented_features() -> dict[str, Any]:
     """Check which features documented in CLAUDE.md actually exist in code."""
-    results = {
+    results: dict[str, list[str]] = {
         "documented_files": [],
         "missing_files": [],
         "documented_classes": [],

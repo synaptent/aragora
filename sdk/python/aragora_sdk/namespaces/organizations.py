@@ -248,30 +248,6 @@ class OrganizationsAPI:
         """
         return self._client.request("GET", "/api/v1/tenants")
 
-    def create_tenant(
-        self,
-        name: str,
-        slug: str | None = None,
-        settings: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        """
-        Create a new tenant.
-
-        Args:
-            name: Tenant name.
-            slug: URL-friendly identifier.
-            settings: Tenant configuration.
-
-        Returns:
-            Created tenant details.
-        """
-        data: dict[str, Any] = {"name": name}
-        if slug is not None:
-            data["slug"] = slug
-        if settings is not None:
-            data["settings"] = settings
-        return self._client.request("POST", "/api/v1/tenants", json=data)
-
 
 class AsyncOrganizationsAPI:
     """
@@ -379,17 +355,3 @@ class AsyncOrganizationsAPI:
     async def list_tenants(self) -> dict[str, Any]:
         """List all tenants."""
         return await self._client.request("GET", "/api/v1/tenants")
-
-    async def create_tenant(
-        self,
-        name: str,
-        slug: str | None = None,
-        settings: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        """Create a new tenant."""
-        data: dict[str, Any] = {"name": name}
-        if slug is not None:
-            data["slug"] = slug
-        if settings is not None:
-            data["settings"] = settings
-        return await self._client.request("POST", "/api/v1/tenants", json=data)

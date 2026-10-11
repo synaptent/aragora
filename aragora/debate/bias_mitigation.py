@@ -156,9 +156,11 @@ def average_permutation_votes(
             )
 
             logger.debug(
-                f"position_bias_averaged agent={agent_name} "
-                f"choice={choice} consistency={consistency:.0%} "
-                f"avg_confidence={avg_confidence:.2f}"
+                "position_bias_averaged agent=%s choice=%s consistency=%.0f%% avg_confidence=%.2f",
+                agent_name,
+                choice,
+                consistency * 100,
+                avg_confidence,
             )
 
     return final_votes
@@ -254,17 +256,21 @@ def apply_self_vote_penalty(
                 adjusted[agent] = 0.0
                 if config.log_self_votes:
                     logger.info(
-                        f"self_vote_excluded agent={agent} "
-                        f"choice={vote.choice} original_weight={original_weight:.2f}"
+                        "self_vote_excluded agent=%s choice=%s original_weight=%.2f",
+                        agent,
+                        vote.choice,
+                        original_weight,
                     )
 
             elif config.mode == "downweight":
                 adjusted[agent] = original_weight * config.downweight_factor
                 if config.log_self_votes:
                     logger.info(
-                        f"self_vote_downweighted agent={agent} "
-                        f"choice={vote.choice} "
-                        f"weight={original_weight:.2f}->{adjusted[agent]:.2f}"
+                        "self_vote_downweighted agent=%s choice=%s weight=%.2f->%.2f",
+                        agent,
+                        vote.choice,
+                        original_weight,
+                        adjusted[agent],
                     )
 
             else:  # log_only
@@ -330,9 +336,10 @@ def calculate_verbosity_factor(
 
     if config.log_adjustments:
         logger.debug(
-            f"verbosity_factor length={proposal_length} "
-            f"ratio={ratio:.1f}x target "
-            f"factor={factor:.2f}"
+            "verbosity_factor length=%s ratio=%.1fx target factor=%.2f",
+            proposal_length,
+            ratio,
+            factor,
         )
 
     return factor
@@ -484,9 +491,10 @@ class ProcessEvaluator:
             tool_results = await self._run_tool_verification(proposal, evidence_pack)
 
         logger.debug(
-            f"process_evaluation agent={agent_name} "
-            f"weighted_total={weighted_total:.2f} "
-            f"criteria={criterion_scores}"
+            "process_evaluation agent=%s weighted_total=%.2f criteria=%s",
+            agent_name,
+            weighted_total,
+            criterion_scores,
         )
 
         return ProcessEvaluationResult(

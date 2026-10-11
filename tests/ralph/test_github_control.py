@@ -8,6 +8,9 @@ import pytest
 
 from aragora.ralph.github_control import GitHubControl, GitHubControlError
 
+_HEAD_SHA = "a" * 40
+_PIN = ["--match-head-commit", _HEAD_SHA]
+
 
 def _completed_process(
     *,
@@ -160,6 +163,7 @@ class TestGitHubControlGateSnapshots:
                         "state": "MERGED",
                         "isDraft": False,
                         "headRefName": "codex/test",
+                        "headRefOid": _HEAD_SHA,
                         "baseRefName": "main",
                         "reviewDecision": "APPROVED",
                         "mergeStateStatus": "CLEAN",
@@ -176,6 +180,10 @@ class TestGitHubControlGateSnapshots:
 
         assert snapshot.disposition == "merged"
         assert snapshot.merge_commit_sha == "merge-sha"
+        assert snapshot.head_sha == _HEAD_SHA
+        assert snapshot.to_dict()["head_sha"] == _HEAD_SHA
+        view_argv = mock_run.call_args_list[0].args[0]
+        assert "headRefOid" in view_argv[view_argv.index("--json") + 1].split(",")
 
     @patch("aragora.ralph.github_control.subprocess.run")
     def test_fetch_gate_snapshot_waits_for_review(self, mock_run, tmp_path: Path) -> None:
@@ -457,12 +465,20 @@ class TestGitHubControlMerge:
             "https://github.com/org/repo/pull/88",
             required_checks_green=True,
             allow_admin=True,
+            head_sha=_HEAD_SHA,
         )
 
         assert result.merged is True
         assert result.used_admin is False
         called = mock_run.call_args.args[0]
-        assert called == ["gh", "pr", "merge", "https://github.com/org/repo/pull/88", "--squash"]
+        assert called == [
+            "gh",
+            "pr",
+            "merge",
+            "https://github.com/org/repo/pull/88",
+            "--squash",
+            *_PIN,
+        ]
 
     @patch("aragora.ralph.github_control.subprocess.run")
     def test_merge_pr_falls_back_to_admin_when_needed(self, mock_run, tmp_path: Path) -> None:
@@ -478,10 +494,12 @@ class TestGitHubControlMerge:
             "https://github.com/org/repo/pull/88",
             required_checks_green=True,
             allow_admin=True,
+            head_sha=_HEAD_SHA,
         )
 
         assert result.merged is True
         assert result.used_admin is True
+        assert mock_run.call_args_list[0].args[0][-2:] == _PIN
         assert mock_run.call_args_list[1].args[0] == [
             "gh",
             "pr",
@@ -489,6 +507,7 @@ class TestGitHubControlMerge:
             "https://github.com/org/repo/pull/88",
             "--squash",
             "--admin",
+            *_PIN,
         ]
 
     @patch("aragora.ralph.github_control.subprocess.run")
@@ -500,6 +519,7 @@ class TestGitHubControlMerge:
             "https://github.com/org/repo/pull/88",
             required_checks_green=True,
             allow_admin=True,
+            head_sha=_HEAD_SHA,
         )
 
         assert result.merged is False
@@ -513,8 +533,79 @@ class TestGitHubControlMerge:
             "https://github.com/org/repo/pull/88",
             required_checks_green=False,
             allow_admin=True,
+            head_sha=_HEAD_SHA,
         )
 
         assert result.merged is False
         assert result.action == "blocked"
         assert mock_run.call_count == 0
+
+    @patch("aragora.ralph.github_control.subprocess.run")
+    def test_head_change_rejection_is_not_retried_with_admin(
+        self, mock_run, tmp_path: Path
+    ) -> None:
+        """A moved head needs a fresh gate snapshot, not an admin retry."""
+        mock_run.return_value = _completed_process(
+            returncode=1,
+            stderr="GraphQL: Head branch was modified. Review and try the merge again.",
+        )
+
+        control = GitHubControl(repo_root=tmp_path)
+        result = control.merge_pr(
+            "https://github.com/org/repo/pull/88",
+            required_checks_green=True,
+            allow_admin=True,
+            head_sha=_HEAD_SHA,
+        )
+
+        assert result.merged is False
+        assert result.action == "merge_failed"
+        assert mock_run.call_count == 1
+
+    @patch("aragora.ralph.github_control.subprocess.run")
+    @pytest.mark.parametrize("head_sha", [None, "", "abc123", "g" * 40, "a" * 39, "a" * 41])
+    def test_merge_without_a_full_snapshot_head_is_blocked(
+        self, mock_run, tmp_path: Path, head_sha: str | None
+    ) -> None:
+        control = GitHubControl(repo_root=tmp_path)
+        with patch("aragora.ralph.github_control.evaluate_merge_halt") as halt:
+            result = control.merge_pr(
+                "https://github.com/org/repo/pull/88",
+                required_checks_green=True,
+                allow_admin=True,
+                head_sha=head_sha,
+            )
+
+        assert result.merged is False
+        assert result.action == "blocked"
+        assert "full 40-character" in result.detail
+        halt.assert_not_called()
+        mock_run.assert_not_called()
+
+    @patch("aragora.ralph.github_control.subprocess.run")
+    @pytest.mark.parametrize(
+        ("pr_ref", "expected"),
+        [
+            ("https://github.com/org/repo/pull/88", 88),
+            ("https://github.com/org/repo/pull/88/files", 88),
+            ("88", 88),
+            ("#88", 88),
+            ("feature-88", 0),
+        ],
+    )
+    def test_halt_is_checked_for_the_pr_and_the_snapshot_head(
+        self, mock_run, tmp_path: Path, pr_ref: str, expected: int
+    ) -> None:
+        mock_run.return_value = _completed_process(stdout="merged")
+        control = GitHubControl(repo_root=tmp_path)
+        with patch("aragora.ralph.github_control.evaluate_merge_halt") as halt:
+            halt.return_value = MagicMock(allowed=True)
+            control.merge_pr(
+                pr_ref,
+                required_checks_green=True,
+                allow_admin=False,
+                head_sha=_HEAD_SHA.upper(),
+            )
+
+        halt.assert_called_once_with(expected, _HEAD_SHA)
+        assert mock_run.call_args.args[0][-2:] == _PIN

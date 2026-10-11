@@ -7,6 +7,9 @@ Tests cover:
 - Statistics tracking
 """
 
+import ast
+from pathlib import Path
+
 import pytest
 from unittest.mock import MagicMock, patch
 from datetime import datetime
@@ -17,6 +20,10 @@ from aragora.events.cross_subscribers import (
     SubscriberStats,
     get_cross_subscriber_manager,
     reset_cross_subscriber_manager,
+)
+
+_MANAGER_PATH = (
+    Path(__file__).resolve().parents[2] / "aragora" / "events" / "cross_subscribers" / "manager.py"
 )
 
 
@@ -161,6 +168,46 @@ class TestBuiltinHandlers:
 
         # Should not raise
         manager._dispatch_event(event)
+
+    def test_memory_to_rlm_handler_never_resolves_an_rlm_compressor(self, monkeypatch):
+        """The handler only records the retrieval; it never calls into aragora.rlm."""
+        import aragora.rlm.compressor as compressor_module
+
+        get_compressor = MagicMock(name="get_compressor")
+        monkeypatch.setattr(compressor_module, "get_compressor", get_compressor, raising=False)
+        manager = CrossSubscriberManager()
+
+        manager._dispatch_event(
+            make_stream_event(
+                StreamEventType.MEMORY_RETRIEVED,
+                data={"tier": "fast", "cache_hit": True, "importance": 0.9},
+            )
+        )
+
+        get_compressor.assert_not_called()
+        stats = manager._stats["memory_to_rlm"]
+        assert stats.events_processed == 1
+        assert stats.events_failed == 0
+
+    def test_manager_holds_no_import_of_rlm_at_any_scope(self):
+        """Infrastructure ``aragora.events`` must not import the domain ``aragora.rlm`` package."""
+        tree = ast.parse(_MANAGER_PATH.read_text(encoding="utf-8"))
+        imported: set[str] = set()
+        literals: set[str] = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                imported.update(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                imported.add(node.module)
+            elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+                literals.add(node.value)
+
+        def is_rlm(name: str) -> bool:
+            return name == "aragora.rlm" or name.startswith("aragora.rlm.")
+
+        assert not sorted(name for name in imported if is_rlm(name))
+        assert "importlib" not in imported
+        assert not sorted(text for text in literals if is_rlm(text))
 
 
 class TestSubscriberManagement:

@@ -706,7 +706,9 @@ class KeyRotationScheduler:
 
         logger.log(
             logging.CRITICAL if severity == "critical" else logging.WARNING,
-            f"[KEY ROTATION] {severity.upper()}: {message}",
+            "[KEY ROTATION] %s: %s",
+            severity.upper(),
+            message,
         )
 
         # Audit log the alert

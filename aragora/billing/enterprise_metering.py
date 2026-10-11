@@ -41,7 +41,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from enum import Enum
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 from uuid import uuid4
 
 from .usage import PROVIDER_PRICING
@@ -347,7 +347,9 @@ class EnterpriseMeter:
 
     @property
     def _connection(self) -> sqlite3.Connection:
-        return cast(sqlite3.Connection, self._conn)
+        if self._conn is None:
+            raise RuntimeError("metering store not initialized")
+        return self._conn
 
     async def initialize(self) -> None:
         """Initialize database and start background tasks."""
@@ -921,7 +923,7 @@ class EnterpriseMeter:
                 self._connection.commit()
 
                 logger.warning(
-                    f"Budget alert for tenant {tenant_id}: {alert_level.value} ({percent:.1f}%)"
+                    "Budget alert for tenant %s: %s (%.1f%%)", tenant_id, alert_level.value, percent
                 )
 
                 # Send email notifications to configured alert recipients

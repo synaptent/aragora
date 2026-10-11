@@ -12,6 +12,7 @@ import asyncio
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from aragora.debate.workspace_stores import get_workspace_stores
 from aragora.logging_config import get_logger as get_structured_logger
 
 if TYPE_CHECKING:
@@ -31,11 +32,6 @@ async def _resolve_bead_store(
     if bead_store is not None:
         return bead_store
 
-    try:
-        from aragora.stores import get_canonical_workspace_stores
-    except ImportError:
-        return None
-
     canonical_stores = (
         holder_state.get("_canonical_workspace_stores")
         if "_canonical_workspace_stores" in holder_state
@@ -43,7 +39,7 @@ async def _resolve_bead_store(
     )
     if canonical_stores is None:
         bead_dir = Path(env.context.get("bead_dir")) if env.context else None
-        canonical_stores = get_canonical_workspace_stores(
+        canonical_stores = get_workspace_stores(
             bead_dir=str(bead_dir) if bead_dir else None,
             git_enabled=True,
             auto_commit=getattr(protocol, "bead_auto_commit", False),
@@ -80,7 +76,7 @@ async def create_debate_bead(
 
     if result.confidence < min_confidence:
         logger.debug(
-            f"Skipping bead creation: confidence {result.confidence:.2f} < {min_confidence}"
+            "Skipping bead creation: confidence %.2f < %s", result.confidence, min_confidence
         )
         return None
 
@@ -395,10 +391,9 @@ async def recover_pending_debates(
 
         from aragora.nomic.beads import BeadStatus, BeadType
         from aragora.nomic.hook_queue import HookQueueRegistry
-        from aragora.stores import get_canonical_workspace_stores
 
         if bead_store is None:
-            stores = get_canonical_workspace_stores(
+            stores = get_workspace_stores(
                 git_enabled=False,
                 auto_commit=False,
             )

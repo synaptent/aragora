@@ -516,6 +516,6 @@ kubectl scale deployment aragora --replicas=3 -n aragora
 - [RUNBOOK.md](RUNBOOK.md) - Operational procedures and incident response
 - [DISASTER_RECOVERY.md](DISASTER_RECOVERY.md) - Recovery procedures
 - [ENVIRONMENT.md](../reference/ENVIRONMENT.md) - Complete environment variable reference
-- [DEPLOYMENT.md](DEPLOYMENT.md) - Kubernetes and Docker deployment guides
+- [DEPLOYMENT.md](../DEPLOYMENT.md) - Kubernetes and Docker deployment guides
 - [SECURITY.md](../enterprise/SECURITY.md) - Security architecture and practices
 - [SCALING.md](SCALING.md) - Scaling guidelines and capacity planning

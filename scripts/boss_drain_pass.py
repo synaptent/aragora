@@ -41,6 +41,7 @@ from aragora.swarm.boss_drain import (
 )
 from aragora.swarm.drain_pass import DrainPassPolicy
 from aragora.swarm.drain_policy import DrainAction, DrainPolicy
+from aragora.swarm.merge_halt import evaluate_merge_halt
 
 # Single-sourced from boss_drain so the proxy gate and the repair prompt can't drift.
 _REQUIRED = set(REQUIRED_CHECK_NAMES)
@@ -248,6 +249,10 @@ def make_execute_fn(
             # a second lookup could pair a newer head with an older gate result.
             head = _settle_authorized(repo, pr)
             if head is None:  # missing/malformed provenance fails closed
+                return False
+            halt = evaluate_merge_halt(pr, head)  # #9216
+            if not halt.allowed:
+                print(f"  #{pr} not merged: {halt.reason}")
                 return False
             cmd = [
                 "gh",

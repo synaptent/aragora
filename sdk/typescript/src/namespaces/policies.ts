@@ -215,20 +215,6 @@ export class PoliciesAPI {
   }
 
   /**
-   * Enable a policy.
-   */
-  async enable(policyId: string): Promise<{ enabled: boolean }> {
-    return this.client.request('POST', `/api/policies/${policyId}/enable`);
-  }
-
-  /**
-   * Disable a policy.
-   */
-  async disable(policyId: string): Promise<{ enabled: boolean }> {
-    return this.client.request('POST', `/api/policies/${policyId}/disable`);
-  }
-
-  /**
    * Get violations for a specific policy.
    */
   async getViolations(
@@ -256,18 +242,6 @@ export class PoliciesAPI {
     offset?: number;
   }): Promise<{ violations: PolicyViolation[]; total: number }> {
     return this.client.request('GET', '/api/policies/violations', { params: options });
-  }
-
-  /**
-   * Resolve a policy violation.
-   */
-  async resolveViolation(
-    violationId: string,
-    resolution: { notes?: string }
-  ): Promise<PolicyViolation> {
-    return this.client.request('POST', `/api/policies/violations/${violationId}/resolve`, {
-      json: resolution,
-    });
   }
 
   /**

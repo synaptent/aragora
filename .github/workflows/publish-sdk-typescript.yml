@@ -45,6 +45,8 @@ jobs:
 
       - name: Verify checkout integrity
         shell: bash
+        # The job default is sdk/typescript; pyproject.toml lives at the repository root.
+        working-directory: ${{ github.workspace }}
         run: |
           if [[ ! -f pyproject.toml ]]; then
             echo "::warning::pyproject.toml missing after checkout; attempting recovery"
@@ -66,7 +68,7 @@ jobs:
           fi
 
       - name: Setup Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
@@ -89,8 +91,14 @@ jobs:
 
   build-and-publish:
     needs: test
-    runs-on: aragora
+    # npm trusted publishing (OIDC) does not support self-hosted runners, so the
+    # publish job runs GitHub-hosted. The trusted publisher on npmjs.com is bound
+    # to synaptent/aragora + this workflow file; no NPM_TOKEN is used.
+    runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: write  # GitHub release on sdk-ts-v* tags
+      id-token: write  # npm trusted publishing
 
     defaults:
       run:
@@ -101,6 +109,8 @@ jobs:
 
       - name: Verify checkout integrity
         shell: bash
+        # The job default is sdk/typescript; pyproject.toml lives at the repository root.
+        working-directory: ${{ github.workspace }}
         run: |
           if [[ ! -f pyproject.toml ]]; then
             echo "::warning::pyproject.toml missing after checkout; attempting recovery"
@@ -122,12 +132,19 @@ jobs:
           fi
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          # Node 24 bundles npm 11, which trusted publishing needs (>= 11.5.1).
+          # No dependency cache in a release build.
+          node-version: '24'
           registry-url: 'https://registry.npmjs.org'
-          cache: 'npm'
-          cache-dependency-path: sdk/typescript/package-lock.json
+
+      - name: Require an npm that supports trusted publishing
+        run: |
+          v=$(npm --version)
+          node -e 'const [a,b,c]=process.argv[1].split(".").map(Number); process.exit(a>11||(a===11&&(b>5||(b===5&&c>=1)))?0:1)' "$v" \
+            || { echo "::error::npm $v cannot use trusted publishing (needs >= 11.5.1)"; exit 1; }
+          echo "npm $v"
 
       - name: Install dependencies
         run: npm ci
@@ -171,9 +188,8 @@ jobs:
 
       - name: Publish to npm
         if: ${{ !(github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true') }}
+        # Authenticates through the npm trusted publisher (OIDC); provenance is automatic.
         run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Dry run summary
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true' }}

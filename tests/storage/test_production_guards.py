@@ -12,6 +12,7 @@ Tests cover:
 
 from __future__ import annotations
 
+import dataclasses
 import os
 from unittest.mock import patch
 
@@ -131,6 +132,52 @@ class TestStorageGuardConfig:
         config = StorageGuardConfig(fail_open_stores={"custom_store"})
         assert "custom_store" in config.fail_open_stores
         assert "cache_store" not in config.fail_open_stores
+
+    def test_set_fields_declare_default_factories(self):
+        """Set fields should use real default factories instead of a None default."""
+        fields = {f.name: f for f in dataclasses.fields(StorageGuardConfig)}
+        for name in ("allowed_fallback_envs", "fail_open_stores"):
+            assert fields[name].default is dataclasses.MISSING
+            assert fields[name].default_factory is not dataclasses.MISSING
+
+    def test_default_sets_have_exact_contents(self):
+        """Defaults should be exactly dev/test envs and the three fail-open stores."""
+        config = StorageGuardConfig()
+        assert config.allowed_fallback_envs == {
+            EnvironmentMode.DEVELOPMENT,
+            EnvironmentMode.TEST,
+        }
+        assert config.fail_open_stores == {"cache_store", "session_store", "workflow_store"}
+
+    def test_default_sets_are_independent_per_instance(self):
+        """Mutating one instance's defaults must not leak into other instances."""
+        first = StorageGuardConfig()
+        second = StorageGuardConfig()
+        assert first.allowed_fallback_envs is not second.allowed_fallback_envs
+        assert first.fail_open_stores is not second.fail_open_stores
+
+        first.allowed_fallback_envs.add(EnvironmentMode.PRODUCTION)
+        first.fail_open_stores.add("critical_store")
+
+        assert EnvironmentMode.PRODUCTION not in second.allowed_fallback_envs
+        assert "critical_store" not in second.fail_open_stores
+        fresh = StorageGuardConfig()
+        assert EnvironmentMode.PRODUCTION not in fresh.allowed_fallback_envs
+        assert "critical_store" not in fresh.fail_open_stores
+
+    def test_explicit_sets_are_kept_as_given(self):
+        """Caller-provided sets, including empty ones, should be stored unchanged."""
+        envs = {EnvironmentMode.STAGING}
+        stores: set[str] = set()
+        config = StorageGuardConfig(
+            require_distributed=False,
+            allowed_fallback_envs=envs,
+            fail_open_stores=stores,
+        )
+        assert config.require_distributed is False
+        assert config.allowed_fallback_envs is envs
+        assert config.fail_open_stores is stores
+        assert config.fail_open_stores == set()
 
 
 # =============================================================================
@@ -384,6 +431,69 @@ class TestRequireDistributedStore:
         with patch.dict(os.environ, env, clear=False):
             with pytest.raises(DistributedStateError):
                 require_distributed_store("test_store", StorageMode.MEMORY)
+
+    @pytest.mark.parametrize("env_name", ["development", "test"])
+    def test_default_config_allows_fallback_without_pytest_override(self, env_name):
+        """Default allowed envs should permit local fallback on their own."""
+        import aragora.storage.production_guards as guards
+
+        guards._config = None
+
+        env = {
+            "ARAGORA_ENV": env_name,
+            "ARAGORA_REQUIRE_DISTRIBUTED": "true",
+            "PYTEST_CURRENT_TEST": "",
+        }
+        with patch.dict(os.environ, env, clear=False):
+            require_distributed_store("critical_store", StorageMode.SQLITE)
+
+    def test_default_config_rejects_fallback_in_staging(self):
+        """Staging is not a default fallback environment."""
+        import aragora.storage.production_guards as guards
+
+        guards._config = None
+
+        env = {
+            "ARAGORA_ENV": "staging",
+            "ARAGORA_REQUIRE_DISTRIBUTED": "true",
+            "PYTEST_CURRENT_TEST": "",
+        }
+        with patch.dict(os.environ, env, clear=False):
+            with pytest.raises(DistributedStateError):
+                require_distributed_store("critical_store", StorageMode.SQLITE)
+
+    @pytest.mark.parametrize("store_name", ["cache_store", "session_store", "workflow_store"])
+    def test_default_fail_open_stores_allowed_in_production(self, store_name):
+        """Default fail-open stores should fall back in production without the pytest override."""
+        import aragora.storage.production_guards as guards
+
+        guards._config = None
+
+        env = {
+            "ARAGORA_ENV": "production",
+            "ARAGORA_REQUIRE_DISTRIBUTED": "true",
+            "PYTEST_CURRENT_TEST": "",
+        }
+        with patch.dict(os.environ, env, clear=False):
+            require_distributed_store(store_name, StorageMode.SQLITE)
+
+    def test_mutated_standalone_config_does_not_relax_global_guard(self):
+        """Mutating a separate config instance must not change the global decision."""
+        import aragora.storage.production_guards as guards
+
+        guards._config = None
+        standalone = StorageGuardConfig()
+        standalone.allowed_fallback_envs.add(EnvironmentMode.PRODUCTION)
+        standalone.fail_open_stores.add("critical_store")
+
+        env = {
+            "ARAGORA_ENV": "production",
+            "ARAGORA_REQUIRE_DISTRIBUTED": "true",
+            "PYTEST_CURRENT_TEST": "",
+        }
+        with patch.dict(os.environ, env, clear=False):
+            with pytest.raises(DistributedStateError):
+                require_distributed_store("critical_store", StorageMode.SQLITE)
 
     def test_allows_postgres_in_production(self):
         """Should allow PostgreSQL in production."""

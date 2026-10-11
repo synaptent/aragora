@@ -90,35 +90,6 @@ class MediaAPI:
             params=params if params else None,
         )
 
-    def upload_audio(
-        self,
-        file_path: str,
-        debate_id: str | None = None,
-        format: AudioFormat | None = None,
-        metadata: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        """
-        Upload an audio file.
-
-        Args:
-            file_path: Path to the audio file.
-            debate_id: Optional debate ID to associate with.
-            format: Audio format (mp3, aac, m4a, wav, ogg).
-            metadata: Optional metadata for the audio file.
-
-        Returns:
-            Dict with uploaded audio file details.
-        """
-        data: dict[str, Any] = {"file_path": file_path}
-        if debate_id is not None:
-            data["debate_id"] = debate_id
-        if format is not None:
-            data["format"] = format
-        if metadata is not None:
-            data["metadata"] = metadata
-
-        return self._client._request("POST", "/api/v1/media/audio", json=data)
-
     # =========================================================================
     # Podcast Episodes
     # =========================================================================
@@ -149,18 +120,6 @@ class MediaAPI:
             "/api/v1/podcast/episodes",
             params=params if params else None,
         )
-
-    def get_podcast_episode(self, episode_id: str) -> dict[str, Any]:
-        """
-        Get a specific podcast episode.
-
-        Args:
-            episode_id: The episode identifier.
-
-        Returns:
-            Episode details including title, description, audio URL, and duration.
-        """
-        return self._client._request("GET", f"/api/v1/podcast/episodes/{episode_id}")
 
     def get_feed_url(self) -> str:
         """
@@ -268,24 +227,6 @@ class AsyncMediaAPI:
             params=params if params else None,
         )
 
-    async def upload_audio(
-        self,
-        file_path: str,
-        debate_id: str | None = None,
-        format: AudioFormat | None = None,
-        metadata: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        """Upload an audio file."""
-        data: dict[str, Any] = {"file_path": file_path}
-        if debate_id is not None:
-            data["debate_id"] = debate_id
-        if format is not None:
-            data["format"] = format
-        if metadata is not None:
-            data["metadata"] = metadata
-
-        return await self._client._request("POST", "/api/v1/media/audio", json=data)
-
     # =========================================================================
     # Podcast Episodes
     # =========================================================================
@@ -307,10 +248,6 @@ class AsyncMediaAPI:
             "/api/v1/podcast/episodes",
             params=params if params else None,
         )
-
-    async def get_podcast_episode(self, episode_id: str) -> dict[str, Any]:
-        """Get a specific podcast episode."""
-        return await self._client._request("GET", f"/api/v1/podcast/episodes/{episode_id}")
 
     def get_feed_url(self) -> str:
         """Get the podcast RSS feed URL."""

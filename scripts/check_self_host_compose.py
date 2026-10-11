@@ -150,7 +150,7 @@ def main() -> int:
     )
     parser.add_argument("--compose", default="docker-compose.production.yml")
     parser.add_argument("--env-example", default=".env.production.example")
-    parser.add_argument("--runbook", default="docs/SELF_HOSTING.md")
+    parser.add_argument("--runbook", default="docs/operations/SELF_HOSTING.md")
     args = parser.parse_args()
 
     compose_path = Path(args.compose)

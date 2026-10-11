@@ -979,6 +979,7 @@ class RalphSupervisor:
                         pr_url,
                         required_checks_green=True,
                         allow_admin=True,
+                        head_sha=snapshot.head_sha,
                     )
                     target["auto_merge_requested"] = True
                     target["last_merge_action"] = merge_result.to_dict()
@@ -1040,6 +1041,7 @@ class RalphSupervisor:
                 pr_url,
                 required_checks_green=snapshot.required_checks_green,
                 allow_admin=True,
+                head_sha=snapshot.head_sha,
             )
             target["auto_merge_requested"] = True
             target["last_merge_action"] = merge_result.to_dict()
@@ -1362,7 +1364,13 @@ class RalphSupervisor:
 
     def _auto_merge_pr(self, pr_url: str) -> bool:
         """Backward-compatible wrapper around GitHubControl.merge_pr()."""
-        result = self._merge_pr(pr_url, required_checks_green=True, allow_admin=True)
+        snapshot = self._fetch_pr_gate_snapshot(pr_url)
+        result = self._merge_pr(
+            pr_url,
+            required_checks_green=snapshot.required_checks_green,
+            allow_admin=True,
+            head_sha=snapshot.head_sha,
+        )
         return result.merged
 
     def _repair_run_id(self, state: SupervisorState) -> str | None:
@@ -1469,11 +1477,13 @@ class RalphSupervisor:
         *,
         required_checks_green: bool,
         allow_admin: bool,
+        head_sha: str | None,
     ) -> Any:
         return self.github.merge_pr(
             pr_url,
             required_checks_green=required_checks_green,
             allow_admin=allow_admin,
+            head_sha=head_sha,
         )
 
     def _evaluate_admin_merge_calibration_gate(

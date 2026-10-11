@@ -278,7 +278,7 @@ def cmd_validate_env(args: argparse.Namespace) -> None:
 
         # 2. Check distributed state requirement
         try:
-            from aragora.control_plane.leader import is_distributed_state_required
+            from aragora.config.distributed import is_distributed_state_required
 
             distributed_required = is_distributed_state_required()
         except ImportError:

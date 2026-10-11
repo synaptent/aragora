@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    pass
+    from aragora.core_types import DebateResult
 
 from aragora.core_types import DebateStatus, DebateStatusSource
 from aragora.server.http_utils import run_async
@@ -187,14 +187,14 @@ class SecurityDebateHandler(SecureHandler):
         # Run the debate
         start_time = datetime.now(timezone.utc)
 
-        async def _run_debate():
+        async def _run_debate() -> DebateResult:
             return await run_security_debate(
                 event,
                 confidence_threshold=confidence_threshold,
                 timeout_seconds=timeout_seconds,
             )
 
-        debate_coro: Coroutine[Any, Any, Any] | None = _run_debate()
+        debate_coro: Coroutine[Any, Any, DebateResult] = _run_debate()
 
         try:
             result = run_async(debate_coro)
@@ -217,7 +217,7 @@ class SecurityDebateHandler(SecureHandler):
         except ImportError:
             logger.debug("Security debate result store unavailable")
         else:
-            store_coro: Coroutine[Any, Any, Any] | None = _store_security_debate_result(
+            store_coro: Coroutine[Any, Any, None] = _store_security_debate_result(
                 response_debate_id,
                 event,
                 result,
@@ -285,7 +285,9 @@ class SecurityDebateHandler(SecureHandler):
         except ImportError:
             logger.debug("Security debate result store unavailable")
         else:
-            fetch_coro: Coroutine[Any, Any, Any] | None = get_security_debate_result(debate_id)
+            fetch_coro: Coroutine[Any, Any, dict[str, Any] | None] = get_security_debate_result(
+                debate_id
+            )
             try:
                 cached = run_async(fetch_coro)
             except (RuntimeError, OSError, ConnectionError, TimeoutError, ValueError, TypeError):

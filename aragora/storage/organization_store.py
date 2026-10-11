@@ -26,7 +26,7 @@ import threading
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 from collections.abc import Callable, Iterator
 
 from aragora.config import resolve_db_path
@@ -40,6 +40,16 @@ from aragora.storage.backends import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_timestamp(value: str | datetime) -> datetime:
+    """Parse a timestamp column: ISO text on SQLite, ``datetime`` on PostgreSQL."""
+    return value if isinstance(value, datetime) else datetime.fromisoformat(value)
+
+
+def _parse_optional_timestamp(value: str | datetime | None) -> datetime | None:
+    """Parse a nullable timestamp column; NULL and empty text become ``None``."""
+    return _parse_timestamp(value) if value else None
 
 
 class OrganizationStore:
@@ -771,16 +781,11 @@ class OrganizationStore:
             token=row["token"],
             invited_by=row["invited_by"],
             status=row["status"],
-            created_at=datetime.fromisoformat(row["created_at"]),
-            expires_at=cast(
-                datetime,
-                datetime.fromisoformat(row["expires_at"]) if row["expires_at"] else None,
-            ),
+            created_at=_parse_timestamp(row["created_at"]),
+            expires_at=_parse_optional_timestamp(row["expires_at"]),
             accepted_by=row["accepted_by"] if has_accepted_by else None,
             accepted_at=(
-                datetime.fromisoformat(row["accepted_at"])
-                if (has_accepted_at and row["accepted_at"])
-                else None
+                _parse_optional_timestamp(row["accepted_at"]) if has_accepted_at else None
             ),
         )
 

@@ -763,8 +763,13 @@ You can adjust your budget alerts in your billing settings.
 
         # Log as final fallback
         logger.warning(
-            f"BUDGET_ALERT: tenant={tenant_id} email={email} level={alert_level} "
-            f"spend={current_spend} budget={budget_limit} percent={percent_used:.1f}%"
+            "BUDGET_ALERT: tenant=%s email=%s level=%s spend=%s budget=%s percent=%.1f%%",
+            tenant_id,
+            email,
+            alert_level,
+            current_spend,
+            budget_limit,
+            percent_used,
         )
         return NotificationResult(success=True, method="log")
 
@@ -911,8 +916,12 @@ View your billing dashboard: https://aragora.ai/dashboard/billing
 
         # Log as final fallback
         logger.warning(
-            f"FORECAST_OVERAGE: org={org_id} email={email} budget={budget_name} "
-            f"projected=${projected_amount:.2f} limit=${budget_limit:.2f}"
+            "FORECAST_OVERAGE: org=%s email=%s budget=%s projected=$%.2f limit=$%.2f",
+            org_id,
+            email,
+            budget_name,
+            projected_amount,
+            budget_limit,
         )
         return NotificationResult(success=True, method="log")
 
@@ -1029,8 +1038,11 @@ Start a debate: https://aragora.ai/dashboard/debates/new
 
         # Log as final fallback
         logger.warning(
-            f"CREDIT_EXPIRING: org={org_id} email={email} "
-            f"amount=${expiring_usd:.2f} expires={expiration_date.date()}"
+            "CREDIT_EXPIRING: org=%s email=%s amount=$%.2f expires=%s",
+            org_id,
+            email,
+            expiring_usd,
+            expiration_date.date(),
         )
         return NotificationResult(success=True, method="log")
 

@@ -26,6 +26,8 @@ from aragora.connectors.runtime_registry import (
     ConnectorStatus,
     get_connector_registry,
 )
+from aragora.rbac.checker import get_permission_checker
+from aragora.rbac.models import AuthorizationContext
 from aragora.server.handlers.base import (
     BaseHandler,
     HandlerResult,
@@ -71,6 +73,31 @@ class ConnectorManagementHandler(BaseHandler):
             return error_response(f"Invalid connector name: {name!r}", 400)
         return None
 
+    @staticmethod
+    def _check_rbac_permission(user: Any, permission: str) -> HandlerResult | None:
+        """Authorize with the RBAC v2 checker, building the context as ConnectorsHandler does."""
+        role = getattr(user, "role", None)
+        context = AuthorizationContext(
+            user_id=user.user_id,
+            user_email=getattr(user, "email", None),
+            org_id=getattr(user, "org_id", None),
+            roles={role} if role else {"member"},
+        )
+        if not get_permission_checker().check_permission(context, permission).allowed:
+            return error_response("Permission denied", 403)
+        return None
+
+    @staticmethod
+    def _not_a_runtime_name(name: str) -> HandlerResult | None:
+        """Answer 501 for ids the runtime registry cannot hold, such as stored connectors' UUIDs."""
+        if _SAFE_NAME_RE.match(name):
+            return None
+        return error_response(
+            "Health checks and tests for stored connectors are not implemented",
+            501,
+            code="not_implemented",
+        )
+
     # ------------------------------------------------------------------
     # GET routing
     # ------------------------------------------------------------------
@@ -83,27 +110,33 @@ class ConnectorManagementHandler(BaseHandler):
         user, err = self.require_auth_or_error(handler)
         if err:
             return err
-        _, perm_err = self.require_permission_or_error(handler, "connectors:read")
-        if perm_err:
-            return perm_err
 
         sub = path[len(_PREFIX) :]
-
-        # GET /api/v1/connectors  or  /api/v1/connectors/
-        if sub in ("", "/"):
-            return self._handle_list(query_params)
-
-        # GET /api/v1/connectors/summary
-        if sub == "/summary":
-            return self._handle_summary()
-
         # Strip leading slash for further matching.
         parts = sub.lstrip("/").split("/")
         name = parts[0]
 
         # GET /api/v1/connectors/<name>/health
         if len(parts) == 2 and parts[1] == "health":
+            if perm_err := self._check_rbac_permission(user, "connectors:read"):
+                return perm_err
+            if unsupported := self._not_a_runtime_name(name):
+                return unsupported
             return self._handle_health(name)
+
+        # GET /api/v1/connectors/summary
+        if sub == "/summary":
+            if perm_err := self._check_rbac_permission(user, "connectors:read"):
+                return perm_err
+            return self._handle_summary()
+
+        _, perm_err = self.require_permission_or_error(handler, "connectors:read")
+        if perm_err:
+            return perm_err
+
+        # GET /api/v1/connectors  or  /api/v1/connectors/
+        if sub in ("", "/"):
+            return self._handle_list(query_params)
 
         # GET /api/v1/connectors/<name>
         if len(parts) == 1:
@@ -126,15 +159,16 @@ class ConnectorManagementHandler(BaseHandler):
         user, err = self.require_auth_or_error(handler)
         if err:
             return err
-        _, perm_err = self.require_permission_or_error(handler, "connectors:test")
-        if perm_err:
-            return perm_err
 
         sub = path[len(_PREFIX) :]
         parts = sub.lstrip("/").split("/")
 
         # POST /api/v1/connectors/<name>/test
         if len(parts) == 2 and parts[1] == "test":
+            if perm_err := self._check_rbac_permission(user, "connectors:test"):
+                return perm_err
+            if unsupported := self._not_a_runtime_name(parts[0]):
+                return unsupported
             headers = getattr(handler, "headers", None)
             content_length = 0
             if isinstance(headers, Mapping):
@@ -158,7 +192,8 @@ class ConnectorManagementHandler(BaseHandler):
                     return body_error
             return self._handle_test(parts[0])
 
-        return None
+        _, perm_err = self.require_permission_or_error(handler, "connectors:test")
+        return perm_err
 
     # ------------------------------------------------------------------
     # Endpoint implementations

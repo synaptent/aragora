@@ -123,8 +123,12 @@ def with_retry(
                     if attempt < config.max_retries:
                         delay = config.calculate_delay(attempt)
                         logger.warning(
-                            f"Timeout in {func.__name__} (attempt {attempt + 1}/{total_attempts}): "
-                            f"exceeded {config.timeout_seconds}s. Retrying in {delay:.2f}s"
+                            "Timeout in %s (attempt %s/%s): exceeded %ss. Retrying in %.2fs",
+                            func.__name__,
+                            attempt + 1,
+                            total_attempts,
+                            config.timeout_seconds,
+                            delay,
                         )
                         await asyncio.sleep(delay)
                     else:
@@ -134,8 +138,12 @@ def with_retry(
                     if attempt < config.max_retries:
                         delay = config.calculate_delay(attempt)
                         logger.warning(
-                            f"Retryable error in {func.__name__} (attempt {attempt + 1}/{total_attempts}): {e}. "
-                            f"Retrying in {delay:.2f}s"
+                            "Retryable error in %s (attempt %s/%s): %s. Retrying in %.2fs",
+                            func.__name__,
+                            attempt + 1,
+                            total_attempts,
+                            e,
+                            delay,
                         )
                         await asyncio.sleep(delay)
                     else:

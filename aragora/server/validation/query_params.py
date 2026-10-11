@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import re
+from datetime import datetime
 from typing import Any
 from collections.abc import Set
 
@@ -278,6 +279,48 @@ def safe_query_float(
         return max(min_val, min(val, max_val))
     except (ValueError, IndexError, TypeError):
         return default
+
+
+def parse_iso_datetime(raw: Any) -> datetime:
+    """Parse an ISO 8601 value; an offset-bearing value becomes naive local time.
+
+    The accounting services store naive local ``datetime.now()`` timestamps, and
+    comparing naive with aware datetimes raises ``TypeError``. A value outside the
+    range of local time, or without a POSIX timestamp there (the AP and AR lists
+    compare timestamps), raises ``ValueError``.
+    """
+    value = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    try:
+        local = value.astimezone().replace(tzinfo=None) if value.tzinfo else value
+        local.timestamp()
+    except (OverflowError, OSError) as exc:
+        raise ValueError(f"{raw!r} is outside the supported date range") from exc
+    return local
+
+
+def parse_date_range_params(
+    query: Any,
+) -> tuple[datetime | None, datetime | None, str | None]:
+    """Parse the optional ``start_date`` and ``end_date`` ISO 8601 query parameters.
+
+    Accepts scalar values and single-element ``parse_qs`` lists. Returns
+    ``(start, end, None)``, or ``(None, None, message)`` where the message names
+    the first parameter that is repeated or not an ISO 8601 date/datetime.
+    """
+    parsed: dict[str, datetime | None] = {}
+    for key in ("start_date", "end_date"):
+        raw = query.get(key)
+        if isinstance(raw, list):
+            if len(raw) > 1:
+                return None, None, f"{key} must not be repeated"
+            raw = raw[0] if raw else None
+        parsed[key] = None
+        if raw:
+            try:
+                parsed[key] = parse_iso_datetime(raw)
+            except ValueError:
+                return None, None, f"{key} must be an ISO format date"
+    return parsed["start_date"], parsed["end_date"], None
 
 
 # =============================================================================

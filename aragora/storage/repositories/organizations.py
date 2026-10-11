@@ -58,6 +58,11 @@ class OrganizationRepository:
         "settings": "settings",
     }
 
+    _AUTO_SLUG_ATTEMPTS = 10
+    # sqlite3 names the violated column only in the message text; the extended
+    # error code (SQLITE_CONSTRAINT_UNIQUE) does not say which index failed.
+    _SLUG_CONFLICT_MESSAGE = "UNIQUE constraint failed: organizations.slug"
+
     def __init__(
         self,
         transaction_fn: Callable[[], AbstractContextManager[sqlite3.Cursor]],
@@ -97,53 +102,60 @@ class OrganizationRepository:
         if tier is None:
             tier = SubscriptionTier.FREE
 
-        if slug is None:
-            slug = name.lower().replace(" ", "-").replace("_", "-")
-            base_slug = slug
-            for _ in range(10):
-                with self._transaction() as cursor:
-                    cursor.execute("SELECT 1 FROM organizations WHERE slug = ?", (slug,))
-                    if not cursor.fetchone():
-                        break
-                    slug = f"{base_slug}-{secrets.token_hex(4)}"
+        auto_slug = slug is None
+        base_slug = name.lower().replace(" ", "-").replace("_", "-")
 
         org = Organization(
             name=name,
-            slug=slug,
+            slug=base_slug if slug is None else slug,
             tier=tier,
             owner_id=owner_id,
         )
 
-        with self._transaction() as cursor:
-            cursor.execute(
-                """
-                INSERT INTO organizations (
-                    id, name, slug, tier, owner_id, stripe_customer_id,
-                    stripe_subscription_id, debates_used_this_month,
-                    billing_cycle_start, settings, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    org.id,
-                    org.name,
-                    org.slug,
-                    org.tier.value,
-                    org.owner_id,
-                    org.stripe_customer_id,
-                    org.stripe_subscription_id,
-                    org.debates_used_this_month,
-                    org.billing_cycle_start.isoformat(),
-                    json.dumps(org.settings),
-                    org.created_at.isoformat(),
-                    org.updated_at.isoformat(),
-                ),
-            )
+        # The UNIQUE index on organizations.slug is the only atomic arbiter of slug
+        # availability: a separate SELECT lets concurrent creators both observe the
+        # same free slug before either INSERT commits.
+        for attempt in range(self._AUTO_SLUG_ATTEMPTS):
+            try:
+                with self._transaction() as cursor:
+                    cursor.execute(
+                        """
+                        INSERT INTO organizations (
+                            id, name, slug, tier, owner_id, stripe_customer_id,
+                            stripe_subscription_id, debates_used_this_month,
+                            billing_cycle_start, settings, created_at, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            org.id,
+                            org.name,
+                            org.slug,
+                            org.tier.value,
+                            org.owner_id,
+                            org.stripe_customer_id,
+                            org.stripe_subscription_id,
+                            org.debates_used_this_month,
+                            org.billing_cycle_start.isoformat(),
+                            json.dumps(org.settings),
+                            org.created_at.isoformat(),
+                            org.updated_at.isoformat(),
+                        ),
+                    )
 
-            # Update owner's org_id and role
-            cursor.execute(
-                "UPDATE users SET org_id = ?, role = ?, updated_at = ? WHERE id = ?",
-                (org.id, "owner", datetime.now(timezone.utc).isoformat(), owner_id),
-            )
+                    # Update owner's org_id and role
+                    cursor.execute(
+                        "UPDATE users SET org_id = ?, role = ?, updated_at = ? WHERE id = ?",
+                        (org.id, "owner", datetime.now(timezone.utc).isoformat(), owner_id),
+                    )
+                break
+            except sqlite3.IntegrityError as exc:
+                if (
+                    not auto_slug
+                    or self._SLUG_CONFLICT_MESSAGE not in str(exc)
+                    or attempt == self._AUTO_SLUG_ATTEMPTS - 1
+                ):
+                    raise
+                org.slug = f"{base_slug}-{secrets.token_hex(4)}"
 
         logger.info("organization_created id=%s name=%s owner=%s", org.id, name, owner_id)
         return org

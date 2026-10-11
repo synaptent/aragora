@@ -326,17 +326,6 @@ export class APAutomationAPI {
   }
 
   /**
-   * Add an AP invoice (shortcut route).
-   */
-  async addAPInvoice(
-    request: AddAPInvoiceRequest
-  ): Promise<{ invoice: APInvoice; message: string }> {
-    return this.client.request('POST', '/api/v1/ap/invoices', {
-      json: request as unknown as Record<string, unknown>,
-    });
-  }
-
-  /**
    * Optimize AP payments (shortcut route).
    */
   async optimizeAP(

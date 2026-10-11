@@ -244,6 +244,12 @@ def test_full_migration_cycle(runner, backend):
 
 - Always provide `down_fn` or `down_sql` for rollback
 - Use `safe_*` pattern functions for schema changes
+- Index tables the migration did not create with `create_index_if_columns_exist`
+  (or check `get_missing_columns`): the app's stores create tables at startup,
+  and their shape can lack columns the migration assumes. If the migration
+  itself declares the missing column (in its `CREATE TABLE IF NOT EXISTS`),
+  add it as a nullable column instead of skipping its index, so the migration
+  is never recorded as applied without its own schema
 - Test migrations on a copy of production data
 - Include data validation before applying constraints
 - Use batched updates for data migrations
@@ -251,7 +257,11 @@ def test_full_migration_cycle(runner, backend):
 
 ### DON'T
 
-- Modify existing migrations that have been applied
+- Modify existing migrations that have been applied. The one exception is a fix
+  that changes the outcome only where the old version could not apply
+  correctly (it failed, or built something meaningless). Add the old checksum
+  to `previous_checksums` on its `Migration`: databases that applied the old
+  version still verify, and later edits are still detected
 - Add NOT NULL columns without defaults to tables with data
 - Drop columns that might still be referenced
 - Create indexes without CONCURRENTLY on large tables

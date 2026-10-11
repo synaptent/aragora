@@ -79,7 +79,7 @@ from aragora.knowledge.mound.types import MoundConfig
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from aragora.types.protocols import EventEmitterProtocol
+    from aragora.protocols import LegacyEventEmitterProtocol
 
 
 # Multiple inheritance with 17 mixins causes mypy to report complex MRO issues.
@@ -111,7 +111,7 @@ class KnowledgeMound(  # type: ignore[misc]
         self,
         config: MoundConfig | None = None,
         workspace_id: str | None = None,
-        event_emitter: EventEmitterProtocol | None = None,
+        event_emitter: LegacyEventEmitterProtocol | None = None,
     ) -> None:
         """Initialize the Knowledge Mound.
 

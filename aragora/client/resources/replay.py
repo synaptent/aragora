@@ -90,26 +90,5 @@ class ReplayAPI:
         await self._client._delete_async(f"/api/replays/{replay_id}")
         return True
 
-    def export(self, replay_id: str, format: str = "json") -> str:
-        """
-        Export replay data in specified format.
-
-        Args:
-            replay_id: The replay ID.
-            format: Export format (json, csv).
-
-        Returns:
-            Exported data as string.
-        """
-        response = self._client._get(f"/api/replays/{replay_id}/export", params={"format": format})
-        return response.get("data", "") if isinstance(response, dict) else str(response)
-
-    async def export_async(self, replay_id: str, format: str = "json") -> str:
-        """Async version of export()."""
-        response = await self._client._get_async(
-            f"/api/replays/{replay_id}/export", params={"format": format}
-        )
-        return response.get("data", "") if isinstance(response, dict) else str(response)
-
 
 __all__ = ["ReplayAPI"]

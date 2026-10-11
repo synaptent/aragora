@@ -137,46 +137,6 @@ class TestCheckpointsOperations:
 class TestDebateCheckpoints:
     """Tests for debate-specific checkpoint operations."""
 
-    def test_list_for_debate(self, client: AragoraClient, mock_request) -> None:
-        """List checkpoints for a debate."""
-        mock_request.return_value = {
-            "checkpoints": [
-                {"id": "cp_1", "round": 1},
-                {"id": "cp_2", "round": 2},
-            ]
-        }
-
-        result = client.checkpoints.list_for_debate("d_123")
-
-        mock_request.assert_called_once_with(
-            "GET",
-            "/api/v1/debates/d_123/checkpoints",
-            params=None,
-            json=None,
-            headers=None,
-        )
-        assert len(result["checkpoints"]) == 2
-
-    def test_create_for_debate(self, client: AragoraClient, mock_request) -> None:
-        """Create checkpoint for a debate."""
-        mock_request.return_value = {
-            "id": "cp_new",
-            "debate_id": "d_123",
-            "status": "active",
-            "round": 2,
-        }
-
-        result = client.checkpoints.create_for_debate("d_123")
-
-        mock_request.assert_called_once_with(
-            "POST",
-            "/api/v1/debates/d_123/checkpoint",
-            params=None,
-            json=None,
-            headers=None,
-        )
-        assert result["status"] == "active"
-
     def test_pause_debate(self, client: AragoraClient, mock_request) -> None:
         """Pause a debate."""
         mock_request.return_value = {

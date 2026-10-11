@@ -300,7 +300,7 @@ class ReceiptSettlementService:
         if self._identity_bridge is not None:
             return self._identity_bridge
         try:
-            from aragora.control_plane.blockchain_identity import (
+            from aragora.blockchain.agent_registry import (
                 get_blockchain_identity_bridge,
             )
 

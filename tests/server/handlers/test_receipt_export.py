@@ -947,8 +947,9 @@ class TestStatelessOdrVerification:
         )
 
         assert payload["verified"] is False
-        statuses = {check["name"]: check["status"] for check in payload["checks"]}
-        assert statuses["signature"] == "warn"
+        signature = next(check for check in payload["checks"] if check["name"] == "signature")
+        assert signature["status"] == "skip"
+        assert "authenticity NOT established" in signature["detail"]
         assert payload["key_id"] == key_id
 
     @pytest.mark.asyncio

@@ -122,8 +122,9 @@ class MigrationContext:
             }
         )
         logger.info(
-            f"Registered native override for '{skill_name}' "
-            f"({self._state.migration_percentage:.0f}% migrated)"
+            "Registered native override for '%s' (%.0f%% migrated)",
+            skill_name,
+            self._state.migration_percentage,
         )
 
     def import_skill(self, parsed: ParsedOpenClawSkill) -> OpenClawBridgeSkill:

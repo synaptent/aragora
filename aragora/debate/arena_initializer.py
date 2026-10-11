@@ -17,7 +17,8 @@ from aragora.debate.chaos_theater import DramaLevel, get_chaos_director
 from aragora.debate.extensions import ArenaExtensions
 from aragora.debate.immune_system import get_immune_system
 from aragora.debate.optional_imports import OptionalImports
-from aragora.debate.protocol import CircuitBreaker, DebateProtocol
+from aragora.protocols.debate import DebateProtocol
+from aragora.resilience import CircuitBreaker
 from aragora.debate.safety import resolve_auto_evolve, resolve_prompt_evolution
 from aragora.debate.subsystem_coordinator import SubsystemCoordinator
 from aragora.spectate.stream import SpectatorStream
@@ -28,7 +29,7 @@ if TYPE_CHECKING:
     from aragora.debate.autonomic_executor import AutonomicExecutor
     from aragora.debate.event_bridge import EventEmitterBridge
     from aragora.evolution.evolver import PromptEvolver as PromptEvolverType
-    from aragora.types.protocols import EventEmitterProtocol
+    from aragora.protocols import LegacyEventEmitterProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +61,7 @@ class CoreComponents:
     memory: Any
     hooks: dict
     hook_manager: Any
-    event_emitter: EventEmitterProtocol | None
+    event_emitter: LegacyEventEmitterProtocol | None
     spectator: SpectatorStream
     debate_embeddings: Any
     insight_store: Any
@@ -157,7 +158,7 @@ class ArenaInitializer:
         memory,
         event_hooks: dict | None,
         hook_manager,
-        event_emitter: EventEmitterProtocol | None,
+        event_emitter: LegacyEventEmitterProtocol | None,
         spectator: SpectatorStream | None,
         debate_embeddings,
         insight_store,
@@ -223,7 +224,7 @@ class ArenaInitializer:
         auto_evolve = resolve_auto_evolve(auto_evolve)
         enable_prompt_evolution = resolve_prompt_evolution(enable_prompt_evolution)
 
-        from aragora.debate.protocol import resolve_default_protocol
+        from aragora.debate.protocol_resolver import resolve_default_protocol
 
         protocol = resolve_default_protocol(protocol)
 
@@ -275,7 +276,7 @@ class ArenaInitializer:
         # Prompt evolver for self-improvement via pattern extraction
         if prompt_evolver:
             evolver = prompt_evolver
-        elif enable_prompt_evolution and PROMPT_EVOLVER_AVAILABLE:
+        elif enable_prompt_evolution and PROMPT_EVOLVER_AVAILABLE and PromptEvolver is not None:
             evolver = PromptEvolver()
             logger.debug("[evolution] Auto-created PromptEvolver for pattern extraction")
         else:

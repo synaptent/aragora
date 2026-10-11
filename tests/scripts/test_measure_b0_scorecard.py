@@ -238,6 +238,7 @@ def test_build_published_scorecard_links_truth_artifact_and_previous_delta(
 
     published = mod.build_published_scorecard(
         scorecard=mod.compute_scorecard(mod.load_metrics(metrics_path)),
+        rows=mod.load_metrics(metrics_path),
         metrics_path=metrics_path,
         truth_artifact_path=truth_artifact_path,
         publish_dir=tmp_path / "published",
@@ -671,3 +672,299 @@ def test_main_publish_fail_incomplete_does_not_write_scorecard_or_truth_artifact
     assert "incomplete corpus coverage" in captured.err
     assert not (tmp_path / "published").exists()
     assert not (tmp_path / "truth-published").exists()
+
+
+_OBSERVED_CORPUS = {
+    "path": "docs/benchmarks/corpus.json",
+    "corpus_id": "tw-01-bounded-execution-v1",
+    "revision": 7,
+    "recorded_on": "2026-08-19",
+    "success_contract": "mergeable_pr_or_merged_pr",
+    "membership_issue_numbers": [1001, 1002],
+    "issue_count": 2,
+}
+_COMPLETE_STATUS = {
+    "raw_inputs": "available",
+    "elapsed_time": "measured",
+    "rescue_history": "complete",
+    "raw_input_replay": "unmeasured",
+}
+# Shape of the hand-disclosed 2026-09-04 rev-7 snapshot (#9980).
+_SEP4_PREVIOUS = {
+    "generated_at": "2026-09-04T13:28:39Z",
+    "truth_metrics": {
+        "truth_success_rate": 0.5,
+        "no_rescue_truth_success_rate": 0.5,
+        "merged_only_rate": 0.5,
+    },
+    "proxy_metrics": {"no_rescue_success_rate": 0.0, "unique_issues_attempted": 2},
+    "observation_status": {
+        "raw_inputs": "unavailable",
+        "elapsed_time": "unmeasured",
+        "rescue_history": "incomplete",
+        "raw_input_replay": "unmeasured",
+    },
+    "observation_limits": {
+        "non_authoritative_fields": [
+            "proxy_metrics",
+            "proxy_metrics.mean_elapsed_seconds",
+            "proxy_metrics.median_elapsed_seconds",
+            "failure_class_distribution",
+            "rescue_counts_by_type",
+            "truth_metrics.no_rescue_truth_success_rate",
+        ]
+    },
+}
+
+
+def _publish_observed(
+    tmp_path: Path,
+    *,
+    rows: list[dict[str, object]] | None,
+    truth_observation_status: dict[str, str] | None,
+    previous: dict[str, object] | None = None,
+) -> dict[str, object]:
+    metrics_path = tmp_path / "boss_metrics.jsonl"
+    if rows is not None:
+        _write_metrics(metrics_path, rows)
+    truth_payload: dict[str, object] = {
+        "generated_at": "2026-09-29T01:59:04Z",
+        "corpus": dict(_OBSERVED_CORPUS),
+        "primary_metrics": {
+            "truth_success_rate": 0.5,
+            "no_rescue_truth_success_rate": 0.5,
+            "merged_only_rate": 0.5,
+        },
+        "coverage": {"is_complete": True, "missing_issue_numbers": []},
+        "failure_class_distribution": {},
+        "rescue_counts_by_type": {},
+    }
+    if truth_observation_status is not None:
+        truth_payload["observation_status"] = truth_observation_status
+    truth_artifact_path = _write_json(tmp_path / "truth-artifact.json", truth_payload)
+    publish_dir = tmp_path / "published"
+    if previous is not None:
+        previous_dir = publish_dir / "tw-01-bounded-execution-v1" / "rev-7"
+        previous_dir.mkdir(parents=True)
+        _write_json(previous_dir / "scorecard-20260904T132839Z.json", previous)
+    loaded = mod.load_metrics(metrics_path)
+    return mod.build_published_scorecard(
+        scorecard=mod.compute_scorecard(loaded),
+        rows=loaded,
+        metrics_path=metrics_path,
+        truth_artifact_path=truth_artifact_path,
+        publish_dir=publish_dir,
+        generated_at="2026-09-29T01:59:14Z",
+    )
+
+
+def test_published_scorecard_discloses_placeholder_elapsed_and_inherited_rescue_gap(
+    tmp_path: Path,
+) -> None:
+    # The recurrence placeholder rows behind the 2026-09-29 rev-7 publication.
+    rows = [
+        {
+            "issue_number": 1001,
+            "terminal_class": "issue_already_resolved",
+            "dispatch_skip_reason": "no_work_orders",
+            "elapsed_seconds": 0.0,
+        },
+        {
+            "issue_number": 1002,
+            "terminal_class": "blocked_not_dispatch_bounded",
+            "dispatch_skip_reason": "needs_human_no_prompt",
+            "elapsed_seconds": 0.0,
+        },
+    ]
+    published = _publish_observed(
+        tmp_path,
+        rows=rows,
+        truth_observation_status={**_COMPLETE_STATUS, "rescue_history": "incomplete"},
+        previous=_SEP4_PREVIOUS,
+    )
+
+    assert published["observation_status"] == {
+        "raw_inputs": "available",
+        "elapsed_time": "unmeasured",
+        "rescue_history": "incomplete",
+        "raw_input_replay": "unmeasured",
+    }
+    assert published["proxy_metrics"]["mean_elapsed_seconds"] == 0.0
+    limits = published["observation_limits"]
+    assert limits["non_authoritative_fields"] == [
+        *mod.ELAPSED_DEPENDENT_FIELDS,
+        *mod.RESCUE_DEPENDENT_FIELDS,
+        "deltas.no_rescue_truth_success_rate",
+        "deltas.proxy_no_rescue_success_rate",
+        # Current row counts are observed; the Sep 4 side of this delta is not.
+        "deltas.unique_issues_attempted",
+    ]
+    assert "placeholders" in limits["reason"]
+    assert "rescue history as `incomplete`" in limits["reason"]
+    assert "previous snapshot" in limits["reason"]
+    assert "zero-duration" in limits["value_semantics"]
+
+
+def test_published_scorecard_with_measured_inputs_carries_no_limits(tmp_path: Path) -> None:
+    rows = [
+        {"issue_number": 1001, "terminal_class": "deliverable_pr_created", "elapsed_seconds": 90.0},
+        {"issue_number": 1002, "terminal_class": "rescue_timeout", "elapsed_seconds": 30.0},
+    ]
+    published = _publish_observed(
+        tmp_path,
+        rows=rows,
+        truth_observation_status=dict(_COMPLETE_STATUS),
+        previous={**_SEP4_PREVIOUS, "observation_status": dict(_COMPLETE_STATUS)}
+        | {"observation_limits": {"non_authoritative_fields": []}},
+    )
+
+    assert published["observation_status"] == _COMPLETE_STATUS
+    assert "observation_limits" not in published
+    assert published["proxy_metrics"]["mean_elapsed_seconds"] == 60.0
+
+
+def test_published_scorecard_treats_legacy_truth_artifact_rescue_history_as_unknown(
+    tmp_path: Path,
+) -> None:
+    rows = [
+        {"issue_number": 1001, "terminal_class": "deliverable_pr_created", "elapsed_seconds": 90.0},
+        # An executed attempt without a sample: the mean covers only 1001.
+        {"issue_number": 1002, "terminal_class": "rescue_timeout"},
+    ]
+    published = _publish_observed(tmp_path, rows=rows, truth_observation_status=None)
+
+    assert published["observation_status"]["elapsed_time"] == "incomplete"
+    assert published["observation_status"]["rescue_history"] == "unknown"
+    limits = published["observation_limits"]
+    assert limits["non_authoritative_fields"] == [
+        *mod.ELAPSED_DEPENDENT_FIELDS,
+        *mod.RESCUE_DEPENDENT_FIELDS,
+    ]
+    assert "only part of the executed attempts" in limits["reason"]
+
+
+def test_published_scorecard_without_metrics_file_marks_proxy_metrics_unavailable(
+    tmp_path: Path,
+) -> None:
+    published = _publish_observed(
+        tmp_path,
+        rows=None,
+        truth_observation_status=dict(_COMPLETE_STATUS),
+    )
+
+    assert published["observation_status"]["raw_inputs"] == "unavailable"
+    assert published["observation_status"]["elapsed_time"] == "unmeasured"
+    limits = published["observation_limits"]
+    assert limits["non_authoritative_fields"][0] == "proxy_metrics"
+    assert "could not be read" in limits["reason"]
+
+
+def test_published_scorecard_demotes_deltas_against_a_legacy_previous_snapshot(
+    tmp_path: Path,
+) -> None:
+    rows = [
+        {"issue_number": 1001, "terminal_class": "deliverable_pr_created", "elapsed_seconds": 90.0},
+        {"issue_number": 1002, "terminal_class": "rescue_timeout", "elapsed_seconds": 30.0},
+    ]
+    legacy_previous = {
+        key: value
+        for key, value in _SEP4_PREVIOUS.items()
+        if key not in {"observation_status", "observation_limits"}
+    }
+    published = _publish_observed(
+        tmp_path,
+        rows=rows,
+        truth_observation_status=dict(_COMPLETE_STATUS),
+        previous=legacy_previous,
+    )
+
+    assert published["observation_status"] == _COMPLETE_STATUS
+    assert published["observation_limits"]["non_authoritative_fields"] == [
+        "deltas.no_rescue_truth_success_rate",
+        "deltas.proxy_no_rescue_success_rate",
+        "deltas.unique_issues_attempted",
+    ]
+
+
+def test_main_publish_writes_observation_markers_into_both_published_artifacts(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    # Mirrors the workflow's "Publish tracked trust-loop surfaces" invocation.
+    metrics_path = _write_metrics(
+        tmp_path / "boss_metrics.jsonl",
+        [
+            {
+                "issue_number": 1001,
+                "terminal_class": "issue_already_resolved",
+                "dispatch_skip_reason": "no_work_orders",
+                "elapsed_seconds": 0.0,
+            }
+        ],
+    )
+    corpus_path = _write_json(
+        tmp_path / "corpus.json",
+        {
+            "corpus_id": "tw-01-bounded-execution-v1",
+            "revision": 7,
+            "recorded_on": "2026-08-19",
+            "success_contract": "mergeable_pr_or_merged_pr",
+            "issues": [{"issue_id": 1001, "title": "Issue A"}],
+        },
+    )
+
+    class _FakeTruthClient:
+        def get_issue(self, repo: str, number: int) -> dict[str, object]:
+            return {"title": "Issue A", "comments": [], "closedByPullRequestsReferences": []}
+
+        def get_pr(self, repo: str, number: int) -> dict[str, object]:
+            raise AssertionError("no linked PRs expected")
+
+        def get_cross_referenced_pr_numbers(self, repo: str, number: int) -> list[int]:
+            return []
+
+    monkeypatch.setattr(mod, "GitHubTruthClient", _FakeTruthClient)
+
+    exit_code = mod.main(
+        [
+            "--metrics",
+            str(metrics_path),
+            "--corpus",
+            str(corpus_path),
+            "--publish",
+            "--publish-dir",
+            str(tmp_path / "scorecards"),
+            "--truth-publish-dir",
+            str(tmp_path / "truth"),
+            "--freshness-map",
+            str(tmp_path / "freshness.json"),
+            "--rescue-ledger",
+            str(tmp_path / "rescue_events.jsonl"),
+            "--fail-incomplete",
+        ]
+    )
+
+    assert exit_code == 0
+    truth = json.loads(
+        (tmp_path / "truth" / "tw-01-bounded-execution-v1" / "rev-7" / "latest.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    scorecard = json.loads(
+        (
+            tmp_path / "scorecards" / "tw-01-bounded-execution-v1" / "rev-7" / "latest.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert truth["observation_status"]["rescue_history"] == "incomplete"
+    assert truth["rescue_ledger"]["error_code"] == "rescue_ledger_missing"
+    assert truth["observation_limits"]["issues_without_executed_attempt"] == [1001]
+    assert scorecard["observation_status"] == {
+        "raw_inputs": "available",
+        "elapsed_time": "unmeasured",
+        "rescue_history": "incomplete",
+        "raw_input_replay": "unmeasured",
+    }
+    assert (
+        "proxy_metrics.mean_elapsed_seconds"
+        in (scorecard["observation_limits"]["non_authoritative_fields"])
+    )

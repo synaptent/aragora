@@ -147,7 +147,7 @@ class DatabaseMaintenance:
             with sqlite3.connect(str(db_path), timeout=300) as conn:
                 conn.execute("VACUUM")
             elapsed = time.time() - start
-            logger.debug(f"VACUUM {db_path.name} completed in {elapsed:.1f}s")
+            logger.debug("VACUUM %s completed in %.1fs", db_path.name, elapsed)
             return True
         except sqlite3.Error as e:
             logger.warning("VACUUM failed for %s: %s", db_path.name, e)
@@ -164,7 +164,7 @@ class DatabaseMaintenance:
         elapsed = time.time() - start
         success_count = sum(results.values())
         logger.info(
-            f"[maintenance] VACUUM: {success_count}/{len(results)} databases in {elapsed:.1f}s"
+            "[maintenance] VACUUM: %s/%s databases in %.1fs", success_count, len(results), elapsed
         )
 
         self._last_vacuum = datetime.now()

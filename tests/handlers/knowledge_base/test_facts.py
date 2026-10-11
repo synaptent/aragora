@@ -346,7 +346,7 @@ class TestGetFact:
 
     def test_get_fact_calls_store_with_id(self, handler, get_handler, mock_fact_store):
         handler.handle("/api/v1/knowledge/facts/fact-xyz", {}, get_handler)
-        mock_fact_store.get_fact.assert_called_with("fact-xyz")
+        mock_fact_store.get_fact.assert_called_with("fact-xyz", org_id="test-org-001")
 
     def test_get_fact_includes_all_fields(self, handler, get_handler):
         result = handler.handle("/api/v1/knowledge/facts/fact-001", {}, get_handler)
@@ -587,7 +587,7 @@ class TestDeleteFact:
 
     def test_delete_fact_calls_store(self, handler, delete_handler, mock_fact_store):
         handler.handle("/api/v1/knowledge/facts/fact-001", {}, delete_handler)
-        mock_fact_store.delete_fact.assert_called_once_with("fact-001")
+        mock_fact_store.delete_fact.assert_called_once_with("fact-001", org_id="test-org-001")
 
 
 # ============================================================================
@@ -736,7 +736,9 @@ class TestGetContradictions:
 
     def test_contradictions_calls_store_with_fact_id(self, handler, get_handler, mock_fact_store):
         handler.handle("/api/v1/knowledge/facts/fact-001/contradictions", {}, get_handler)
-        mock_fact_store.get_contradictions.assert_called_once_with("fact-001")
+        mock_fact_store.get_contradictions.assert_called_once_with(
+            "fact-001", org_id="test-org-001"
+        )
 
 
 # ============================================================================
@@ -875,7 +877,7 @@ class TestAddRelation:
         # Source exists, target does not
         source_fact = _make_fact("fact-001")
         mock_fact_store.get_fact.side_effect = (
-            lambda fid: source_fact if fid == "fact-001" else None
+            lambda fid, **_kw: source_fact if fid == "fact-001" else None
         )
         http = post_handler_factory(
             {
@@ -1148,7 +1150,7 @@ class TestFactRouting:
         """Test that /api/v1/facts/ is normalized to /api/v1/knowledge/facts/."""
         result = handler.handle("/api/v1/facts/fact-001", {}, get_handler)
         assert _status(result) == 200
-        mock_fact_store.get_fact.assert_called_with("fact-001")
+        mock_fact_store.get_fact.assert_called_with("fact-001", org_id="test-org-001")
 
 
 # ============================================================================

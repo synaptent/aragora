@@ -240,10 +240,12 @@ class TestHelperFunctions:
         assert result.year == 2023
 
     def test_parse_datetime_invalid(self):
-        assert _parse_datetime("not-a-date") is None
+        with pytest.raises(FreshdeskError, match="Invalid Freshdesk datetime value"):
+            _parse_datetime("not-a-date")
 
     def test_parse_datetime_malformed(self):
-        assert _parse_datetime("2023/06/15") is None
+        with pytest.raises(FreshdeskError, match="Invalid Freshdesk datetime value"):
+            _parse_datetime("2023/06/15")
 
 
 # =============================================================================
@@ -1202,8 +1204,8 @@ class TestEdgeCases:
     async def test_get_tickets_dict_response(self, freshdesk_connector, mock_httpx_client):
         # In case API returns dict instead of list
         mock_httpx_client.request.return_value = _make_response({"error": "unexpected"})
-        tickets = await freshdesk_connector.get_tickets()
-        assert tickets == []
+        with pytest.raises(FreshdeskError, match="GET /tickets: expected list, got dict"):
+            await freshdesk_connector.get_tickets()
 
     @pytest.mark.asyncio
     async def test_get_conversations_empty_response(self, freshdesk_connector, mock_httpx_client):
@@ -1215,5 +1217,7 @@ class TestEdgeCases:
     async def test_get_conversations_dict_response(self, freshdesk_connector, mock_httpx_client):
         # In case API returns dict instead of list
         mock_httpx_client.request.return_value = _make_response({"error": "unexpected"})
-        conversations = await freshdesk_connector.get_conversations(1000)
-        assert conversations == []
+        with pytest.raises(
+            FreshdeskError, match="GET /tickets/1000/conversations: expected list, got dict"
+        ):
+            await freshdesk_connector.get_conversations(1000)

@@ -2,7 +2,8 @@
 
 This note records the first end-to-end `observe-outcomes --write` execution and
 its independent three-model cross-family verification. It complements the
-[Proof Loop First Closure note from 2026-05-12](PROOF_LOOP_FIRST_CLOSURE_2026-05-12.md),
+Proof Loop First Closure note from 2026-05-12
+(`PROOF_LOOP_FIRST_CLOSURE_2026-05-12.md`, now an archived dated snapshot),
 which captured the dry-run-only state.
 
 ## What ran

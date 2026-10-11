@@ -41,24 +41,6 @@ class TestMediaAudio:
         assert call_kwargs["params"]["offset"] == 5
         assert call_kwargs["params"]["debate_id"] == "debate_123"
 
-    def test_upload_audio(self, client: AragoraClient, mock_request) -> None:
-        """Upload an audio file."""
-        mock_request.return_value = {"id": "audio_new", "status": "processing"}
-
-        result = client.media.upload_audio(
-            file_path="/path/to/audio.mp3",
-            debate_id="debate_123",
-            format="mp3",
-            metadata={"title": "Test Audio"},
-        )
-
-        call_kwargs = mock_request.call_args[1]
-        call_json = call_kwargs["json"]
-        assert call_json["file_path"] == "/path/to/audio.mp3"
-        assert call_json["debate_id"] == "debate_123"
-        assert call_json["format"] == "mp3"
-        assert result["status"] == "processing"
-
 
 class TestMediaPodcast:
     """Tests for podcast episode operations."""
@@ -89,28 +71,6 @@ class TestMediaPodcast:
         call_kwargs = mock_request.call_args[1]
         assert call_kwargs["params"]["limit"] == 5
         assert call_kwargs["params"]["offset"] == 10
-
-    def test_get_podcast_episode(self, client: AragoraClient, mock_request) -> None:
-        """Get a specific podcast episode."""
-        mock_request.return_value = {
-            "id": "ep_123",
-            "title": "Test Episode",
-            "description": "Test description",
-            "audio_url": "https://example.com/audio.mp3",
-            "duration_seconds": 1800,
-        }
-
-        result = client.media.get_podcast_episode("ep_123")
-
-        mock_request.assert_called_once_with(
-            "GET",
-            "/api/v1/podcast/episodes/ep_123",
-            params=None,
-            json=None,
-            headers=None,
-        )
-        assert result["title"] == "Test Episode"
-        assert result["duration_seconds"] == 1800
 
     def test_get_feed_url(self, client: AragoraClient) -> None:
         """Get podcast RSS feed URL."""

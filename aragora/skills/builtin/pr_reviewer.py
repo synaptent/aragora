@@ -12,6 +12,7 @@ This is the dogfooding skill — Aragora reviewing its own PRs.
 
 from __future__ import annotations
 
+import json
 import logging
 import subprocess
 from typing import Any
@@ -106,6 +107,11 @@ class PRReviewerSkill(Skill):
                     error_message=f"Failed to fetch PR diff: {error}",
                     error_code="FETCH_FAILED",
                 )
+        if diff is None:
+            return SkillResult.create_failure(
+                error_message="No diff to review",
+                error_code="MISSING_INPUT",
+            )
 
         # Step 2: Run the review
         findings, error = await self._run_review(diff)
@@ -117,7 +123,7 @@ class PRReviewerSkill(Skill):
 
         # Step 3: Post comment if requested
         comment_url = None
-        if post_comment and pr_url:
+        if post_comment and pr_url and findings is not None:
             comment_url, error = await self._post_pr_comment(pr_url, findings)
             if error:
                 logger.warning("Failed to post PR comment: %s", error)
@@ -161,48 +167,59 @@ class PRReviewerSkill(Skill):
         diff: str,
     ) -> tuple[dict[str, Any] | None, str | None]:
         """Run the Aragora review engine on a diff."""
-        try:
-            from aragora.cli.review import run_review_on_diff  # type: ignore[attr-defined]
-
-            findings = await run_review_on_diff(diff, demo=self._demo)
-            return findings, None
-        except ImportError:
-            # Fallback: run as subprocess
-            return await self._run_review_subprocess(diff)
+        return await self._run_review_subprocess(diff)
 
     async def _run_review_subprocess(
         self,
         diff: str,
     ) -> tuple[dict[str, Any] | None, str | None]:
-        """Fallback: run review as a subprocess."""
-        import json
-
-        cmd = ["aragora", "review", "--format", "json"]
-        if self._demo:
-            cmd.append("--demo")
-
+        """Run ``aragora review`` as a subprocess and parse its JSON output."""
         try:
             result = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
-                cmd,
+                self._review_command(),
                 input=diff,
                 capture_output=True,
                 text=True,
                 timeout=120,
             )
-            if result.returncode != 0:
-                return None, result.stderr.strip()
-            # Try to parse JSON from output
-            for line in result.stdout.strip().split("\n"):
-                line = line.strip()
-                if line.startswith("{"):
-                    return json.loads(line), None
-            return {"raw_output": result.stdout}, None
         except FileNotFoundError:
             return None, "aragora CLI not found"
         except subprocess.TimeoutExpired:
             return None, "Review timed out"
-        except json.JSONDecodeError:
-            return {"raw_output": result.stdout}, None
+        if result.returncode != 0:
+            return None, (
+                result.stderr.strip() or f"aragora review exited with code {result.returncode}"
+            )
+        return self._parse_review_output(result.stdout), None
+
+    def _review_command(self) -> list[str]:
+        cmd = ["aragora", "review", "--output-format", "json"]
+        if self._demo:
+            cmd.append("--demo")
+        return cmd
+
+    @staticmethod
+    def _parse_review_output(stdout: str) -> dict[str, Any]:
+        """Return the first JSON object that starts a stdout line.
+
+        ``aragora review --output-format json`` pretty-prints the object over many
+        lines and may print log lines before it, so decode from the start of the
+        first line that opens an object rather than line by line.
+        """
+        decoder = json.JSONDecoder()
+        offset = 0
+        for line in stdout.splitlines(keepends=True):
+            stripped = line.lstrip()
+            if stripped.startswith("{"):
+                try:
+                    value, _ = decoder.raw_decode(stdout, offset + len(line) - len(stripped))
+                except json.JSONDecodeError:
+                    pass
+                else:
+                    if isinstance(value, dict):
+                        return value
+            offset += len(line)
+        return {"raw_output": stdout}
 
     async def _post_pr_comment(
         self,
