@@ -52,6 +52,9 @@ Every headline number is reproducible: the exact command for each lives in the b
 
 **Remediation:** per-package enrollment lists that can only grow — enrolled packages get `check_untyped_defs=true` and lose the `BLE001`/`G004` ignores. Seed with 3 verified-clean packages.
 
+- **Enrollment seeded (P6):** `mypy_check_untyped_defs_packages` 0 → 7. A grow-only `[[tool.mypy.overrides]]` entry in `pyproject.toml` sets `check_untyped_defs = true` for `aragora.caching`, `aragora.events`, `aragora.protocols`, `aragora.resilience`, `aragora.shared`, `aragora.types` and `aragora.utils` (foundation and infrastructure layers). Measured on origin/main `66c804cb4f`: each package has zero `.mypy-baseline` entries and no `check_untyped_defs` errors under mypy 2.1.0 and 2.4.0 in both the CI changed-file form (`--follow-imports=skip`) and the full-tree form. Of the other 68 packages without baseline entries or carve-outs, 67 were also clean; `aragora/audit/exploration/memory.py` has 2 errors.
+- `ruff_strict_enrolled_packages` 0 → 7 is the same seven packages seen from the ruff side, not separate work: #10491 removed the package-wide `BLE001`/`G004` ignore, and no per-file-ignores key exempts any enrolled package from either code. The metric falls below the mypy count only if such a carve-out returns.
+
 ## Finding 3 — Duplicate subsystems
 
 **Issue:** #8264 (Wave 3) | **Related:** #8259 baseline

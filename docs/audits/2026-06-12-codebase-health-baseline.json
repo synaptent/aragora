@@ -139,17 +139,19 @@
     },
     {
       "key": "mypy_check_untyped_defs_packages",
-      "value": 0,
+      "value": 7,
       "direction": "grow",
-      "command": "per-package enrollment list introduced by #8261 (pyproject [tool.mypy] overrides)",
-      "issue": 8261
+      "command": "python3 -c \"import tomllib; ov=tomllib.load(open('pyproject.toml','rb'))['tool']['mypy'].get('overrides',[]); print(len({m[8:-2] for o in ov if o.get('check_untyped_defs') is True for m in (o['module'] if isinstance(o['module'],list) else [o['module']]) if m.startswith('aragora.') and m.endswith('.*') and m.count('.')==2}))\"",
+      "issue": 8261,
+      "note": "Distinct whole packages (module pattern exactly aragora.<pkg>.*, which mypy also applies to the package __init__) in the grow-only [[tool.mypy.overrides]] list with check_untyped_defs = true; single-module overrides do not count. Seeded 2026-10-11 on main 66c804cb4f with caching, events, protocols, resilience, shared, types and utils (was 0): each has zero .mypy-baseline entries and no check_untyped_defs errors under mypy 2.1.0 and 2.4.0, in both the CI changed-file form (--follow-imports=skip) and the full-tree form."
     },
     {
       "key": "ruff_strict_enrolled_packages",
-      "value": 0,
+      "value": 7,
       "direction": "grow",
-      "command": "per-package BLE001/G004 carve-outs from [tool.ruff.lint.per-file-ignores] introduced by #8261",
-      "issue": 8261
+      "command": "python3 -c \"import tomllib,fnmatch; d=tomllib.load(open('pyproject.toml','rb')); P={m[8:-2] for o in d['tool']['mypy'].get('overrides',[]) if o.get('check_untyped_defs') is True for m in (o['module'] if isinstance(o['module'],list) else [o['module']]) if m.startswith('aragora.') and m.endswith('.*') and m.count('.')==2}; S={'ALL','BLE','BLE0','BLE00','BLE001','G','G0','G00','G004'}; K=[k for k,v in d['tool']['ruff']['lint'].get('per-file-ignores',{}).items() if S & set(v)]; print(sum(1 for p in P if not any(k.startswith('aragora/'+p+'/') or fnmatch.fnmatch('aragora/'+p+'/__init__.py',k) for k in K)))\"",
+      "issue": 8261,
+      "note": "Enrolled packages (the mypy_check_untyped_defs_packages set) that no [tool.ruff.lint.per-file-ignores] key exempts from BLE001 or G004, including broad keys such as aragora/* and selector prefixes such as BLE, G or ALL. The value follows the mypy enrollment because the package-wide aragora/* BLE001/G004 ignore was removed in #10491; it drops below the mypy count only if a carve-out returns for an enrolled package (was 0)."
     },
     {
       "key": "mutual_import_cycles",
