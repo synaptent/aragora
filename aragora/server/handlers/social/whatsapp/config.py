@@ -86,8 +86,8 @@ extract_user_from_request: Callable[..., Any] | None
 AuthorizationContext: type[Any] | None
 
 try:
-    from aragora.rbac.checker import check_permission as _check_perm
-    from aragora.rbac.models import AuthorizationContext as _AuthCtx
+    from aragora.rbac.checker import check_permission as _check_perm  # noqa: F401
+    from aragora.rbac.models import AuthorizationContext as _AuthCtx  # noqa: F401
 
     check_permission = _check_perm
     AuthorizationContext = _AuthCtx
