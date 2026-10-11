@@ -107,25 +107,11 @@ def _configure_runtime_environment(offline: bool, api_keys: list[str], logger) -
     logger.info("[server] API keys detected: %s", ", ".join(api_keys))
 
 
-def _exit_on_unusable_secret_custody(entry: Callable[[], object]) -> int:
-    """Run ``entry``; turn unusable secret custody into one stderr line and exit code 1.
+def _exit_on_unusable_secret_custody(entry: Callable[[], None]) -> int:
+    """Run ``entry``; turn unusable secret custody into one stderr line and exit code 1."""
+    from aragora.cli.secret_custody_exit import run_reporting_unusable_secret_custody
 
-    Graceful startup degradation does not cover unusable custody, so this stays
-    fatal, but without a traceback.
-    """
-    try:
-        entry()
-    except Exception as exc:
-        line = None
-        if "aragora.config.secrets" in sys.modules:
-            from aragora.config.secrets import format_secret_custody_failure
-
-            line = format_secret_custody_failure(exc)
-        if line is None:
-            raise
-        print(line, file=sys.stderr)
-        return 1
-    return 0
+    return run_reporting_unusable_secret_custody(entry)
 
 
 def _run_worker(http_port: int, ws_port: int, host: str, static_dir, nomic_dir):

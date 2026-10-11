@@ -105,6 +105,12 @@ def test_unusable_custody_exits_with_one_line(monkeypatch, capsys):
     assert "Traceback" not in captured.err
 
 
+def test_clean_server_exit_returns_zero(monkeypatch):
+    monkeypatch.setattr("aragora.server.__main__.main", lambda: None)
+
+    assert _run_main() == 0
+
+
 def test_unrelated_server_errors_still_propagate(monkeypatch):
     def failing_main():
         raise RuntimeError("unrelated failure")
