@@ -575,6 +575,7 @@ class PlansHandler(BaseHandler):
         background task and returns immediately with status 202 Accepted.
         """
         from aragora.pipeline.decision_plan.core import PlanStatus
+        from aragora.tenancy.record_scope import record_not_found
 
         user, perm_err = self.require_permission_or_error(self._current_handler, "plans:approve")
         if perm_err:

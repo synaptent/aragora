@@ -102,6 +102,12 @@ def claim_plan_for_scheduler(
             raise ExecutionNotAuthorizedError(
                 EXECUTION_ORG_MISMATCH, "Plan has no known owning organization"
             )
+    else:
+        plan_org = _clean(getattr(plan, "org_id", None))
+        if plan_org is not None and plan_org != org_id:
+            raise ExecutionNotAuthorizedError(
+                EXECUTION_ORG_MISMATCH, "Plan belongs to a different organization"
+            )
     if org_id is not None and _clean(getattr(plan, "org_id", None)) is None:
         if stored_plan is None or getattr(stored_plan, "ownership_source", None) is None:
             plan.org_id = org_id
