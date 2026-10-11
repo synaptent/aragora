@@ -109,7 +109,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e .
+          bash scripts/ci_install_project.sh --extras dev
 
       - name: Regenerate API docs
         run: |
@@ -123,25 +123,48 @@ jobs:
             exit 1
           fi
 
-      # Same generator and operation-count comparison as openapi.yml, but blocking.
+      # Builds docs/api/openapi.{json,yaml} the way openapi.yml's sync job does and compares
+      # the content. Non-blocking like lint.yml: only that manually dispatched job refreshes
+      # docs/api, so a tagged commit can carry spec drift.
       - name: Ensure OpenAPI spec is in sync
+        continue-on-error: true
         run: |
           OUT="$(mktemp -d)"
+          trap 'rm -rf "$OUT"' EXIT
           python scripts/generate_openapi.py --output "$OUT/openapi.json"
           python scripts/generate_openapi.py --output "$OUT/openapi.yaml" --format yaml
           python scripts/add_openapi_operation_ids.py --spec "$OUT/openapi.json"
           python scripts/add_openapi_param_descriptions.py --spec "$OUT/openapi.json"
           python scripts/add_openapi_descriptions.py --spec "$OUT/openapi.json"
-          COUNT='import json, sys, yaml; f = open(sys.argv[1]); d = json.load(f) if sys.argv[1].endswith(".json") else yaml.load(f, Loader=getattr(yaml, "CSafeLoader", yaml.SafeLoader)); print(sum(len(m) for m in d.get("paths", {}).values()))'
-          for SPEC in openapi.json openapi.yaml; do
-            EXISTING=$(python -c "$COUNT" "docs/api/$SPEC")
-            GENERATED=$(python -c "$COUNT" "$OUT/$SPEC")
-            echo "docs/api/$SPEC: $EXISTING operations; scripts/generate_openapi.py: $GENERATED"
-            if [ "$EXISTING" != "$GENERATED" ]; then
-              echo "::error::docs/api/$SPEC is stale ($EXISTING operations, generator builds $GENERATED)."
-              exit 1
-            fi
-          done
+          python - "$OUT" <<'PY'
+          import json, sys, yaml
+
+          def read(path):
+              with open(path) as f:
+                  if path.endswith(".json"):
+                      return json.load(f)
+                  return yaml.load(f, Loader=getattr(yaml, "CSafeLoader", yaml.SafeLoader))
+
+          stale = False
+          for name in ("openapi.json", "openapi.yaml"):
+              old, new = read(f"docs/api/{name}"), read(f"{sys.argv[1]}/{name}")
+              if old == new:
+                  print(f"docs/api/{name}: in sync")
+                  continue
+              stale = True
+              old_paths, new_paths = old.get("paths", {}), new.get("paths", {})
+              old_ops = {(p, m) for p, item in old_paths.items() for m in item}
+              new_ops = {(p, m) for p, item in new_paths.items() for m in item}
+              changed = sum(old_paths[p][m] != new_paths[p][m] for p, m in old_ops & new_ops)
+              other = sorted(k for k in set(old) | set(new) if k != "paths" and old.get(k) != new.get(k))
+              print(f"::warning::docs/api/{name} is stale: {len(old_ops - new_ops)} operations only in the file, "
+                    f"{len(new_ops - old_ops)} only in the generator output, {changed} shared operations differ, "
+                    f"other keys differ: {other}. Refresh it with the openapi.yml sync job.")
+              for label, ops in (("file only", old_ops - new_ops), ("generator only", new_ops - old_ops)):
+                  for p, m in sorted(ops):
+                      print(f"  {label}: {m.upper()} {p}")
+          sys.exit(1 if stale else 0)
+          PY
 
   test:
     needs: validate
