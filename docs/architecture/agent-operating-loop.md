@@ -78,9 +78,11 @@ fresh match from a stale one, which is the only question the variant answers.
 
 Every derived record carries its lower-layer `basis_fingerprint`, evidence
 references, authority, freshness, invalidators, and bounded cost. Evidence
-handles use portable source URIs. Only source inputs and prepared-effect inputs
-receive deterministic fingerprints; model reasoning must never be presented as
-reproducible.
+handles use portable source URIs with the `https` or `aragora` scheme, matched
+case-insensitively; every other scheme, including `file:` and active content
+such as `javascript:`, `data:` and `vbscript:`, is rejected. Only source inputs
+and prepared-effect inputs receive deterministic fingerprints; model reasoning
+must never be presented as reproducible.
 
 A derived record's own authority is always `derived_recommendation`; the cited
 evidence handles retain their native authority. This prevents a synthesized

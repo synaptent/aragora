@@ -53,6 +53,7 @@ AUTHORITY_PRECEDENCE = (
 )
 GROUNDED_AUTHORITIES = AUTHORITY_PRECEDENCE[:-1]
 EVIDENCE_COLLECTIONS = (*DERIVED_COLLECTIONS, "source_observations", "facts")
+EVIDENCE_URI_SCHEMES = frozenset({"aragora", "https"})
 
 
 def _load(path: Path) -> dict[str, Any]:
@@ -124,7 +125,7 @@ def test_traces_exercise_portable_lower_layer_evidence() -> None:
     for fixture_name in FIXTURE_NAMES - {"quiet_no_change.json"}:
         handles.extend(_evidence_handles(_load(FIXTURE_DIR / fixture_name)))
     assert handles
-    assert all(urlsplit(handle["uri"]).scheme not in {"", "file"} for handle in handles)
+    assert {urlsplit(handle["uri"]).scheme for handle in handles} == EVIDENCE_URI_SCHEMES
 
 
 def test_fresh_trace_exercises_source_fact_belief_and_nomic() -> None:
@@ -327,6 +328,32 @@ def test_mission_projection_requires_an_evidence_handle(validator: Any) -> None:
         "C:\\data\\orientation.json",
         "c:/data/orientation.json",
         "x:",
+        # Active content, in any case and behind whitespace a consumer might trim.
+        "javascript:alert(1)",
+        "JavaScript:alert(1)",
+        "JAVASCRIPT:alert(1)",
+        " javascript:alert(1)",
+        "\tjavascript:alert(1)",
+        "\njavascript:alert(1)",
+        "javascript:alert(1) ",
+        "data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==",
+        "Data:text/html,<script>alert(1)</script>",
+        "DATA:text/html,<script>alert(1)</script>",
+        "vbscript:msgbox(1)",
+        "VBScript:msgbox(1)",
+        "VBSCRIPT:msgbox(1)",
+        # Every other scheme, including ones that extend an allowed name.
+        "git:head",
+        "urn:uuid:8f1a",
+        "http://example.invalid/a",
+        "ftp://example.invalid/a",
+        "mailto:ops@example.invalid",
+        "blob:https://example.invalid/0f1e",
+        "httpsx://example.invalid/a",
+        "https.evil://example.invalid/a",
+        "aragoraz://synaptent/aragora/missions/m1",
+        "\u04bbttps://example.invalid/a",
+        " https://example.invalid/a",
     ],
 )
 def test_evidence_uris_must_be_portable(validator: Any, unusable_uri: str) -> None:
@@ -339,10 +366,12 @@ def test_evidence_uris_must_be_portable(validator: Any, unusable_uri: str) -> No
 @pytest.mark.parametrize(
     "usable_uri",
     [
-        "git:head",
         "https://api.github.com/repos/synaptent/aragora/pulls/1",
+        "HTTPS://api.github.com/repos/synaptent/aragora/pulls/1",
+        "Https://api.github.com/repos/synaptent/aragora/pulls/1",
         "aragora://synaptent/aragora/missions/m1",
-        "urn:uuid:8f1a",
+        "ARAGORA://synaptent/aragora/missions/m1",
+        "aRaGoRa://synaptent/aragora/missions/m1",
     ],
 )
 def test_evidence_uris_accept_real_schemes(validator: Any, usable_uri: str) -> None:

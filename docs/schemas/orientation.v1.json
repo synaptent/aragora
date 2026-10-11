@@ -105,9 +105,9 @@
       "properties": {
         "id": { "type": "string", "minLength": 1 },
         "uri": {
-          "description": "A portable absolute URI. The scheme needs two or more characters, which is what separates a real scheme from a Windows drive letter.",
+          "description": "A portable absolute URI whose scheme is https or aragora, matched case-insensitively. Every other scheme (file:, javascript:, data:, vbscript: and the rest) is rejected, and so is whitespace anywhere in the value, so trimming cannot expose a different scheme.",
           "type": "string",
-          "pattern": "^(?![Ff][Ii][Ll][Ee]:)[A-Za-z][A-Za-z0-9+.\\-]+:\\S*(?![\\s\\S])"
+          "pattern": "^(?:[Hh][Tt][Tt][Pp][Ss]|[Aa][Rr][Aa][Gg][Oo][Rr][Aa]):\\S*(?![\\s\\S])"
         },
         "authority": { "$ref": "#/$defs/authority" },
         "fingerprint": { "$ref": "#/$defs/fingerprint" },
