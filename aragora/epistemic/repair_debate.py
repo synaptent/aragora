@@ -16,6 +16,9 @@ Invariants:
   than 64 levels become ``None``; mapping keys and other non-JSON values
   become ``str`` (keys that collide after ``str`` keep the last value);
   tuples become lists.
+- Each agent's ``name`` is read once and stored as its ``str`` form
+  (``<unprintable TypeName>`` when ``__str__`` raises) in
+  ``agent_evaluations``, ``contesting_agents`` and ``receipt.agents``.
 - No live Arena, no queue mutation, no issue creation.
 - Callers inject a :class:`RepairDebateAgent` protocol so tests run without
   API keys or network access.
@@ -158,7 +161,7 @@ def run_repair_debate(
     evaluations: list[dict[str, Any]] = []
     for agent in agents:
         ev = dict(agent.evaluate(copy.deepcopy(snapshot), _agent_context(snapshot)))
-        ev["agent"] = agent.name
+        ev["agent"] = _safe_str(agent.name)
         evaluations.append(ev)
 
     crux_entries = _collect_crux_entries(snapshot, evaluations)

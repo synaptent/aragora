@@ -11,6 +11,7 @@ import copy
 import dataclasses
 import hashlib
 import json
+from typing import Any
 
 import pytest
 
@@ -104,6 +105,29 @@ class _PayloadAgent:
 
     def evaluate(self, spec, context):
         return self.payload
+
+
+class _RawNameAgent:
+    """Agent whose ``name`` is whatever the caller passes, ignoring the protocol's ``str``."""
+
+    def __init__(self, name: Any) -> None:
+        self.name = name
+
+    def evaluate(self, spec, context):
+        return {
+            "supports_repair": True,
+            "crux_candidates": [{"crux_id": "crux.named", "statement": "Named concern"}],
+        }
+
+
+class _OpaqueName:
+    def __str__(self) -> str:
+        return "opaque-agent"
+
+
+class _UnprintableName:
+    def __str__(self) -> str:
+        raise RuntimeError("no text form")
 
 
 class _MalformedCandidatesAgent:
@@ -812,3 +836,55 @@ class TestAgentEvaluationSerialization:
         result = run_repair_debate(spec, [_PayloadAgent("agent-a", payload)])
         assert result.consensus_reached is True
         assert result.recommended_action == "proceed_with_repair"
+
+
+# ---------------------------------------------------------------------------
+# Agent names that are not strings
+# ---------------------------------------------------------------------------
+
+
+class TestAgentNameCoercion:
+    @pytest.mark.parametrize(
+        ("name", "expected"),
+        [
+            ({"agent-set"}, "{'agent-set'}"),
+            (_OpaqueName(), "opaque-agent"),
+            (float("nan"), "nan"),
+            (_UnprintableName(), "<unprintable _UnprintableName>"),
+        ],
+        ids=["set", "object", "nan", "unprintable"],
+    )
+    def test_agent_name_is_stored_as_its_string_form(
+        self, monkeypatch: pytest.MonkeyPatch, name: Any, expected: str
+    ) -> None:
+        spec = _spec(monkeypatch)
+        result = run_repair_debate(spec, [_RawNameAgent(name)])
+        named = next(c for c in result.receipt.cruxes if c.crux_id == "crux.named")
+        assert result.agent_evaluations[0]["agent"] == expected
+        assert named.contesting_agents == [expected]
+        assert result.receipt.agents == [expected]
+        decoded = json.loads(json.dumps(result.to_dict(), allow_nan=False))
+        assert decoded["receipt"]["agents"] == [expected]
+        assert decoded["agent_evaluations"][0]["agent"] == expected
+
+    def test_coerced_names_keep_the_receipt_checksum_canonical(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        spec = _spec(monkeypatch)
+        receipt = run_repair_debate(
+            spec, [_RawNameAgent({"agent-set"}), _RawNameAgent(float("nan"))]
+        ).receipt
+        material = {
+            "receipt_id": receipt.receipt_id,
+            "debate_id": receipt.debate_id,
+            "question": receipt.question,
+            "cruxes": [crux.to_dict() for crux in receipt.cruxes],
+            "convergence_barrier": round(receipt.convergence_barrier, 4),
+        }
+        expected = hashlib.sha256(
+            json.dumps(material, sort_keys=True, separators=(",", ":"), allow_nan=False).encode(
+                "utf-8"
+            )
+        ).hexdigest()
+        assert receipt.checksum == expected
+        assert receipt.agents == ["{'agent-set'}", "nan"]
