@@ -123,3 +123,18 @@ def test_receipt_and_file_scope_backfill_predicates() -> None:
     assert not rehab._merge_gate_replay_matches_task_keys(
         "run-1", {"work_order_id": "wo-1"}, {"run-1:wo-2"}
     )
+
+
+def test_receipt_backfill_needs_a_leased_unreceipted_deliverable() -> None:
+    adopted = {"status": "completed", "lease_id": "l-1", "adopted_pr": "https://example/pr/1"}
+    assert rehab._work_order_should_backfill_receipt(adopted)
+    delivered = {
+        "status": "needs_human",
+        "lease_id": "l-1",
+        "branch": "feature/x",
+        "commit_shas": ["abc123"],
+    }
+    assert rehab._work_order_should_backfill_receipt(delivered)
+    assert not rehab._work_order_should_backfill_receipt({**adopted, "receipt_id": "r-1"})
+    assert not rehab._work_order_should_backfill_receipt({**adopted, "lease_id": ""})
+    assert not rehab._work_order_should_backfill_receipt({"status": "completed", "lease_id": "l-1"})
