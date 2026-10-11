@@ -166,22 +166,18 @@ def _collect_routes_from_handler_class(handler_cls: type[Any]) -> list[str]:
     return sorted(collected)
 
 
-# Modules the handler cascade still reaches transitively that emit a
-# module-level DeprecationWarning on first import: compatibility shims, plus
-# one handler module carrying a module-level notice for a single deprecated
-# function. Their remaining in-tree importers are migrated on separate
-# tracks, so this diagnostic script imports each module once under a locally
-# scoped filter instead. sys.modules caching guarantees the warning cannot
-# fire again during the cascade, and the filter list is restored on scope
-# exit, so no global warning state (and no package __init__) is ever touched.
+# Compatibility shims the handler cascade still reaches transitively; each
+# emits a module-level DeprecationWarning on first import. Their remaining
+# in-tree importers are migrated on separate tracks, so this diagnostic
+# script imports each module once under a locally scoped filter instead.
+# sys.modules caching guarantees the warning cannot fire again during the
+# cascade, and the filter list is restored on scope exit, so no global
+# warning state (and no package __init__) is ever touched.
+# tests/scripts/test_check_sdk_parity.py fails once an entry stops warning
+# during a run, so drop entries as their last cascade importer migrates.
 _LEGACY_WARNING_MODULES: tuple[str, ...] = (
     "aragora.server.errors",
-    "aragora.debate.protocol",
     "aragora.server.metrics",
-    "aragora.server.redis_config",
-    "aragora.server.storage",
-    "aragora.server.http_client_pool",
-    "aragora.server.handlers.webhooks",
 )
 
 

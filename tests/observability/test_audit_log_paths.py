@@ -285,6 +285,8 @@ FLIPPED_SITES = [
     "aragora/storage/production_guards.py",
     "aragora/debate/settlement_event_listener.py",
     "aragora/rlm/bridge.py",
+    "aragora/rbac/decorators.py",
+    "aragora/compliance/monitor.py",
 ]
 
 

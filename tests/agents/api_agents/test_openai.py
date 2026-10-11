@@ -673,13 +673,17 @@ class TestOpenAIVibeProxyRouting:
         cb.record_success.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_required_web_search_prompt_fails_closed(self, mock_env_with_api_keys) -> None:
-        from aragora.agents.api_agents.common import AgentAPIError
+    async def test_vibeproxy_required_web_search_prompt_routes_through_proxy_without_tools(
+        self, mock_env_with_api_keys, monkeypatch
+    ) -> None:
+        from aragora.agents.api_agents import openai as openai_module
         from aragora.agents.api_agents.openai import OpenAIAPIAgent
         from aragora.agents.transports.vibeproxy import ModelTransportPolicy, TransportMode
 
+        monkeypatch.setattr(openai_module, "_required_web_search_notice_logged", False)
         client = self.FakeClient()
         agent = OpenAIAPIAgent(model="gpt-5.5", enable_fallback=False)
+        assert agent.enable_web_search is True
         agent._model_transport_policy = ModelTransportPolicy(
             TransportMode.REQUIRED,
             client=client,  # type: ignore[arg-type]
@@ -688,11 +692,75 @@ class TestOpenAIVibeProxyRouting:
         with patch(
             "aragora.agents.api_agents.openai_compatible.create_client_session"
         ) as direct_session:
-            with pytest.raises(AgentAPIError, match="vibeproxy-required cannot serve"):
-                await agent.generate("check https://example.com")
+            result = await agent.generate("check https://example.com and the online article")
 
+        assert result == "proxy response"
         direct_session.assert_not_called()
-        assert client.calls == []
+        request = next(call for call in client.calls if call["operation"] == "request")
+        assert "tools" not in request["payload"]
+
+    def test_vibeproxy_required_web_search_detection_disabled_and_logged_once(
+        self, mock_env_with_api_keys, monkeypatch, caplog
+    ) -> None:
+        import logging
+
+        from aragora.agents.api_agents import openai as openai_module
+        from aragora.agents.api_agents.openai import OpenAIAPIAgent
+        from aragora.agents.transports.vibeproxy import ModelTransportPolicy, TransportMode
+
+        monkeypatch.setattr(openai_module, "_required_web_search_notice_logged", False)
+        first = OpenAIAPIAgent(name="first", model="gpt-5.5", enable_fallback=False)
+        second = OpenAIAPIAgent(name="second", model="gpt-5.5", enable_fallback=False)
+        for agent in (first, second):
+            agent._model_transport_policy = ModelTransportPolicy(
+                TransportMode.REQUIRED,
+                client=self.FakeClient(),  # type: ignore[arg-type]
+            )
+
+        with caplog.at_level(logging.INFO, logger="aragora.agents.api_agents.openai"):
+            assert first._needs_web_search("Write a hello world program") is False
+            assert first._needs_web_search("Check https://example.com") is False
+            assert first._needs_web_search("Find the latest news online") is False
+            assert second._needs_web_search("Read the article") is False
+            first._build_messages("Check https://example.com")
+            assert first._build_extra_payload() is None
+
+        notices = [
+            record
+            for record in caplog.records
+            if "web search disabled under vibeproxy-required" in record.getMessage()
+        ]
+        assert len(notices) == 1
+
+    @pytest.mark.parametrize("mode_name", ["DIRECT", "PREFER"])
+    def test_vibeproxy_direct_and_prefer_keep_web_search_detection(
+        self, mock_env_with_api_keys, monkeypatch, caplog, mode_name
+    ) -> None:
+        import logging
+
+        from aragora.agents.api_agents import openai as openai_module
+        from aragora.agents.api_agents.openai import OpenAIAPIAgent
+        from aragora.agents.transports.vibeproxy import ModelTransportPolicy, TransportMode
+
+        monkeypatch.setattr(openai_module, "_required_web_search_notice_logged", False)
+        agent = OpenAIAPIAgent(model="gpt-5.5", enable_fallback=False)
+        agent._model_transport_policy = ModelTransportPolicy(
+            TransportMode[mode_name],
+            client=self.FakeClient(),  # type: ignore[arg-type]
+        )
+
+        with caplog.at_level(logging.INFO, logger="aragora.agents.api_agents.openai"):
+            assert agent._needs_web_search("Check https://example.com") is True
+            assert agent._needs_web_search("Write a hello world program") is False
+            agent._build_messages("Find the latest news online")
+            assert agent._build_extra_payload() == {
+                "tools": [{"type": "web_search", "web_search": {}}]
+            }
+
+        assert not any(
+            "web search disabled under vibeproxy-required" in record.getMessage()
+            for record in caplog.records
+        )
 
     @pytest.mark.asyncio
     async def test_required_custom_endpoint_fails_closed(
@@ -720,28 +788,166 @@ class TestOpenAIVibeProxyRouting:
         direct_session.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_required_streaming_fails_closed(self, mock_env_with_api_keys) -> None:
-        from aragora.agents.api_agents.common import AgentAPIError
+    async def test_vibeproxy_required_stream_yields_single_proxy_chunk(
+        self, mock_env_with_api_keys
+    ) -> None:
         from aragora.agents.api_agents.openai import OpenAIAPIAgent
         from aragora.agents.api_agents.openai_compatible import OpenAICompatibleMixin
         from aragora.agents.transports.vibeproxy import ModelTransportPolicy, TransportMode
 
         client = self.FakeClient()
         agent = OpenAIAPIAgent(model="gpt-5.5", enable_fallback=False)
-        agent.enable_web_search = False
         agent._model_transport_policy = ModelTransportPolicy(
             TransportMode.REQUIRED,
             client=client,  # type: ignore[arg-type]
         )
 
-        async def fake_direct_stream(_agent, _prompt, _context=None):
-            yield "direct chunk"
+        async def direct_stream_must_not_run(_agent, _prompt, _context=None):
+            raise AssertionError("REQUIRED mode must not open a direct stream")
+            yield ""  # pragma: no cover
 
-        with patch.object(OpenAICompatibleMixin, "generate_stream", fake_direct_stream):
+        with patch.object(OpenAICompatibleMixin, "generate_stream", direct_stream_must_not_run):
+            with patch(
+                "aragora.agents.api_agents.openai_compatible.create_client_session"
+            ) as direct_session:
+                chunks = [chunk async for chunk in agent.generate_stream("hello")]
+
+        assert chunks == ["proxy response"]
+        direct_session.assert_not_called()
+        requests = [call for call in client.calls if call["operation"] == "request"]
+        assert len(requests) == 1
+        assert not requests[0]["payload"].get("stream")
+
+    @pytest.mark.asyncio
+    async def test_vibeproxy_required_stream_delegates_to_class_generate(
+        self, mock_env_with_api_keys
+    ) -> None:
+        from aragora.agents.api_agents.openai import OpenAIAPIAgent
+        from aragora.agents.transports.vibeproxy import ModelTransportPolicy, TransportMode
+        from aragora.core import Message
+
+        agent = OpenAIAPIAgent(model="gpt-5.5", enable_fallback=False)
+        agent._model_transport_policy = ModelTransportPolicy(
+            TransportMode.REQUIRED,
+            client=self.FakeClient(),  # type: ignore[arg-type]
+        )
+        context = [Message(role="proposer", agent="other", content="earlier turn")]
+        class_generate = AsyncMock(return_value="non-streaming answer")
+
+        with patch.object(OpenAIAPIAgent, "generate", class_generate):
+            chunks = [chunk async for chunk in agent.generate_stream("hello", context)]
+
+        assert chunks == ["non-streaming answer"]
+        class_generate.assert_awaited_once_with(agent, "hello", context)
+
+    @pytest.mark.asyncio
+    async def test_vibeproxy_required_stream_wrapped_agent_does_not_recurse(
+        self, mock_env_with_api_keys
+    ) -> None:
+        """The server's stream wrapper replaces the instance generate() with a
+        wrapper around generate_stream(); REQUIRED mode must not loop back into it."""
+        from aragora.agents.api_agents.openai import OpenAIAPIAgent
+        from aragora.agents.transports.vibeproxy import ModelTransportPolicy, TransportMode
+        from aragora.server.stream.arena_hooks import wrap_agent_for_streaming
+
+        client = self.FakeClient()
+        agent = OpenAIAPIAgent(name="gpt55", model="gpt-5.5", enable_fallback=False)
+        agent._model_transport_policy = ModelTransportPolicy(
+            TransportMode.REQUIRED,
+            client=client,  # type: ignore[arg-type]
+        )
+        emitter = MagicMock()
+        wrapped = wrap_agent_for_streaming(agent, emitter, "debate-vibeproxy")
+        assert "generate" in vars(wrapped)
+
+        with patch(
+            "aragora.agents.api_agents.openai_compatible.create_client_session"
+        ) as direct_session:
+            result = await wrapped.generate("Summarize the online article")
+            chunks = [chunk async for chunk in wrapped.generate_stream("hello")]
+
+        assert result == "proxy response"
+        assert chunks == ["proxy response"]
+        direct_session.assert_not_called()
+        assert len([call for call in client.calls if call["operation"] == "request"]) == 2
+        assert emitter.emit.called
+
+    @pytest.mark.asyncio
+    async def test_vibeproxy_required_stream_custom_endpoint_still_fails_closed(
+        self, mock_env_with_api_keys, monkeypatch
+    ) -> None:
+        from aragora.agents.api_agents.common import AgentAPIError
+        from aragora.agents.api_agents.openai import OpenAIAPIAgent
+        from aragora.agents.transports.vibeproxy import ModelTransportPolicy, TransportMode
+
+        monkeypatch.setenv("OPENAI_BASE_URL", "https://gateway.example/openai")
+        client = self.FakeClient()
+        agent = OpenAIAPIAgent(model="gpt-5.5", enable_fallback=False)
+        agent._model_transport_policy = ModelTransportPolicy(
+            TransportMode.REQUIRED,
+            client=client,  # type: ignore[arg-type]
+        )
+
+        with patch(
+            "aragora.agents.api_agents.openai_compatible.create_client_session"
+        ) as direct_session:
             with pytest.raises(AgentAPIError, match="vibeproxy-required cannot serve"):
                 async for _ in agent.generate_stream("hello"):
                     pass
 
+        direct_session.assert_not_called()
+        assert client.calls == []
+
+    @pytest.mark.asyncio
+    async def test_vibeproxy_direct_mode_stream_still_streams(
+        self, mock_env_with_api_keys, monkeypatch
+    ) -> None:
+        from aragora.agents.api_agents.openai import OpenAIAPIAgent
+        from aragora.agents.api_agents.openai_compatible import OpenAICompatibleMixin
+        from aragora.agents.transports.vibeproxy import TransportMode
+
+        monkeypatch.delenv("ARAGORA_MODEL_TRANSPORT", raising=False)
+        agent = OpenAIAPIAgent(model="gpt-5.5", enable_fallback=False)
+        assert agent._model_transport_policy.mode is TransportMode.DIRECT
+
+        async def fake_direct_stream(_agent, _prompt, _context=None):
+            yield "first "
+            yield "second"
+
+        class_generate = AsyncMock(return_value="non-streaming answer")
+        with patch.object(OpenAICompatibleMixin, "generate_stream", fake_direct_stream):
+            with patch.object(OpenAIAPIAgent, "generate", class_generate):
+                chunks = [chunk async for chunk in agent.generate_stream("hello")]
+
+        assert chunks == ["first ", "second"]
+        class_generate.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_vibeproxy_prefer_stream_does_not_substitute_generate(
+        self, mock_env_with_api_keys
+    ) -> None:
+        from aragora.agents.api_agents.openai import OpenAIAPIAgent
+        from aragora.agents.api_agents.openai_compatible import OpenAICompatibleMixin
+        from aragora.agents.transports.vibeproxy import ModelTransportPolicy, TransportMode
+
+        client = self.FakeClient()
+        agent = OpenAIAPIAgent(model="gpt-5.5", enable_fallback=False)
+        agent._model_transport_policy = ModelTransportPolicy(
+            TransportMode.PREFER,
+            client=client,  # type: ignore[arg-type]
+        )
+
+        async def fake_direct_stream(_agent, _prompt, _context=None):
+            yield "first "
+            yield "second"
+
+        class_generate = AsyncMock(return_value="non-streaming answer")
+        with patch.object(OpenAICompatibleMixin, "generate_stream", fake_direct_stream):
+            with patch.object(OpenAIAPIAgent, "generate", class_generate):
+                chunks = [chunk async for chunk in agent.generate_stream("hello")]
+
+        assert chunks == ["first ", "second"]
+        class_generate.assert_not_awaited()
         assert client.calls == []
 
     @pytest.mark.asyncio

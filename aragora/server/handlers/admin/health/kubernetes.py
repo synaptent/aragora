@@ -301,7 +301,7 @@ def readiness_dependencies(handler: Any) -> HandlerResult:
 
     # Check Redis connectivity (if distributed state required)
     try:
-        from aragora.control_plane.leader import is_distributed_state_required
+        from aragora.config.distributed import is_distributed_state_required
         from aragora.server.startup import validate_redis_connectivity
 
         distributed_required = is_distributed_state_required()

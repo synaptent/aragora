@@ -319,7 +319,7 @@ class ComplianceMonitor:
         try:
             # Try to get the audit log for recent findings
             try:
-                from aragora.audit.log import AuditQuery, get_audit_log
+                from aragora.observability.audit_log import AuditQuery, get_audit_log
             except ImportError:
                 return None
 
@@ -397,7 +397,7 @@ class ComplianceMonitor:
         self._last_audit_verify = datetime.now(timezone.utc)
 
         try:
-            from aragora.audit.log import get_audit_log
+            from aragora.observability.audit_log import get_audit_log
 
             audit_log = get_audit_log()
             if audit_log:

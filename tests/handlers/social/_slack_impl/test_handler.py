@@ -1408,7 +1408,7 @@ class TestIntegrationInteractiveFlow:
         }
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
         ):
             result = await slack_handler.handle(

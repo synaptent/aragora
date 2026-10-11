@@ -39,7 +39,7 @@ class TestComplianceToAudit:
 
     def test_fetch_audit_context_no_audit_module(self, monitor):
         """Returns None when audit module is not available."""
-        with patch.dict("sys.modules", {"aragora.audit.log": None}):
+        with patch.dict("sys.modules", {"aragora.observability.audit_log": None}):
             status = ComplianceStatus()
             result = monitor._fetch_audit_context(status)
             # Should gracefully return None
@@ -48,7 +48,7 @@ class TestComplianceToAudit:
     def test_fetch_audit_context_no_log(self, monitor):
         """Returns None when audit log is not available."""
         with patch(
-            "aragora.audit.log.get_audit_log",
+            "aragora.observability.audit_log.get_audit_log",
             return_value=None,
         ):
             status = ComplianceStatus(frameworks={"soc2": FrameworkStatus(framework="soc2")})
@@ -86,7 +86,7 @@ class TestComplianceToAudit:
         mock_log.query.return_value = [event1, event2, event3]
 
         with patch(
-            "aragora.audit.log.get_audit_log",
+            "aragora.observability.audit_log.get_audit_log",
             return_value=mock_log,
         ):
             result = monitor._fetch_audit_context(status)
@@ -111,7 +111,7 @@ class TestComplianceToAudit:
         mock_log.query.return_value = [event]
 
         with patch(
-            "aragora.audit.log.get_audit_log",
+            "aragora.observability.audit_log.get_audit_log",
             return_value=mock_log,
         ):
             result = monitor._fetch_audit_context(status)
@@ -125,7 +125,7 @@ class TestComplianceToAudit:
         mock_log.query.side_effect = TypeError("query failed")
 
         with patch(
-            "aragora.audit.log.get_audit_log",
+            "aragora.observability.audit_log.get_audit_log",
             return_value=mock_log,
         ):
             result = monitor._fetch_audit_context(status)
