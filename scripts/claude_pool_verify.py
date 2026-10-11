@@ -45,6 +45,9 @@ from aragora.agents.claude_pool_health import (  # noqa: E402
 
 DEFAULT_PROFILES = tuple(f"max-{i:02d}" for i in range(1, 14))
 SNAPSHOT_PATH = REPO_ROOT / ".aragora" / "claude_pool_health.json"
+_STDERR_REASONS_OVERRIDING_REPLY = frozenset(
+    {"auth_missing", "auth_revoked", "auth_expired", "quota_exhausted", "invalid_response"}
+)
 
 
 def _configured_profiles() -> list[str]:
@@ -109,10 +112,16 @@ def _probe_with_reason(
         if not (ln.startswith("Using profile home:") or ln.startswith("Command:"))
     ]
     combined = "\n".join(lines)
+    stderr = proc.stderr or ""
+    stderr_reason = classify_probe_reason(stderr) if stderr.strip() else "ok"
+    # The CLI can log timeouts, retried 5xx responses or other errors on stderr and
+    # still answer; only credential, quota or malformed-response signals outrank a reply.
+    real_reply = proc.returncode == 0 and classify_probe_reason(combined, returncode=0) == "ok"
     if not combined.strip() or (
-        (proc.stderr or "").strip() and classify_probe_reason(proc.stderr) != "ok"
+        stderr_reason != "ok"
+        and (not real_reply or stderr_reason in _STDERR_REASONS_OVERRIDING_REPLY)
     ):
-        combined = proc.stderr or ""
+        combined = stderr
     return (
         classify_probe(combined, returncode=proc.returncode),
         classify_probe_reason(combined, returncode=proc.returncode),

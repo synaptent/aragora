@@ -97,6 +97,47 @@ def test_probe_failure_after_warning_and_wrapper_preamble(monkeypatch, stream, t
     assert run.call_count == 1
 
 
+@pytest.mark.parametrize(
+    "noise",
+    [
+        "timeout waiting for telemetry flush; continuing",
+        "Error: failed to write ~/.claude/statsig cache (EACCES)",
+        "Failed to refresh feature flags; using cached values",
+        "API Error: 503 overloaded, retried successfully",
+    ],
+)
+def test_stderr_noise_does_not_override_real_reply(monkeypatch, noise):
+    stdout = "Using profile home: private\nCommand: private\nHello! How can I help you today?\n"
+    run = Mock(return_value=subprocess.CompletedProcess([], 0, stdout, f"{noise}\n"))
+    monkeypatch.setattr(verify.subprocess, "run", run)
+    assert verify._probe_with_reason(Path("unused"), "max-01", "hi", 1) == ("ok", "ok")
+    assert run.call_count == 1
+
+
+@pytest.mark.parametrize(
+    ("outcome", "expected"),
+    [
+        (
+            subprocess.CompletedProcess([], 0, "", "API Error: 503 overloaded"),
+            ("unauthenticated", "service_unavailable"),
+        ),
+        (
+            subprocess.CompletedProcess([], 1, "Starting...", "timeout waiting for response"),
+            ("unauthenticated", "transport_timeout"),
+        ),
+        (
+            subprocess.CompletedProcess([], 0, "API Error: 500", "Error: request failed"),
+            ("unauthenticated", "unknown_failure"),
+        ),
+    ],
+)
+def test_stderr_failure_still_decides_without_real_reply(monkeypatch, outcome, expected):
+    run = Mock(return_value=outcome)
+    monkeypatch.setattr(verify.subprocess, "run", run)
+    assert verify._probe_with_reason(Path("unused"), "max-01", "hi", 1) == expected
+    assert run.call_count == 1
+
+
 @pytest.mark.parametrize("as_json", [False, True])
 @pytest.mark.parametrize(
     ("text", "reason", "label"),
