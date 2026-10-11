@@ -320,6 +320,55 @@ def test_enrollment_floor_fails_when_ruff_carve_out_returns(
     assert summary[MYPY_KEY]["missing"] == []
 
 
+def _fake_package_root(tmp_path: Path) -> Path:
+    for package in SEEDED_PACKAGES:
+        (tmp_path / "aragora" / package).mkdir(parents=True)
+        (tmp_path / "aragora" / package / "__init__.py").touch()
+    (tmp_path / "aragora" / "utils" / "timeouts.py").touch()
+    return tmp_path
+
+
+@pytest.mark.parametrize(
+    ("addition", "expected_missing"),
+    [
+        ('"aragora/*/timeouts.py" = ["G004"]\n', ["utils"]),
+        ('"aragora/**/timeouts.py" = ["BLE001"]\n', ["utils"]),
+        ('"timeouts.py" = ["G004"]\n', ["utils"]),
+        ('"aragora/{events,shared}/*" = ["BLE001"]\n', ["events", "shared"]),
+        (
+            '"!aragora/{caching,events,protocols,resilience,shared,types}/*" = ["G004"]\n',
+            ["utils"],
+        ),
+        ('"aragora/*/no_such_module.py" = ["BLE001"]\n', []),
+    ],
+    ids=[
+        "wildcard-package-segment",
+        "double-star",
+        "file-name-only",
+        "brace-alternatives",
+        "negated",
+        "matches-no-file",
+    ],
+)
+def test_ruff_carve_out_detection_follows_ruff_key_globs(
+    tmp_path: Path, addition: str, expected_missing: list[str]
+) -> None:
+    text = _edit(
+        _repo_pyproject_text(), PER_FILE_IGNORES_HEADER, PER_FILE_IGNORES_HEADER + addition
+    )
+
+    live = report_code_quality.measure_enrollment(
+        report_code_quality.tomllib.loads(text), root=_fake_package_root(tmp_path)
+    )
+    violations, summary = report_code_quality.check_enrollment_floor(
+        live, report_code_quality.load_enrollment_floor()
+    )
+
+    assert summary[RUFF_KEY]["missing"] == expected_missing
+    assert summary[MYPY_KEY]["missing"] == []
+    assert len(violations) == (1 if expected_missing else 0)
+
+
 @pytest.mark.parametrize(
     ("old", "new"),
     [

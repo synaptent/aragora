@@ -153,7 +153,7 @@
       "direction": "grow",
       "command": "python3 scripts/report_code_quality.py --enrolled-count ruff_strict_enrolled_packages",
       "issue": 8261,
-      "note": "Enrolled packages (the mypy_check_untyped_defs_packages set) that no [tool.ruff.lint] per-file-ignores or extend-per-file-ignores key exempts from BLE001 or G004, including broad keys such as aragora/* and selector prefixes such as BLE, G or ALL; 0 when either code is not selected or is ignored globally. packages is the only-grow floor, enforced by scripts/report_code_quality.py --check like the mypy metric. The value follows the mypy enrollment because the package-wide aragora/* BLE001/G004 ignore was removed in #10491; it drops below the mypy count only if a carve-out returns for an enrolled package (was 0)."
+      "note": "Enrolled packages (the mypy_check_untyped_defs_packages set) that no [tool.ruff.lint] per-file-ignores or extend-per-file-ignores key exempts from BLE001 or G004. A key counts when, under ruff's key rules (wildcards, {a,b} alternatives, file-name-only keys, ! negation), it matches any of the package's files or names a path inside it; this includes broad keys such as aragora/*, wildcard keys such as aragora/*/timeouts.py, and selector prefixes such as BLE, G or ALL; 0 when either code is not selected or is ignored globally. packages is the only-grow floor, enforced by scripts/report_code_quality.py --check like the mypy metric. The value follows the mypy enrollment because the package-wide aragora/* BLE001/G004 ignore was removed in #10491; it drops below the mypy count only if a carve-out returns for an enrolled package (was 0)."
     },
     {
       "key": "mutual_import_cycles",

@@ -304,14 +304,71 @@ def mypy_enrolled_packages(pyproject: dict[str, Any]) -> set[str]:
     return enrolled - opted_out
 
 
-def ruff_strict_packages(pyproject: dict[str, Any], enrolled: set[str]) -> set[str]:
+def _expand_braces(pattern: str) -> list[str]:
+    match = re.search(r"\{([^{}]*)\}", pattern)
+    if match is None:
+        return [pattern]
+    head, tail = pattern[: match.start()], pattern[match.end() :]
+    return [
+        expanded
+        for option in match.group(1).split(",")
+        for expanded in _expand_braces(head + option + tail)
+    ]
+
+
+def _package_files(root: Path, package: str) -> list[str]:
+    """Return repo-relative paths of the package's Python files, plus its ``__init__``.
+
+    The ``__init__`` probe is included even when absent so a broad key still
+    covers a package that has no files yet.
+    """
+    base = root / "aragora" / package
+    files = {f"aragora/{package}/__init__.py"}
+    if base.is_dir():
+        files.update(
+            path.relative_to(root).as_posix()
+            for path in base.rglob("*")
+            if path.suffix in {".py", ".pyi"} and path.is_file()
+        )
+    return sorted(files)
+
+
+def _ruff_key_covers(key: str, package: str, files: list[str]) -> bool:
+    """Return whether a per-file-ignores key applies to any file of the package.
+
+    Follows ruff's key rules: ``*`` also matches ``/``, ``{a,b}`` alternatives,
+    a key without ``/`` also matches the file name alone, and a leading ``!``
+    applies the codes to every file the pattern does not match. A key naming a
+    path inside the package counts even when that file does not exist yet.
+    """
+    negated = key.startswith("!")
+    patterns = _expand_braces(key.removeprefix("!"))
+    if not negated and any(pattern.startswith(f"aragora/{package}/") for pattern in patterns):
+        return True
+
+    def matches(path: str) -> bool:
+        name = path.rsplit("/", 1)[-1]
+        return any(
+            fnmatch.fnmatchcase(path, pattern)
+            or ("/" not in pattern and fnmatch.fnmatchcase(name, pattern))
+            for pattern in patterns
+        )
+
+    return any(matches(path) != negated for path in files)
+
+
+def ruff_strict_packages(
+    pyproject: dict[str, Any], enrolled: set[str], root: Path | None = None
+) -> set[str]:
     """Return the enrolled packages that ruff checks for both BLE001 and G004.
 
     No package counts when either code is not selected or is ignored globally.
     A package drops out when a ``per-file-ignores`` or ``extend-per-file-ignores``
-    key covering it exempts either code, including broad keys such as
-    ``aragora/*`` and selectors such as ``BLE``, ``G`` or ``ALL``.
+    key that applies to any of its files under ``root`` exempts either code,
+    including broad or wildcard keys such as ``aragora/*`` or
+    ``aragora/*/timeouts.py`` and selectors such as ``BLE``, ``G`` or ``ALL``.
     """
+    root = REPO_ROOT if root is None else root
     lint = pyproject.get("tool", {}).get("ruff", {}).get("lint", {})
     selected = {*lint.get("select", []), *lint.get("extend-select", [])}
     ignored = {*lint.get("ignore", []), *lint.get("extend-ignore", [])}
@@ -325,22 +382,19 @@ def ruff_strict_packages(pyproject: dict[str, Any], enrolled: set[str]) -> set[s
         for key, codes in lint.get(table, {}).items()
         if exempting & set(codes)
     ]
-    return {
-        package
-        for package in enrolled
-        if not any(
-            key.startswith(f"aragora/{package}/")
-            or fnmatch.fnmatchcase(f"aragora/{package}/__init__.py", key)
-            for key in keys
-        )
-    }
+    strict: set[str] = set()
+    for package in enrolled:
+        files = _package_files(root, package)
+        if not any(_ruff_key_covers(key, package, files) for key in keys):
+            strict.add(package)
+    return strict
 
 
-def measure_enrollment(pyproject: dict[str, Any]) -> dict[str, set[str]]:
+def measure_enrollment(pyproject: dict[str, Any], root: Path | None = None) -> dict[str, set[str]]:
     mypy_packages = mypy_enrolled_packages(pyproject)
     return {
         MYPY_ENROLLMENT_METRIC: mypy_packages,
-        RUFF_ENROLLMENT_METRIC: ruff_strict_packages(pyproject, mypy_packages),
+        RUFF_ENROLLMENT_METRIC: ruff_strict_packages(pyproject, mypy_packages, root),
     }
 
 
