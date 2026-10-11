@@ -279,3 +279,42 @@ async def test_pipeline_cache_is_bounded_and_stops_the_least_recently_used(
     assert integration._pipelines[("beta", "ws-1")] is third
     assert isinstance(second, _FakePipeline) and second.running is False
     assert isinstance(first, _FakePipeline) and first.running is True
+
+
+async def test_a_pipeline_evicted_while_processing_is_stopped_only_afterwards(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    busy: list[_FakePipeline] = []
+    running_during_processing: list[bool] = []
+
+    class _BusyPipeline(_FakePipeline):
+        async def process_document(self, **_kwargs: Any) -> Any:
+            busy.append(self)
+            # Another request evicts this pipeline while it is still in use.
+            await integration.get_pipeline("ws-2", org_id="acme")
+            running_during_processing.append(self.running)
+            return SimpleNamespace(success=True)
+
+    monkeypatch.setattr(integration, "_pipelines", {})
+    monkeypatch.setattr(integration, "_MAX_PIPELINES", 1, raising=False)
+    monkeypatch.setattr(integration, "KnowledgePipeline", _BusyPipeline)
+    monkeypatch.setattr(integration, "_should_use_weaviate", lambda: False)
+    monkeypatch.setattr(integration, "_should_use_knowledge_mound", lambda: False)
+
+    await integration.process_document_async(b"x", "a.txt", "ws-1", org_id="acme")
+
+    assert running_during_processing == [True]
+    assert busy[0].running is False
+    assert list(integration._pipelines) == [("acme", "ws-2")]
+
+
+async def test_mound_items_for_org_reports_the_unstamped_items_it_withholds(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from aragora.knowledge.pipeline import mound_items_for_org
+
+    with caplog.at_level("INFO", logger="aragora.knowledge.pipeline"):
+        kept = mound_items_for_org(MIXED_ITEMS, "acme")
+
+    assert [item.content for item in kept] == ["acme roadmap"]
+    assert "withheld 1 Knowledge Mound item(s) without an organization stamp" in caplog.text

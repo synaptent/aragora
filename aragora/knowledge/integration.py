@@ -12,8 +12,9 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import asynccontextmanager
 
 from aragora.knowledge.fact_store import OrgScopeRequiredError
 from aragora.knowledge.pipeline import KnowledgePipeline, PipelineConfig, ProcessingResult
@@ -23,11 +24,15 @@ logger = logging.getLogger(__name__)
 # Pipelines keyed by (org_id, workspace_id): workspace ids are not unique across
 # organizations, so two orgs must never share a pipeline. A None org is the
 # unscoped pipeline, whose fact reads and writes fail closed. Insertion order is
-# recency: get_pipeline re-inserts on every hit and, past _MAX_PIPELINES, stops
-# and drops the least recently used pipeline (it is rebuilt on its next request).
+# recency: get_pipeline re-inserts on every hit and, past _MAX_PIPELINES, drops
+# the least recently used pipeline (it is rebuilt on its next request). A dropped
+# pipeline that a caller of this module is still using is stopped only when that
+# last caller returns it.
 _pipelines: dict[tuple[str | None, str], KnowledgePipeline] = {}
 _MAX_PIPELINES = 64
 _pipeline_lock = asyncio.Lock()
+_borrowers: dict[int, int] = {}
+_evicted_in_use: dict[int, KnowledgePipeline] = {}
 
 # Thread pool for running async code from sync context
 _executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="knowledge-")
@@ -84,10 +89,18 @@ async def get_pipeline(
             pipeline's fact reads and writes fail closed.
 
     Returns:
-        Initialized KnowledgePipeline
+        Initialized KnowledgePipeline. It is not tracked as in use, so a later
+        eviction may stop it; this module's own callers borrow it instead.
     """
+    return await _checkout_pipeline(workspace_id, org_id, borrow=False)
+
+
+async def _checkout_pipeline(
+    workspace_id: str, org_id: str | None, *, borrow: bool
+) -> KnowledgePipeline:
     org_id = org_id or None
     key = (org_id, workspace_id)
+    idle: list[KnowledgePipeline] = []
     async with _pipeline_lock:
         pipeline = _pipelines.pop(key, None)
         if pipeline is None:
@@ -102,18 +115,52 @@ async def get_pipeline(
             await pipeline.start()
             logger.info("Knowledge pipeline initialized for workspace %s", workspace_id)
         _pipelines[key] = pipeline
+        if borrow:
+            _borrowers[id(pipeline)] = _borrowers.get(id(pipeline), 0) + 1
 
         while len(_pipelines) > _MAX_PIPELINES:
-            evicted_key = next(iter(_pipelines))
-            evicted = _pipelines.pop(evicted_key)
-            try:
-                await evicted.stop()
-            except (OSError, RuntimeError) as e:
-                logger.warning(
-                    "Failed to stop evicted pipeline for workspace %s: %s", evicted_key[1], e
-                )
+            evicted = _pipelines.pop(next(iter(_pipelines)))
+            if _borrowers.get(id(evicted)):
+                _evicted_in_use[id(evicted)] = evicted
+            else:
+                idle.append(evicted)
 
-        return pipeline
+    for evicted in idle:
+        await _stop_evicted(evicted)
+    return pipeline
+
+
+async def _return_pipeline(pipeline: KnowledgePipeline) -> None:
+    async with _pipeline_lock:
+        remaining = _borrowers.pop(id(pipeline), 1) - 1
+        if remaining > 0:
+            _borrowers[id(pipeline)] = remaining
+            return
+        evicted = _evicted_in_use.pop(id(pipeline), None)
+    if evicted is not None:
+        await _stop_evicted(evicted)
+
+
+@asynccontextmanager
+async def _borrowed_pipeline(
+    workspace_id: str, *, org_id: str | None
+) -> AsyncIterator[KnowledgePipeline]:
+    pipeline = await _checkout_pipeline(workspace_id, org_id, borrow=True)
+    try:
+        yield pipeline
+    finally:
+        await _return_pipeline(pipeline)
+
+
+async def _stop_evicted(pipeline: KnowledgePipeline) -> None:
+    try:
+        await pipeline.stop()
+    except (OSError, RuntimeError) as e:
+        logger.warning(
+            "Failed to stop evicted pipeline for workspace %s: %s",
+            pipeline.config.workspace_id,
+            e,
+        )
 
 
 def _should_use_weaviate() -> bool:
@@ -162,16 +209,15 @@ async def process_document_async(
     """
     config = config or KnowledgeProcessingConfig()
 
-    pipeline = await get_pipeline(workspace_id, org_id=org_id)
-
-    result = await pipeline.process_document(
-        content=content,
-        filename=filename,
-        tags=tags,
-        extract_facts=config.extract_facts,
-        document_id=document_id,
-        metadata=metadata,
-    )
+    async with _borrowed_pipeline(workspace_id, org_id=org_id) as pipeline:
+        result = await pipeline.process_document(
+            content=content,
+            filename=filename,
+            tags=tags,
+            extract_facts=config.extract_facts,
+            document_id=document_id,
+            metadata=metadata,
+        )
 
     if config.on_complete and result.success:
         try:
@@ -260,16 +306,15 @@ async def process_text_async(
     """
     config = config or KnowledgeProcessingConfig()
 
-    pipeline = await get_pipeline(workspace_id, org_id=org_id)
-
-    result = await pipeline.process_text(
-        text=text,
-        filename=filename,
-        tags=tags,
-        extract_facts=config.extract_facts,
-        document_id=document_id,
-        metadata=metadata,
-    )
+    async with _borrowed_pipeline(workspace_id, org_id=org_id) as pipeline:
+        result = await pipeline.process_text(
+            text=text,
+            filename=filename,
+            tags=tags,
+            extract_facts=config.extract_facts,
+            document_id=document_id,
+            metadata=metadata,
+        )
 
     if config.on_complete and result.success:
         try:

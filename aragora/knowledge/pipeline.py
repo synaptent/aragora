@@ -121,18 +121,27 @@ MOUND_ORG_KEY = "org_id"
 def mound_items_for_org(items: Iterable[Any], org_id: str | None) -> list[Any]:
     """Keep only Knowledge Mound items stamped with ``org_id``.
 
-    Items of another organization and unstamped (legacy) items are dropped.
+    Items of another organization and unstamped items are dropped. Unstamped
+    items include everything written before this stamp existed and everything
+    written by Mound producers other than this pipeline; no organization can be
+    proven for them, so no organization reads them. Their count is logged.
     Raises OrgScopeRequiredError without an organization.
     """
     if not org_id:
         raise OrgScopeRequiredError("Knowledge Mound access requires an organization")
     scoped = []
+    unstamped = 0
     for item in items or []:
         metadata = (
             item.get("metadata") if isinstance(item, dict) else getattr(item, "metadata", None)
         )
-        if isinstance(metadata, dict) and metadata.get(MOUND_ORG_KEY) == org_id:
+        stamp = metadata.get(MOUND_ORG_KEY) if isinstance(metadata, dict) else None
+        if stamp == org_id:
             scoped.append(item)
+        elif not stamp:
+            unstamped += 1
+    if unstamped:
+        logger.info("withheld %d Knowledge Mound item(s) without an organization stamp", unstamped)
     return scoped
 
 

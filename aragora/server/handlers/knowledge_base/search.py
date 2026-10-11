@@ -229,9 +229,9 @@ class SearchOperationsMixin:
         """Handle GET /api/knowledge/search - Search chunks.
 
         ``@require_permission`` reads the request's authorization context from
-        ``handler``. Results are confined to the caller's verified organization:
-        401 without authentication, 403 ``knowledge_org_required`` without an
-        organization, before any read.
+        ``handler``. This handler confines its own results to the caller's
+        verified organization: 401 without authentication, 403
+        ``knowledge_org_required`` without an organization, before any read.
         """
         org_id, err = caller_org_or_error(self, handler, "Knowledge search")
         if err:
