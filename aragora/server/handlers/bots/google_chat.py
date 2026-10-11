@@ -63,8 +63,8 @@ from aragora.server.handlers.utils.rate_limit import rate_limit
 
 # RBAC imports - optional dependency
 try:
-    from aragora.rbac.checker import check_permission  # noqa: F401
-    from aragora.rbac.models import AuthorizationContext  # noqa: F401
+    from aragora.rbac.checker import check_permission
+    from aragora.rbac.models import AuthorizationContext
 
     RBAC_AVAILABLE = True
 except ImportError:
@@ -221,8 +221,9 @@ def _verify_token_via_tokeninfo(token: str) -> bool | None:
     url = f"https://oauth2.googleapis.com/tokeninfo?access_token={token}"
 
     try:
-        req = urllib.request.Request(url, headers={"Accept": "application/json"})  # noqa: S310 -- hardcoded Google OAuth URL
-        with urllib.request.urlopen(req, timeout=5) as resp:  # noqa: S310 -- hardcoded Google OAuth URL
+        # hardcoded Google OAuth URL
+        req = urllib.request.Request(url, headers={"Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=5) as resp:  # hardcoded Google OAuth URL
             data = json.loads(resp.read().decode("utf-8"))
 
         # Check email is a Google Chat service account

@@ -28,6 +28,6 @@ from .config import (  # noqa: F401
     TTS_VOICE_ENABLED,
     create_tracked_task,
 )
-from .handler import WhatsAppHandler, get_whatsapp_handler  # noqa: F401
+from .handler import WhatsAppHandler, get_whatsapp_handler
 
 __all__ = ["WhatsAppHandler", "get_whatsapp_handler"]

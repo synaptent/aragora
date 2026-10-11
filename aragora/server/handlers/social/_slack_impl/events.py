@@ -47,7 +47,7 @@ class EventsMixin(MessagingMixin):
             # Use pre-read body from handle()
             body = getattr(handler, "_slack_body", "")
             # Workspace context available for future use
-            _workspace = getattr(handler, "_slack_workspace", None)  # noqa: F841
+            _workspace = getattr(handler, "_slack_workspace", None)
             team_id = getattr(handler, "_slack_team_id", None) or ""
             event = json.loads(body)
 

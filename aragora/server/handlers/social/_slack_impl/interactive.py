@@ -39,8 +39,8 @@ class InteractiveMixin(MessagingMixin):
             # Use pre-read body from handle()
             body = getattr(handler, "_slack_body", "")
             # Workspace context available for future use
-            _workspace = getattr(handler, "_slack_workspace", None)  # noqa: F841
-            _team_id = getattr(handler, "_slack_team_id", None)  # noqa: F841
+            _workspace = getattr(handler, "_slack_workspace", None)
+            _team_id = getattr(handler, "_slack_team_id", None)
 
             # Interactive payloads come as form-encoded with a 'payload' field
             params = parse_qs(body)

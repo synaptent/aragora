@@ -34,18 +34,18 @@ logger = logging.getLogger(__name__)
 
 # Re-export names that tests and downstream modules patch against.
 # Importing eagerly is safe because these modules do not pull in ``web3``.
-from aragora.blockchain.config import get_chain_config as get_chain_config  # noqa: E402
+from aragora.blockchain.config import get_chain_config as get_chain_config
 
 # Optional heavy connectors / adapters -- imported lazily at call-time but
 # made available as module-level attributes so ``unittest.mock.patch`` can
 # target ``aragora.server.handlers.integrations.erc8004.ERC8004Connector`` etc.
 try:
-    from aragora.connectors.blockchain import ERC8004Connector as ERC8004Connector  # noqa: E402
+    from aragora.connectors.blockchain import ERC8004Connector as ERC8004Connector
 except ImportError:  # pragma: no cover – web3 optional
     ERC8004Connector = None  # type: ignore[assignment,misc]
 
 try:
-    from aragora.knowledge.mound.adapters.erc8004_adapter import ERC8004Adapter as ERC8004Adapter  # noqa: E402
+    from aragora.knowledge.mound.adapters.erc8004_adapter import ERC8004Adapter as ERC8004Adapter
 except ImportError:  # pragma: no cover – web3 optional
     ERC8004Adapter = None  # type: ignore[assignment,misc]
 
