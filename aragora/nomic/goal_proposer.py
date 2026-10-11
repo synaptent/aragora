@@ -198,7 +198,9 @@ class GoalProposer:
                     for agent in r.agents_used:
                         slow_agents[agent] = slow_agents.get(agent, 0) + 1
 
-                top_agent = max(slow_agents, key=slow_agents.get) if slow_agents else "unknown"
+                top_agent = (
+                    max(slow_agents, key=slow_agents.__getitem__) if slow_agents else "unknown"
+                )
                 confidence = min(0.6 + len(slow_cycles) * 0.05, 0.95)
 
                 candidates.append(

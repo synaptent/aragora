@@ -312,7 +312,7 @@ class FederatedAgentPool:
             from aragora.control_plane.regional_sync import RegionalEventType
 
             # Skip events from our own instance
-            source_region = getattr(event, "source_region", None)
+            source_region: Any = getattr(event, "source_region", None)
             if source_region == self._instance_id:
                 return
 

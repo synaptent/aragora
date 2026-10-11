@@ -9,14 +9,15 @@ import inspect
 import json
 import subprocess
 import sys
+from collections.abc import Coroutine
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 
 def _resolve(result: Any) -> Any:
     """Resolve an awaitable from sync CLI code."""
     if inspect.isawaitable(result):
-        return asyncio.run(result)
+        return asyncio.run(cast(Coroutine[Any, Any, Any], result))
     return result
 
 

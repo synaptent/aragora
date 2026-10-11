@@ -881,6 +881,23 @@ class TestCommitKMPersistence:
         mock_persist.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_persist_to_km_without_outcome_is_noop(self, mock_aragora_path, mock_log_fn):
+        """Calling _persist_to_km with no cycle_outcome returns before touching KM."""
+        phase = CommitPhase(
+            aragora_path=mock_aragora_path,
+            log_fn=mock_log_fn,
+            cycle_outcome=None,
+        )
+
+        with patch(
+            "aragora.knowledge.mound.adapters.nomic_cycle_adapter.get_nomic_cycle_adapter"
+        ) as mock_get_adapter:
+            await phase._persist_to_km("abc1234")
+
+        mock_get_adapter.assert_not_called()
+        mock_log_fn.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_commit_sets_completed_at(self, mock_aragora_path, mock_log_fn):
         """Should set completed_at on cycle_outcome before persisting if not already set."""
         outcome = self._make_cycle_outcome()

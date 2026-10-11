@@ -28,7 +28,7 @@ import logging
 import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 from collections.abc import Callable
 
 if TYPE_CHECKING:
@@ -273,7 +273,7 @@ class ReceiptRetentionScheduler:
             completed_at=completed_at,
             duration_seconds=duration,
             retention_days=self.retention_days
-            or getattr(self.store, "retention_days", DEFAULT_RETENTION_DAYS),
+            or cast(int, getattr(self.store, "retention_days", DEFAULT_RETENTION_DAYS)),
             error=error,
         )
 

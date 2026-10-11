@@ -294,6 +294,8 @@ class CommitPhase:
 
     async def _persist_to_km(self, commit_hash: str | None) -> None:
         """Persist cycle outcome to Knowledge Mound for cross-cycle learning."""
+        if self._cycle_outcome is None:
+            return
         try:
             from aragora.knowledge.mound.adapters.nomic_cycle_adapter import (
                 get_nomic_cycle_adapter,

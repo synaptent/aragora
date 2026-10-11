@@ -151,8 +151,8 @@ class RoleMatcher:
         cold_start = [
             name
             for name in agent_names
-            if calibrations.get(name) is None
-            or calibrations[name].total_predictions < self.config.min_predictions_for_calibration
+            if (cal := calibrations.get(name)) is None
+            or cal.total_predictions < self.config.min_predictions_for_calibration
         ]
 
         if self.config.strategy == "calibration":
@@ -477,7 +477,7 @@ class RoleMatcher:
         if not self.calibration_tracker:
             return {}
 
-        result = {}
+        result: dict[str, CalibrationSummary | None] = {}
         for agent in agent_names:
             if agent in self._calibration_cache:
                 result[agent] = self._calibration_cache[agent]

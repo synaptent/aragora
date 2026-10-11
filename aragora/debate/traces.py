@@ -711,7 +711,8 @@ class DebateReplayer:
             event_b = other.events[i] if i < len(other.events) else None
 
             if event_a is None:
-                diffs.append({"type": "added", "position": i, "event": event_b.to_dict()})
+                if event_b is not None:
+                    diffs.append({"type": "added", "position": i, "event": event_b.to_dict()})
             elif event_b is None:
                 diffs.append({"type": "removed", "position": i, "event": event_a.to_dict()})
             elif event_a.to_dict() != event_b.to_dict():
