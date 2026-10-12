@@ -48,8 +48,8 @@ member.
 | infrastructure | 31 | `storage` `resilience` `events` `observability` `security` `queue` `db` `caching` `billing` `backup` `migrations` `cache` `deletion_coordinator` `fabric` `maintenance` `monitoring` `performance` `resilience_config` `resilience_patterns` `runtime` `sandbox` `streaming` `telemetry` `transcription` `auth` `logging_config` `notifications` `persistence` `privacy` `rbac` `tenancy` |
 | foundation | 21 | `api_errors` `config` `core_types` `exceptions` `errors` `utils` `protocols` `types` `__version__` `_lazy_imports` `core_protocols` `docs_only` `http_client` `models` `serialization` `task_brief` `topic_handler` `topic_spec` `topics` `type_protocols` `shared` |
 
-The domain, infrastructure and foundation lines are complete. The interface and application lines grow in
-later tranches (next section).
+The application, domain, infrastructure and foundation lines are complete. The interface line grows in
+tranche T6 (next section).
 
 ## Planned final membership
 
@@ -67,7 +67,7 @@ by PR #9057 (commit `5ac7fa3fc280`, 2026-09-30), so it is not planned. The final
 | infrastructure | layered | 31 | `storage` `resilience` `events` `observability` `security` `queue` `db` `caching` `billing` `backup` `migrations` `cache` `deletion_coordinator` `fabric` `maintenance` `monitoring` `performance` `resilience_config` `resilience_patterns` `runtime` `sandbox` `streaming` `telemetry` `transcription` `auth` `logging_config` `notifications` `persistence` `privacy` `rbac` `tenancy` |
 | foundation | layered | 21 | `api_errors` `config` `core_types` `exceptions` `errors` `utils` `protocols` `types` `__version__` `_lazy_imports` `core_protocols` `docs_only` `http_client` `models` `serialization` `task_brief` `topic_handler` `topic_spec` `topics` `type_protocols` `shared` |
 
-Tranche T4a landed in milestone M3, and T4b and T5 in M4; T6 lands in M4. Deprecated shim packages that are listed
+Tranche T4a landed in milestone M3, and T4b and T5 landed in M4; T6 follows in M4. Deprecated shim packages that are listed
 (`cache`, `core_protocols`, `metrics`, `monitoring`, `telemetry`, `type_protocols`, `operations`,
 `schedulers`, `resilience_patterns`) stay listed until they are retired; when a listed module is deleted, its
 name leaves `.importlinter` in the same PR, because import-linter errors on a missing layer module.
