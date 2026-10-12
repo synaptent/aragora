@@ -12,17 +12,26 @@ the signing adapter the legacy receipts use.
 from __future__ import annotations
 
 import sys
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from aragora.models.receipts import legacy as _legacy
 
 if not TYPE_CHECKING:
     sys.modules[__name__] = _legacy
 
-import aragora.storage.receipt_signing as _receipt_signing
 from aragora.models.receipts import operations as _operations
 
-_operations.register_signing(_receipt_signing)
+
+class _DeferredReceiptSigning:
+    # Importing aragora.storage.receipt_signing runs the whole storage package init,
+    # so it waits for the first signing call instead of loading with this facade.
+    def __getattr__(self, name: str) -> Any:
+        import aragora.storage.receipt_signing as receipt_signing
+
+        return getattr(receipt_signing, name)
+
+
+_operations.register_signing(_DeferredReceiptSigning())
 
 if TYPE_CHECKING:
     from aragora.models.receipts.legacy import DecisionReceipt as DecisionReceipt

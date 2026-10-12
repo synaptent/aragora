@@ -88,6 +88,25 @@ def test_patch_through_the_old_path_is_seen_at_the_new_path(
     assert jcs.jcs_canonicalize is sentinel
 
 
+def _is_type_checking_guard(test: ast.expr) -> bool:
+    # Only a plain `if TYPE_CHECKING:` (or `typing.TYPE_CHECKING`) block is type-only;
+    # `if not TYPE_CHECKING:` runs at import time and must stay checked.
+    if isinstance(test, ast.Name):
+        return test.id == "TYPE_CHECKING"
+    return isinstance(test, ast.Attribute) and test.attr == "TYPE_CHECKING"
+
+
+def test_type_checking_guard_excludes_negated_blocks() -> None:
+    def guard(source: str) -> bool:
+        node = ast.parse(source).body[0]
+        assert isinstance(node, ast.If)
+        return _is_type_checking_guard(node.test)
+
+    assert guard("if TYPE_CHECKING:\n    pass")
+    assert guard("if typing.TYPE_CHECKING:\n    pass")
+    assert not guard("if not TYPE_CHECKING:\n    pass")
+
+
 def test_foundation_modules_import_nothing_above_foundation() -> None:
     offenders: list[str] = []
     for path in sorted(RECEIPTS_DIR.rglob("*.py")):
@@ -95,7 +114,7 @@ def test_foundation_modules_import_nothing_above_foundation() -> None:
         type_only = {
             id(inner)
             for node in ast.walk(tree)
-            if isinstance(node, ast.If) and ast.unparse(node.test).endswith("TYPE_CHECKING")
+            if isinstance(node, ast.If) and _is_type_checking_guard(node.test)
             for inner in ast.walk(node)
         }
         for node in ast.walk(tree):
