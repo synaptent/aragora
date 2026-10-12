@@ -953,6 +953,8 @@ class ImplementationOperationsMixin:
                     auth_context=getattr(self, "_auth_context", None),
                     execution_mode="computer_use",
                     safety_mode=SafetyMode.INTERACTIVE,
+                    org_id=rc.owner[0],
+                    created_by=rc.owner[1],
                 )
             )
             response_payload["execution"] = {

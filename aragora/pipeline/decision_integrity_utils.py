@@ -325,6 +325,8 @@ async def execute_decision_plan_with_backbone(
     auth_context: Any | None,
     execution_mode: str | None,
     safety_mode: SafetyMode | None = None,
+    org_id: str | None = None,
+    created_by: str | None = None,
 ) -> tuple[dict[str, Any], Any]:
     """Queue and execute a decision plan through ExecutionBridge with a supplied executor."""
     from aragora.pipeline.canonical_execution import queue_plan_execution
@@ -337,6 +339,8 @@ async def execute_decision_plan_with_backbone(
         auth_context=auth_context,
         execution_mode=execution_mode,
         safety_mode=safety_mode,
+        org_id=org_id,
+        created_by=created_by,
     )
     ensure_execution_still_authorized(
         get_plan_store(),

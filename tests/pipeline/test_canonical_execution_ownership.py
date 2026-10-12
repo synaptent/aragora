@@ -374,20 +374,23 @@ class TestExecuteDecisionPlanWithBackboneRecheck:
         assert [(r["status"], r["org_id"]) for r in records] == [("failed", ORG_A)]
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("owner", [{}, {"org_id": ORG_A, "created_by": USER_A}])
     async def test_backbone_execute_org_mismatch_control_member_executes(
         self,
         store: PlanStore,
         user_store: _UserStore,
         monkeypatch: pytest.MonkeyPatch,
+        owner: dict[str, str],
     ) -> None:
         plan = _build_plan()
+        auth = None if owner else _auth()
         executed = AsyncMock(return_value=SimpleNamespace(success=True))
         monkeypatch.setattr(
             "aragora.pipeline.execution_bridge.ExecutionBridge.execute_approved_plan", executed
         )
 
         launch, outcome = await execute_decision_plan_with_backbone(
-            plan, executor=MagicMock(), auth_context=_auth(), execution_mode="workflow"
+            plan, executor=MagicMock(), auth_context=auth, execution_mode="workflow", **owner
         )
 
         executed.assert_awaited_once()

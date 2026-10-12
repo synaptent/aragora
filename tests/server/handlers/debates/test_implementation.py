@@ -1250,6 +1250,7 @@ class TestExecuteMode:
     ):
         """Approved computer-use execution queues through the backbone wrapper."""
         handler._body = {"execution_mode": "execute", "execution_engine": "computer_use"}
+        handler.get_current_user = lambda h: MagicMock(org_id="org-a", user_id="user-1")
 
         from aragora.autonomous.loop_enhancement import ApprovalStatus
 
@@ -1325,6 +1326,8 @@ class TestExecuteMode:
         assert body["execution"]["progress"]["total_steps"] >= 0
         assert mock_executor_cls.called is True
         assert mock_execute.call_args.kwargs["safety_mode"] == ExecutionMode.INTERACTIVE
+        plan, kw = mock_execute.call_args.args[0], mock_execute.call_args.kwargs
+        assert (kw.get("org_id"), kw.get("created_by"), plan.org_id) == ("org-a", "user-1", "org-a")
 
     def test_execute_approved_computer_use_backbone_failure_returns_503(
         self, handler, mock_storage, mock_package, mock_approval_request
