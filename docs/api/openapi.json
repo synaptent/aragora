@@ -683,6 +683,10 @@
       "description": "Agent Bridge operations"
     },
     {
+      "name": "AccountingIntegration",
+      "description": "AccountingIntegration operations"
+    },
+    {
       "name": "Activity",
       "description": "Activity operations"
     },
@@ -39166,7 +39170,24 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "total_agents": {
+                      "type": "integer"
+                    },
+                    "avg_elo": {
+                      "type": "number"
+                    },
+                    "max_elo": {
+                      "type": "number"
+                    },
+                    "min_elo": {
+                      "type": "number"
+                    },
+                    "total_matches": {
+                      "type": "integer"
+                    }
+                  }
                 }
               }
             }
@@ -50389,7 +50410,30 @@
           "Reputation"
         ],
         "summary": "Get domain reputation scores",
-        "description": "Return domain-level reputation scores or reputation summaries.",
+        "description": "Return domain-level reputation scores or reputation summaries. Requires the critiques:read permission.",
+        "parameters": [
+          {
+            "name": "domain",
+            "in": "query",
+            "required": true,
+            "description": "Domain token matched against agent names.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum reputations to return.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 100
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Domain reputation",
@@ -50411,12 +50455,51 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "domain": {
+                      "type": "string"
+                    },
+                    "reputations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "agent": {
+                            "type": "string"
+                          },
+                          "score": {
+                            "type": "number"
+                          },
+                          "vote_weight": {
+                            "type": "number"
+                          },
+                          "proposal_acceptance_rate": {
+                            "type": "number"
+                          },
+                          "critique_value": {
+                            "type": "number"
+                          },
+                          "debates_participated": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "count": {
+                      "type": "integer"
+                    }
+                  }
                 }
               }
             }
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "deprecated": true,
         "x-aragora-stability": "deprecated",
         "operationId": "listReputationDomain"
@@ -50428,7 +50511,48 @@
           "Reputation"
         ],
         "summary": "Get reputation history",
-        "description": "List historical reputation events or score snapshots.",
+        "description": "List historical reputation events or score snapshots. Requires the critiques:read permission.",
+        "parameters": [
+          {
+            "name": "agent",
+            "in": "query",
+            "required": false,
+            "description": "Restrict snapshots to a single agent.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "start_date",
+            "in": "query",
+            "required": false,
+            "description": "ISO-8601 lower bound; invalid values are a 400.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "required": false,
+            "description": "ISO-8601 upper bound; invalid values are a 400.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum snapshots to return.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 100
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Reputation history",
@@ -50450,15 +50574,42 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "history": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "timestamp": {
+                            "type": "string"
+                          },
+                          "agent": {
+                            "type": "string"
+                          },
+                          "reputation": {
+                            "type": "number"
+                          },
+                          "event": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "count": {
+                      "type": "integer"
+                    }
                   }
                 }
               }
             }
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "deprecated": true,
         "x-aragora-stability": "deprecated",
         "operationId": "listReputationHistory"
@@ -57969,7 +58120,7 @@
           }
         },
         "x-autogenerated": true,
-        "x-method-inferred": false,
+        "x-method-inferred": true,
         "parameters": [
           {
             "name": "invoice_id",
@@ -57987,7 +58138,7 @@
       }
     },
     "/api/v1/accounting/ap/invoices/{invoice_id}/payment": {
-      "get": {
+      "post": {
         "summary": "Autogenerated placeholder (spec pending)",
         "tags": [
           "Accounting"
@@ -58000,9 +58151,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "data": {
-                      "type": "object",
-                      "description": "Response data"
+                    "id": {
+                      "type": "string",
+                      "description": "Created resource ID"
                     },
                     "success": {
                       "type": "boolean"
@@ -58014,7 +58165,7 @@
           }
         },
         "x-autogenerated": true,
-        "x-method-inferred": false,
+        "x-method-inferred": true,
         "parameters": [
           {
             "name": "invoice_id",
@@ -58027,7 +58178,7 @@
           }
         ],
         "x-aragora-stability": "experimental",
-        "operationId": "listAccountingApInvoicesByinvoiceidPayment",
+        "operationId": "createAccountingApInvoicesByinvoiceidPayment",
         "description": "Autogenerated placeholder (spec pending)"
       }
     },
@@ -58195,7 +58346,7 @@
           }
         },
         "x-autogenerated": true,
-        "x-method-inferred": false,
+        "x-method-inferred": true,
         "parameters": [
           {
             "name": "customer_id",
@@ -58306,7 +58457,7 @@
           }
         },
         "x-autogenerated": true,
-        "x-method-inferred": false,
+        "x-method-inferred": true,
         "parameters": [
           {
             "name": "invoice_id",
@@ -58324,7 +58475,7 @@
       }
     },
     "/api/v1/accounting/ar/invoices/{invoice_id}/payment": {
-      "get": {
+      "post": {
         "summary": "Autogenerated placeholder (spec pending)",
         "tags": [
           "Accounting"
@@ -58337,9 +58488,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "data": {
-                      "type": "object",
-                      "description": "Response data"
+                    "id": {
+                      "type": "string",
+                      "description": "Created resource ID"
                     },
                     "success": {
                       "type": "boolean"
@@ -58351,7 +58502,7 @@
           }
         },
         "x-autogenerated": true,
-        "x-method-inferred": false,
+        "x-method-inferred": true,
         "parameters": [
           {
             "name": "invoice_id",
@@ -58364,12 +58515,12 @@
           }
         ],
         "x-aragora-stability": "experimental",
-        "operationId": "listAccountingArInvoicesByinvoiceidPayment",
+        "operationId": "createAccountingArInvoicesByinvoiceidPayment",
         "description": "Autogenerated placeholder (spec pending)"
       }
     },
     "/api/v1/accounting/ar/invoices/{invoice_id}/reminder": {
-      "get": {
+      "post": {
         "summary": "Autogenerated placeholder (spec pending)",
         "tags": [
           "Accounting"
@@ -58382,9 +58533,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "data": {
-                      "type": "object",
-                      "description": "Response data"
+                    "id": {
+                      "type": "string",
+                      "description": "Created resource ID"
                     },
                     "success": {
                       "type": "boolean"
@@ -58396,7 +58547,7 @@
           }
         },
         "x-autogenerated": true,
-        "x-method-inferred": false,
+        "x-method-inferred": true,
         "parameters": [
           {
             "name": "invoice_id",
@@ -58409,12 +58560,12 @@
           }
         ],
         "x-aragora-stability": "experimental",
-        "operationId": "listAccountingArInvoicesByinvoiceidReminder",
+        "operationId": "createAccountingArInvoicesByinvoiceidReminder",
         "description": "Autogenerated placeholder (spec pending)"
       }
     },
     "/api/v1/accounting/ar/invoices/{invoice_id}/send": {
-      "get": {
+      "post": {
         "summary": "Autogenerated placeholder (spec pending)",
         "tags": [
           "Accounting"
@@ -58427,9 +58578,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "data": {
-                      "type": "object",
-                      "description": "Response data"
+                    "id": {
+                      "type": "string",
+                      "description": "Created resource ID"
                     },
                     "success": {
                       "type": "boolean"
@@ -58441,7 +58592,7 @@
           }
         },
         "x-autogenerated": true,
-        "x-method-inferred": false,
+        "x-method-inferred": true,
         "parameters": [
           {
             "name": "invoice_id",
@@ -58454,7 +58605,7 @@
           }
         ],
         "x-aragora-stability": "experimental",
-        "operationId": "listAccountingArInvoicesByinvoiceidSend",
+        "operationId": "createAccountingArInvoicesByinvoiceidSend",
         "description": "Autogenerated placeholder (spec pending)"
       }
     },
@@ -60928,36 +61079,32 @@
     },
     "/api/v1/accounting/reports": {
       "get": {
-        "summary": "Autogenerated placeholder (spec pending)",
+        "summary": "GET /api/v1/accounting/reports",
+        "description": "Fail closed for integrations unavailable on the modular HTTP server. Auto-generated from handler ROUTES; detailed contract pending.",
         "tags": [
-          "Accounting"
+          "AccountingIntegration"
         ],
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "Success",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "type": "object",
-                      "description": "Response data"
-                    },
-                    "success": {
-                      "type": "boolean"
-                    }
-                  }
+                  "type": "object"
                 }
               }
             }
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "x-autogenerated": true,
-        "x-method-inferred": false,
+        "x-method-inferred": true,
         "x-aragora-stability": "experimental",
-        "operationId": "listAccountingReports",
-        "description": "Autogenerated placeholder (spec pending)"
+        "operationId": "listAccountingReports"
       }
     },
     "/api/v1/accounting/status": {
@@ -77600,172 +77747,152 @@
     },
     "/api/v1/ap/batch-payments": {
       "get": {
-        "summary": "Autogenerated placeholder (spec pending)",
+        "summary": "GET /api/v1/ap/batch-payments",
+        "description": "Fail closed for integrations unavailable on the modular HTTP server. Auto-generated from handler ROUTES; detailed contract pending.",
         "tags": [
-          "Undocumented"
+          "AccountingIntegration"
         ],
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "Success",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "type": "object",
-                      "description": "Response data"
-                    },
-                    "success": {
-                      "type": "boolean"
-                    }
-                  }
+                  "type": "object"
                 }
               }
             }
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "x-autogenerated": true,
-        "x-method-inferred": false,
+        "x-method-inferred": true,
         "x-aragora-stability": "experimental",
-        "operationId": "listApBatchPayments",
-        "description": "Autogenerated placeholder (spec pending)"
+        "operationId": "listApBatchPayments"
       }
     },
     "/api/v1/ap/cash-flow": {
       "get": {
-        "summary": "Autogenerated placeholder (spec pending)",
+        "summary": "GET /api/v1/ap/cash-flow",
+        "description": "Fail closed for integrations unavailable on the modular HTTP server. Auto-generated from handler ROUTES; detailed contract pending.",
         "tags": [
-          "Undocumented"
+          "AccountingIntegration"
         ],
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "Success",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "type": "object",
-                      "description": "Response data"
-                    },
-                    "success": {
-                      "type": "boolean"
-                    }
-                  }
+                  "type": "object"
                 }
               }
             }
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "x-autogenerated": true,
-        "x-method-inferred": false,
+        "x-method-inferred": true,
         "x-aragora-stability": "experimental",
-        "operationId": "listApCashFlow",
-        "description": "Autogenerated placeholder (spec pending)"
+        "operationId": "listApCashFlow"
       }
     },
     "/api/v1/ap/discount-opportunities": {
       "get": {
-        "summary": "Autogenerated placeholder (spec pending)",
+        "summary": "GET /api/v1/ap/discount-opportunities",
+        "description": "Fail closed for integrations unavailable on the modular HTTP server. Auto-generated from handler ROUTES; detailed contract pending.",
         "tags": [
-          "Undocumented"
+          "AccountingIntegration"
         ],
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "Success",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "type": "object",
-                      "description": "Response data"
-                    },
-                    "success": {
-                      "type": "boolean"
-                    }
-                  }
+                  "type": "object"
                 }
               }
             }
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "x-autogenerated": true,
-        "x-method-inferred": false,
+        "x-method-inferred": true,
         "x-aragora-stability": "experimental",
-        "operationId": "listApDiscountOpportunities",
-        "description": "Autogenerated placeholder (spec pending)"
+        "operationId": "listApDiscountOpportunities"
       }
     },
     "/api/v1/ap/invoices": {
       "get": {
-        "summary": "Autogenerated placeholder (spec pending)",
+        "summary": "GET /api/v1/ap/invoices",
+        "description": "Fail closed for integrations unavailable on the modular HTTP server. Auto-generated from handler ROUTES; detailed contract pending.",
         "tags": [
-          "Undocumented"
+          "AccountingIntegration"
         ],
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "Success",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "type": "object",
-                      "description": "Response data"
-                    },
-                    "success": {
-                      "type": "boolean"
-                    }
-                  }
+                  "type": "object"
                 }
               }
             }
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "x-autogenerated": true,
-        "x-method-inferred": false,
+        "x-method-inferred": true,
         "x-aragora-stability": "experimental",
-        "operationId": "listApInvoices",
-        "description": "Autogenerated placeholder (spec pending)"
+        "operationId": "listApInvoices"
       }
     },
     "/api/v1/ap/optimize": {
       "get": {
-        "summary": "Autogenerated placeholder (spec pending)",
+        "summary": "GET /api/v1/ap/optimize",
+        "description": "Fail closed for integrations unavailable on the modular HTTP server. Auto-generated from handler ROUTES; detailed contract pending.",
         "tags": [
-          "Undocumented"
+          "AccountingIntegration"
         ],
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "Success",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "type": "object",
-                      "description": "Response data"
-                    },
-                    "success": {
-                      "type": "boolean"
-                    }
-                  }
+                  "type": "object"
                 }
               }
             }
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "x-autogenerated": true,
-        "x-method-inferred": false,
+        "x-method-inferred": true,
         "x-aragora-stability": "experimental",
-        "operationId": "listApOptimize",
-        "description": "Autogenerated placeholder (spec pending)"
+        "operationId": "listApOptimize"
       }
     },
     "/api/v1/api-keys": {
@@ -156991,173 +157118,171 @@
       }
     },
     "/api/v1/gusto/connect": {
-      "get": {
-        "summary": "Autogenerated placeholder (spec pending)",
+      "post": {
+        "summary": "POST /api/v1/gusto/connect",
+        "description": "Fail closed for integrations unavailable on the modular HTTP server. Auto-generated from handler ROUTES; detailed contract pending.",
         "tags": [
-          "Undocumented"
+          "AccountingIntegration"
         ],
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "Success",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "type": "object",
-                      "description": "Response data"
-                    },
-                    "success": {
-                      "type": "boolean"
-                    }
-                  }
+                  "type": "object"
                 }
               }
             }
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "x-autogenerated": true,
-        "x-method-inferred": false,
+        "x-method-inferred": true,
         "x-aragora-stability": "experimental",
-        "operationId": "listGustoConnect",
-        "description": "Autogenerated placeholder (spec pending)"
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "operationId": "createGustoConnect"
       }
     },
     "/api/v1/gusto/disconnect": {
-      "get": {
-        "summary": "Autogenerated placeholder (spec pending)",
+      "post": {
+        "summary": "POST /api/v1/gusto/disconnect",
+        "description": "Fail closed for integrations unavailable on the modular HTTP server. Auto-generated from handler ROUTES; detailed contract pending.",
         "tags": [
-          "Undocumented"
+          "AccountingIntegration"
         ],
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "Success",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "type": "object",
-                      "description": "Response data"
-                    },
-                    "success": {
-                      "type": "boolean"
-                    }
-                  }
+                  "type": "object"
                 }
               }
             }
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "x-autogenerated": true,
-        "x-method-inferred": false,
+        "x-method-inferred": true,
         "x-aragora-stability": "experimental",
-        "operationId": "listGustoDisconnect",
-        "description": "Autogenerated placeholder (spec pending)"
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "operationId": "createGustoDisconnect"
       }
     },
     "/api/v1/gusto/employees": {
       "get": {
-        "summary": "Autogenerated placeholder (spec pending)",
+        "summary": "GET /api/v1/gusto/employees",
+        "description": "Fail closed for integrations unavailable on the modular HTTP server. Auto-generated from handler ROUTES; detailed contract pending.",
         "tags": [
-          "Undocumented"
+          "AccountingIntegration"
         ],
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "Success",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "type": "object",
-                      "description": "Response data"
-                    },
-                    "success": {
-                      "type": "boolean"
-                    }
-                  }
+                  "type": "object"
                 }
               }
             }
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "x-autogenerated": true,
-        "x-method-inferred": false,
+        "x-method-inferred": true,
         "x-aragora-stability": "experimental",
-        "operationId": "listGustoEmployees",
-        "description": "Autogenerated placeholder (spec pending)"
+        "operationId": "listGustoEmployees"
       }
     },
     "/api/v1/gusto/payrolls": {
       "get": {
-        "summary": "Autogenerated placeholder (spec pending)",
+        "summary": "GET /api/v1/gusto/payrolls",
+        "description": "Fail closed for integrations unavailable on the modular HTTP server. Auto-generated from handler ROUTES; detailed contract pending.",
         "tags": [
-          "Undocumented"
+          "AccountingIntegration"
         ],
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "Success",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "type": "object",
-                      "description": "Response data"
-                    },
-                    "success": {
-                      "type": "boolean"
-                    }
-                  }
+                  "type": "object"
                 }
               }
             }
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "x-autogenerated": true,
-        "x-method-inferred": false,
+        "x-method-inferred": true,
         "x-aragora-stability": "experimental",
-        "operationId": "listGustoPayrolls",
-        "description": "Autogenerated placeholder (spec pending)"
+        "operationId": "listGustoPayrolls"
       }
     },
     "/api/v1/gusto/status": {
       "get": {
-        "summary": "Autogenerated placeholder (spec pending)",
+        "summary": "GET /api/v1/gusto/status",
+        "description": "Fail closed for integrations unavailable on the modular HTTP server. Auto-generated from handler ROUTES; detailed contract pending.",
         "tags": [
-          "Undocumented"
+          "AccountingIntegration"
         ],
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "Success",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "type": "object",
-                      "description": "Response data"
-                    },
-                    "success": {
-                      "type": "boolean"
-                    }
-                  }
+                  "type": "object"
                 }
               }
             }
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "x-autogenerated": true,
-        "x-method-inferred": false,
+        "x-method-inferred": true,
         "x-aragora-stability": "experimental",
-        "operationId": "listGustoStatus",
-        "description": "Autogenerated placeholder (spec pending)"
+        "operationId": "listGustoStatus"
       }
     },
     "/api/v1/harnesses": {
@@ -182563,7 +182688,24 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "total_agents": {
+                      "type": "integer"
+                    },
+                    "avg_elo": {
+                      "type": "number"
+                    },
+                    "max_elo": {
+                      "type": "number"
+                    },
+                    "min_elo": {
+                      "type": "number"
+                    },
+                    "total_matches": {
+                      "type": "integer"
+                    }
+                  }
                 }
               }
             }
@@ -215622,8 +215764,31 @@
           "Reputation"
         ],
         "summary": "Get domain reputation scores",
-        "description": "Return domain-level reputation scores or reputation summaries.",
+        "description": "Return domain-level reputation scores or reputation summaries. Requires the critiques:read permission.",
         "operationId": "getReputationDomain",
+        "parameters": [
+          {
+            "name": "domain",
+            "in": "query",
+            "required": true,
+            "description": "Domain token matched against agent names.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum reputations to return.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 100
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Domain reputation",
@@ -215645,12 +215810,51 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "domain": {
+                      "type": "string"
+                    },
+                    "reputations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "agent": {
+                            "type": "string"
+                          },
+                          "score": {
+                            "type": "number"
+                          },
+                          "vote_weight": {
+                            "type": "number"
+                          },
+                          "proposal_acceptance_rate": {
+                            "type": "number"
+                          },
+                          "critique_value": {
+                            "type": "number"
+                          },
+                          "debates_participated": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "count": {
+                      "type": "integer"
+                    }
+                  }
                 }
               }
             }
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "x-aragora-stability": "stable"
       }
     },
@@ -215660,8 +215864,49 @@
           "Reputation"
         ],
         "summary": "Get reputation history",
-        "description": "List historical reputation events or score snapshots.",
+        "description": "List historical reputation events or score snapshots. Requires the critiques:read permission.",
         "operationId": "getReputationHistory",
+        "parameters": [
+          {
+            "name": "agent",
+            "in": "query",
+            "required": false,
+            "description": "Restrict snapshots to a single agent.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "start_date",
+            "in": "query",
+            "required": false,
+            "description": "ISO-8601 lower bound; invalid values are a 400.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "required": false,
+            "description": "ISO-8601 upper bound; invalid values are a 400.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum snapshots to return.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 100
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Reputation history",
@@ -215683,15 +215928,42 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "history": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "timestamp": {
+                            "type": "string"
+                          },
+                          "agent": {
+                            "type": "string"
+                          },
+                          "reputation": {
+                            "type": "number"
+                          },
+                          "event": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "count": {
+                      "type": "integer"
+                    }
                   }
                 }
               }
             }
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "x-aragora-stability": "stable"
       }
     },

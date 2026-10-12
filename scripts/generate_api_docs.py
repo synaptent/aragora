@@ -2,8 +2,9 @@
 """
 Generate API documentation from handler classes.
 
-Scans all handler modules and extracts endpoint definitions and docstrings
-to generate comprehensive API documentation.
+Parses every handler module statically (ast, nothing imported, so the output does
+not depend on installed extras) and lists only the (method, path) pairs that
+docs/api/openapi.json serves; discovered endpoints without a spec operation are left out.
 
 Usage:
     python scripts/generate_api_docs.py > docs/API_ENDPOINTS.md
@@ -12,17 +13,18 @@ Usage:
 """
 
 import argparse
-import importlib
-import inspect
+import ast
 import json
 import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Any
 
-# Add project root to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+HANDLERS_DIR = PROJECT_ROOT / "aragora" / "server" / "handlers"
+SPEC_PATH = PROJECT_ROOT / "docs" / "api" / "openapi.json"
+HTTP_METHODS = ("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS")
 
 
 @dataclass
@@ -48,32 +50,35 @@ class EndpointGroup:
     endpoints: list[Endpoint] = field(default_factory=list)
 
 
-# Handler modules to scan - dynamically discovered
-def discover_handler_modules() -> list[str]:
-    """Discover all handler modules in aragora.server.handlers."""
-    handlers_dir = Path(__file__).parent.parent / "aragora" / "server" / "handlers"
-    modules = []
-    for py_file in sorted(handlers_dir.glob("*.py")):
-        if py_file.stem.startswith("_") or py_file.stem in ("base", "routing"):
-            continue
-        modules.append(f"aragora.server.handlers.{py_file.stem}")
-    # Include selected handler submodules (avoid optional deps in other trees)
-    codebase_dir = handlers_dir / "codebase"
-    if codebase_dir.exists():
-        for py_file in sorted(codebase_dir.glob("*.py")):
-            if py_file.stem.startswith("_") or py_file.stem == "__init__":
-                continue
-            modules.append(f"aragora.server.handlers.codebase.{py_file.stem}")
-    github_dir = handlers_dir / "github"
-    if github_dir.exists():
-        for py_file in sorted(github_dir.glob("*.py")):
-            if py_file.stem.startswith("_") or py_file.stem == "__init__":
-                continue
-            modules.append(f"aragora.server.handlers.github.{py_file.stem}")
-    return modules
+def discover_handler_modules(handlers_dir: Path = HANDLERS_DIR) -> list[Path]:
+    """Discover every handler module file under ``handlers_dir``, in path order."""
+    return sorted(
+        path
+        for path in handlers_dir.rglob("*.py")
+        if not any(part.startswith("_") for part in path.relative_to(handlers_dir).parts)
+        and path.stem not in ("base", "routing")
+    )
 
 
-HANDLER_MODULES = discover_handler_modules()
+def normalize_path(path: str) -> str:
+    """Erase path-parameter names (``{id}``, ``:id``, ``<id>``) so handler and spec paths compare."""
+    return re.sub(r"\{[^}]+\}|:\w+|<[^>]+>", "{}", path.rstrip("/") or "/")
+
+
+def load_spec_operations(spec_path: Path) -> dict[str, dict[str, dict]]:
+    """Map each normalized spec path to its operations keyed by upper-case method."""
+    operations: dict[str, dict[str, dict]] = {}
+    for path, item in json.loads(spec_path.read_text(encoding="utf-8"))["paths"].items():
+        for method, operation in item.items():
+            if method.upper() in HTTP_METHODS:
+                operations.setdefault(normalize_path(path), {})[method.upper()] = operation
+    return operations
+
+
+def handler_classes(module: ast.Module) -> list[tuple[str, ast.ClassDef]]:
+    """Return the module's ``*Handler`` classes by name, as ``inspect.getmembers`` orders them."""
+    nodes = [n for n in module.body if isinstance(n, ast.ClassDef) and n.name.endswith("Handler")]
+    return sorted(((node.name, node) for node in nodes), key=lambda pair: pair[0])
 
 
 def extract_endpoints_from_module_docstring(module) -> list[tuple[str, str, str]]:
@@ -87,7 +92,7 @@ def extract_endpoints_from_module_docstring(module) -> list[tuple[str, str, str]
     Returns:
         List of (method, path, description) tuples
     """
-    docstring = module.__doc__
+    docstring = ast.get_docstring(module, clean=False)
     if not docstring:
         return []
 
@@ -108,19 +113,19 @@ def extract_endpoints_from_module_docstring(module) -> list[tuple[str, str, str]
     return endpoints
 
 
-def extract_routes_from_handler(handler_class) -> list[str]:
-    """Extract route definitions from a handler class."""
-    routes = []
-
-    # Check for ROUTES class attribute
-    if hasattr(handler_class, "ROUTES"):
-        routes.extend(handler_class.ROUTES)
-
-    # Check for POST_ROUTES class attribute
-    if hasattr(handler_class, "POST_ROUTES"):
-        routes.extend(handler_class.POST_ROUTES)
-
-    return routes
+def extract_routes_from_handler(handler_class: ast.ClassDef) -> list[str]:
+    """Extract literal ROUTES and POST_ROUTES from a handler class; computed values are skipped."""
+    routes: list[object] = []
+    for stmt in handler_class.body:
+        if not isinstance(stmt, (ast.Assign, ast.AnnAssign)) or stmt.value is None:
+            continue
+        targets = stmt.targets if isinstance(stmt, ast.Assign) else [stmt.target]
+        if {t.id for t in targets if isinstance(t, ast.Name)} & {"ROUTES", "POST_ROUTES"}:
+            try:
+                routes.extend(ast.literal_eval(stmt.value))
+            except ValueError:
+                continue
+    return [route for route in dict.fromkeys(routes) if isinstance(route, str)]
 
 
 def extract_docstring_info(docstring: str) -> tuple[str, list[dict]]:
@@ -181,39 +186,26 @@ def extract_docstring_info(docstring: str) -> tuple[str, list[dict]]:
     return description, parameters
 
 
-def check_auth_required(handler_class, method_name: str) -> bool:
-    """Check if a handler method requires authentication."""
-    if hasattr(handler_class, method_name):
-        method = getattr(handler_class, method_name)
-        # Check for @require_auth decorator
-        if hasattr(method, "__wrapped__"):
-            return True
-        # Check method source for require_auth
-        try:
-            source = inspect.getsource(method)
-            if "@require_auth" in source:
-                return True
-        except (OSError, TypeError):
-            pass
-    return False
+def discover_endpoints(
+    handlers_dir: Path = HANDLERS_DIR, spec_path: Path = SPEC_PATH
+) -> tuple[list[EndpointGroup], int]:
+    """Discover endpoints from handler sources; return the groups and the count omitted.
 
-
-def discover_endpoints() -> list[EndpointGroup]:
-    """Discover all API endpoints from handler modules."""
+    Only (method, path) pairs the spec serves are kept: a docstring endpoint or a
+    ROUTES path without a spec operation is counted as omitted instead of guessed.
+    """
+    operations = load_spec_operations(spec_path)
     groups = []
+    omitted = 0
 
-    for module_name in HANDLER_MODULES:
-        try:
-            module = importlib.import_module(module_name)
-        except ImportError as e:
-            print(f"Warning: Could not import {module_name}: {e}", file=sys.stderr)
-            continue
+    for py_file in discover_handler_modules(handlers_dir):
+        module = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
 
         # First try to extract endpoints from module docstring
         module_endpoints = extract_endpoints_from_module_docstring(module)
 
         # Get module description from first paragraph before "Endpoints:"
-        module_doc = module.__doc__ or ""
+        module_doc = ast.get_docstring(module, clean=False) or ""
         module_desc = ""
         if module_doc:
             desc_match = re.match(r"^(.+?)(?=\n\s*Endpoints:|$)", module_doc, re.DOTALL)
@@ -222,23 +214,23 @@ def discover_endpoints() -> list[EndpointGroup]:
 
         # Find handler classes in the module
         handler_class_name = None
-        auth_endpoints = []
-        post_routes = []
 
-        for name, obj in inspect.getmembers(module, inspect.isclass):
-            if name.endswith("Handler") and hasattr(obj, "ROUTES"):
+        for name, obj in handler_classes(module):
+            if extract_routes_from_handler(obj):
                 handler_class_name = name
-                auth_endpoints = getattr(obj, "AUTH_REQUIRED_ENDPOINTS", [])
-                post_routes = getattr(obj, "POST_ROUTES", [])
                 break
 
         # If we have module docstring endpoints, use those (preferred)
         if module_endpoints:
-            group_name = module_name.split(".")[-1].title().replace("_", " ")
+            group_name = py_file.stem.title().replace("_", " ")
             group = EndpointGroup(name=group_name, description=module_desc)
 
             for method, path, description in module_endpoints:
-                auth_required = any(auth_pattern in path for auth_pattern in auth_endpoints)
+                operation = operations.get(normalize_path(path), {}).get(method)
+                if operation is None:
+                    omitted += 1
+                    continue
+                auth_required = bool(operation.get("security"))
                 endpoint = Endpoint(
                     path=path,
                     method=method,
@@ -255,10 +247,10 @@ def discover_endpoints() -> list[EndpointGroup]:
             continue
 
         # Fall back to ROUTES attribute
-        for name, obj in inspect.getmembers(module, inspect.isclass):
-            if name.endswith("Handler") and hasattr(obj, "ROUTES"):
+        for name, obj in handler_classes(module):
+            if extract_routes_from_handler(obj):
                 group_name = name.replace("Handler", "")
-                group_desc = obj.__doc__ or f"{group_name} endpoints"
+                group_desc = ast.get_docstring(obj, clean=False) or f"{group_name} endpoints"
 
                 # Extract first line of docstring as description
                 if group_desc:
@@ -267,32 +259,31 @@ def discover_endpoints() -> list[EndpointGroup]:
                 group = EndpointGroup(name=group_name, description=group_desc)
 
                 routes = extract_routes_from_handler(obj)
-                post_routes = getattr(obj, "POST_ROUTES", [])
+                served = {route: operations.get(normalize_path(route), {}) for route in routes}
+                omitted += sum(not methods for methods in served.values())
+                method_docs = {
+                    f.name: ast.get_docstring(f, clean=False) or ""
+                    for f in obj.body
+                    if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef))
+                }
+                pairs = [(r, m) for r in routes for m in sorted(served[r], key=HTTP_METHODS.index)]
 
-                for route in routes:
-                    method = "POST" if route in post_routes else "GET"
-
+                for route, method in pairs:
                     # Try to find the corresponding handler method
                     handler_method = None
                     method_doc = ""
-                    params = []
+                    params: list[dict] = []
 
                     # Look for method that handles this route
-                    for attr_name in dir(obj):
+                    for attr_name, attr_doc in sorted(method_docs.items()):
                         if attr_name.startswith("_") and not attr_name.startswith("__"):
-                            attr = getattr(obj, attr_name)
-                            if callable(attr):
-                                attr_doc = attr.__doc__ or ""
-                                # Check if method handles this route
-                                if route in attr_doc or route.split("/")[-1] in attr_name:
-                                    handler_method = attr_name
-                                    method_doc, params = extract_docstring_info(attr_doc)
-                                    break
+                            # Check if method handles this route
+                            if route in attr_doc or route.split("/")[-1] in attr_name:
+                                handler_method = attr_name
+                                method_doc, params = extract_docstring_info(attr_doc)
+                                break
 
-                    auth_required = (
-                        check_auth_required(obj, handler_method) if handler_method else False
-                    )
-
+                    auth_required = bool(served[route][method].get("security"))
                     endpoint = Endpoint(
                         path=route,
                         method=method,
@@ -307,7 +298,7 @@ def discover_endpoints() -> list[EndpointGroup]:
                 if group.endpoints:
                     groups.append(group)
 
-    return groups
+    return groups, omitted
 
 
 def generate_markdown(groups: list[EndpointGroup]) -> str:
@@ -404,10 +395,14 @@ def generate_markdown(groups: list[EndpointGroup]) -> str:
 
 def generate_json(groups: list[EndpointGroup]) -> str:
     """Generate JSON documentation from endpoint groups."""
-    data = {"title": "Aragora API", "version": "1.0.0", "groups": []}
+    data: dict[str, Any] = {"title": "Aragora API", "version": "1.0.0", "groups": []}
 
     for group in groups:
-        group_data = {"name": group.name, "description": group.description, "endpoints": []}
+        group_data: dict[str, Any] = {
+            "name": group.name,
+            "description": group.description,
+            "endpoints": [],
+        }
 
         for endpoint in group.endpoints:
             endpoint_data = {
@@ -442,10 +437,11 @@ def main():
     args = parser.parse_args()
 
     print("Discovering endpoints...", file=sys.stderr)
-    groups = discover_endpoints()
+    groups, omitted = discover_endpoints()
 
     total_endpoints = sum(len(g.endpoints) for g in groups)
     print(f"Found {total_endpoints} endpoints in {len(groups)} groups", file=sys.stderr)
+    print(f"Omitted {omitted} discovered endpoints with no spec operation", file=sys.stderr)
 
     if args.format == "json":
         output = generate_json(groups)
