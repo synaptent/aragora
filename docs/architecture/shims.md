@@ -386,3 +386,8 @@ import-and-call tests at both paths.
 | `aragora.cli.review:DEFAULT_REVIEW_AGENTS` | `aragora.review.diff_review:DEFAULT_REVIEW_AGENTS` | #10600 | not before M4 seal |
 | `aragora.cli.review:DEFAULT_ROUNDS` | `aragora.review.diff_review:DEFAULT_ROUNDS` | #10600 | not before M4 seal |
 | `aragora.cli.review:MAX_DIFF_SIZE` | `aragora.review.diff_review:MAX_DIFF_SIZE` | #10600 | not before M4 seal |
+| `aragora.extensions.gastown.hooks:HookRunner` | `aragora.worktree.hook_runner:HookRunner` | #10609 | not before M4 seal |
+| `aragora.extensions.gastown.hooks:Hook` | `aragora.worktree.hook_runner:Hook` | #10609 | not before M4 seal |
+| `aragora.extensions.gastown.hooks:HookType` | `aragora.worktree.hook_runner:HookType` | #10609 | not before M4 seal |
+| `aragora.extensions.gastown.models:Hook` | `aragora.worktree.hook_runner:Hook` | #10609 | not before M4 seal |
+| `aragora.extensions.gastown.models:HookType` | `aragora.worktree.hook_runner:HookType` | #10609 | not before M4 seal |
