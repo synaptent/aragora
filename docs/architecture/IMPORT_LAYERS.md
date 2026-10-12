@@ -13,8 +13,8 @@ baseline [scripts/baselines/import_contracts_baseline.json](../../scripts/baseli
 Symbols moved down a layer keep a compatibility re-export at their old path; every such move is listed in
 [shims.md](shims.md).
 
-This page is in its M4 form. Measured on `origin/main` at `81d6da4c897d` (2026-10-09, after #10267) with
-tranche T4b applied: 133 layered names, 65 baselined pairs (16 in Partition A, 49 in Partition B), and the
+This page is in its M4 form. Measured on `origin/main` at `06603465fb4c` (2026-10-12, after #10594) with
+tranche T4b applied: 133 layered names, 63 baselined pairs (16 in Partition A, 47 in Partition B), and the
 live pair set equals the baseline.
 
 ## Enforcement
