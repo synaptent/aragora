@@ -7,13 +7,35 @@ public names) and the OpenClaw PR review runner.
 from __future__ import annotations
 
 import re
-from typing import Any
+from typing import Any, cast
 
-from aragora.core import DebateResult
+from aragora.agents.base import AgentType, create_agent
+from aragora.config.secrets import get_secret_presence
+from aragora.config.settings import AgentSettings, DebateSettings
+from aragora.core import Agent, DebateResult, Environment
 from aragora.debate.disagreement import DisagreementReporter
+from aragora.debate.orchestrator import Arena, DebateProtocol
 
-__all__ = ["extract_review_findings"]
+__all__ = [
+    "DEFAULT_REVIEW_AGENTS",
+    "DEFAULT_ROUNDS",
+    "MAX_DIFF_SIZE",
+    "build_review_prompt",
+    "extract_review_findings",
+    "get_available_agents",
+    "run_review_debate",
+]
 
+
+def _has_api_key(*names: str) -> bool:
+    """Return API-key availability without exposing secret values."""
+    return any(get_secret_presence(name).source in {"aws", "env"} for name in names)
+
+
+# Default agents for code review (fast, diverse perspectives)
+DEFAULT_REVIEW_AGENTS = AgentSettings().default_agents
+DEFAULT_ROUNDS = DebateSettings().default_rounds
+MAX_DIFF_SIZE = 50000  # 50KB max diff size
 _LOCATION_HINT_RE = re.compile(
     r"(?P<path>[\w./-]+\.(?:py|pyi|ts|tsx|js|jsx|yml|yaml|json|md|sh))(?:[:#]L?(?P<line>\d+))?"
 )
@@ -57,6 +79,149 @@ _META_REVIEW_MARKERS = (
     "since the diff is truncated",
     "since the diff may be truncated",
 )
+
+
+def get_available_agents() -> str:
+    """Get available agents based on configured API keys.
+
+    Falls back gracefully if not all providers are configured.
+    """
+    agents = []
+
+    # Check Anthropic
+    if _has_api_key("ANTHROPIC_API_KEY"):
+        agents.append("anthropic-api")
+
+    # Check OpenAI
+    if _has_api_key("OPENAI_API_KEY"):
+        agents.append("openai-api")
+
+    # Check OpenRouter as fallback
+    if _has_api_key("OPENROUTER_API_KEY"):
+        if len(agents) < 2:
+            agents.append("openrouter")
+
+    # Check other providers
+    if _has_api_key("GEMINI_API_KEY", "GOOGLE_API_KEY") and len(agents) < 2:
+        agents.append("gemini")
+
+    if _has_api_key("MISTRAL_API_KEY") and len(agents) < 2:
+        agents.append("mistral-api")
+
+    if not agents:
+        return ""
+
+    return ",".join(agents)
+
+
+def _parse_review_agents(agents_str: str) -> list[str]:
+    """Parse a comma-separated review agent list."""
+    return [spec.strip() for spec in agents_str.split(",") if spec.strip()]
+
+
+def build_review_prompt(diff: str, focus_areas: list[str] | None = None) -> str:
+    """Build a focused code review prompt."""
+    focus = focus_areas or ["security", "performance", "quality"]
+
+    focus_instructions = []
+    if "security" in focus:
+        focus_instructions.append("""
+**Security** - Look for:
+- SQL/NoSQL injection, XSS, CSRF
+- Authentication/authorization bypass
+- Secrets/credentials in code
+- Insecure deserialization
+- Path traversal""")
+
+    if "performance" in focus:
+        focus_instructions.append("""
+**Performance** - Look for:
+- N+1 query patterns
+- O(n^2) or worse algorithms
+- Memory leaks, unbounded collections
+- Missing pagination
+- Blocking operations in async code""")
+
+    if "quality" in focus:
+        focus_instructions.append("""
+**Code Quality** - Look for:
+- Missing error handling
+- Edge cases not covered
+- Unclear or complex logic
+- Missing input validation
+- Resource cleanup issues""")
+
+    focus_text = "\n".join(focus_instructions)
+
+    # Truncate diff if too large
+    if len(diff) > MAX_DIFF_SIZE:
+        diff = diff[:MAX_DIFF_SIZE] + "\n\n[... diff truncated ...]"
+
+    return f"""You are reviewing a pull request. Analyze the diff carefully and identify issues.
+
+## Review Focus
+{focus_text}
+
+## Diff to Review
+```diff
+{diff}
+```
+
+## Response Format
+For each issue found, specify:
+1. **Category**: Security, Performance, or Quality
+2. **Severity**: CRITICAL, HIGH, MEDIUM, or LOW
+3. **Location**: File and line number if identifiable
+4. **Issue**: Clear description of the problem
+5. **Suggestion**: How to fix it
+
+If no issues found in a category, say "No issues found."
+
+Be thorough but avoid false positives. Focus on real, actionable issues."""
+
+
+async def run_review_debate(
+    diff: str,
+    agents_str: str = DEFAULT_REVIEW_AGENTS,
+    rounds: int = DEFAULT_ROUNDS,
+    focus_areas: list[str] | None = None,
+) -> DebateResult:
+    """Run a code review debate on the given diff."""
+
+    agent_specs = _parse_review_agents(agents_str)
+
+    if agents_str.strip() == DEFAULT_REVIEW_AGENTS.strip() or len(agent_specs) < 2:
+        available_specs = _parse_review_agents(get_available_agents())
+        if available_specs:
+            agent_specs = available_specs
+
+    if not agent_specs:
+        agent_specs = _parse_review_agents(DEFAULT_REVIEW_AGENTS)
+
+    # Create agents with reviewer roles
+    agents: list[Agent] = []
+    roles = ["security_reviewer", "performance_reviewer", "quality_reviewer"]
+    for i, agent_type in enumerate(agent_specs):
+        role = roles[i % len(roles)]
+        agent = create_agent(
+            model_type=cast(AgentType, agent_type),
+            name=f"{agent_type}_{role}",
+            role=role,
+        )
+        agents.append(agent)
+
+    # Build review prompt
+    task = build_review_prompt(diff, focus_areas)
+
+    # Create environment and protocol
+    env = Environment(task=task, max_rounds=rounds)
+    protocol = DebateProtocol(rounds=rounds, consensus="majority")
+
+    # Run debate
+    arena = Arena(env, agents, protocol)
+    result = await arena.run()
+
+    return result
 
 
 def _extract_location_hint(text: str) -> str | None:
