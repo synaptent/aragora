@@ -254,7 +254,7 @@ class EncryptionMigrator:
 
         except (TypeError, RuntimeError, OSError, ValueError) as e:
             result.errors.append("Migration failed due to an internal error")
-            result.failed_records = result.total_records
+            result.failed_records = max(1, result.total_records)
             logger.error("Migration failed for %s: %s", store_name, e)
 
         return result
@@ -915,8 +915,7 @@ def rotate_encryption_key(
 
             except (ImportError, RuntimeError, ValueError, TypeError, OSError) as e:
                 result.errors.append(f"Store {store_name} re-encryption failed")
-                if store_name == "sync":
-                    result.failed_records += 1
+                result.failed_records += 1
                 logger.error("Key rotation failed for store %s: %s", store_name, e)
             finally:
                 close_fn = config.get("close_fn") if config else None
@@ -935,6 +934,7 @@ def rotate_encryption_key(
 
     except (RuntimeError, ValueError, TypeError, OSError, ImportError, AttributeError) as e:
         result.errors.append("Key rotation failed due to an internal error")
+        result.failed_records += 1
         logger.error("Key rotation failed: %s", e)
 
     return result
