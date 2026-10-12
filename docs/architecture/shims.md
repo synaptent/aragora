@@ -386,3 +386,12 @@ import-and-call tests at both paths.
 | `aragora.cli.review:DEFAULT_REVIEW_AGENTS` | `aragora.review.diff_review:DEFAULT_REVIEW_AGENTS` | #10600 | not before M4 seal |
 | `aragora.cli.review:DEFAULT_ROUNDS` | `aragora.review.diff_review:DEFAULT_ROUNDS` | #10600 | not before M4 seal |
 | `aragora.cli.review:MAX_DIFF_SIZE` | `aragora.review.diff_review:MAX_DIFF_SIZE` | #10600 | not before M4 seal |
+| `aragora.cli.commands.review_queue:SettlementReceipt` | `aragora.review.settlement_receipt:SettlementReceipt` | #10603 | not before M4 seal |
+| `aragora.cli.commands.review_queue_comment_verdicts:extract_finding_lines` | `aragora.review.comment_verdicts:extract_finding_lines` | #10603 | not before M4 seal |
+| `aragora.cli.commands.review_queue_comment_verdicts:has_blocking_finding_or_label` | `aragora.review.comment_verdicts:has_blocking_finding_or_label` | #10603 | not before M4 seal |
+| `aragora.cli.commands.review_queue_comment_verdicts:has_blocking_or_negative_verdict` | `aragora.review.comment_verdicts:has_blocking_or_negative_verdict` | #10603 | not before M4 seal |
+| `aragora.cli.commands.review_queue_comment_verdicts:highest_blocking_severity` | `aragora.review.comment_verdicts:highest_blocking_severity` | #10603 | not before M4 seal |
+| `aragora.cli.commands.review_queue_transport:GITHUB_TRANSPORT_BLOCKED_STATUS` | `aragora.review.github_transport:GITHUB_TRANSPORT_BLOCKED_STATUS` | #10603 | not before M4 seal |
+| `aragora.cli.commands.review_queue_transport:GITHUB_TRANSPORT_ERROR_KIND` | `aragora.review.github_transport:GITHUB_TRANSPORT_ERROR_KIND` | #10603 | not before M4 seal |
+| `aragora.cli.commands.review_queue_transport:_gh_error_kind` | `aragora.review.github_transport:gh_error_kind` | #10603 | not before M4 seal |
+| `aragora.cli.commands.review_queue_transport:_is_github_transport_error` | `aragora.review.github_transport:is_github_transport_error` | #10603 | not before M4 seal |

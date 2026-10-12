@@ -13,9 +13,9 @@ baseline [scripts/baselines/import_contracts_baseline.json](../../scripts/baseli
 Symbols moved down a layer keep a compatibility re-export at their old path; every such move is listed in
 [shims.md](shims.md).
 
-This page is in its M4 form. Measured on `origin/main` at `6b7d46683e35` (2026-10-12, after #10600) with
-tranche T5 applied: 161 layered names, 61 baselined pairs (18 in Partition A, 43 in Partition B), and the
-live pair set equals the baseline.
+This page is in its M4 form. Measured with #10603 applied on `324ea90c2404` (2026-10-12, after tranche T5):
+161 layered names, 60 baselined pairs (18 in Partition A, 42 in Partition B), and the live pair set equals
+the baseline.
 
 ## Enforcement
 
@@ -187,7 +187,8 @@ through `aragora.training.specialist_models`).
 | #10598 | `f14f82796b` | `cli.review` seam, part 1: the review-comment verdict parser and `SettlementReceipt` get homes in `aragora.review` (`comment_verdicts`, `settlement_receipt`), and the `aragora.swarm` sites and `aragora.review.observe_outcomes_cli` import them there. The homes are verbatim copies pinned to the CLI definitions by parity tests until the Tier-4 re-export edit; `aragora/swarm/quorum_evidence.py` keeps `aragora.swarm -> aragora.cli` live until then | 133 | 62 |
 | #10599 | `3f78f841a0` | `cli.review` seam, part 2: `extract_review_findings` moved down to `aragora.review.diff_review`; `aragora.cli.review` re-exports it | 133 | 62 |
 | #10600 | `6b7d46683e` | `cli.review` seam, part 3: the review debate runner (`run_review_debate`, `build_review_prompt`, `get_available_agents` and the review defaults) moved down to `aragora.review.diff_review` with re-exports; the OpenClaw PR review runner imports it there, so `aragora.compat` no longer imports `aragora.cli`. Resolved `aragora.export -> aragora.cli` and `aragora.nomic -> aragora.cli` (their only routes, from `aragora.export.case_study` and `aragora.nomic.execution_bridge`, ran through that import) | 133 | 62 to 60 |
-| #10602 | squash merge of #10602 | Tranche T5: `brief_engine codex compat essay factory fixtures gti harnesses hooks ideacloud interrogation missions onboarding operations ops pdb playbooks policy prediction ralph reports review scheduler schedulers sync trail triage worktree` (application); adopted `aragora.compat -> aragora.server`, `aragora.harnesses -> aragora.mcp`, `aragora.ideacloud -> aragora.connectors`, `aragora.ops -> aragora.gateway` and `aragora.ops -> aragora.server`; `aragora.implement`, `aragora.nomic`, `aragora.swarm` and `aragora.workflow -> aragora.mcp` resolved by reattribution (their only chains run through `aragora/harnesses/claude_code.py:570` and now count toward `aragora.harnesses -> aragora.mcp`) | 161 | 60 to 61 |
+| #10602 | `324ea90c24` | Tranche T5: `brief_engine codex compat essay factory fixtures gti harnesses hooks ideacloud interrogation missions onboarding operations ops pdb playbooks policy prediction ralph reports review scheduler schedulers sync trail triage worktree` (application); adopted `aragora.compat -> aragora.server`, `aragora.harnesses -> aragora.mcp`, `aragora.ideacloud -> aragora.connectors`, `aragora.ops -> aragora.gateway` and `aragora.ops -> aragora.server`; `aragora.implement`, `aragora.nomic`, `aragora.swarm` and `aragora.workflow -> aragora.mcp` resolved by reattribution (their only chains run through `aragora/harnesses/claude_code.py:570` and now count toward `aragora.harnesses -> aragora.mcp`) | 161 | 60 to 61 |
+| #10603 | squash merge of #10603 | `cli.review` seam, part 4 (Tier 4): the CLI modules re-export the `aragora.review` homes (`comment_verdicts`, `settlement_receipt` and the new `github_transport` for the GitHub transport-error classification), so each object has one definition, and `aragora/swarm/quorum_evidence.py` imports them there. The four `aragora/review` modules the merge-gate classifier now loads join its Tier-4 authority closure. Resolved `aragora.swarm -> aragora.cli` | 161 | 61 to 60 |
 
 The two config pairs adopted by #10314 (`aragora.config -> aragora.persistence`, `aragora.config ->
 aragora.tenancy`) were fixed by the config-seam PR #10316 (Tier 4, settled by the operator).
