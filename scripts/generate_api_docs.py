@@ -102,6 +102,8 @@ def literal(node: ast.expr | None, names: dict[str, ast.expr]) -> Any:
         return tuple(
             literal(e, names) for e in (node.keys if isinstance(node, ast.Dict) else node.elts)
         )
+    if node is None:
+        raise ValueError("dict unpacking (**) is not a literal")
     return ast.literal_eval(node)
 
 
