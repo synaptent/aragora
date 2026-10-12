@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 from copy import deepcopy
+from pathlib import Path
 
 import pytest
 
@@ -151,3 +155,38 @@ def test_binding_defaults_to_frozen_benchmark_and_team_condition() -> None:
     assert binding.benchmark_id == BENCHMARK_ID
     assert binding.condition_id == ARAGORA_TEAM
     assert binding.to_dict()["schema_version"] == TEAM_RECEIPT_BINDING_SCHEMA
+
+
+def test_builds_receipts_without_a_receipt_facade() -> None:
+    # Provider detection may still load aragora.debate (and through it the gauntlet)
+    # at call time; what must hold is that importing the module does not, and that
+    # building works with only the hooks this module registers.
+    code = """
+import sys, warnings
+warnings.simplefilter("ignore")
+from aragora.evaluation.outcome_backed_receipt import OutcomeBackedReceiptError, build_team_receipt
+assert not [m for m in sys.modules if m.startswith(("aragora.gauntlet", "aragora.receipts"))]
+from tests.evaluation.test_outcome_backed_receipt import _binding, _team_result
+assert build_team_receipt(_team_result(), binding=_binding()).verification == "verified"
+placeholder = _team_result(final_answer="anthropic-api got confused and needs to recalibrate.")
+placeholder.messages = []
+placeholder.proposals = {}
+try:
+    build_team_receipt(placeholder, binding=_binding())
+except OutcomeBackedReceiptError:
+    pass
+else:
+    raise SystemExit("failure placeholder produced a receipt")
+print("ok")
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+        env=dict(os.environ),
+        cwd=Path(__file__).resolve().parents[2],
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip().endswith("ok")

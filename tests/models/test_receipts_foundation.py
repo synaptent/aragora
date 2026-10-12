@@ -14,6 +14,7 @@ import aragora.models.receipts as receipts
 from aragora.models.receipts import attestation, jcs
 
 RECEIPTS_DIR = Path(receipts.__file__).resolve().parent
+REPO_ROOT = RECEIPTS_DIR.parents[2]
 FOUNDATION_PREFIXES = ("aragora.models", "aragora.core_types")
 
 MOVED_MODULES = {
@@ -87,11 +88,38 @@ def test_patch_through_the_old_path_is_seen_at_the_new_path(
     assert jcs.jcs_canonicalize is sentinel
 
 
+def _is_type_checking_guard(test: ast.expr) -> bool:
+    # Only a plain `if TYPE_CHECKING:` (or `typing.TYPE_CHECKING`) block is type-only;
+    # `if not TYPE_CHECKING:` runs at import time and must stay checked.
+    if isinstance(test, ast.Name):
+        return test.id == "TYPE_CHECKING"
+    return isinstance(test, ast.Attribute) and test.attr == "TYPE_CHECKING"
+
+
+def test_type_checking_guard_excludes_negated_blocks() -> None:
+    def guard(source: str) -> bool:
+        node = ast.parse(source).body[0]
+        assert isinstance(node, ast.If)
+        return _is_type_checking_guard(node.test)
+
+    assert guard("if TYPE_CHECKING:\n    pass")
+    assert guard("if typing.TYPE_CHECKING:\n    pass")
+    assert not guard("if not TYPE_CHECKING:\n    pass")
+
+
 def test_foundation_modules_import_nothing_above_foundation() -> None:
     offenders: list[str] = []
     for path in sorted(RECEIPTS_DIR.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        type_only = {
+            id(inner)
+            for node in ast.walk(tree)
+            if isinstance(node, ast.If) and _is_type_checking_guard(node.test)
+            for inner in ast.walk(node)
+        }
         for node in ast.walk(tree):
+            if id(node) in type_only:
+                continue
             if isinstance(node, ast.Call) and getattr(node.func, "attr", "") == "import_module":
                 offenders.append(f"{path.name}:{node.lineno}:importlib")
                 continue
@@ -118,7 +146,12 @@ def test_primitive_import_loads_no_application_package() -> None:
         "print('\\n'.join(loaded))\n"
     )
     completed = subprocess.run(
-        [sys.executable, "-c", code], capture_output=True, text=True, timeout=120, check=False
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+        cwd=REPO_ROOT,
     )
     assert completed.returncode == 0, completed.stderr
     loaded = completed.stdout.split()

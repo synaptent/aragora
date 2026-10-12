@@ -9,7 +9,7 @@ them):
 * :class:`EvidenceQualityAnalyzer` — scores a finding's specificity /
   concreteness / evidence diversity. Prefer the legacy ``aragora_debate``
   package when installed, otherwise use Aragora's in-tree analyzer.
-* :func:`aragora.cli.commands.review_queue_comment_verdicts.has_blocking_finding_or_label`
+* :func:`aragora.review.comment_verdicts.has_blocking_finding_or_label`
   — the SAME ``[P0]/[P1]`` detector the gate already trusts (the hard bar).
 
 The adjudicator fires ONLY on a stall (quorum unsatisfied, dissent present, at
@@ -48,7 +48,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Protocol, Sequence
 
-from aragora.cli.commands.review_queue_comment_verdicts import (
+from aragora.review.comment_verdicts import (
     has_blocking_finding_or_label,
     highest_blocking_severity,
 )

@@ -1,8 +1,8 @@
 {
   "_comment": "Shrink-only baseline of import-linter layer-contract violations (fail-on-new). Frozen from origin/main by scripts/ci/check_import_contracts.py --freeze. New violations fail the checker; this baseline may only shrink. Layer membership was cross-checked against aragora/module_tiers.yaml (see .importlinter).",
   "config": ".importlinter",
-  "frozen_from_ref": "81d6da4c897dfe3b773ae08afdd702f8b6b73e36",
-  "frozen_at": "2026-10-09T20:25:34Z",
+  "frozen_from_ref": "e5ec918c19cc9dff5c6a1af66fc34f69b077024d",
+  "frozen_at": "2026-10-12T14:11:18Z",
   "layers": [
     "interface",
     "application",
@@ -19,7 +19,7 @@
         "aragora.auth -> aragora.connectors",
         "aragora.auth -> aragora.server",
         "aragora.blockchain -> aragora.server",
-        "aragora.compliance -> aragora.gauntlet",
+        "aragora.compat -> aragora.server",
         "aragora.computer_use -> aragora.connectors",
         "aragora.control_plane -> aragora.server",
         "aragora.debate -> aragora.broadcast",
@@ -34,11 +34,10 @@
         "aragora.debate -> aragora.server",
         "aragora.debate -> aragora.spectate",
         "aragora.debate -> aragora.workflow",
-        "aragora.evaluation -> aragora.gauntlet",
         "aragora.evidence -> aragora.connectors",
-        "aragora.export -> aragora.cli",
         "aragora.gauntlet -> aragora.server",
-        "aragora.implement -> aragora.mcp",
+        "aragora.harnesses -> aragora.mcp",
+        "aragora.ideacloud -> aragora.connectors",
         "aragora.implement -> aragora.server",
         "aragora.inbox -> aragora.server",
         "aragora.introspection -> aragora.nomic",
@@ -51,11 +50,11 @@
         "aragora.memory -> aragora.connectors",
         "aragora.memory -> aragora.nomic",
         "aragora.modes -> aragora.server",
-        "aragora.nomic -> aragora.cli",
         "aragora.nomic -> aragora.connectors",
-        "aragora.nomic -> aragora.mcp",
         "aragora.nomic -> aragora.server",
         "aragora.notifications -> aragora.server",
+        "aragora.ops -> aragora.gateway",
+        "aragora.ops -> aragora.server",
         "aragora.pipeline -> aragora.connectors",
         "aragora.pipeline -> aragora.server",
         "aragora.ranking -> aragora.server",
@@ -72,12 +71,9 @@
         "aragora.stores -> aragora.gateway",
         "aragora.swarm -> aragora.cli",
         "aragora.swarm -> aragora.connectors",
-        "aragora.swarm -> aragora.mcp",
-        "aragora.training -> aragora.gauntlet",
         "aragora.verticals -> aragora.connectors",
         "aragora.workflow -> aragora.connectors",
-        "aragora.workflow -> aragora.gateway",
-        "aragora.workflow -> aragora.mcp"
+        "aragora.workflow -> aragora.gateway"
       ]
     }
   }

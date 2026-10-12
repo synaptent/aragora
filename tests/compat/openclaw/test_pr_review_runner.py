@@ -448,7 +448,7 @@ class TestPRReviewRunner:
     @pytest.mark.asyncio
     async def test_run_review_logs_import_fallback(self):
         runner = PRReviewRunner(dry_run=True)
-        with patch.dict("sys.modules", {"aragora.cli.review": None}):
+        with patch.dict("sys.modules", {"aragora.review.diff_review": None}):
             with patch.object(
                 runner,
                 "_run_review_subprocess",
