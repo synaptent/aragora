@@ -35,7 +35,7 @@ import logging
 from copy import deepcopy
 from typing import Any
 
-from aragora.cli.commands.review_queue_comment_verdicts import extract_finding_lines
+from aragora.review.comment_verdicts import extract_finding_lines
 from aragora.gauntlet.receipt_models import (
     AgentResponseRecord,
     ConsensusProof,
