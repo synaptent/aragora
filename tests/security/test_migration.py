@@ -5,16 +5,22 @@ Tests automatic detection, migration, and startup migration functionality.
 """
 
 import ast
+import asyncio
 import logging
+import sqlite3
 import sys
+import threading
+from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 import aragora.security.migration as migration_module
+import aragora.utils.async_utils as async_utils
 from aragora.security.migration import (
     MigrationResult,
     EncryptionMigrator,
@@ -37,6 +43,168 @@ def reset_migration_providers():
     register_migration_audit_provider(None)
     yield
     register_migration_audit_provider(None)
+
+
+class _LoopAffineSyncStore:
+    """SyncStore fake that, like a real database connection, only works on its creation loop."""
+
+    def __init__(self, backend: "_FakeSyncBackend", kwargs: dict[str, Any]) -> None:
+        self._backend = backend
+        self.kwargs = kwargs
+        self.loop: asyncio.AbstractEventLoop | None = None
+        self.closed = False
+        self.calls: list[tuple[str, asyncio.AbstractEventLoop]] = []
+
+    def _enter(self, name: str) -> None:
+        loop = asyncio.get_running_loop()
+        self.calls.append((name, loop))
+        if self.loop is None or self.closed:
+            raise RuntimeError(f"{name} called on an uninitialized or closed store")
+        if loop is not self.loop:
+            raise RuntimeError(f"{name} ran on a different event loop than initialize()")
+
+    @property
+    def call_names(self) -> list[str]:
+        return [name for name, _ in self.calls]
+
+    @property
+    def call_loops(self) -> set[asyncio.AbstractEventLoop]:
+        return {loop for _, loop in self.calls}
+
+    async def initialize(self) -> None:
+        if self._backend.init_error is not None:
+            raise self._backend.init_error
+        self.loop = asyncio.get_running_loop()
+        self.calls.append(("initialize", self.loop))
+
+    async def list_connectors(self) -> list[SimpleNamespace]:
+        self._enter("list_connectors")
+        if self._backend.list_error is not None:
+            raise self._backend.list_error
+        return list(self._backend.connectors)
+
+    async def save_connector(
+        self,
+        connector_id: str,
+        connector_type: str,
+        name: str,
+        config: dict[str, Any],
+    ) -> SimpleNamespace:
+        self._enter("save_connector")
+        delay = self._backend.save_delays.get(connector_id)
+        if delay:
+            await asyncio.sleep(delay)
+        error = self._backend.save_errors.get(connector_id)
+        if error is not None:
+            raise error
+        self._backend.saved.append((connector_id, connector_type, name, dict(config)))
+        return SimpleNamespace(
+            id=connector_id, connector_type=connector_type, name=name, config=config
+        )
+
+    async def close(self) -> None:
+        if self.loop is not None:
+            self._enter("close")
+        self.closed = True
+
+
+class _FakeSyncBackend:
+    """Stand-in for aragora.storage.sync_store, including the process-wide get_sync_store()."""
+
+    def __init__(self) -> None:
+        self.connectors: list[SimpleNamespace] = []
+        self.init_error: Exception | None = None
+        self.list_error: Exception | None = None
+        self.save_errors: dict[str, Exception] = {}
+        self.save_delays: dict[str, float] = {}
+        self.saved: list[tuple[str, str, str, dict[str, Any]]] = []
+        self.stores: list[_LoopAffineSyncStore] = []
+        self.process_store: _LoopAffineSyncStore | None = None
+        self.get_sync_store_calls = 0
+
+    def add_connector(self, connector_id: str, config: dict[str, Any]) -> None:
+        self.connectors.append(
+            SimpleNamespace(
+                id=connector_id,
+                connector_type="github",
+                name=f"GitHub {connector_id}",
+                config=dict(config),
+            )
+        )
+
+    def create_store(self, *args: Any, **kwargs: Any) -> _LoopAffineSyncStore:
+        store = _LoopAffineSyncStore(self, kwargs)
+        self.stores.append(store)
+        return store
+
+    async def get_sync_store(self) -> _LoopAffineSyncStore:
+        self.get_sync_store_calls += 1
+        if self.process_store is None:
+            store = self.create_store()
+            await store.initialize()
+            self.process_store = store
+        return self.process_store
+
+    @property
+    def private_stores(self) -> list[_LoopAffineSyncStore]:
+        return [store for store in self.stores if store is not self.process_store]
+
+    def only_private_store(self) -> _LoopAffineSyncStore:
+        assert self.get_sync_store_calls == 0
+        assert self.process_store is None
+        assert len(self.private_stores) == 1
+        store = self.private_stores[0]
+        assert store.kwargs == {"recover_jobs_on_init": False}
+        assert store.closed is True
+        assert len(store.call_loops) <= 1
+        if store.loop is not None:
+            assert store.call_loops == {store.loop}
+            assert store.call_names[0] == "initialize"
+            assert store.call_names[-1] == "close"
+            assert store.loop.is_closed()
+        return store
+
+
+@pytest.fixture
+def sync_backend(monkeypatch):
+    """Loop-affine sync store module, with no shared pool loop registered."""
+    backend = _FakeSyncBackend()
+    module = ModuleType("aragora.storage.sync_store")
+    module.SyncStore = backend.create_store
+    module.get_sync_store = backend.get_sync_store
+    monkeypatch.setitem(sys.modules, "aragora.storage.sync_store", module)
+    monkeypatch.setattr(async_utils, "_pool_event_loop_provider", None)
+    return backend
+
+
+@pytest.fixture
+def shared_pool_loop(sync_backend, monkeypatch):
+    """A running loop registered as the shared pool loop, as in a Postgres server process."""
+    loop = asyncio.new_event_loop()
+    thread = threading.Thread(target=loop.run_forever, name="test-shared-pool-loop", daemon=True)
+    thread.start()
+    monkeypatch.setattr(async_utils, "_pool_event_loop_provider", lambda: loop)
+    asyncio.run_coroutine_threadsafe(sync_backend.get_sync_store(), loop).result(timeout=5)
+    yield loop
+    loop.call_soon_threadsafe(loop.stop)
+    thread.join(timeout=5)
+    loop.close()
+
+
+def _assert_used_shared_store(backend: _FakeSyncBackend, loop: asyncio.AbstractEventLoop) -> None:
+    assert backend.private_stores == []
+    store = backend.process_store
+    assert store is not None
+    assert store.loop is loop
+    assert store.call_loops == {loop}
+    assert store.closed is False
+    assert "close" not in store.call_names
+
+
+def _prepare_live_rotation(service: MagicMock) -> None:
+    service._keys = {"default": MagicMock(version=1)}
+    service._active_key_id = "default"
+    service.rotate_key.return_value = MagicMock(key_id="default", version=2)
 
 
 class TestMigrationResult:
@@ -429,30 +597,36 @@ class TestStoreMigrations:
             assert result.store_name == "gmail_token_store"
             assert len(result.errors) > 0
 
-    def test_migrate_sync_store_empty(self):
+    def test_migrate_sync_store_empty(self, sync_backend):
         """Test migration with empty sync store."""
-        store = MagicMock()
-        store.list_connectors = AsyncMock(return_value=[])
-
-        with patch(
-            "aragora.storage.sync_store.get_sync_store",
-            new=AsyncMock(return_value=store),
-        ):
-            result = migrate_sync_store(dry_run=True)
+        result = migrate_sync_store(dry_run=True)
 
         assert result.store_name == "sync_store"
         # Should complete successfully even with empty store
         assert result.failed_records == 0
+        assert result.errors == []
+        assert sync_backend.only_private_store().call_names == [
+            "initialize",
+            "list_connectors",
+            "close",
+        ]
 
-    def test_unavailable_sync_store_preserves_best_effort_result(self):
+    def test_unavailable_sync_store_preserves_best_effort_result(self, sync_backend):
         """An unavailable storage implementation preserves the best-effort result."""
-        with patch(
-            "aragora.storage.sync_store.get_sync_store",
-            new=AsyncMock(side_effect=RuntimeError("unavailable")),
-        ):
-            result = migrate_sync_store(dry_run=True)
+        sync_backend.init_error = RuntimeError("unavailable")
+
+        result = migrate_sync_store(dry_run=True)
 
         assert result.store_name == "sync_store"
+        assert result.errors == ["Sync store not available"]
+        assert result.success is True
+        assert sync_backend.only_private_store().call_names == []
+
+    def test_unimportable_sync_store_preserves_best_effort_result(self, monkeypatch):
+        monkeypatch.setitem(sys.modules, "aragora.storage.sync_store", None)
+
+        result = migrate_sync_store(dry_run=False)
+
         assert result.errors == ["Sync store not available"]
         assert result.success is True
 
@@ -596,164 +770,151 @@ class TestMigrationAuditProvider:
         register_migration_audit_provider(None)
         assert migration_module.get_migration_audit_provider() is None
 
-    def test_live_sync_rotation_resolves_unregistered_storage_store(
-        self, encryption_service, monkeypatch
-    ):
-        old_key = MagicMock(version=1)
-        new_key = MagicMock(key_id="default", version=2)
-        encryption_service._keys = {"default": old_key}
-        encryption_service._active_key_id = "default"
-        encryption_service.rotate_key.return_value = new_key
-        connector = SimpleNamespace(
-            id="connector-1",
-            connector_type="github",
-            name="GitHub",
-            config={"api_key": "decrypted-secret"},
-        )
-        store = MagicMock()
-        store.list_connectors = AsyncMock(return_value=[connector])
-        store.save_connector = AsyncMock(return_value=connector)
-        get_sync_store = AsyncMock(return_value=store)
-        sync_store_module = ModuleType("aragora.storage.sync_store")
-        sync_store_module.get_sync_store = get_sync_store
-        monkeypatch.setitem(sys.modules, "aragora.storage.sync_store", sync_store_module)
-
+    def _rotate_sync(self, encryption_service, **kwargs):
+        _prepare_live_rotation(encryption_service)
+        kwargs.setdefault("stores", ["sync"])
         with patch(
             "aragora.security.encryption.get_encryption_service",
             return_value=encryption_service,
         ):
-            result = rotate_encryption_key(dry_run=False, stores=["sync"])
+            return rotate_encryption_key(dry_run=False, **kwargs)
+
+    def test_live_sync_rotation_resolves_unregistered_storage_store(
+        self, encryption_service, sync_backend
+    ):
+        sync_backend.add_connector("connector-1", {"api_key": "decrypted-secret"})
+
+        result = self._rotate_sync(encryption_service)
 
         assert result.success is True
         assert result.stores_processed == 1
         assert result.records_reencrypted == 1
-        get_sync_store.assert_awaited_once_with()
-        store.list_connectors.assert_awaited_once_with()
-        store.save_connector.assert_awaited_once_with(
-            "connector-1",
-            "github",
-            "GitHub",
-            {"api_key": "decrypted-secret"},
-        )
+        assert sync_backend.saved == [
+            ("connector-1", "github", "GitHub connector-1", {"api_key": "decrypted-secret"})
+        ]
+        assert sync_backend.only_private_store().call_names == [
+            "initialize",
+            "list_connectors",
+            "save_connector",
+            "close",
+        ]
 
-    def test_optional_store_absence_remains_best_effort(self, encryption_service, monkeypatch):
-        old_key = MagicMock(version=1)
-        new_key = MagicMock(key_id="default", version=2)
-        encryption_service._keys = {"default": old_key}
-        encryption_service._active_key_id = "default"
-        encryption_service.rotate_key.return_value = new_key
-        store = MagicMock()
-        store.list_connectors = AsyncMock(return_value=[])
-        store.save_connector = AsyncMock()
-        get_sync_store = AsyncMock(return_value=store)
-        sync_store_module = ModuleType("aragora.storage.sync_store")
-        sync_store_module.get_sync_store = get_sync_store
-        monkeypatch.setitem(sys.modules, "aragora.storage.sync_store", sync_store_module)
-
+    def test_optional_store_absence_remains_best_effort(self, encryption_service, sync_backend):
         with (
-            patch(
-                "aragora.security.encryption.get_encryption_service",
-                return_value=encryption_service,
-            ),
             patch("aragora.security.migration._get_integration_store_config", return_value=None),
             patch("aragora.security.migration._get_gmail_store_config", return_value=None),
         ):
-            result = rotate_encryption_key(dry_run=False)
+            result = self._rotate_sync(encryption_service, stores=None)
 
         assert result.success is True
         assert result.stores_processed == 1
         assert result.failed_records == 0
         assert result.errors == []
-        get_sync_store.assert_awaited_once_with()
-        store.list_connectors.assert_awaited_once_with()
+        assert sync_backend.only_private_store().call_names == [
+            "initialize",
+            "list_connectors",
+            "close",
+        ]
 
     def test_live_sync_rotation_fails_closed_when_storage_resolution_fails(
-        self, encryption_service, monkeypatch
+        self, encryption_service, sync_backend
     ):
-        old_key = MagicMock(version=1)
-        new_key = MagicMock(key_id="default", version=2)
-        encryption_service._keys = {"default": old_key}
-        encryption_service._active_key_id = "default"
-        encryption_service.rotate_key.return_value = new_key
-        get_sync_store = AsyncMock(side_effect=RuntimeError("sync store unavailable"))
-        sync_store_module = ModuleType("aragora.storage.sync_store")
-        sync_store_module.get_sync_store = get_sync_store
-        monkeypatch.setitem(sys.modules, "aragora.storage.sync_store", sync_store_module)
+        sync_backend.init_error = RuntimeError("sync store unavailable")
 
-        with patch(
-            "aragora.security.encryption.get_encryption_service",
-            return_value=encryption_service,
-        ):
-            result = rotate_encryption_key(dry_run=False, stores=["sync"])
+        result = self._rotate_sync(encryption_service)
 
         assert result.success is False
         assert result.stores_processed == 0
         assert result.failed_records == 1
         assert result.errors == ["Store sync re-encryption failed"]
-        get_sync_store.assert_awaited_once_with()
+        assert sync_backend.only_private_store().call_names == []
 
-    def test_live_sync_rotation_fails_closed_when_connector_list_fails(
+    def test_live_sync_rotation_fails_closed_when_storage_is_unimportable(
         self, encryption_service, monkeypatch
     ):
-        old_key = MagicMock(version=1)
-        new_key = MagicMock(key_id="default", version=2)
-        encryption_service._keys = {"default": old_key}
-        encryption_service._active_key_id = "default"
-        encryption_service.rotate_key.return_value = new_key
-        store = MagicMock()
-        store.list_connectors = AsyncMock(side_effect=RuntimeError("credential=secret-value"))
-        get_sync_store = AsyncMock(return_value=store)
-        sync_store_module = ModuleType("aragora.storage.sync_store")
-        sync_store_module.get_sync_store = get_sync_store
-        monkeypatch.setitem(sys.modules, "aragora.storage.sync_store", sync_store_module)
+        monkeypatch.setitem(sys.modules, "aragora.storage.sync_store", None)
 
-        with patch(
-            "aragora.security.encryption.get_encryption_service",
-            return_value=encryption_service,
-        ):
-            result = rotate_encryption_key(dry_run=False, stores=["sync"])
+        result = self._rotate_sync(encryption_service)
+
+        assert result.success is False
+        assert result.failed_records == 1
+        assert result.errors == ["Store sync re-encryption failed"]
+
+    def test_live_sync_rotation_fails_closed_when_connector_list_fails(
+        self, encryption_service, sync_backend
+    ):
+        sync_backend.list_error = RuntimeError("credential=secret-value")
+
+        result = self._rotate_sync(encryption_service)
 
         assert result.success is False
         assert result.stores_processed == 1
         assert result.failed_records >= 1
         assert result.errors == ["Re-encryption failed due to an internal error"]
         assert "secret-value" not in " ".join(result.errors)
-        get_sync_store.assert_awaited_once_with()
-        store.list_connectors.assert_awaited_once_with()
+        assert sync_backend.only_private_store().call_names == [
+            "initialize",
+            "list_connectors",
+            "close",
+        ]
 
     def test_live_sync_rotation_fails_closed_when_connector_save_fails(
-        self, encryption_service, monkeypatch
+        self, encryption_service, sync_backend
     ):
-        old_key = MagicMock(version=1)
-        new_key = MagicMock(key_id="default", version=2)
-        encryption_service._keys = {"default": old_key}
-        encryption_service._active_key_id = "default"
-        encryption_service.rotate_key.return_value = new_key
-        connector = SimpleNamespace(
-            id="connector-1",
-            connector_type="github",
-            name="GitHub",
-            config={"api_key": "decrypted-secret"},
-        )
-        store = MagicMock()
-        store.list_connectors = AsyncMock(return_value=[connector])
-        store.save_connector = AsyncMock(side_effect=RuntimeError("write failed"))
-        get_sync_store = AsyncMock(return_value=store)
-        sync_store_module = ModuleType("aragora.storage.sync_store")
-        sync_store_module.get_sync_store = get_sync_store
-        monkeypatch.setitem(sys.modules, "aragora.storage.sync_store", sync_store_module)
+        sync_backend.add_connector("connector-1", {"api_key": "decrypted-secret"})
+        sync_backend.save_errors["connector-1"] = RuntimeError("write failed")
 
-        with patch(
-            "aragora.security.encryption.get_encryption_service",
-            return_value=encryption_service,
-        ):
-            result = rotate_encryption_key(dry_run=False, stores=["sync"])
+        result = self._rotate_sync(encryption_service)
 
         assert result.success is False
         assert result.stores_processed == 1
         assert result.failed_records == 1
         assert result.errors == ["Error re-encrypting record: connector-1"]
-        store.save_connector.assert_awaited_once()
+        assert sync_backend.only_private_store().call_names.count("save_connector") == 1
+
+    def test_live_sync_rotation_counts_each_failed_record_on_one_loop(
+        self, encryption_service, sync_backend
+    ):
+        for connector_id in ("connector-1", "connector-2", "connector-3"):
+            sync_backend.add_connector(connector_id, {"token": f"{connector_id}-secret"})
+        sync_backend.save_errors["connector-2"] = RuntimeError("write failed")
+
+        result = self._rotate_sync(encryption_service)
+
+        assert result.success is False
+        assert result.records_reencrypted == 2
+        assert result.failed_records == 1
+        assert result.errors == ["Error re-encrypting record: connector-2"]
+        assert [saved[0] for saved in sync_backend.saved] == ["connector-1", "connector-3"]
+        assert sync_backend.only_private_store().call_names.count("save_connector") == 3
+
+    def test_live_sync_rotation_save_timeout_fails_closed_and_closes_store(
+        self, encryption_service, sync_backend, monkeypatch
+    ):
+        monkeypatch.setattr(migration_module, "_SYNC_STORE_CALL_TIMEOUT", 1.0)
+        sync_backend.add_connector("connector-1", {"api_key": "slow-secret"})
+        sync_backend.add_connector("connector-2", {"api_key": "fast-secret"})
+        sync_backend.save_delays["connector-1"] = 60.0
+
+        result = self._rotate_sync(encryption_service)
+
+        assert result.success is False
+        assert result.failed_records == 1
+        assert result.errors == ["Error re-encrypting record: connector-1"]
+        assert [saved[0] for saved in sync_backend.saved] == ["connector-2"]
+        sync_backend.only_private_store()
+
+    def test_live_sync_rotation_keeps_shared_pool_store_on_its_loop(
+        self, encryption_service, sync_backend, shared_pool_loop
+    ):
+        sync_backend.add_connector("connector-1", {"api_key": "decrypted-secret"})
+
+        result = self._rotate_sync(encryption_service)
+
+        assert result.success is True
+        assert result.records_reencrypted == 1
+        assert [saved[0] for saved in sync_backend.saved] == ["connector-1"]
+        _assert_used_shared_store(sync_backend, shared_pool_loop)
 
 
 class TestMigrationAuditComposition:
@@ -825,38 +986,165 @@ class TestMigrationAuditComposition:
             name for name in imported if name.startswith(("aragora.audit", "aragora.ops"))
         } == set()
 
+    def test_migration_module_does_not_import_connectors_or_server(self):
+        source = Path(migration_module.__file__).read_text(encoding="utf-8")
+        imported: set[str] = set()
+        for node in ast.walk(ast.parse(source)):
+            if isinstance(node, ast.Import):
+                imported.update(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                imported.add(node.module)
+
+        assert {
+            name
+            for name in imported
+            if name.startswith(("aragora.connectors", "aragora.server", "aragora.storage.pool"))
+        } == set()
+
 
 class TestDirectSyncMigration:
     """Direct sync migration resolves and awaits the storage implementation."""
 
-    def test_migrate_sync_store_resaves_plaintext_connector(self, monkeypatch):
-        connector = SimpleNamespace(
-            id="connector-1",
-            connector_type="github",
-            name="GitHub",
-            config={"api_key": "plaintext-secret"},
-        )
-        store = MagicMock()
-        store.list_connectors = AsyncMock(return_value=[connector])
-        store.save_connector = AsyncMock(return_value=connector)
-        get_sync_store = AsyncMock(return_value=store)
-        sync_store_module = ModuleType("aragora.storage.sync_store")
-        sync_store_module.get_sync_store = get_sync_store
-        monkeypatch.setitem(sys.modules, "aragora.storage.sync_store", sync_store_module)
+    def test_migrate_sync_store_resaves_plaintext_connector(self, sync_backend):
+        sync_backend.add_connector("connector-1", {"api_key": "plaintext-secret"})
 
         result = migrate_sync_store(dry_run=False)
 
         assert result.success is True
         assert result.total_records == 1
         assert result.migrated_records == 1
-        get_sync_store.assert_awaited_once_with()
-        store.list_connectors.assert_awaited_once_with()
-        store.save_connector.assert_awaited_once_with(
-            "connector-1",
-            "github",
-            "GitHub",
-            {"api_key": "plaintext-secret"},
+        assert sync_backend.saved == [
+            ("connector-1", "github", "GitHub connector-1", {"api_key": "plaintext-secret"})
+        ]
+        assert sync_backend.only_private_store().call_names == [
+            "initialize",
+            "list_connectors",
+            "save_connector",
+            "close",
+        ]
+
+    def test_migrate_sync_store_dry_run_counts_without_saving(self, sync_backend):
+        sync_backend.add_connector("connector-1", {"api_key": "plaintext-secret"})
+
+        result = migrate_sync_store(dry_run=True)
+
+        assert result.success is True
+        assert result.migrated_records == 1
+        assert sync_backend.saved == []
+        assert "save_connector" not in sync_backend.only_private_store().call_names
+
+    def test_migrate_sync_store_counts_failed_record_and_continues(self, sync_backend):
+        sync_backend.add_connector("connector-1", {"api_key": "first-secret"})
+        sync_backend.add_connector("connector-2", {"api_key": "second-secret"})
+        sync_backend.save_errors["connector-1"] = RuntimeError("write failed")
+
+        result = migrate_sync_store(dry_run=False)
+
+        assert result.success is False
+        assert result.total_records == 2
+        assert result.migrated_records == 1
+        assert result.failed_records == 1
+        assert result.errors == ["Error migrating record: connector-1"]
+        assert [saved[0] for saved in sync_backend.saved] == ["connector-2"]
+        assert sync_backend.only_private_store().call_names.count("save_connector") == 2
+
+    def test_migrate_sync_store_ignores_process_store_bound_to_another_loop(self, sync_backend):
+        sync_backend.add_connector("connector-1", {"api_key": "plaintext-secret"})
+        process_store = asyncio.run(sync_backend.get_sync_store())
+        sync_backend.get_sync_store_calls = 0
+
+        result = migrate_sync_store(dry_run=False)
+
+        assert result.success is True
+        assert result.migrated_records == 1
+        assert process_store.call_names == ["initialize"]
+        assert sync_backend.get_sync_store_calls == 0
+        private_stores = sync_backend.private_stores
+        assert len(private_stores) == 1
+        assert private_stores[0].closed is True
+        assert len(private_stores[0].call_loops) == 1
+
+    def test_migrate_sync_store_called_inside_a_running_loop(self, sync_backend):
+        sync_backend.add_connector("connector-1", {"api_key": "plaintext-secret"})
+
+        async def call_from_async_handler():
+            return migrate_sync_store(dry_run=False), asyncio.get_running_loop()
+
+        result, caller_loop = asyncio.run(call_from_async_handler())
+
+        assert result.success is True
+        assert result.migrated_records == 1
+        assert sync_backend.only_private_store().loop is not caller_loop
+
+    def test_migrate_sync_store_real_sqlite_leaves_live_jobs_running(self, tmp_path, monkeypatch):
+        from aragora.storage.sync_store import SyncStore
+
+        db_path = tmp_path / "connectors.db"
+        monkeypatch.setenv("ARAGORA_SYNC_DATABASE_URL", f"sqlite:///{db_path}")
+        monkeypatch.setattr(async_utils, "_pool_event_loop_provider", None)
+
+        async def seed_live_owner() -> None:
+            owner = SyncStore(use_encryption=False)
+            await owner.initialize()
+            await owner.save_connector("connector-1", "github", "GitHub", {"api_key": "plain"})
+            await owner.record_sync_start("connector-1")
+            await owner.close()
+
+        asyncio.run(seed_live_owner())
+
+        result = migrate_sync_store(dry_run=True)
+
+        assert result.errors == []
+        assert result.total_records == 1
+        assert result.migrated_records == 1
+        with closing(sqlite3.connect(db_path)) as conn:
+            statuses = [row[0] for row in conn.execute("SELECT status FROM sync_jobs")]
+        assert statuses == ["running"]
+
+    def test_migrate_sync_store_keeps_shared_pool_store_on_its_loop(
+        self, sync_backend, shared_pool_loop
+    ):
+        sync_backend.add_connector("connector-1", {"api_key": "plaintext-secret"})
+
+        result = migrate_sync_store(dry_run=False)
+
+        assert result.success is True
+        assert result.migrated_records == 1
+        assert [saved[0] for saved in sync_backend.saved] == ["connector-1"]
+        _assert_used_shared_store(sync_backend, shared_pool_loop)
+
+    def test_migrate_sync_store_closes_private_loop_when_thread_start_fails(
+        self, sync_backend, monkeypatch
+    ):
+        sync_backend.add_connector("connector-1", {"api_key": "plaintext-secret"})
+        loops: list[asyncio.AbstractEventLoop] = []
+
+        class _UnstartableThread(threading.Thread):
+            def __init__(self, *args: Any, **kwargs: Any) -> None:
+                super().__init__(*args, **kwargs)
+                loops.append(kwargs["args"][0])
+
+            def start(self) -> None:
+                raise RuntimeError("can't start new thread")
+
+        monkeypatch.setattr(
+            migration_module, "threading", SimpleNamespace(Thread=_UnstartableThread)
         )
+
+        result = migrate_sync_store(dry_run=False)
+
+        assert result.errors == ["Sync store not available"]
+        assert sync_backend.stores == []
+        assert len(loops) == 1
+        assert loops[0].is_closed()
+
+    def test_closed_shared_pool_session_refuses_new_calls(self, sync_backend, shared_pool_loop):
+        session = migration_module._SyncStoreSession()
+        session.close()
+
+        with pytest.raises(RuntimeError, match="session is closed"):
+            session.run(session.store.list_connectors())
+        _assert_used_shared_store(sync_backend, shared_pool_loop)
 
 
 class TestStartupMigrationConfig:

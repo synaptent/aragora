@@ -13,8 +13,8 @@ baseline [scripts/baselines/import_contracts_baseline.json](../../scripts/baseli
 Symbols moved down a layer keep a compatibility re-export at their old path; every such move is listed in
 [shims.md](shims.md).
 
-This page is in its M4 form. Measured on `origin/main` at `81d6da4c897d` (2026-10-09, after #10267) with
-tranche T4b applied: 133 layered names, 65 baselined pairs (16 in Partition A, 49 in Partition B), and the
+This page is in its M4 form. Measured on `origin/main` at `06603465fb4c` (2026-10-12, after #10594) with
+tranche T4b applied: 133 layered names, 63 baselined pairs (16 in Partition A, 47 in Partition B), and the
 live pair set equals the baseline.
 
 ## Enforcement
@@ -109,8 +109,9 @@ When a pair violates the contract, use the first fix class that applies:
    expected outputs. Never move a symbol up with a shim; relocating up needs zero lower-layer callers first.
 2. **Registry or protocol inversion.** The lower layer defines a `Protocol` or registration hook; the upper
    package registers its implementation in its own package init or in a non-startup server module. An
-   unregistered hook raises an explicit error instead of succeeding silently. Example:
-   `aragora/core/decision_route_hooks.py` (#10331, #10335).
+   unregistered hook raises an explicit error instead of succeeding silently. Examples:
+   `aragora/core/decision_route_hooks.py` (#10331, #10335), `aragora/models/receipts/operations.py` (#10590)
+   and `aragora/training/evaluation_protocols.py` (#10591, registered through an entry point).
 3. **Event emission.** Replace the direct upward call with an event on the existing `aragora.events`
    machinery.
 4. **Delete the import** when it is dead or trivially replaceable (#10325 deleted the dead
@@ -176,18 +177,28 @@ through `aragora.training.specialist_models`).
 | #10382 | `4ec2d475be` | Audit split: the compliance audit log, the unified audit facade and the audit persistence backends moved down to `aragora.observability` (`audit_log`, `unified_audit`, `audit_persistence`) with re-exports at the old `aragora.audit` paths; the server registers the HTTP middleware audit logger; the storage, debate and rlm sites flipped. Resolved `aragora.audit -> aragora.server`, `aragora.debate -> aragora.audit`, `aragora.rlm -> aragora.audit` and `aragora.storage -> aragora.audit` | 125 | 85 to 81 |
 | #10390 | `2652b4a148` | Code scanner inversion: `aragora.agents.code_scanners` holds the scanner registry, and `aragora.audit` registers its security scanner and bug detector from its init and through the `aragora.code_scanners` entry point. Resolved `aragora.agents -> aragora.audit` | 125 | 81 to 80 |
 | #10394 | squash merge of #10394 | Audit split site flips: the rbac permission-denial audit and the compliance monitor's audit log lookups import from `aragora.observability` (`unified_audit`, `audit_log`). Resolved `aragora.compliance -> aragora.audit` and `aragora.rbac -> aragora.audit` | 125 | 65 to 63 |
+| #10316 | `35844533c4` | Config seam: the data-dir and tenant-context primitives moved into `aragora.config` with re-exports at the old paths. Resolved `aragora.config -> aragora.persistence` and `aragora.config -> aragora.tenancy` | 125 | 63 to 61 |
 | #10510 | squash merge of #10510 | Tranche T4b: `computer_use coordination export markets plugins prompt_engine receipts workspace` (application); adopted `aragora.computer_use -> aragora.connectors`, `aragora.export -> aragora.cli`, `aragora.knowledge -> aragora.coordination` and `aragora.markets -> aragora.connectors`; none resolved | 133 | 61 to 65 |
+| #10512 | `aeb96bccec` | Receipts foundation, part 1: the ODR JCS canonicalizer and the oversight attestation helpers moved down to `aragora.models.receipts.jcs` and `aragora.models.receipts.attestation`; `aragora.gauntlet.odr_jcs` and `aragora.gauntlet.attestation` are module aliases of the new modules | 133 | 65 |
+| #10590 | `934a63ed7b` | Receipts foundation, part 2: the gauntlet receipt models and the legacy export receipt moved down to `aragora.models.receipts.gauntlet` and `aragora.models.receipts.legacy`. `aragora.models.receipts.operations` holds typed hooks for signing, exporters, the compliance generator, provider detection and failure classification, and an unregistered hook raises. `aragora.gauntlet.receipt_models` and `aragora.export.decision_receipt` alias the new modules and register the adapters from their own init | 133 | 65 |
+| #10592 | `76e7486296` | Receipts foundation, part 3: the canonical hash and normalization helpers split into `aragora.models.receipts.canonical` (re-exported from `aragora.models.receipts.gauntlet`); the receipt facades import receipt signing on first use | 133 | 65 |
+| #10591 | `8453160ddd` | Training evaluation inversion: `aragora.training.evaluation_protocols` holds the specialist-evaluator hook and the shared scoring rules, and `aragora.gauntlet.training_adapter` registers the gauntlet evaluator through the `aragora.training_evaluators` entry point. Resolved `aragora.training -> aragora.gauntlet` | 133 | 65 to 64 |
+| #10594 | `06603465fb` | Receipt site flip: `aragora.evaluation.outcome_backed_receipt` imports the gauntlet receipt from `aragora.models.receipts.gauntlet`, and `aragora.agents.receipt_hooks` registers provider detection and failure classification for it. Resolved `aragora.evaluation -> aragora.gauntlet` | 133 | 64 to 63 |
 
 The two config pairs adopted by #10314 (`aragora.config -> aragora.persistence`, `aragora.config ->
-aragora.tenancy`) are fixed by the config-seam PR #10316 (Tier 4), which was prepared and is awaiting
-operator settlement at the time of writing.
+aragora.tenancy`) were fixed by the config-seam PR #10316 (Tier 4, settled by the operator).
+
+The last receipt pair, `aragora.compliance -> aragora.gauntlet`, is fixed by the compliance site flip #10596
+(Tier 3), which imports the oversight attestation helpers and the JCS canonicalizer from
+`aragora.models.receipts`. It was prepared and is awaiting settlement at the time of writing.
 
 ## Partition A handover
 
 Partition A is every violating pair whose imported package is `aragora.server` (pair level, not every server
 import). These pairs stay baselined: the server-as-library migration of the server modules owns them, and the
 layering work adds no new Partition A site. Measured on `b0ab11df1366` with tranche T4a applied: 17 pairs, 80
-direct sites.
+direct sites. The audit split (#10382) has since removed the `aragora.audit` row, leaving the 16 pairs below,
+and tranche T4b added none.
 
 - **sites** lists every direct, runtime (not `TYPE_CHECKING`) `from aragora.server...` or `import
   aragora.server...` statement inside the importer package.
@@ -227,8 +238,7 @@ direct sites.
 
 This map explains each suggested landing module. "New" means the module does not exist yet. "Alias" means the
 server module is already a deprecated alias of the lower module, so the fix is only a site flip. Server modules
-whose importers are not layered yet (they arrive with tranches T4b and T5) are included so the migration has one
-list.
+whose importers are not layered yet (they arrive with tranche T5) are included so the migration has one list.
 
 | server module | suggested landing module | fix |
 |---|---|---|
