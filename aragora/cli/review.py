@@ -20,6 +20,7 @@ import re
 import subprocess
 import sys
 import uuid
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
@@ -30,6 +31,7 @@ from aragora.core import Agent, DebateResult, Environment
 from aragora.debate.disagreement import DisagreementReporter
 from aragora.debate.orchestrator import Arena, DebateProtocol
 from aragora.config.settings import DebateSettings, AgentSettings
+from aragora.cli.review_bundle import ReviewBundle
 
 logger = logging.getLogger(__name__)
 
@@ -316,12 +318,14 @@ async def run_review_debate(
     agents_str: str = DEFAULT_REVIEW_AGENTS,
     rounds: int = DEFAULT_ROUNDS,
     focus_areas: list[str] | None = None,
+    *,
+    resolved_agents: bool = False,
 ) -> DebateResult:
     """Run a code review debate on the given diff."""
 
     agent_specs = _parse_review_agents(agents_str)
 
-    if agents_str.strip() == DEFAULT_REVIEW_AGENTS.strip() or len(agent_specs) < 2:
+    if not resolved_agents and agents_str.strip() == DEFAULT_REVIEW_AGENTS.strip():
         available_specs = _parse_review_agents(get_available_agents())
         if available_specs:
             agent_specs = available_specs
@@ -346,7 +350,13 @@ async def run_review_debate(
 
     # Create environment and protocol
     env = Environment(task=task, max_rounds=rounds)
-    protocol = DebateProtocol(rounds=rounds, consensus="majority")
+    protocol = DebateProtocol(
+        rounds=rounds,
+        consensus="majority",
+        enable_research=False,
+        enable_trending_injection=False,
+        enable_knowledge_injection=False,
+    )
 
     # Run debate
     arena = Arena(env, agents, protocol)
@@ -407,6 +417,65 @@ def _is_meta_review_issue(issue: str, suggestions: list[str], raw_target: Any) -
     return _looks_like_agent_target(raw_target) and _extract_location_hint(issue) is None
 
 
+def _proposal_findings(result: DebateResult) -> tuple[list[tuple[str, dict[str, Any]]], list[str]]:
+    """Read the labeled response contract from reviewers, never the echoed PR prompt."""
+    latest = {m.agent: m.content for m in result.messages if getattr(m, "role", None) == "proposer"}
+    findings: list[tuple[str, dict[str, Any]]] = []
+    unparsed: list[str] = []
+    for agent, content in latest.items():
+        plain = re.sub(r"(?ms)^[ \t]*```.*?^[ \t]*```[^\n]*", "", content).replace("**", "")
+        start = len(findings)
+        prefix = r"^\s*(?:[-*]|\d+\.)?\s*"
+        for block in re.split(r"(?m)(?=" + prefix + r"Severity:)", plain):
+            fields = dict(
+                re.findall(
+                    r"(?ms)" + prefix + r"(Severity|Location|Issue|Suggestion):[ \t]*(.*?)"
+                    r"(?=" + prefix + r"(?:Severity|Location|Issue|Suggestion):|\n\s*\n|\Z)",
+                    block,
+                )
+            )
+            severity = fields.get("Severity", "").strip().lower()
+            issue = fields.get("Issue", "").strip()
+            if severity not in {"critical", "high", "medium", "low"} or not issue:
+                if fields:
+                    unparsed.append(agent)
+                continue
+            target = _extract_location_hint(fields.get("Location", ""))
+            if not target:
+                unparsed.append(agent)
+            findings.append(
+                (
+                    severity,
+                    {
+                        "agent": agent,
+                        "issue": issue,
+                        "target": target,
+                        "suggestions": [fields["Suggestion"].strip()]
+                        if fields.get("Suggestion")
+                        else [],
+                        "grounded": bool(target),
+                        "source": "proposal",
+                    },
+                )
+            )
+        if len(findings) == start and "no issues found" not in plain.lower():
+            unparsed.append(agent)
+    return findings, sorted(set(unparsed))
+
+
+def _findings_summary(findings: dict[str, Any]) -> str:
+    lines = [
+        f"[{severity.upper()}] {issue['issue']} ({issue.get('target') or 'location unknown'}; "
+        f"reported by {issue.get('agent', 'unknown')})"
+        for severity in ("critical", "high", "medium", "low")
+        for issue in findings.get(f"{severity}_issues", [])
+    ]
+    summary = "\n".join(lines) or findings.get("final_summary", "")
+    if lines and str(findings.get("final_summary", "")).startswith("[DEMO MODE]"):
+        summary = "[DEMO MODE] Fabricated sample findings, not a real review.\n" + summary
+    return summary
+
+
 def extract_review_findings(result: DebateResult) -> dict:
     """Extract structured findings from debate result."""
     reporter = DisagreementReporter()
@@ -451,6 +520,21 @@ def extract_review_findings(result: DebateResult) -> dict:
             else:
                 low_issues.append(issue_data)
 
+    buckets = dict(
+        zip(
+            ("critical", "high", "medium", "low"),
+            (critical_issues, high_issues, medium_issues, low_issues),
+        )
+    )
+    proposals, unparsed = _proposal_findings(result)
+    for severity, issue in proposals:
+        if not any(
+            i["issue"] == issue["issue"] and i["agent"] == issue["agent"]
+            for values in buckets.values()
+            for i in values
+        ):
+            buckets[severity].append(issue)
+
     return {
         "unanimous_critiques": report.unanimous_critiques,
         "split_opinions": report.split_opinions,
@@ -463,6 +547,7 @@ def extract_review_findings(result: DebateResult) -> dict:
         "low_issues": low_issues,
         "meta_issues": meta_issues,
         "all_critiques": result.critiques,
+        "unparsed_reviews": unparsed,
         "final_summary": result.final_answer,
         "agents_used": list(set(m.agent for m in result.messages)) if result.messages else [],
     }
@@ -496,21 +581,28 @@ def format_github_comment(result: DebateResult | None, findings: dict[str, Any])
             lines.append(f"- {issue}")
         lines.extend(["", "</details>", ""])
 
-    # Critical/High issues
+    # Render all findings, including proposal-only low/medium issues.
     critical = findings.get("critical_issues", [])
     high = findings.get("high_issues", [])
-    if critical or high:
-        count = len(critical) + len(high)
+    medium = findings.get("medium_issues", [])
+    low = findings.get("low_issues", [])
+    if critical or high or medium or low:
+        count = len(critical) + len(high) + len(medium) + len(low)
+        title = "Review Findings" if medium or low else "Critical & High Severity Issues"
         lines.extend(
             [
                 "<details open>",
-                f"<summary><strong>Critical & High Severity Issues</strong> ({count} found)</summary>",
+                f"<summary><strong>{title}</strong> ({count} found)</summary>",
                 "",
             ]
         )
-        for issue in (critical + high)[:5]:
-            severity = "CRITICAL" if issue in critical else "HIGH"
-            lines.append(f"- **{severity}**: {issue['issue'][:200]}")
+        for severity in ("critical", "high", "medium", "low"):
+            for issue in findings.get(f"{severity}_issues", []):
+                lines.append(f"- **{severity.upper()}**: {issue['issue']}")
+                if issue.get("target"):
+                    lines.append(f"  Location: `{issue['target']}`")
+                for suggestion in issue.get("suggestions", []):
+                    lines.append(f"  Suggestion: {suggestion}")
         lines.extend(["", "</details>", ""])
 
     # Split opinions
@@ -545,7 +637,7 @@ def format_github_comment(result: DebateResult | None, findings: dict[str, Any])
         lines.extend(["", "</details>", ""])
 
     # Summary if available
-    summary = findings.get("final_summary", "")
+    summary = _findings_summary(findings)
     if summary and len(summary) > 50:
         lines.extend(
             [
@@ -896,6 +988,24 @@ def _write_review_odr(
         pr_url=pr_url,
         reviewer_agents=agents_used or None,
     )
+    receipt = replace(receipt, verdict_reasoning=_findings_summary(findings), artifact_hash="")
+    context = findings.get("review_context")
+    if context:
+        receipt.gauntlet_id = context["review_run_id"]
+        receipt.input_hash = context.get("input_diff_sha256", receipt.input_hash)
+        receipt.settlement_metadata = {
+            key: context[source]
+            for key, source in (
+                ("repo", "repository"),
+                ("pr", "pr_number"),
+                ("head_sha", "head_sha"),
+            )
+            if context.get(source) is not None
+        }
+        receipt.verdict_reasoning += "\nReview context: " + json.dumps(context, sort_keys=True)
+        if context["status"] != "complete":
+            receipt.verdict = "INCONCLUSIVE"
+        receipt = replace(receipt, artifact_hash="")
     # ARAGORA_ODR_PROFILE_VERSION selects the profile, as for `aragora receipt export`;
     # unset means the library default (0.2). An invalid value raises ValueError.
     odr = decision_receipt_to_odr(receipt, odr_version=resolve_odr_version(None))
@@ -951,7 +1061,41 @@ def _emit_requested_odr(
 
 def cmd_review(args: argparse.Namespace) -> int:
     """Handle 'review' command."""
+    if not getattr(args, "bundle", False):
+        return _cmd_review(args)
+    if not args.output_dir:
+        print("Error: --bundle requires --output-dir", file=sys.stderr)
+        return 1
+    if getattr(args, "post_comment", False):
+        print(
+            "Error: --bundle exports locally; use the Action's head-checked comment publisher",
+            file=sys.stderr,
+        )
+        return 1
+    head = getattr(args, "head_sha", None)
+    if head and not re.fullmatch(r"[0-9a-fA-F]{40}", head):
+        print("Error: --head-sha must be a full 40-character commit SHA", file=sys.stderr)
+        return 1
+    bundle = ReviewBundle(args)
+    try:
+        code = _cmd_review(args, bundle)
+    except (OSError, ValueError, RuntimeError, TypeError, KeyError) as exc:
+        print(f"Error: review bundle failed ({type(exc).__name__})", file=sys.stderr)
+        code = 3
+    findings_exit = bool(
+        getattr(args, "ci", False) and bundle.findings is not None and code in (1, 2)
+    )
+    try:
+        bundle.write(code, findings_exit=findings_exit)
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        print(f"Error: could not write review bundle ({type(exc).__name__})", file=sys.stderr)
+        return 3
+    if bundle.status != "complete" and not getattr(args, "demo", False):
+        return code or 3
+    return code
 
+
+def _cmd_review(args: argparse.Namespace, bundle: ReviewBundle | None = None) -> int:
     # Fail fast if --emit-odr swallowed the PR URL positional (nargs="?" footgun):
     # otherwise the receipt would be written under a literal "https:/..." directory.
     emit_odr_path = getattr(args, "emit_odr", None)
@@ -1013,6 +1157,8 @@ def cmd_review(args: argparse.Namespace) -> int:
             except (OSError, ValueError, KeyError) as e:
                 print(f"Warning: SARIF export failed: {e}", file=sys.stderr)
 
+        if bundle:
+            bundle.capture(None, findings)
         odr_ok = _emit_requested_odr(args, findings, output_dir)
 
         print("\n---", file=sys.stderr)
@@ -1095,6 +1241,12 @@ def cmd_review(args: argparse.Namespace) -> int:
         print("    aragora review <PR-URL>           # Review a GitHub PR", file=sys.stderr)
         return 1
 
+    if bundle:
+        bundle.bind_diff(
+            diff,
+            truncated=len(diff) > MAX_DIFF_SIZE or getattr(args, "diff_truncated", False),
+        )
+
     # Determine which agents to use
     agents_str = args.agents
     if agents_str == DEFAULT_REVIEW_AGENTS:
@@ -1111,6 +1263,8 @@ def cmd_review(args: argparse.Namespace) -> int:
         if available != DEFAULT_REVIEW_AGENTS:
             print(f"Note: Using available agents: {available}", file=sys.stderr)
             agents_str = available
+    if bundle:
+        bundle.context["effective_agents"] = _parse_review_agents(agents_str)
 
     # Run review debate
     print(f"Running AI code review ({agents_str}, {args.rounds} rounds)...", file=sys.stderr)
@@ -1122,6 +1276,7 @@ def cmd_review(args: argparse.Namespace) -> int:
                 agents_str=agents_str,
                 rounds=args.rounds,
                 focus_areas=args.focus.split(",") if args.focus else None,
+                resolved_agents=True,
             )
         )
     except (OSError, ConnectionError, RuntimeError, ValueError) as e:
@@ -1223,6 +1378,8 @@ def cmd_review(args: argparse.Namespace) -> int:
         except (OSError, ConnectionError, RuntimeError, ValueError) as e:
             print(f"Warning: Gauntlet stress-test failed: {e}", file=sys.stderr)
             logger.debug("Gauntlet error details", exc_info=True)
+            if bundle:
+                bundle.reasons.append("Requested gauntlet did not complete.")
 
     # Generate SARIF output if requested
     sarif_output = getattr(args, "sarif", None)
@@ -1287,7 +1444,11 @@ def cmd_review(args: argparse.Namespace) -> int:
 
     # Emit the receipt after the other artifact steps so an emit failure cannot
     # suppress SARIF/comment output.
+    if bundle:
+        bundle.capture(result, findings)
     odr_ok = _emit_requested_odr(args, findings, output_dir)
+    if bundle and not odr_ok:
+        return 3
 
     # CI mode exit codes — findings verdicts take priority over artifact-IO errors
     if getattr(args, "ci", False):
@@ -1352,6 +1513,20 @@ def create_review_parser(subparsers) -> None:
     parser.add_argument(
         "--output-dir",
         help="Directory to save output artifacts",
+    )
+    parser.add_argument(
+        "--bundle",
+        action="store_true",
+        help="Export one result as Markdown, JSON, SARIF and a provenance manifest; requires --output-dir",
+    )
+    parser.add_argument(
+        "--head-sha",
+        help="Caller-supplied PR head SHA for bundle provenance (not independently verified)",
+    )
+    parser.add_argument(
+        "--diff-truncated",
+        action="store_true",
+        help="Mark externally truncated bundle input as incomplete",
     )
 
     parser.add_argument(

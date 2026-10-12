@@ -21,15 +21,22 @@ Add multi-agent AI code review to your pull requests in under 5 minutes.
 
 ### 1. Add API Keys as GitHub Secrets
 
-Go to your repo's **Settings > Secrets and variables > Actions** and add at least one:
+Go to your repo's **Settings > Secrets and variables > Actions**. The default
+`agents: anthropic-api,openai-api` requires **both** provider keys. A one-key
+advisory review is supported by explicitly selecting its provider, as shown below.
 
 | Secret | Required | Provider |
 |--------|----------|----------|
-| `ANTHROPIC_API_KEY` | Yes (or OpenAI) | [Anthropic Console](https://console.anthropic.com/) |
-| `OPENAI_API_KEY` | Yes (or Anthropic) | [OpenAI Platform](https://platform.openai.com/) |
+| `ANTHROPIC_API_KEY` | For `anthropic-api` | [Anthropic Console](https://console.anthropic.com/) |
+| `OPENAI_API_KEY` | For `openai-api` | [OpenAI Platform](https://platform.openai.com/) |
 | `OPENROUTER_API_KEY` | No | Fallback provider |
 
-For best results, add both `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` -- multi-model consensus produces higher-quality reviews.
+For a one-key setup, set `agents: anthropic-api` and supply only
+`anthropic-api-key`, or set `agents: openai-api` and supply only `openai-api-key`.
+Explicitly requested reviewers are not silently replaced or removed. An absent
+or failed requested reviewer makes the run incomplete, not a clean review.
+This advisory choice does not reduce the independent receipt quorum: when
+`emit-receipt: 'true'`, every configured `receipt-reviewers` family is still required.
 
 ### 2. Add the Workflow File
 
@@ -108,6 +115,7 @@ fails the test).
 |--------|-------------|
 | `review-path` | Path to generated review file |
 | `review-generated` | Whether a PR comment was generated |
+| `review-status` | Execution status (`complete`, `incomplete`, `failed`), not a findings verdict |
 | `review-json-path` | Path to the generated `review.json` (structured output) |
 | `review-log-path` | Path to the `review.log` file |
 | `unanimous-count` | Issues all agents agree on |
@@ -229,8 +237,27 @@ Outputs: `receipt-path`, `receipt-verdict`, `receipt-digest`, `receipt-verified`
 requested: if `emit-receipt: 'true'` and no verified receipt comes out, the action's
 own `Check receipt emission` step fails the job rather than silently skipping it.
 
+### Single-run review artifacts
+
+The Action runs advisory review once and renders `comment.md`, `review.json`, and
+`review.sarif` from that result. `bundle.json` records their hashes, run identity,
+input-diff digest, PR head, reviewer coverage and execution limitations. Receipt
+quorum remains a separate opt-in model pass on the same head. A changed PR is not
+commented on; failed or truncated review is not treated as clean, regardless of
+the findings threshold. Diagnostic artifacts remain available after failure.
+
+For local exports, use `aragora review --diff-file pr.diff --bundle --output-dir artifacts`.
+Bundle mode exports locally; PR posting uses the Action's head check. Existing flags keep their
+defaults. `--head-sha` records a caller-supplied head, not independent head proof;
+`--diff-truncated` discloses externally truncated input. `--emit-odr` optionally
+adds a receipt bound to the bundle run and diff; incomplete runs are inconclusive.
+`--demo --bundle --output-dir artifacts` exercises formatting offline but cannot
+demonstrate reviewer quality. These bundle options require a CLI revision that
+contains them; the Action installs its own trusted source revision.
+
 ### Secret-dependent limits
 
+- Fork PRs stop before review or signing. No secrets are requested or exposed to fork code.
 - **Receipts are unsigned unless you pass `odr-signing-key`.** An unsigned receipt
   still verifies (exit `0`) on schema conformance, quorum consistency and a digest
   the verifier recomputes from the file it is given, so it cannot show that a copy

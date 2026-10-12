@@ -1,0 +1,17 @@
+No external research was performed; this review is based only on the provided diff.
+
+**Security**
+No issues found.
+
+**Performance**
+No issues found. The tuple sort has the same asymptotic behavior as the previous sort and only adds a cheap string key comparison for equal mtimes.
+
+**Code Quality**
+
+1. **Category**: Quality
+   **Severity**: LOW
+   **Location**: `aragora/server/handlers/evolution/replays.py`, around line 162
+   **Issue**: The new comment says the order "never depends on `iterdir()` order," but the function still stops collecting entries once `max_to_scan` is reached before sorting. If the replay directory contains more entries than `max_to_scan`, which entries make it into `dir_entries` can still depend on filesystem iteration order. The new tie-breaker makes ordering deterministic only within the collected subset.
+   **Suggestion**: Either narrow the comment, e.g. "so ties within the scanned subset do not depend on `iterdir()` order," or change the scan strategy if full deterministic top-N behavior is required for directories larger than `max_to_scan`.
+
+Overall, the actual code change looks reasonable: sorting by `(mtime, name)` descending is a simple deterministic tie-breaker, and the added tests cover equal-mtime ordering and ensure newer mtimes still win.
