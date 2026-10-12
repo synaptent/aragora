@@ -116,18 +116,15 @@ jobs:
           python scripts/generate_api_docs.py --output docs/API_ENDPOINTS.md
 
       - name: Ensure API endpoint docs are in sync
-        continue-on-error: true  # generate_api_docs.py discovers far fewer endpoints than the committed file lists
         run: |
           if ! git diff --exit-code docs/API_ENDPOINTS.md; then
-            echo "::warning::docs/API_ENDPOINTS.md is stale. Run: python scripts/generate_api_docs.py --output docs/API_ENDPOINTS.md"
+            echo "::error::docs/API_ENDPOINTS.md is stale. Run: python scripts/generate_api_docs.py --output docs/API_ENDPOINTS.md"
             exit 1
           fi
 
-      # Builds docs/api/openapi.{json,yaml} the way openapi.yml's sync job does and compares
-      # the content. Non-blocking like lint.yml: only that manually dispatched job refreshes
-      # docs/api, so a tagged commit can carry spec drift.
+      # Builds docs/api/openapi.{json,yaml} the way openapi.yml generates them and compares
+      # the parsed content, so a tag fails while the committed spec drifts from the generator.
       - name: Ensure OpenAPI spec is in sync
-        continue-on-error: true
         run: |
           OUT="$(mktemp -d)"
           trap 'rm -rf "$OUT"' EXIT
@@ -139,11 +136,17 @@ jobs:
           python - "$OUT" <<'PY'
           import json, sys, yaml
 
+          METHODS = {"get", "put", "post", "delete", "options", "head", "patch", "trace"}
+          LISTED = 20
+
           def read(path):
               with open(path) as f:
                   if path.endswith(".json"):
                       return json.load(f)
                   return yaml.load(f, Loader=getattr(yaml, "CSafeLoader", yaml.SafeLoader))
+
+          def operations(spec):
+              return {(p, m): op for p, item in spec.get("paths", {}).items() for m, op in item.items() if m in METHODS}
 
           stale = False
           for name in ("openapi.json", "openapi.yaml"):
@@ -152,17 +155,18 @@ jobs:
                   print(f"docs/api/{name}: in sync")
                   continue
               stale = True
-              old_paths, new_paths = old.get("paths", {}), new.get("paths", {})
-              old_ops = {(p, m) for p, item in old_paths.items() for m in item}
-              new_ops = {(p, m) for p, item in new_paths.items() for m in item}
-              changed = sum(old_paths[p][m] != new_paths[p][m] for p, m in old_ops & new_ops)
+              old_ops, new_ops = operations(old), operations(new)
+              file_only, generator_only = sorted(old_ops.keys() - new_ops.keys()), sorted(new_ops.keys() - old_ops.keys())
+              changed = sum(old_ops[k] != new_ops[k] for k in old_ops.keys() & new_ops.keys())
               other = sorted(k for k in set(old) | set(new) if k != "paths" and old.get(k) != new.get(k))
-              print(f"::warning::docs/api/{name} is stale: {len(old_ops - new_ops)} operations only in the file, "
-                    f"{len(new_ops - old_ops)} only in the generator output, {changed} shared operations differ, "
-                    f"other keys differ: {other}. Refresh it with the openapi.yml sync job.")
-              for label, ops in (("file only", old_ops - new_ops), ("generator only", new_ops - old_ops)):
-                  for p, m in sorted(ops):
+              print(f"::error::docs/api/{name} is stale: {len(file_only)} operations only in the file, "
+                    f"{len(generator_only)} only in the generator output, {changed} shared operations differ, "
+                    f"other keys differ: {other}. Regenerate it as this step does and commit the result.")
+              for label, keys in (("file only", file_only), ("generator only", generator_only)):
+                  for p, m in keys[:LISTED]:
                       print(f"  {label}: {m.upper()} {p}")
+                  if len(keys) > LISTED:
+                      print(f"  {label}: {len(keys) - LISTED} more not listed")
           sys.exit(1 if stale else 0)
           PY
 
@@ -697,26 +701,9 @@ jobs:
           name: dist
           path: dist/
 
-  publish-pypi:
-    needs: [validate, build]
-    runs-on: aragora
-    timeout-minutes: 10
-    environment: pypi
-
-    steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist/
-
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          user: __token__
-          password: ${{ secrets.PYPI_API_TOKEN }}
-          skip-existing: true
-
+  # No PyPI upload here: publish-aragora.yml (manual dispatch) is the only publisher of the
+  # aragora package. Run it after this workflow's release job has attached the assets, since
+  # immutable releases refuse assets once published.
   release:
     needs: [validate, build]
     runs-on: aragora
