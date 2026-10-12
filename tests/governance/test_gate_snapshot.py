@@ -7,6 +7,7 @@ between classification and merge.
 
 from __future__ import annotations
 
+import dataclasses
 import datetime as dt
 import inspect
 import json
@@ -108,7 +109,7 @@ def test_head_and_verdict_come_from_one_read() -> None:
     rec = _Recorder([_proc(stdout=_view_payload(HEAD_A))])
     snap = capture_gate_snapshot(42, "o/r", runner=rec)
     assert len(rec.calls) == 1, f"expected exactly one gh read, got {rec.calls}"
-    assert snap.head_sha == HEAD_A and snap.required_checks_green
+    assert snap.head_sha == HEAD_A and snap.all_checks_green
 
 
 def test_unknown_checks_are_not_a_pass() -> None:
@@ -142,7 +143,7 @@ def test_a_successful_commit_status_counts_as_green() -> None:
     snap = capture_gate_snapshot(
         42, "o/r", runner=_Recorder([_proc(stdout=_rollup_payload(rollup))])
     )
-    assert snap.checks_known and snap.required_checks_green and snap.mergeable_now
+    assert snap.checks_known and snap.all_checks_green and snap.mergeable_now
 
 
 @pytest.mark.parametrize("state", ["PENDING", "EXPECTED", "FAILURE", "ERROR", ""])
@@ -154,7 +155,43 @@ def test_a_commit_status_that_is_not_success_blocks(state: str) -> None:
     snap = capture_gate_snapshot(
         42, "o/r", runner=_Recorder([_proc(stdout=_rollup_payload(rollup))])
     )
-    assert snap.checks_known and not snap.required_checks_green and not snap.mergeable_now
+    assert snap.checks_known and not snap.all_checks_green and not snap.mergeable_now
+
+
+def test_the_verdict_field_claims_every_check_not_only_required_ones() -> None:
+    """The rollup does not say which checks are required, so the name must not either."""
+    names = {field.name for field in dataclasses.fields(GateSnapshot)}
+    assert "all_checks_green" in names
+    assert "required_checks_green" not in names
+
+
+def test_a_failed_advisory_check_blocks_a_merge_protection_would_allow() -> None:
+    """Every reported check must be green, advisory ones included (fail-closed).
+
+    Branch protection would merge this head, because the check that did not pass
+    is not required. The snapshot cannot tell required from advisory, so it
+    refuses and never asks gh to merge.
+    """
+    for conclusion in ("FAILURE", "CANCELLED"):
+        rollup = [
+            {
+                "__typename": "CheckRun",
+                "name": "lint",
+                "status": "COMPLETED",
+                "conclusion": "SUCCESS",
+            },
+            {
+                "__typename": "CheckRun",
+                "name": "Metrics Drift",
+                "status": "COMPLETED",
+                "conclusion": conclusion,
+            },
+        ]
+        rec = _Recorder([_proc(stdout=_rollup_payload(rollup))])
+        snap = capture_gate_snapshot(42, "o/r", runner=rec)
+        assert snap.checks_known and not snap.all_checks_green and not snap.mergeable_now
+        assert merge_with_snapshot(snap, runner=rec).action == "blocked"
+        assert len(rec.calls) == 1, f"a merge was attempted: {rec.calls}"
 
 
 # --------------------------------------------------------------------------
@@ -214,8 +251,8 @@ def test_race_a_stale_verdict_cannot_be_paired_with_a_fresh_head() -> None:
     rec2 = _Recorder([_proc(stdout=_view_payload(HEAD_B, green=False))])
     second = capture_gate_snapshot(42, "o/r", runner=rec2)
 
-    assert first.head_sha == HEAD_A and first.required_checks_green
-    assert second.head_sha == HEAD_B and not second.required_checks_green
+    assert first.head_sha == HEAD_A and first.all_checks_green
+    assert second.head_sha == HEAD_B and not second.all_checks_green
     # The failing new head cannot borrow the old head's pass.
     assert not second.mergeable_now
     assert merge_with_snapshot(second, runner=_Recorder([])).action == "blocked"

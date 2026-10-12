@@ -87,12 +87,19 @@ class GateSnapshot:
 
     ``frozen=True`` is load-bearing, not stylistic: it is what stops a caller
     from "refreshing" the head after classification.
+
+    ``all_checks_green`` requires every check the rollup reports to be green,
+    advisory ones included. The rollup does not say which checks branch
+    protection requires, so a failed or cancelled advisory check makes it False
+    and the snapshot refuses a merge that protection would allow. That refusal
+    is deliberate (fail-closed): it can withhold a merge, never authorize one
+    that a reported check did not pass.
     """
 
     pr_number: int
     repo: str
     head_sha: str
-    required_checks_green: bool
+    all_checks_green: bool
     checks_known: bool
     state: str
     is_draft: bool
@@ -117,7 +124,7 @@ class GateSnapshot:
             self.state.upper() == "OPEN"
             and not self.is_draft
             and self.checks_known
-            and self.required_checks_green
+            and self.all_checks_green
         )
 
     def match_head_args(self) -> list[str]:
@@ -199,7 +206,7 @@ def capture_gate_snapshot(
         pr_number=number,
         repo=repo,
         head_sha=str(payload.get("headRefOid") or ""),
-        required_checks_green=green,
+        all_checks_green=green,
         checks_known=known,
         state=str(payload.get("state") or ""),
         is_draft=bool(payload.get("isDraft", False)),
@@ -260,7 +267,7 @@ def merge_with_snapshot(
             action="blocked",
             detail=(
                 f"snapshot does not authorize a merge (state={snap.state} draft={snap.is_draft} "
-                f"checks_known={snap.checks_known} green={snap.required_checks_green})"
+                f"checks_known={snap.checks_known} green={snap.all_checks_green})"
             ),
             head_sha=snap.head_sha,
         )
