@@ -1,0 +1,436 @@
+"""#9873: a merge may only land the head whose checks authorized it.
+
+The race tests are the point of this file. Everything else guards the shape that
+makes the race safe; these prove the behaviour under an actual head change
+between classification and merge.
+"""
+
+from __future__ import annotations
+
+import dataclasses
+import datetime as dt
+import inspect
+import json
+import subprocess
+
+import pytest
+
+from aragora.governance.gate_snapshot import (
+    GateSnapshot,
+    GateSnapshotError,
+    MergeRefused,
+    capture_gate_snapshot,
+    merge_with_snapshot,
+    require_snapshot,
+)
+
+HEAD_A = "a" * 40
+HEAD_B = "b" * 40
+
+
+def _proc(returncode: int = 0, stdout: str = "", stderr: str = ""):
+    return subprocess.CompletedProcess(args=[], returncode=returncode, stdout=stdout, stderr=stderr)
+
+
+def _view_payload(
+    head: str,
+    *,
+    green: bool = True,
+    state: str = "OPEN",
+    draft: bool = False,
+    merge_state: str | None = "CLEAN",
+):
+    conclusion = "SUCCESS" if green else "FAILURE"
+    payload = {
+        "number": 42,
+        "headRefOid": head,
+        "state": state,
+        "isDraft": draft,
+        "statusCheckRollup": [{"status": "COMPLETED", "conclusion": conclusion}],
+    }
+    if merge_state is not None:
+        payload["mergeStateStatus"] = merge_state
+    return json.dumps(payload)
+
+
+class _Recorder:
+    """Runner that serves scripted responses and records every argv."""
+
+    def __init__(self, responses):
+        self._responses = list(responses)
+        self.calls: list[list[str]] = []
+
+    def __call__(self, args, *, timeout=30.0):
+        self.calls.append(list(args))
+        return self._responses.pop(0) if self._responses else _proc()
+
+
+# --------------------------------------------------------------------------
+# The invariant: no snapshot, no merge — enforced by construction
+# --------------------------------------------------------------------------
+
+
+def test_a_snapshot_cannot_exist_without_a_full_head() -> None:
+    """'Refuse when the head is missing' is structural, not a forgettable check."""
+    for bad in ["", None, "abc123", HEAD_A[:12], "z" * 40]:
+        with pytest.raises(GateSnapshotError):
+            GateSnapshot(42, "o/r", bad, True, True, "OPEN", False, None, "t")  # type: ignore[arg-type]
+
+
+def test_capture_refuses_when_github_omits_the_head() -> None:
+    payload = json.dumps({"number": 42, "state": "OPEN", "statusCheckRollup": []})
+    with pytest.raises(GateSnapshotError):
+        capture_gate_snapshot(42, "o/r", runner=_Recorder([_proc(stdout=payload)]))
+
+
+def test_capture_failure_is_not_mistaken_for_a_missing_head() -> None:
+    """A failed read must raise, never yield a snapshot-shaped 'no'."""
+    with pytest.raises(GateSnapshotError) as exc:
+        capture_gate_snapshot(42, "o/r", runner=_Recorder([_proc(returncode=1, stderr="boom")]))
+    assert "boom" in str(exc.value)
+
+
+def test_merge_without_a_snapshot_is_refused() -> None:
+    with pytest.raises(MergeRefused):
+        merge_with_snapshot(None)
+    with pytest.raises(MergeRefused):
+        require_snapshot(None, pr_number=42)
+
+
+def test_snapshot_is_immutable() -> None:
+    """Frozen is what stops a caller 'refreshing' the head after classification."""
+    snap = GateSnapshot(42, "o/r", HEAD_A, True, True, "OPEN", False, None, "t")
+    with pytest.raises(Exception):
+        snap.head_sha = HEAD_B  # type: ignore[misc]
+
+
+def test_head_and_verdict_come_from_one_read() -> None:
+    """Two reads would reintroduce the split this type exists to prevent."""
+    rec = _Recorder([_proc(stdout=_view_payload(HEAD_A))])
+    snap = capture_gate_snapshot(42, "o/r", runner=rec)
+    assert len(rec.calls) == 1, f"expected exactly one gh read, got {rec.calls}"
+    assert snap.head_sha == HEAD_A and snap.all_checks_green
+
+
+def test_unknown_checks_are_not_a_pass() -> None:
+    """An empty rollup means 'we do not know', which must not authorize a merge."""
+    payload = json.dumps(
+        {"number": 42, "headRefOid": HEAD_A, "state": "OPEN", "statusCheckRollup": []}
+    )
+    snap = capture_gate_snapshot(42, "o/r", runner=_Recorder([_proc(stdout=payload)]))
+    assert not snap.checks_known and not snap.mergeable_now
+
+
+def _rollup_payload(rollup: list[dict]) -> str:
+    return json.dumps(
+        {
+            "number": 42,
+            "headRefOid": HEAD_A,
+            "state": "OPEN",
+            "isDraft": False,
+            "mergeStateStatus": "CLEAN",
+            "statusCheckRollup": rollup,
+        }
+    )
+
+
+def test_a_successful_commit_status_counts_as_green() -> None:
+    """statusCheckRollup mixes check runs with commit statuses ({context, state})."""
+    rollup = [
+        {"__typename": "CheckRun", "name": "lint", "status": "COMPLETED", "conclusion": "SUCCESS"},
+        {"__typename": "StatusContext", "context": "ci/legacy", "state": "SUCCESS"},
+    ]
+    snap = capture_gate_snapshot(
+        42, "o/r", runner=_Recorder([_proc(stdout=_rollup_payload(rollup))])
+    )
+    assert snap.checks_known and snap.all_checks_green and snap.mergeable_now
+
+
+@pytest.mark.parametrize("state", ["PENDING", "EXPECTED", "FAILURE", "ERROR", ""])
+def test_a_commit_status_that_is_not_success_blocks(state: str) -> None:
+    rollup = [
+        {"__typename": "CheckRun", "name": "lint", "status": "COMPLETED", "conclusion": "SUCCESS"},
+        {"__typename": "StatusContext", "context": "ci/legacy", "state": state},
+    ]
+    snap = capture_gate_snapshot(
+        42, "o/r", runner=_Recorder([_proc(stdout=_rollup_payload(rollup))])
+    )
+    assert snap.checks_known and not snap.all_checks_green and not snap.mergeable_now
+
+
+def test_the_verdict_field_claims_every_check_not_only_required_ones() -> None:
+    """The rollup does not say which checks are required, so the name must not either."""
+    names = {field.name for field in dataclasses.fields(GateSnapshot)}
+    assert "all_checks_green" in names
+    assert "required_checks_green" not in names
+
+
+def test_a_failed_advisory_check_blocks_a_merge_protection_would_allow() -> None:
+    """Every reported check must be green, advisory ones included (fail-closed).
+
+    Branch protection would merge this head, because the check that did not pass
+    is not required. The snapshot cannot tell required from advisory, so it
+    refuses and never asks gh to merge.
+    """
+    for conclusion in ("FAILURE", "CANCELLED"):
+        rollup = [
+            {
+                "__typename": "CheckRun",
+                "name": "lint",
+                "status": "COMPLETED",
+                "conclusion": "SUCCESS",
+            },
+            {
+                "__typename": "CheckRun",
+                "name": "Metrics Drift",
+                "status": "COMPLETED",
+                "conclusion": conclusion,
+            },
+        ]
+        rec = _Recorder([_proc(stdout=_rollup_payload(rollup))])
+        snap = capture_gate_snapshot(42, "o/r", runner=rec)
+        assert snap.checks_known and not snap.all_checks_green and not snap.mergeable_now
+        assert merge_with_snapshot(snap, runner=rec).action == "blocked"
+        assert len(rec.calls) == 1, f"a merge was attempted: {rec.calls}"
+
+
+# --------------------------------------------------------------------------
+# The race: head changes between classification and merge
+# --------------------------------------------------------------------------
+
+
+def test_race_merge_pins_the_captured_head_not_the_live_one() -> None:
+    """Capture at A, PR force-pushes to B, merge must still carry A.
+
+    This is the TOCTOU that nine rounds of #9677 failed to close by passing a
+    SHA around: any code path that re-reads the head here would send B and merge
+    unchecked content.
+    """
+    rec = _Recorder([_proc(stdout=_view_payload(HEAD_A)), _proc(returncode=0, stdout="merged")])
+    snap = capture_gate_snapshot(42, "o/r", runner=rec)
+
+    # ... the world moves on: the PR is force-pushed to HEAD_B ...
+
+    merge_with_snapshot(snap, runner=rec)
+    merge_argv = rec.calls[-1]
+    assert "--match-head-commit" in merge_argv
+    pinned = merge_argv[merge_argv.index("--match-head-commit") + 1]
+    assert pinned == HEAD_A, f"merge pinned {pinned}, must pin the captured head {HEAD_A}"
+    assert HEAD_B not in merge_argv
+
+
+def test_race_github_rejection_is_surfaced_as_refusal_not_retried() -> None:
+    """When the head moved, GitHub rejects the pin — we must report, not retry."""
+    rec = _Recorder(
+        [
+            _proc(stdout=_view_payload(HEAD_A)),
+            _proc(returncode=1, stderr="Head branch was modified. Review and try again."),
+        ]
+    )
+    snap = capture_gate_snapshot(42, "o/r", runner=rec)
+    outcome = merge_with_snapshot(snap, runner=rec)
+
+    assert outcome.merged is False
+    assert outcome.action == "refused"
+    assert "Head branch was modified" in outcome.detail
+    assert outcome.head_sha == HEAD_A
+    # Exactly one capture and one merge — no re-read, no second attempt.
+    assert len(rec.calls) == 2, f"a retry or re-resolve happened: {rec.calls}"
+
+
+def test_race_a_stale_verdict_cannot_be_paired_with_a_fresh_head() -> None:
+    """The reverted #9677 bug, encoded: classification then a *new* head lookup.
+
+    Building a second snapshot is the only way to obtain HEAD_B, and doing so
+    re-reads the checks too — so a fresh head always arrives with a fresh
+    verdict. There is no API that yields B's head with A's verdict.
+    """
+    rec = _Recorder([_proc(stdout=_view_payload(HEAD_A, green=True))])
+    first = capture_gate_snapshot(42, "o/r", runner=rec)
+
+    rec2 = _Recorder([_proc(stdout=_view_payload(HEAD_B, green=False))])
+    second = capture_gate_snapshot(42, "o/r", runner=rec2)
+
+    assert first.head_sha == HEAD_A and first.all_checks_green
+    assert second.head_sha == HEAD_B and not second.all_checks_green
+    # The failing new head cannot borrow the old head's pass.
+    assert not second.mergeable_now
+    assert merge_with_snapshot(second, runner=_Recorder([])).action == "blocked"
+
+
+def test_merge_argv_carries_exactly_one_head_pin() -> None:
+    rec = _Recorder([_proc(stdout=_view_payload(HEAD_A)), _proc()])
+    snap = capture_gate_snapshot(42, "o/r", runner=rec)
+    merge_with_snapshot(snap, delete_branch=True, runner=rec)
+    argv = rec.calls[-1]
+    assert argv.count("--match-head-commit") == 1
+    assert argv[-2:] == ["--match-head-commit", HEAD_A]
+
+
+@pytest.mark.parametrize(("squash", "strategy"), [(True, "--squash"), (False, "--merge")])
+def test_merge_argv_names_exactly_one_merge_strategy(squash, strategy) -> None:
+    """``gh pr merge`` with no strategy flag prompts, and fails when it cannot prompt.
+
+    The runner captures gh's output, so gh can never prompt: every merge must name its strategy.
+    """
+    rec = _Recorder([_proc(stdout=_view_payload(HEAD_A)), _proc()])
+    snap = capture_gate_snapshot(42, "o/r", runner=rec)
+    outcome = merge_with_snapshot(snap, squash=squash, runner=rec)
+
+    assert outcome.merged is True
+    argv = rec.calls[-1]
+    assert [flag for flag in ("--merge", "--rebase", "--squash") if flag in argv] == [strategy]
+    assert "--admin" not in argv
+    assert argv[-2:] == ["--match-head-commit", HEAD_A]
+
+
+def test_a_merge_offers_no_admin_bypass() -> None:
+    """``--admin`` overrides protection this capture never verified, such as required reviews.
+
+    The snapshot verifies checks, not protection, and its ``mergeStateStatus`` may be stale by
+    merge time, so no caller can ask for a merge that skips what GitHub enforces.
+    """
+    assert "admin" not in inspect.signature(merge_with_snapshot).parameters
+    snap = GateSnapshot(42, "o/r", HEAD_A, True, True, "OPEN", False, "CLEAN", "t")
+    rec = _Recorder([])
+    with pytest.raises(TypeError):
+        merge_with_snapshot(snap, admin=True, runner=rec)  # type: ignore[call-arg]
+    assert rec.calls == []
+
+
+@pytest.mark.parametrize(
+    "merge_state", ["CLEAN", "HAS_HOOKS", "BLOCKED", "BEHIND", "UNSTABLE", "UNKNOWN", None]
+)
+def test_every_merge_runs_pinned_without_admin_whatever_state_was_captured(merge_state) -> None:
+    """GitHub decides protection when the merge runs; a captured state of any age does not."""
+    rec = _Recorder([_proc(stdout=_view_payload(HEAD_A, merge_state=merge_state)), _proc()])
+    outcome = merge_with_snapshot(capture_gate_snapshot(42, "o/r", runner=rec), runner=rec)
+
+    assert outcome.merged is True
+    argv = rec.calls[-1]
+    assert argv[:2] == ["pr", "merge"]
+    assert "--admin" not in argv
+    assert argv[-2:] == ["--match-head-commit", HEAD_A]
+
+
+def test_a_stale_clean_capture_cannot_bypass_protection_that_now_blocks_the_head() -> None:
+    """Captured CLEAN, then protection blocks the same head (a re-run check fails, say).
+
+    With no ``--admin`` sent, GitHub's refusal comes back as a refusal and is not retried.
+    """
+    blocked = "Pull request o/r#42 is not mergeable: the base branch policy prohibits the merge."
+    rec = _Recorder(
+        [
+            _proc(stdout=_view_payload(HEAD_A, merge_state="CLEAN")),
+            _proc(returncode=1, stderr=blocked),
+        ]
+    )
+    stale = dt.datetime(2026, 10, 1, tzinfo=dt.timezone.utc)
+    outcome = merge_with_snapshot(
+        capture_gate_snapshot(42, "o/r", runner=rec, now=stale), runner=rec
+    )
+
+    assert (outcome.merged, outcome.action) == (False, "refused")
+    assert "base branch policy prohibits the merge" in outcome.detail
+    assert outcome.head_sha == HEAD_A
+    assert "--admin" not in rec.calls[-1]
+    assert len(rec.calls) == 2, f"a retry or re-read happened: {rec.calls}"
+
+
+def test_a_non_open_or_draft_pr_is_not_mergeable() -> None:
+    for payload in (
+        _view_payload(HEAD_A, state="CLOSED"),
+        _view_payload(HEAD_A, draft=True),
+        _view_payload(HEAD_A, green=False),
+    ):
+        snap = capture_gate_snapshot(42, "o/r", runner=_Recorder([_proc(stdout=payload)]))
+        assert not snap.mergeable_now
+        assert merge_with_snapshot(snap, runner=_Recorder([])).action == "blocked"
+
+
+# --------------------------------------------------------------------------
+# Argument hygiene: what reaches gh must be a well-formed capture
+# --------------------------------------------------------------------------
+
+
+def test_a_snapshot_requires_an_owner_name_repository() -> None:
+    for bad in ["", "o", "o/r/x", "x /../evil", "o/r --admin", "../o/r"]:
+        with pytest.raises(GateSnapshotError):
+            GateSnapshot(42, bad, HEAD_A, True, True, "OPEN", False, None, "t")
+
+
+def test_capture_rejects_a_malformed_repository_before_reading() -> None:
+    rec = _Recorder([])
+    with pytest.raises(GateSnapshotError):
+        capture_gate_snapshot(42, "x /../evil", runner=rec)
+    assert rec.calls == []
+
+
+def test_a_non_integer_pr_number_from_github_is_a_capture_error() -> None:
+    """Callers catch GateSnapshotError; a bare ValueError would escape them."""
+    payload = json.dumps(
+        {"number": "forty-two", "headRefOid": HEAD_A, "state": "OPEN", "statusCheckRollup": []}
+    )
+    with pytest.raises(GateSnapshotError):
+        capture_gate_snapshot(42, "o/r", runner=_Recorder([_proc(stdout=payload)]))
+
+
+# --------------------------------------------------------------------------
+# The main-red merge halt (#9216) applies to the captured head
+# --------------------------------------------------------------------------
+
+
+@pytest.fixture
+def armed_halt(tmp_path, monkeypatch):
+    """Arm the halt marker the merge reads by default, with no waiver present."""
+    import aragora.swarm.merge_halt as merge_halt
+
+    halt = tmp_path / "merge_executor.halt"
+    halt.write_text(json.dumps({"reason": "main_red"}) + "\n", encoding="utf-8")
+    waiver = tmp_path / "merge_executor.waiver"
+    monkeypatch.setattr(merge_halt, "DEFAULT_HALT_FILE", halt)
+    monkeypatch.setattr(merge_halt, "DEFAULT_WAIVER_FILE", waiver)
+    monkeypatch.setattr(merge_halt, "SHARED_ROOT_ERROR", None)
+    return waiver
+
+
+def _waive(path, *, head: str) -> None:
+    expires = dt.datetime.now(dt.timezone.utc) + dt.timedelta(hours=1)
+    payload = {
+        "pr": 42,
+        "head_sha": head,
+        "actor": "operator",
+        "scope": "single-pr",
+        "reason": "incident waiver",
+        "expires_at": expires.isoformat(),
+    }
+    path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+
+
+def test_merge_refuses_while_the_main_red_halt_is_armed(armed_halt) -> None:
+    rec = _Recorder([_proc(stdout=_view_payload(HEAD_A))])
+    snap = capture_gate_snapshot(42, "o/r", runner=rec)
+    outcome = merge_with_snapshot(snap, runner=rec)
+
+    assert (outcome.merged, outcome.action) == (False, "blocked")
+    assert "halt armed" in outcome.detail
+    assert outcome.head_sha == HEAD_A
+    assert len(rec.calls) == 1, f"a merge ran while the halt was armed: {rec.calls}"
+
+
+def test_a_waiver_for_the_captured_head_lets_the_pinned_merge_run(armed_halt) -> None:
+    _waive(armed_halt, head=HEAD_A)
+    rec = _Recorder([_proc(stdout=_view_payload(HEAD_A)), _proc(stdout="merged")])
+    outcome = merge_with_snapshot(capture_gate_snapshot(42, "o/r", runner=rec), runner=rec)
+
+    assert outcome.merged is True
+    assert rec.calls[-1][-2:] == ["--match-head-commit", HEAD_A]
+
+
+def test_a_waiver_for_another_head_does_not_apply(armed_halt) -> None:
+    _waive(armed_halt, head=HEAD_B)
+    rec = _Recorder([_proc(stdout=_view_payload(HEAD_A))])
+    outcome = merge_with_snapshot(capture_gate_snapshot(42, "o/r", runner=rec), runner=rec)
+
+    assert outcome.action == "blocked"
+    assert len(rec.calls) == 1, f"a merge ran under another head's waiver: {rec.calls}"

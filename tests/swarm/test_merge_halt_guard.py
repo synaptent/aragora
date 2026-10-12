@@ -270,6 +270,7 @@ _EXECUTION_SHAPED = _MERGE_INVOCATIONS[:2]
 # Module -> the function that executes its merge. That function must call the
 # guard for the head it merges.
 GUARDED_MERGE_PATHS = {
+    "aragora/governance/gate_snapshot.py": "merge_with_snapshot",
     "aragora/missions/live_gate.py": "LiveBossLoopGate.merge_head_bound",
     "aragora/ralph/github_control.py": "GitHubControl.merge_pr",
     "aragora/swarm/merge_arbiter.py": "_merge_pr",
@@ -498,6 +499,17 @@ def test_merge_arbiter_refuses_while_halted(armed, monkeypatch) -> None:
     ok, reason = merge_arbiter._merge_pr(PR, REPO, HEAD)
     assert ok is False
     assert "halt armed" in reason
+    assert spy.merges() == []
+
+
+def test_gate_snapshot_refuses_while_halted(armed) -> None:
+    from aragora.governance.gate_snapshot import GateSnapshot, merge_with_snapshot
+
+    spy = _Spy()
+    snapshot = GateSnapshot(PR, REPO, HEAD, True, True, "OPEN", False, "CLEAN", "t")
+    outcome = merge_with_snapshot(snapshot, runner=lambda args, **_: spy.record(args))
+    assert (outcome.merged, outcome.action) == (False, "blocked")
+    assert "halt armed" in outcome.detail
     assert spy.merges() == []
 
 
