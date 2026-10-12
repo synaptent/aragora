@@ -129,13 +129,19 @@ reviewed; (3) every branch-protection required check **other than** the exact qu
 human-settlement context being satisfied by this evidence/settlement step is green, with no
 non-quorum required check pending, failing, or cancelled; AND (4) the PR is mergeable — not
 behind base and free of conflicts — with the PR non-draft and GitHub reporting `mergeable` as
-`MERGEABLE` and `mergeStateStatus` as `CLEAN` or `BLOCKED`; `UNSTABLE` is also permitted only
-when merge-packet has an available, selected required-check surface with at least one effective
-required check, every required check green, complete rollup diagnostics proving every
-non-green context is non-required, no cancelled non-required context that a verified
-cancellation receipt does not cover, and a changed-files read showing the PR modifies no
-receipt-guarded path; a merge that relies on this proof records the waived failing contexts and
-the proof's counts. Required-check gating comes from `gh pr checks --required` /
+`MERGEABLE` and `mergeStateStatus` as `CLEAN` or `BLOCKED`. The one narrower exception belongs
+to the unattended Tier 0-2 executors `scripts/merge_executor.py` and
+`scripts/auto_merge_quorum_green.py`: they may also merge an `UNSTABLE` head, but only through
+merge-packet's separate `optional_only_unstable_executor_proof` field, which merge-packet emits
+only when the model quorum alone allows an admin squash with no unresolved dissent, no
+operator-review hold is present, the required-check surface is available and selected with at
+least one effective required check and every required check green, complete rollup diagnostics
+prove every non-green context is non-required, no cancelled non-required context lacks a
+verified cancellation receipt, and a changed-files read shows the PR modifies no receipt-guarded
+path; each executor also matches every live failing context to the packet's non-required sample
+and records the waived contexts and the proof's counts. Merge-packet's own verdict, a manual
+admin squash, and every other packet consumer still treat that `UNSTABLE` head as blocked.
+Required-check gating comes from `gh pr checks --required` /
 merge-packet's required-check surface, not the raw `statusCheckRollup`: non-required rollup
 failures remain advisory, but any failing non-quorum required check makes the head not
 settlement-stable. Do not add a "base unchanged" condition
@@ -147,8 +153,9 @@ semantic/body-marker requirement, not only the helper's `verdict`, `would_count`
 `[P0]`, `[P1]`, or `[P2]` finding is not clean and must become a repair packet, not countable
 support. `BLOCKED` is allowed only when the blocker is the quorum / exact-head human-settlement
 context this step is designed to satisfy; `BLOCKED` from any other required check failure is
-not settlement-stable. `DIRTY`, `BEHIND`, `DRAFT`, `UNKNOWN`, unproven `UNSTABLE`, and
-missing/unknown mergeability or `mergeStateStatus` are not settlement-stable. The
+not settlement-stable. `DIRTY`, `BEHIND`, `DRAFT`, `UNKNOWN`, `UNSTABLE` (apart from the
+executor-only exception above), and missing/unknown mergeability or `mergeStateStatus` are not
+settlement-stable. The
 counted-family set comes from
 [`docs/REVIEW_AUTHORITY_PRINCIPLES.md`](REVIEW_AUTHORITY_PRINCIPLES.md), especially the
 Tier-eligibility table; do not invent a smaller family set inside a recursive prompt.

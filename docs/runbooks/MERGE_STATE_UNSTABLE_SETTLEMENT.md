@@ -153,12 +153,14 @@ settlement-stable only when all of these exact-head predicates are true:
    `aragora/cli/commands/review_queue.py`, which produces the packet counts and
    surfaces both exceptions trust, `review_queue_rest_fallback.py`, which
    resolves the repository whose file list this guard reads,
-   `aragora/swarm/auto_merge_green.py`, which holds the optional-only UNSTABLE
-   proof the live gate uses, `scripts/merge_executor.py` and
-   `scripts/auto_merge_quorum_green.py`, which turn that proof into a merge, or
-   the policy check script). A PR editing those surfaces could smuggle
-   substantive work behind its own cancellation, so it never qualifies for the
-   exception; its cancelled advisory runs must be rerun instead.
+   `review_queue_transport.py`, which defines the `gh` JSON reader and error
+   type that file-list read goes through, `aragora/swarm/auto_merge_green.py`,
+   which holds the optional-only UNSTABLE proof the executors use,
+   `scripts/merge_executor.py` and `scripts/auto_merge_quorum_green.py`, which
+   turn that proof into a merge, or the policy check script). A PR editing
+   those surfaces could smuggle substantive work behind its own cancellation,
+   so it never qualifies for the exception; its cancelled advisory runs must be
+   rerun instead.
 10. The helper emits an explicit receipt field naming each ignored non-required
     cancelled context, run URL, and reason so the merge record does not silently
     hide GitHub rollup noise.
@@ -215,11 +217,26 @@ must include this receipt.
 
 ## Optional-Only `UNSTABLE` Proof
 
-Separately from the cancellation receipt, the live gate in
-`aragora/swarm/auto_merge_green.py` accepts `UNSTABLE` when the packet proves
-that every non-green rollup context is non-required (for example an optional
-security scan that failed). It fails closed unless all of these hold in the
-packet's `check_surfaces`:
+This proof is narrower than the cancellation receipt. It applies only to the
+two unattended Tier 0-2 executors, `scripts/merge_executor.py` and
+`scripts/auto_merge_quorum_green.py`, both of which call `decide_auto_merge` in
+`aragora/swarm/auto_merge_green.py`. Merge-packet's own verdict is unchanged:
+its live gate admits `UNSTABLE` only through the verified cancellation receipt
+above, so an optional-only `UNSTABLE` PR still reads
+`status=blocked_by_live_gate` with `admin_squash_allowed: false`, and a manual
+admin squash, the merge-quorum workflow, `scripts/settle_one_pr.py` and
+`scripts/drain_codex_automation_value.py` treat it as blocked.
+
+Instead, merge-packet adds a separate `optional_only_unstable_executor_proof`
+field to the entry. The field carries the model quorum's own status, verdict
+and admin-squash flag plus the rollup counts below, and merge-packet emits it
+only for an `UNSTABLE` PR without the `operator-review-required` label whose
+model quorum allows an admin squash with no unresolved dissent. The executors
+let the `UNSTABLE` merge state through only when that field is well formed,
+carries `satisfied` / `admin_squash_allowed` / `true`, sits beside either that
+verdict or `blocked_by_live_gate`, matches the packet's rollup counts exactly,
+and the packet reports `operator_review_required: false`. The proof fails
+closed unless all of these also hold in the packet's `check_surfaces`:
 
 1. `required_pr_checks` is available, selected, and every effective required
    check is green with none pending.
@@ -240,4 +257,12 @@ When the proof lets a merge through, `auto_merge_quorum_green.py` and
 `scripts/merge_executor.py` add `waived_failing_checks` (the waived contexts as
 `workflow / name`) and `optional_only_unstable_proof` (the packet counts the
 proof relied on) to the merge record, and the merge executor also writes them
-to its receipt.
+to its receipt, whose `authority` names the executor proof rather than
+`status=satisfied`.
+
+Both executors also require the PR's own `aragora-merge-quorum` check to be
+green. That check runs the merge-quorum workflow, which judges the packet's own
+verdict, so an optional-only `UNSTABLE` PR whose quorum check observed
+`UNSTABLE` keeps a failing quorum check and the executors refuse it. The
+executor proof therefore reaches only PRs whose quorum check passed; it never
+widens what the quorum check itself accepts.

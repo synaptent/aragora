@@ -369,10 +369,18 @@ def run_pass(
             if ok:
                 record["action"] = "merged"
                 merged_count += 1
-                authority = (
-                    "merge-quorum packet (status=satisfied) + aragora-merge-quorum "
-                    "check; executor added no new risk judgment"
-                )
+                if decision2.optional_only_unstable_proof is None:
+                    authority = (
+                        "merge-quorum packet (status=satisfied) + aragora-merge-quorum "
+                        "check; executor added no new risk judgment"
+                    )
+                else:
+                    authority = (
+                        "merge-quorum packet optional_only_unstable_executor_proof "
+                        "(model-level admin_squash_allowed verdict; the packet's live gate "
+                        "blocked only the UNSTABLE merge state) + aragora-merge-quorum check; "
+                        "executor waived only the recorded optional failing rows"
+                    )
                 receipt = {
                     "schema": "merge-executor-receipt/v1",
                     "repo": repo,

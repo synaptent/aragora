@@ -7,6 +7,7 @@ import io
 import json
 import subprocess
 from contextlib import redirect_stderr, redirect_stdout
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -1433,6 +1434,9 @@ class TestUnstableCancellationReceipt:
             "scripts/auto_merge_quorum_green.py",
             # Resolves the repo slug whose file list the guard itself reads.
             "aragora/cli/commands/review_queue_rest_fallback.py",
+            # Defines the gh JSON reader and error type the guard's file-list
+            # read goes through.
+            "aragora/cli/commands/review_queue_transport.py",
         ],
     )
     def test_rejects_pr_modifying_optional_only_unstable_predicate(
@@ -1644,6 +1648,8 @@ class TestUnstableCancellationReceipt:
 
 # --- Optional-only UNSTABLE proof inputs (producer counts, guarded paths) ---
 
+MAIN_UNSTABLE_BLOCKER = "mergeStateStatus=UNSTABLE; admin squash requires CLEAN or BLOCKED"
+
 
 def _check_row(name: str, workflow: str, conclusion: str) -> dict[str, Any]:
     return {
@@ -1763,47 +1769,122 @@ class TestOptionalOnlyUnstableProofInputs:
             check_surfaces=surfaces,
             head_sha="a" * 40,
             unstable_non_required_contexts_ignored=[],
-            model_review_quorum={"admin_squash_allowed": True, "unresolved_dissent": False},
+            model_review_quorum={
+                "status": "satisfied",
+                "verdict": "admin_squash_allowed",
+                "admin_squash_allowed": True,
+                "unresolved_dissent": False,
+            },
         )
 
     @pytest.mark.parametrize(
-        ("extra_rows", "blocked"),
+        ("extra_rows", "proven"),
         [
-            pytest.param([OPTIONAL_FAILURE], False, id="S1-optional-failure-only"),
+            pytest.param([OPTIONAL_FAILURE], True, id="S1-optional-failure-only"),
             pytest.param(
                 [OPTIONAL_FAILURE, UNVERIFIED_CANCELLATION],
-                True,
+                False,
                 id="S2-optional-failure-plus-unverified-cancellation",
             ),
-            pytest.param([UNVERIFIED_CANCELLATION], True, id="S3-unverified-cancellation-only"),
+            pytest.param([UNVERIFIED_CANCELLATION], False, id="S3-unverified-cancellation-only"),
         ],
     )
-    def test_live_gate_refuses_optional_only_proof_with_unverified_cancellation(
-        self, extra_rows: list[dict[str, Any]], blocked: bool
+    def test_live_gate_blocks_unstable_and_executor_proof_refuses_unverified_cancellation(
+        self, extra_rows: list[dict[str, Any]], proven: bool
     ) -> None:
-        from aragora.cli.commands.review_queue_unstable import admin_squash_live_gate_blockers
+        from aragora.cli.commands.review_queue_unstable import (
+            admin_squash_live_gate_blockers,
+            optional_only_unstable_executor_proof,
+        )
 
         packet = self._live_gate_packet(
             [*self.GREEN_REQUIRED, *extra_rows], guard={"modifies_guarded_paths": False}
         )
 
-        assert bool(admin_squash_live_gate_blockers(packet)) is blocked
+        # The packet's own verdict treats UNSTABLE as main does, proof or not.
+        assert admin_squash_live_gate_blockers(packet) == [MAIN_UNSTABLE_BLOCKER]
+        assert (optional_only_unstable_executor_proof(packet) is not None) is proven
 
     @pytest.mark.parametrize(
         "guard",
         [None, {"modifies_guarded_paths": True}, {"modifies_guarded_paths": None}],
     )
-    def test_live_gate_refuses_optional_only_proof_for_guarded_path_prs(
-        self, guard: dict[str, Any] | None
-    ) -> None:
-        from aragora.cli.commands.review_queue_unstable import admin_squash_live_gate_blockers
+    def test_executor_proof_refuses_guarded_path_prs(self, guard: dict[str, Any] | None) -> None:
+        from aragora.cli.commands.review_queue_unstable import (
+            admin_squash_live_gate_blockers,
+            optional_only_unstable_executor_proof,
+        )
 
         packet = self._live_gate_packet([*self.GREEN_REQUIRED, self.OPTIONAL_FAILURE], guard=guard)
 
-        assert admin_squash_live_gate_blockers(packet) == [
-            "mergeStateStatus=UNSTABLE; admin squash requires CLEAN/BLOCKED or "
-            "authoritative optional-only UNSTABLE proof"
-        ]
+        assert admin_squash_live_gate_blockers(packet) == [MAIN_UNSTABLE_BLOCKER]
+        assert optional_only_unstable_executor_proof(packet) is None
+
+    def test_executor_proof_carries_the_model_verdict_and_proof_counts(self) -> None:
+        from aragora.cli.commands.review_queue_unstable import optional_only_unstable_executor_proof
+
+        packet = self._live_gate_packet(
+            [*self.GREEN_REQUIRED, self.OPTIONAL_FAILURE],
+            guard={"modifies_guarded_paths": False},
+        )
+
+        assert optional_only_unstable_executor_proof(packet) == {
+            "model_quorum_status": "satisfied",
+            "model_quorum_verdict": "admin_squash_allowed",
+            "model_quorum_admin_squash_allowed": True,
+            "proof_counts": {
+                "non_green_count": 1,
+                "non_required_non_green_count": 1,
+                "failing_or_cancelled_count": 1,
+                "pending_count": 0,
+                "unverified_cancelled_non_required_count": 0,
+            },
+        }
+
+    @pytest.mark.parametrize(
+        ("labels", "merge_state_status"),
+        [
+            pytest.param(["operator-review-required"], "UNSTABLE", id="operator-hold"),
+            pytest.param([], "CLEAN", id="clean"),
+            pytest.param([], "BLOCKED", id="blocked"),
+            pytest.param([], "", id="merge-state-unavailable"),
+        ],
+    )
+    def test_executor_proof_applies_only_to_unheld_unstable_prs(
+        self, labels: list[str], merge_state_status: str
+    ) -> None:
+        from aragora.cli.commands.review_queue_unstable import optional_only_unstable_executor_proof
+
+        packet = self._live_gate_packet(
+            [*self.GREEN_REQUIRED, self.OPTIONAL_FAILURE],
+            guard={"modifies_guarded_paths": False},
+        )
+        packet.labels = labels
+        packet.merge_state_status = merge_state_status
+
+        assert optional_only_unstable_executor_proof(packet) is None
+
+    @pytest.mark.parametrize(
+        "quorum_overrides",
+        [
+            pytest.param({"admin_squash_allowed": False}, id="quorum-refuses-admin-squash"),
+            pytest.param({"admin_squash_allowed": "true"}, id="quorum-flag-not-bool"),
+            pytest.param({"unresolved_dissent": True}, id="unresolved-dissent"),
+            pytest.param({"unresolved_dissent": None}, id="dissent-unknown"),
+        ],
+    )
+    def test_executor_proof_requires_an_undissented_admin_squash_quorum(
+        self, quorum_overrides: dict[str, Any]
+    ) -> None:
+        from aragora.cli.commands.review_queue_unstable import optional_only_unstable_executor_proof
+
+        packet = self._live_gate_packet(
+            [*self.GREEN_REQUIRED, self.OPTIONAL_FAILURE],
+            guard={"modifies_guarded_paths": False},
+        )
+        packet.model_review_quorum = {**packet.model_review_quorum, **quorum_overrides}
+
+        assert optional_only_unstable_executor_proof(packet) is None
 
     @staticmethod
     def _gh_json_for_packet(
@@ -1859,6 +1940,11 @@ class TestOptionalOnlyUnstableProofInputs:
                 id="edits-guard-repo-slug-resolver",
             ),
             pytest.param(
+                [[{"filename": "aragora/cli/commands/review_queue_transport.py"}]],
+                True,
+                id="edits-guard-gh-transport",
+            ),
+            pytest.param(
                 [
                     [
                         {
@@ -1880,7 +1966,10 @@ class TestOptionalOnlyUnstableProofInputs:
         files_listing: Any,
         modifies: bool,
     ) -> None:
-        from aragora.cli.commands.review_queue_unstable import admin_squash_live_gate_blockers
+        from aragora.cli.commands.review_queue_unstable import (
+            admin_squash_live_gate_blockers,
+            optional_only_unstable_executor_proof,
+        )
 
         pr_payload = _make_pr(
             number=9453,
@@ -1902,12 +1991,29 @@ class TestOptionalOnlyUnstableProofInputs:
         assert [call for call in calls if call[:1] == ["api"]] == [
             ["api", "repos/synaptent/aragora/pulls/9453/files", "--paginate", "--slurp"]
         ]
-        assert bool(admin_squash_live_gate_blockers(packet)) is modifies
+        assert admin_squash_live_gate_blockers(packet) == [MAIN_UNSTABLE_BLOCKER]
+        # No review quorum ran here, so give the packet one that allows an admin
+        # squash; the guard is then the only thing that can withhold the proof.
+        allowed = replace(
+            packet,
+            model_review_quorum={
+                **packet.model_review_quorum,
+                "status": "satisfied",
+                "verdict": "admin_squash_allowed",
+                "admin_squash_allowed": True,
+                "unresolved_dissent": False,
+            },
+        )
+        assert optional_only_unstable_executor_proof(packet) is None
+        assert (optional_only_unstable_executor_proof(allowed) is None) is modifies
 
     def test_packet_from_the_real_builder_refuses_the_s2_shape(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from aragora.cli.commands.review_queue_unstable import admin_squash_live_gate_blockers
+        from aragora.cli.commands.review_queue_unstable import (
+            admin_squash_live_gate_blockers,
+            optional_only_unstable_executor_proof,
+        )
 
         pr_payload = _make_pr(
             number=9453,
@@ -1926,10 +2032,18 @@ class TestOptionalOnlyUnstableProofInputs:
         assert rollup["non_green_count"] == rollup["non_required_non_green_count"] == 1
         assert rollup["unverified_cancelled_non_required_count"] == 1
         assert packet.check_surfaces["unstable_receipt_guard"] == {"modifies_guarded_paths": False}
-        assert admin_squash_live_gate_blockers(packet) == [
-            "mergeStateStatus=UNSTABLE; admin squash requires CLEAN/BLOCKED or "
-            "authoritative optional-only UNSTABLE proof"
-        ]
+        assert admin_squash_live_gate_blockers(packet) == [MAIN_UNSTABLE_BLOCKER]
+        allowed = replace(
+            packet,
+            model_review_quorum={
+                **packet.model_review_quorum,
+                "status": "satisfied",
+                "verdict": "admin_squash_allowed",
+                "admin_squash_allowed": True,
+                "unresolved_dissent": False,
+            },
+        )
+        assert optional_only_unstable_executor_proof(allowed) is None
 
     @pytest.mark.parametrize("merge_state_status", ["CLEAN", "BLOCKED"])
     def test_packet_skips_the_guarded_path_lookup_outside_unstable(
@@ -5120,10 +5234,7 @@ class TestBuildQueueAndPacket:
             (
                 "UNSTABLE",
                 [],
-                (
-                    "mergeStateStatus=UNSTABLE; admin squash requires CLEAN/BLOCKED or "
-                    "authoritative optional-only UNSTABLE proof"
-                ),
+                "mergeStateStatus=UNSTABLE; admin squash requires CLEAN or BLOCKED",
             ),
             (
                 "CLEAN",
@@ -5133,10 +5244,7 @@ class TestBuildQueueAndPacket:
             (
                 "",
                 [],
-                (
-                    "mergeStateStatus unavailable; admin squash requires CLEAN/BLOCKED or "
-                    "authoritative optional-only UNSTABLE proof"
-                ),
+                "mergeStateStatus unavailable; admin squash requires CLEAN or BLOCKED",
             ),
         ],
     )
@@ -5296,7 +5404,7 @@ class TestBuildQueueAndPacket:
         assert entry["unstable_non_required_contexts_ignored"] == [ignored_context]
         assert packet["admin_squash_order"] == [9034]
 
-    def test_merge_packet_allows_unstable_with_authoritative_required_checks(
+    def test_merge_packet_blocks_optional_only_unstable_but_records_the_executor_proof(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         def fake_build_packet(ref: str, **_kwargs: Any) -> ReviewPacket:
@@ -5378,9 +5486,26 @@ class TestBuildQueueAndPacket:
         )
 
         entry = packet["entries"][0]
-        assert entry["admin_squash_allowed"] is True
-        assert entry["admin_squash_gate_blockers"] == []
-        assert packet["admin_squash_order"] == [9453]
+        assert entry["status"] == "blocked_by_live_gate"
+        assert entry["verdict"] == "admin_squash_blocked_by_live_gate"
+        assert entry["admin_squash_allowed"] is False
+        assert entry["admin_squash_gate_blockers"] == [
+            "mergeStateStatus=UNSTABLE; admin squash requires CLEAN or BLOCKED"
+        ]
+        assert packet["admin_squash_order"] == []
+        assert packet["not_ready"] == [9453]
+        assert entry["optional_only_unstable_executor_proof"] == {
+            "model_quorum_status": "satisfied",
+            "model_quorum_verdict": "admin_squash_allowed",
+            "model_quorum_admin_squash_allowed": True,
+            "proof_counts": {
+                "non_green_count": 2,
+                "non_required_non_green_count": 2,
+                "failing_or_cancelled_count": 2,
+                "pending_count": 0,
+                "unverified_cancelled_non_required_count": 0,
+            },
+        }
 
     def test_merge_packet_text_renderer_prints_live_gate_blockers(
         self,

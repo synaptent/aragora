@@ -3173,6 +3173,9 @@ def _build_merge_authorization_packet(
         }
         if packet.check_surfaces:
             entry["check_surfaces"] = packet.check_surfaces
+        executor_proof = unstable.optional_only_unstable_executor_proof(packet)
+        if executor_proof is not None:
+            entry["optional_only_unstable_executor_proof"] = executor_proof
         hydrated_entries_by_pr[str(packet.pr_number)] = entry
 
     entries = []
