@@ -92,9 +92,16 @@ record from acquiring the authority of the live or durable state it summarizes.
 
 - `fresh` means the evidence remains valid under its declared invalidators.
 - `stale` remains visible for history but has no current authority.
+- A fact or derived record is never fresher than its basis: a record that
+  declares itself `fresh` cites only `fresh` evidence handles. A record that
+  must keep stale history in view declares itself `stale` or `unknown`.
 - `unknown`, `unavailable`, or `ambiguous` on an authority-bearing source blocks
   dependent affordances.
 - Anchor movement invalidates commit-bound Nomic results and decision evidence.
+  The Nomic projection cites its pack, planning result, and receipt as
+  `commit_evidence` handles. Only a `verified` state, whose cited handles are all
+  `fresh`, claims `exact_commit_match: true`; `absent`, `stale`, and `invalid`
+  states always record `false`.
 - Truncation is explicit, deterministic, and never silently removes a blocker.
   `truncation.emitted_bytes` is the exact byte length of the complete envelope
   serialized as compact, key-sorted UTF-8 JSON. Because the field is counted
@@ -128,6 +135,7 @@ The fixtures under `tests/orientation/fixtures/` pin four required journeys:
 4. quiet no-change recheck within the compact response budget.
 
 `tests/orientation/test_orientation_contract.py` validates the schema, authority
-monotonicity, evidence metadata, no-effect rule, response budget, and links from
+and freshness monotonicity, evidence metadata, exact-commit Nomic binding,
+no-effect rule, response budget, and links from
 the thesis, roadmap, flywheel, mission, and Nomic plans. Runtime implementation
 must conform to these traces rather than weakening them.

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import copy
 import fnmatch
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -54,6 +56,8 @@ AUTHORITY_PRECEDENCE = (
 GROUNDED_AUTHORITIES = AUTHORITY_PRECEDENCE[:-1]
 EVIDENCE_COLLECTIONS = (*DERIVED_COLLECTIONS, "source_observations", "facts")
 EVIDENCE_URI_SCHEMES = frozenset({"aragora", "https"})
+FRESHNESS_EXAMPLES = (("fresh_orientation.json", "facts"), *DERIVED_EXAMPLES)
+NOMIC_REFS = ("pack_ref", "result_ref", "receipt_ref")
 
 
 def _load(path: Path) -> dict[str, Any]:
@@ -70,6 +74,55 @@ def _evidence_handles(document: dict[str, Any]) -> list[dict[str, Any]]:
         for record in document.get(collection, ()):
             handles.extend(record["evidence_refs"])
     return handles
+
+
+def _commit_evidence_handle(name: str, status: str = "fresh") -> dict[str, Any]:
+    return {
+        "id": f"nomic:{name}",
+        "uri": f"aragora://synaptent/aragora/nomic/{name}",
+        "authority": "commit_evidence",
+        "fingerprint": "sha256:" + hashlib.sha256(name.encode("utf-8")).hexdigest(),
+        "freshness": {"status": status, "observed_at": "2026-08-31T13:30:00Z", "expires_at": None},
+        "invalidators": ["repository anchor changes"],
+    }
+
+
+def _nomic(state: str) -> dict[str, Any]:
+    if state == "absent":
+        return {
+            "state": state,
+            "exact_commit_match": False,
+            "evidence_coverage": 0.0,
+            "dissent": [],
+        }
+    status = "fresh" if state == "verified" else "stale"
+    return {
+        "state": state,
+        "exact_commit_match": state == "verified",
+        "evidence_coverage": 1.0,
+        **{ref: _commit_evidence_handle(ref.removesuffix("_ref"), status) for ref in NOMIC_REFS},
+        "dissent": [],
+    }
+
+
+def _ungrounded_nomic_refs() -> list[Any]:
+    handle = _commit_evidence_handle("pack")
+    without_fingerprint = {key: value for key, value in handle.items() if key != "fingerprint"}
+    return [
+        pytest.param("x", id="free-form-string"),
+        pytest.param("aragora://synaptent/aragora/nomic/pack", id="bare-uri-string"),
+        pytest.param("javascript:alert(1)", id="javascript-string"),
+        pytest.param("data:text/html,<script>alert(1)</script>", id="data-string"),
+        pytest.param("file:///etc/passwd", id="file-string"),
+        pytest.param({**handle, "uri": "javascript:alert(1)"}, id="javascript-handle"),
+        pytest.param({**handle, "uri": "data:text/html,x"}, id="data-handle"),
+        pytest.param({**handle, "uri": "file:///etc/passwd"}, id="file-handle"),
+        pytest.param({**handle, "authority": "live_authority"}, id="live-authority-handle"),
+        pytest.param({**handle, "authority": "durable_state"}, id="durable-state-handle"),
+        pytest.param({**handle, "authority": "derived_recommendation"}, id="derived-handle"),
+        pytest.param({**handle, "fingerprint": "sha256:x"}, id="malformed-fingerprint"),
+        pytest.param(without_fingerprint, id="no-fingerprint"),
+    ]
 
 
 @pytest.fixture(scope="module")
@@ -194,6 +247,35 @@ def test_evidence_backed_records_cannot_ground_themselves_in_derived_guidance(
     error = jsonschema.exceptions.best_match(bare_validator.iter_errors(document))
     assert error is not None
     assert list(error.absolute_path) == [collection, 0, "authority"]
+
+
+@pytest.mark.parametrize("weaker_status", ["stale", "unknown"])
+@pytest.mark.parametrize(("fixture_name", "collection"), FRESHNESS_EXAMPLES)
+def test_fresh_record_cites_only_fresh_evidence(
+    bare_validator: Any, fixture_name: str, collection: str, weaker_status: str
+) -> None:
+    document = _load(FIXTURE_DIR / fixture_name)
+    record = document[collection][0]
+    assert record["freshness"]["status"] == "fresh"
+    fresh_sibling = copy.deepcopy(record["evidence_refs"][0])
+    record["evidence_refs"][0]["freshness"]["status"] = weaker_status
+    # A fresh sibling handle must not carry a stale one: every cited handle counts.
+    record["evidence_refs"].append(fresh_sibling)
+    with pytest.raises(jsonschema.ValidationError):
+        bare_validator.validate(document)
+
+
+@pytest.mark.parametrize("record_status", ["stale", "unknown"])
+@pytest.mark.parametrize(("fixture_name", "collection"), FRESHNESS_EXAMPLES)
+def test_non_fresh_record_keeps_stale_evidence_visible(
+    bare_validator: Any, fixture_name: str, collection: str, record_status: str
+) -> None:
+    document = _load(FIXTURE_DIR / fixture_name)
+    record = document[collection][0]
+    record["freshness"]["status"] = record_status
+    for handle in record["evidence_refs"]:
+        handle["freshness"]["status"] = "stale"
+    bare_validator.validate(document)
 
 
 @pytest.mark.parametrize(
@@ -469,21 +551,69 @@ def test_truncation_flag_must_agree_with_omissions(
 
 def test_verified_nomic_state_requires_an_exact_commit_and_refs(bare_validator: Any) -> None:
     document = _load(FIXTURE_DIR / "fresh_orientation.json")
-    document["nomic"] = {
-        "state": "verified",
-        "exact_commit_match": False,
-        "evidence_coverage": 1.0,
-        "pack_ref": "pack-1",
-        "receipt_ref": "receipt-1",
-        "dissent": [],
-    }
+    document["nomic"] = _nomic("verified")
+    document["nomic"]["exact_commit_match"] = False
     with pytest.raises(jsonschema.ValidationError):
         bare_validator.validate(document)
 
     document["nomic"]["exact_commit_match"] = True
     bare_validator.validate(document)
 
-    del document["nomic"]["receipt_ref"]
+    for required_ref in ("pack_ref", "receipt_ref"):
+        missing = copy.deepcopy(document)
+        del missing["nomic"][required_ref]
+        with pytest.raises(jsonschema.ValidationError):
+            bare_validator.validate(missing)
+
+    del document["nomic"]["result_ref"]
+    bare_validator.validate(document)
+
+
+@pytest.mark.parametrize("state", ["verified", "stale", "invalid"])
+def test_nomic_refs_accept_commit_evidence_handles(bare_validator: Any, state: str) -> None:
+    document = _load(FIXTURE_DIR / "fresh_orientation.json")
+    document["nomic"] = _nomic(state)
+    bare_validator.validate(document)
+
+
+@pytest.mark.parametrize("ungrounded", _ungrounded_nomic_refs())
+@pytest.mark.parametrize("ref", NOMIC_REFS)
+@pytest.mark.parametrize("state", ["verified", "stale", "invalid"])
+def test_nomic_refs_must_be_commit_evidence_handles(
+    bare_validator: Any, state: str, ref: str, ungrounded: Any
+) -> None:
+    document = _load(FIXTURE_DIR / "fresh_orientation.json")
+    document["nomic"] = _nomic(state)
+    bare_validator.validate(document)
+
+    document["nomic"][ref] = copy.deepcopy(ungrounded)
+    with pytest.raises(jsonschema.ValidationError):
+        bare_validator.validate(document)
+
+
+@pytest.mark.parametrize("weaker_status", ["stale", "unknown"])
+@pytest.mark.parametrize("ref", NOMIC_REFS)
+def test_verified_nomic_cites_only_fresh_commit_evidence(
+    bare_validator: Any, ref: str, weaker_status: str
+) -> None:
+    document = _load(FIXTURE_DIR / "fresh_orientation.json")
+    document["nomic"] = _nomic("verified")
+    bare_validator.validate(document)
+
+    document["nomic"][ref]["freshness"]["status"] = weaker_status
+    with pytest.raises(jsonschema.ValidationError):
+        bare_validator.validate(document)
+
+
+@pytest.mark.parametrize("state", ["absent", "stale", "invalid"])
+def test_only_a_verified_nomic_state_may_claim_an_exact_commit(
+    bare_validator: Any, state: str
+) -> None:
+    document = _load(FIXTURE_DIR / "fresh_orientation.json")
+    document["nomic"] = _nomic(state)
+    bare_validator.validate(document)
+
+    document["nomic"]["exact_commit_match"] = True
     with pytest.raises(jsonschema.ValidationError):
         bare_validator.validate(document)
 

@@ -79,6 +79,20 @@
         }
       ]
     },
+    "freshCitation": {
+      "properties": {
+        "freshness": { "properties": { "status": { "const": "fresh" } } }
+      }
+    },
+    "freshnessMonotonicity": {
+      "description": "A record is never fresher than its cited basis: a fresh record cites only fresh evidence handles.",
+      "if": { "$ref": "#/$defs/freshCitation", "required": ["freshness"] },
+      "then": {
+        "properties": {
+          "evidence_refs": { "items": { "$ref": "#/$defs/freshCitation" } }
+        }
+      }
+    },
     "freshness": {
       "type": "object",
       "required": ["status", "observed_at"],
@@ -125,6 +139,15 @@
         }
       }
     },
+    "commitEvidenceHandle": {
+      "$ref": "#/$defs/evidenceHandle",
+      "properties": {
+        "authority": {
+          "description": "Nomic packs, planning results and receipts are commit evidence bound to the exact repository commit.",
+          "const": "commit_evidence"
+        }
+      }
+    },
     "derivedMetadata": {
       "type": "object",
       "required": [
@@ -149,7 +172,8 @@
         "freshness": { "$ref": "#/$defs/freshness" },
         "invalidators": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
         "bounded_cost": { "$ref": "#/$defs/boundedCost" }
-      }
+      },
+      "allOf": [{ "$ref": "#/$defs/freshnessMonotonicity" }]
     },
     "repositoryAnchor": {
       "type": "object",
@@ -223,7 +247,10 @@
         "freshness": { "$ref": "#/$defs/freshness" },
         "invalidators": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
       },
-      "allOf": [{ "$ref": "#/$defs/authorityMonotonicity" }],
+      "allOf": [
+        { "$ref": "#/$defs/authorityMonotonicity" },
+        { "$ref": "#/$defs/freshnessMonotonicity" }
+      ],
       "additionalProperties": false
     },
     "workRecommendation": {
@@ -333,18 +360,25 @@
         "state": { "enum": ["absent", "verified", "stale", "invalid"] },
         "exact_commit_match": { "type": "boolean" },
         "evidence_coverage": { "type": "number", "minimum": 0, "maximum": 1 },
-        "pack_ref": { "type": "string" },
-        "result_ref": { "type": "string" },
-        "receipt_ref": { "type": "string" },
+        "pack_ref": { "$ref": "#/$defs/commitEvidenceHandle" },
+        "result_ref": { "$ref": "#/$defs/commitEvidenceHandle" },
+        "receipt_ref": { "$ref": "#/$defs/commitEvidenceHandle" },
         "dissent": { "type": "array", "items": { "type": "string" } }
       },
       "allOf": [
         {
+          "description": "Only a verified pack, resting on fresh commit evidence, matches the exact commit; absent, stale and invalid states never claim the match.",
           "if": { "properties": { "state": { "const": "verified" } }, "required": ["state"] },
           "then": {
-            "properties": { "exact_commit_match": { "const": true } },
+            "properties": {
+              "exact_commit_match": { "const": true },
+              "pack_ref": { "$ref": "#/$defs/freshCitation" },
+              "result_ref": { "$ref": "#/$defs/freshCitation" },
+              "receipt_ref": { "$ref": "#/$defs/freshCitation" }
+            },
             "required": ["pack_ref", "receipt_ref"]
-          }
+          },
+          "else": { "properties": { "exact_commit_match": { "const": false } } }
         }
       ],
       "additionalProperties": false

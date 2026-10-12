@@ -761,7 +761,7 @@ Critical operations use explicit transactions:
 - **Storage tests**: 4,300+ tests across all backends including KM (Phase A2)
 - **SDK breadth**: Python and TypeScript SDKs (module counts in `docs/METRICS.md`)
 <!-- metrics:begin architecture-scale -->
-- **Test coverage**: 229,099 tests across 5,763 test files
+- **Test coverage**: 229,105 tests across 5,763 test files
 - **Source files**: 4,460 Python files under `aragora/`
 - **API surface**: 3,205 API operations across 2,912 paths
 - **KM adapters**: 42 registered adapters (see `aragora/knowledge/mound/adapters/`)
