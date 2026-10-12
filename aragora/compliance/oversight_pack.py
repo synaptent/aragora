@@ -512,7 +512,7 @@ def build_oversight_pack(
         now: Window anchor (defaults to current UTC; injectable for tests).
         attestations: Optional ``receipt_id -> attestation block`` mapping,
             overriding/supplying attestations for native receipts (e.g. built
-            with :mod:`aragora.gauntlet.attestation`).
+            with :mod:`aragora.models.receipts.attestation`).
         settlement_fetch_report: Optional fetch-completeness metadata from
             :func:`aragora.compliance.oversight_fetch.fetch_settlement_attestations`
             (repo, scanned_prs, skipped, truncated) — persisted in the pack so
