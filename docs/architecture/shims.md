@@ -333,3 +333,16 @@ import-and-call tests at both paths.
 | `aragora.tenancy.context:get_current_tenant_id` | `aragora.config.tenant_context:get_current_tenant_id` | #10316 | not before M4 seal |
 | `aragora.tenancy.context:set_tenant` | `aragora.config.tenant_context:set_tenant` | #10316 | not before M4 seal |
 | `aragora.tenancy.context:set_tenant_id` | `aragora.config.tenant_context:set_tenant_id` | #10316 | not before M4 seal |
+| `aragora.gauntlet.odr_jcs` | `aragora.models.receipts.jcs` | #10512 | not before M4 seal |
+| `aragora.gauntlet.odr_jcs:ODR_SIGNATURE_INPUT_V02` | `aragora.models.receipts.jcs:ODR_SIGNATURE_INPUT_V02` | #10512 | not before M4 seal |
+| `aragora.gauntlet.odr_jcs:jcs_canonicalize` | `aragora.models.receipts.jcs:jcs_canonicalize` | #10512 | not before M4 seal |
+| `aragora.gauntlet.odr_jcs:odr_content_digest` | `aragora.models.receipts.jcs:odr_content_digest` | #10512 | not before M4 seal |
+| `aragora.gauntlet.odr_jcs:odr_signature_message` | `aragora.models.receipts.jcs:odr_signature_message` | #10512 | not before M4 seal |
+| `aragora.gauntlet.attestation` | `aragora.models.receipts.attestation` | #10512 | not before M4 seal |
+| `aragora.gauntlet.attestation:AUTONOMOUS_DISPOSITION` | `aragora.models.receipts.attestation:AUTONOMOUS_DISPOSITION` | #10512 | not before M4 seal |
+| `aragora.gauntlet.attestation:HUMAN_ATTESTED_DISPOSITION` | `aragora.models.receipts.attestation:HUMAN_ATTESTED_DISPOSITION` | #10512 | not before M4 seal |
+| `aragora.gauntlet.attestation:HUMAN_SETTLEMENT_CONTEXT` | `aragora.models.receipts.attestation:HUMAN_SETTLEMENT_CONTEXT` | #10512 | not before M4 seal |
+| `aragora.gauntlet.attestation:OversightAttestation` | `aragora.models.receipts.attestation:OversightAttestation` | #10512 | not before M4 seal |
+| `aragora.gauntlet.attestation:attestation_from_preapproval_comment` | `aragora.models.receipts.attestation:attestation_from_preapproval_comment` | #10512 | not before M4 seal |
+| `aragora.gauntlet.attestation:attestation_from_settlement_status` | `aragora.models.receipts.attestation:attestation_from_settlement_status` | #10512 | not before M4 seal |
+| `aragora.gauntlet.attestation:build_oversight_attestation` | `aragora.models.receipts.attestation:build_oversight_attestation` | #10512 | not before M4 seal |
