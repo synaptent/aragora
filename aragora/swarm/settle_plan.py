@@ -21,7 +21,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from aragora.cli.commands.review_queue_comment_verdicts import extract_finding_lines
+from aragora.review.comment_verdicts import extract_finding_lines
 
 # Tier 0-2 can settle unattended on a green model quorum (auto-merge path);
 # Tier 3-4 require a head-bound human risk settlement by a trusted operator.
