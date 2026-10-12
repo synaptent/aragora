@@ -194,6 +194,12 @@ stores = "aragora.stores.debate_registration:register_debate_workspace_stores"
 [project.entry-points."aragora.tenancy_bindings"]
 server = "aragora.server.tenancy_bindings:register_tenancy_bindings"
 
+# Run by aragora/events/approval_requests.py on the first approval request that finds
+# no notifier, so workflows, pipelines and computer use still reach the chat approval
+# notifier without importing aragora.approvals.
+[project.entry-points."aragora.approval_notifiers"]
+approvals = "aragora.approvals.notifier_registration:register_chat_approval_notifier"
+
 # -----------------------------------------------------------------------------
 # uv resolver constraints — security floors for the pip-audit security gate
 # (scripts/run_pip_audit_gate.py). They bound what the lockfile may resolve
