@@ -13,9 +13,9 @@ baseline [scripts/baselines/import_contracts_baseline.json](../../scripts/baseli
 Symbols moved down a layer keep a compatibility re-export at their old path; every such move is listed in
 [shims.md](shims.md).
 
-This page is in its M4 form. Measured on `origin/main` at `6b7d46683e35` (2026-10-12, after #10600) with
-tranche T5 applied: 161 layered names, 61 baselined pairs (18 in Partition A, 43 in Partition B), and the
-live pair set equals the baseline.
+This page is in its M4 form. Measured on `origin/main` at `f754e076ca9b` (2026-10-12, after #10609) with
+tranche T6 applied: 166 layered names (every top-level module), 60 baselined pairs (18 in Partition A, 42 in
+Partition B), and the live pair set equals the baseline.
 
 ## Enforcement
 
@@ -31,43 +31,45 @@ live pair set equals the baseline.
   those layers.
 - `scripts/ci/measure_import_graph.py --check` ratchets the mutual import cycle count against
   `scripts/baselines/import_cycles_baseline.json` (140, shrink-only).
-- Pinned by tests: `tests/ci/test_layer_membership.py` (exact per-layer sets, five lines, checker mapping),
+- Pinned by tests: `tests/ci/test_layer_membership.py` (exact per-layer sets, five lines, checker mapping,
+  every top-level module layered),
   `tests/ci/test_importlinter_tc_policy.py` (the TYPE_CHECKING policy) and `tests/ci/test_shims_ledger.py`
   (every [shims.md](shims.md) row resolves at both paths to the same object).
 
 ## Current layer membership
 
-Exactly what `.importlinter` declares today (161 names). The container package `aragora` itself is never a
+Exactly what `.importlinter` declares today (166 names). The container package `aragora` itself is never a
 member.
 
 | layer | count | members |
 |---|---|---|
-| interface | 8 | `server` `cli` `mcp` `gateway` `bots` `channels` `integrations` `connectors` |
+| interface | 13 | `server` `cli` `mcp` `gateway` `bots` `channels` `integrations` `connectors` `__main__` `approvals` `client` `extensions` `webhooks` |
 | application | 58 | `workflow` `pipeline` `nomic` `swarm` `gauntlet` `goals` `implement` `modes` `verticals` `autonomous` `broadcast` `canvas` `spectate` `analytics` `audit` `control_plane` `golden` `inbox` `marketplace` `services` `skills` `stores` `computer_use` `coordination` `export` `markets` `plugins` `prompt_engine` `receipts` `workspace` `brief_engine` `codex` `compat` `essay` `factory` `fixtures` `gti` `harnesses` `hooks` `ideacloud` `interrogation` `missions` `onboarding` `operations` `ops` `pdb` `playbooks` `policy` `prediction` `ralph` `reports` `review` `scheduler` `schedulers` `sync` `trail` `triage` `worktree` |
 | domain | 43 | `debate` `agents` `memory` `knowledge` `ranking` `reasoning` `evidence` `evaluation` `explainability` `learning` `ml` `advocates` `analysis` `audience` `blockchain` `compliance` `container` `core` `deliberation` `documents` `embeddings` `epistemic` `evolution` `genesis` `heterogeneity` `insights` `introspection` `metrics` `moderation` `prompts` `pulse` `replay` `reputation` `rlm` `routing` `templates` `tools` `tournaments` `training` `uncertainty` `verification` `visualization` `work` |
 | infrastructure | 31 | `storage` `resilience` `events` `observability` `security` `queue` `db` `caching` `billing` `backup` `migrations` `cache` `deletion_coordinator` `fabric` `maintenance` `monitoring` `performance` `resilience_config` `resilience_patterns` `runtime` `sandbox` `streaming` `telemetry` `transcription` `auth` `logging_config` `notifications` `persistence` `privacy` `rbac` `tenancy` |
 | foundation | 21 | `api_errors` `config` `core_types` `exceptions` `errors` `utils` `protocols` `types` `__version__` `_lazy_imports` `core_protocols` `docs_only` `http_client` `models` `serialization` `task_brief` `topic_handler` `topic_spec` `topics` `type_protocols` `shared` |
 
-The application, domain, infrastructure and foundation lines are complete. The interface line grows in
-tranche T6 (next section).
+Every line is complete: every `aragora/<name>.py` and `aragora/<name>/__init__.py` (except `__init__`) is a
+member, and `tests/ci/test_layer_membership.py` fails when a new top-level module is not layered.
+`aragora/live` is the Next.js frontend; it has no `__init__.py`, so it is not a Python module.
 
 ## Planned final membership
 
 The design census of 2026-09-10 names 167 top-level modules (interface 13, application 59, domain 43,
 infrastructure 31, foundation 21). One of them, the application module `tasks`, was deleted from `main`
 by PR #9057 (commit `5ac7fa3fc280`, 2026-09-30), so it is not planned. The final membership is the remaining
-166 names. A top-level module that appears after the census is classified explicitly before it is layered.
+166 names, all layered since tranche T6. A top-level module that appears after the census is classified
+explicitly before it is layered.
 
 | layer | status | count | members |
 |---|---|---|---|
-| interface | layered | 8 | `server` `cli` `mcp` `gateway` `bots` `channels` `integrations` `connectors` |
-| interface | tranche T6 | 5 | `__main__` `approvals` `client` `extensions` `webhooks` |
+| interface | layered | 13 | `server` `cli` `mcp` `gateway` `bots` `channels` `integrations` `connectors` `__main__` `approvals` `client` `extensions` `webhooks` |
 | application | layered | 58 | `workflow` `pipeline` `nomic` `swarm` `gauntlet` `goals` `implement` `modes` `verticals` `autonomous` `broadcast` `canvas` `spectate` `analytics` `audit` `control_plane` `golden` `inbox` `marketplace` `services` `skills` `stores` `computer_use` `coordination` `export` `markets` `plugins` `prompt_engine` `receipts` `workspace` `brief_engine` `codex` `compat` `essay` `factory` `fixtures` `gti` `harnesses` `hooks` `ideacloud` `interrogation` `missions` `onboarding` `operations` `ops` `pdb` `playbooks` `policy` `prediction` `ralph` `reports` `review` `scheduler` `schedulers` `sync` `trail` `triage` `worktree` |
 | domain | layered | 43 | `debate` `agents` `memory` `knowledge` `ranking` `reasoning` `evidence` `evaluation` `explainability` `learning` `ml` `advocates` `analysis` `audience` `blockchain` `compliance` `container` `core` `deliberation` `documents` `embeddings` `epistemic` `evolution` `genesis` `heterogeneity` `insights` `introspection` `metrics` `moderation` `prompts` `pulse` `replay` `reputation` `rlm` `routing` `templates` `tools` `tournaments` `training` `uncertainty` `verification` `visualization` `work` |
 | infrastructure | layered | 31 | `storage` `resilience` `events` `observability` `security` `queue` `db` `caching` `billing` `backup` `migrations` `cache` `deletion_coordinator` `fabric` `maintenance` `monitoring` `performance` `resilience_config` `resilience_patterns` `runtime` `sandbox` `streaming` `telemetry` `transcription` `auth` `logging_config` `notifications` `persistence` `privacy` `rbac` `tenancy` |
 | foundation | layered | 21 | `api_errors` `config` `core_types` `exceptions` `errors` `utils` `protocols` `types` `__version__` `_lazy_imports` `core_protocols` `docs_only` `http_client` `models` `serialization` `task_brief` `topic_handler` `topic_spec` `topics` `type_protocols` `shared` |
 
-Tranche T4a landed in milestone M3, and T4b and T5 landed in M4; T6 follows in M4. Deprecated shim packages that are listed
+Tranche T4a landed in milestone M3, and T4b, T5 and T6 landed in M4. Deprecated shim packages that are listed
 (`cache`, `core_protocols`, `metrics`, `monitoring`, `telemetry`, `type_protocols`, `operations`,
 `schedulers`, `resilience_patterns`) stay listed until they are retired; when a listed module is deleted, its
 name leaves `.importlinter` in the same PR, because import-linter errors on a missing layer module.
@@ -187,7 +189,9 @@ through `aragora.training.specialist_models`).
 | #10598 | `f14f82796b` | `cli.review` seam, part 1: the review-comment verdict parser and `SettlementReceipt` get homes in `aragora.review` (`comment_verdicts`, `settlement_receipt`), and the `aragora.swarm` sites and `aragora.review.observe_outcomes_cli` import them there. The homes are verbatim copies pinned to the CLI definitions by parity tests until the Tier-4 re-export edit; `aragora/swarm/quorum_evidence.py` keeps `aragora.swarm -> aragora.cli` live until then | 133 | 62 |
 | #10599 | `3f78f841a0` | `cli.review` seam, part 2: `extract_review_findings` moved down to `aragora.review.diff_review`; `aragora.cli.review` re-exports it | 133 | 62 |
 | #10600 | `6b7d46683e` | `cli.review` seam, part 3: the review debate runner (`run_review_debate`, `build_review_prompt`, `get_available_agents` and the review defaults) moved down to `aragora.review.diff_review` with re-exports; the OpenClaw PR review runner imports it there, so `aragora.compat` no longer imports `aragora.cli`. Resolved `aragora.export -> aragora.cli` and `aragora.nomic -> aragora.cli` (their only routes, from `aragora.export.case_study` and `aragora.nomic.execution_bridge`, ran through that import) | 133 | 62 to 60 |
-| #10602 | squash merge of #10602 | Tranche T5: `brief_engine codex compat essay factory fixtures gti harnesses hooks ideacloud interrogation missions onboarding operations ops pdb playbooks policy prediction ralph reports review scheduler schedulers sync trail triage worktree` (application); adopted `aragora.compat -> aragora.server`, `aragora.harnesses -> aragora.mcp`, `aragora.ideacloud -> aragora.connectors`, `aragora.ops -> aragora.gateway` and `aragora.ops -> aragora.server`; `aragora.implement`, `aragora.nomic`, `aragora.swarm` and `aragora.workflow -> aragora.mcp` resolved by reattribution (their only chains run through `aragora/harnesses/claude_code.py:570` and now count toward `aragora.harnesses -> aragora.mcp`) | 161 | 60 to 61 |
+| #10602 | `324ea90c24` | Tranche T5: `brief_engine codex compat essay factory fixtures gti harnesses hooks ideacloud interrogation missions onboarding operations ops pdb playbooks policy prediction ralph reports review scheduler schedulers sync trail triage worktree` (application); adopted `aragora.compat -> aragora.server`, `aragora.harnesses -> aragora.mcp`, `aragora.ideacloud -> aragora.connectors`, `aragora.ops -> aragora.gateway` and `aragora.ops -> aragora.server`; `aragora.implement`, `aragora.nomic`, `aragora.swarm` and `aragora.workflow -> aragora.mcp` resolved by reattribution (their only chains run through `aragora/harnesses/claude_code.py:570` and now count toward `aragora.harnesses -> aragora.mcp`) | 161 | 60 to 61 |
+| #10607 | `2647ad8b5a` | Approval-request inversion: `aragora.events.approval_requests` holds the notifier hook, and `aragora.approvals` registers its chat notifier from its init and through the `aragora.approval_notifiers` entry point; the `aragora.workflow`, `aragora.pipeline` and `aragora.computer_use` sites call the hook, so none of them imports `aragora.approvals` (tranche T6). Resolved `aragora.computer_use -> aragora.connectors` (its only chain ran through `aragora.approvals.chat`) | 161 | 61 to 60 |
+| #10609 | `f754e076ca` | Moved the gastown hook runner to `aragora.worktree.hook_runner`, with shims at `aragora.extensions.gastown.hooks` and `aragora.extensions.gastown.models`, so `aragora.nomic` no longer imports `aragora.extensions` (tranche T6) | 161 | 60 |
 
 The two config pairs adopted by #10314 (`aragora.config -> aragora.persistence`, `aragora.config ->
 aragora.tenancy`) were fixed by the config-seam PR #10316 (Tier 4, settled by the operator).
@@ -198,8 +202,8 @@ Partition A is every violating pair whose imported package is `aragora.server` (
 import). These pairs stay baselined: the server-as-library migration of the server modules owns them, and the
 layering work adds no new Partition A site. Measured on `b0ab11df1366` with tranche T4a applied: 17 pairs, 80
 direct sites. The audit split (#10382) has since removed the `aragora.audit` row, leaving 16 pairs; tranche
-T4b added none, and tranche T5 added `aragora.compat` and `aragora.ops` (one direct site each), so 18 pairs are
-listed below.
+T4b added none, tranche T5 added `aragora.compat` and `aragora.ops` (one direct site each), and tranche T6 added
+none, so 18 pairs are listed below.
 
 - **sites** lists every direct, runtime (not `TYPE_CHECKING`) `from aragora.server...` or `import
   aragora.server...` statement inside the importer package.
