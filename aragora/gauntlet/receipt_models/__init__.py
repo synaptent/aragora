@@ -19,10 +19,18 @@ if not TYPE_CHECKING:
     # Alias first: the adapter modules below may import this path while it loads.
     sys.modules[__name__] = _receipts
 
-import aragora.storage.receipt_signing as _receipt_signing
 from aragora.agents.failure_semantics import all_responses_are_failures as _all_failures
 from aragora.gauntlet import receipt_exporters as _receipt_exporters
 from aragora.models.receipts import operations as _operations
+
+
+class _DeferredReceiptSigning:
+    # Importing aragora.storage.receipt_signing runs the whole storage package init,
+    # so it waits for the first signing call instead of loading with this facade.
+    def __getattr__(self, name: str) -> Any:
+        import aragora.storage.receipt_signing as receipt_signing
+
+        return getattr(receipt_signing, name)
 
 
 def _compliance_generator(**kwargs: Any) -> Any:
@@ -41,7 +49,7 @@ def _detect_provider(model: str) -> str:
         return "unknown"
 
 
-_operations.register_signing(_receipt_signing)
+_operations.register_signing(_DeferredReceiptSigning())
 _operations.register_exporters(_receipt_exporters)
 _operations.register_compliance_generator(_compliance_generator)
 _operations.register_provider_detector(_detect_provider)
