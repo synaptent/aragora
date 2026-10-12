@@ -76,12 +76,16 @@ the candidate set with `git ls-files | grep -v /`.
 .dockerignore
 .env.example
 .env.production.example
+# .git-blame-ignore-revs: format-only commits that git blame skips
+.git-blame-ignore-revs
 .gitattributes
 .gitguardian.yaml
 .gitignore
 .gitleaks.toml
 .importlinter
 .mypy-baseline
+# .npmrc: advisory npm min-release-age=3 cooldown (docs/RATCHETS.md)
+.npmrc
 .pre-commit-config.yaml
 .trivy.yaml
 .trivyignore
