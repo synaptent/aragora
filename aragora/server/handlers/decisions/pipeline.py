@@ -486,8 +486,10 @@ class DecisionPipelineHandler(SecureHandler):
         )
 
         # Store it
+        from aragora.pipeline.execution_ownership import resolve_execution_owner
         from aragora.pipeline.executor import store_plan
 
+        plan.org_id, plan.created_by = resolve_execution_owner(user)
         store_plan(plan)
         sync_decision_plan_backbone_receipt(plan, append_event=False)
 

@@ -515,7 +515,7 @@ class TestCreateDecisionIntegrityPlanOnly:
         ):
             handler._create_decision_integrity(None, "debate-001")
 
-        mock_persist_plan.assert_called_once_with(mock_package.plan, "debate-001")
+        mock_persist_plan.assert_called_once_with(mock_package.plan, "debate-001", (None, None))
 
     def test_custom_payload_options(self, handler, mock_storage, mock_package):
         """Payload options are forwarded to build_decision_integrity_package."""
@@ -1033,6 +1033,36 @@ class TestWorkflowBackbone:
 
         assert parse_result(result)[1] == 200
         assert stored_owners == [expected_owner]
+
+    @pytest.mark.parametrize("body", [{}, {"execution_engine": "computer_use"}])
+    def test_non_workflow_plan_is_stored_with_the_caller_as_owner(
+        self, handler, mock_storage, mock_package, body
+    ):
+        handler._body = body
+        handler.get_current_user = lambda h: MagicMock(org_id="org-a", user_id="user-1")
+
+        from aragora.pipeline.decision_plan import DecisionPlan
+
+        stored_owners = []
+        impl = "aragora.server.handlers.debates.implementation"
+        with (
+            patch(f"{impl}.run_async", return_value=mock_package),
+            patch(f"{impl}._persist_receipt", return_value=None),
+            patch(
+                "aragora.pipeline.decision_plan.DecisionPlanFactory.from_implement_plan",
+                side_effect=lambda *a, **k: DecisionPlan(debate_id="debate-001", task="t"),
+            ),
+            patch(f"{impl}.ensure_decision_plan_backbone_run", return_value="run-owner"),
+            patch(f"{impl}.sync_decision_plan_backbone_receipt", return_value=True),
+            patch(
+                "aragora.pipeline.executor.store_plan",
+                side_effect=lambda p: stored_owners.append((p.org_id, p.created_by)),
+            ),
+        ):
+            result = handler._create_decision_integrity(None, "debate-001")
+
+        assert parse_result(result)[1] == 200
+        assert stored_owners == [("org-a", "user-1")]
 
 
 # =============================================================================

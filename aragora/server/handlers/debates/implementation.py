@@ -93,8 +93,13 @@ def _persist_receipt(receipt: Any, debate_id: str) -> str | None:
         return None
 
 
-def _persist_plan(plan: Any, debate_id: str) -> None:
-    """Store an ImplementPlan in the pipeline plan store for tracking."""
+def _persist_plan(
+    plan: Any, debate_id: str, owner: tuple[str | None, str | None] = (None, None)
+) -> None:
+    """Store an ImplementPlan in the pipeline plan store for tracking.
+
+    ``owner`` is the ``(org_id, created_by)`` of the requesting user.
+    """
     try:
         from aragora.pipeline.executor import store_plan
         from aragora.pipeline.decision_plan import DecisionPlanFactory
@@ -104,6 +109,7 @@ def _persist_plan(plan: Any, debate_id: str) -> None:
     except (ImportError, KeyError, ValueError, OSError, AttributeError, TypeError) as exc:
         logger.debug("Plan persistence setup failed: %s", exc)
         return
+    decision_plan.org_id, decision_plan.created_by = owner
 
     try:
         ensure_decision_plan_backbone_run(
@@ -214,6 +220,8 @@ class _RequestConfig:
     workflow_mode: bool
     execute_workflow: bool
     repo_path: Path | None
+    # (org_id, created_by) of the requesting user
+    owner: tuple[str | None, str | None] = (None, None)
 
 
 def _parse_request(payload: dict[str, Any], ctx: dict[str, Any]) -> _RequestConfig:
@@ -417,6 +425,7 @@ class ImplementationOperationsMixin:
 
         payload = self.read_json_body(handler) or {}
         rc = _parse_request(payload, self.ctx)
+        rc.owner = resolve_execution_owner(self.get_current_user(handler))
 
         # Build the decision integrity package
         package, response_payload = self._build_integrity_package(debate, debate_id, rc, handler)
@@ -532,6 +541,7 @@ class ImplementationOperationsMixin:
                         package.plan,
                         debate_id=debate_id,
                     )
+                    computer_use_plan.org_id, computer_use_plan.created_by = rc.owner
                     run_id = ensure_decision_plan_backbone_run(
                         computer_use_plan,
                         auth_context=None,
@@ -552,7 +562,7 @@ class ImplementationOperationsMixin:
                 ) as exc:
                     logger.debug("Computer use plan persistence failed: %s", exc)
             else:
-                _persist_plan(package.plan, debate_id)
+                _persist_plan(package.plan, debate_id, rc.owner)
 
         return receipt_id, computer_use_plan
 
