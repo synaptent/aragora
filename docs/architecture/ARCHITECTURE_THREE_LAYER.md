@@ -99,7 +99,7 @@ decision control plane with optional Gastown and OpenClaw (formerly Moltbot) ext
 
 **Components** (to build):
 - `aragora/extensions/gastown/workspace.py` - Workspace manager (projects, rigs)
-- `aragora/extensions/gastown/hooks.py` - Git worktree persistence layer
+- `aragora/worktree/hook_runner.py` - Git worktree persistence layer (re-exported as `aragora.extensions.gastown.hooks`)
 - `aragora/extensions/gastown/convoy.py` - Work tracking units and state machine
 - `aragora/extensions/gastown/beads.py` - Issue tracking ledger
 - `aragora/extensions/gastown/mayor.py` - Coordinator agent interface
