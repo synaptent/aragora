@@ -23,7 +23,9 @@ from __future__ import annotations
 
 import argparse
 import fnmatch
+import functools
 import json
+import posixpath
 import re
 import sys
 from pathlib import Path
@@ -333,28 +335,77 @@ def _package_files(root: Path, package: str) -> list[str]:
     return sorted(files)
 
 
+def _ruff_glob(pattern: str) -> re.Pattern[str]:
+    """Compile one brace-free per-file-ignores glob with ruff's globset rules.
+
+    ``*`` and ``?`` also match ``/``. A whole ``**`` component matches zero or
+    more directories: ``**/`` at the start, ``/**/`` in the middle, and a
+    trailing ``/**`` matches everything below. ``**`` inside a component acts
+    like ``*``.
+    """
+    parts: list[str] = []
+    for part in pattern.split("/"):
+        if not (part == "**" and parts and parts[-1] == "**"):
+            parts.append(part)
+    if parts == ["**"]:
+        return re.compile(".*", re.DOTALL)
+    regex = ""
+    for index, part in enumerate(parts):
+        if part == "**":
+            if index == 0:
+                regex += "(?:/?|.*/)"
+            elif index == len(parts) - 1:
+                regex += "/.*"
+            else:
+                regex += "(?:/|/.*/)"
+            continue
+        if index and parts[index - 1] != "**":
+            regex += "/"
+        regex += fnmatch.translate(part).removesuffix(r"\Z")
+    return re.compile(regex, re.DOTALL)
+
+
+@functools.cache
+def _ruff_key_globs(
+    pattern: str,
+) -> tuple[tuple[re.Pattern[str], ...], tuple[re.Pattern[str], ...]]:
+    """Return the full-path and file-name matchers ruff builds for one key.
+
+    Ruff matches each key twice: normalised against the project root (so
+    ``./`` and ``..`` fold away) against the full path, and as written against
+    the file name alone. ``{a,b}`` lists alternatives.
+    """
+    return (
+        tuple(_ruff_glob(option) for option in _expand_braces(posixpath.normpath(pattern))),
+        tuple(_ruff_glob(option) for option in _expand_braces(pattern)),
+    )
+
+
+def _ruff_key_applies(key: str, path: str) -> bool:
+    """Return whether a per-file-ignores key applies to one repo-relative path.
+
+    A leading ``!`` applies the codes to every path the pattern does not match.
+    """
+    path_globs, name_globs = _ruff_key_globs(key.removeprefix("!"))
+    name = path.rsplit("/", 1)[-1]
+    matched = any(glob.fullmatch(path) for glob in path_globs) or any(
+        glob.fullmatch(name) for glob in name_globs
+    )
+    return matched != key.startswith("!")
+
+
 def _ruff_key_covers(key: str, package: str, files: list[str]) -> bool:
     """Return whether a per-file-ignores key applies to any file of the package.
 
-    Follows ruff's key rules: ``*`` also matches ``/``, ``{a,b}`` alternatives,
-    a key without ``/`` also matches the file name alone, and a leading ``!``
-    applies the codes to every file the pattern does not match. A key naming a
-    path inside the package counts even when that file does not exist yet.
+    A key naming a path inside the package counts even when that file does not
+    exist yet.
     """
-    negated = key.startswith("!")
-    patterns = _expand_braces(key.removeprefix("!"))
-    if not negated and any(pattern.startswith(f"aragora/{package}/") for pattern in patterns):
+    if not key.startswith("!") and any(
+        pattern.startswith(f"aragora/{package}/")
+        for pattern in _expand_braces(posixpath.normpath(key))
+    ):
         return True
-
-    def matches(path: str) -> bool:
-        name = path.rsplit("/", 1)[-1]
-        return any(
-            fnmatch.fnmatchcase(path, pattern)
-            or ("/" not in pattern and fnmatch.fnmatchcase(name, pattern))
-            for pattern in patterns
-        )
-
-    return any(matches(path) != negated for path in files)
+    return any(_ruff_key_applies(key, path) for path in files)
 
 
 def ruff_strict_packages(
@@ -365,8 +416,9 @@ def ruff_strict_packages(
     No package counts when either code is not selected or is ignored globally.
     A package drops out when a ``per-file-ignores`` or ``extend-per-file-ignores``
     key that applies to any of its files under ``root`` exempts either code,
-    including broad or wildcard keys such as ``aragora/*`` or
-    ``aragora/*/timeouts.py`` and selectors such as ``BLE``, ``G`` or ``ALL``.
+    including broad, wildcard or recursive keys such as ``aragora/*``,
+    ``aragora/*/timeouts.py`` or ``aragora/**/utils/*.py`` and selectors such as
+    ``BLE``, ``G`` or ``ALL``.
     """
     root = REPO_ROOT if root is None else root
     lint = pyproject.get("tool", {}).get("ruff", {}).get("lint", {})
