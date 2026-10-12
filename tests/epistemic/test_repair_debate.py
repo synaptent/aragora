@@ -888,3 +888,73 @@ class TestAgentNameCoercion:
         ).hexdigest()
         assert receipt.checksum == expected
         assert receipt.agents == ["{'agent-set'}", "nan"]
+
+
+# ---------------------------------------------------------------------------
+# Crux fields whose str() raises
+# ---------------------------------------------------------------------------
+
+
+def _crux_payload(crux_id: Any, statement: Any = "Concern") -> dict[str, Any]:
+    return {
+        "supports_repair": True,
+        "crux_candidates": [{"crux_id": crux_id, "statement": statement}],
+    }
+
+
+class TestUnprintableCruxFields:
+    def test_unprintable_crux_id_is_skipped_as_absent(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        spec = _spec(monkeypatch)
+        result = run_repair_debate(
+            spec,
+            [
+                _PayloadAgent("agent-a", _crux_payload("crux.kept")),
+                _PayloadAgent("agent-b", _crux_payload(_UnprintableName())),
+            ],
+        )
+        assert [c.crux_id for c in result.receipt.cruxes] == [
+            "crux.kept",
+            *spec.linked_crux_ids,
+        ]
+        assert result.receipt.cruxes[0].contesting_agents == ["agent-a"]
+        assert result.receipt.agents == ["agent-a", "agent-b"]
+        decoded = json.loads(json.dumps(result.to_dict(), allow_nan=False))
+        candidate = decoded["agent_evaluations"][1]["crux_candidates"][0]
+        assert candidate["crux_id"] == "<unprintable _UnprintableName>"
+
+    @pytest.mark.parametrize("crux_id", ["", None], ids=["empty", "none"])
+    def test_empty_crux_id_is_skipped_as_absent(
+        self, monkeypatch: pytest.MonkeyPatch, crux_id: Any
+    ) -> None:
+        spec = _spec(monkeypatch)
+        result = run_repair_debate(spec, [_PayloadAgent("agent-a", _crux_payload(crux_id))])
+        assert [c.crux_id for c in result.receipt.cruxes] == list(spec.linked_crux_ids)
+
+    def test_unprintable_statement_counts_as_empty(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        spec = _spec(monkeypatch)
+        result = run_repair_debate(
+            spec, [_PayloadAgent("agent-a", _crux_payload("crux.x", _UnprintableName()))]
+        )
+        crux = next(c for c in result.receipt.cruxes if c.crux_id == "crux.x")
+        assert crux.statement == ""
+        assert crux.contesting_agents == ["agent-a"]
+        json.dumps(result.to_dict(), allow_nan=False)
+
+    @pytest.mark.parametrize("reverse", [False, True], ids=["unprintable-first", "printable-first"])
+    def test_printable_statement_wins_over_unprintable_in_any_agent_order(
+        self, monkeypatch: pytest.MonkeyPatch, reverse: bool
+    ) -> None:
+        spec = _spec(monkeypatch)
+        agents = [
+            _PayloadAgent("agent-a", _crux_payload("crux.x", _UnprintableName())),
+            _PayloadAgent("agent-b", _crux_payload("crux.x", "Readable concern")),
+        ]
+        if reverse:
+            agents.reverse()
+        result = run_repair_debate(spec, agents)
+        crux = next(c for c in result.receipt.cruxes if c.crux_id == "crux.x")
+        assert crux.statement == "Readable concern"
+        assert crux.contesting_agents == ["agent-a", "agent-b"]
+        json.dumps(result.to_dict(), allow_nan=False)

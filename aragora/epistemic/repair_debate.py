@@ -11,6 +11,8 @@ Invariants:
   by ``crux_id`` (spec-linked cruxes no agent named follow in spec order), and
   a crux several agents name keeps the highest usable score per field, a
   statement chosen by sorted agent name, and sorted ``contesting_agents``.
+- A crux candidate whose ``crux_id`` is empty or whose ``__str__`` raises is
+  skipped as absent; a statement whose ``__str__`` raises counts as empty.
 - ``agent_evaluations`` is a strict-JSON deep copy of the agents' payloads:
   non-finite floats, integers too long to print, cycles and nesting deeper
   than 64 levels become ``None``; mapping keys and other non-JSON values
@@ -219,7 +221,7 @@ def _collect_crux_entries(
         for cand in candidates:
             if not isinstance(cand, dict):
                 continue
-            cid = str(cand.get("crux_id") or "")
+            cid = _safe_str(cand.get("crux_id") or "", unprintable="")
             if not cid:
                 continue
             named.setdefault(cid, []).append((ev["agent"], cand))
@@ -252,7 +254,10 @@ def _merge_named_crux(
 ) -> CruxEntry:
     """Merge every agent candidate for *crux_id* into one order-independent entry."""
     candidates = [cand for _, cand in named_by]
-    statements = sorted((str(agent), str(cand.get("statement") or "")) for agent, cand in named_by)
+    statements = sorted(
+        (str(agent), _safe_str(cand.get("statement") or "", unprintable=""))
+        for agent, cand in named_by
+    )
     agents: list[Any] = []
     for agent, _ in named_by:
         if agent not in agents:
@@ -305,10 +310,12 @@ def _json_safe(value: Any, depth: int = 0, active: frozenset[int] = frozenset())
     return _safe_str(value)
 
 
-def _safe_str(value: Any) -> str:
+def _safe_str(value: Any, unprintable: str | None = None) -> str:
     try:
         return str(value)
     except Exception:  # noqa: BLE001 - agent payloads may carry objects whose __str__ raises
+        if unprintable is not None:
+            return unprintable
         return f"<unprintable {type(value).__name__}>"
 
 
