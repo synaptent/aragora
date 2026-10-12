@@ -5,7 +5,7 @@
     {"path": "aragora-verify/src/aragora_verify", "package": "aragora_verify"}
   ],
   "sources": [
-    "aragora/gauntlet/receipt_models.py",
+    "aragora/gauntlet/receipt_models",
     "aragora/gauntlet/receipt.py",
     "aragora/receipts",
     "aragora/gauntlet/odr_jcs",

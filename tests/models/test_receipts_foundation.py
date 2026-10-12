@@ -14,6 +14,7 @@ import aragora.models.receipts as receipts
 from aragora.models.receipts import attestation, jcs
 
 RECEIPTS_DIR = Path(receipts.__file__).resolve().parent
+REPO_ROOT = RECEIPTS_DIR.parents[2]
 FOUNDATION_PREFIXES = ("aragora.models", "aragora.core_types")
 
 MOVED_MODULES = {
@@ -91,7 +92,15 @@ def test_foundation_modules_import_nothing_above_foundation() -> None:
     offenders: list[str] = []
     for path in sorted(RECEIPTS_DIR.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        type_only = {
+            id(inner)
+            for node in ast.walk(tree)
+            if isinstance(node, ast.If) and ast.unparse(node.test).endswith("TYPE_CHECKING")
+            for inner in ast.walk(node)
+        }
         for node in ast.walk(tree):
+            if id(node) in type_only:
+                continue
             if isinstance(node, ast.Call) and getattr(node.func, "attr", "") == "import_module":
                 offenders.append(f"{path.name}:{node.lineno}:importlib")
                 continue
@@ -118,7 +127,12 @@ def test_primitive_import_loads_no_application_package() -> None:
         "print('\\n'.join(loaded))\n"
     )
     completed = subprocess.run(
-        [sys.executable, "-c", code], capture_output=True, text=True, timeout=120, check=False
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+        cwd=REPO_ROOT,
     )
     assert completed.returncode == 0, completed.stderr
     loaded = completed.stdout.split()

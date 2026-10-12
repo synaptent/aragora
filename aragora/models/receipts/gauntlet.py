@@ -18,20 +18,18 @@ import hashlib
 import json
 import math
 import uuid
-
-from aragora.agents.failure_semantics import all_responses_are_failures
 from dataclasses import InitVar, dataclass, field
 from datetime import datetime, timezone
 from html import escape
 from typing import TYPE_CHECKING, Any
 
 from aragora.core_types import Verdict  # noqa: F401 - re-exported for receipt consumers
+from aragora.models.receipts import operations
 
 if TYPE_CHECKING:
     from aragora.debate.crux_mode import CruxFinderResult
-
-    from .result import GauntletResult
-    from .signing import ReceiptSigner
+    from aragora.gauntlet.result import GauntletResult
+    from aragora.storage.receipt_signing import ReceiptSigner
 
 
 def _normalize_live_explainability_text(value: Any, *, max_len: int) -> str | None:
@@ -814,10 +812,7 @@ class DecisionReceipt:
         Returns:
             Self with signature fields populated.
         """
-        from aragora.gauntlet.signing import get_default_signer
-
-        signer = signer or get_default_signer()
-        signed = signer.sign(self.to_dict())
+        signed = operations.sign_receipt(self, signer)
 
         self.signature = signed.signature
         self.signature_algorithm = signed.signature_metadata.algorithm
@@ -839,25 +834,20 @@ class DecisionReceipt:
         if not self.signature:
             return False
 
-        from aragora.gauntlet.signing import (
-            SignedReceipt,
-            SignatureMetadata,
-            get_default_signer,
-        )
-
-        signer = signer or get_default_signer()
+        backend = operations.signing_backend()
+        signer = signer or backend.get_default_signer()
 
         # Reconstruct SignedReceipt for verification
         # Note: We need to exclude signature fields from the receipt data
         receipt_data = self._to_dict_for_signing()
 
-        metadata = SignatureMetadata(
+        metadata = backend.SignatureMetadata(
             algorithm=self.signature_algorithm or "",
             timestamp=self.signed_at or "",
             key_id=self.signature_key_id or "",
         )
 
-        signed_receipt = SignedReceipt(
+        signed_receipt = backend.SignedReceipt(
             receipt_data=receipt_data,
             signature=self.signature,
             signature_metadata=metadata,
@@ -992,12 +982,7 @@ class DecisionReceipt:
             return ""
         if "/" in candidate:
             return candidate.split("/", 1)[0]
-        try:
-            from aragora.debate.provider_diversity import detect_provider
-
-            detected = detect_provider(candidate)
-        except ImportError:
-            detected = "unknown"
+        detected = operations.detect_provider(candidate)
         return "" if detected == "unknown" else detected
 
     @classmethod
@@ -1659,10 +1644,10 @@ class DecisionReceipt:
             for r in getattr(result, "agent_responses", []) or []
         ]
         zero_evidence = (
-            all_responses_are_failures(response_texts)
-            and all_responses_are_failures(proposal_texts)
-            and all_responses_are_failures(agent_response_texts)
-            and all_responses_are_failures([result.final_answer])
+            operations.all_responses_are_failures(response_texts)
+            and operations.all_responses_are_failures(proposal_texts)
+            and operations.all_responses_are_failures(agent_response_texts)
+            and operations.all_responses_are_failures([result.final_answer])
         )
 
         # Supporting agents = participants minus dissenters
@@ -2265,9 +2250,7 @@ class DecisionReceipt:
             print(result.eu_ai_act.risk_classification)
             print(result.soc2.to_json())
         """
-        from aragora.compliance.artifact_generator import ReceiptComplianceGenerator
-
-        generator = ReceiptComplianceGenerator(**kwargs)
+        generator = operations.compliance_generator(**kwargs)
         return generator.generate(self.to_dict(), frameworks=frameworks)
 
     @staticmethod
@@ -2387,17 +2370,15 @@ class DecisionReceipt:
 
     def to_markdown(self, include_provenance: bool = True, include_evidence: bool = True) -> str:
         """Generate markdown report with full provenance and evidence links."""
-        from aragora.gauntlet.receipt_exporters import receipt_to_markdown
-
-        return receipt_to_markdown(
+        return operations.receipt_exporters().receipt_to_markdown(
             self, include_provenance=include_provenance, include_evidence=include_evidence
         )
 
     def to_html(self, max_findings: int = 20, max_provenance: int = 50) -> str:
         """Export as self-contained HTML document."""
-        from aragora.gauntlet.receipt_exporters import receipt_to_html
-
-        return receipt_to_html(self, max_findings=max_findings, max_provenance=max_provenance)
+        return operations.receipt_exporters().receipt_to_html(
+            self, max_findings=max_findings, max_provenance=max_provenance
+        )
 
     def to_html_paginated(
         self,
@@ -2406,9 +2387,7 @@ class DecisionReceipt:
         provenance_sampling: str = "first_last",
     ) -> str:
         """Export as paginated HTML document optimized for PDF rendering."""
-        from aragora.gauntlet.receipt_exporters import receipt_to_html_paginated
-
-        return receipt_to_html_paginated(
+        return operations.receipt_exporters().receipt_to_html_paginated(
             self,
             findings_per_page=findings_per_page,
             max_provenance=max_provenance,
@@ -2450,9 +2429,7 @@ class DecisionReceipt:
 
     def to_sarif(self) -> dict:
         """Export as SARIF 2.1.0 format."""
-        from aragora.gauntlet.receipt_exporters import receipt_to_sarif
-
-        return receipt_to_sarif(self)
+        return operations.receipt_exporters().receipt_to_sarif(self)
 
     def to_sarif_json(self, indent: int = 2) -> str:
         """Export as SARIF JSON string."""
@@ -2482,9 +2459,7 @@ class DecisionReceipt:
 
     def to_csv(self) -> str:
         """Export findings as CSV format."""
-        from aragora.gauntlet.receipt_exporters import receipt_to_csv
-
-        return receipt_to_csv(self)
+        return operations.receipt_exporters().receipt_to_csv(self)
 
     def to_briefing_text(self, max_chars: int = 2000) -> str:
         """Generate natural-language spoken text suitable for TTS synthesis.
