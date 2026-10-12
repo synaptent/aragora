@@ -1,8 +1,8 @@
 {
   "_comment": "Shrink-only baseline of import-linter layer-contract violations (fail-on-new). Frozen from origin/main by scripts/ci/check_import_contracts.py --freeze. New violations fail the checker; this baseline may only shrink. Layer membership was cross-checked against aragora/module_tiers.yaml (see .importlinter).",
   "config": ".importlinter",
-  "frozen_from_ref": "06603465fb4cfd0d4516c55f7545648022c96ee7",
-  "frozen_at": "2026-10-12T09:37:39Z",
+  "frozen_from_ref": "74acc961ed6c3ca1ad0970f81ac7dfe2c2ff7705",
+  "frozen_at": "2026-10-12T13:16:27Z",
   "layers": [
     "interface",
     "application",
@@ -34,7 +34,6 @@
         "aragora.debate -> aragora.spectate",
         "aragora.debate -> aragora.workflow",
         "aragora.evidence -> aragora.connectors",
-        "aragora.export -> aragora.cli",
         "aragora.gauntlet -> aragora.server",
         "aragora.implement -> aragora.mcp",
         "aragora.implement -> aragora.server",
@@ -49,7 +48,6 @@
         "aragora.memory -> aragora.connectors",
         "aragora.memory -> aragora.nomic",
         "aragora.modes -> aragora.server",
-        "aragora.nomic -> aragora.cli",
         "aragora.nomic -> aragora.connectors",
         "aragora.nomic -> aragora.mcp",
         "aragora.nomic -> aragora.server",
