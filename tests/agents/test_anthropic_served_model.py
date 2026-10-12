@@ -1,9 +1,9 @@
 """The model the SERVER answered with is read back and recorded.
 
-Finding C-P3 on #9989 (merge-gate, round 2). This branch turns Anthropic's
-server-side refusal fallback on by default for Fable 5.1 / Opus 5, so a
-request can legitimately be answered by a DIFFERENT model than the one asked
-for. The agent never read the response's ``model`` field, so a decision
+Finding C-P3 on #9989 (merge-gate, round 2). This branch adds Anthropic's
+server-side refusal fallback for Fable 5.1 / Opus 5 (opt-in via
+ARAGORA_ANTHROPIC_REFUSAL_FALLBACK=true), so a request can legitimately be
+answered by a DIFFERENT model than the one asked for. The agent never read the response's ``model`` field, so a decision
 receipt attributed the output to the requested id even when the fallback had
 fired -- the receipt was wrong about which model made the decision.
 

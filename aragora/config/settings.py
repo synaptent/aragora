@@ -264,9 +264,9 @@ class AgentSettings(BaseSettings):
     # 2026-09-04): Fable 5.1 / Opus 5 can retry a cyber-classifier refusal
     # against a fallback model server-side when the request carries
     # "fallbacks": "default" and the matching anthropic-beta header. Default
-    # on; set ARAGORA_ANTHROPIC_REFUSAL_FALLBACK=false to opt out.
+    # off; set ARAGORA_ANTHROPIC_REFUSAL_FALLBACK=true to opt in.
     anthropic_refusal_fallback: bool = Field(
-        default=True,
+        default=False,
         alias="ARAGORA_ANTHROPIC_REFUSAL_FALLBACK",
         description=(
             "Enable Anthropic server-side refusal fallback (fallbacks: default + "

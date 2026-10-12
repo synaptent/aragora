@@ -485,8 +485,8 @@ class DecisionReceipt:
     # swaps, not just whichever model answered last (finding C-P2 on #9989).
     # "calls"/"fallback_calls" are absent for a source that cannot count them
     # (an unpinned CLI agent, a third-party agent exposing only its last
-    # served model). Anthropic's server-side refusal fallback -- enabled by
-    # default for Fable 5.1 / Opus 5 -- can legitimately answer a request with
+    # served model). Anthropic's server-side refusal fallback -- opt-in for
+    # Fable 5.1 / Opus 5 -- can legitimately answer a request with
     # a different model, and a receipt that attributes the decision to the
     # requested id is then wrong about which model made it. Additive: None
     # means "not recorded" and serialization omits the key entirely, so

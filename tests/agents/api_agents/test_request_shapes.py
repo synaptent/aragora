@@ -152,7 +152,195 @@ def test_anthropic_payload_unknown_model_keeps_4096_default() -> None:
     assert payload["max_tokens"] == 4096
 
 
-def test_anthropic_refusal_fallback_payload_and_headers() -> None:
+_REFUSAL_FALLBACK_ENV = "ARAGORA_ANTHROPIC_REFUSAL_FALLBACK"
+_REFUSAL_FALLBACK_BETA = "server-side-fallback-2026-07-01"
+_REFUSAL_FALLBACK_MODELS = ("claude-fable-5-1", "claude-opus-5")
+_TRACE_HEADERS = frozenset({"traceparent", "tracestate"})
+
+
+@pytest.fixture
+def refusal_fallback_default(monkeypatch: pytest.MonkeyPatch):
+    """Settings as shipped: the opt-in env var is unset and the agent targets
+    the official endpoint."""
+    from aragora.config.settings import get_settings
+
+    monkeypatch.delenv(_REFUSAL_FALLBACK_ENV, raising=False)
+    monkeypatch.delenv("ANTHROPIC_BASE_URL", raising=False)
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
+@pytest.fixture
+def refusal_fallback_opted_in(monkeypatch: pytest.MonkeyPatch):
+    """The operator opted in with ``ARAGORA_ANTHROPIC_REFUSAL_FALLBACK=true``."""
+    from aragora.config.settings import get_settings
+
+    monkeypatch.setenv(_REFUSAL_FALLBACK_ENV, "true")
+    monkeypatch.delenv("ANTHROPIC_BASE_URL", raising=False)
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
+def _wire_session(*, stream: bool, model: str):
+    """An aiohttp session fake whose ``post`` records the request the agent
+    actually sends, answering with a minimal success for either path."""
+    from unittest.mock import MagicMock
+
+    from tests.utils.aiohttp_mocks import make_mock_client_session, make_mock_response
+
+    if stream:
+
+        async def iter_any():
+            yield (
+                b'data: {"type": "content_block_delta", '
+                b'"delta": {"type": "text_delta", "text": "ok"}}\n\n'
+            )
+
+        content = MagicMock()
+        content.iter_any = iter_any
+        response = make_mock_response(content=content)
+    else:
+        response = make_mock_response(
+            json_data={
+                "model": model,
+                "content": [{"type": "text", "text": "ok"}],
+                "usage": {"input_tokens": 1, "output_tokens": 1},
+            }
+        )
+    return make_mock_client_session(response)
+
+
+async def _sent_request(model: str, *, stream: bool) -> tuple[dict, dict]:
+    """Drive ``generate``/``generate_stream`` through the HTTP fake and return
+    the ``(json, headers)`` the agent posted."""
+    from unittest.mock import patch
+
+    from aragora.agents.api_agents.anthropic import AnthropicAPIAgent
+
+    agent = AnthropicAPIAgent(name="a", model=model, api_key="test-key")
+    session = _wire_session(stream=stream, model=model)
+    with patch(
+        "aragora.agents.api_agents.anthropic.create_client_session",
+        return_value=session,
+    ):
+        if stream:
+            chunks = [c async for c in agent.generate_stream("hello")]
+            assert chunks == ["ok"]
+        else:
+            assert await agent.generate("hello") == "ok"
+    assert session.post.call_count == 1
+    kwargs = session.post.call_args.kwargs
+    return kwargs["json"], kwargs["headers"]
+
+
+def test_anthropic_refusal_fallback_setting_defaults_off(
+    refusal_fallback_default: None,
+) -> None:
+    from aragora.config.settings import AgentSettings, get_settings
+
+    assert AgentSettings.model_fields["anthropic_refusal_fallback"].default is False
+    assert AgentSettings().anthropic_refusal_fallback is False
+    assert get_settings().agent.anthropic_refusal_fallback is False
+
+
+@pytest.mark.parametrize("model", _REFUSAL_FALLBACK_MODELS)
+@pytest.mark.parametrize("stream", [False, True])
+def test_anthropic_refusal_fallback_off_by_default_in_payload_and_headers(
+    refusal_fallback_default: None, model: str, stream: bool
+) -> None:
+    from aragora.agents.api_agents.anthropic import AnthropicAPIAgent
+
+    agent = AnthropicAPIAgent(name="a", model=model, api_key="test-key")
+    assert agent._supports_refusal_fallback() is True
+    assert agent._refusal_fallback_enabled() is False
+    assert "fallbacks" not in agent._build_payload("hello", stream=stream)
+    assert "anthropic-beta" not in agent._request_headers()
+    # Web search still gets its own beta, and only that one.
+    assert agent._request_headers(use_web_search=True)["anthropic-beta"] == (
+        "web-search-2025-03-05"
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("model", _REFUSAL_FALLBACK_MODELS)
+@pytest.mark.parametrize("stream", [False, True])
+async def test_anthropic_default_request_on_the_wire_has_no_refusal_fallback(
+    refusal_fallback_default: None, model: str, stream: bool
+) -> None:
+    sent_json, sent_headers = await _sent_request(model, stream=stream)
+    assert sent_json["model"] == model
+    assert "fallbacks" not in sent_json
+    assert "anthropic-beta" not in sent_headers
+    assert all(_REFUSAL_FALLBACK_BETA not in str(v) for v in sent_headers.values())
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("model", _REFUSAL_FALLBACK_MODELS)
+@pytest.mark.parametrize("stream", [False, True])
+async def test_anthropic_refusal_fallback_opt_in_restores_exact_body_field_and_header(
+    monkeypatch: pytest.MonkeyPatch, model: str, stream: bool
+) -> None:
+    """Opting in adds exactly the scalar ``"fallbacks": "default"`` body field
+    and the matching 07-01 beta header, and changes nothing else on the wire."""
+    from aragora.config.settings import get_settings
+
+    monkeypatch.delenv("ANTHROPIC_BASE_URL", raising=False)
+    monkeypatch.delenv(_REFUSAL_FALLBACK_ENV, raising=False)
+    get_settings.cache_clear()
+    try:
+        off_json, off_headers = await _sent_request(model, stream=stream)
+        monkeypatch.setenv(_REFUSAL_FALLBACK_ENV, "true")
+        get_settings.cache_clear()
+        on_json, on_headers = await _sent_request(model, stream=stream)
+    finally:
+        get_settings.cache_clear()
+
+    assert on_json["fallbacks"] == "default"
+    assert on_headers["anthropic-beta"] == _REFUSAL_FALLBACK_BETA
+    assert {k: v for k, v in on_json.items() if k != "fallbacks"} == off_json
+
+    def _stable(headers: dict) -> dict:
+        return {k: v for k, v in headers.items() if k not in _TRACE_HEADERS}
+
+    assert {k: v for k, v in _stable(on_headers).items() if k != "anthropic-beta"} == _stable(
+        off_headers
+    )
+
+
+@pytest.mark.parametrize("model", _REFUSAL_FALLBACK_MODELS)
+def test_anthropic_refusal_fallback_opt_in_through_the_setting_object(
+    refusal_fallback_default: None, model: str
+) -> None:
+    """Enabling the setting itself (not only its env var) opts in."""
+    from aragora.agents.api_agents.anthropic import AnthropicAPIAgent
+    from aragora.config.settings import get_settings
+
+    get_settings().agent.anthropic_refusal_fallback = True
+    agent = AnthropicAPIAgent(name="a", model=model, api_key="test-key")
+    assert agent._build_payload("hello")["fallbacks"] == "default"
+    assert agent._request_headers()["anthropic-beta"] == _REFUSAL_FALLBACK_BETA
+
+
+@pytest.mark.parametrize("error", [ImportError, AttributeError])
+def test_anthropic_refusal_fallback_stays_off_when_settings_unavailable(
+    refusal_fallback_default: None, monkeypatch: pytest.MonkeyPatch, error: type
+) -> None:
+    import aragora.config as config_pkg
+    from aragora.agents.api_agents.anthropic import AnthropicAPIAgent
+
+    def _unavailable():
+        raise error("settings unavailable")
+
+    agent = AnthropicAPIAgent(name="a", model="claude-fable-5-1", api_key="test-key")
+    monkeypatch.setattr(config_pkg, "get_settings", _unavailable)
+    assert agent._refusal_fallback_enabled() is False
+    assert "fallbacks" not in agent._build_payload("hello")
+    assert "anthropic-beta" not in agent._request_headers()
+
+
+def test_anthropic_refusal_fallback_payload_and_headers(refusal_fallback_opted_in: None) -> None:
     from aragora.agents.api_agents.anthropic import AnthropicAPIAgent
 
     agent = AnthropicAPIAgent(name="a", model="claude-fable-5-1", api_key="test-key")
@@ -179,7 +367,7 @@ def test_anthropic_refusal_fallback_disabled_by_setting(monkeypatch: pytest.Monk
         get_settings.cache_clear()
 
 
-def test_anthropic_refusal_fallback_beta_pairing_rule() -> None:
+def test_anthropic_refusal_fallback_beta_pairing_rule(refusal_fallback_opted_in: None) -> None:
     """The payload form and the beta header must stay paired.
 
     2026-09-05 merge-gate ruling on finding C-P3 of #9989: the refusal
@@ -215,6 +403,7 @@ def test_anthropic_refusal_fallback_beta_pairing_rule() -> None:
 
 
 def test_anthropic_refusal_fallback_only_on_the_official_endpoint(
+    refusal_fallback_opted_in: None,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A BYOK/LiteLLM/VibeProxy gateway gets neither the beta nor the body field.
@@ -240,6 +429,7 @@ def test_anthropic_refusal_fallback_only_on_the_official_endpoint(
 
 
 def test_anthropic_refusal_fallback_on_official_endpoint_spelled_without_v1(
+    refusal_fallback_opted_in: None,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The gate compares the RESOLVED url, so a /v1-less spelling of the
@@ -266,7 +456,9 @@ def test_is_official_anthropic_endpoint_branches() -> None:
     assert _is_official_anthropic_endpoint("https://api.anthropic.com.evil.test/v1") is False
 
 
-def test_anthropic_refusal_fallback_not_applied_to_other_models() -> None:
+def test_anthropic_refusal_fallback_not_applied_to_other_models(
+    refusal_fallback_opted_in: None,
+) -> None:
     from aragora.agents.api_agents.anthropic import AnthropicAPIAgent
 
     agent = AnthropicAPIAgent(name="a", model="claude-opus-4-8", api_key="test-key")

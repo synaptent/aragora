@@ -621,8 +621,8 @@ class SSEStreamParser:
         self.stop_details: dict[str, Any] | None = None
         # Populated from an Anthropic "message_start" event: the model the
         # server ACTUALLY answered with, which can differ from the requested
-        # id when a server-side fallback fires (the refusal fallback this
-        # agent enables by default). None for providers whose streams carry
+        # id when a server-side fallback fires (the opt-in refusal fallback
+        # of the Anthropic agent). None for providers whose streams carry
         # no such event.
         self.served_model: str | None = None
 

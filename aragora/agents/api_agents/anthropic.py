@@ -321,7 +321,7 @@ class AnthropicAPIAgent(QuotaFallbackMixin, APIAgent):
         model from the one we asked for.
 
         Anthropic echoes the model that actually produced the response. With
-        the server-side refusal fallback enabled by default for Fable 5.1 /
+        the opt-in server-side refusal fallback enabled for Fable 5.1 /
         Opus 5, a request can legitimately be answered by a DIFFERENT model,
         and a receipt that attributes the output to the requested id is then
         wrong about which model made the decision (finding C-P3 on #9989).
@@ -444,7 +444,8 @@ class AnthropicAPIAgent(QuotaFallbackMixin, APIAgent):
 
     def _refusal_fallback_enabled(self) -> bool:
         """``_supports_refusal_fallback()`` gated by the target ENDPOINT and
-        the ``anthropic_refusal_fallback`` setting (default on).
+        the ``anthropic_refusal_fallback`` setting (default off; opt in with
+        ``ARAGORA_ANTHROPIC_REFUSAL_FALLBACK=true``).
 
         The beta header and the ``"fallbacks"`` body field are an
         api.anthropic.com request extension. A custom ``ANTHROPIC_BASE_URL``
@@ -464,10 +465,9 @@ class AnthropicAPIAgent(QuotaFallbackMixin, APIAgent):
 
             return bool(get_settings().agent.anthropic_refusal_fallback)
         except (ImportError, AttributeError):
-            # Settings unavailable for some reason: default to the
-            # documented default (on) rather than silently disabling a
-            # reliability feature.
-            return True
+            # Settings unavailable: keep the documented default (off) so an
+            # unreadable config can never opt a request into the beta.
+            return False
 
     def _log_adaptive_thinking_once(self) -> None:
         """Log (once per model id) that an explicit thinking_budget is being
@@ -795,7 +795,7 @@ class AnthropicAPIAgent(QuotaFallbackMixin, APIAgent):
                     data = await response.json()
 
                     # The server echoes the model that actually answered; with
-                    # the server-side refusal fallback on by default that can
+                    # the opt-in server-side refusal fallback enabled that can
                     # differ from what we asked for (finding C-P3).
                     self._note_served_model(data.get("model"))
 

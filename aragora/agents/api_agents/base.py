@@ -140,7 +140,7 @@ class APIAgent(CritiqueMixin, Agent):
         """Model id this call's token usage should be PRICED against.
 
         Normally ``self.model``. When the provider answered with a different
-        model -- Anthropic's server-side refusal fallback, on by default for
+        model -- Anthropic's server-side refusal fallback, opt-in for
         Fable 5.1 / Opus 5 -- the tokens were produced by, and billed by the
         provider at, the SERVED model's rate. Pricing them at the requested
         model's rate mis-states the spend in both directions depending on

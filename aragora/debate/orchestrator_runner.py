@@ -1977,7 +1977,7 @@ async def handle_debate_completion(
     # Collect the model each provider ACTUALLY answered with, whenever that
     # was not the id we asked for. Two ways it happens, and the block names
     # both: a provider answered with a DIFFERENT model (Anthropic's
-    # server-side refusal fallback, on by default for Fable 5.1 / Opus 5), or
+    # server-side refusal fallback, opt-in for Fable 5.1 / Opus 5), or
     # the requested id never reached the provider at all because the agent's
     # CLI takes no model flag -- recorded as UNKNOWN_CLI_DEFAULT_MODEL,
     # "unknown (CLI default)", because a receipt must be able to say
