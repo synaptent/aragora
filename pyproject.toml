@@ -173,6 +173,12 @@ server = "aragora.server.decision_routes:register_decision_routes"
 [project.entry-points."aragora.code_scanners"]
 audit = "aragora.audit.code_scanners:register_code_scanners"
 
+# Run by aragora/training/evaluation_protocols.py on the first lookup that finds
+# nothing registered, so specialist training reaches the gauntlet evaluator without
+# importing the gauntlet package.
+[project.entry-points."aragora.training_evaluators"]
+gauntlet = "aragora.gauntlet.training_adapter:register_training_adapter"
+
 # Run by aragora/events/debate_completion.py on the first debate_completed emit, so a
 # process that only runs debates still records them in the debate analytics store.
 [project.entry-points."aragora.debate_completed_subscribers"]
