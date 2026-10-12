@@ -13,8 +13,8 @@ baseline [scripts/baselines/import_contracts_baseline.json](../../scripts/baseli
 Symbols moved down a layer keep a compatibility re-export at their old path; every such move is listed in
 [shims.md](shims.md).
 
-This page is in its M4 form. Measured on `origin/main` at `06603465fb4c` (2026-10-12, after #10594) with
-tranche T4b applied: 133 layered names, 63 baselined pairs (16 in Partition A, 47 in Partition B), and the
+This page is in its M4 form. Measured on `origin/main` at `6b7d46683e35` (2026-10-12, after #10600) with
+tranche T5 applied: 161 layered names, 61 baselined pairs (18 in Partition A, 43 in Partition B), and the
 live pair set equals the baseline.
 
 ## Enforcement
@@ -37,13 +37,13 @@ live pair set equals the baseline.
 
 ## Current layer membership
 
-Exactly what `.importlinter` declares today (133 names). The container package `aragora` itself is never a
+Exactly what `.importlinter` declares today (161 names). The container package `aragora` itself is never a
 member.
 
 | layer | count | members |
 |---|---|---|
 | interface | 8 | `server` `cli` `mcp` `gateway` `bots` `channels` `integrations` `connectors` |
-| application | 30 | `workflow` `pipeline` `nomic` `swarm` `gauntlet` `goals` `implement` `modes` `verticals` `autonomous` `broadcast` `canvas` `spectate` `analytics` `audit` `control_plane` `golden` `inbox` `marketplace` `services` `skills` `stores` `computer_use` `coordination` `export` `markets` `plugins` `prompt_engine` `receipts` `workspace` |
+| application | 58 | `workflow` `pipeline` `nomic` `swarm` `gauntlet` `goals` `implement` `modes` `verticals` `autonomous` `broadcast` `canvas` `spectate` `analytics` `audit` `control_plane` `golden` `inbox` `marketplace` `services` `skills` `stores` `computer_use` `coordination` `export` `markets` `plugins` `prompt_engine` `receipts` `workspace` `brief_engine` `codex` `compat` `essay` `factory` `fixtures` `gti` `harnesses` `hooks` `ideacloud` `interrogation` `missions` `onboarding` `operations` `ops` `pdb` `playbooks` `policy` `prediction` `ralph` `reports` `review` `scheduler` `schedulers` `sync` `trail` `triage` `worktree` |
 | domain | 43 | `debate` `agents` `memory` `knowledge` `ranking` `reasoning` `evidence` `evaluation` `explainability` `learning` `ml` `advocates` `analysis` `audience` `blockchain` `compliance` `container` `core` `deliberation` `documents` `embeddings` `epistemic` `evolution` `genesis` `heterogeneity` `insights` `introspection` `metrics` `moderation` `prompts` `pulse` `replay` `reputation` `rlm` `routing` `templates` `tools` `tournaments` `training` `uncertainty` `verification` `visualization` `work` |
 | infrastructure | 31 | `storage` `resilience` `events` `observability` `security` `queue` `db` `caching` `billing` `backup` `migrations` `cache` `deletion_coordinator` `fabric` `maintenance` `monitoring` `performance` `resilience_config` `resilience_patterns` `runtime` `sandbox` `streaming` `telemetry` `transcription` `auth` `logging_config` `notifications` `persistence` `privacy` `rbac` `tenancy` |
 | foundation | 21 | `api_errors` `config` `core_types` `exceptions` `errors` `utils` `protocols` `types` `__version__` `_lazy_imports` `core_protocols` `docs_only` `http_client` `models` `serialization` `task_brief` `topic_handler` `topic_spec` `topics` `type_protocols` `shared` |
@@ -62,13 +62,12 @@ by PR #9057 (commit `5ac7fa3fc280`, 2026-09-30), so it is not planned. The final
 |---|---|---|---|
 | interface | layered | 8 | `server` `cli` `mcp` `gateway` `bots` `channels` `integrations` `connectors` |
 | interface | tranche T6 | 5 | `__main__` `approvals` `client` `extensions` `webhooks` |
-| application | layered | 30 | `workflow` `pipeline` `nomic` `swarm` `gauntlet` `goals` `implement` `modes` `verticals` `autonomous` `broadcast` `canvas` `spectate` `analytics` `audit` `control_plane` `golden` `inbox` `marketplace` `services` `skills` `stores` `computer_use` `coordination` `export` `markets` `plugins` `prompt_engine` `receipts` `workspace` |
-| application | tranche T5 | 28 | `brief_engine` `codex` `compat` `essay` `factory` `fixtures` `gti` `harnesses` `hooks` `ideacloud` `interrogation` `missions` `onboarding` `operations` `ops` `pdb` `playbooks` `policy` `prediction` `ralph` `reports` `review` `scheduler` `schedulers` `sync` `trail` `triage` `worktree` |
+| application | layered | 58 | `workflow` `pipeline` `nomic` `swarm` `gauntlet` `goals` `implement` `modes` `verticals` `autonomous` `broadcast` `canvas` `spectate` `analytics` `audit` `control_plane` `golden` `inbox` `marketplace` `services` `skills` `stores` `computer_use` `coordination` `export` `markets` `plugins` `prompt_engine` `receipts` `workspace` `brief_engine` `codex` `compat` `essay` `factory` `fixtures` `gti` `harnesses` `hooks` `ideacloud` `interrogation` `missions` `onboarding` `operations` `ops` `pdb` `playbooks` `policy` `prediction` `ralph` `reports` `review` `scheduler` `schedulers` `sync` `trail` `triage` `worktree` |
 | domain | layered | 43 | `debate` `agents` `memory` `knowledge` `ranking` `reasoning` `evidence` `evaluation` `explainability` `learning` `ml` `advocates` `analysis` `audience` `blockchain` `compliance` `container` `core` `deliberation` `documents` `embeddings` `epistemic` `evolution` `genesis` `heterogeneity` `insights` `introspection` `metrics` `moderation` `prompts` `pulse` `replay` `reputation` `rlm` `routing` `templates` `tools` `tournaments` `training` `uncertainty` `verification` `visualization` `work` |
 | infrastructure | layered | 31 | `storage` `resilience` `events` `observability` `security` `queue` `db` `caching` `billing` `backup` `migrations` `cache` `deletion_coordinator` `fabric` `maintenance` `monitoring` `performance` `resilience_config` `resilience_patterns` `runtime` `sandbox` `streaming` `telemetry` `transcription` `auth` `logging_config` `notifications` `persistence` `privacy` `rbac` `tenancy` |
 | foundation | layered | 21 | `api_errors` `config` `core_types` `exceptions` `errors` `utils` `protocols` `types` `__version__` `_lazy_imports` `core_protocols` `docs_only` `http_client` `models` `serialization` `task_brief` `topic_handler` `topic_spec` `topics` `type_protocols` `shared` |
 
-Tranche T4a landed in milestone M3 and T4b in M4; T5 and T6 land in M4. Deprecated shim packages that are listed
+Tranche T4a landed in milestone M3, and T4b and T5 in M4; T6 lands in M4. Deprecated shim packages that are listed
 (`cache`, `core_protocols`, `metrics`, `monitoring`, `telemetry`, `type_protocols`, `operations`,
 `schedulers`, `resilience_patterns`) stay listed until they are retired; when a listed module is deleted, its
 name leaves `.importlinter` in the same PR, because import-linter errors on a missing layer module.
@@ -184,21 +183,23 @@ through `aragora.training.specialist_models`).
 | #10592 | `76e7486296` | Receipts foundation, part 3: the canonical hash and normalization helpers split into `aragora.models.receipts.canonical` (re-exported from `aragora.models.receipts.gauntlet`); the receipt facades import receipt signing on first use | 133 | 65 |
 | #10591 | `8453160ddd` | Training evaluation inversion: `aragora.training.evaluation_protocols` holds the specialist-evaluator hook and the shared scoring rules, and `aragora.gauntlet.training_adapter` registers the gauntlet evaluator through the `aragora.training_evaluators` entry point. Resolved `aragora.training -> aragora.gauntlet` | 133 | 65 to 64 |
 | #10594 | `06603465fb` | Receipt site flip: `aragora.evaluation.outcome_backed_receipt` imports the gauntlet receipt from `aragora.models.receipts.gauntlet`, and `aragora.agents.receipt_hooks` registers provider detection and failure classification for it. Resolved `aragora.evaluation -> aragora.gauntlet` | 133 | 64 to 63 |
+| #10596 | `43c9522b05` | Compliance site flip: `aragora.compliance.oversight_fetch` and `oversight_pack` import the oversight attestation helpers and the JCS canonicalizer from `aragora.models.receipts`. Resolved `aragora.compliance -> aragora.gauntlet`, the last receipt pair | 133 | 63 to 62 |
+| #10598 | `f14f82796b` | `cli.review` seam, part 1: the review-comment verdict parser and `SettlementReceipt` get homes in `aragora.review` (`comment_verdicts`, `settlement_receipt`), and the `aragora.swarm` sites and `aragora.review.observe_outcomes_cli` import them there. The homes are verbatim copies pinned to the CLI definitions by parity tests until the Tier-4 re-export edit; `aragora/swarm/quorum_evidence.py` keeps `aragora.swarm -> aragora.cli` live until then | 133 | 62 |
+| #10599 | `3f78f841a0` | `cli.review` seam, part 2: `extract_review_findings` moved down to `aragora.review.diff_review`; `aragora.cli.review` re-exports it | 133 | 62 |
+| #10600 | `6b7d46683e` | `cli.review` seam, part 3: the review debate runner (`run_review_debate`, `build_review_prompt`, `get_available_agents` and the review defaults) moved down to `aragora.review.diff_review` with re-exports; the OpenClaw PR review runner imports it there, so `aragora.compat` no longer imports `aragora.cli`. Resolved `aragora.export -> aragora.cli` and `aragora.nomic -> aragora.cli` (their only routes, from `aragora.export.case_study` and `aragora.nomic.execution_bridge`, ran through that import) | 133 | 62 to 60 |
+| #PR3 | squash merge of #PR3 | Tranche T5: `brief_engine codex compat essay factory fixtures gti harnesses hooks ideacloud interrogation missions onboarding operations ops pdb playbooks policy prediction ralph reports review scheduler schedulers sync trail triage worktree` (application); adopted `aragora.compat -> aragora.server`, `aragora.harnesses -> aragora.mcp`, `aragora.ideacloud -> aragora.connectors`, `aragora.ops -> aragora.gateway` and `aragora.ops -> aragora.server`; `aragora.implement`, `aragora.nomic`, `aragora.swarm` and `aragora.workflow -> aragora.mcp` resolved by reattribution (their only chains run through `aragora/harnesses/claude_code.py:570` and now count toward `aragora.harnesses -> aragora.mcp`) | 161 | 60 to 61 |
 
 The two config pairs adopted by #10314 (`aragora.config -> aragora.persistence`, `aragora.config ->
 aragora.tenancy`) were fixed by the config-seam PR #10316 (Tier 4, settled by the operator).
-
-The last receipt pair, `aragora.compliance -> aragora.gauntlet`, is fixed by the compliance site flip #10596
-(Tier 3), which imports the oversight attestation helpers and the JCS canonicalizer from
-`aragora.models.receipts`. It was prepared and is awaiting settlement at the time of writing.
 
 ## Partition A handover
 
 Partition A is every violating pair whose imported package is `aragora.server` (pair level, not every server
 import). These pairs stay baselined: the server-as-library migration of the server modules owns them, and the
 layering work adds no new Partition A site. Measured on `b0ab11df1366` with tranche T4a applied: 17 pairs, 80
-direct sites. The audit split (#10382) has since removed the `aragora.audit` row, leaving the 16 pairs below,
-and tranche T4b added none.
+direct sites. The audit split (#10382) has since removed the `aragora.audit` row, leaving 16 pairs; tranche
+T4b added none, and tranche T5 added `aragora.compat` and `aragora.ops` (one direct site each), so 18 pairs are
+listed below.
 
 - **sites** lists every direct, runtime (not `TYPE_CHECKING`) `from aragora.server...` or `import
   aragora.server...` statement inside the importer package.
@@ -219,6 +220,7 @@ and tranche T4b added none.
 |---|---|---|---|---|---|---|
 | `aragora.auth` | infrastructure | `aragora.server.http_client_pool`, `aragora.server.middleware.audit_logger` | `aragora/auth/oidc.py:446`, `aragora/auth/oidc.py:683`, `aragora/auth/oidc.py:903`, `aragora/auth/oidc.py:1023`, `aragora/auth/oidc.py:830` | `aragora.observability.http_client_pool` (pool); `aragora.observability.audit_log` (new, audit events) | flip the pool sites (the server module is an alias); move symbol down for the audit logger | none |
 | `aragora.blockchain` | domain | `aragora.server.handlers.integrations.erc8004` | `aragora/blockchain/handler.py:85`, `aragora/blockchain/handler.py:105`, `aragora/blockchain/handler.py:128`, `aragora/blockchain/handler.py:147`, `aragora/blockchain/handler.py:164`, `aragora/blockchain/handler.py:179`, `aragora/blockchain/handler.py:200` | `aragora.blockchain.config`; `aragora.knowledge.mound.adapters.erc8004_adapter`; `aragora.blockchain.connector_registry` (new) | import the real homes of the config and adapter; registry for `ERC8004Connector`, which `aragora.connectors.blockchain` registers | none |
+| `aragora.compat` | application | `aragora.server.handlers.openclaw` | `aragora/compat/openclaw/standalone.py:93` | `aragora.compat.openclaw.gateway_hooks` (new) | registry (the server registers `OpenClawGatewayHandler`, resolved through an entry point as the code-scanner registry is; moving the module up is costlier because `deploy/openclaw/docker-compose.standalone.yml` runs it by module path) | none (the route from `aragora/compat/openclaw/pr_review_runner.py` through `aragora.review.diff_review` counts toward the `aragora.debate` row) |
 | `aragora.control_plane` | application | `aragora.server.prometheus_control_plane`, `aragora.server.stream.control_plane_stream`, `aragora.server.http_client_pool` | `aragora/control_plane/arena_bridge.py:124`, `aragora/control_plane/arena_bridge.py:194`, `aragora/control_plane/channels.py:291`, `aragora/control_plane/channels.py:423`, `aragora/control_plane/channels.py:543`, `aragora/control_plane/health.py:25`, `aragora/control_plane/policy/manager.py:65`, `aragora/control_plane/scheduler.py:23` | `aragora.observability.metrics.control_plane`; `aragora.events.emitter` (new); `aragora.observability.http_client_pool` (alias) | move symbol down (the `record_control_plane_*` recorders); event (the control-plane stream); flip the pool sites | none |
 | `aragora.debate` | domain | `aragora.server.result_router`, `aragora.server.debate_origin`, `aragora.server.research_phase`, `aragora.server.question_classifier`, `aragora.server.decision_integrity_utils`, `aragora.server.webhook_delivery`, `aragora.server.prometheus_rlm`, `aragora.server.stream`, `aragora.server.handlers.debates.spectate`, `aragora.server.handlers.metrics`, `aragora.server.handlers.features.provenance` | `aragora/debate/orchestrator_runner.py:1942`, `aragora/debate/orchestrator_runner.py:1951`, `aragora/debate/phases/feedback_phase.py:1081`, `aragora/debate/context_strategies/claude_search.py:39`, `aragora/debate/context_strategies/claude_search.py:56`, `aragora/debate/context/sources.py:90`, `aragora/debate/context_gatherer/sources.py:100`, `aragora/debate/prompt_context_providers.py:41`, `aragora/debate/hook_handlers.py:794`, `aragora/debate/hook_handlers.py:872`, `aragora/debate/hook_handlers.py:1108`, `aragora/debate/hook_handlers.py:1207`, `aragora/debate/phases/context_init.py:1848`, `aragora/debate/phases/context_init.py:1872`, `aragora/debate/phases/context_init.py:1893`, `aragora/debate/settlement_event_listener.py:121`, `aragora/debate/event_bridge.py:106`, `aragora/debate/arena_phases.py:68` | `aragora.debate.origin_hooks` (new); `aragora.debate.research_phase` (new); `aragora.debate.question_classifier` (new); `aragora.debate.decision_plan_hooks` (new); `aragora.events.webhook_delivery` (new); `aragora.observability.prometheus_rlm` (new); `aragora.events.emitter` (new); `aragora.events.spectator_bus` (new); `aragora.observability.metrics.verification` (new); `aragora.reasoning.provenance` | registry (result routing, origins, decision plans, provenance managers); move symbol down (research phase, classifier, webhook delivery, RLM metrics, verification metric); event (emitter, spectator events) | none (since T4a, the route from `aragora/debate/extensions.py:802` through `aragora.control_plane.channels` counts toward the `aragora.control_plane` row) |
 | `aragora.gauntlet` | application | `aragora.server.stream.emitter`, `aragora.server.stream.arena_hooks` | `aragora/gauntlet/api/export.py:85`, `aragora/gauntlet/orchestrator.py:488` | `aragora.events.emitter` (new); `aragora.events.context` | event (emitter); flip the `streaming_task_context` site | none |
@@ -228,6 +230,7 @@ and tranche T4b added none.
 | `aragora.modes` | application | `aragora.server.stream.arena_hooks` | `aragora/modes/deep_audit.py:282` | `aragora.events.context` | flip the site | none |
 | `aragora.nomic` | application | `aragora.server.stream.arena_hooks`, `aragora.server.stream.emitter`, `aragora.server.stream.nomic_loop_stream`, `aragora.server.stream.pipeline_stream`, `aragora.server.handlers.sme.feedback` | `aragora/nomic/phases/context.py:377`, `aragora/nomic/phases/verify.py:464`, `aragora/nomic/phases/implement.py:249`, `aragora/nomic/cli_stream_bridge.py:128`, `aragora/nomic/cli_stream_bridge.py:150`, `aragora/nomic/meta_planner.py:2009` | `aragora.events.context`; `aragora.events.emitter` (new); `aragora.cli.stream_bridge` (new); `aragora.storage.feedback_store` (new) | flip the `streaming_task_context` sites; event (emitter); relocate `cli_stream_bridge` up to the CLI (its only caller is `scripts/self_develop.py`); move symbol down (`FeedbackStore`) | none (since T4a, the route from `aragora/nomic/testfixer/worker_loop.py` through `aragora.control_plane` counts toward the `aragora.control_plane` row) |
 | `aragora.notifications` | infrastructure | `aragora.server.stream.emitter` | `aragora/notifications/service.py:76` | none needed (if an emitter is wanted later, `aragora.events.emitter`) | delete (dead import: `get_emitter` does not exist in that module) | none |
+| `aragora.ops` | application | `aragora.server.handlers.debates.auditing` | `aragora/ops/enterprise_validator.py:180` | `aragora.observability.audit_log` | flip the presence probe (it imports the debate auditing endpoint handler to check that audit logging is installed; the compliance audit log lives in `aragora.observability.audit_log`) | none |
 | `aragora.pipeline` | application | `aragora.server.stream.pipeline_stream`, `aragora.server.stream.emitter`, `aragora.server.stream.broadcast`, `aragora.server.result_router`, `aragora.server.handlers.autonomous.approvals` | `aragora/pipeline/idea_to_execution.py:1378`, `aragora/pipeline/status_propagator.py:184`, `aragora/pipeline/executor.py:327`, `aragora/pipeline/execution_notifier.py:202`, `aragora/pipeline/execution_notifier.py:212`, `aragora/pipeline/execution_notifier.py:299`, `aragora/pipeline/execution_notifier.py:308`, `aragora/pipeline/decision_integrity_utils.py:570`, `aragora/pipeline/decision_integrity_utils.py:690` | `aragora.events.pipeline_stream` (new); `aragora.events.emitter` (new); `aragora.debate.origin_hooks` (new); `aragora.autonomous.loop_enhancement` | event (pipeline stream, emitter); delete the two `aragora.server.stream.broadcast` imports (that module does not exist, so they always raise `ImportError`); registry (result routing); move symbol down (the `get_approval_flow` singleton next to `ApprovalFlow`) | none |
 | `aragora.ranking` | domain | `aragora.server.handlers.base` | `aragora/ranking/elo_matchmaking.py:148` | `aragora.caching.registry` | event (an invalidation hook keyed by event name, which the handler cache registers with) | none |
 | `aragora.rbac` | infrastructure | `aragora.server.auth` | `aragora/rbac/decorators.py:231`, `aragora/rbac/decorators.py:269`, `aragora/rbac/decorators.py:638`, `aragora/rbac/decorators.py:681` | `aragora.auth.config` (new) | move symbol down (`auth_config`; the CORS origin list is passed in instead of read from the server) | none (since T4a, the route from `aragora/rbac/emergency.py:749` through `aragora.control_plane.notifications` counts toward the `aragora.control_plane` row) |
@@ -237,8 +240,8 @@ and tranche T4b added none.
 ### Landing map by server module
 
 This map explains each suggested landing module. "New" means the module does not exist yet. "Alias" means the
-server module is already a deprecated alias of the lower module, so the fix is only a site flip. Server modules
-whose importers are not layered yet (they arrive with tranche T5) are included so the migration has one list.
+server module is already a deprecated alias of the lower module, so the fix is only a site flip. Rows whose
+importers were not layered when the map was written (before tranche T5) are kept so the migration has one list.
 
 | server module | suggested landing module | fix |
 |---|---|---|
@@ -269,7 +272,8 @@ whose importers are not layered yet (they arrive with tranche T5) are included s
 | `aragora.server.stream.control_plane_stream`, `aragora.server.stream.usage_stream`, `aragora.server.stream.broadcaster` | `aragora.events.emitter` (new) | event emission |
 | `aragora.server.debate_factory` | `aragora.debate.factory_hooks` (new) | registry: the server registers its arena factory |
 | `aragora.server.handlers.utils.url_security` | `aragora.security.ssrf_protection` | flip to the existing `validate_url` |
-| `aragora.server.handlers.openclaw` | `aragora.compat` | inversion: the server registers its handler over the compat logic |
+| `aragora.server.handlers.openclaw` | `aragora.compat.openclaw.gateway_hooks` (new) | inversion: the server registers its handler over the compat logic |
+| `aragora.server.handlers.debates.auditing` | `aragora.observability.audit_log` | flip the ops presence probe to the audit log's home |
 | `aragora.server.documents` | `aragora.documents.parsing` (alias) | flip the import sites |
 | `aragora.server.storage` | `aragora.storage.debate_storage` (alias) | flip the import sites |
 | `aragora.server.stream.events` | `aragora.events.types` (alias) | flip the import sites |
