@@ -380,3 +380,9 @@ import-and-call tests at both paths.
 | `aragora.export.decision_receipt:generate_decision_receipt` | `aragora.models.receipts.legacy:generate_decision_receipt` | #10590 | not before M4 seal |
 | `aragora.export.decision_receipt:link_receipt_to_trail` | `aragora.models.receipts.legacy:link_receipt_to_trail` | #10590 | not before M4 seal |
 | `aragora.cli.review:extract_review_findings` | `aragora.review.diff_review:extract_review_findings` | #10599 | not before M4 seal |
+| `aragora.cli.review:run_review_debate` | `aragora.review.diff_review:run_review_debate` | #10600 | not before M4 seal |
+| `aragora.cli.review:build_review_prompt` | `aragora.review.diff_review:build_review_prompt` | #10600 | not before M4 seal |
+| `aragora.cli.review:get_available_agents` | `aragora.review.diff_review:get_available_agents` | #10600 | not before M4 seal |
+| `aragora.cli.review:DEFAULT_REVIEW_AGENTS` | `aragora.review.diff_review:DEFAULT_REVIEW_AGENTS` | #10600 | not before M4 seal |
+| `aragora.cli.review:DEFAULT_ROUNDS` | `aragora.review.diff_review:DEFAULT_ROUNDS` | #10600 | not before M4 seal |
+| `aragora.cli.review:MAX_DIFF_SIZE` | `aragora.review.diff_review:MAX_DIFF_SIZE` | #10600 | not before M4 seal |
