@@ -58,6 +58,15 @@ EVIDENCE_COLLECTIONS = (*DERIVED_COLLECTIONS, "source_observations", "facts")
 EVIDENCE_URI_SCHEMES = frozenset({"aragora", "https"})
 FRESHNESS_EXAMPLES = (("fresh_orientation.json", "facts"), *DERIVED_EXAMPLES)
 NOMIC_REFS = ("pack_ref", "result_ref", "receipt_ref")
+OMITTABLE_COLLECTIONS = ("work_recommendations", "beliefs", "questions")
+NEVER_OMITTED_COLLECTIONS = (
+    "source_observations",
+    "facts",
+    "affordances",
+    "obligations",
+    "source_health",
+    "next_legal_actions",
+)
 
 
 def _load(path: Path) -> dict[str, Any]:
@@ -74,6 +83,21 @@ def _evidence_handles(document: dict[str, Any]) -> list[dict[str, Any]]:
         for record in document.get(collection, ()):
             handles.extend(record["evidence_refs"])
     return handles
+
+
+def _unresolved_blocker_links(document: dict[str, Any]) -> list[str]:
+    """Return blocker links that do not name exactly one of their affordance's own handles.
+
+    JSON Schema cannot compare sibling values, so this resolution rule lives in
+    the contract tests (and in every emitter) rather than in the schema.
+    """
+    unresolved: list[str] = []
+    for affordance in document.get("affordances", ()):
+        cited = [handle["id"] for handle in affordance["evidence_refs"]]
+        for link in affordance["blocked_by"]:
+            if cited.count(link["evidence_ref"]) != 1:
+                unresolved.append(f"{affordance['id']} -> {link['evidence_ref']}")
+    return unresolved
 
 
 def _commit_evidence_handle(name: str, status: str = "fresh") -> dict[str, Any]:
@@ -521,19 +545,93 @@ def test_timestamps_reject_leap_seconds(bare_validator: Any) -> None:
 @pytest.mark.parametrize(
     ("disposition", "blocked_by"),
     [
-        ("allowed", ["settlement:BLOCKED"]),
+        ("allowed", [{"evidence_ref": "git:README", "reason": "README changed"}]),
         ("blocked", []),
         ("requires_authorization", []),
         ("wait", []),
     ],
 )
 def test_affordance_disposition_must_agree_with_its_blockers(
-    bare_validator: Any, disposition: str, blocked_by: list[str]
+    bare_validator: Any, disposition: str, blocked_by: list[dict[str, str]]
 ) -> None:
     document = _load(FIXTURE_DIR / "fresh_orientation.json")
     affordance = document["affordances"][0]
     affordance["disposition"] = disposition
     affordance["blocked_by"] = blocked_by
+    with pytest.raises(jsonschema.ValidationError):
+        bare_validator.validate(document)
+
+
+@pytest.mark.parametrize("fixture_name", sorted(FIXTURE_NAMES - {"quiet_no_change.json"}))
+def test_blocker_links_resolve_to_the_affordances_own_evidence(fixture_name: str) -> None:
+    assert _unresolved_blocker_links(_load(FIXTURE_DIR / fixture_name)) == []
+
+
+def test_traces_exercise_blocker_links() -> None:
+    linked = {
+        link["evidence_ref"]
+        for fixture_name in FIXTURE_NAMES - {"quiet_no_change.json"}
+        for affordance in _load(FIXTURE_DIR / fixture_name)["affordances"]
+        for link in affordance["blocked_by"]
+    }
+    assert linked == {"settlement:PR-2", "authorization:PR-3"}
+
+
+def _blocker_link_mutations() -> list[Any]:
+    def unrelated_text(affordance: dict[str, Any]) -> None:
+        affordance["blocked_by"] = [
+            {"evidence_ref": "zzz unrelated free text", "reason": "zzz unrelated free text"}
+        ]
+
+    def renamed_handle(affordance: dict[str, Any]) -> None:
+        affordance["evidence_refs"][0]["id"] = "unrelated:handle"
+
+    def another_records_handle(affordance: dict[str, Any]) -> None:
+        affordance["blocked_by"][0]["evidence_ref"] = "lease:lease-1"
+
+    def ambiguous_handle(affordance: dict[str, Any]) -> None:
+        affordance["evidence_refs"].append(copy.deepcopy(affordance["evidence_refs"][0]))
+
+    return [
+        pytest.param(unrelated_text, id="unrelated-text"),
+        pytest.param(renamed_handle, id="renamed-cited-handle"),
+        pytest.param(another_records_handle, id="another-records-handle"),
+        pytest.param(ambiguous_handle, id="ambiguous-cited-handle"),
+    ]
+
+
+@pytest.mark.parametrize("mutate", _blocker_link_mutations())
+def test_unresolved_blocker_links_break_the_contract(bare_validator: Any, mutate: Any) -> None:
+    """A link the schema accepts still has to name one of the affordance's own handles."""
+    document = _load(FIXTURE_DIR / "interrupted_resumption.json")
+    assert _unresolved_blocker_links(document) == []
+
+    mutate(document["affordances"][0])
+    bare_validator.validate(document)
+    assert _unresolved_blocker_links(document)
+
+
+@pytest.mark.parametrize(
+    "link",
+    [
+        pytest.param("settlement:BLOCKED", id="bare-string"),
+        pytest.param({"evidence_ref": "settlement:PR-2"}, id="no-reason"),
+        pytest.param({"reason": "settlement is BLOCKED"}, id="no-evidence-ref"),
+        pytest.param({"evidence_ref": "", "reason": "settlement is BLOCKED"}, id="empty-ref"),
+        pytest.param({"evidence_ref": "settlement:PR-2", "reason": ""}, id="empty-reason"),
+        pytest.param(
+            {
+                "evidence_ref": "settlement:PR-2",
+                "reason": "settlement is BLOCKED",
+                "work_id": "PR-2",
+            },
+            id="undeclared-field",
+        ),
+    ],
+)
+def test_blocker_links_are_structured(bare_validator: Any, link: Any) -> None:
+    document = _load(FIXTURE_DIR / "interrupted_resumption.json")
+    document["affordances"][0]["blocked_by"] = [link]
     with pytest.raises(jsonschema.ValidationError):
         bare_validator.validate(document)
 
@@ -544,6 +642,64 @@ def test_truncation_flag_must_agree_with_omissions(
 ) -> None:
     document = _load(FIXTURE_DIR / "fresh_orientation.json")
     document["truncation"]["truncated"] = truncated
+    document["truncation"]["omitted"] = omitted
+    with pytest.raises(jsonschema.ValidationError):
+        bare_validator.validate(document)
+
+
+def test_every_envelope_collection_is_classified_for_truncation(bare_validator: Any) -> None:
+    envelope = bare_validator.schema["$defs"]["fullEnvelope"]["properties"]
+    collections = {
+        name
+        for name, rule in envelope.items()
+        if rule.get("type") == "array" and rule.get("maxItems") != 0
+    }
+    assert collections == {*OMITTABLE_COLLECTIONS, *NEVER_OMITTED_COLLECTIONS}
+    omitted = bare_validator.schema["$defs"]["truncation"]["properties"]["omitted"]
+    assert omitted["items"]["enum"] == list(OMITTABLE_COLLECTIONS)
+
+
+@pytest.mark.parametrize("collection", OMITTABLE_COLLECTIONS)
+def test_truncation_may_omit_derived_guidance(bare_validator: Any, collection: str) -> None:
+    document = _load(FIXTURE_DIR / "fresh_orientation.json")
+    document[collection] = []
+    document["truncation"]["truncated"] = True
+    document["truncation"]["omitted"] = [collection]
+    bare_validator.validate(document)
+
+
+@pytest.mark.parametrize("collection", NEVER_OMITTED_COLLECTIONS)
+def test_truncation_never_omits_a_blocker_bearing_collection(
+    bare_validator: Any, collection: str
+) -> None:
+    """Dropping the only live blocker must not leave the ready recommendation standing."""
+    document = _load(FIXTURE_DIR / "interrupted_resumption.json")
+    assert document["work_recommendations"][0]["classification"] == "ready"
+    document[collection] = []
+    document["truncation"]["truncated"] = True
+    document["truncation"]["omitted"] = [collection]
+    with pytest.raises(jsonschema.ValidationError):
+        bare_validator.validate(document)
+
+
+@pytest.mark.parametrize(
+    "omitted",
+    [
+        pytest.param(["anything at all"], id="free-text"),
+        pytest.param([""], id="empty-name"),
+        pytest.param(["Beliefs"], id="wrong-case"),
+        pytest.param(["mission"], id="mission-object"),
+        pytest.param(["nomic"], id="nomic-object"),
+        pytest.param(["beliefs", "anything at all"], id="mixed"),
+        pytest.param(["beliefs", "beliefs"], id="repeated"),
+        pytest.param(["affordances", "obligations", "source_health"], id="all-blocker-collections"),
+    ],
+)
+def test_truncation_omissions_use_the_closed_vocabulary(
+    bare_validator: Any, omitted: list[str]
+) -> None:
+    document = _load(FIXTURE_DIR / "interrupted_resumption.json")
+    document["truncation"]["truncated"] = True
     document["truncation"]["omitted"] = omitted
     with pytest.raises(jsonschema.ValidationError):
         bare_validator.validate(document)
@@ -635,7 +791,9 @@ def test_live_blocker_overrides_ready_recommendation() -> None:
     assert affordance["authority"] == "derived_recommendation"
     assert affordance["evidence_refs"][0]["authority"] == "live_authority"
     assert affordance["disposition"] == "blocked"
-    assert affordance["blocked_by"] == ["settlement:BLOCKED"]
+    assert affordance["blocked_by"] == [
+        {"evidence_ref": affordance["evidence_refs"][0]["id"], "reason": "settlement is BLOCKED"}
+    ]
 
 
 def test_named_sources_sit_in_the_layer_the_contract_assigns() -> None:
@@ -663,6 +821,9 @@ def test_high_risk_trace_requests_authorization_without_effect() -> None:
     affordance = document["affordances"][0]
     assert affordance["risk_tier"] == 4
     assert affordance["disposition"] == "requires_authorization"
+    assert affordance["blocked_by"] == [
+        {"evidence_ref": "authorization:PR-3", "reason": "missing human authorization"}
+    ]
     assert document["mutations"] == []
 
 

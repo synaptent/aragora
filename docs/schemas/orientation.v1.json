@@ -322,9 +322,19 @@
         "permissions": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
         "reversible": { "type": "boolean" },
         "information_value": { "type": "number", "minimum": 0, "maximum": 1 },
-        "blocked_by": { "type": "array", "items": { "type": "string" } }
+        "blocked_by": { "type": "array", "items": { "$ref": "#/$defs/blockerLink" } }
       },
       "unevaluatedProperties": false
+    },
+    "blockerLink": {
+      "description": "Names what blocks an affordance. evidence_ref is the id of exactly one of the affordance's own evidence_refs; reason says why in words. JSON Schema cannot compare sibling values, so the contract tests and every emitter enforce that evidence_ref resolves.",
+      "type": "object",
+      "required": ["evidence_ref", "reason"],
+      "properties": {
+        "evidence_ref": { "type": "string", "minLength": 1 },
+        "reason": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
     },
     "obligation": {
       "allOf": [{ "$ref": "#/$defs/derivedMetadata" }],
@@ -401,7 +411,12 @@
         "budget_bytes": { "type": "integer", "minimum": 1 },
         "emitted_bytes": { "type": "integer", "minimum": 0 },
         "truncated": { "type": "boolean" },
-        "omitted": { "type": "array", "items": { "type": "string" } }
+        "omitted": {
+          "description": "Truncation may omit only derived guidance that cannot carry a blocker. Source observations, facts, affordances, obligations, source health and next legal actions are never omitted, so a truncated envelope keeps every blocker it carries.",
+          "type": "array",
+          "items": { "enum": ["work_recommendations", "beliefs", "questions"] },
+          "uniqueItems": true
+        }
       },
       "allOf": [
         {

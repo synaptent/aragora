@@ -97,12 +97,23 @@ record from acquiring the authority of the live or durable state it summarizes.
   must keep stale history in view declares itself `stale` or `unknown`.
 - `unknown`, `unavailable`, or `ambiguous` on an authority-bearing source blocks
   dependent affordances.
+- Every `blocked_by` entry names its blocker: `evidence_ref` is the id of exactly
+  one of the affordance's own `evidence_refs`, and `reason` states the block in
+  words. JSON Schema cannot compare sibling values, so the contract tests and
+  every emitter check that each `evidence_ref` resolves.
 - Anchor movement invalidates commit-bound Nomic results and decision evidence.
   The Nomic projection cites its pack, planning result, and receipt as
   `commit_evidence` handles. Only a `verified` state, whose cited handles are all
   `fresh`, claims `exact_commit_match: true`; `absent`, `stale`, and `invalid`
   states always record `false`.
 - Truncation is explicit, deterministic, and never silently removes a blocker.
+  It may omit only derived guidance that cannot carry a blocker:
+  `work_recommendations`, `beliefs`, and `questions`, each named at most once in
+  `truncation.omitted`. Source observations, facts, affordances, obligations,
+  source health, and next legal actions are never omitted. The schema rejects a
+  declared omission of any of them, but it cannot see a collection an emitter
+  empties without declaring it, so keeping every blocker-bearing record is an
+  emitter obligation that its own tests must cover.
   `truncation.emitted_bytes` is the exact byte length of the complete envelope
   serialized as compact, key-sorted UTF-8 JSON. Because the field is counted
   inside the envelope it measures, widening it can widen the envelope; where more
