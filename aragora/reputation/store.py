@@ -279,7 +279,14 @@ class ReputationStore:
                     delta = ReputationDelta.from_json(payload)
                     store._deltas[delta.agent_id].append(delta)
                     store._delta_by_id[delta.delta_id] = delta
-                except (KeyError, TypeError, ValueError, OverflowError, RecursionError) as exc:  # noqa: BLE001
+                except (
+                    KeyError,
+                    TypeError,
+                    ValueError,
+                    OverflowError,
+                    RecursionError,
+                    MemoryError,
+                ) as exc:  # noqa: BLE001
                     logger.warning(
                         "ReputationStore: skipping invalid line %d in %s: %s",
                         lineno,
@@ -298,7 +305,14 @@ class ReputationStore:
                     try:
                         reversal = ReputationDeltaReversed.from_json(json.loads(raw))
                         store._reversals[reversal.original_delta_id] = reversal
-                    except (KeyError, TypeError, ValueError, OverflowError, RecursionError) as exc:  # noqa: BLE001
+                    except (
+                        KeyError,
+                        TypeError,
+                        ValueError,
+                        OverflowError,
+                        RecursionError,
+                        MemoryError,
+                    ) as exc:  # noqa: BLE001
                         logger.warning(
                             "ReputationStore: skipping invalid reversal line %d in %s: %s",
                             lineno,

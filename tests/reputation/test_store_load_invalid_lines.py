@@ -11,10 +11,12 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
+from aragora.reputation import store as store_module
 from aragora.reputation.store import ReputationStore
 from aragora.reputation.types import (
     DOMAIN_PREDICTION_MARKET,
@@ -166,3 +168,137 @@ def test_invalid_reversal_line_is_skipped_with_one_warning(
     assert warnings[0].startswith(
         f"ReputationStore: skipping invalid reversal line 1 in {reversal_path}: "
     )
+
+
+_OOM_MESSAGE = "simulated allocation failure"
+_INJECTION_POINTS = [
+    pytest.param("json.loads", id="json-loads"),
+    pytest.param("from_json", id="from-json"),
+]
+
+
+def _raise_memory_error_for(
+    monkeypatch: pytest.MonkeyPatch,
+    inject: str,
+    record_type: type[ReputationDelta] | type[ReputationDeltaReversed],
+    field: str,
+    value: str,
+) -> list[str]:
+    """Make the loader's try body raise MemoryError for the one line whose ``field`` is ``value``.
+
+    Returns a list that gains one entry per injected failure, so a test can
+    prove the failure really happened inside the loader.
+    """
+    raised: list[str] = []
+
+    def _matches(payload: Any) -> bool:
+        return isinstance(payload, dict) and payload.get(field) == value
+
+    if inject == "json.loads":
+        real_loads = json.loads
+
+        def _loads(raw: str) -> Any:
+            payload = real_loads(raw)
+            if _matches(payload):
+                raised.append(value)
+                raise MemoryError(_OOM_MESSAGE)
+            return payload
+
+        # Replace only the store module's ``json`` binding so other users of ``json`` are untouched.
+        monkeypatch.setattr(store_module, "json", SimpleNamespace(loads=_loads, dumps=json.dumps))
+    else:
+        real_from_json = record_type.from_json
+
+        def _from_json(cls: type[Any], data: Any) -> Any:
+            if _matches(data):
+                raised.append(value)
+                raise MemoryError(_OOM_MESSAGE)
+            return real_from_json(data)
+
+        monkeypatch.setattr(record_type, "from_json", classmethod(_from_json))
+    return raised
+
+
+@pytest.mark.parametrize("inject", _INJECTION_POINTS)
+def test_memory_error_on_delta_line_is_skipped_with_one_warning(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
+    inject: str,
+) -> None:
+    ledger = tmp_path / "ledger.jsonl"
+    _write(
+        ledger,
+        [
+            _line(_DELTA, delta_id="d-a"),
+            _line(_DELTA, delta_id="d-oom"),
+            _line(_DELTA, delta_id="d-b", agent_id="bob", delta=-0.25),
+        ],
+    )
+    reversal_path = tmp_path / "ledger.reversals.jsonl"
+    _write(
+        reversal_path,
+        [_line(_REVERSAL, original_delta_id="d-b", agent_id="bob", counter_delta=0.25)],
+    )
+    raised = _raise_memory_error_for(monkeypatch, inject, ReputationDelta, "delta_id", "d-oom")
+
+    with caplog.at_level(logging.WARNING, logger=_STORE_LOGGER):
+        store = ReputationStore.load_from_file(ledger)
+
+    assert raised == ["d-oom"]
+    assert len(store) == 2
+    assert [d.delta_id for d in store.deltas_for("alice")] == ["d-a"]
+    assert [d.delta_id for d in store.deltas_for("bob")] == ["d-b"]
+    assert [r.original_delta_id for r in store.reversals_for("bob")] == ["d-b"]
+    assert store.get_score("alice", apply_decay=False) == pytest.approx(0.5)
+    assert store.get_score("bob", apply_decay=False) == pytest.approx(0.0)
+    assert _warnings(caplog) == [
+        f"ReputationStore: skipping invalid line 2 in {ledger}: {_OOM_MESSAGE}"
+    ]
+
+
+@pytest.mark.parametrize("inject", _INJECTION_POINTS)
+def test_memory_error_on_reversal_line_is_skipped_with_one_warning(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
+    inject: str,
+) -> None:
+    ledger = tmp_path / "ledger.jsonl"
+    _write(
+        ledger,
+        [
+            _line(_DELTA, delta_id="d-a"),
+            _line(_DELTA, delta_id="d-b", agent_id="bob", delta=-0.25),
+        ],
+    )
+    reversal_path = tmp_path / "ledger.reversals.jsonl"
+    _write(
+        reversal_path,
+        [
+            _line(
+                _REVERSAL,
+                reversal_id="rev-oom",
+                original_delta_id="d-b",
+                agent_id="bob",
+                counter_delta=0.25,
+            ),
+            _line(_REVERSAL, original_delta_id="d-a"),
+        ],
+    )
+    raised = _raise_memory_error_for(
+        monkeypatch, inject, ReputationDeltaReversed, "reversal_id", "rev-oom"
+    )
+
+    with caplog.at_level(logging.WARNING, logger=_STORE_LOGGER):
+        store = ReputationStore.load_from_file(ledger)
+
+    assert raised == ["rev-oom"]
+    assert len(store) == 2
+    assert [r.original_delta_id for r in store.reversals_for("alice")] == ["d-a"]
+    assert store.reversals_for("bob") == []
+    assert store.get_score("alice", apply_decay=False) == pytest.approx(0.0)
+    assert store.get_score("bob", apply_decay=False) == pytest.approx(-0.25)
+    assert _warnings(caplog) == [
+        f"ReputationStore: skipping invalid reversal line 1 in {reversal_path}: {_OOM_MESSAGE}"
+    ]

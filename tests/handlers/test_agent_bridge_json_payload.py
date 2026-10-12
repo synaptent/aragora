@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 import pytest
 
+from aragora.server.handlers.agents import agent_bridge as agent_bridge_module
 from aragora.server.handlers.agents.agent_bridge import _json_payload
 from aragora.server.handlers.utils.responses import HandlerResult
 
@@ -30,6 +32,22 @@ def test_undecodable_body_falls_back_to_empty_dict(
     assert excinfo.type is expected_exc
 
     assert _json_payload(_result(raw.encode("utf-8"))) == {}
+
+
+def test_memory_error_while_decoding_falls_back_to_empty_dict(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    decoded: list[str] = []
+
+    def _loads(raw: str) -> object:
+        decoded.append(raw)
+        raise MemoryError("simulated allocation failure")
+
+    # Replace only this module's ``json`` binding so other users of ``json.loads`` are untouched.
+    monkeypatch.setattr(agent_bridge_module, "json", SimpleNamespace(loads=_loads))
+
+    assert _json_payload(_result(b'{"turn": 3}')) == {}
+    assert decoded == ['{"turn": 3}']
 
 
 @pytest.mark.parametrize(
