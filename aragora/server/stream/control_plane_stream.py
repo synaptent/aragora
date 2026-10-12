@@ -103,7 +103,8 @@ class ControlPlaneStreamServer:
     to all connected clients in real-time.
     """
 
-    def __init__(self, port: int = 8766, host: str = "0.0.0.0"):  # noqa: S104 - WS server binds all interfaces by default
+    # WS server binds all interfaces by default
+    def __init__(self, port: int = 8766, host: str = "0.0.0.0"):
         """Initialize the control plane stream server.
 
         Args:

@@ -112,7 +112,7 @@ def _classify_slack_error(
 async def _exponential_backoff(attempt: int, base: float = 1.0, max_delay: float = 30.0) -> None:
     """Sleep with exponential backoff and jitter."""
     # Jitter scales with base to keep early attempts short.
-    delay = min(base * (2**attempt) + random.uniform(0, base), max_delay)  # noqa: S311 -- retry jitter
+    delay = min(base * (2**attempt) + random.uniform(0, base), max_delay)
     await asyncio.sleep(delay)
 
 

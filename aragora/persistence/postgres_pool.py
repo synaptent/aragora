@@ -210,7 +210,7 @@ class ReplicaAwarePool:
                 return
 
             try:
-                import asyncpg  # noqa: F401 - type hint only
+                import asyncpg  # type hint only
             except ImportError:
                 logger.warning(
                     "asyncpg not installed, PostgreSQL pool will not be available. "
@@ -350,7 +350,7 @@ class ReplicaAwarePool:
             return None
 
         # Simple random selection (could be enhanced with latency-based weighting)
-        return random.choice(healthy_pools)  # noqa: S311 -- load balancing
+        return random.choice(healthy_pools)
 
     def _record_query(self, readonly: bool) -> None:
         """Record query statistics."""

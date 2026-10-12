@@ -921,7 +921,7 @@ def check_semgrep_installation() -> dict[str, Any]:
 
     try:
         result = subprocess.run(
-            ["semgrep", "--version"],  # noqa: S607 -- fixed command
+            ["semgrep", "--version"],  # fixed command
             capture_output=True,
             text=True,
             timeout=10,

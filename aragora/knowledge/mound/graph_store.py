@@ -333,7 +333,7 @@ class KnowledgeGraphStore(SQLiteStore):
                        created_by, created_at, tenant_id, metadata
                 FROM knowledge_links
                 WHERE {column} = ? AND tenant_id = ?
-            """  # noqa: S608 -- column name interpolation, parameterized
+            """  # column name interpolation, parameterized
             params: list = [value, tenant_id]
 
             if relationship_types:

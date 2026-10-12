@@ -264,7 +264,7 @@ class SlackPreserver:
 
                 if curr_diff - prev_diff > 0.2:
                     # Significant difficulty jump - add exploration space
-                    slack_type = random.choice([SlackType.EXPLORE, SlackType.USER_CHOICE])  # noqa: S311 -- non-security random selection
+                    slack_type = random.choice([SlackType.EXPLORE, SlackType.USER_CHOICE])
                     points.append((i, slack_type))
 
         # Random additional slack
@@ -272,10 +272,8 @@ class SlackPreserver:
         if remaining_allowed:
             # Add some random slack points
             for i in range(1, len(stones) - 1):
-                if (
-                    random.random() < 0.1  # noqa: S311 -- non-security random selection
-                ):  # 10% chance per position
-                    slack_type = random.choice(remaining_allowed)  # noqa: S311 -- non-security random selection
+                if random.random() < 0.1:  # 10% chance per position
+                    slack_type = random.choice(remaining_allowed)
                     points.append((i, slack_type))
 
         return points
@@ -299,7 +297,7 @@ class SlackPreserver:
         self._slack_stone_counter += 1
 
         # Select prompt based on type
-        prompt = random.choice(SLACK_PROMPTS.get(slack_type, ["Take a moment."]))  # noqa: S311 -- non-security random selection
+        prompt = random.choice(SLACK_PROMPTS.get(slack_type, ["Take a moment."]))
 
         # Generate contextual "why"
         if position == 0:
@@ -529,7 +527,7 @@ def create_pure_slack_curriculum(
     stones = []
     for i in range(stone_count):
         slack_type = types[i % len(types)]
-        prompt = random.choice(SLACK_PROMPTS[slack_type])  # noqa: S311 -- non-security random selection
+        prompt = random.choice(SLACK_PROMPTS[slack_type])
 
         stone = SlackStone(
             id=f"pure_slack_{i + 1}",

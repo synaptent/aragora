@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from aragora.rbac.decorators import require_permission  # noqa: F401
 
 try:
-    from aragora.rbac.checker import check_permission  # noqa: F401
+    from aragora.rbac.checker import check_permission
 
     RBAC_AVAILABLE = True
 except ImportError:
@@ -52,15 +52,15 @@ from ..secure import ForbiddenError, SecureHandler, UnauthorizedError
 from ..utils.rate_limit import RateLimiter, get_client_ip
 
 # Re-export from submodules for backward compatibility
-from ._analytics_metrics_common import (  # noqa: F401
+from ._analytics_metrics_common import (
     VALID_GRANULARITIES,
     VALID_TIME_RANGES,
     _group_by_time,
     _parse_time_range,
 )
-from ._analytics_metrics_agents import AgentAnalyticsMixin  # noqa: F401
-from ._analytics_metrics_debates import DebateAnalyticsMixin  # noqa: F401
-from ._analytics_metrics_usage import UsageAnalyticsMixin  # noqa: F401
+from ._analytics_metrics_agents import AgentAnalyticsMixin
+from ._analytics_metrics_debates import DebateAnalyticsMixin
+from ._analytics_metrics_usage import UsageAnalyticsMixin
 
 logger = logging.getLogger(__name__)
 

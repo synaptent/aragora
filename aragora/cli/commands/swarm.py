@@ -88,7 +88,7 @@ T = TypeVar("T")
 # we expose the type to type-checkers unconditionally while tolerating
 # runtime import failures.
 if TYPE_CHECKING:
-    from aragora.nomic.dev_coordination import (  # noqa: F401
+    from aragora.nomic.dev_coordination import (
         DevCoordinationStore as DevCoordinationStore,
     )
 else:

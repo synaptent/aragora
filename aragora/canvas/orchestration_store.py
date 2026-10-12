@@ -110,7 +110,7 @@ class OrchestrationCanvasStore(SQLiteStore):
 
         with self.connection() as conn:
             rows = conn.execute(
-                f"SELECT * FROM orchestration_canvases{where}"  # noqa: S608
+                f"SELECT * FROM orchestration_canvases{where}"
                 " ORDER BY updated_at DESC LIMIT ? OFFSET ?",
                 params,
             ).fetchall()
@@ -154,7 +154,7 @@ class OrchestrationCanvasStore(SQLiteStore):
 
         with self.connection() as conn:
             conn.execute(
-                f"UPDATE orchestration_canvases SET {', '.join(updates)} WHERE id = ?",  # noqa: S608
+                f"UPDATE orchestration_canvases SET {', '.join(updates)} WHERE id = ?",
                 params,
             )
         return self.load_canvas(canvas_id)

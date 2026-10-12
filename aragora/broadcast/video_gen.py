@@ -633,8 +633,8 @@ class VideoGenerator:
             # Get duration using ffprobe synchronously
             import subprocess
 
-            result = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
-                [  # noqa: S607 -- fixed command
+            result = subprocess.run(  # subprocess with fixed args, no shell
+                [  # fixed command
                     "ffprobe",
                     "-v",
                     "quiet",

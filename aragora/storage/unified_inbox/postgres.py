@@ -229,7 +229,7 @@ class PostgresUnifiedInboxStore(UnifiedInboxStoreBackend):
             UPDATE unified_inbox_accounts
             SET {", ".join(fields)}
             WHERE tenant_id = ${idx} AND account_id = ${idx + 1}
-        """  # noqa: S608 -- dynamic clause from internal state
+        """  # dynamic clause from internal state
         await self._store.execute(sql, *values)
 
     async def increment_account_counts(
@@ -405,7 +405,8 @@ class PostgresUnifiedInboxStore(UnifiedInboxStoreBackend):
 
         where_clause = " AND ".join(clauses)
         total_row = await self._store.fetch_one(
-            f"SELECT COUNT(*) AS total FROM unified_inbox_messages WHERE {where_clause}",  # noqa: S608 -- dynamic clause from internal state
+            # dynamic clause from internal state
+            f"SELECT COUNT(*) AS total FROM unified_inbox_messages WHERE {where_clause}",
             *params,
         )
         total = int(total_row["total"]) if total_row else 0
@@ -425,7 +426,7 @@ class PostgresUnifiedInboxStore(UnifiedInboxStoreBackend):
             WHERE {where_clause}
             ORDER BY priority_score DESC, received_at DESC
             {limit_clause}
-        """,  # noqa: S608 -- dynamic clause from internal state
+        """,  # dynamic clause from internal state
             *params,
         )
         return [self._row_to_message(row) for row in rows], total
@@ -511,7 +512,7 @@ class PostgresUnifiedInboxStore(UnifiedInboxStoreBackend):
             UPDATE unified_inbox_messages
             SET {", ".join(updates)}
             WHERE tenant_id = ${idx + 1} AND message_id = ${idx + 2}
-        """,  # noqa: S608 -- dynamic clause from internal state
+        """,  # dynamic clause from internal state
             *params,
         )
         new_read = is_read if is_read is not None else old_read

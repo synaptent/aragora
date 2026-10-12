@@ -79,7 +79,7 @@ def _claims_overlap(first: str, second: str) -> bool:
 def resolve_repo_root(path_hint: Path) -> Path:
     """Resolve git repo root from any path inside a repository."""
     proc = subprocess.run(
-        ["git", "-C", str(path_hint), "rev-parse", "--show-toplevel"],  # noqa: S607 -- fixed command
+        ["git", "-C", str(path_hint), "rev-parse", "--show-toplevel"],  # fixed command
         capture_output=True,
         text=True,
         check=False,
@@ -91,7 +91,7 @@ def resolve_repo_root(path_hint: Path) -> Path:
 
 def _list_git_worktrees(repo_root: Path) -> list[dict[str, str | bool | None]]:
     proc = subprocess.run(
-        ["git", "worktree", "list", "--porcelain"],  # noqa: S607 -- fixed command
+        ["git", "worktree", "list", "--porcelain"],  # fixed command
         cwd=repo_root,
         capture_output=True,
         text=True,
@@ -322,7 +322,7 @@ def _count_dirty(worktree_path: Path) -> int:
         return 0
     try:
         proc = subprocess.run(
-            ["git", "status", "--porcelain"],  # noqa: S607 -- fixed command
+            ["git", "status", "--porcelain"],  # fixed command
             cwd=worktree_path,
             capture_output=True,
             text=True,
@@ -341,7 +341,7 @@ def _ahead_behind(worktree_path: Path, base_branch: str) -> tuple[int | None, in
     for target in (f"origin/{base_branch}", base_branch):
         try:
             proc = subprocess.run(
-                ["git", "rev-list", "--left-right", "--count", f"{target}...HEAD"],  # noqa: S607 -- fixed command
+                ["git", "rev-list", "--left-right", "--count", f"{target}...HEAD"],  # fixed command
                 cwd=worktree_path,
                 capture_output=True,
                 text=True,

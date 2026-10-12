@@ -690,8 +690,8 @@ class PRReviewRunner:
     def _fetch_diff(self, repo: str, pr_number: int) -> tuple[str | None, str | None]:
         """Fetch PR diff via gh CLI."""
         try:
-            result = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
-                ["gh", "pr", "diff", str(pr_number), "--repo", repo],  # noqa: S607 -- fixed command
+            result = subprocess.run(  # subprocess with fixed args, no shell
+                ["gh", "pr", "diff", str(pr_number), "--repo", repo],  # fixed command
                 capture_output=True,
                 text=True,
                 timeout=self.policy.max_execution_seconds,
@@ -759,7 +759,7 @@ class PRReviewRunner:
             cmd.append("--gauntlet")
 
         try:
-            result = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
+            result = subprocess.run(  # subprocess with fixed args, no shell
                 cmd,
                 input=diff,
                 capture_output=True,
@@ -804,8 +804,8 @@ class PRReviewRunner:
         body = _format_comment(findings, agreement_score)
 
         try:
-            result = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
-                [  # noqa: S607 -- fixed command
+            result = subprocess.run(  # subprocess with fixed args, no shell
+                [  # fixed command
                     "gh",
                     "pr",
                     "comment",
@@ -834,8 +834,8 @@ class PRReviewRunner:
     ) -> tuple[list[int] | None, str | None]:
         """List open PR numbers for a repo."""
         try:
-            result = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
-                [  # noqa: S607 -- fixed command
+            result = subprocess.run(  # subprocess with fixed args, no shell
+                [  # fixed command
                     "gh",
                     "pr",
                     "list",
@@ -870,8 +870,8 @@ class PRReviewRunner:
     ) -> tuple[PRMetadata | None, str | None]:
         """Fetch public PR metadata via gh CLI."""
         try:
-            result = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
-                [  # noqa: S607 -- fixed command
+            result = subprocess.run(  # subprocess with fixed args, no shell
+                [  # fixed command
                     "gh",
                     "pr",
                     "view",

@@ -415,7 +415,7 @@ async def get_recent_dissents(
                 {where_clause}
                 ORDER BY d.timestamp DESC
                 LIMIT ?
-            """  # noqa: S608 -- dynamic clause from internal state
+            """  # dynamic clause from internal state
             params.append(limit)
             cursor.execute(query, tuple(params))
             return cursor.fetchall()

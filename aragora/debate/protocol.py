@@ -11,8 +11,8 @@ warnings.warn(
     stacklevel=2,
 )
 
-from aragora.debate.protocol_resolver import resolve_default_protocol  # noqa: E402
-from aragora.protocols.debate import (  # noqa: E402
+from aragora.debate.protocol_resolver import resolve_default_protocol
+from aragora.protocols.debate import (
     ARAGORA_AI_LIGHT_PROTOCOL,
     ARAGORA_AI_PROTOCOL,
     STRUCTURED_LIGHT_ROUND_PHASES,
@@ -21,7 +21,7 @@ from aragora.protocols.debate import (  # noqa: E402
     RoundPhase,
     user_vote_multiplier,
 )
-from aragora.resilience import CircuitBreaker  # noqa: E402
+from aragora.resilience import CircuitBreaker
 
 __all__ = [
     "ARAGORA_AI_LIGHT_PROTOCOL",

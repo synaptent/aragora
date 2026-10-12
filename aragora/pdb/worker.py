@@ -28,7 +28,7 @@ from aragora.brief_engine.worker import (
 # "run_protocol_b", ...)``) continue to observe their override. The
 # generic worker's default Mode 3 runner dispatches through this
 # module attribute precisely to preserve that behaviour.
-from aragora.pdb.protocol import run_protocol_b  # noqa: F401
+from aragora.pdb.protocol import run_protocol_b
 
 __all__ = [
     "AlreadyRunningError",

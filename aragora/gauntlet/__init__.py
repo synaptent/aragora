@@ -42,7 +42,7 @@ from .receipt import DecisionReceipt
 
 # Result types
 from .result import GauntletResult, Vulnerability
-from .result import RiskSummary as ResultRiskSummary  # noqa: F401 - Alias for backward compat
+from .result import RiskSummary as ResultRiskSummary  # Alias for backward compat
 
 # Runner
 from .runner import GauntletRunner

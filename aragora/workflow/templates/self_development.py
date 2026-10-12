@@ -373,7 +373,7 @@ def _register_self_dev_handlers():
             from aragora.nomic.branch_coordinator import BranchCoordinator
 
             branches_data = context.step_outputs.get("create_branches", {}).get("branches", [])
-            _parallel_results = context.step_outputs.get("parallel_nomic", {})  # noqa: F841 - For debugging
+            _parallel_results = context.step_outputs.get("parallel_nomic", {})  # For debugging
 
             coordinator = BranchCoordinator()
             merged = []

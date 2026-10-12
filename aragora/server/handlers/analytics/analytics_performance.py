@@ -24,7 +24,7 @@ from aragora.rbac.decorators import require_permission
 from aragora.server.validation.query_params import safe_query_int
 
 try:
-    from aragora.rbac.checker import check_permission  # noqa: F401
+    from aragora.rbac.checker import check_permission
     from aragora.rbac.models import AuthorizationContext  # noqa: F401
 
     RBAC_AVAILABLE = True

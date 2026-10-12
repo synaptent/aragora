@@ -243,7 +243,8 @@ class PostgresWorkflowStore(PostgresStore):
 
         # Get total count
         count_row = await self.fetch_one(
-            f"SELECT COUNT(*) as cnt FROM workflows WHERE {where_clause}",  # noqa: S608 -- dynamic clause from internal state
+            # dynamic clause from internal state
+            f"SELECT COUNT(*) as cnt FROM workflows WHERE {where_clause}",
             *params,
         )
         total = count_row["cnt"] if count_row else 0
@@ -256,7 +257,7 @@ class PostgresWorkflowStore(PostgresStore):
             WHERE {where_clause}
             ORDER BY updated_at DESC
             LIMIT ${param_num} OFFSET ${param_num + 1}
-            """,  # noqa: S608 -- dynamic clause from internal state
+            """,  # dynamic clause from internal state
             *params,
         )
 
@@ -623,7 +624,8 @@ class PostgresWorkflowStore(PostgresStore):
 
         # Get total count
         count_row = await self.fetch_one(
-            f"SELECT COUNT(*) as cnt FROM workflow_executions WHERE {where_clause}",  # noqa: S608 -- dynamic clause from internal state
+            # dynamic clause from internal state
+            f"SELECT COUNT(*) as cnt FROM workflow_executions WHERE {where_clause}",
             *params,
         )
         total = count_row["cnt"] if count_row else 0
@@ -638,7 +640,7 @@ class PostgresWorkflowStore(PostgresStore):
             WHERE {where_clause}
             ORDER BY started_at DESC
             LIMIT ${param_num} OFFSET ${param_num + 1}
-            """,  # noqa: S608 -- dynamic clause from internal state
+            """,  # dynamic clause from internal state
             *params,
         )
 
