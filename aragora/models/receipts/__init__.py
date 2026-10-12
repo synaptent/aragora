@@ -9,6 +9,8 @@ application packages (``aragora.receipts``, ``aragora.gauntlet``,
   content digest.
 - :mod:`aragora.models.receipts.attestation`: human-oversight attestation
   blocks for ODR receipts.
+- :mod:`aragora.models.receipts.canonical`: receipt flag and linkage normalization, the
+  ``artifact_hash`` recipe and schema-version selection.
 - :mod:`aragora.models.receipts.gauntlet`: the gauntlet receipt family
   (``aragora.gauntlet.receipt_models``).
 - :mod:`aragora.models.receipts.legacy`: the legacy export receipt family

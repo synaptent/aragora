@@ -121,9 +121,11 @@ def test_reimporting_a_facade_replaces_its_adapter_instead_of_adding_one() -> No
     sys.modules.pop("aragora.export.decision_receipt")
     assert importlib.import_module("aragora.export.decision_receipt") is legacy
     assert operations.registered_operations() == before
-    assert operations.signing_backend() is importlib.import_module(
-        "aragora.storage.receipt_signing"
-    )
+    signing = operations.signing_backend()
+    storage_signing = importlib.import_module("aragora.storage.receipt_signing")
+    for name in ("HMACSigner", "ReceiptSigner", "SignatureMetadata", "SignedReceipt"):
+        assert getattr(signing, name) is getattr(storage_signing, name), name
+    assert signing.get_default_signer is storage_signing.get_default_signer
 
 
 def test_gauntlet_signing_round_trip_through_the_registered_signer(
@@ -207,6 +209,27 @@ import aragora.receipts
 assert OP.sign_receipt(l).signature
 print("ok")
 """
+    _run_fresh_interpreter(code)
+
+
+@pytest.mark.parametrize(
+    "facade", ["aragora.export.decision_receipt", "aragora.gauntlet.receipt_models"]
+)
+def test_facade_import_leaves_storage_unloaded_until_the_first_signature(facade) -> None:
+    code = f"""
+import sys, warnings
+warnings.simplefilter("ignore")
+import {facade}
+from aragora.models.receipts import legacy, operations
+assert not [m for m in sys.modules if m.startswith("aragora.storage")]
+assert operations.sign_receipt(legacy.DecisionReceipt(receipt_id="lr", gauntlet_id="g")).signature
+assert "aragora.storage.receipt_signing" in sys.modules
+print("ok")
+"""
+    _run_fresh_interpreter(code)
+
+
+def _run_fresh_interpreter(code: str) -> None:
     env = {**os.environ, "ARAGORA_RECEIPT_SIGNING_KEY": SIGNING_KEY}
     result = subprocess.run(
         [sys.executable, "-c", code],
