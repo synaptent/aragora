@@ -520,6 +520,31 @@ class TestEncryptionMigrator:
         assert result.failed_records == 1
         assert result.success is False
 
+    @pytest.mark.parametrize("dry_run", [False, True])
+    def test_migrate_store_list_failure_fails_closed(self, dry_run):
+        """A list failure before any record is known still counts one sanitized failure."""
+        mock_service = MagicMock()
+        migrator = EncryptionMigrator(encryption_service=mock_service, dry_run=dry_run)
+        save_fn = MagicMock(return_value=True)
+
+        def list_fn():
+            raise RuntimeError("credential=secret-value")
+
+        result = migrator.migrate_store(
+            store_name="test_store",
+            list_fn=list_fn,
+            save_fn=save_fn,
+            sensitive_fields=["api_key"],
+        )
+
+        assert result.total_records == 0
+        assert result.failed_records == 1
+        assert result.success is False
+        assert result.errors == ["Migration failed due to an internal error"]
+        assert "secret-value" not in " ".join(result.errors)
+        save_fn.assert_not_called()
+        mock_service.encrypt_fields.assert_not_called()
+
 
 class TestStoreMigrations:
     """Tests for store-specific migration functions."""
@@ -596,6 +621,24 @@ class TestStoreMigrations:
 
             assert result.store_name == "gmail_token_store"
             assert len(result.errors) > 0
+
+    def test_migrate_gmail_token_store_list_failure_fails_closed(self):
+        """A configured Gmail store that cannot list its records is a failed migration."""
+        store = MagicMock()
+        store.list_all.side_effect = OSError("refresh_token=secret-value")
+
+        with patch(
+            "aragora.storage.gmail_token_store.get_gmail_token_store",
+            return_value=store,
+        ):
+            result = migrate_gmail_token_store(dry_run=False)
+
+        assert result.store_name == "gmail_token_store"
+        assert result.failed_records == 1
+        assert result.success is False
+        assert result.errors == ["Migration failed due to an internal error"]
+        assert "secret-value" not in " ".join(result.errors)
+        store.save_state.assert_not_called()
 
     def test_migrate_sync_store_empty(self, sync_backend):
         """Test migration with empty sync store."""
@@ -815,6 +858,71 @@ class TestMigrationAuditProvider:
             "list_connectors",
             "close",
         ]
+
+    def test_unimportable_optional_stores_remain_best_effort(
+        self, encryption_service, sync_backend, monkeypatch
+    ):
+        monkeypatch.setitem(sys.modules, "aragora.storage.integration_store", None)
+        monkeypatch.setitem(sys.modules, "aragora.storage.gmail_token_store", None)
+        sync_backend.add_connector("connector-1", {"api_key": "decrypted-secret"})
+
+        result = self._rotate_sync(encryption_service, stores=None)
+
+        assert result.success is True
+        assert result.stores_processed == 1
+        assert result.records_reencrypted == 1
+        assert result.failed_records == 0
+        assert result.errors == []
+
+    def test_live_rotation_exception_fails_closed(self, encryption_service):
+        _prepare_live_rotation(encryption_service)
+        encryption_service.rotate_key.side_effect = RuntimeError("kms credential=secret-value")
+        audit = MagicMock()
+        register_migration_audit_provider(audit)
+        integration_config = MagicMock(return_value=None)
+
+        with (
+            patch(
+                "aragora.security.encryption.get_encryption_service",
+                return_value=encryption_service,
+            ),
+            patch(
+                "aragora.security.migration._get_integration_store_config",
+                integration_config,
+            ),
+        ):
+            result = rotate_encryption_key(dry_run=False, stores=["integration"])
+
+        assert result.success is False
+        assert result.failed_records == 1
+        assert result.stores_processed == 0
+        assert result.errors == ["Key rotation failed due to an internal error"]
+        assert "secret-value" not in " ".join(result.errors)
+        audit.assert_not_called()
+        integration_config.assert_not_called()
+
+    @pytest.mark.parametrize(
+        ("store_name", "factory"),
+        [
+            ("integration", "aragora.storage.integration_store.get_integration_store"),
+            ("gmail", "aragora.storage.gmail_token_store.get_gmail_token_store"),
+        ],
+    )
+    def test_live_rotation_counts_configured_optional_store_setup_exception(
+        self, encryption_service, sync_backend, store_name, factory
+    ):
+        sync_backend.add_connector("connector-1", {"api_key": "decrypted-secret"})
+
+        with patch(factory, side_effect=RuntimeError("dsn=postgres://user:secret-value@db")):
+            result = self._rotate_sync(encryption_service, stores=[store_name, "sync"])
+
+        assert result.success is False
+        assert result.failed_records == 1
+        assert result.stores_processed == 1
+        assert result.records_reencrypted == 1
+        assert result.errors == [f"Store {store_name} re-encryption failed"]
+        assert "secret-value" not in " ".join(result.errors)
+        assert [saved[0] for saved in sync_backend.saved] == ["connector-1"]
 
     def test_live_sync_rotation_fails_closed_when_storage_resolution_fails(
         self, encryption_service, sync_backend
