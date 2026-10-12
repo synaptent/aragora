@@ -153,3 +153,14 @@ class TestTasksCommand:
         payload = json.loads(capsys.readouterr().out)
         assert payload["developer_tasks"]["created"] == 2
         assert payload["pending"]["updated"] == 1
+
+
+class TestResolve:
+    def test_runs_coroutines_and_passes_plain_values_through(self):
+        from aragora.cli.commands.tasks import _resolve
+
+        async def produce() -> str:
+            return "done"
+
+        assert _resolve(produce()) == "done"
+        assert _resolve({"id": 1}) == {"id": 1}

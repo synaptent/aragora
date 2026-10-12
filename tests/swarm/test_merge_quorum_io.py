@@ -469,6 +469,142 @@ def test_fetch_merge_packet_classification_reads_semantic_fields(monkeypatch) ->
     assert packet.requires_human_risk_settlement is False
 
 
+def test_fetch_merge_packet_classification_skips_partial_duplicate_row(monkeypatch) -> None:
+    payload = {
+        "entries": [
+            {"pr_number": 7754, "head_sha": "stale-partial"},
+            {"pr_number": 7754, "head_sha": "abc123", "tier": 2},
+        ]
+    }
+    monkeypatch.setattr(m, "run", lambda *a, **k: _proc(json.dumps(payload)))
+
+    packet = m.fetch_merge_packet_classification("o/r", 7754)
+
+    assert packet is not None
+    assert packet.head_sha == "abc123"
+    assert packet.tier == 2
+
+
+def test_fetch_live_evidence_state_combines_linted_comments_and_packet(monkeypatch) -> None:
+    comments = [
+        m.EvidenceComment(
+            created_at="2026-07-09T12:00:00Z",
+            would_count=True,
+            reviewer_id="openai",
+            is_dogfood=True,
+        )
+    ]
+    monkeypatch.setattr(m, "fetch_evidence_comments", lambda *args: comments)
+    monkeypatch.setattr(
+        m,
+        "fetch_merge_packet_entry",
+        lambda repo, pr, **kwargs: {
+            "pr_number": pr,
+            "head_sha": "abc123",
+            "unresolved_dissent": False,
+        },
+    )
+
+    state = m.fetch_live_evidence_state("o/r", 7754, "abc123", "2026-07-09T11:00:00Z")
+
+    assert state == {
+        "head_sha": "abc123",
+        "counting_families": ["openai"],
+        "unresolved_dissent": False,
+    }
+
+
+def test_fetch_live_evidence_state_counts_only_genuine_reviewer_signals(monkeypatch) -> None:
+    comments = [
+        m.EvidenceComment(
+            created_at="2026-07-09T12:00:00Z",
+            would_count=True,
+            reviewer_id="openai",
+            is_dogfood=True,
+            reviewer_signals=(),
+        ),
+        m.EvidenceComment(
+            created_at="2026-07-09T12:05:00Z",
+            would_count=True,
+            reviewer_id="claude",
+            reviewer_signals=("claude",),
+        ),
+    ]
+    monkeypatch.setattr(m, "fetch_evidence_comments", lambda *args: comments)
+    monkeypatch.setattr(
+        m,
+        "fetch_merge_packet_entry",
+        lambda repo, pr, **kwargs: {
+            "pr_number": pr,
+            "head_sha": "abc123",
+            "unresolved_dissent": False,
+        },
+    )
+
+    state = m.fetch_live_evidence_state("o/r", 7754, "abc123", "2026-07-09T11:00:00Z")
+
+    assert state["counting_families"] == ["claude"]
+
+
+def test_fetch_live_evidence_state_fails_when_packet_has_no_head(monkeypatch) -> None:
+    monkeypatch.setattr(m, "fetch_evidence_comments", lambda *args: [])
+    monkeypatch.setattr(
+        m,
+        "fetch_merge_packet_entry",
+        lambda repo, pr, **kwargs: {"pr_number": pr, "unresolved_dissent": False},
+    )
+
+    with pytest.raises(RuntimeError, match="missing head SHA"):
+        m.fetch_live_evidence_state("o/r", 7754, "abc123", "2026-07-09T11:00:00Z")
+
+
+def test_fetch_live_evidence_state_preserves_unknown_dissent(monkeypatch) -> None:
+    monkeypatch.setattr(m, "fetch_evidence_comments", lambda *args: [])
+    monkeypatch.setattr(
+        m,
+        "fetch_merge_packet_entry",
+        lambda repo, pr, **kwargs: {"pr_number": pr, "head_sha": "abc123"},
+    )
+
+    state = m.fetch_live_evidence_state("o/r", 7754, "abc123", "2026-07-09T11:00:00Z")
+
+    assert state["unresolved_dissent"] is None
+
+
+def test_fetch_live_evidence_state_skips_partial_duplicate_row(monkeypatch) -> None:
+    payload = {
+        "entries": [
+            {"pr_number": 7754, "head_sha": "stale-partial"},
+            {
+                "pr_number": 7754,
+                "head_sha": "abc123",
+                "unresolved_dissent": False,
+            },
+        ]
+    }
+    monkeypatch.setattr(m, "run", lambda *a, **k: _proc(json.dumps(payload)))
+    monkeypatch.setattr(m, "fetch_evidence_comments", lambda *args: [])
+
+    state = m.fetch_live_evidence_state("o/r", 7754, "abc123", "2026-07-09T11:00:00Z")
+
+    assert state["head_sha"] == "abc123"
+    assert state["unresolved_dissent"] is False
+
+
+def test_fetch_live_evidence_state_fails_on_ambiguous_complete_rows(monkeypatch) -> None:
+    payload = {
+        "entries": [
+            {"pr_number": 7754, "head_sha": "abc123", "unresolved_dissent": False},
+            {"pr_number": 7754, "head_sha": "abc123", "unresolved_dissent": False},
+        ]
+    }
+    monkeypatch.setattr(m, "run", lambda *a, **k: _proc(json.dumps(payload)))
+    monkeypatch.setattr(m, "fetch_evidence_comments", lambda *args: [])
+
+    with pytest.raises(RuntimeError, match="no unique complete head/dissent entry"):
+        m.fetch_live_evidence_state("o/r", 7754, "abc123", "2026-07-09T11:00:00Z")
+
+
 def test_fetch_quorum_run_packet_classification_parses_log(monkeypatch) -> None:
     log = (
         "PR #7754 | Tier 4 | status=human_preapproval_required | "
@@ -512,6 +648,15 @@ def test_fetch_pr_tier_accepts_bare_list(monkeypatch) -> None:
 
 def test_fetch_pr_tier_accepts_single_entry_dict(monkeypatch) -> None:
     monkeypatch.setattr(m, "run", lambda *a, **k: _proc(json.dumps({"tier": 1})))
+    assert m.fetch_pr_tier("o/r", 1) == 1
+
+
+def test_fetch_pr_tier_accepts_null_pr_number_in_single_entry(monkeypatch) -> None:
+    monkeypatch.setattr(
+        m,
+        "run",
+        lambda *a, **k: _proc(json.dumps({"pr_number": None, "tier": 1})),
+    )
     assert m.fetch_pr_tier("o/r", 1) == 1
 
 

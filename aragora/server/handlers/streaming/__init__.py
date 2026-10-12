@@ -18,6 +18,6 @@ Routes:
 Phase 6: Frontend/Backend Wiring.
 """
 
-from .handler import StreamingConnectorHandler  # noqa: F401
+from .handler import StreamingConnectorHandler
 
 __all__ = ["StreamingConnectorHandler"]

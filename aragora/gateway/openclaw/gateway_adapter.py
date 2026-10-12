@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 # Import here (not at top) to keep it clear this is a subclass relationship.
 # No circular import since adapter.py does NOT import gateway_adapter.py.
-from .adapter import OpenClawAdapter  # noqa: E402
+from .adapter import OpenClawAdapter
 
 
 class OpenClawGatewayAdapter(OpenClawAdapter):

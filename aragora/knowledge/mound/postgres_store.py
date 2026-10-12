@@ -467,7 +467,8 @@ class PostgresStore:
         if not set_clauses:
             return
 
-        query = f"UPDATE knowledge_nodes SET {', '.join(set_clauses)} WHERE id = $1"  # noqa: S608 -- dynamic clause from internal state
+        # dynamic clause from internal state
+        query = f"UPDATE knowledge_nodes SET {', '.join(set_clauses)} WHERE id = $1"
 
         async with self.connection() as conn:
             await conn.execute(query, *params)
@@ -865,7 +866,8 @@ class PostgresStore:
             where_sql = " AND ".join(where_clauses)
 
             # Count total matching items (for has_more calculation)
-            count_query = f"SELECT COUNT(*) FROM knowledge_nodes WHERE {' AND '.join(where_clauses[: param_idx - 2 if cursor_id else param_idx])}"  # noqa: S608 -- dynamic clause from internal state
+            # dynamic clause from internal state
+            count_query = f"SELECT COUNT(*) FROM knowledge_nodes WHERE {' AND '.join(where_clauses[: param_idx - 2 if cursor_id else param_idx])}"
             # Use only the non-cursor params for count
             count_params = params[: param_idx - 2] if cursor_id else params
             total = await conn.fetchval(count_query, *count_params) or 0
@@ -877,7 +879,7 @@ class PostgresStore:
                 ORDER BY {order_by} {order_dir}, id {order_dir}
                 LIMIT ${param_idx}
                 OFFSET ${param_idx + 1}
-            """  # noqa: S608 -- dynamic clause from internal state
+            """  # dynamic clause from internal state
             params.append(limit + 1)  # Fetch one extra to detect has_more
             params.append(effective_offset)
 
@@ -1012,9 +1014,10 @@ class PostgresStore:
                     FROM knowledge_relationships r
                     JOIN knowledge_nodes n ON r.from_node_id = n.id
                     WHERE {count_sql}
-                """  # noqa: S608 -- internal query construction
+                """  # internal query construction
             else:
-                count_query = f"SELECT COUNT(*) FROM knowledge_relationships r WHERE {count_sql}"  # noqa: S608 -- internal query construction
+                # internal query construction
+                count_query = f"SELECT COUNT(*) FROM knowledge_relationships r WHERE {count_sql}"
 
             total = await conn.fetchval(count_query, *count_params) or 0
 
@@ -1028,7 +1031,7 @@ class PostgresStore:
                     ORDER BY r.created_at DESC, r.id DESC
                     LIMIT ${param_idx}
                     OFFSET ${param_idx + 1}
-                """  # noqa: S608 -- internal query construction
+                """  # internal query construction
             else:
                 query = f"""
                     SELECT * FROM knowledge_relationships r
@@ -1036,7 +1039,7 @@ class PostgresStore:
                     ORDER BY r.created_at DESC, r.id DESC
                     LIMIT ${param_idx}
                     OFFSET ${param_idx + 1}
-                """  # noqa: S608 -- internal query construction
+                """  # internal query construction
 
             params.append(limit + 1)
             params.append(effective_offset)
@@ -1111,7 +1114,8 @@ class PostgresStore:
             where_sql = " AND ".join(where_clauses)
 
             # Count total
-            count_query = f"SELECT COUNT(*) FROM culture_patterns WHERE {where_sql}"  # noqa: S608 -- internal query construction
+            # internal query construction
+            count_query = f"SELECT COUNT(*) FROM culture_patterns WHERE {where_sql}"
             total = await conn.fetchval(count_query, *params) or 0
 
             # Fetch with pagination
@@ -1121,7 +1125,7 @@ class PostgresStore:
                 ORDER BY confidence DESC, last_observed_at DESC
                 LIMIT ${param_idx}
                 OFFSET ${param_idx + 1}
-            """  # noqa: S608 -- internal query construction
+            """  # internal query construction
             params.append(limit + 1)
             params.append(offset)
 

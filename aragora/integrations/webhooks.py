@@ -610,7 +610,7 @@ class WebhookDispatcher:
                     if retry_after and retry_after.isdigit():
                         backoff = min(float(retry_after), 60.0)  # Cap at 60s
                     else:
-                        backoff = cfg.backoff_base_s * (2**attempt) + random.uniform(0, 0.5)  # noqa: S311 -- retry jitter
+                        backoff = cfg.backoff_base_s * (2**attempt) + random.uniform(0, 0.5)
 
                     if attempt < cfg.max_retries - 1:
                         logger.debug(
@@ -644,7 +644,7 @@ class WebhookDispatcher:
             except (TimeoutError, ConnectionError, OSError) as e:
                 # Network errors (stdlib): retry
                 if attempt < cfg.max_retries - 1:
-                    backoff = cfg.backoff_base_s * (2**attempt) + random.uniform(0, 0.5)  # noqa: S311 -- retry jitter
+                    backoff = cfg.backoff_base_s * (2**attempt) + random.uniform(0, 0.5)
                     logger.debug(
                         "Webhook %s attempt %s failed: %s, retrying in %.1fs",
                         cfg.name,
@@ -661,7 +661,7 @@ class WebhookDispatcher:
 
                 if isinstance(e, _httpx.TransportError):
                     if attempt < cfg.max_retries - 1:
-                        backoff = cfg.backoff_base_s * (2**attempt) + random.uniform(0, 0.5)  # noqa: S311 -- retry jitter
+                        backoff = cfg.backoff_base_s * (2**attempt) + random.uniform(0, 0.5)
                         logger.debug(
                             "Webhook %s attempt %s transport error: %s, retrying in %.1fs",
                             cfg.name,

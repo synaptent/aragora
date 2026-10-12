@@ -335,7 +335,8 @@ class ControlPlanePolicyStore(SQLiteStore):
 
         params.append(policy_id)
         self.execute(
-            f"UPDATE control_plane_policies SET {', '.join(set_clauses)} WHERE id = ?",  # noqa: S608 -- dynamic clause from internal state
+            # dynamic clause from internal state
+            f"UPDATE control_plane_policies SET {', '.join(set_clauses)} WHERE id = ?",
             tuple(params),
         )
 
@@ -733,7 +734,8 @@ class PostgresControlPlanePolicyStore:
 
         params.append(policy_id)
         self._backend.execute_write(
-            f"UPDATE control_plane_policies SET {', '.join(set_clauses)} WHERE id = ${param_idx}",  # noqa: S608 -- dynamic clause from internal state
+            # dynamic clause from internal state
+            f"UPDATE control_plane_policies SET {', '.join(set_clauses)} WHERE id = ${param_idx}",
             tuple(params),
         )
 

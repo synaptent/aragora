@@ -402,7 +402,7 @@ class CodexHarness(CodeAnalysisHarness):
         prompt: str,
     ) -> SessionResult:
         """Run an interactive analysis session."""
-        _started_at = datetime.now(timezone.utc)  # noqa: F841
+        _started_at = datetime.now(timezone.utc)
 
         try:
             # Build context from files

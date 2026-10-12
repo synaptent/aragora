@@ -144,7 +144,7 @@ from ..base import (
     HandlerResult,
     ServerContext,
     error_response,
-    handle_errors,  # noqa: F401 - used by mixin modules via _mod()
+    handle_errors,  # used by mixin modules via _mod()
     json_response,  # noqa: F401 - used by mixin modules via _mod()
     log_request,  # noqa: F401 - used by mixin modules via _mod()
 )

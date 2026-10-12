@@ -55,7 +55,7 @@ logger = logging.getLogger(__name__)
 
 # Check for PostgreSQL availability
 try:
-    import psycopg2  # noqa: F401
+    import psycopg2
 
     POSTGRESQL_AVAILABLE = True
 except ImportError:
@@ -697,7 +697,7 @@ class AuditLog:
                 WHERE f.audit_fts MATCH ? AND {where_clause}
                 ORDER BY e.timestamp DESC
                 LIMIT ? OFFSET ?
-            """  # noqa: S608 -- dynamic clause from internal state
+            """  # dynamic clause from internal state
             query_params = [query.search_text] + params + [query.limit, query.offset]
         else:
             if query.search_text:
@@ -715,7 +715,7 @@ class AuditLog:
                 WHERE {where_clause}
                 ORDER BY timestamp DESC
                 LIMIT ? OFFSET ?
-            """  # noqa: S608 -- dynamic clause from internal state
+            """  # dynamic clause from internal state
             query_params = params + [query.limit, query.offset]
 
         rows = self._backend.fetch_all(sql, tuple(query_params))
@@ -754,7 +754,8 @@ class AuditLog:
         where_clause = " AND ".join(conditions) if conditions else "1=1"
 
         rows = self._backend.fetch_all(
-            f"SELECT * FROM audit_events WHERE {where_clause} ORDER BY timestamp",  # noqa: S608 -- dynamic clause from internal state
+            # dynamic clause from internal state
+            f"SELECT * FROM audit_events WHERE {where_clause} ORDER BY timestamp",
             tuple(params),
         )
 

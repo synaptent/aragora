@@ -329,7 +329,7 @@ class PostgresMarketplaceStore:
         async with self._pool.acquire() as conn:
             # Get total count
             count_row = await conn.fetchrow(
-                f"SELECT COUNT(*) FROM templates{where_clause}",  # noqa: S608 -- internal clause
+                f"SELECT COUNT(*) FROM templates{where_clause}",  # internal clause
                 *params,
             )
             total = count_row[0] if count_row else 0
@@ -347,7 +347,7 @@ class PostgresMarketplaceStore:
                 {where_clause}
                 ORDER BY {order_clause}
                 LIMIT ${param_idx} OFFSET ${param_idx + 1}
-                """,  # noqa: S608 -- dynamic clause from internal state
+                """,  # dynamic clause from internal state
                 *query_params,
             )
 

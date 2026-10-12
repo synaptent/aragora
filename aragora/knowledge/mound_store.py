@@ -341,7 +341,7 @@ class KnowledgeMoundMetaStore(SQLiteStore):
             query = f"""
                 SELECT * FROM relationships
                 WHERE (from_node_id IN ({placeholders}) OR to_node_id IN ({placeholders}))
-            """  # noqa: S608 -- parameterized query
+            """  # parameterized query
             params: list[Any] = list(node_ids) + list(node_ids)
 
             if types:
@@ -422,7 +422,7 @@ class KnowledgeMoundMetaStore(SQLiteStore):
                 WHERE {where_clause} AND nt.topic IN ({topic_placeholders})
                 ORDER BY kn.confidence DESC
                 LIMIT ? OFFSET ?
-            """  # noqa: S608 -- dynamic clause from internal state
+            """  # dynamic clause from internal state
             params.extend(topics)
         else:
             query = f"""
@@ -430,7 +430,7 @@ class KnowledgeMoundMetaStore(SQLiteStore):
                 WHERE {where_clause}
                 ORDER BY confidence DESC
                 LIMIT ? OFFSET ?
-            """  # noqa: S608 -- dynamic clause from internal state
+            """  # dynamic clause from internal state
 
         params.extend([limit, offset])
 
@@ -503,7 +503,7 @@ class KnowledgeMoundMetaStore(SQLiteStore):
             WHERE {where_clause}
             ORDER BY kn.created_at DESC
             LIMIT ?
-        """  # noqa: S608 -- dynamic clause from internal state
+        """  # dynamic clause from internal state
         params.append(limit)
 
         with self.connection() as conn:
@@ -517,35 +517,39 @@ class KnowledgeMoundMetaStore(SQLiteStore):
             params = [workspace_id] if workspace_id else []
 
             total = conn.execute(
-                f"SELECT COUNT(*) as count FROM knowledge_nodes {where}",  # noqa: S608 -- internal clause
-                params,  # noqa: S608 -- internal query construction
+                f"SELECT COUNT(*) as count FROM knowledge_nodes {where}",  # internal clause
+                params,
             ).fetchone()["count"]
 
             by_type = {}
             for row in conn.execute(
-                f"SELECT node_type, COUNT(*) as count FROM knowledge_nodes {where} GROUP BY node_type",  # noqa: S608 -- internal query construction
+                # internal query construction
+                f"SELECT node_type, COUNT(*) as count FROM knowledge_nodes {where} GROUP BY node_type",
                 params,
             ).fetchall():
                 by_type[row["node_type"]] = row["count"]
 
             by_tier = {}
             for row in conn.execute(
-                f"SELECT tier, COUNT(*) as count FROM knowledge_nodes {where} GROUP BY tier",  # noqa: S608 -- internal query construction
+                # internal query construction
+                f"SELECT tier, COUNT(*) as count FROM knowledge_nodes {where} GROUP BY tier",
                 params,
             ).fetchall():
                 by_tier[row["tier"]] = row["count"]
 
             by_validation = {}
             for row in conn.execute(
-                f"SELECT validation_status, COUNT(*) as count FROM knowledge_nodes {where} GROUP BY validation_status",  # noqa: S608 -- internal query construction
+                # internal query construction
+                f"SELECT validation_status, COUNT(*) as count FROM knowledge_nodes {where} GROUP BY validation_status",
                 params,
             ).fetchall():
                 by_validation[row["validation_status"]] = row["count"]
 
             avg_confidence = (
                 conn.execute(
-                    f"SELECT AVG(confidence) as avg FROM knowledge_nodes {where}",  # noqa: S608 -- internal clause
-                    params,  # noqa: S608 -- internal query construction
+                    # internal clause
+                    f"SELECT AVG(confidence) as avg FROM knowledge_nodes {where}",
+                    params,
                 ).fetchone()["avg"]
                 or 0.0
             )

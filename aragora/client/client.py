@@ -308,12 +308,13 @@ class AragoraClient:
                 self._rate_limiter.wait()
 
             try:
-                req = urllib.request.Request(  # noqa: S310 -- SDK client, base_url from config
+                req = urllib.request.Request(  # SDK client, base_url from config
                     url,
                     method="GET",
                     headers=self._get_headers(),
                 )
-                with urllib.request.urlopen(req, timeout=self.timeout) as resp:  # noqa: S310 -- SDK client, base_url from config
+                # SDK client, base_url from config
+                with urllib.request.urlopen(req, timeout=self.timeout) as resp:
                     body = resp.read() or b"{}"
                     return json.loads(body)
             except urllib.error.HTTPError as e:
@@ -386,13 +387,14 @@ class AragoraClient:
 
             try:
                 payload = json_module.dumps(data).encode("utf-8")
-                req = urllib.request.Request(  # noqa: S310 -- SDK client, base_url from config
+                req = urllib.request.Request(  # SDK client, base_url from config
                     url,
                     data=payload,
                     method="POST",
                     headers=request_headers,
                 )
-                with urllib.request.urlopen(req, timeout=self.timeout) as resp:  # noqa: S310 -- SDK client, base_url from config
+                # SDK client, base_url from config
+                with urllib.request.urlopen(req, timeout=self.timeout) as resp:
                     body = resp.read() or b"{}"
                     return json_module.loads(body)
             except urllib.error.HTTPError as e:
@@ -450,12 +452,13 @@ class AragoraClient:
                 self._rate_limiter.wait()
 
             try:
-                req = urllib.request.Request(  # noqa: S310 -- SDK client, base_url from config
+                req = urllib.request.Request(  # SDK client, base_url from config
                     url,
                     method="DELETE",
                     headers=self._get_headers(),
                 )
-                with urllib.request.urlopen(req, timeout=self.timeout) as resp:  # noqa: S310 -- SDK client, base_url from config
+                # SDK client, base_url from config
+                with urllib.request.urlopen(req, timeout=self.timeout) as resp:
                     body = resp.read() or b"{}"
                     return json.loads(body)
             except urllib.error.HTTPError as e:
@@ -580,13 +583,14 @@ class AragoraClient:
 
             try:
                 payload = json.dumps(data).encode("utf-8")
-                req = urllib.request.Request(  # noqa: S310 -- SDK client, base_url from config
+                req = urllib.request.Request(  # SDK client, base_url from config
                     url,
                     data=payload,
                     method="PUT",
                     headers=request_headers,
                 )
-                with urllib.request.urlopen(req, timeout=self.timeout) as resp:  # noqa: S310 -- SDK client, base_url from config
+                # SDK client, base_url from config
+                with urllib.request.urlopen(req, timeout=self.timeout) as resp:
                     body = resp.read() or b"{}"
                     return json.loads(body)
             except urllib.error.HTTPError as e:
@@ -715,13 +719,14 @@ class AragoraClient:
 
             try:
                 payload = json.dumps(data).encode("utf-8")
-                req = urllib.request.Request(  # noqa: S310 -- SDK client, base_url from config
+                req = urllib.request.Request(  # SDK client, base_url from config
                     url,
                     data=payload,
                     method="PATCH",
                     headers=request_headers,
                 )
-                with urllib.request.urlopen(req, timeout=self.timeout) as resp:  # noqa: S310 -- SDK client, base_url from config
+                # SDK client, base_url from config
+                with urllib.request.urlopen(req, timeout=self.timeout) as resp:
                     body = resp.read() or b"{}"
                     return json.loads(body)
             except urllib.error.HTTPError as e:

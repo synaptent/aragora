@@ -1,8 +1,9 @@
 """DIC-26 coherence-scan CLI tests.
 
-Flag: ARAGORA_COHERENCE_MONITOR_ENABLED (default OFF)
+Flags: ARAGORA_COHERENCE_MONITOR_ENABLED (default OFF),
+       ARAGORA_EPISTEMIC_FOLLOWUP_ENABLED (default OFF, required for proposals)
 Live queue effect: none
-Advances: issue #6220 (DIC-26)
+Advances: issues #6220 (DIC-26) and #6027 (DIC-17 --emit-followup flag)
 """
 
 from __future__ import annotations
@@ -13,7 +14,11 @@ from pathlib import Path
 
 import pytest
 
-from aragora.cli.commands.dic26_coherence import _load_entries, cmd_coherence_scan
+from aragora.cli.commands.dic26_coherence import (
+    _load_entries,
+    _render_proposals,
+    cmd_coherence_scan,
+)
 
 
 def _args(
@@ -22,12 +27,14 @@ def _args(
     json_output: bool = False,
     gap: float = 0.5,
     min_conf: float = 0.3,
+    emit_followup: bool = False,
 ) -> argparse.Namespace:
     ns = argparse.Namespace()
     ns.input = input_path
     ns.json = json_output
     ns.contradiction_gap = gap
     ns.min_confidence = min_conf
+    ns.emit_followup = emit_followup
     return ns
 
 
@@ -123,3 +130,178 @@ def test_load_entries_accepts_single_object(tmp_path: Path) -> None:
     p.write_text(json.dumps(raw), encoding="utf-8")
     entries = _load_entries(p)
     assert len(entries) == 1 and entries[0].belief_id == "singleton"
+
+
+# ---------------------------------------------------------------------------
+# DIC-17 --emit-followup flag tests
+# ---------------------------------------------------------------------------
+
+_CONTRADICTING = [
+    {"belief_id": "bH", "subject": "auth.gateway", "confidence": 0.95, "status": "pass"},
+    {"belief_id": "bL", "subject": "auth.gateway", "confidence": 0.04, "status": "fail"},
+]
+_WARNING_ONLY = [
+    {
+        "belief_id": "w1",
+        "subject": "cache.hit",
+        "confidence": 0.40,
+        "status": "pass",
+        "evidence_paths": ["docs/cache.md"],
+    },
+    {
+        "belief_id": "w2",
+        "subject": "cache.miss",
+        "confidence": 0.60,
+        "status": "fail",
+        "evidence_paths": ["docs/cache.md"],
+    },
+]
+
+
+class TestEmitFollowupFlag:
+    def test_emit_followup_absent_by_default_no_proposals(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Without --emit-followup, proposals must never appear in text output."""
+        monkeypatch.setenv("ARAGORA_COHERENCE_MONITOR_ENABLED", "1")
+        monkeypatch.setenv("ARAGORA_EPISTEMIC_FOLLOWUP_ENABLED", "1")
+        rc = cmd_coherence_scan(_args(str(_write(tmp_path, _CONTRADICTING))))
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "follow-up proposals" not in out
+
+    def test_emit_followup_requires_env_flag_for_proposals(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """--emit-followup is set but ARAGORA_EPISTEMIC_FOLLOWUP_ENABLED is off."""
+        monkeypatch.setenv("ARAGORA_COHERENCE_MONITOR_ENABLED", "1")
+        monkeypatch.delenv("ARAGORA_EPISTEMIC_FOLLOWUP_ENABLED", raising=False)
+        rc = cmd_coherence_scan(_args(str(_write(tmp_path, _CONTRADICTING)), emit_followup=True))
+        assert rc == 0
+        captured = capsys.readouterr()
+        # The --emit-followup section is printed but proposals list is empty
+        # (env gate not set), so the "follow-up proposals (N)" line must not appear
+        assert "follow-up proposals" not in captured.out
+
+    def test_emit_followup_populates_proposals_in_text(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Both flags set: text output shows follow-up proposals section."""
+        monkeypatch.setenv("ARAGORA_COHERENCE_MONITOR_ENABLED", "1")
+        monkeypatch.setenv("ARAGORA_EPISTEMIC_FOLLOWUP_ENABLED", "1")
+        rc = cmd_coherence_scan(_args(str(_write(tmp_path, _CONTRADICTING)), emit_followup=True))
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "follow-up proposals" in out
+        assert "printed, not filed" in out
+
+    def test_emit_followup_proposals_in_json_output(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Both flags set in JSON mode: JSON output includes 'proposals' key."""
+        monkeypatch.setenv("ARAGORA_COHERENCE_MONITOR_ENABLED", "1")
+        monkeypatch.setenv("ARAGORA_EPISTEMIC_FOLLOWUP_ENABLED", "1")
+        rc = cmd_coherence_scan(
+            _args(str(_write(tmp_path, _CONTRADICTING)), json_output=True, emit_followup=True)
+        )
+        assert rc == 0
+        data = json.loads(capsys.readouterr().out)
+        assert "proposals" in data
+        assert isinstance(data["proposals"], list) and len(data["proposals"]) >= 1
+
+    def test_emit_followup_no_proposals_for_warning_only_issues(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Warning-severity evidence conflicts must never produce proposals."""
+        monkeypatch.setenv("ARAGORA_COHERENCE_MONITOR_ENABLED", "1")
+        monkeypatch.setenv("ARAGORA_EPISTEMIC_FOLLOWUP_ENABLED", "1")
+        rc = cmd_coherence_scan(_args(str(_write(tmp_path, _WARNING_ONLY)), emit_followup=True))
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "follow-up proposals" not in out
+
+    def test_emit_followup_no_boss_ready_label_in_json(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Queue-governance invariant: boss-ready must never appear in proposals."""
+        monkeypatch.setenv("ARAGORA_COHERENCE_MONITOR_ENABLED", "1")
+        monkeypatch.setenv("ARAGORA_EPISTEMIC_FOLLOWUP_ENABLED", "1")
+        rc = cmd_coherence_scan(
+            _args(str(_write(tmp_path, _CONTRADICTING)), json_output=True, emit_followup=True)
+        )
+        assert rc == 0
+        data = json.loads(capsys.readouterr().out)
+        assert data["proposals"]
+        for proposal in data["proposals"]:
+            labels = proposal["labels"]
+            assert labels, "proposal labels must be serialized"
+            assert "boss-ready" not in labels, f"boss-ready found in {labels}"
+
+    def test_emit_followup_json_proposals_match_text_fields(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """JSON proposals carry the fields text mode prints, plus body and keys."""
+        monkeypatch.setenv("ARAGORA_COHERENCE_MONITOR_ENABLED", "1")
+        monkeypatch.setenv("ARAGORA_EPISTEMIC_FOLLOWUP_ENABLED", "1")
+        path = str(_write(tmp_path, _CONTRADICTING))
+        assert cmd_coherence_scan(_args(path, emit_followup=True)) == 0
+        text_out = capsys.readouterr().out
+        assert cmd_coherence_scan(_args(path, json_output=True, emit_followup=True)) == 0
+        data = json.loads(capsys.readouterr().out)
+        assert data["proposals"]
+        for proposal in data["proposals"]:
+            assert proposal["source_kind"] == "coherence_issue"
+            assert proposal["source_key"]
+            assert proposal["title"] and proposal["title"][:100] in text_out
+            assert proposal["body"]
+            assert proposal["rationale"]
+            assert ", ".join(proposal["labels"]) in text_out
+            assert proposal["provenance"]["kind"] in proposal["title"]
+            assert proposal["provenance"]["belief_ids"]
+        kinds = {proposal["provenance"]["kind"] for proposal in data["proposals"]}
+        assert "contradiction" in kinds
+
+    def test_render_proposals_noop_when_empty(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """_render_proposals prints nothing when report.proposals is empty."""
+        from aragora.epistemic.coherence import CoherenceReport
+
+        report = CoherenceReport(scanned=0)
+        _render_proposals(report)
+        assert capsys.readouterr().out == ""
+
+    def test_emit_followup_warns_on_stderr_when_env_disabled(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """--emit-followup with env gate off emits a warning to stderr, exit 0."""
+        monkeypatch.setenv("ARAGORA_COHERENCE_MONITOR_ENABLED", "1")
+        monkeypatch.delenv("ARAGORA_EPISTEMIC_FOLLOWUP_ENABLED", raising=False)
+        rc = cmd_coherence_scan(_args(str(_write(tmp_path, _CONTRADICTING)), emit_followup=True))
+        assert rc == 0
+        captured = capsys.readouterr()
+        assert "ARAGORA_EPISTEMIC_FOLLOWUP_ENABLED" in captured.err
+        assert "suppressed" in captured.err
+
+    def test_render_proposals_defensive_against_none_provenance(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """_render_proposals must not crash when provenance is None or belief_ids is None."""
+        from aragora.epistemic.coherence import CoherenceReport
+        from aragora.epistemic.followup import FollowupProposal
+
+        proposal = FollowupProposal(
+            source_kind="coherence_issue",
+            source_key="test-key",
+            title="test-proposal",
+            body="body text",
+            labels=(),
+            rationale="test rationale",
+            provenance=None,  # type: ignore[arg-type]
+        )
+        report = CoherenceReport(scanned=1)
+        report.proposals = [proposal]
+        _render_proposals(report)
+        out = capsys.readouterr().out
+        assert "test-proposal" in out
+        assert "printed, not filed" in out

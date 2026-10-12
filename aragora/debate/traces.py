@@ -341,7 +341,8 @@ class DebateTracer(SQLiteStore):
         self.debate_id = debate_id
         self.task = task
         self.agents = agents
-        self.random_seed = random_seed or random.randint(0, 2**32 - 1)  # noqa: S311 -- deterministic seed for reproducibility
+        # deterministic seed for reproducibility
+        self.random_seed = random_seed or random.randint(0, 2**32 - 1)
 
         # Seed random for determinism
         random.seed(self.random_seed)
@@ -711,7 +712,8 @@ class DebateReplayer:
             event_b = other.events[i] if i < len(other.events) else None
 
             if event_a is None:
-                diffs.append({"type": "added", "position": i, "event": event_b.to_dict()})
+                if event_b is not None:
+                    diffs.append({"type": "added", "position": i, "event": event_b.to_dict()})
             elif event_b is None:
                 diffs.append({"type": "removed", "position": i, "event": event_a.to_dict()})
             elif event_a.to_dict() != event_b.to_dict():

@@ -195,7 +195,7 @@ def calculate_backoff(
 
     if jitter:
         # Add up to 25% jitter
-        delay *= 1 + random.uniform(-0.25, 0.25)  # noqa: S311 -- retry jitter
+        delay *= 1 + random.uniform(-0.25, 0.25)
 
     return delay
 

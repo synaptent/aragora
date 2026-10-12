@@ -166,7 +166,7 @@ class GitProvenanceTracker:
         Returns stdout on success, stderr on failure for better diagnostics.
         """
         try:
-            result = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
+            result = subprocess.run(  # subprocess with fixed args, no shell
                 ["git"] + args,
                 cwd=self.repo_path,
                 capture_output=True,

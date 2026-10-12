@@ -676,8 +676,8 @@ class DependencyAnalyzer:
         try:
             # Use pip show to get dependencies
             for dep_name in list(direct_deps.keys())[:50]:  # Limit to avoid timeout
-                result = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
-                    ["pip", "show", dep_name],  # noqa: S607 -- fixed command
+                result = subprocess.run(  # subprocess with fixed args, no shell
+                    ["pip", "show", dep_name],  # fixed command
                     capture_output=True,
                     text=True,
                     timeout=10,
@@ -727,7 +727,7 @@ class DependencyAnalyzer:
         # Try pip-audit first
         try:
             result = subprocess.run(
-                ["pip-audit", "--format", "json"],  # noqa: S607 -- fixed command
+                ["pip-audit", "--format", "json"],  # fixed command
                 capture_output=True,
                 text=True,
                 timeout=120,
@@ -792,7 +792,7 @@ class DependencyAnalyzer:
 
         try:
             result = subprocess.run(
-                ["npm", "audit", "--json"],  # noqa: S607 -- fixed command
+                ["npm", "audit", "--json"],  # fixed command
                 capture_output=True,
                 text=True,
                 cwd=path,
@@ -945,7 +945,7 @@ class DependencyAnalyzer:
     def _generate_spdx(
         self,
         tree: DependencyTree,
-        vulnerabilities: list[Vulnerability],  # noqa: ARG002
+        vulnerabilities: list[Vulnerability],
     ) -> str:
         """Generate SPDX format SBOM."""
         sbom: dict[str, Any] = {

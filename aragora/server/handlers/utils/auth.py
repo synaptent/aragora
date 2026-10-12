@@ -22,7 +22,7 @@ from __future__ import annotations
 import logging
 from functools import wraps
 from typing import Any, TypeVar, overload, cast
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 
 from aragora.rbac.models import AuthorizationContext
 
@@ -72,10 +72,7 @@ async def get_auth_context(
     from aragora.billing.jwt_auth import extract_user_from_request, UserAuthContext
 
     try:
-        # Try to get user store from request app context
-        user_store = None
-        if hasattr(request, "app") and hasattr(request.app, "get"):
-            user_store = request.app.get("user_store")
+        user_store = _get_request_user_store(request)
 
         # Extract user from JWT token
         user_ctx: UserAuthContext = extract_user_from_request(request, user_store)
@@ -115,6 +112,55 @@ async def get_auth_context(
             roles=set(),
             permissions=set(),
         )
+
+
+def _get_request_user_store(request: Any) -> Any | None:
+    """Return the user store for API key validation, if one is available.
+
+    aiohttp applications hold ``user_store`` as a mapping entry. FastAPI keeps
+    it in ``app.state.context``; there ``app.get`` is the route decorator, so it
+    must never be used as a lookup. The FastAPI lifespan leaves the context
+    store as ``None`` while the Postgres pool is not ready, so FastAPI requests
+    then use the global store, as ``aragora.server.fastapi.routes.auth`` does.
+    """
+    if not hasattr(request, "app"):
+        return None
+    app = request.app
+    state_context = getattr(getattr(app, "state", None), "context", None)
+    if isinstance(state_context, Mapping) or _is_starlette_app(app):
+        store = state_context.get("user_store") if isinstance(state_context, Mapping) else None
+        # Only API keys are validated against the store. Creating the global
+        # store has side effects, so other requests must not trigger it.
+        if store is None and _has_api_key_bearer(request):
+            store = _get_global_user_store()
+        return store
+    if hasattr(app, "get"):
+        return app.get("user_store")
+    return None
+
+
+def _has_api_key_bearer(request: Any) -> bool:
+    headers = getattr(request, "headers", None)
+    auth_header = headers.get("Authorization", "") if headers is not None else ""
+    return isinstance(auth_header, str) and auth_header.startswith("Bearer ara_")
+
+
+def _get_global_user_store() -> Any | None:
+    try:
+        from aragora.storage.user_store import get_user_store
+
+        return get_user_store()
+    except Exception:
+        logger.error("Global user store unavailable for API key auth", exc_info=True)
+        return None
+
+
+def _is_starlette_app(app: Any) -> bool:
+    try:
+        from starlette.applications import Starlette
+    except ImportError:
+        return False
+    return isinstance(app, Starlette)
 
 
 def _extract_workspace_id(request: Any, user_id: str | None = None) -> str | None:

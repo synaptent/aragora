@@ -164,18 +164,18 @@ class PromptEvolver(SQLiteStore):
 
         result = prompt
         for old, new in mutations:
-            if random.random() < self.mutation_rate and old in result:  # noqa: S311 -- genetic algorithm
+            if random.random() < self.mutation_rate and old in result:
                 result = result.replace(old, new, 1)
                 break  # Apply one mutation at a time
 
         # If no mutation was applied, add a suffix
-        if result == prompt and random.random() < self.mutation_rate:  # noqa: S311 -- genetic algorithm
+        if result == prompt and random.random() < self.mutation_rate:
             suffixes = [
                 " Consider multiple perspectives.",
                 " Provide clear reasoning.",
                 " Be thorough in your analysis.",
             ]
-            result = prompt.rstrip() + random.choice(suffixes)  # noqa: S311 -- genetic algorithm
+            result = prompt.rstrip() + random.choice(suffixes)
 
         return result
 
@@ -211,7 +211,7 @@ class PromptEvolver(SQLiteStore):
         max_len = max(len(sentences1), len(sentences2))
 
         for i in range(max_len):
-            if random.random() < 0.5:  # noqa: S311 -- genetic algorithm
+            if random.random() < 0.5:
                 if i < len(sentences1):
                     offspring_sentences.append(sentences1[i])
             else:

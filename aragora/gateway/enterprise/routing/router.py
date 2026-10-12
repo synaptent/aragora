@@ -909,8 +909,8 @@ class TenantRouter:
         elif strategy == LoadBalancingStrategy.WEIGHTED_RANDOM:
             total_weight = sum(e.weight for e in endpoints)
             if total_weight == 0:
-                return random.choice(endpoints)  # noqa: S311 -- load balancing
-            r = random.randint(1, total_weight)  # noqa: S311 -- load balancing
+                return random.choice(endpoints)
+            r = random.randint(1, total_weight)
             cumulative = 0
             for endpoint in endpoints:
                 cumulative += endpoint.weight

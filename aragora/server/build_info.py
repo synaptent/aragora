@@ -32,7 +32,7 @@ def _git_sha_fallback() -> str:
     """Try to get git SHA from the local repo as a fallback."""
     try:
         result = subprocess.run(
-            ["git", "rev-parse", "HEAD"],  # noqa: S607 -- fixed command
+            ["git", "rev-parse", "HEAD"],  # fixed command
             capture_output=True,
             text=True,
             timeout=5,

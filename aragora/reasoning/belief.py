@@ -1039,7 +1039,7 @@ class BeliefNetwork:
 
 # Re-export crux detection classes for backward compatibility
 # (extracted to aragora.reasoning.crux_detector for better modularity)
-from aragora.reasoning.crux_detector import (  # noqa: E402
+from aragora.reasoning.crux_detector import (
     BeliefPropagationAnalyzer,
     CruxAnalysisResult,
     CruxClaim,

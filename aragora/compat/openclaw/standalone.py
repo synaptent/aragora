@@ -29,7 +29,7 @@ from urllib.parse import unquote
 logger = logging.getLogger(__name__)
 
 # Default configuration
-DEFAULT_HOST = "0.0.0.0"  # noqa: S104 - server must bind all interfaces by default
+DEFAULT_HOST = "0.0.0.0"  # server must bind all interfaces by default
 DEFAULT_PORT = 8100
 DEFAULT_POLICY = "deny"
 

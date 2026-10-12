@@ -640,7 +640,7 @@ class CritiqueStore(SQLiteStore):
                 FROM critiques
                 WHERE debate_id IN ({placeholders})
                 ORDER BY created_at ASC
-                """,  # noqa: S608 -- parameterized query
+                """,  # parameterized query
                 debate_ids,
             )
 
@@ -696,7 +696,7 @@ class CritiqueStore(SQLiteStore):
                 LEFT JOIN critiques c ON d.id = c.debate_id
                 WHERE d.id IN ({placeholders})
                 ORDER BY d.id, c.created_at ASC
-                """,  # noqa: S608 -- parameterized query
+                """,  # parameterized query
                 debate_ids,
             )
 
@@ -1161,7 +1161,7 @@ class CritiqueStore(SQLiteStore):
                 FROM patterns p
                 LEFT JOIN pattern_embeddings e ON p.id = e.pattern_id
                 WHERE p.id IN ({placeholders})
-                """,  # noqa: S608 -- parameterized query
+                """,  # parameterized query
                 pattern_ids,
             )
 
@@ -1334,7 +1334,7 @@ class CritiqueStore(SQLiteStore):
                        COALESCE(calibration_score, 0.5)
                 FROM agent_reputation
                 WHERE agent_name IN ({placeholders})
-                """,  # noqa: S608 -- parameterized query
+                """,  # parameterized query
                 agent_names,
             )
 
@@ -1421,7 +1421,7 @@ class CritiqueStore(SQLiteStore):
                     UPDATE agent_reputation
                     SET {", ".join(updates)}
                     WHERE agent_name = ?
-                """  # noqa: S608 -- dynamic clause from internal state
+                """  # dynamic clause from internal state
                 cursor.execute(sql, [_utc_now_iso(), agent_name])
 
                 # Log reputation changes at debug level

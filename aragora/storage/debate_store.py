@@ -243,7 +243,7 @@ _store: DebateResultStore | None = None
 
 def get_debate_store() -> DebateResultStore:
     """Get or create the singleton DebateResultStore."""
-    global _store  # noqa: PLW0603
+    global _store
     if _store is None:
         _store = DebateResultStore("debate_results.db")
     return _store
