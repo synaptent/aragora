@@ -25,7 +25,7 @@ import subprocess
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
-from aragora.gauntlet.attestation import (
+from aragora.models.receipts.attestation import (
     HUMAN_SETTLEMENT_CONTEXT,
     attestation_from_settlement_status,
 )

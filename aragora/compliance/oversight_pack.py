@@ -30,10 +30,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from aragora.gauntlet.attestation import (
+from aragora.models.receipts.attestation import (
     AUTONOMOUS_DISPOSITION,
     HUMAN_ATTESTED_DISPOSITION,
 )
+from aragora.models.receipts.jcs import jcs_canonicalize
 
 logger = logging.getLogger(__name__)
 
@@ -656,8 +657,6 @@ def build_oversight_pack(
 
     # Integrity digest over the canonical payload (RFC 8785 JCS, same basis
     # as ODR content digests) so the bundle itself is tamper-evident.
-    from aragora.gauntlet.odr_export import jcs_canonicalize
-
     pack["integrity"] = {
         "algorithm": "sha256/jcs",
         "content_digest": hashlib.sha256(jcs_canonicalize(pack)).hexdigest(),
