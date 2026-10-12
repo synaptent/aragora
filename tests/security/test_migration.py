@@ -6,6 +6,7 @@ Tests automatic detection, migration, and startup migration functionality.
 
 import ast
 import asyncio
+import importlib
 import logging
 import sqlite3
 import sys
@@ -923,6 +924,64 @@ class TestMigrationAuditProvider:
         assert result.errors == [f"Store {store_name} re-encryption failed"]
         assert "secret-value" not in " ".join(result.errors)
         assert [saved[0] for saved in sync_backend.saved] == ["connector-1"]
+
+    @pytest.mark.parametrize(
+        ("store_name", "factory", "backend_path"),
+        [
+            (
+                "integration",
+                "aragora.storage.integration_store.get_integration_store",
+                "aragora.storage.integration_sqlite.SQLiteIntegrationStore",
+            ),
+            (
+                "gmail",
+                "aragora.storage.gmail_token_store.get_gmail_token_store",
+                "aragora.storage.gmail_token_store.SQLiteGmailTokenStore",
+            ),
+        ],
+    )
+    def test_live_rotation_counts_sqlite_setup_error_and_continues(
+        self, encryption_service, sync_backend, tmp_path, store_name, factory, backend_path
+    ):
+        module_name, class_name = backend_path.rsplit(".", 1)
+        backend_cls = getattr(importlib.import_module(module_name), class_name)
+        # A directory at the database path makes the real backend's sqlite3.connect() fail.
+        unopenable = tmp_path / "secret-value.db"
+        unopenable.mkdir()
+        with pytest.raises(sqlite3.OperationalError):
+            backend_cls(unopenable)
+        sync_backend.add_connector("connector-1", {"api_key": "decrypted-secret"})
+
+        with patch(factory, side_effect=lambda: backend_cls(unopenable)):
+            result = self._rotate_sync(encryption_service, stores=[store_name, "sync"])
+
+        assert result.success is False
+        assert result.failed_records == 1
+        assert result.stores_processed == 1
+        assert result.records_reencrypted == 1
+        assert result.errors == [f"Store {store_name} re-encryption failed"]
+        joined_errors = " ".join(result.errors)
+        assert "secret-value" not in joined_errors
+        assert "unable to open" not in joined_errors
+        assert [saved[0] for saved in sync_backend.saved] == ["connector-1"]
+
+    def test_live_rotation_sqlite_error_fails_closed(self, encryption_service):
+        _prepare_live_rotation(encryption_service)
+        encryption_service.rotate_key.side_effect = sqlite3.OperationalError(
+            "database is locked: /data/secret-value/keys.db"
+        )
+
+        with patch(
+            "aragora.security.encryption.get_encryption_service",
+            return_value=encryption_service,
+        ):
+            result = rotate_encryption_key(dry_run=False, stores=["sync"])
+
+        assert result.success is False
+        assert result.failed_records == 1
+        assert result.stores_processed == 0
+        assert result.errors == ["Key rotation failed due to an internal error"]
+        assert "secret-value" not in " ".join(result.errors)
 
     def test_live_sync_rotation_fails_closed_when_storage_resolution_fails(
         self, encryption_service, sync_backend
