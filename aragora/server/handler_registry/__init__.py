@@ -118,11 +118,19 @@ HANDLERS_AVAILABLE = all(
 
 
 def _request_declares_body(request_handler: Any) -> bool:
-    """Whether the request announces a body: a positive Content-Length or chunked encoding.
+    """Whether the request has a body to read: one already buffered on the handler
+    (``handler.body`` or ``handler.request.body``, which read_json_body reads first),
+    a positive Content-Length or chunked encoding.
 
-    Reading the socket of a request that announces neither waits on a keep-alive
+    Reading the socket of a request that announces none of these waits on a keep-alive
     connection until the client sends more or closes it.
     """
+    for buffered in (
+        getattr(request_handler, "body", None),
+        getattr(getattr(request_handler, "request", None), "body", None),
+    ):
+        if isinstance(buffered, (str, bytes, bytearray)):
+            return True
     headers = getattr(request_handler, "headers", None)
     if headers is None:
         return False

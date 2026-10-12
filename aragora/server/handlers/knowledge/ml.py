@@ -35,6 +35,9 @@ __all__ = [
     "get_local_embedding_service",
     "embeddings_unavailable_response",
     "texts_exceed_model_window",
+    "MAX_EMBED_TEXT_BYTES",
+    "MAX_EMBED_TOTAL_BYTES",
+    "embed_input_error",
     "_clear_ml_components",
 ]
 
@@ -187,6 +190,37 @@ def texts_exceed_model_window(service: Any, texts: list[str]) -> bool | None:
     except (ImportError, RuntimeError, OSError, ValueError, TypeError, KeyError) as e:
         logger.debug("Could not tell whether texts exceed the model window: %s", e)
         return None
+
+
+# A request bound, not a model limit: sentence-transformers truncates every text to
+# the model's max_seq_length (256 word pieces for all-MiniLM-L6-v2), so no length
+# fails. 2,000 bytes still fits a full window of English prose.
+MAX_EMBED_TEXT_BYTES = 2000
+# 100 texts at the per-text cap, the most /api/v1/ml/embed and embed-batch accept.
+# /api/v1/ml/search takes up to 1,000 documents, so this total is what bounds its work.
+MAX_EMBED_TOTAL_BYTES = 100 * MAX_EMBED_TEXT_BYTES
+
+
+def embed_input_error(texts: Any) -> HandlerResult | None:
+    """The 400 for texts to embed that are not a list of strings or exceed the byte caps."""
+    if not isinstance(texts, list) or not all(isinstance(t, str) for t in texts):
+        return error_response("Texts to embed must be strings", 400, code="invalid_input")
+    # A lone surrogate (a JSON "\ud800" escape) is counted here and left to the model
+    # call to reject, as before.
+    sizes = [len(t.encode("utf-8", "surrogatepass")) for t in texts]
+    if sizes and max(sizes) > MAX_EMBED_TEXT_BYTES:
+        return error_response(
+            f"Each text may be at most {MAX_EMBED_TEXT_BYTES} bytes of UTF-8",
+            400,
+            code="input_too_large",
+        )
+    if sum(sizes) > MAX_EMBED_TOTAL_BYTES:
+        return error_response(
+            f"Texts may total at most {MAX_EMBED_TOTAL_BYTES} bytes of UTF-8",
+            400,
+            code="input_too_large",
+        )
+    return None
 
 
 def _clear_ml_components() -> None:
@@ -614,12 +648,15 @@ class MLHandler(BaseHandler):
             return error_response("text or texts is required", 400)
 
         try:
+            if not text and len(texts) > 100:
+                return error_response("Maximum 100 texts per batch", 400)
+            input_error = embed_input_error([text] if text else texts)
+            if input_error is not None:
+                return input_error
             if text:
                 result = [embeddings.embed(text)]
                 truncated = texts_exceed_model_window(embeddings, [text])
             else:
-                if len(texts) > 100:
-                    return error_response("Maximum 100 texts per batch", 400)
                 result = embeddings.embed_batch(texts)
                 truncated = texts_exceed_model_window(embeddings, texts)
 
@@ -671,6 +708,11 @@ class MLHandler(BaseHandler):
             return error_response("documents is required", 400)
         if len(documents) > 1000:
             return error_response("Maximum 1000 documents", 400)
+        input_error = embed_input_error(
+            [query, *documents] if isinstance(documents, list) else documents
+        )
+        if input_error is not None:
+            return input_error
 
         top_k = data.get("top_k", 5)
         threshold = data.get("threshold", 0.0)

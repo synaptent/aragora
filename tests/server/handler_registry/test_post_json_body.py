@@ -9,11 +9,13 @@ real HANDLER_REGISTRY dispatch with a JWT access token.
 
 from __future__ import annotations
 
+import importlib
 import io
 import json
 import threading
+from types import SimpleNamespace
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -82,8 +84,11 @@ def _dispatch(
     role: str = "member",
     content_length: str | None = None,
     rfile: Any = None,
+    attrs: dict[str, Any] | None = None,
 ) -> tuple[int, dict[str, Any]]:
     instance: Any = registry_cls()
+    for name, value in (attrs or {}).items():
+        setattr(instance, name, value)
     token = create_access_token(
         user_id=f"jwt-{role}", email=f"{role}@example.com", org_id="org-1", role=role
     )
@@ -130,6 +135,9 @@ class _FakeEmbeddingService:
 
     def embed_batch(self, texts: list[str]) -> list[list[float]]:
         return [[0.1, 0.2, 0.3] for _ in texts]
+
+    def search(self, query: str, documents: list[str], top_k: int, threshold: float) -> list:
+        return []
 
 
 @pytest.mark.parametrize(
@@ -233,3 +241,148 @@ def test_post_handlers_without_the_declaration_keep_the_query_dict(registry_cls,
 
     assert status == 200
     assert received == [{}]
+
+
+def _post_ml(registry_cls, path: str, body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+    with patch(
+        "aragora.server.handlers.knowledge.ml.get_local_embedding_service",
+        return_value=_FakeEmbeddingService(),
+    ):
+        return _dispatch(registry_cls, path, json.dumps(body).encode("utf-8"))
+
+
+_PER_TEXT_CAP_ERROR = {
+    "error": {"message": "Each text may be at most 2000 bytes of UTF-8", "code": "input_too_large"}
+}
+
+
+@pytest.mark.parametrize(
+    "body",
+    [{"text": "x" * 2001}, {"texts": ["a", "x" * 2001]}, {"texts": ["\u00e9" * 1001]}],
+    ids=["text", "texts", "multibyte"],
+)
+def test_ml_embed_rejects_a_text_over_the_per_text_byte_cap(registry_cls, body):
+    assert _post_ml(registry_cls, "/api/v1/ml/embed", body) == (400, _PER_TEXT_CAP_ERROR)
+
+
+@pytest.mark.parametrize(
+    "body",
+    [{"query": "x" * 2001, "documents": ["a"]}, {"query": "q", "documents": ["a", "x" * 2001]}],
+    ids=["query", "document"],
+)
+def test_ml_search_rejects_a_text_over_the_per_text_byte_cap(registry_cls, body):
+    assert _post_ml(registry_cls, "/api/v1/ml/search", body) == (400, _PER_TEXT_CAP_ERROR)
+
+
+def test_ml_search_rejects_texts_over_the_total_byte_cap(registry_cls):
+    body = {"query": "q", "documents": ["x" * 2000] * 100}
+
+    assert _post_ml(registry_cls, "/api/v1/ml/search", body) == (
+        400,
+        {
+            "error": {
+                "message": "Texts may total at most 200000 bytes of UTF-8",
+                "code": "input_too_large",
+            }
+        },
+    )
+
+
+@pytest.mark.parametrize(
+    ("path", "body"),
+    [
+        ("/api/v1/ml/embed", {"texts": ["x" * 2000] * 100}),
+        ("/api/v1/ml/search", {"query": "q", "documents": ["x" * 2000] * 99 + ["x" * 1999]}),
+    ],
+    ids=["embed", "search"],
+)
+def test_ml_embed_and_search_accept_texts_at_the_byte_caps(registry_cls, path, body):
+    status, payload = _post_ml(registry_cls, path, body)
+
+    assert status == 200, payload
+
+
+@pytest.mark.parametrize(
+    ("path", "body"),
+    [
+        ("/api/v1/ml/embed", {"texts": ["a", 5]}),
+        ("/api/v1/ml/embed", {"texts": "not a list"}),
+        ("/api/v1/ml/search", {"query": "q", "documents": ["a", {"text": "b"}]}),
+    ],
+    ids=["embed-item", "embed-string", "search-item"],
+)
+def test_ml_embed_and_search_reject_texts_that_are_not_strings(registry_cls, path, body):
+    assert _post_ml(registry_cls, path, body) == (
+        400,
+        {"error": {"message": "Texts to embed must be strings", "code": "invalid_input"}},
+    )
+
+
+def _upload_result(filename: str) -> Any:
+    return SimpleNamespace(
+        id=f"up-{filename}",
+        filename=filename,
+        status="completed",
+        category=SimpleNamespace(value="document"),
+        error=None,
+    )
+
+
+@pytest.mark.parametrize(("count", "expected_status"), [(50, 200), (51, 400)])
+def test_upload_batch_caps_the_file_count(registry_cls, count, expected_status):
+    from aragora.server.middleware.rate_limit.distributed import reset_distributed_limiter
+
+    # The upload routes allow 20 requests a minute per client, shared with any earlier
+    # test in this process.
+    importlib.import_module("aragora.server.handlers.utils.rate_limit").clear_all_limiters()
+    reset_distributed_limiter()
+    files = [{"filename": f"f{i}.txt", "content": ""} for i in range(count)]
+    upload = AsyncMock(side_effect=lambda content, filename, *a, **k: _upload_result(filename))
+
+    # Of the default roles only owner and admin hold upload.create.
+    with patch("aragora.server.handlers.features.smart_upload.smart_upload", upload):
+        status, payload = _dispatch(
+            registry_cls,
+            "/api/v1/upload/batch",
+            json.dumps({"files": files}).encode("utf-8"),
+            role="admin",
+        )
+
+    assert status == expected_status, payload
+    if expected_status == 400:
+        assert payload == {
+            "error": {"message": "At most 50 files per batch", "code": "too_many_files"}
+        }
+        upload.assert_not_called()
+    else:
+        assert payload["count"] == 50
+
+
+@pytest.mark.parametrize(
+    "attrs",
+    [
+        {"body": b'{"text": "hello"}'},
+        {"request": MagicMock(body='{"text": "hello"}')},
+    ],
+    ids=["handler.body", "handler.request.body"],
+)
+def test_a_pre_buffered_body_is_read_without_a_length_header(registry_cls, attrs):
+    blocking_rfile = MagicMock()
+    blocking_rfile.read.side_effect = AssertionError("rfile.read with a pre-buffered body")
+
+    with patch(
+        "aragora.server.handlers.knowledge.ml.get_local_embedding_service",
+        return_value=_FakeEmbeddingService(),
+    ):
+        status, payload = _dispatch(
+            registry_cls,
+            "/api/v1/ml/embed",
+            b"",
+            content_length="",
+            rfile=blocking_rfile,
+            attrs=attrs,
+        )
+
+    blocking_rfile.read.assert_not_called()
+    assert status == 200, payload
+    assert payload["count"] == 1
