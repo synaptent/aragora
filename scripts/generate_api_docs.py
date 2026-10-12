@@ -38,7 +38,7 @@ class Endpoint:
     handler_method: str = ""
     parameters: list[dict] = field(default_factory=list)
     response_example: str | None = None
-    auth_required: bool = False
+    auth_required: bool | None = False
 
 
 @dataclass
@@ -56,13 +56,53 @@ def discover_handler_modules(handlers_dir: Path = HANDLERS_DIR) -> list[Path]:
         path
         for path in handlers_dir.rglob("*.py")
         if not any(part.startswith("_") for part in path.relative_to(handlers_dir).parts)
-        and path.stem not in ("base", "routing")
     )
 
 
 def normalize_path(path: str) -> str:
-    """Erase path-parameter names (``{id}``, ``:id``, ``<id>``) so handler and spec paths compare."""
-    return re.sub(r"\{[^}]+\}|:\w+|<[^>]+>", "{}", path.rstrip("/") or "/")
+    """Erase path parameters (``{id}``, ``:id``, ``<id>``, ``*``) so handler and spec paths compare."""
+    return re.sub(r"\{[^}]+\}|:\w+|<[^>]+>|\*", "{}", path.rstrip("/") or "/")
+
+
+def requires_auth(operation: dict) -> bool | None:
+    """Whether every security alternative needs credentials (``{}`` is anonymous); None if undeclared."""
+    security = operation.get("security")
+    return None if security is None else bool(security) and all(security)
+
+
+def module_constants(py_file: Path, module: ast.Module) -> dict[str, ast.expr]:
+    """Module-level assignments, including names imported with ``from .sibling import NAME``."""
+
+    def assigned(tree: ast.Module) -> dict[str, ast.expr]:
+        return {
+            t.id: n.value
+            for n in tree.body
+            if isinstance(n, ast.Assign)
+            for t in n.targets
+            if isinstance(t, ast.Name)
+        }
+
+    names: dict[str, ast.expr] = {}
+    for node in module.body:
+        if isinstance(node, ast.ImportFrom) and node.level == 1 and node.module:
+            sibling = py_file.parent.joinpath(*node.module.split(".")).with_suffix(".py")
+            if sibling.is_file():
+                found = assigned(ast.parse(sibling.read_text(encoding="utf-8")))
+                names.update(
+                    {a.asname or a.name: found[a.name] for a in node.names if a.name in found}
+                )
+    return names | assigned(module)
+
+
+def literal(node: ast.expr | None, names: dict[str, ast.expr]) -> Any:
+    """``ast.literal_eval`` that resolves ``names`` and reads only the keys of a dict."""
+    if isinstance(node, ast.Name) and node.id in names:
+        return literal(names[node.id], names)
+    if isinstance(node, (ast.List, ast.Tuple, ast.Set, ast.Dict)):
+        return tuple(
+            literal(e, names) for e in (node.keys if isinstance(node, ast.Dict) else node.elts)
+        )
+    return ast.literal_eval(node)
 
 
 def load_spec_operations(spec_path: Path) -> dict[str, dict[str, dict]]:
@@ -113,8 +153,8 @@ def extract_endpoints_from_module_docstring(module) -> list[tuple[str, str, str]
     return endpoints
 
 
-def extract_routes_from_handler(handler_class: ast.ClassDef) -> list[str]:
-    """Extract literal ROUTES and POST_ROUTES from a handler class; computed values are skipped."""
+def extract_routes_from_handler(handler_class: ast.ClassDef, names=None) -> list[str]:
+    """Extract ROUTES and POST_ROUTES from a handler class; computed values are skipped with a warning."""
     routes: list[object] = []
     for stmt in handler_class.body:
         if not isinstance(stmt, (ast.Assign, ast.AnnAssign)) or stmt.value is None:
@@ -122,9 +162,9 @@ def extract_routes_from_handler(handler_class: ast.ClassDef) -> list[str]:
         targets = stmt.targets if isinstance(stmt, ast.Assign) else [stmt.target]
         if {t.id for t in targets if isinstance(t, ast.Name)} & {"ROUTES", "POST_ROUTES"}:
             try:
-                routes.extend(ast.literal_eval(stmt.value))
-            except ValueError:
-                continue
+                routes.extend(literal(stmt.value, names or {}))
+            except (ValueError, TypeError, SyntaxError, RecursionError):
+                print(f"warning: {handler_class.name}: routes not static, skipped", file=sys.stderr)
     return [route for route in dict.fromkeys(routes) if isinstance(route, str)]
 
 
@@ -213,24 +253,26 @@ def discover_endpoints(
                 module_desc = desc_match.group(1).strip().split("\n")[0]
 
         # Find handler classes in the module
-        handler_class_name = None
+        names = module_constants(py_file, module)
+        class_routes = {
+            n: extract_routes_from_handler(c, names) for n, c in handler_classes(module)
+        }
+        handler_class_name = next((name for name, routes in class_routes.items() if routes), None)
+        rel_path = py_file.relative_to(handlers_dir).as_posix()
+        seen: set[tuple[str, str]] = set()
+        module_group: EndpointGroup | None = None
 
-        for name, obj in handler_classes(module):
-            if extract_routes_from_handler(obj):
-                handler_class_name = name
-                break
-
-        # If we have module docstring endpoints, use those (preferred)
+        # Module docstring endpoints come first, with their descriptions
         if module_endpoints:
-            group_name = py_file.stem.title().replace("_", " ")
-            group = EndpointGroup(name=group_name, description=module_desc)
+            group_name = f"{py_file.stem.title().replace('_', ' ')} ({rel_path})"
+            group = module_group = EndpointGroup(name=group_name, description=module_desc)
 
             for method, path, description in module_endpoints:
                 operation = operations.get(normalize_path(path), {}).get(method)
                 if operation is None:
                     omitted += 1
                     continue
-                auth_required = bool(operation.get("security"))
+                auth_required = requires_auth(operation)
                 endpoint = Endpoint(
                     path=path,
                     method=method,
@@ -241,14 +283,14 @@ def discover_endpoints(
                     auth_required=auth_required,
                 )
                 group.endpoints.append(endpoint)
+                seen.add((method, normalize_path(path)))
 
             if group.endpoints:
                 groups.append(group)
-            continue
 
-        # Fall back to ROUTES attribute
+        # Then the ROUTES pairs the docstring did not list, in the docstring's group if any
         for name, obj in handler_classes(module):
-            if extract_routes_from_handler(obj):
+            if routes := class_routes[name]:
                 group_name = name.replace("Handler", "")
                 group_desc = ast.get_docstring(obj, clean=False) or f"{group_name} endpoints"
 
@@ -256,9 +298,8 @@ def discover_endpoints(
                 if group_desc:
                     group_desc = group_desc.strip().split("\n")[0]
 
-                group = EndpointGroup(name=group_name, description=group_desc)
+                group = module_group or EndpointGroup(f"{group_name} ({rel_path})", group_desc)
 
-                routes = extract_routes_from_handler(obj)
                 served = {route: operations.get(normalize_path(route), {}) for route in routes}
                 omitted += sum(not methods for methods in served.values())
                 method_docs = {
@@ -269,6 +310,9 @@ def discover_endpoints(
                 pairs = [(r, m) for r in routes for m in sorted(served[r], key=HTTP_METHODS.index)]
 
                 for route, method in pairs:
+                    if (method, normalize_path(route)) in seen:
+                        continue
+                    seen.add((method, normalize_path(route)))
                     # Try to find the corresponding handler method
                     handler_method = None
                     method_doc = ""
@@ -283,7 +327,7 @@ def discover_endpoints(
                                 method_doc, params = extract_docstring_info(attr_doc)
                                 break
 
-                    auth_required = bool(served[route][method].get("security"))
+                    auth_required = requires_auth(served[route][method])
                     endpoint = Endpoint(
                         path=route,
                         method=method,
@@ -295,7 +339,7 @@ def discover_endpoints(
                     )
                     group.endpoints.append(endpoint)
 
-                if group.endpoints:
+                if group.endpoints and group not in groups:
                     groups.append(group)
 
     return groups, omitted
@@ -314,7 +358,7 @@ def generate_markdown(groups: list[EndpointGroup]) -> str:
 
     # Generate TOC
     for group in groups:
-        anchor = group.name.lower().replace(" ", "-")
+        anchor = re.sub(r"[^\w\- ]", "", group.name.lower()).replace(" ", "-")
         lines.append(f"- [{group.name}](#{anchor})")
 
     lines.extend(["", "---", ""])
@@ -332,7 +376,7 @@ def generate_markdown(groups: list[EndpointGroup]) -> str:
 
         for endpoint in group.endpoints:
             method_badge = f"`{endpoint.method}`"
-            auth_badge = " 🔒" if endpoint.auth_required else ""
+            auth_badge = {True: " 🔒", None: " ❔"}.get(endpoint.auth_required, "")
 
             lines.extend(
                 [
@@ -374,7 +418,8 @@ def generate_markdown(groups: list[EndpointGroup]) -> str:
         [
             "## Authentication",
             "",
-            "Endpoints marked with 🔒 require authentication.",
+            "Endpoints marked with 🔒 require authentication. Endpoints marked with ❔ have no",
+            "security declared in the OpenAPI spec and may still require it.",
             "",
             "Include an `Authorization` header with your API token:",
             "",
