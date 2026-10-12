@@ -54,7 +54,7 @@ class A2AServer:
 
     def __init__(
         self,
-        host: str = "0.0.0.0",  # noqa: S104 - A2A server binds all interfaces by default
+        host: str = "0.0.0.0",  # A2A server binds all interfaces by default
         port: int = 8766,
         max_concurrent_tasks: int = 10,
     ):

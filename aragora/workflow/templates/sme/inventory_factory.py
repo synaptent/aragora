@@ -307,7 +307,7 @@ def create_tool_selection_workflow(
     return WorkflowDefinition(
         id=workflow_id,
         name=f"Tool Selection: {category}",
-        description=f"Select best {category} tool from {len(candidates)} options",  # noqa: S608 -- internal identifier, internal length
+        description=f"Select best {category} tool from {len(candidates)} options",
         category=WorkflowCategory.GENERAL,
         tags=["sme", "tools", "selection", "vendor"],
         inputs={

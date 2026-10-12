@@ -41,7 +41,7 @@ try:
         import weaviate
         from weaviate.classes.config import Configure, Property, DataType
         from weaviate.classes.query import MetadataQuery, Filter
-        from weaviate.classes.data import DataObject  # noqa: F401
+        from weaviate.classes.data import DataObject
 
     WEAVIATE_AVAILABLE = True
 except ImportError:

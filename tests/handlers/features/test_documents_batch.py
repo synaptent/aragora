@@ -1169,6 +1169,33 @@ class TestUploadBatch:
         assert body["knowledge_processing"]["job_ids"] == ["kp-001"]
 
     @pytest.mark.asyncio
+    async def test_knowledge_processing_scoped_to_authenticated_org(
+        self, handler_with_processor, processor
+    ):
+        """Queued knowledge jobs carry the verified auth context's org."""
+        http = _make_multipart_handler(
+            files=[("test.txt", b"hello")],
+            form_fields={"process_knowledge": "true", "org_id": "org-b"},
+        )
+        with patch(
+            "aragora.documents.ingestion.batch_processor.JobPriority",
+        ) as MockJP:
+            MockJP.NORMAL = "normal"
+            with patch(
+                "aragora.documents.chunking.token_counter.get_token_counter",
+                return_value=MockTokenCounter(),
+            ):
+                with patch(
+                    "aragora.knowledge.integration.queue_document_processing",
+                    return_value="kp-001",
+                ) as mock_queue:
+                    result = await handler_with_processor.handle_post(
+                        "/api/v1/documents/batch", {}, http
+                    )
+        assert _status(result) == 202
+        assert mock_queue.call_args.kwargs["org_id"] == "test-org-001"
+
+    @pytest.mark.asyncio
     async def test_upload_knowledge_processing_unavailable(self, handler_with_processor, processor):
         """Knowledge processing unavailable should be noted in response."""
         http = _make_multipart_handler(

@@ -113,7 +113,7 @@ class ThroughputLedger:
                     continue
                 try:
                     record = LedgerRecord.from_json(line)
-                    record.when  # noqa: B018 - validate timestamp eagerly
+                    record.when  # validate timestamp eagerly
                 except (json.JSONDecodeError, KeyError, ValueError, TypeError):
                     skipped += 1
                     logger.warning("skipping corrupt ledger line %d in %s", line_number, self.path)

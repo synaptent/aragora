@@ -581,22 +581,22 @@ class PersonaLaboratory:
         mutations = []
 
         # Trait mutation
-        if random.random() < mutation_rate:  # noqa: S311 -- genetic algorithm
+        if random.random() < mutation_rate:
             available_traits = [t for t in PERSONALITY_TRAITS if t not in new_traits]
             if available_traits and len(new_traits) < 4:
-                new_trait = random.choice(available_traits)  # noqa: S311 -- genetic algorithm
+                new_trait = random.choice(available_traits)
                 new_traits.append(new_trait)
                 mutations.append(f"Added trait: {new_trait}")
-            elif new_traits and random.random() < 0.5:  # noqa: S311 -- genetic algorithm
-                removed = random.choice(new_traits)  # noqa: S311 -- genetic algorithm
+            elif new_traits and random.random() < 0.5:
+                removed = random.choice(new_traits)
                 new_traits.remove(removed)
                 mutations.append(f"Removed trait: {removed}")
 
         # Expertise mutation
         for domain in EXPERTISE_DOMAINS:
-            if random.random() < mutation_rate:  # noqa: S311 -- genetic algorithm
+            if random.random() < mutation_rate:
                 current = new_expertise.get(domain, 0.5)
-                delta = random.uniform(-0.1, 0.1)  # noqa: S311 -- genetic algorithm
+                delta = random.uniform(-0.1, 0.1)
                 new_expertise[domain] = max(0.0, min(1.0, current + delta))
                 mutations.append(f"Adjusted {domain}: {current:.2f} -> {new_expertise[domain]:.2f}")
 

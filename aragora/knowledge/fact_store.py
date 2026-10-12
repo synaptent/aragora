@@ -157,10 +157,32 @@ class FactStore(SQLiteStore):
             description="Add nullable facts.org_id; existing facts stay unassigned",
         )
 
+    _DUPLICATE_QUERY = """
+        SELECT * FROM facts
+        WHERE statement_hash = ? AND workspace_id = ? AND org_id IS ?
+        ORDER BY created_at, rowid
+        LIMIT 1
+    """
+
     def _compute_statement_hash(self, statement: str) -> str:
         """Compute hash for statement deduplication."""
         normalized = " ".join(statement.lower().split())
         return hashlib.sha256(normalized.encode()).hexdigest()[:32]
+
+    def find_duplicate(
+        self, statement: str, workspace_id: str, *, org_id: str | None = None
+    ) -> Fact | None:
+        """Return the fact ``add_fact`` would reuse for this statement, or None.
+
+        Raises:
+            OrgScopeRequiredError: org_id is missing
+        """
+        _require_org(org_id)
+        params = (self._compute_statement_hash(statement), workspace_id, org_id)
+        with self.connection() as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(self._DUPLICATE_QUERY, params).fetchone()
+        return self._row_to_fact(row) if row else None
 
     def add_fact(
         self,
@@ -212,15 +234,7 @@ class FactStore(SQLiteStore):
 
             # Check for existing fact with same statement in workspace
             if deduplicate:
-                cursor.execute(
-                    """
-                    SELECT * FROM facts
-                    WHERE statement_hash = ? AND workspace_id = ? AND org_id IS ?
-                    ORDER BY created_at, rowid
-                    LIMIT 1
-                    """,
-                    (statement_hash, workspace_id, org_id),
-                )
+                cursor.execute(self._DUPLICATE_QUERY, (statement_hash, workspace_id, org_id))
                 existing = cursor.fetchone()
                 if existing:
                     logger.debug("Fact deduplicated: %s", existing["id"])
@@ -295,7 +309,8 @@ class FactStore(SQLiteStore):
         with self.connection() as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
-            cursor.execute(f"SELECT * FROM facts WHERE id = ?{clause}", (fact_id, *params))  # noqa: S608 -- fixed clause, values bound
+            # fixed clause, values bound
+            cursor.execute(f"SELECT * FROM facts WHERE id = ?{clause}", (fact_id, *params))
             row = cursor.fetchone()
 
             if not row:
@@ -383,7 +398,8 @@ class FactStore(SQLiteStore):
         with self.connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
-                f"UPDATE facts SET {', '.join(updates)} WHERE id = ?{org_sql}",  # noqa: S608 -- dynamic clause from internal state
+                # dynamic clause from internal state
+                f"UPDATE facts SET {', '.join(updates)} WHERE id = ?{org_sql}",
                 params,
             )
 
@@ -497,7 +513,7 @@ class FactStore(SQLiteStore):
             cursor = conn.cursor()
 
             org_sql, org_params = _org_clause(filters.org_id)
-            sql = f"SELECT * FROM facts WHERE 1=1{org_sql}"  # noqa: S608 -- fixed clause, values bound
+            sql = f"SELECT * FROM facts WHERE 1=1{org_sql}"  # fixed clause, values bound
             params: list[Any] = list(org_params)
 
             if filters.workspace_id:
@@ -567,7 +583,7 @@ class FactStore(SQLiteStore):
                 )
                 WHERE r.relation_type = ?
                 AND f.superseded_by IS NULL{org_sql}
-                """,  # noqa: S608 -- fixed clauses, values bound
+                """,  # fixed clauses, values bound
                 (fact_id, fact_id, FactRelationType.CONTRADICTS.value, *org_params),
             )
 
@@ -641,7 +657,7 @@ class FactStore(SQLiteStore):
                     id, source_fact_id, target_fact_id, relation_type,
                     confidence, created_by, metadata_json, created_at
                 ) SELECT ?, ?, ?, ?, ?, ?, ?, ?{scope_sql}
-                """,  # noqa: S608 -- fixed clause, values bound
+                """,  # fixed clause, values bound
                 (
                     relation_id,
                     source_fact_id,
@@ -707,7 +723,8 @@ class FactStore(SQLiteStore):
             if not conditions:
                 return []
 
-            sql = f"SELECT * FROM fact_relations r WHERE ({' OR '.join(conditions)})"  # noqa: S608 -- dynamic clause from internal state
+            # dynamic clause from internal state
+            sql = f"SELECT * FROM fact_relations r WHERE ({' OR '.join(conditions)})"
 
             if relation_type:
                 sql += " AND relation_type = ?"
@@ -755,7 +772,8 @@ class FactStore(SQLiteStore):
 
             # The fact row goes first so an org-scoped miss leaves the FTS
             # entry and relations of another org's fact untouched.
-            cursor.execute(f"DELETE FROM facts WHERE id = ?{org_sql}", (fact_id, *org_params))  # noqa: S608 -- fixed clause, values bound
+            # fixed clause, values bound
+            cursor.execute(f"DELETE FROM facts WHERE id = ?{org_sql}", (fact_id, *org_params))
             if cursor.rowcount == 0:
                 return False
 
@@ -830,7 +848,8 @@ class FactStore(SQLiteStore):
             where = f" WHERE {' AND '.join(conditions)}"
 
             # Total facts
-            cursor.execute(f"SELECT COUNT(*) as count FROM facts{where}", params)  # noqa: S608 -- internal query construction
+            # internal query construction
+            cursor.execute(f"SELECT COUNT(*) as count FROM facts{where}", params)
             total = cursor.fetchone()["count"]
 
             # By status
@@ -839,14 +858,14 @@ class FactStore(SQLiteStore):
                 SELECT validation_status, COUNT(*) as count
                 FROM facts{where}
                 GROUP BY validation_status
-                """,  # noqa: S608 -- internal query construction
+                """,  # internal query construction
                 params,
             )
             by_status = {row["validation_status"]: row["count"] for row in cursor.fetchall()}
 
             # Average confidence
             cursor.execute(
-                f"SELECT AVG(confidence) as avg FROM facts{where}",  # noqa: S608 -- internal query construction
+                f"SELECT AVG(confidence) as avg FROM facts{where}",  # internal query construction
                 params,
             )
             avg_confidence = cursor.fetchone()["avg"] or 0.0
@@ -863,7 +882,7 @@ class FactStore(SQLiteStore):
                 SELECT COUNT(*) as count FROM facts
                 WHERE validation_status IN ({placeholders})
                 {"".join(f" AND {c}" for c in conditions)}
-                """,  # noqa: S608 -- parameterized query
+                """,  # parameterized query
                 list(verified_statuses) + params,
             )
             verified = cursor.fetchone()["count"]
@@ -875,7 +894,7 @@ class FactStore(SQLiteStore):
                 JOIN facts s ON s.id = r.source_fact_id
                 JOIN facts t ON t.id = r.target_fact_id
                 WHERE {end_conditions}
-                """,  # noqa: S608 -- fixed clauses, values bound
+                """,  # fixed clauses, values bound
                 params + params,
             )
             relations = cursor.fetchone()["count"]
@@ -940,6 +959,14 @@ class InMemoryFactStore:
     def _in_org(fact: Fact | None, org_id: str | None) -> bool:
         org = _require_org(org_id)
         return fact is not None and fact.org_id == org
+
+    def find_duplicate(
+        self, statement: str, workspace_id: str, *, org_id: str | None = None
+    ) -> Fact | None:
+        """Return the fact ``add_fact`` would reuse for this statement, or None."""
+        _require_org(org_id)
+        fact_id = self._statement_hashes.get(self._compute_hash(statement, workspace_id, org_id))
+        return self._facts.get(fact_id) if fact_id else None
 
     def add_fact(
         self,
@@ -1325,6 +1352,11 @@ class ScopedFactStore:
             deduplicate,
             org_id=self._org(org_id),
         )
+
+    def find_duplicate(
+        self, statement: str, workspace_id: str, *, org_id: str | None = None
+    ) -> Fact | None:
+        return self._store.find_duplicate(statement, workspace_id, org_id=self._org(org_id))
 
     def get_fact(self, fact_id: str, *, org_id: str | None = None) -> Fact | None:
         return self._store.get_fact(fact_id, org_id=self._org(org_id))

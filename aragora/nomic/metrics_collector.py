@@ -393,7 +393,7 @@ class MetricsCollector:
         if scope_dirs:
             cmd.extend(scope_dirs)
 
-        result = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
+        result = subprocess.run(  # subprocess with fixed args, no shell
             cmd,
             capture_output=True,
             text=True,
@@ -419,7 +419,7 @@ class MetricsCollector:
             if existing:
                 cmd.extend(existing[:50])  # Limit to avoid arg overflow
 
-        result = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
+        result = subprocess.run(  # subprocess with fixed args, no shell
             cmd,
             capture_output=True,
             text=True,

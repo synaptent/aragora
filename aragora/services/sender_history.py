@@ -981,7 +981,7 @@ class SenderHistoryService:
                 WHERE user_id = ? AND total_emails > 0
                 ORDER BY {order_clause}
                 LIMIT ?
-                """,  # noqa: S608 -- dynamic clause from internal state
+                """,  # dynamic clause from internal state
                 (user_id, limit),
             )
 

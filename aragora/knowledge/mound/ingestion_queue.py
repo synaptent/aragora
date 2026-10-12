@@ -129,7 +129,8 @@ class IngestionDeadLetterQueue:
             with sqlite3.connect(self._db_path) as conn:
                 placeholders = ",".join("?" for _ in success_ids)
                 conn.execute(
-                    f"DELETE FROM ingestion_dlq WHERE id IN ({placeholders})",  # noqa: S608 -- parameterized query
+                    # parameterized query
+                    f"DELETE FROM ingestion_dlq WHERE id IN ({placeholders})",
                     success_ids,
                 )
             logger.info(

@@ -450,7 +450,7 @@ class ShopifyConnector(EnterpriseConnector):
                         retry_after = float(
                             resp.headers.get("Retry-After", _BASE_DELAY * (2**attempt))
                         )
-                        jitter = random.uniform(0, retry_after * 0.3)  # noqa: S311 -- retry jitter
+                        jitter = random.uniform(0, retry_after * 0.3)
                         delay = min(retry_after + jitter, _MAX_DELAY)
                         logger.warning(
                             "Shopify rate limited, retrying in %.1fs (attempt %d/%d)",
@@ -462,7 +462,7 @@ class ShopifyConnector(EnterpriseConnector):
                         continue
 
                     if resp.status >= 500 and attempt < _MAX_RETRIES:
-                        delay = min(_BASE_DELAY * (2**attempt) + random.uniform(0, 1), _MAX_DELAY)  # noqa: S311 -- retry jitter
+                        delay = min(_BASE_DELAY * (2**attempt) + random.uniform(0, 1), _MAX_DELAY)
                         logger.warning(
                             "Shopify server error %d, retrying in %.1fs (attempt %d/%d)",
                             resp.status,
@@ -488,7 +488,7 @@ class ShopifyConnector(EnterpriseConnector):
             except asyncio.TimeoutError as e:
                 last_error = e
                 if attempt < _MAX_RETRIES:
-                    delay = min(_BASE_DELAY * (2**attempt) + random.uniform(0, 1), _MAX_DELAY)  # noqa: S311 -- retry jitter
+                    delay = min(_BASE_DELAY * (2**attempt) + random.uniform(0, 1), _MAX_DELAY)
                     logger.warning(
                         "Shopify request timeout, retrying in %.1fs (attempt %d/%d)",
                         delay,
@@ -500,7 +500,7 @@ class ShopifyConnector(EnterpriseConnector):
             except OSError as e:
                 last_error = e
                 if attempt < _MAX_RETRIES:
-                    delay = min(_BASE_DELAY * (2**attempt) + random.uniform(0, 1), _MAX_DELAY)  # noqa: S311 -- retry jitter
+                    delay = min(_BASE_DELAY * (2**attempt) + random.uniform(0, 1), _MAX_DELAY)
                     logger.warning(
                         "Shopify connection error, retrying in %.1fs (attempt %d/%d)",
                         delay,

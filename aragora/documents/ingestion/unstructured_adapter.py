@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 
 # Check for unstructured library
 try:
-    from unstructured.partition.auto import partition  # noqa: F401
+    from unstructured.partition.auto import partition
     from unstructured.partition.pdf import partition_pdf  # noqa: F401
     from unstructured.partition.docx import partition_docx  # noqa: F401
     from unstructured.partition.html import partition_html  # noqa: F401

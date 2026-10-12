@@ -150,7 +150,7 @@ class TeamBuilder:
         remaining = list(scored)
 
         while len(team) < max_size and remaining:
-            if len(team) < min_size or random.random() > diversity_pref:  # noqa: S311 -- load balancing
+            if len(team) < min_size or random.random() > diversity_pref:
                 # Greedy: pick highest scored
                 agent, score = remaining[0]
                 team.append(agent)

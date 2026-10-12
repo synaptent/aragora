@@ -547,7 +547,7 @@ Be honest. Don't dismiss valid concerns - acknowledge and explain tradeoffs.
 
         # Calculate results
         total_attacks = len(all_attacks)
-        _successful_defenses = len([d for d in all_defenses if d.success])  # noqa: F841
+        _successful_defenses = len([d for d in all_defenses if d.success])
 
         # An attack is "successful" if not refuted
         defended_attack_ids = {d.attack_id for d in all_defenses if d.success}

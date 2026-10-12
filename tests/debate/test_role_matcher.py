@@ -396,6 +396,36 @@ def test_calibration_strategy_cold_start_agent(mock_calibration_tracker, mock_pe
     assert "agent1" in result.assignments
 
 
+def test_cold_start_covers_missing_and_thin_calibrations(
+    mock_calibration_tracker, mock_persona_manager
+):
+    """Agents with no calibration or fewer than the minimum predictions are cold-start."""
+    random.seed(42)
+    config = RoleMatchingConfig(strategy="calibration", min_predictions_for_calibration=5)
+    matcher = RoleMatcher(
+        calibration_tracker=mock_calibration_tracker,
+        persona_manager=mock_persona_manager,
+        config=config,
+    )
+
+    summaries = {
+        "thin": MockCalibrationSummary(agent="thin", total_predictions=4),
+        "at_minimum": MockCalibrationSummary(agent="at_minimum", total_predictions=5),
+    }
+
+    def get_summary(agent: str) -> MockCalibrationSummary:
+        if agent == "missing":
+            raise KeyError(agent)
+        return summaries[agent]
+
+    mock_calibration_tracker.get_calibration_summary.side_effect = get_summary
+
+    result = matcher.match_roles(["missing", "thin", "at_minimum"], round_num=0)
+
+    assert result.cold_start_agents == ["missing", "thin"]
+    assert set(result.assignments) == {"missing", "thin", "at_minimum"}
+
+
 def test_calibration_strategy_no_tracker(mock_persona_manager):
     """Test calibration strategy falls back gracefully without tracker."""
     random.seed(42)

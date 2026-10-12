@@ -121,7 +121,7 @@ def batch_select(
 
     for chunk in chunked(ids, batch_size):
         placeholders = ", ".join("?" * len(chunk))
-        query = f"SELECT {cols} FROM {table} WHERE {id_column} IN ({placeholders})"  # nosec B608  # noqa: S608
+        query = f"SELECT {cols} FROM {table} WHERE {id_column} IN ({placeholders})"  # nosec B608
 
         try:
             cursor = conn.execute(query, chunk)
@@ -165,7 +165,7 @@ def batch_exists(
 
     for chunk in chunked(ids, batch_size):
         placeholders = ", ".join("?" * len(chunk))
-        query = f"SELECT {id_column} FROM {table} WHERE {id_column} IN ({placeholders})"  # nosec B608  # noqa: S608
+        query = f"SELECT {id_column} FROM {table} WHERE {id_column} IN ({placeholders})"  # nosec B608
 
         try:
             cursor = conn.execute(query, chunk)
@@ -237,7 +237,7 @@ def get_table_stats(conn: sqlite3.Connection, table: str) -> dict[str, Any]:
     if not table.replace("_", "").isalnum():
         raise ValueError(f"Invalid table name: {table}")
 
-    cursor = conn.execute(f"SELECT COUNT(*) FROM {table}")  # nosec B608  # noqa: S608
+    cursor = conn.execute(f"SELECT COUNT(*) FROM {table}")  # nosec B608
     row = cursor.fetchone()
 
     return {
