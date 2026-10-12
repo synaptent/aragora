@@ -77,9 +77,8 @@ UPGRADES: dict[str, str] = {
     # NOTE: "claude-fable-5.1" and "anthropic/claude-fable-5.1" are
     # deliberately absent — Task 1 made both catalog aliases of the ACTIVE
     # claude-fable-5-1 row (controller ruling 1).
-    **{
-        k: _ANTHROPIC
-        for k in (
+    **dict.fromkeys(
+        (
             "claude-fable-5",
             "anthropic/claude-fable-5",
             "claude-3-opus-20240229",
@@ -95,14 +94,14 @@ UPGRADES: dict[str, str] = {
             "claude-opus-4.1",
             "anthropic/claude-opus-4.1",
             "anthropic/claude-opus-4",
-        )
-    },
+        ),
+        _ANTHROPIC,
+    ),
     # Sonnet spellings -> the current Sonnet (value tier, $2/$10), not the
     # $10/$50 flagship. The claude-sonnet-5 row and its price are the ones
     # the Claude API reference documents; see the catalog entry.
-    **{
-        k: _ANTHROPIC_SONNET
-        for k in (
+    **dict.fromkeys(
+        (
             "claude-3-5-sonnet-20241022",
             "claude-3.5-sonnet",
             "claude-3-5-sonnet-20240620",
@@ -115,17 +114,14 @@ UPGRADES: dict[str, str] = {
             "anthropic/claude-3.5-sonnet",
             "anthropic/claude-sonnet-4",
             "anthropic/claude-sonnet-4.6",
-        )
-    },
+        ),
+        _ANTHROPIC_SONNET,
+    ),
     # Haiku spellings -> the value-tier Haiku row, not the flagship.
-    **{
-        k: _ANTHROPIC_HAIKU
-        for k in (
-            "claude-3-haiku-20240307",
-            "claude-3-5-haiku-20241022",
-            "anthropic/claude-3-haiku",
-        )
-    },
+    **dict.fromkeys(
+        ("claude-3-haiku-20240307", "claude-3-5-haiku-20241022", "anthropic/claude-3-haiku"),
+        _ANTHROPIC_HAIKU,
+    ),
     # OpenAI — flagship-line spellings → Astra ($10/$50); every spelling
     # whose own SKU was a VALUE tier → Terra ($2/$12). The GPT-4 family
     # (gpt-4, gpt-4-turbo, gpt-4o, gpt-4.1 and their mini/nano siblings) is
@@ -134,9 +130,8 @@ UPGRADES: dict[str, str] = {
     # Sonnet/Haiku rows had (finding C-P3 on #9989, round 4). gpt-4.5 stays
     # on Astra: it was OpenAI's flagship research preview at $75/$150, well
     # above the 4o line, so Terra would under-serve it.
-    **{
-        k: _OPENAI
-        for k in (
+    **dict.fromkeys(
+        (
             "gpt-4.5",
             "gpt-5",
             "gpt-5.1",
@@ -145,45 +140,20 @@ UPGRADES: dict[str, str] = {
             "gpt-5.4",
             "gpt-5.5",
             "gpt-5.6-sol",
-            # Codex/chat CLI spellings. Real names a user config or Codex
-            # harness can still pin; without them the CLI fallback would send
-            # an OpenAI pin cross-family to Anthropic. These stay on the
-            # flagship even where their base spelling moved to Terra: the
-            # codex line is OpenAI's coding flagship, not a value SKU.
             "gpt-5.3-codex",
             "gpt-4.1-codex",
             "gpt-5.3-chat-latest",
             "openai/gpt-5.3",
-            # Orphan spelling from aragora/server/stream/debate_executor.py's
-            # generic fallback: absent from the catalog, so PR 3's sweep would
-            # otherwise leave it behind as a dead slug.
             "openai/gpt-5.3-chat",
             "openai/gpt-5.4",
             "openai/gpt-5.5",
             "openai/gpt-5.6-sol",
-            # NOTE: bare "o1" and "o3" are deliberately ABSENT, while every
-            # hyphenated o-series spelling stays. RETIRED_PATTERN is built
-            # from these keys and is what scripts/refresh_model_literals.py
-            # hunts for in source text; two-character hyphen-free tokens are
-            # far more often an ordinary identifier ("o1 = _make_org(...)"),
-            # a plan/route/observation id, or a word in prose ("GPT-4o, o1,
-            # o3") than a model pin. The 2026-09-05 repo-wide re-sweep
-            # rewrote them in 25 files where none of them was a model id, and
-            # no boundary rule can tell the two apart by shape (wave-6
-            # ruling, sweep gap 4, on #9989). A live "o1"/"o3" pin therefore
-            # no longer upgrades through this map; it falls through
-            # resolve_model_id unchanged, and each provider's own
-            # DEFAULT_FALLBACK_MODEL still lands it on the frontier.
             "o3-pro",
-        )
-    },
-    **{
-        k: _OPENAI_VALUE
-        for k in (
-            # The GPT-4 line itself, not just its mini siblings: an explicit
-            # gpt-4o pin used to be rewritten to the Astra flagship while
-            # gpt-4o-mini went to Terra, so the cheap SKU was treated more
-            # honestly than the one it was a sibling of.
+        ),
+        _OPENAI,
+    ),
+    **dict.fromkeys(
+        (
             "gpt-4",
             "gpt-4-turbo",
             "gpt-4-turbo-preview",
@@ -197,28 +167,22 @@ UPGRADES: dict[str, str] = {
             "gpt-5.4-mini",
             "gpt-5.6-luna",
             "openai/gpt-4o-mini",
-            # Orphan spelling from aragora/server/handlers/agents/agents.py's
-            # per-provider fallback map (see openai/gpt-5.3-chat above).
             "openai/gpt-4.1-mini",
             "openai/gpt-5.4-mini",
             "openai/gpt-5.6-luna",
             "o1-mini",
             "o3-mini",
-            # "o4-mini" is a mini SKU and belongs with its siblings on the
-            # value tier: it used to map to the Astra flagship while
-            # "o3-mini"/"gpt-4o-mini" mapped to Terra, an inconsistency the
-            # 2026-09-05 merge-gate review caught (finding C-P3 on #9989).
             "o4-mini",
-        )
-    },
+        ),
+        _OPENAI_VALUE,
+    ),
     # Google. NOTE: "google/gemini-3.1-pro" is deliberately absent — Task 1
     # made it a catalog alias of the ACTIVE gemini-3.1-pro-preview row
     # (controller ruling 1). The bare "gemini-3.1-pro" spelling stays: it
     # collides with a routing hand-row, so it is NOT a catalog alias, and
     # this map is its only path back to the current id.
-    **{
-        k: _GOOGLE_PRO
-        for k in (
+    **dict.fromkeys(
+        (
             "gemini-3-pro",
             "gemini-3.1-pro",
             "google/gemini-3-pro",
@@ -227,11 +191,11 @@ UPGRADES: dict[str, str] = {
             "gemini-2.5-pro",
             "gemini-1.5-pro",
             "gemini-pro",
-        )
-    },
-    **{
-        k: _GOOGLE_FLASH
-        for k in (
+        ),
+        _GOOGLE_PRO,
+    ),
+    **dict.fromkeys(
+        (
             "gemini-2.0-flash",
             "gemini-2.0-flash-exp",
             "gemini-2.5-flash",
@@ -246,58 +210,42 @@ UPGRADES: dict[str, str] = {
             "gemini-3.7-flash",
             "google/gemini-2.0-flash",
             "google/gemini-3-flash-preview",
-        )
-    },
+        ),
+        _GOOGLE_FLASH,
+    ),
     # xAI
-    **{
-        k: _XAI
-        for k in (
+    **dict.fromkeys(
+        (
             "grok-2",
             "grok-3",
             "grok-3-mini",
             "grok-4",
             "grok-4-latest",
-            # xAI "fast" variant spelling used by CLI pins.
             "grok-4-1-fast",
             "grok-4.3",
             "grok-4.5",
             "x-ai/grok-4",
-            # Orphan spelling from aragora/server/stream/debate_executor.py
-            # (see openai/gpt-5.3-chat above).
             "x-ai/grok-4.1-fast",
             "x-ai/grok-4.3",
             "x-ai/grok-4.5",
-        )
-    },
+        ),
+        _XAI,
+    ),
     # Mistral. NOTE: "mistral-large-latest" and "mistral-medium-latest"
     # (plus "mistral-medium-3.5") are deliberately absent — Task 1 made
     # them catalog aliases of their ACTIVE rows (controller ruling 1). The
     # bare "mistral-large" spelling stays for the same reason as
     # "gemini-3.1-pro" above: it collides with a routing hand-row, so it
     # is not a catalog alias, and this map is its only path back.
-    **{
-        k: _MISTRAL_LARGE
-        for k in ("mistral-large", "mistral-large-2411", "mistralai/mistral-large")
-    },
-    **{
-        k: _MISTRAL_MEDIUM
-        for k in (
-            "mistral-medium",
-            "mistral-medium-3.1",
-            "mistralai/mistral-medium-3.1",
-            # NOTE: "codestral-latest" is deliberately absent here — it is a
-            # live Mistral SKU (see aragora/agents/api_agents/mistral.py),
-            # not a retired id. Its CLI/agent fallback comes from the
-            # family-aware last resort in
-            # aragora/agents/cli_agents.py::_get_fallback_agent /
-            # _family_frontier_openrouter_id (Mistral family -> the Mistral
-            # frontier's OpenRouter slug), not from this upgrade map.
-        )
-    },
+    **dict.fromkeys(
+        ("mistral-large", "mistral-large-2411", "mistralai/mistral-large"), _MISTRAL_LARGE
+    ),
+    **dict.fromkeys(
+        ("mistral-medium", "mistral-medium-3.1", "mistralai/mistral-medium-3.1"), _MISTRAL_MEDIUM
+    ),
     # OpenRouter-routed families
-    **{
-        k: _DEEPSEEK
-        for k in (
+    **dict.fromkeys(
+        (
             "deepseek-r1",
             "deepseek/deepseek-r1",
             "deepseek-v3",
@@ -306,17 +254,16 @@ UPGRADES: dict[str, str] = {
             "deepseek/deepseek-v4-pro",
             "deepseek-chat",
             "deepseek/deepseek-chat",
-            # Seeded agent id (scripts/seed_agents.py) and the v3.2 line.
             "deepseek-coder",
             "deepseek-v3.2",
-        )
-    },
+        ),
+        _DEEPSEEK,
+    ),
     # NOTE: "qwen3.8-max" and "qwen/qwen3.8-max" are deliberately absent —
     # Task 1 made both catalog aliases of the ACTIVE qwen3.8-2.4t-a95b row
     # (controller ruling 1).
-    **{
-        k: _QWEN
-        for k in (
+    **dict.fromkeys(
+        (
             "qwen3-max",
             "qwen/qwen3-max",
             "qwen3.5-plus-02-15",
@@ -326,11 +273,11 @@ UPGRADES: dict[str, str] = {
             "qwen3-coder",
             "qwen/qwen3-coder",
             "qwen-2.5-coder",
-        )
-    },
-    **{
-        k: _KIMI
-        for k in (
+        ),
+        _QWEN,
+    ),
+    **dict.fromkeys(
+        (
             "kimi-k2",
             "moonshotai/kimi-k2",
             "kimi-k2.5",
@@ -340,11 +287,11 @@ UPGRADES: dict[str, str] = {
             "kimi-k2-thinking",
             "moonshotai/kimi-k2-thinking",
             "moonshot-v1-8k",
-        )
-    },
-    **{
-        k: _META
-        for k in (
+        ),
+        _KIMI,
+    ),
+    **dict.fromkeys(
+        (
             "llama-3.3-70b",
             "meta-llama/llama-3.3-70b-instruct",
             "llama-4-maverick",
@@ -353,8 +300,9 @@ UPGRADES: dict[str, str] = {
             "meta-llama/llama-4-scout",
             "meta/muse-spark-1.1",
             "meta/muse-spark-1.2",
-        )
-    },
+        ),
+        _META,
+    ),
 }
 
 # Characters that make up a single model-id "token". A match must not be
