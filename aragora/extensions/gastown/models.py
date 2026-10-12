@@ -16,6 +16,8 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Literal
 import logging
 
+from aragora.worktree.hook_runner import Hook as Hook, HookType as HookType
+
 logger = logging.getLogger(__name__)
 
 
@@ -118,17 +120,6 @@ class ConvoyStatus(Enum):
             "failed": cls.BLOCKED,
             "cancelled": cls.CANCELLED,
         }.get(value, cls.PENDING)
-
-
-class HookType(Enum):
-    """Types of git hooks for persistence."""
-
-    PRE_COMMIT = "pre-commit"
-    POST_COMMIT = "post-commit"
-    PRE_PUSH = "pre-push"
-    POST_CHECKOUT = "post-checkout"
-    POST_MERGE = "post-merge"
-    PREPARE_COMMIT_MSG = "prepare-commit-msg"
 
 
 @dataclass
@@ -301,28 +292,6 @@ class Convoy:
     def convoy_metadata(self) -> dict[str, Any]:
         """Protocol: metadata dictionary."""
         return self.metadata
-
-
-@dataclass
-class Hook:
-    """
-    Git hook for persistent storage.
-
-    Hooks store agent state in git worktrees, enabling persistence
-    across sessions and disaster recovery.
-    """
-
-    id: str
-    rig_id: str
-    type: HookType
-    path: str
-    content: str = ""
-    enabled: bool = True
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    last_triggered: datetime | None = None
-    trigger_count: int = 0
-    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

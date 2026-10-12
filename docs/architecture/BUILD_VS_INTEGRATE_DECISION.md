@@ -87,7 +87,7 @@ Implementation approach:
 | Rigs | Workspace + Agent pool configuration |
 | Crew | User workspace membership |
 | Polecats | Ephemeral agents via Agent Fabric |
-| Hooks | `aragora/extensions/gastown/hooks.py` - Git worktree persistence |
+| Hooks | `aragora/worktree/hook_runner.py` - Git worktree persistence |
 | Convoys | `aragora/extensions/gastown/convoy.py` - Work tracking |
 | Beads | `aragora/extensions/gastown/ledger.py` - Issue ledger |
 
