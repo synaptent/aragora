@@ -379,3 +379,4 @@ import-and-call tests at both paths.
 | `aragora.export.decision_receipt:_load_weasyprint` | `aragora.models.receipts.legacy:_load_weasyprint` | #10590 | not before M4 seal |
 | `aragora.export.decision_receipt:generate_decision_receipt` | `aragora.models.receipts.legacy:generate_decision_receipt` | #10590 | not before M4 seal |
 | `aragora.export.decision_receipt:link_receipt_to_trail` | `aragora.models.receipts.legacy:link_receipt_to_trail` | #10590 | not before M4 seal |
+| `aragora.cli.review:extract_review_findings` | `aragora.review.diff_review:extract_review_findings` | #10599 | not before M4 seal |

@@ -88,7 +88,7 @@ class TestExtractReviewFindings:
         mock_result.final_answer = "Test summary"
         mock_result.messages = []
 
-        with patch("aragora.cli.review.DisagreementReporter") as MockReporter:
+        with patch("aragora.review.diff_review.DisagreementReporter") as MockReporter:
             mock_report = Mock()
             mock_report.unanimous_critiques = []
             mock_report.split_opinions = []
@@ -132,7 +132,7 @@ class TestExtractReviewFindings:
 
         mock_result.critiques = [critical_critique, low_critique]
 
-        with patch("aragora.cli.review.DisagreementReporter") as MockReporter:
+        with patch("aragora.review.diff_review.DisagreementReporter") as MockReporter:
             mock_report = Mock()
             mock_report.unanimous_critiques = []
             mock_report.split_opinions = []
@@ -165,7 +165,7 @@ class TestExtractReviewFindings:
         ]
         mock_result.critiques = [meta_critique]
 
-        with patch("aragora.cli.review.DisagreementReporter") as MockReporter:
+        with patch("aragora.review.diff_review.DisagreementReporter") as MockReporter:
             mock_report = Mock()
             mock_report.unanimous_critiques = []
             mock_report.split_opinions = []
@@ -194,7 +194,7 @@ class TestExtractReviewFindings:
         meta_critique.suggestions = []
         mock_result.critiques = [meta_critique]
 
-        with patch("aragora.cli.review.DisagreementReporter") as MockReporter:
+        with patch("aragora.review.diff_review.DisagreementReporter") as MockReporter:
             mock_report = Mock()
             mock_report.unanimous_critiques = []
             mock_report.split_opinions = []
@@ -230,7 +230,7 @@ class TestExtractReviewFindings:
         ]
         mock_result.critiques = [meta_critique]
 
-        with patch("aragora.cli.review.DisagreementReporter") as MockReporter:
+        with patch("aragora.review.diff_review.DisagreementReporter") as MockReporter:
             mock_report = Mock()
             mock_report.unanimous_critiques = []
             mock_report.split_opinions = []
@@ -262,7 +262,7 @@ class TestExtractReviewFindings:
         meta_critique.suggestions = []
         mock_result.critiques = [meta_critique]
 
-        with patch("aragora.cli.review.DisagreementReporter") as MockReporter:
+        with patch("aragora.review.diff_review.DisagreementReporter") as MockReporter:
             mock_report = Mock()
             mock_report.unanimous_critiques = []
             mock_report.split_opinions = []
@@ -294,7 +294,7 @@ class TestExtractReviewFindings:
         meta_critique.suggestions = []
         mock_result.critiques = [meta_critique]
 
-        with patch("aragora.cli.review.DisagreementReporter") as MockReporter:
+        with patch("aragora.review.diff_review.DisagreementReporter") as MockReporter:
             mock_report = Mock()
             mock_report.unanimous_critiques = []
             mock_report.split_opinions = []
@@ -325,7 +325,7 @@ class TestExtractReviewFindings:
         meta_critique.suggestions = []
         mock_result.critiques = [meta_critique]
 
-        with patch("aragora.cli.review.DisagreementReporter") as MockReporter:
+        with patch("aragora.review.diff_review.DisagreementReporter") as MockReporter:
             mock_report = Mock()
             mock_report.unanimous_critiques = []
             mock_report.split_opinions = []
