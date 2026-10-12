@@ -63,6 +63,23 @@ from aragora.cli.commands.review_queue_transport import (
     _merge_packet_transport_blocked_envelope_with_rest_fallback,
     _queue_conductor_transport_blocked_envelope,
 )
+from aragora.review.settlement_receipt import SettlementReceipt
+
+__all__ = [
+    "AutoHandleCalibrationStore",
+    "ModelReviewIdentity",
+    "QueueItem",
+    "RecordedSettlementResult",
+    "ReviewPacket",
+    "SettlementReceipt",
+    "add_review_queue_parser",
+    "cmd_review_queue",
+    "default_pr_review_protocol",
+    "post_merge_lane_audit_failed",
+    "post_merge_lane_audit_failure_reason",
+    "resolve_repo_root",
+    "run_post_merge_lane_audit",
+]
 
 if TYPE_CHECKING:
     from aragora.review.invalidation import BaselineMeasurement, ThresholdProposal
@@ -260,7 +277,7 @@ CONTRACT_DRIFT_AUTHORITY_POLICY_VERSION = 1
 CONTRACT_DRIFT_AUTHORITY_TIER = 4
 # fmt: off
 CONTRACT_DRIFT_AUTHORITY_PREFIXES: tuple[str, ...] = ("scripts/check_contract_drift_ratchet.py", "scripts/generate_contract_drift_inventory.py", "scripts/baselines/contract_drift_inventory.json", "scripts/sdk_path_normalize.py", "scripts/baselines/internal_route_prefixes.json", "scripts/baselines/contract_drift_program.json", "scripts/check_sdk_parity.py", "scripts/validate_openapi_routes.py")
-CONTRACT_DRIFT_AUTHORITY_DEPENDENCY_PREFIXES: tuple[str, ...] = (".github/actions/pr-scope-classifier/action.yml", ".github/actions/setup-python-safe/action.yml", "aragora/__init__.py", "aragora/__main__.py", "aragora/__version__.py", "aragora/cli/__init__.py", "aragora/cli/_mission_parser.py", "aragora/cli/api_keys.py", "aragora/cli/commands/__init__.py", "aragora/cli/commands/review_queue_comment_verdicts.py", "aragora/cli/commands/review_queue_parsers.py", "aragora/cli/commands/review_queue_render.py", "aragora/cli/commands/review_queue_rest_fallback.py", "aragora/cli/commands/review_queue_transport.py", "aragora/cli/commands/review_queue_unstable.py", "aragora/cli/doctor.py", "aragora/cli/main.py", "aragora/compliance/__init__.py", "aragora/compliance/artifact_generator.py", "aragora/compliance/data_classification.py", "aragora/compliance/eu_ai_act.py", "aragora/compliance/framework.py", "aragora/compliance/monitor.py", "aragora/compliance/phi_detectors.py", "aragora/config/__init__.py", "aragora/config/distributed.py", "aragora/config/env_helpers.py", "aragora/config/feature_flags.py", "aragora/config/provider_readiness.py", "aragora/config/secrets.py", "aragora/config/settings.py", "aragora/config/stability.py", "aragora/config/timeouts.py", "aragora/config/validator.py", "aragora/connectors/__init__.py", "aragora/connectors/exceptions.py", "aragora/exceptions.py", "aragora/modes/__init__.py", "aragora/modes/base.py", "aragora/modes/builtin/__init__.py", "aragora/modes/builtin/architect.py", "aragora/modes/builtin/coder.py", "aragora/modes/builtin/debugger.py", "aragora/modes/builtin/epistemic_hygiene.py", "aragora/modes/builtin/orchestrator.py", "aragora/modes/builtin/reviewer.py", "aragora/modes/custom.py", "aragora/modes/handoff.py", "aragora/modes/tool_groups.py", "aragora/server/__init__.py", "aragora/server/startup/__init__.py", "aragora/server/startup/background.py", "aragora/server/startup/billing.py", "aragora/server/startup/control_plane.py", "aragora/server/startup/database.py", "aragora/server/startup/dr_drilling.py", "aragora/server/startup/event_subscribers.py", "aragora/server/startup/health_check.py", "aragora/server/startup/knowledge_mound.py", "aragora/server/startup/observability.py", "aragora/server/startup/parallel.py", "aragora/server/startup/redis.py", "aragora/server/startup/security.py", "aragora/server/startup/validation.py", "aragora/server/startup/validation_runner.py", "aragora/server/startup/workers.py", "aragora/server/webhook_store_registration.py", "aragora/swarm/__init__.py", "aragora/swarm/github_app_auth.py", "aragora/swarm/merge_quorum_io.py", "aragora/swarm/merge_quorum_reconcile.py", "scripts/__init__.py", "scripts/add_openapi_descriptions.py", "scripts/add_openapi_operation_ids.py", "scripts/add_openapi_param_descriptions.py", "scripts/audit_openapi_docs.py", "scripts/audit_test_skips.py", "scripts/build_contract_drift_historical_backfill.py", "scripts/capability_gap_report.py", "scripts/check_capability_matrix_sync.py", "scripts/check_cross_sdk_parity.py", "scripts/check_pentest_findings.py", "scripts/check_portability.py", "scripts/check_sdk_namespace_parity.py", "scripts/check_test_dependencies.py", "scripts/check_version_alignment.py", "scripts/ci_install_project.sh", "scripts/classification_scan.py", "scripts/contract_drift_report.py", "scripts/export_openapi.py", "scripts/generate_api_docs.py", "scripts/generate_capability_matrix.py", "scripts/generate_contract_drift_backlog.py", "scripts/generate_contract_drift_issue_plan.py", "scripts/generate_openapi.py", "scripts/generate_python_sdk_types.py", "scripts/generate_sdk_types.py", "scripts/gh_app_env.py", "scripts/guard_repo_clean.py", "scripts/openapi_release_envelope.py", "scripts/pre_release_check.py", "scripts/reconcile_status_docs.py", "scripts/run_pip_audit_gate.py", "scripts/smoke_test.py", "scripts/tier4_merge_train.py", "scripts/verify_sdk_contracts.py")
+CONTRACT_DRIFT_AUTHORITY_DEPENDENCY_PREFIXES: tuple[str, ...] = (".github/actions/pr-scope-classifier/action.yml", ".github/actions/setup-python-safe/action.yml", "aragora/__init__.py", "aragora/__main__.py", "aragora/__version__.py", "aragora/cli/__init__.py", "aragora/cli/_mission_parser.py", "aragora/cli/api_keys.py", "aragora/cli/commands/__init__.py", "aragora/cli/commands/review_queue_comment_verdicts.py", "aragora/cli/commands/review_queue_parsers.py", "aragora/cli/commands/review_queue_render.py", "aragora/cli/commands/review_queue_rest_fallback.py", "aragora/cli/commands/review_queue_transport.py", "aragora/cli/commands/review_queue_unstable.py", "aragora/cli/doctor.py", "aragora/cli/main.py", "aragora/compliance/__init__.py", "aragora/compliance/artifact_generator.py", "aragora/compliance/data_classification.py", "aragora/compliance/eu_ai_act.py", "aragora/compliance/framework.py", "aragora/compliance/monitor.py", "aragora/compliance/phi_detectors.py", "aragora/config/__init__.py", "aragora/config/distributed.py", "aragora/config/env_helpers.py", "aragora/config/feature_flags.py", "aragora/config/provider_readiness.py", "aragora/config/secrets.py", "aragora/config/settings.py", "aragora/config/stability.py", "aragora/config/timeouts.py", "aragora/config/validator.py", "aragora/connectors/__init__.py", "aragora/connectors/exceptions.py", "aragora/exceptions.py", "aragora/modes/__init__.py", "aragora/modes/base.py", "aragora/modes/builtin/__init__.py", "aragora/modes/builtin/architect.py", "aragora/modes/builtin/coder.py", "aragora/modes/builtin/debugger.py", "aragora/modes/builtin/epistemic_hygiene.py", "aragora/modes/builtin/orchestrator.py", "aragora/modes/builtin/reviewer.py", "aragora/modes/custom.py", "aragora/modes/handoff.py", "aragora/modes/tool_groups.py", "aragora/review/__init__.py", "aragora/review/comment_verdicts.py", "aragora/review/github_transport.py", "aragora/review/settlement_receipt.py", "aragora/server/__init__.py", "aragora/server/startup/__init__.py", "aragora/server/startup/background.py", "aragora/server/startup/billing.py", "aragora/server/startup/control_plane.py", "aragora/server/startup/database.py", "aragora/server/startup/dr_drilling.py", "aragora/server/startup/event_subscribers.py", "aragora/server/startup/health_check.py", "aragora/server/startup/knowledge_mound.py", "aragora/server/startup/observability.py", "aragora/server/startup/parallel.py", "aragora/server/startup/redis.py", "aragora/server/startup/security.py", "aragora/server/startup/validation.py", "aragora/server/startup/validation_runner.py", "aragora/server/startup/workers.py", "aragora/server/webhook_store_registration.py", "aragora/swarm/__init__.py", "aragora/swarm/github_app_auth.py", "aragora/swarm/merge_quorum_io.py", "aragora/swarm/merge_quorum_reconcile.py", "scripts/__init__.py", "scripts/add_openapi_descriptions.py", "scripts/add_openapi_operation_ids.py", "scripts/add_openapi_param_descriptions.py", "scripts/audit_openapi_docs.py", "scripts/audit_test_skips.py", "scripts/build_contract_drift_historical_backfill.py", "scripts/capability_gap_report.py", "scripts/check_capability_matrix_sync.py", "scripts/check_cross_sdk_parity.py", "scripts/check_pentest_findings.py", "scripts/check_portability.py", "scripts/check_sdk_namespace_parity.py", "scripts/check_test_dependencies.py", "scripts/check_version_alignment.py", "scripts/ci_install_project.sh", "scripts/classification_scan.py", "scripts/contract_drift_report.py", "scripts/export_openapi.py", "scripts/generate_api_docs.py", "scripts/generate_capability_matrix.py", "scripts/generate_contract_drift_backlog.py", "scripts/generate_contract_drift_issue_plan.py", "scripts/generate_openapi.py", "scripts/generate_python_sdk_types.py", "scripts/generate_sdk_types.py", "scripts/gh_app_env.py", "scripts/guard_repo_clean.py", "scripts/openapi_release_envelope.py", "scripts/pre_release_check.py", "scripts/reconcile_status_docs.py", "scripts/run_pip_audit_gate.py", "scripts/smoke_test.py", "scripts/tier4_merge_train.py", "scripts/verify_sdk_contracts.py")
 TIER_4_PREFIXES: tuple[str, ...] = (
     ".github/workflows/",
     "deploy/",
@@ -427,65 +444,6 @@ class ReviewPacket:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
-
-
-@dataclass(slots=True)
-class SettlementReceipt:
-    """Persisted human settlement receipt for one PR/head/packet tuple.
-
-    The five ``outcome_*`` fields are optional post-settlement signals that
-    correspond exactly to the canonical invalidation labels in
-    :data:`aragora.review.invalidation.INVALIDATION_SIGNALS`. They default to
-    ``None`` (= "signal not yet observed") to preserve backward compatibility
-    with receipts written before #6375 phase 4. When ``observe_outcome`` (in
-    :mod:`aragora.review.settlement_outcome`) populates these, downstream
-    consumers like :mod:`aragora.review.invalidation_event_source` can finally
-    classify the human side of the baseline (closing the
-    ``schema_gap_human_numerator`` note that #6898 surfaces).
-
-    Semantics:
-      - All five ``None`` → receipt is denominator-only (counted in
-        ``total_human_settled`` but not in invalidation numerator).
-      - Any one ``True`` → receipt is invalidated, all firing signals
-        contribute to the numerator.
-      - All five ``False`` → receipt is a clean human-settled non-invalidation
-        (still denominator, explicitly not numerator).
-
-    ``outcome_observed_at`` is the ISO 8601 UTC timestamp at which the
-    observation was recorded (separate from ``reviewed_at`` which is the
-    settlement time). ``None`` iff none of the five outcome fields have been
-    observed yet.
-    """
-
-    session_id: str
-    reviewed_at: str
-    actor: str
-    action: str
-    reason: str
-    pr_number: int
-    pr_url: str
-    head_sha: str
-    base_sha: str
-    packet_sha: str
-    queue_bucket: str
-    machine_recommendation: str
-    github_event: str
-    elapsed_seconds: float | None = None
-    receipt_path: str = ""
-    # Post-settlement outcome signals (#6375 phase 4). None == not yet observed.
-    outcome_revert_within_window: bool | None = None
-    outcome_post_merge_incident: bool | None = None
-    outcome_human_override_redo: bool | None = None
-    outcome_rollback: bool | None = None
-    outcome_reopened_pr: bool | None = None
-    outcome_observed_at: str | None = None
-    post_merge_lane_audit: dict[str, Any] | None = None
-
-    def to_dict(self) -> dict[str, Any]:
-        payload = asdict(self)
-        if payload.get("post_merge_lane_audit") is None:
-            payload.pop("post_merge_lane_audit", None)
-        return payload
 
 
 @dataclass(slots=True)
