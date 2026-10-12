@@ -129,7 +129,7 @@ class NodeHandler(NodeOperationsMixin):
     def __init__(self, mound: MockKnowledgeMound | None = None, user: MockUser | None = None):
         self._mound = mound
         self._user = user or MockUser()
-        self.ctx = {}
+        self.ctx: dict[str, Any] = {}
 
     def _get_mound(self):
         return self._mound
@@ -326,6 +326,46 @@ class TestCreateNode:
         result = handler_no_mound._handle_create_node(http_handler)
 
         assert result.status_code == 503
+
+    def test_caller_supplied_org_id_in_metadata_is_not_stored(self, tmp_path):
+        """The organization stamp the knowledge readers filter on cannot be planted here."""
+        import asyncio
+
+        from aragora.knowledge.mound import KnowledgeMound, MoundBackend, MoundConfig
+        from aragora.knowledge.pipeline import mound_items_for_org
+
+        config = MoundConfig(backend=MoundBackend.SQLITE, sqlite_path=str(tmp_path / "mound.db"))
+        mound = KnowledgeMound(config=config, workspace_id="research")
+        asyncio.run(mound.initialize())
+        mound._semantic_store = None
+        created: list[str] = []
+        add_node = mound.add_node
+
+        async def _recording_add_node(node):
+            created.append(await add_node(node))
+            return created[-1]
+
+        mound.add_node = _recording_add_node
+        try:
+            body = {
+                "content": "planted note",
+                "workspace_id": "research",
+                "metadata": {"org_id": "victim-org"},
+            }
+            # The response status is not asserted: serializing the facade's
+            # NodeProxy reply fails after the node is already stored.
+            NodeHandler(mound=mound)._handle_create_node(
+                MockHandler(body=json.dumps(body).encode())
+            )
+
+            assert len(created) == 1
+            stored = asyncio.run(mound.get(created[0]))
+            assert stored is not None and stored.content == "planted note"
+            assert stored.metadata.get("node_type") == "fact"
+            assert "org_id" not in stored.metadata
+            assert mound_items_for_org([stored], "victim-org") == []
+        finally:
+            asyncio.run(mound.close())
 
 
 # =============================================================================

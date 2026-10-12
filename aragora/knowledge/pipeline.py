@@ -53,7 +53,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
-from collections.abc import Callable, Iterable
+from collections.abc import Awaitable, Callable, Iterable
 
 if TYPE_CHECKING:
     pass
@@ -143,6 +143,39 @@ def mound_items_for_org(items: Iterable[Any], org_id: str | None) -> list[Any]:
     if unstamped:
         logger.info("withheld %d Knowledge Mound item(s) without an organization stamp", unstamped)
     return scoped
+
+
+# Most items one organization-scoped Mound read examines (the Mound's default
+# per-query cap, MoundConfig.max_query_limit), unless ``limit`` itself is larger.
+MOUND_ORG_SCAN_LIMIT = 100
+
+
+def mound_read_sizes(limit: int) -> list[int]:
+    """Read sizes for one organization-scoped Knowledge Mound read.
+
+    The Mound applies its limit before mound_items_for_org filters, so other
+    organizations' items in a shared workspace can crowd out the caller's. A
+    read that keeps fewer than ``limit`` items is repeated four times larger,
+    up to MOUND_ORG_SCAN_LIMIT, while the Mound keeps returning full pages.
+    """
+    bound = max(limit, MOUND_ORG_SCAN_LIMIT)
+    sizes = [max(limit, 1)]
+    while sizes[-1] < bound:
+        sizes.append(min(sizes[-1] * 4, bound))
+    return sizes
+
+
+async def read_mound_for_org(
+    fetch: Callable[[int], Awaitable[list[Any]]], org_id: str | None, limit: int
+) -> list[Any]:
+    """Up to ``limit`` of ``org_id``'s items, fetching ``fetch(size)`` per mound_read_sizes."""
+    kept: list[Any] = []
+    for size in mound_read_sizes(limit):
+        items = list(await fetch(size) or [])
+        kept = mound_items_for_org(items, org_id)
+        if len(kept) >= limit or len(items) < size:
+            break
+    return kept[:limit]
 
 
 @dataclass
@@ -1030,13 +1063,16 @@ Include dates, numbers, names, and specific claims where possible."""
         # Augment with Knowledge Mound results if available
         if use_mound and self._knowledge_mound and MOUND_AVAILABLE:
             org_id = self._mound_org()
-            try:
-                mound_result = await self._knowledge_mound.query(
-                    query=question,
-                    workspace_id=self.config.workspace_id,
-                    limit=10,
+            mound = self._knowledge_mound
+
+            async def _fetch(size: int) -> list[Any]:
+                found = await mound.query(
+                    query=question, workspace_id=self.config.workspace_id, limit=size
                 )
-                mound_items = mound_items_for_org(mound_result.items, org_id)
+                return found.items
+
+            try:
+                mound_items = await read_mound_for_org(_fetch, org_id, 10)
                 # Merge mound results into the answer context
                 if mound_items and hasattr(result, "context"):
                     mound_context = "\n".join(
@@ -1081,14 +1117,23 @@ Include dates, numbers, names, and specific claims where possible."""
             return None
 
         org_id = self._mound_org()
-        result = await self._knowledge_mound.query(
-            query=query,
-            workspace_id=self.config.workspace_id,
-            sources=sources or ["all"],
-            limit=limit,
-        )
-        result.items = mound_items_for_org(result.items, org_id)
-        result.total_count = len(result.items)
+        mound = self._knowledge_mound
+        last: list[Any] = []
+
+        async def _fetch(size: int) -> list[Any]:
+            found = await mound.query(
+                query=query,
+                workspace_id=self.config.workspace_id,
+                sources=sources or ["all"],
+                limit=size,
+            )
+            last[:] = [found]
+            return found.items
+
+        items = await read_mound_for_org(_fetch, org_id, limit)
+        result = last[0]
+        result.items = items
+        result.total_count = len(items)
         return result
 
     async def search(

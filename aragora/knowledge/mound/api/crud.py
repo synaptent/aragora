@@ -18,7 +18,6 @@ comments suppress mypy warnings that are expected for this mixin pattern.
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import uuid
 from collections.abc import Generator
@@ -61,6 +60,7 @@ except ImportError:
     TRACING_AVAILABLE = False
 
 
+from aragora.knowledge.mound_types import ORG_STAMP_KEY, content_dedup_hash
 from aragora.knowledge.mound.validation import (
     ValidationError,
     validate_content,
@@ -198,9 +198,11 @@ class CRUDOperationsMixin(_CRUDMixinBase):
             node_id = f"kn_{uuid.uuid4().hex[:16]}"
             span.set_tag("node_id", node_id)
 
+            content_hash = content_dedup_hash(request.content, request.metadata)[:32]
+            org_stamp = request.metadata.get(ORG_STAMP_KEY) if request.metadata else None
+
             # Check for duplicates if enabled
             if self.config.enable_deduplication:
-                content_hash = hashlib.sha256(request.content.encode()).hexdigest()[:32]
                 existing = await self._find_by_content_hash(content_hash, request.workspace_id)
                 if existing:
                     # Update existing node
@@ -221,7 +223,7 @@ class CRUDOperationsMixin(_CRUDMixinBase):
                 "workspace_id": request.workspace_id,
                 "node_type": request.node_type,
                 "content": request.content,
-                "content_hash": hashlib.sha256(request.content.encode()).hexdigest()[:32],
+                "content_hash": content_hash,
                 "confidence": request.confidence,
                 "tier": request.tier,
                 "source_type": request.source_type.value,
@@ -249,6 +251,7 @@ class CRUDOperationsMixin(_CRUDMixinBase):
                         tenant_id=request.workspace_id,
                         domain=request.topics[0] if request.topics else "general",
                         importance=request.confidence,
+                        metadata={ORG_STAMP_KEY: org_stamp} if org_stamp else None,
                     )
                     span.add_event("semantic_indexed")
                 except (OSError, ConnectionError, TimeoutError, RuntimeError) as e:  # noqa: BLE001 - adapter isolation

@@ -37,6 +37,7 @@ from datetime import datetime
 from pathlib import Path
 
 from aragora.knowledge.mound.types import KnowledgeSource
+from aragora.knowledge.mound_types import content_dedup_hash
 from aragora.memory.embeddings import (
     EmbeddingProvider,
     OpenAIEmbedding,
@@ -263,7 +264,7 @@ class SemanticStore(SQLiteStore):
         )
 
         # Check for duplicate content
-        content_hash = hashlib.sha256(content.encode()).hexdigest()
+        content_hash = content_dedup_hash(content, metadata)
         existing_id = await self._find_by_hash(content_hash, tenant_id)
         if existing_id:
             # Update retrieval count as a proxy for importance

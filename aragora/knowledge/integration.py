@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import weakref
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
@@ -27,12 +28,14 @@ logger = logging.getLogger(__name__)
 # recency: get_pipeline re-inserts on every hit and, past _MAX_PIPELINES, drops
 # the least recently used pipeline (it is rebuilt on its next request). A dropped
 # pipeline that a caller of this module is still using is stopped only when that
-# last caller returns it.
+# last caller returns it. A pipeline get_pipeline ever returned is never stopped
+# on eviction: its callers have no way to return it.
 _pipelines: dict[tuple[str | None, str], KnowledgePipeline] = {}
 _MAX_PIPELINES = 64
 _pipeline_lock = asyncio.Lock()
 _borrowers: dict[int, int] = {}
 _evicted_in_use: dict[int, KnowledgePipeline] = {}
+_handed_out: weakref.WeakSet[KnowledgePipeline] = weakref.WeakSet()
 
 # Thread pool for running async code from sync context
 _executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="knowledge-")
@@ -89,8 +92,8 @@ async def get_pipeline(
             pipeline's fact reads and writes fail closed.
 
     Returns:
-        Initialized KnowledgePipeline. It is not tracked as in use, so a later
-        eviction may stop it; this module's own callers borrow it instead.
+        Initialized KnowledgePipeline. The bounded cache may later drop it, but
+        never stops it, so the caller can keep using it.
     """
     return await _checkout_pipeline(workspace_id, org_id, borrow=False)
 
@@ -117,9 +120,13 @@ async def _checkout_pipeline(
         _pipelines[key] = pipeline
         if borrow:
             _borrowers[id(pipeline)] = _borrowers.get(id(pipeline), 0) + 1
+        else:
+            _handed_out.add(pipeline)
 
         while len(_pipelines) > _MAX_PIPELINES:
             evicted = _pipelines.pop(next(iter(_pipelines)))
+            if evicted in _handed_out:
+                continue
             if _borrowers.get(id(evicted)):
                 _evicted_in_use[id(evicted)] = evicted
             else:

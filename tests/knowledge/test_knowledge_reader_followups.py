@@ -83,6 +83,32 @@ async def test_query_mound_uses_a_caller_built_scoped_store_organization() -> No
     assert [i.content for i in result.items] == ["beta payroll"]
 
 
+class _LimitedMound(_RecordingMound):
+    """Like the real Mound, returns at most ``limit`` items, before any org filter."""
+
+    async def query(self, **kwargs: Any) -> Any:
+        self.queries.append(kwargs)
+        items = self.items[: kwargs["limit"]]
+        return SimpleNamespace(items=items, total_count=len(items))
+
+
+async def test_query_mound_reads_past_other_organizations_items_up_to_a_bound() -> None:
+    crowd = [_item(f"beta note {n}", "beta") for n in range(5)]
+    own = [_item("acme roadmap", "acme"), _item("acme budget", "acme"), _item("acme plan", "acme")]
+    mound = _LimitedMound([*crowd, *own])
+    result = await _pipeline("acme", mound).query_mound("roadmap", limit=2)
+
+    assert [i.content for i in result.items] == ["acme roadmap", "acme budget"]
+    assert result.total_count == 2
+    assert [q["limit"] for q in mound.queries] == [2, 8]
+
+    crowded_out = _LimitedMound([_item(f"beta note {n}", "beta") for n in range(500)])
+    result = await _pipeline("acme", crowded_out).query_mound("roadmap", limit=2)
+
+    assert result.items == []
+    assert [q["limit"] for q in crowded_out.queries] == [2, 8, 32, 100]
+
+
 async def test_query_without_an_organization_never_reads_the_mound() -> None:
     mound = _RecordingMound(MIXED_ITEMS)
     with pytest.raises(OrgScopeRequiredError):
@@ -261,6 +287,11 @@ class _FakePipeline:
         self.running = False
 
 
+async def _use_pipeline(workspace_id: str, org_id: str) -> Any:
+    async with integration._borrowed_pipeline(workspace_id, org_id=org_id) as pipeline:
+        return pipeline
+
+
 async def test_pipeline_cache_is_bounded_and_stops_the_least_recently_used(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -270,15 +301,31 @@ async def test_pipeline_cache_is_bounded_and_stops_the_least_recently_used(
     monkeypatch.setattr(integration, "_should_use_weaviate", lambda: False)
     monkeypatch.setattr(integration, "_should_use_knowledge_mound", lambda: False)
 
-    first = await integration.get_pipeline("ws-1", org_id="acme")
-    second = await integration.get_pipeline("ws-2", org_id="acme")
-    assert await integration.get_pipeline("ws-1", org_id="acme") is first
-    third = await integration.get_pipeline("ws-1", org_id="beta")
+    first = await _use_pipeline("ws-1", "acme")
+    second = await _use_pipeline("ws-2", "acme")
+    assert await _use_pipeline("ws-1", "acme") is first
+    third = await _use_pipeline("ws-1", "beta")
 
     assert list(integration._pipelines) == [("acme", "ws-1"), ("beta", "ws-1")]
     assert integration._pipelines[("beta", "ws-1")] is third
     assert isinstance(second, _FakePipeline) and second.running is False
     assert isinstance(first, _FakePipeline) and first.running is True
+
+
+async def test_a_pipeline_returned_by_get_pipeline_is_never_stopped_by_eviction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(integration, "_pipelines", {})
+    monkeypatch.setattr(integration, "_MAX_PIPELINES", 1, raising=False)
+    monkeypatch.setattr(integration, "KnowledgePipeline", _FakePipeline)
+    monkeypatch.setattr(integration, "_should_use_weaviate", lambda: False)
+    monkeypatch.setattr(integration, "_should_use_knowledge_mound", lambda: False)
+
+    held = await integration.get_pipeline("ws-1", org_id="acme")
+    await _use_pipeline("ws-2", "acme")
+
+    assert list(integration._pipelines) == [("acme", "ws-2")]
+    assert isinstance(held, _FakePipeline) and held.running is True
 
 
 async def test_a_pipeline_evicted_while_processing_is_stopped_only_afterwards(
@@ -306,6 +353,54 @@ async def test_a_pipeline_evicted_while_processing_is_stopped_only_afterwards(
     assert running_during_processing == [True]
     assert busy[0].running is False
     assert list(integration._pipelines) == [("acme", "ws-2")]
+
+
+async def test_identical_content_from_two_organizations_keeps_one_stamped_copy_each(
+    tmp_path: Any,
+) -> None:
+    import hashlib
+
+    from aragora.knowledge.mound import IngestionRequest, KnowledgeMound, KnowledgeSource
+    from aragora.knowledge.mound import MoundBackend, MoundConfig
+    from aragora.knowledge.mound.semantic_store import SemanticStore
+    from aragora.memory.embeddings import EmbeddingProvider
+
+    class _HashEmbedding(EmbeddingProvider):
+        async def embed(self, text: str) -> list[float]:
+            digest = hashlib.sha256(text.encode()).digest()
+            return [byte / 255 for byte in digest[: self.dimension]]
+
+    config = MoundConfig(backend=MoundBackend.SQLITE, sqlite_path=str(tmp_path / "mound.db"))
+    mound = KnowledgeMound(config=config, workspace_id="research")  # type: ignore[abstract]
+    await mound.initialize()
+    mound._semantic_store = SemanticStore(
+        db_path=str(tmp_path / "semantic.db"),
+        embedding_provider=_HashEmbedding(dimension=16),
+        default_tenant_id="research",
+    )
+
+    def _request(org_id: str) -> Any:
+        return IngestionRequest(
+            content="shared roadmap",
+            source_type=KnowledgeSource.DOCUMENT,
+            workspace_id="research",
+            metadata={"org_id": org_id},
+        )
+
+    try:
+        acme = await mound.store(_request("acme"))
+        beta = await mound.store(_request("beta"))
+        acme_again = await mound.store(_request("acme"))
+
+        assert not beta.deduplicated and beta.node_id != acme.node_id
+        assert acme_again.deduplicated and acme_again.node_id == acme.node_id
+        for node_id, org_id in ((acme.node_id, "acme"), (beta.node_id, "beta")):
+            stored = await mound.get(node_id)
+            assert stored is not None and stored.metadata["org_id"] == org_id
+        hits = await mound._semantic_store.search_similar("shared roadmap", tenant_id="research")
+        assert sorted(hit.source_id for hit in hits) == sorted([acme.node_id, beta.node_id])
+    finally:
+        await mound.close()
 
 
 async def test_mound_items_for_org_reports_the_unstamped_items_it_withholds(
