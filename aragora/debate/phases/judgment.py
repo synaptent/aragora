@@ -84,14 +84,14 @@ class JudgmentPhase:
             return self._select_last()
 
         elif selection == "random":
-            return random.choice(self._require_agents())  # noqa: S311 -- non-security random selection
+            return random.choice(self._require_agents())
 
         elif selection == "voted":
             # Voting requires async - return None to signal caller should use async method
             if vote_for_judge_fn:
                 # This is a sync method, can't await
                 logger.warning("voted selection requires async; falling back to random")
-            return random.choice(self._require_agents())  # noqa: S311 -- non-security random selection
+            return random.choice(self._require_agents())
 
         elif selection == "elo_ranked":
             return self._select_elo_ranked()
@@ -100,7 +100,7 @@ class JudgmentPhase:
             return self._select_calibrated()
 
         # Default fallback
-        return random.choice(self._require_agents())  # noqa: S311 -- non-security random selection
+        return random.choice(self._require_agents())
 
     def _select_last(self) -> Agent:
         """Select synthesizer or last agent as judge."""
@@ -111,7 +111,7 @@ class JudgmentPhase:
         """Select highest ELO-rated agent as judge."""
         if not self.elo_system:
             logger.warning("elo_ranked judge selection requires elo_system; falling back to random")
-            return random.choice(self._require_agents())  # noqa: S311 -- non-security random selection
+            return random.choice(self._require_agents())
 
         agent_names = [a.name for a in self.agents]
 
@@ -128,13 +128,13 @@ class JudgmentPhase:
         except Exception as e:  # noqa: BLE001
             logger.warning("ELO query failed: %s; falling back to random", e)
 
-        return random.choice(self._require_agents())  # noqa: S311 -- non-security random selection
+        return random.choice(self._require_agents())
 
     def _select_calibrated(self) -> Agent:
         """Select based on composite score (ELO + calibration)."""
         if not self.elo_system:
             logger.warning("calibrated judge selection requires elo_system; falling back to random")
-            return random.choice(self._require_agents())  # noqa: S311 -- non-security random selection
+            return random.choice(self._require_agents())
 
         if not self._compute_composite_score:
             logger.warning(
@@ -156,7 +156,7 @@ class JudgmentPhase:
             logger.debug(f"Selected {best_agent.name} (composite: {best_score:.3f}) as judge")
             return best_agent
 
-        return random.choice(self._require_agents())  # noqa: S311 -- non-security random selection
+        return random.choice(self._require_agents())
 
     def should_terminate(
         self,

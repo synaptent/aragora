@@ -1096,7 +1096,8 @@ class DatabaseConsolidator:
 
             # Read source data
             col_list = ", ".join(available_columns)
-            cursor = source_conn.execute(f"SELECT {col_list} FROM {source_table}")  # noqa: S608 -- table/column name interpolation, parameterized
+            # table/column name interpolation, parameterized
+            cursor = source_conn.execute(f"SELECT {col_list} FROM {source_table}")
             rows = cursor.fetchall()
             stats.rows_read = len(rows)
 
@@ -1108,7 +1109,7 @@ class DatabaseConsolidator:
             insert_sql = f"""
                 INSERT OR IGNORE INTO {target_table} ({col_list})
                 VALUES ({placeholders})
-            """  # noqa: S608 -- table name interpolation, parameterized
+            """  # table name interpolation, parameterized
 
             for row in rows:
                 try:
@@ -1199,7 +1200,8 @@ class DatabaseConsolidator:
                     if dry_run:
                         # Just count rows for dry run
                         try:
-                            cursor = source_conn.execute(f"SELECT COUNT(*) FROM {source_table}")  # noqa: S608 -- table name interpolation, parameterized
+                            # table name interpolation, parameterized
+                            cursor = source_conn.execute(f"SELECT COUNT(*) FROM {source_table}")
                             count = cursor.fetchone()[0]
                             stats = MigrationStats(
                                 table_name=source_table,
@@ -1281,7 +1283,8 @@ class DatabaseConsolidator:
                     if table.startswith("_"):
                         continue
 
-                    cursor = conn.execute(f"SELECT COUNT(*) FROM {table}")  # noqa: S608 -- table name interpolation, parameterized
+                    # table name interpolation, parameterized
+                    cursor = conn.execute(f"SELECT COUNT(*) FROM {table}")
                     count = cursor.fetchone()[0]
                     db_tables[table] = count
 

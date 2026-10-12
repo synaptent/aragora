@@ -155,7 +155,7 @@ class DispatchMixin:
 
             # Apply sampling
             sample_rate = self._stats[name].sample_rate if name in self._stats else 1.0
-            if sample_rate < 1.0 and random.random() > sample_rate:  # noqa: S311 -- probabilistic sampling
+            if sample_rate < 1.0 and random.random() > sample_rate:
                 if name in self._stats:
                     self._stats[name].events_skipped += 1
                 continue

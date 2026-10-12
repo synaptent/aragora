@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 # Try to import required libraries
 try:
-    import httpx  # type: ignore[import-not-found]  # noqa: F401 - used for availability check and in download_file
+    import httpx  # type: ignore[import-not-found]  # used for availability check and in download_file
 
     HTTPX_AVAILABLE = True
 except ImportError:

@@ -294,7 +294,7 @@ class DatabaseBatchJobStore(BatchJobStore):
                 options_json=excluded.options_json,
                 error=excluded.error,
                 expires_at=excluded.expires_at
-            """,  # noqa: S608 -- table name interpolation, parameterized
+            """,  # table name interpolation, parameterized
             (
                 job.batch_id,
                 job.status,
@@ -327,7 +327,7 @@ class DatabaseBatchJobStore(BatchJobStore):
                 expires_at
             FROM {self._TABLE_NAME}
             WHERE batch_id = ?
-            """,  # noqa: S608 -- table name interpolation, parameterized
+            """,  # table name interpolation, parameterized
             (batch_id,),
         )
         if not row:
@@ -342,7 +342,8 @@ class DatabaseBatchJobStore(BatchJobStore):
 
         if self._is_expired(expires_at):
             self._backend.execute_write(
-                f"DELETE FROM {self._TABLE_NAME} WHERE batch_id = ?",  # noqa: S608 -- table name interpolation, parameterized
+                # table name interpolation, parameterized
+                f"DELETE FROM {self._TABLE_NAME} WHERE batch_id = ?",
                 (batch_id,),
             )
             return None
@@ -351,7 +352,8 @@ class DatabaseBatchJobStore(BatchJobStore):
 
     async def delete_job(self, batch_id: str) -> bool:
         self._backend.execute_write(
-            f"DELETE FROM {self._TABLE_NAME} WHERE batch_id = ?",  # noqa: S608 -- table name interpolation, parameterized
+            # table name interpolation, parameterized
+            f"DELETE FROM {self._TABLE_NAME} WHERE batch_id = ?",
             (batch_id,),
         )
         return True
@@ -383,7 +385,7 @@ class DatabaseBatchJobStore(BatchJobStore):
             {where_clause}
             ORDER BY created_at DESC
             LIMIT ?
-            """,  # noqa: S608 -- table name interpolation, parameterized
+            """,  # table name interpolation, parameterized
             tuple(params + [limit]),
         )
 
@@ -400,7 +402,8 @@ class DatabaseBatchJobStore(BatchJobStore):
             if self._is_expired(row_expires_at):
                 try:
                     self._backend.execute_write(
-                        f"DELETE FROM {self._TABLE_NAME} WHERE batch_id = ?",  # noqa: S608 -- table name interpolation, parameterized
+                        # table name interpolation, parameterized
+                        f"DELETE FROM {self._TABLE_NAME} WHERE batch_id = ?",
                         (row_batch_id,),
                     )
                 except (OSError, RuntimeError, ValueError) as e:

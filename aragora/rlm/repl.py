@@ -635,7 +635,7 @@ class RLMEnvironment:
 
         try:
             with redirect_stdout(stdout_capture), redirect_stderr(stdout_capture):
-                exec(code, {"__builtins__": {}}, self.state.namespace)  # nosec B102 # noqa: S102 - Sandboxed REPL with AST validation
+                exec(code, {"__builtins__": {}}, self.state.namespace)  # nosec B102  # Sandboxed REPL with AST validation
         except SecurityError as e:
             return f"SecurityError: {e}", False
         except Exception as e:  # noqa: BLE001 - sandboxed REPL must catch all user code errors

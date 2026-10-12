@@ -15,11 +15,11 @@ Routes:
 Phase Y: Connector Consolidation.
 """
 
-from .management import ConnectorManagementHandler  # noqa: F401
-from .shared import _scheduler, get_scheduler  # noqa: F401
+from .management import ConnectorManagementHandler
+from .shared import _scheduler, get_scheduler
 
 # Re-export legacy handler functions for backward compatibility
-from .legacy import (  # noqa: F401
+from .legacy import (
     RBAC_AVAILABLE,
     check_permission,  # re-export for test patching
     _check_permission,
@@ -45,7 +45,7 @@ from .legacy import (  # noqa: F401
 )
 
 # Re-export audit functions for test patching
-from aragora.audit.unified import audit_data, audit_admin  # noqa: F401
+from aragora.audit.unified import audit_data, audit_admin
 
 __all__ = [
     "ConnectorManagementHandler",

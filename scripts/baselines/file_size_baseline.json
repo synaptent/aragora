@@ -14,7 +14,6 @@
     "aragora/debate/phases/feedback_phase.py": 2033,
     "aragora/gauntlet/receipt_models.py": 2344,
     "aragora/nomic/autonomous_orchestrator.py": 2944,
-    "aragora/nomic/dev_coordination/core.py": 3378,
     "aragora/nomic/dev_receipts.py": 3262,
     "aragora/nomic/meta_planner.py": 2563,
     "aragora/nomic/task_decomposer.py": 2879,
@@ -26,8 +25,6 @@
     "aragora/server/handlers/social/slack_oauth.py": 2075,
     "aragora/swarm/boss_loop.py": 5178,
     "aragora/swarm/campaign.py": 2944,
-    "aragora/swarm/reporter.py": 2988,
-    "aragora/swarm/supervisor.py": 3314,
     "aragora/swarm/tranche_queue.py": 3228,
     "aragora/swarm/worker_launcher.py": 2649
   }

@@ -39,7 +39,7 @@ def _has_tool(name: str) -> bool:
 def _run_cmd(cmd: list[str], cwd: str | None = None, timeout: int = 60) -> tuple[bool, str]:
     """Run a command, return (success, output)."""
     try:
-        result = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
+        result = subprocess.run(  # subprocess with fixed args, no shell
             cmd,
             capture_output=True,
             text=True,

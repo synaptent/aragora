@@ -674,7 +674,7 @@ class ConsensusHandler(BaseHandler):
                 {where_clause}
                 ORDER BY d.timestamp DESC
                 LIMIT ?
-            """  # noqa: S608 -- dynamic clause from internal state
+            """  # dynamic clause from internal state
             params.append(limit)
             cursor.execute(query, tuple(params))
             rows = cursor.fetchall()

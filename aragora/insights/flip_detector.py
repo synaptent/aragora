@@ -493,7 +493,8 @@ class FlipDetector:
         with self.db.connection() as conn:
             # Batch query 1: Count positions per agent
             cursor = conn.execute(
-                f"SELECT agent_name, COUNT(*) FROM positions WHERE agent_name IN ({placeholders}) GROUP BY agent_name",  # noqa: S608 -- parameterized query
+                # parameterized query
+                f"SELECT agent_name, COUNT(*) FROM positions WHERE agent_name IN ({placeholders}) GROUP BY agent_name",
                 agent_names,
             )
             positions_map: dict[str, int] = {row[0]: row[1] for row in cursor.fetchall()}
@@ -505,7 +506,7 @@ class FlipDetector:
                 FROM detected_flips
                 WHERE agent_name IN ({placeholders})
                 GROUP BY agent_name, flip_type
-                """,  # noqa: S608 -- parameterized query
+                """,  # parameterized query
                 agent_names,
             )
             flip_stats: dict[str, dict[str, Any]] = {}
@@ -522,7 +523,7 @@ class FlipDetector:
                 f"""
                 SELECT agent_name, domain FROM detected_flips
                 WHERE agent_name IN ({placeholders}) AND domain IS NOT NULL
-                """,  # noqa: S608 -- parameterized query
+                """,  # parameterized query
                 agent_names,
             )
             domains_map: dict[str, set[str]] = {}

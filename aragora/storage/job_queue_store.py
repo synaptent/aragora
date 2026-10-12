@@ -367,7 +367,7 @@ class SQLiteJobStore(JobStoreBackend):
                 WHERE status = 'pending' AND job_type IN ({placeholders})
                 ORDER BY priority DESC, created_at ASC
                 LIMIT 1
-            """  # noqa: S608 -- parameterized query
+            """  # parameterized query
             cursor = conn.execute(query, job_types)
         else:
             cursor = conn.execute(
@@ -566,7 +566,7 @@ class SQLiteJobStore(JobStoreBackend):
                        worker_id, error, result_json, user_id, workspace_id
                 FROM job_queue {where_clause}
                 ORDER BY created_at DESC
-                LIMIT ?""",  # noqa: S608 -- dynamic clause from internal state
+                LIMIT ?""",  # dynamic clause from internal state
             params,
         )
         return [QueuedJob.from_row(row) for row in cursor.fetchall()]
@@ -711,7 +711,7 @@ class PostgresJobQueueStore(JobStoreBackend):
                                  EXTRACT(EPOCH FROM started_at) as started_at,
                                  EXTRACT(EPOCH FROM completed_at) as completed_at,
                                  attempts, max_attempts, worker_id, error, result_json,
-                                 user_id, workspace_id""",  # noqa: S608 -- parameterized query
+                                 user_id, workspace_id""",  # parameterized query
                     worker_id,
                     *job_types,
                 )

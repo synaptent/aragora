@@ -170,7 +170,8 @@ class MigrationTracker:
         """
         self._ensure_table()
         result = self._backend.fetch_one(
-            f"SELECT 1 FROM {self.TABLE_NAME} WHERE version = ?",  # noqa: S608 -- table name interpolation, parameterized
+            # table name interpolation, parameterized
+            f"SELECT 1 FROM {self.TABLE_NAME} WHERE version = ?",
             (version,),
         )
         return result is not None
@@ -206,7 +207,7 @@ class MigrationTracker:
             INSERT INTO {self.TABLE_NAME}
                 (version, name, applied_by, checksum, rollback_sql)
             VALUES (?, ?, ?, ?, ?)
-            """,  # noqa: S608 -- table name interpolation, parameterized
+            """,  # table name interpolation, parameterized
             (version, name, applied_by, checksum, rollback_sql),
         )
         logger.info("Marked migration %s (%s) as applied", version, name)
@@ -227,7 +228,8 @@ class MigrationTracker:
             raise ValueError(f"Migration {version} is not applied")
 
         self._backend.execute_write(
-            f"DELETE FROM {self.TABLE_NAME} WHERE version = ?",  # noqa: S608 -- table name interpolation, parameterized
+            # table name interpolation, parameterized
+            f"DELETE FROM {self.TABLE_NAME} WHERE version = ?",
             (version,),
         )
         logger.info("Marked migration %s as rolled back", version)
@@ -241,7 +243,8 @@ class MigrationTracker:
         """
         self._ensure_table()
         rows = self._backend.fetch_all(
-            f"SELECT version FROM {self.TABLE_NAME} ORDER BY applied_at ASC"  # noqa: S608 -- table name interpolation, parameterized
+            # table name interpolation, parameterized
+            f"SELECT version FROM {self.TABLE_NAME} ORDER BY applied_at ASC"
         )
         return [row[0] for row in rows]
 
@@ -258,7 +261,7 @@ class MigrationTracker:
             SELECT version, name, applied_at, applied_by, checksum, rollback_sql
             FROM {self.TABLE_NAME}
             ORDER BY applied_at ASC
-            """  # noqa: S608 -- table name interpolation, parameterized
+            """  # table name interpolation, parameterized
         )
         return [
             AppliedMigration(
@@ -306,7 +309,7 @@ class MigrationTracker:
             SELECT version, name, applied_at, applied_by, checksum, rollback_sql
             FROM {self.TABLE_NAME}
             WHERE version = ?
-            """,  # noqa: S608 -- table name interpolation, parameterized
+            """,  # table name interpolation, parameterized
             (version,),
         )
         if not row:
@@ -337,7 +340,8 @@ class MigrationTracker:
         """
         self._ensure_table()
         row = self._backend.fetch_one(
-            f"SELECT rollback_sql FROM {self.TABLE_NAME} WHERE version = ?",  # noqa: S608 -- table name interpolation, parameterized
+            # table name interpolation, parameterized
+            f"SELECT rollback_sql FROM {self.TABLE_NAME} WHERE version = ?",
             (version,),
         )
         return row[0] if row else None
@@ -357,7 +361,8 @@ class MigrationTracker:
         """
         self._ensure_table()
         row = self._backend.fetch_one(
-            f"SELECT checksum FROM {self.TABLE_NAME} WHERE version = ?",  # noqa: S608 -- table name interpolation, parameterized
+            # table name interpolation, parameterized
+            f"SELECT checksum FROM {self.TABLE_NAME} WHERE version = ?",
             (version,),
         )
         if not row:
@@ -384,7 +389,8 @@ class MigrationTracker:
 
         for version, current_checksum in migrations.items():
             row = self._backend.fetch_one(
-                f"SELECT checksum FROM {self.TABLE_NAME} WHERE version = ?",  # noqa: S608 -- table name interpolation, parameterized
+                # table name interpolation, parameterized
+                f"SELECT checksum FROM {self.TABLE_NAME} WHERE version = ?",
                 (version,),
             )
             if row and row[0] and row[0] != current_checksum:

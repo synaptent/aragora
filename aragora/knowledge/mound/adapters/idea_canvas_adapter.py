@@ -122,7 +122,7 @@ class IdeaCanvasAdapter(KnowledgeMoundAdapter):
                 },
             },
             topics=data.get("tags", []),
-        )  # noqa: F841
+        )
 
         # Store in local cache
         self._node_map[canvas_node.get("id", "")] = km_node_id
@@ -173,7 +173,7 @@ class IdeaCanvasAdapter(KnowledgeMoundAdapter):
                 "canvas_edge_id": edge.get("id", ""),
                 "label": edge.get("label", ""),
             },
-        )  # noqa: F841
+        )
 
         self._edge_map[edge.get("id", "")] = kr_id
         return kr_id

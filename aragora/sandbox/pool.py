@@ -601,7 +601,7 @@ class ContainerPool:
             "--security-opt=no-new-privileges",
             "--read-only",
             "--tmpfs",
-            "/tmp:rw,noexec,nosuid,size=100m",  # noqa: S108 - container-internal tmpfs mount
+            "/tmp:rw,noexec,nosuid,size=100m",  # container-internal tmpfs mount
             "--tmpfs",
             "/workspace:rw,exec,size=50m",
             # Network

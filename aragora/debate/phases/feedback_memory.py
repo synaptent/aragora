@@ -80,7 +80,7 @@ class MemoryFeedback:
                 logger.debug("[memory] Cleaned %s expired memories", cleaned)
 
             # Probabilistically enforce tier limits (10% of debates)
-            if random.random() < 0.1:  # noqa: S311 -- not security-sensitive
+            if random.random() < 0.1:
                 self.continuum_memory.enforce_tier_limits()
                 logger.debug("[memory] Enforced tier limits")
 

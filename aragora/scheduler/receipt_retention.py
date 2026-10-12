@@ -28,7 +28,7 @@ import logging
 import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 from collections.abc import Callable
 
 if TYPE_CHECKING:
@@ -126,7 +126,7 @@ class ReceiptRetentionScheduler:
 
     def __init__(
         self,
-        store: ReceiptStore,  # noqa: F821 - forward reference
+        store: ReceiptStore,  # forward reference
         interval_hours: int = DEFAULT_CLEANUP_INTERVAL_HOURS,
         retention_days: int | None = None,
         on_cleanup_complete: Callable[[CleanupResult], None] | None = None,
@@ -273,7 +273,7 @@ class ReceiptRetentionScheduler:
             completed_at=completed_at,
             duration_seconds=duration,
             retention_days=self.retention_days
-            or getattr(self.store, "retention_days", DEFAULT_RETENTION_DAYS),
+            or cast(int, getattr(self.store, "retention_days", DEFAULT_RETENTION_DAYS)),
             error=error,
         )
 
@@ -292,7 +292,7 @@ _scheduler: ReceiptRetentionScheduler | None = None
 
 
 def get_receipt_retention_scheduler(
-    store: ReceiptStore | None = None,  # noqa: F821
+    store: ReceiptStore | None = None,
 ) -> ReceiptRetentionScheduler | None:
     """
     Get or create the global receipt retention scheduler.

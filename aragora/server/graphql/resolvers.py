@@ -190,18 +190,18 @@ def _to_iso_datetime(value: Any) -> str | None:
 # Re-export domain-specific resolvers for backward compatibility
 # =============================================================================
 
-from .resolvers_debates import (  # noqa: E402
+from .resolvers_debates import (
     DebateMutationResolvers,
     DebateQueryResolvers,
     DebateSubscriptionResolvers,
 )
 
-from .resolvers_agents import (  # noqa: E402
+from .resolvers_agents import (
     AgentMutationResolvers,
     AgentQueryResolvers,
 )
 
-from .resolvers_tasks import (  # noqa: E402
+from .resolvers_tasks import (
     TaskMutationResolvers,
     TaskQueryResolvers,
     TaskSubscriptionResolvers,

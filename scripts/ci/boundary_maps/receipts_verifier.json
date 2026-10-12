@@ -5,10 +5,11 @@
     {"path": "aragora-verify/src/aragora_verify", "package": "aragora_verify"}
   ],
   "sources": [
-    "aragora/gauntlet/receipt_models.py",
+    "aragora/gauntlet/receipt_models",
     "aragora/gauntlet/receipt.py",
     "aragora/receipts",
-    "aragora/gauntlet/odr_jcs.py",
+    "aragora/gauntlet/odr_jcs",
+    "aragora/models/receipts",
     "aragora/gauntlet/odr_export.py",
     "aragora/gauntlet/odr_signing.py",
     "aragora/gauntlet/odr_verify.py",
@@ -32,6 +33,7 @@
     "aragora.gauntlet.receipt",
     "aragora.receipts",
     "aragora.gauntlet.odr_jcs",
+    "aragora.models.receipts",
     "aragora.gauntlet.odr_export",
     "aragora.gauntlet.odr_signing",
     "aragora.gauntlet.odr_verify"

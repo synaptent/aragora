@@ -1,6 +1,7 @@
-"""Integrator lane view and boss status rendering for swarm operators.
+"""Integrator lane view and boss status payload for swarm operators.
 
-SwarmReport and SwarmReporter live in ``aragora.swarm.swarm_reporter`` and are re-exported here.
+SwarmReport and SwarmReporter live in ``aragora.swarm.swarm_reporter`` and the plain-text
+renderers live in ``aragora.swarm.reporter_render``; both are re-exported here.
 """
 
 from __future__ import annotations
@@ -9,7 +10,6 @@ from collections import defaultdict
 from datetime import datetime, timezone
 import logging
 from typing import Any
-import re
 
 from pathlib import Path
 
@@ -32,14 +32,41 @@ from aragora.swarm.reporter_fields import (
     _metadata,
     _normalize_blocker_text,
     _optional_int,  # noqa: F401
-    _parse_iso_timestamp,
-    _render_repair_summary,
+    _parse_iso_timestamp,  # noqa: F401
+    _render_repair_summary,  # noqa: F401
     _repair_journal_entries,  # noqa: F401
     _sanitize_boss_evidence_text,
     _seconds_between,
     _single_line_text,  # noqa: F401
     _text,
     _text_list,  # noqa: F401
+)
+from aragora.swarm.reporter_lanes import (
+    _available_actions,
+    _deliverable,  # noqa: F401
+    _explicit_missing_receipt,
+    _extract_pr_link,
+    _extract_pr_number,  # noqa: F401
+    _extract_receipt_id,
+    _has_retired_marker,  # noqa: F401
+    _is_superseded,
+    _item_run_task,
+    _item_task_key,
+    _item_timestamp,  # noqa: F401
+    _lane_health,
+    _merge_queue_status,
+    _merge_readiness,
+    _next_action,
+    _receipt_backfill_scope_gap,
+    _receipt_expected,  # noqa: F401
+    _run_task_tuple,
+    _sort_newest,
+)
+from aragora.swarm.reporter_render import (
+    _render_operator_status_line,  # noqa: F401
+    _work_order_status_counts,
+    render_boss_text,  # noqa: F401
+    render_runner_registration_text,  # noqa: F401
 )
 from aragora.swarm.swarm_reporter import SwarmReport, SwarmReporter  # noqa: F401 - re-exported
 from aragora.swarm.terminal_truth import (
@@ -51,296 +78,6 @@ logger = logging.getLogger(__name__)
 
 _STALE_LANE_AFTER_SECONDS = 15 * 60
 _LANE_TELEMETRY = LaneTelemetryCollector()
-
-
-def _extract_receipt_id(*sources: dict[str, Any] | None) -> str:
-    for source in sources:
-        if not isinstance(source, dict):
-            continue
-        for key in ("receipt_id", "decision_receipt_id", "last_receipt_id"):
-            text = _text(source.get(key))
-            if text:
-                return text
-        meta = _metadata(source)
-        for key in ("receipt_id", "decision_receipt_id", "last_receipt_id"):
-            text = _text(meta.get(key))
-            if text:
-                return text
-    return ""
-
-
-def _run_task_tuple(run_id: Any, task_id: Any) -> tuple[str, str] | None:
-    run_text = _text(run_id)
-    task_text = _text(task_id)
-    if not run_text or not task_text:
-        return None
-    return (run_text, task_text)
-
-
-def _item_task_key(item: dict[str, Any] | None) -> str:
-    if not isinstance(item, dict):
-        return ""
-    meta = _metadata(item)
-    return _first_text(item.get("task_key"), meta.get("task_key"))
-
-
-def _item_run_task(item: dict[str, Any] | None) -> tuple[str, str] | None:
-    if not isinstance(item, dict):
-        return None
-    meta = _metadata(item)
-    task_id = _first_text(item.get("task_id"), meta.get("task_id"), meta.get("work_order_id"))
-    run_id = _first_text(meta.get("supervisor_run_id"), meta.get("run_id"))
-    return _run_task_tuple(run_id, task_id)
-
-
-def _deliverable(source: dict[str, Any] | None) -> dict[str, Any]:
-    if not isinstance(source, dict):
-        return {}
-    deliverable = source.get("deliverable")
-    if isinstance(deliverable, dict):
-        return deliverable
-    meta = _metadata(source)
-    deliverable = meta.get("deliverable")
-    return deliverable if isinstance(deliverable, dict) else {}
-
-
-def _extract_pr_number(value: Any) -> int | None:
-    if isinstance(value, int):
-        return value
-    text = _text(value).rstrip("/")
-    if not text:
-        return None
-    if text.isdigit():
-        return int(text)
-    if text.startswith("#") and text[1:].isdigit():
-        return int(text[1:])
-    tail = text.rsplit("/", 1)[-1]
-    if tail.isdigit():
-        return int(tail)
-    match = re.search(r"#(\d+)$", text)
-    if match:
-        return int(match.group(1))
-    return None
-
-
-def _extract_pr_link(*sources: dict[str, Any] | None) -> dict[str, Any] | None:
-    url = ""
-    reference = ""
-    number: int | None = None
-    for source in sources:
-        if not isinstance(source, dict):
-            continue
-        meta = _metadata(source)
-        deliverable = _deliverable(source)
-        for candidate in (
-            source.get("pr_url"),
-            source.get("pull_request_url"),
-            source.get("adopted_pr"),
-            deliverable.get("pr_url"),
-            deliverable.get("adopted_pr"),
-            meta.get("pr_url"),
-            meta.get("pull_request_url"),
-            meta.get("adopted_pr"),
-        ):
-            text = _text(candidate)
-            if not text:
-                continue
-            if not url and re.match(r"^https?://", text):
-                url = text
-            elif not reference:
-                reference = text
-            if number is None:
-                number = _extract_pr_number(text)
-        for candidate in (
-            source.get("pr_number"),
-            source.get("pull_request_number"),
-            source.get("adopted_pr"),
-            deliverable.get("pr_number"),
-            deliverable.get("pull_request_number"),
-            deliverable.get("adopted_pr"),
-            meta.get("pr_number"),
-            meta.get("pull_request_number"),
-            meta.get("adopted_pr"),
-        ):
-            parsed = _extract_pr_number(candidate)
-            if parsed is not None:
-                number = parsed
-                break
-    if not url and not reference and number is None:
-        return None
-    return {
-        "url": url or None,
-        "number": number,
-        "reference": reference or None,
-    }
-
-
-def _explicit_missing_receipt(*sources: dict[str, Any] | None) -> bool:
-    for source in sources:
-        if not isinstance(source, dict):
-            continue
-        for error_field in ("dispatch_error", "error"):
-            lowered = _text(source.get(error_field)).lower()
-            if "without receipt" in lowered or "missing receipt" in lowered:
-                return True
-        meta = _metadata(source)
-        lowered = _text(meta.get("error")).lower()
-        if "without receipt" in lowered or "missing receipt" in lowered:
-            return True
-    return False
-
-
-def _receipt_backfill_scope_gap(scope_violation_record: dict[str, Any] | None) -> bool:
-    if not isinstance(scope_violation_record, dict):
-        return False
-    for violation in scope_violation_record.get("violations", []) or []:
-        if not isinstance(violation, dict):
-            continue
-        if _text(violation.get("type")).lower() == "undeclared_scope":
-            return True
-    return False
-
-
-def _is_superseded(*sources: dict[str, Any] | None) -> bool:
-    for source in sources:
-        if not isinstance(source, dict):
-            continue
-        if _text(source.get("status")).lower() == "superseded":
-            return True
-        meta = _metadata(source)
-        if _text(meta.get("superseded_by")) or _text(meta.get("supersedes")):
-            return True
-        if _has_retired_marker(source):
-            return True
-    return False
-
-
-def _has_retired_marker(source: dict[str, Any]) -> bool:
-    for key in ("failure_reason", "dispatch_error"):
-        text = _text(source.get(key)).lower()
-        if text.startswith("retired after "):
-            return True
-    for key in ("blockers", "blocked_by"):
-        values = source.get(key)
-        if not isinstance(values, list):
-            continue
-        for value in values:
-            if _text(value).lower().startswith("retired after "):
-                return True
-    return False
-
-
-def _merge_queue_status(queue_item: dict[str, Any] | None) -> str:
-    if not isinstance(queue_item, dict):
-        return ""
-    return _text(queue_item.get("status")).lower()
-
-
-def _receipt_expected(status: str, queue_status: str) -> bool:
-    if queue_status in {"validating", "integrating", "needs_human", "merged", "failed"}:
-        return True
-    return status in {"completed", "needs_human", "merged"}
-
-
-def _merge_readiness(
-    *,
-    status: str,
-    queue_status: str,
-    stale_heartbeat: bool,
-    missing_receipt: bool,
-    scope_violation: bool,
-    superseded: bool,
-    collisions: list[str],
-) -> str:
-    if superseded:
-        return "superseded"
-    if (
-        collisions
-        or stale_heartbeat
-        or missing_receipt
-        or scope_violation
-        or queue_status in {"blocked", "failed"}
-    ):
-        return "blocked"
-    if queue_status == "merged":
-        return "merged"
-    if queue_status in {"validating", "integrating"}:
-        return queue_status
-    if queue_status == "needs_human":
-        return "review"
-    if status in {"completed", "needs_human"}:
-        return "ready"
-    if status in {"leased", "dispatched", "queued", "active"}:
-        return "in_progress"
-    return status or queue_status or "unknown"
-
-
-def _next_action(
-    *,
-    readiness: str,
-    lane_health: str,
-    terminal_outcome: str,
-    stale_heartbeat: bool,
-    missing_receipt: bool,
-    scope_violation: bool,
-    superseded: bool,
-    collisions: list[str],
-    queue_status: str,
-    blockers: list[str],
-) -> str:
-    lowered_blockers = {_text(item).lower() for item in blockers if _text(item)}
-    if superseded or lane_health == "superseded":
-        return "Archive the superseded lane and keep the canonical lane."
-    if lane_health == "expired":
-        return "Salvage or reassign the expired lane before resuming work."
-    if lane_health == "stalled":
-        return "Inspect the stalled lane and decide whether to salvage, supersede, or reassign it."
-    if collisions:
-        return "Resolve the branch or file-scope collision before integrating."
-    if "receipt_backfill_blocked_undeclared_scope" in lowered_blockers:
-        return "Declare the intended lane scope or discard the lane before receipt backfill and merge review."
-    if scope_violation:
-        return "Narrow the lane scope or split ownership before it can re-enter merge review."
-    if "work_order_leasing_failed" in lowered_blockers:
-        return "Reconcile or regenerate the managed worktree, then requeue the lane."
-    if _text(terminal_outcome).lower() == "clean_exit_no_deliverable":
-        return "Inspect why the lane produced no concrete deliverable before rerunning it."
-    if "merge_gate_failed" in lowered_blockers or any(
-        item.startswith("merge gate blocked:") for item in lowered_blockers
-    ):
-        return "Fix the merge gate or verification failure before rerunning the lane."
-    if stale_heartbeat:
-        return "Inspect the stale lane and decide whether to salvage or reassign it."
-    if missing_receipt:
-        return "Attach or regenerate the completion receipt before integration."
-    if queue_status == "needs_human":
-        return "Review the validated lane and decide whether it should merge."
-    if readiness == "review":
-        return "Review the validated lane and decide whether it should merge."
-    if readiness == "ready":
-        return "Queue or validate this lane for merge."
-    if readiness == "merged":
-        return "No action needed; the lane is already merged."
-    return "Monitor the lane or reconcile it if progress stalls."
-
-
-def _item_timestamp(item: dict[str, Any] | None, *keys: str) -> datetime:
-    if not isinstance(item, dict):
-        return datetime.min.replace(tzinfo=timezone.utc)
-    for key in keys:
-        parsed = _parse_iso_timestamp(item.get(key))
-        if parsed is not None:
-            return parsed
-    meta = _metadata(item)
-    for key in keys:
-        parsed = _parse_iso_timestamp(meta.get(key))
-        if parsed is not None:
-            return parsed
-    return datetime.min.replace(tzinfo=timezone.utc)
-
-
-def _sort_newest(items: list[dict[str, Any]], *keys: str) -> list[dict[str, Any]]:
-    return sorted(items, key=lambda item: _item_timestamp(item, *keys), reverse=True)
 
 
 def _telemetry_summary() -> dict[str, Any]:
@@ -503,87 +240,6 @@ def _sync_lane_telemetry_from_lanes(lanes: list[dict[str, Any]]) -> None:
                 metadata=metadata,
             )
         )
-
-
-def _lane_health(
-    *,
-    readiness: str,
-    status: str,
-    terminal_outcome: str,
-    lease_status: str,
-    stale_heartbeat: bool,
-    missing_receipt: bool,
-    scope_violation: bool,
-    superseded: bool,
-    collisions: list[str],
-    blockers: list[str],
-) -> str:
-    if superseded or status == "discarded":
-        return "superseded"
-    lowered_blockers = {_text(item).lower() for item in blockers if _text(item)}
-    if lowered_blockers.intersection({"stale_lease_reaped", "expired_lease_reaped"}):
-        return "expired"
-    if (
-        scope_violation
-        or _text(status).lower() == "scope_violation"
-        or lowered_blockers.intersection({"scope_violation", "work_order_leasing_failed"})
-    ):
-        return "blocked"
-    if lease_status == "expired" or status == "timed_out":
-        return "expired"
-    if readiness == "review" and _text(terminal_outcome).lower() in {
-        "deliverable_created",
-        "pr_adopted",
-    }:
-        return "healthy"
-    if stale_heartbeat or status in {"dispatch_failed", "failed"}:
-        return "stalled"
-    if lowered_blockers.intersection({"merge_gate_failed"}) or _text(terminal_outcome).lower() in {
-        "clean_exit_no_deliverable",
-        "blocked",
-    }:
-        return "blocked"
-    if readiness == "merged":
-        return "merged"
-    if readiness == "blocked" or missing_receipt or scope_violation or collisions:
-        return "blocked"
-    return "healthy"
-
-
-def _available_actions(
-    *,
-    canonical_lane: bool,
-    readiness: str,
-    lane_health: str,
-    missing_receipt: bool,
-    scope_violation: bool,
-    superseded: bool,
-    collisions: list[str],
-    decision: str,
-) -> list[str]:
-    if superseded or lane_health == "superseded" or readiness == "superseded":
-        return ["archive"]
-    if readiness == "merged":
-        return ["archive"]
-
-    actions: list[str] = []
-    if lane_health in {"expired", "stalled"}:
-        actions.extend(["salvage", "reassign", "archive"])
-    if collisions or scope_violation:
-        actions.extend(["request_changes", "supersede"])
-    if missing_receipt:
-        actions.append("attach_receipt")
-    if decision == "request_changes":
-        actions.extend(["request_changes", "supersede"])
-    if decision == "salvage":
-        actions.extend(["salvage", "archive"])
-    if readiness in {"ready", "review"} and not (collisions or scope_violation or missing_receipt):
-        actions.extend(["merge", "cherry_pick", "request_changes"])
-    if not canonical_lane and readiness not in {"merged", "superseded"}:
-        actions.append("supersede")
-    if not actions:
-        actions.append("monitor")
-    return list(dict.fromkeys(actions))
 
 
 def build_integrator_view(
@@ -2141,66 +1797,6 @@ def build_integrator_view(
     }
 
 
-def render_runner_registration_text(payload: dict[str, Any]) -> str:
-    """Render a concise runner inspection or registration summary."""
-    lines = [
-        f"runner_id={_text(payload.get('runner_id'))}",
-        "availability="
-        f"{_text(payload.get('availability'))} auth_mode={_text(payload.get('auth_mode'))}",
-        f"runner_type={_text(payload.get('runner_type'))}",
-    ]
-    profile = _text(payload.get("profile"))
-    if profile:
-        lines.append(f"profile={profile}")
-
-    owner = payload.get("owner_binding", {})
-    if isinstance(owner, dict):
-        lines.append(
-            "owner="
-            f"{_text(owner.get('user_id')) or 'unbound'}"
-            f" workspace={_text(owner.get('workspace_id')) or 'none'}"
-        )
-
-    capabilities = payload.get("capabilities", {})
-    if isinstance(capabilities, dict):
-        lines.append(
-            "capabilities="
-            f"exec={capabilities.get('supports_exec', False)} "
-            f"review={capabilities.get('supports_review', False)} "
-            f"max_parallel={capabilities.get('max_parallel_lanes', 0)}"
-        )
-
-    if payload.get("registered"):
-        lines.append(f"registered_at={_text(payload.get('registered_at'))}")
-    freshness_status = _text(payload.get("freshness_status"))
-    if freshness_status:
-        lines.append(
-            "freshness="
-            f"{freshness_status} heartbeat_at={_text(payload.get('heartbeat_at')) or 'none'} "
-            f"stale_after={_text(payload.get('stale_after_seconds')) or 'none'}"
-        )
-
-    status_summary = _text(payload.get("status_summary"))
-    if status_summary:
-        lines.append(f"status_summary={status_summary}")
-
-    next_action = _text(payload.get("next_action"))
-    if next_action:
-        lines.append(f"next: {next_action}")
-
-    return "\n".join(lines)
-
-
-def _work_order_status_counts(work_orders: list[dict[str, Any]] | None) -> dict[str, int]:
-    counts: dict[str, int] = {}
-    for item in work_orders or []:
-        if not isinstance(item, dict):
-            continue
-        status = _text(item.get("status")) or "unknown"
-        counts[status] = counts.get(status, 0) + 1
-    return dict(sorted(counts.items()))
-
-
 def build_boss_payload(
     *,
     run: dict[str, Any],
@@ -2320,134 +1916,3 @@ def build_boss_payload(
         "integrator_telemetry": integrator_view.get("telemetry", {}),
         "routing": routing,
     }
-
-
-def _render_operator_status_line(operator_status: dict[str, Any]) -> str:
-    source = _text(operator_status.get("source"))
-    if source == "shift_ledger":
-        green_shift = operator_status.get("green_shift", {})
-        green_shift = green_shift if isinstance(green_shift, dict) else {}
-        merged_numbers = operator_status.get("merged_pr_numbers", [])
-        merged_numbers = merged_numbers if isinstance(merged_numbers, list) else []
-        merged_text = ",".join(str(item) for item in merged_numbers) or "-"
-        return (
-            "proof-first "
-            f"queue={operator_status.get('queue_depth')} "
-            f"open_prs={operator_status.get('open_prs')} "
-            f"boss={operator_status.get('boss_running')} "
-            f"merge={operator_status.get('merge_running')} "
-            f"benchmark_fresh={operator_status.get('benchmark_fresh')} "
-            f"merged_prs={operator_status.get('prs_merged_recent', 0)} "
-            f"merged={merged_text} "
-            f"last_stop={operator_status.get('last_stop_reason') or '-'} "
-            f"green_shift={green_shift.get('is_green')}"
-        )
-    if source == "legacy_reporter_fallback":
-        return f"reporter-fallback queue={operator_status.get('queue_depth', 'unknown')}"
-    return ""
-
-
-def render_boss_text(payload: dict[str, Any]) -> str:
-    """Render a concise boss-facing supervised swarm summary."""
-    counts = payload.get("work_order_counts", {})
-    counts_text = (
-        ", ".join(f"{key}={value}" for key, value in sorted(counts.items()))
-        if isinstance(counts, dict) and counts
-        else "none"
-    )
-    lines = [
-        f"run_id={_text(payload.get('run_id'))}",
-        f"status={_text(payload.get('status'))} target_branch={_text(payload.get('target_branch'))}",
-        f"goal={_text(payload.get('goal'))}",
-        f"work_orders=[{counts_text}]",
-    ]
-    operator_status = payload.get("operator_status", {})
-    if isinstance(operator_status, dict):
-        operator_line = _render_operator_status_line(operator_status)
-        if operator_line:
-            lines.append(operator_line)
-
-    lanes = payload.get("lanes", [])
-    if isinstance(lanes, list):
-        for lane in lanes[:6]:
-            if not isinstance(lane, dict):
-                continue
-            parts = [
-                _text(lane.get("work_order_id")) or "lane",
-                _text(lane.get("status")) or "unknown",
-            ]
-            branch = _text(lane.get("branch"))
-            if branch:
-                parts.append(f"branch={branch}")
-            worktree_path = _text(lane.get("worktree_path"))
-            if worktree_path:
-                parts.append(f"worktree={worktree_path}")
-            receipt_id = _text(lane.get("receipt_id"))
-            if receipt_id:
-                parts.append(f"receipt={receipt_id}")
-            lines.append("lane: " + " ".join(parts))
-
-    routing = payload.get("routing", {})
-    if isinstance(routing, dict):
-        selected_runner_ids = [
-            _text(item) for item in routing.get("selected_runner_ids", []) if _text(item)
-        ]
-        selected_runners = routing.get("selected_runners", [])
-        selected_runner_parts: list[str] = []
-        if isinstance(selected_runners, list):
-            for item in selected_runners:
-                if not isinstance(item, dict):
-                    continue
-                runner_id = _text(item.get("runner_id"))
-                if not runner_id:
-                    continue
-                freshness = _text(item.get("freshness_status")) or "unknown"
-                selected_runner_parts.append(f"{runner_id}({freshness})")
-        if selected_runner_parts:
-            lines.append("routing: selected_runners=" + ",".join(selected_runner_parts))
-        elif selected_runner_ids:
-            lines.append("routing: selected_runners=" + ",".join(selected_runner_ids))
-        blocked_reason = _text(routing.get("blocked_reason"))
-        if blocked_reason:
-            lines.append(f"routing_blocked: {blocked_reason}")
-        rejected_runner_ids = [
-            _text(item) for item in routing.get("rejected_runner_ids", []) if _text(item)
-        ]
-        if rejected_runner_ids:
-            lines.append("routing_rejected: " + ",".join(rejected_runner_ids))
-        routing_next = _text(routing.get("next_action"))
-        if routing_next:
-            lines.append(f"routing_next: {routing_next}")
-
-    next_actions = payload.get("integrator_next_actions", [])
-    if isinstance(next_actions, list):
-        for item in next_actions[:3]:
-            text = _text(item)
-            if text:
-                lines.append(f"next: {text}")
-
-    needs_human = payload.get("needs_human", [])
-    if isinstance(needs_human, list):
-        for item in needs_human[:3]:
-            if not isinstance(item, dict):
-                continue
-            label = _first_text(item.get("title"), item.get("work_order_id"), "lane")
-            reasons = [_text(reason) for reason in item.get("reasons", []) if _text(reason)]
-            summary = "; ".join(reasons) if reasons else "manual review required"
-            lines.append(f"needs_human: {label} -> {summary}")
-            failure_classes = [
-                _text(reason) for reason in item.get("failure_classes", []) if _text(reason)
-            ]
-            if failure_classes:
-                lines.append(f"needs_human_classes: {label} -> {','.join(failure_classes)}")
-            blocker_evidence = _text(item.get("blocker_evidence"))
-            if blocker_evidence:
-                lines.append(f"needs_human_evidence: {label} -> {blocker_evidence}")
-            repair_summary = _render_repair_summary(item.get("repair_summary"))
-            if repair_summary:
-                lines.append(f"needs_human_repair: {label} -> {repair_summary}")
-            next_action = _text(item.get("next_action"))
-            if next_action:
-                lines.append(f"needs_human_next: {label} -> {next_action}")
-
-    return "\n".join(lines)

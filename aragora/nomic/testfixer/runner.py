@@ -206,7 +206,7 @@ def _safe_write_json(path: Path, payload: dict[str, Any]) -> None:
 
 def _run_command(command: list[str], cwd: Path | None = None) -> str | None:
     try:
-        result = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
+        result = subprocess.run(  # subprocess with fixed args, no shell
             command,
             cwd=cwd,
             capture_output=True,

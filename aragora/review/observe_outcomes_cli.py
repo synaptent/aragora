@@ -82,6 +82,7 @@ from aragora.review.invalidation_event_source import (
     resolve_review_queue_root,
 )
 from aragora.review.settlement_outcome import observe_outcome
+from aragora.review.settlement_receipt import SettlementReceipt
 
 logger = logging.getLogger(__name__)
 
@@ -644,13 +645,7 @@ def _build_insufficiency_receipt(
 
 
 def _materialize_receipt(payload: Mapping[str, Any]) -> Any:
-    """Reconstruct a ``SettlementReceipt`` from a JSON payload.
-
-    Imported here lazily so this module does not pull the full
-    review-queue CLI graph at top level.
-    """
-    from aragora.cli.commands.review_queue import SettlementReceipt
-
+    """Reconstruct a ``SettlementReceipt`` from a JSON payload."""
     field_names = {f.name for f in SettlementReceipt.__dataclass_fields__.values()}
     kwargs = {k: v for k, v in payload.items() if k in field_names}
     return SettlementReceipt(**kwargs)

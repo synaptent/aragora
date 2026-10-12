@@ -68,7 +68,11 @@ _request_auth_context: ContextVar[Any] = ContextVar(
 
 
 def _with_request_auth_context(method: Callable[..., Any]) -> Callable[..., Any]:
-    """Bind the request handler's auth context while ``method`` runs."""
+    """Bind the request handler's auth context while ``method`` runs.
+
+    Apply it outside ``require_permission``: the check reads ``self._auth_context``
+    before the request handler's, so it must already see this request's caller.
+    """
 
     @functools.wraps(method)
     def bound(self: Any, path: str, query_params: dict[str, Any], handler: Any) -> Any:
@@ -209,8 +213,8 @@ class MemoryHandler(
         """Get user store from context."""
         return self.ctx.get("user_store")
 
-    @require_permission("memory:read")
     @_with_request_auth_context
+    @require_permission("memory:read")
     def handle(self, path: str, query_params: dict[str, Any], handler: Any) -> HandlerResult | None:
         """Route memory requests to appropriate handler methods."""
         path = self._normalize_path(path)
@@ -296,6 +300,7 @@ class MemoryHandler(
 
         return None
 
+    @_with_request_auth_context
     @require_permission("memory:update")
     def handle_put(
         self, path: str, query_params: dict[str, Any], handler: Any
@@ -306,8 +311,8 @@ class MemoryHandler(
         return None
 
     @handle_errors("memory creation")
-    @require_permission("memory:manage")
     @_with_request_auth_context
+    @require_permission("memory:manage")
     def handle_post(
         self, path: str, query_params: dict[str, Any], handler: Any
     ) -> HandlerResult | None:

@@ -232,7 +232,7 @@ class QBOQueryBuilder:
         start_position = self._offset_val + 1
 
         return (
-            f"SELECT {fields} FROM {self._entity} "  # noqa: S608 -- internal query construction
+            f"SELECT {fields} FROM {self._entity} "  # internal query construction
             f"WHERE {where_clause} "
             f"MAXRESULTS {self._limit_val} STARTPOSITION {start_position}"
         )

@@ -504,6 +504,39 @@ def test_memory_handler_judges_and_scopes_each_request_by_its_own_caller(
 
 
 @pytest.mark.no_auto_auth
+@pytest.mark.parametrize(
+    ("method", "path", "expected"),
+    [
+        ("GET", "/api/v1/memory/continuum/retrieve", [403, 200, 403, 403, 200, 200]),
+        ("PUT", "/api/v1/memory/k1", [403, 501, 403, 403, 403, 501]),
+        ("POST", "/api/v1/memory/store", [403, 400, 403, 403, 403, 400]),
+    ],
+)
+def test_memory_permission_checks_ignore_a_context_assigned_outside_requests(
+    registry, monkeypatch, method: str, path: str, expected: list[int]
+) -> None:
+    from aragora.rbac.models import AuthorizationContext
+
+    tenants: list[str | None] = []
+
+    def retrieve(**kwargs: Any) -> list[Any]:
+        tenants.append(kwargs["tenant_id"])
+        return []
+
+    memory = _memory_handler()
+    monkeypatch.setitem(memory.ctx, "continuum_memory", SimpleNamespace(retrieve=retrieve))
+    # The shared handler keeps a context assigned by an in-process caller outside any
+    # request; an HTTP request must still be checked against its own caller.
+    in_process = AuthorizationContext(user_id="in-process", org_id="org-o", roles={"owner"})
+    monkeypatch.setattr(memory, "_auth_context", in_process)
+    statuses = [_dispatch(registry, method, path, caller, org)[0] for caller, org in MIXED_SEQUENCE]
+    assert statuses == expected
+    if method == "GET":
+        assert tenants == ["org-o", "org-m", "org-o"]
+    assert memory._auth_context is in_process
+
+
+@pytest.mark.no_auto_auth
 @pytest.mark.parametrize("caller", ["member", "viewer", "anon"])
 def test_documents_read_denial_answers_403_with_the_dispatcher_envelope(
     registry, caller: str

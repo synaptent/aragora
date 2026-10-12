@@ -58,7 +58,7 @@ from aragora.swarm.terminal_truth import (
 from aragora.swarm.lane_telemetry import LaneTelemetryCollector, LaneTelemetryRecord
 
 # Backwards-compatible re-exports from extracted modules
-from aragora.swarm.boss_feed import (  # noqa: F401
+from aragora.swarm.boss_feed import (
     GitHubIssue,
     GitHubIssueFeed,
     IssueEligibilityReport,
@@ -69,7 +69,7 @@ from aragora.swarm.boss_feed import (  # noqa: F401
     select_eligible_issue,
     scope_entries_overlap,
 )
-from aragora.swarm.boss_freshness import RunnerFreshnessResult, check_runner_freshness  # noqa: F401
+from aragora.swarm.boss_freshness import RunnerFreshnessResult, check_runner_freshness
 from aragora.swarm.boss_loop_claims import (
     ISSUE_CLAIM_TTL_SECONDS,
     issue_claim_path as _issue_claim_path_impl,

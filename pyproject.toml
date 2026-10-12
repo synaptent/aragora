@@ -173,6 +173,12 @@ server = "aragora.server.decision_routes:register_decision_routes"
 [project.entry-points."aragora.code_scanners"]
 audit = "aragora.audit.code_scanners:register_code_scanners"
 
+# Run by aragora/training/evaluation_protocols.py on the first lookup that finds
+# nothing registered, so specialist training reaches the gauntlet evaluator without
+# importing the gauntlet package.
+[project.entry-points."aragora.training_evaluators"]
+gauntlet = "aragora.gauntlet.training_adapter:register_training_adapter"
+
 # Run by aragora/events/debate_completion.py on the first debate_completed emit, so a
 # process that only runs debates still records them in the debate analytics store.
 [project.entry-points."aragora.debate_completed_subscribers"]
@@ -183,6 +189,10 @@ analytics = "aragora.analytics.debate_events:subscribe_debate_analytics"
 # without importing aragora.stores.
 [project.entry-points."aragora.workspace_stores"]
 stores = "aragora.stores.debate_registration:register_debate_workspace_stores"
+
+# Lets aragora/tenancy/record_scope.py reach the server without importing it.
+[project.entry-points."aragora.tenancy_bindings"]
+server = "aragora.server.tenancy_bindings:register_tenancy_bindings"
 
 # -----------------------------------------------------------------------------
 # uv resolver constraints — security floors for the pip-audit security gate
@@ -465,6 +475,26 @@ disable_error_code = [
     "truthy-function",       # ~45 legacy optional-import idioms
     "import-untyped",        # defense in depth; stubs installed via [dev] extras
 ]
+
+# Grow-only strict enrollment (#8261). These packages also type-check the
+# bodies of unannotated functions. A package joins only when it has no
+# ``.mypy-baseline`` entries, no BLE001/G004 per-file-ignores, and no
+# ``check_untyped_defs`` errors in either the CI changed-file form
+# (``--follow-imports=skip``) or the full-tree form. Packages are added to
+# this list, never removed; the enrolled count is the
+# ``mypy_check_untyped_defs_packages`` metric in
+# docs/audits/2026-06-12-codebase-health-baseline.json.
+[[tool.mypy.overrides]]
+module = [
+    "aragora.caching.*",
+    "aragora.events.*",
+    "aragora.protocols.*",
+    "aragora.resilience.*",
+    "aragora.shared.*",
+    "aragora.types.*",
+    "aragora.utils.*",
+]
+check_untyped_defs = true
 
 # Optional-import fallback modules. These deliberately rebind a symbol to
 # ``None`` when the optional dependency is unavailable, e.g.

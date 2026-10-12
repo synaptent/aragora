@@ -45,10 +45,10 @@ try:
     # (and its transitive imports register more filters), globally rewriting the
     # ambient warning policy; the scoped guard confines that to this import.
     with warnings.catch_warnings():
-        import weaviate  # noqa: F401
-        from weaviate.classes.config import Configure, DataType, Property  # noqa: F401
+        import weaviate
+        from weaviate.classes.config import Configure, DataType, Property
         from weaviate.classes.data import DataObject  # noqa: F401
-        from weaviate.classes.query import Filter, MetadataQuery  # noqa: F401
+        from weaviate.classes.query import Filter, MetadataQuery
 
     WEAVIATE_AVAILABLE = True
 except ImportError:
