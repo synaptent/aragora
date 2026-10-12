@@ -24,17 +24,17 @@ never pricing lookup.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from decimal import Decimal
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from aragora.models.catalog import CATALOG, ModelSpec
 
 if TYPE_CHECKING:
     from datetime import date
 
-    from aragora.routing.provider_config import ProviderPricing
-
 __all__ = [
+    "ProviderPricing",
     "context_window_rows",
     "dec",
     "debate_cost_rows",
@@ -283,11 +283,51 @@ def metering_rows() -> dict[str, dict[str, Decimal]]:
     return usage_rows()
 
 
+@dataclass(frozen=True)
+class ProviderPricing:
+    """Pricing and capabilities for a single provider/model combination.
+
+    The row type of ``aragora.routing.provider_config.PROVIDER_PRICING``,
+    which re-exports it. It is defined here, in the foundation layer, so
+    :func:`provider_config_rows` can build routing rows without importing
+    ``aragora.routing``."""
+
+    provider_name: str
+    model_name: str
+    input_cost_per_1k: float  # USD per 1K input tokens
+    output_cost_per_1k: float  # USD per 1K output tokens
+    context_window: int  # Maximum context window in tokens
+    supports_streaming: bool = True
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to dictionary."""
+        return {
+            "provider_name": self.provider_name,
+            "model_name": self.model_name,
+            "input_cost_per_1k": self.input_cost_per_1k,
+            "output_cost_per_1k": self.output_cost_per_1k,
+            "context_window": self.context_window,
+            "supports_streaming": self.supports_streaming,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ProviderPricing:
+        """Deserialize from dictionary."""
+        return cls(
+            provider_name=data["provider_name"],
+            model_name=data["model_name"],
+            input_cost_per_1k=data["input_cost_per_1k"],
+            output_cost_per_1k=data["output_cost_per_1k"],
+            context_window=data["context_window"],
+            supports_streaming=data.get("supports_streaming", True),
+        )
+
+
 def provider_config_rows(
     today: "date | None" = None,
     *,
     catalog: "dict[str, ModelSpec] | None" = None,
-) -> "dict[str, ProviderPricing]":
+) -> dict[str, ProviderPricing]:
     """Shape of ``aragora.routing.provider_config.PROVIDER_PRICING``'s
     catalog projection: CANONICAL id only (never alias/direct/openrouter
     spellings) so enumeration consumers never see one model occupy several
@@ -315,13 +355,7 @@ def provider_config_rows(
     that module attribute directly to inject synthetic rows, and this
     function must observe the patched value rather than re-importing the
     real catalog itself.
-
-    ``ProviderPricing`` is imported inside the function (not at module
-    scope) because ``provider_config.py`` imports this module: a top-level
-    import here would cycle.
     """
-    from aragora.routing.provider_config import ProviderPricing
-
     rows = CATALOG if catalog is None else catalog
     return {
         s.canonical_id: ProviderPricing(

@@ -10,10 +10,15 @@ wins on a key collision with the hand-written legacy dict.
 
 from __future__ import annotations
 
+import subprocess
+import sys
 from decimal import Decimal
+from pathlib import Path
 
 from aragora.models import pricing_mirror as pm
 from aragora.models.catalog import CATALOG
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_usage_rows_cover_every_active_row_with_exact_prices() -> None:
@@ -133,6 +138,36 @@ def test_provider_config_rows_are_not_calendar_dependent() -> None:
         mid_soak = spec.release_date + (soak_until - spec.release_date) // 2
         assert set(pm.provider_config_rows(today=mid_soak)) == baseline
     assert set(pm.provider_config_rows(today=date(2099, 1, 1))) == baseline
+
+
+def test_provider_config_rows_loads_no_routing_module() -> None:
+    """``aragora.models`` is in the foundation import layer (``.importlinter``),
+    so generating the routing rows must not import ``aragora.routing``."""
+    code = (
+        "import sys\n"
+        "from aragora.models import pricing_mirror\n"
+        "assert pricing_mirror.provider_config_rows()\n"
+        "print('\\n'.join(sorted(m for m in sys.modules if m.startswith('aragora.routing'))))\n"
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+        cwd=REPO_ROOT,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout.split() == []
+
+
+def test_provider_config_rows_are_the_routing_row_type() -> None:
+    from aragora.routing import provider_config
+
+    assert pm.ProviderPricing is provider_config.ProviderPricing
+    rows = pm.provider_config_rows()
+    assert rows
+    assert all(isinstance(row, provider_config.ProviderPricing) for row in rows.values())
 
 
 def test_legacy_tables_contain_mirror_rows() -> None:

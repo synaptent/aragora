@@ -9,49 +9,16 @@ Pricing is per 1M tokens (consistent with aragora.billing.usage).
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from datetime import date
-from typing import Any
-
-logger = logging.getLogger(__name__)
-
-
-@dataclass(frozen=True)
-class ProviderPricing:
-    """Pricing and capabilities for a single provider/model combination."""
-
-    provider_name: str
-    model_name: str
-    input_cost_per_1k: float  # USD per 1K input tokens
-    output_cost_per_1k: float  # USD per 1K output tokens
-    context_window: int  # Maximum context window in tokens
-    supports_streaming: bool = True
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serialize to dictionary."""
-        return {
-            "provider_name": self.provider_name,
-            "model_name": self.model_name,
-            "input_cost_per_1k": self.input_cost_per_1k,
-            "output_cost_per_1k": self.output_cost_per_1k,
-            "context_window": self.context_window,
-            "supports_streaming": self.supports_streaming,
-        }
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> ProviderPricing:
-        """Deserialize from dictionary."""
-        return cls(
-            provider_name=data["provider_name"],
-            model_name=data["model_name"],
-            input_cost_per_1k=data["input_cost_per_1k"],
-            output_cost_per_1k=data["output_cost_per_1k"],
-            context_window=data["context_window"],
-            supports_streaming=data.get("supports_streaming", True),
-        )
-
 
 from aragora.models import CATALOG, by_any_id, utc_today
+
+# ProviderPricing is defined in the foundation layer so that
+# aragora.models.pricing_mirror can build these rows without importing
+# aragora.routing (.importlinter layers); it stays importable from here.
+from aragora.models.pricing_mirror import ProviderPricing, provider_config_rows
+
+logger = logging.getLogger(__name__)
 
 # Legacy hand-maintained rows (models not yet in the canonical catalog).
 # Cataloged models are PROJECTED from aragora.models.CATALOG below — do not
@@ -246,16 +213,11 @@ def _catalog_projection(today: date | None = None) -> dict[str, ProviderPricing]
     Delegates to :func:`aragora.models.pricing_mirror.provider_config_rows`,
     the single generator for this shape (frontier-model-refresh Task 6): the
     row construction itself lives there so every consumer of catalog
-    pricing shares one implementation. Imported locally to sidestep a
-    potential import cycle (``pricing_mirror.provider_config_rows`` in turn
-    imports ``ProviderPricing`` from this module inside its own function
-    body for the same reason). ``CATALOG`` is passed through explicitly
-    (this module's own, possibly-monkeypatched, module attribute) rather
-    than letting the mirror re-import the real catalog, so tests that
+    pricing shares one implementation. ``CATALOG`` is passed through
+    explicitly (this module's own, possibly-monkeypatched, module attribute)
+    rather than letting the mirror re-import the real catalog, so tests that
     ``monkeypatch.setattr(provider_config, "CATALOG", ...)`` to inject
     synthetic rows are observed correctly."""
-    from aragora.models.pricing_mirror import provider_config_rows
-
     return provider_config_rows(today, catalog=CATALOG)
 
 
