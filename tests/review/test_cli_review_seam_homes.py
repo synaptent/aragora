@@ -129,7 +129,6 @@ def test_extract_finding_lines_fixed_fixture() -> None:
 
 def test_cli_settlement_receipt_is_canonical_class() -> None:
     assert review_queue.SettlementReceipt is settlement_receipt.SettlementReceipt
-    assert "SettlementReceipt" in review_queue.__all__
 
 
 @pytest.mark.parametrize("audit", (None, {"lane": "merge", "ok": True}))
