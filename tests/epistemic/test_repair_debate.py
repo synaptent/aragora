@@ -958,3 +958,99 @@ class TestUnprintableCruxFields:
         assert crux.statement == "Readable concern"
         assert crux.contesting_agents == ["agent-a", "agent-b"]
         json.dumps(result.to_dict(), allow_nan=False)
+
+
+# ---------------------------------------------------------------------------
+# Decay-signal floor for spec-linked cruxes that agents name
+# ---------------------------------------------------------------------------
+
+_LINKED_CRUX = "crux.soak.policy"
+_SIGNAL_STATEMENT = f"Unresolved crux from decay signal: {_LINKED_CRUX}"
+
+
+def _mention(crux_id: str = _LINKED_CRUX, **fields: Any) -> dict[str, Any]:
+    return {"supports_repair": True, "crux_candidates": [{"crux_id": crux_id, **fields}]}
+
+
+def _crux(result: RepairDebateResult, crux_id: str = _LINKED_CRUX):
+    return next(c for c in result.receipt.cruxes if c.crux_id == crux_id)
+
+
+class TestLinkedCruxSignalFloor:
+    def test_unscored_mention_keeps_signal_defaults_and_statement(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        spec = _spec(monkeypatch)
+        unnamed = _crux(run_repair_debate(spec, [_OpposeAgent()]))
+        named = _crux(run_repair_debate(spec, [_PayloadAgent("agent-a", _mention())]))
+        assert named.load_bearing_score == unnamed.load_bearing_score == 0.7
+        assert named.uncertainty_score == unnamed.uncertainty_score == 0.5
+        assert named.resolution_impact == unnamed.resolution_impact == 0.5
+        assert named.statement == unnamed.statement == _SIGNAL_STATEMENT
+        assert named.contesting_agents == ["agent-a"]
+
+    def test_higher_agent_scores_still_win(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        spec = _spec(monkeypatch)
+        payload = _mention(load_bearing_score=0.9, uncertainty_score=0.8, resolution_impact=0.6)
+        crux = _crux(run_repair_debate(spec, [_PayloadAgent("agent-a", payload)]))
+        assert crux.load_bearing_score == 0.9
+        assert crux.uncertainty_score == 0.8
+        assert crux.resolution_impact == 0.6
+        assert crux.statement == _SIGNAL_STATEMENT
+
+    @pytest.mark.parametrize(
+        "scores",
+        [
+            {"load_bearing_score": 0.0, "uncertainty_score": 0.1, "resolution_impact": 0.2},
+            {"load_bearing_score": "high", "uncertainty_score": float("nan")},
+        ],
+        ids=["lower", "malformed"],
+    )
+    def test_lower_or_unusable_agent_scores_cannot_lower_the_floor(
+        self, monkeypatch: pytest.MonkeyPatch, scores: dict[str, Any]
+    ) -> None:
+        spec = _spec(monkeypatch)
+        crux = _crux(run_repair_debate(spec, [_PayloadAgent("agent-a", _mention(**scores))]))
+        assert crux.load_bearing_score == 0.7
+        assert crux.uncertainty_score == 0.5
+        assert crux.resolution_impact == 0.5
+        assert crux.statement == _SIGNAL_STATEMENT
+
+    def test_agent_statement_is_kept(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        spec = _spec(monkeypatch)
+        payload = _mention(statement="Agent wording")
+        crux = _crux(run_repair_debate(spec, [_PayloadAgent("agent-a", payload)]))
+        assert crux.statement == "Agent wording"
+        assert crux.load_bearing_score == 0.7
+
+    def test_floor_does_not_depend_on_agent_order(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        spec = _spec(monkeypatch)
+        agents = [
+            _PayloadAgent("agent-a", _mention(load_bearing_score=0.1, uncertainty_score=0.9)),
+            _PayloadAgent("agent-b", _mention(statement="", resolution_impact=0.3)),
+        ]
+        forward = run_repair_debate(spec, agents)
+        backward = run_repair_debate(spec, list(reversed(agents)))
+        assert [c.to_dict() for c in forward.receipt.cruxes] == [
+            c.to_dict() for c in backward.receipt.cruxes
+        ]
+        crux = _crux(forward)
+        assert (crux.load_bearing_score, crux.uncertainty_score, crux.resolution_impact) == (
+            0.7,
+            0.9,
+            0.5,
+        )
+        assert crux.statement == _SIGNAL_STATEMENT
+        assert crux.contesting_agents == ["agent-a", "agent-b"]
+
+    def test_unlinked_crux_keeps_neutral_defaults(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        spec = _spec(monkeypatch)
+        result = run_repair_debate(spec, [_PayloadAgent("agent-a", _mention("crux.other"))])
+        crux = _crux(result, "crux.other")
+        assert (crux.load_bearing_score, crux.uncertainty_score, crux.resolution_impact) == (
+            0.5,
+            0.5,
+            0.5,
+        )
+        assert crux.statement == ""
+        assert [c.crux_id for c in result.receipt.cruxes] == ["crux.other", _LINKED_CRUX]

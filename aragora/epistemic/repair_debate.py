@@ -11,6 +11,11 @@ Invariants:
   by ``crux_id`` (spec-linked cruxes no agent named follow in spec order), and
   a crux several agents name keeps the highest usable score per field, a
   statement chosen by sorted agent name, and sorted ``contesting_agents``.
+- A spec-linked crux keeps the decay-signal scores (load-bearing 0.7,
+  uncertainty 0.5, resolution impact 0.5) as minimums: they join the
+  max-merge as one more candidate, so a higher agent score wins and a lower
+  or missing one cannot lower them. It keeps the signal statement unless an
+  agent supplies a non-empty one.
 - A crux candidate whose ``crux_id`` is empty or whose ``__str__`` raises is
   skipped as absent; a statement whose ``__str__`` raises counts as empty.
 - ``agent_evaluations`` is a strict-JSON deep copy of the agents' payloads:
@@ -54,6 +59,13 @@ from aragora.epistemic.repair import (
 # the lowest limit Python accepts, so such ints always print.
 _MAX_JSON_INT_BITS = 2048
 _MAX_JSON_DEPTH = 64
+
+# Scores a spec-linked crux carries from its decay signal before any agent rates it.
+_SIGNAL_CRUX_SCORES: dict[str, float] = {
+    "load_bearing_score": 0.7,
+    "uncertainty_score": 0.5,
+    "resolution_impact": 0.5,
+}
 
 
 class RepairDebateAgent(Protocol):
@@ -211,6 +223,8 @@ def _collect_crux_entries(
     highest usable value any agent gave (the neutral default applies only when
     none gave one), the statement is the first non-empty one in sorted
     ``(agent name, statement)`` order, and ``contesting_agents`` is sorted.
+    For a spec-linked crux the decay-signal scores join that max as one more
+    candidate, and the signal statement applies when no agent gave one.
     """
     named: dict[str, list[tuple[Any, dict[str, Any]]]] = {}
 
@@ -226,7 +240,10 @@ def _collect_crux_entries(
                 continue
             named.setdefault(cid, []).append((ev["agent"], cand))
 
-    crux_entries = [_merge_named_crux(cid, named[cid], spec) for cid in sorted(named)]
+    linked_ids = set(spec.linked_crux_ids)
+    crux_entries = [
+        _merge_named_crux(cid, named[cid], spec, linked=cid in linked_ids) for cid in sorted(named)
+    ]
     entries_by_id = {entry.crux_id: entry for entry in crux_entries}
 
     for crux_id in spec.linked_crux_ids:
@@ -234,12 +251,12 @@ def _collect_crux_entries(
             continue
         entry = CruxEntry(
             crux_id=crux_id,
-            statement=f"Unresolved crux from decay signal: {crux_id}",
-            load_bearing_score=0.7,
-            uncertainty_score=0.5,
+            statement=_signal_crux_statement(crux_id),
+            load_bearing_score=_SIGNAL_CRUX_SCORES["load_bearing_score"],
+            uncertainty_score=_SIGNAL_CRUX_SCORES["uncertainty_score"],
             contesting_agents=[],
             affected_claims=list(spec.linked_claims),
-            resolution_impact=0.5,
+            resolution_impact=_SIGNAL_CRUX_SCORES["resolution_impact"],
         )
         entries_by_id[crux_id] = entry
         crux_entries.append(entry)
@@ -247,24 +264,39 @@ def _collect_crux_entries(
     return crux_entries
 
 
+def _signal_crux_statement(crux_id: Any) -> str:
+    return f"Unresolved crux from decay signal: {crux_id}"
+
+
 def _merge_named_crux(
     crux_id: str,
     named_by: list[tuple[Any, dict[str, Any]]],
     spec: RepairSpec,
+    *,
+    linked: bool,
 ) -> CruxEntry:
-    """Merge every agent candidate for *crux_id* into one order-independent entry."""
+    """Merge every agent candidate for *crux_id* into one order-independent entry.
+
+    When *linked*, the decay-signal scores are one more candidate, so they act
+    as minimums, and the signal statement replaces an empty one.
+    """
     candidates = [cand for _, cand in named_by]
+    if linked:
+        candidates.append(dict(_SIGNAL_CRUX_SCORES))
     statements = sorted(
         (str(agent), _safe_str(cand.get("statement") or "", unprintable=""))
         for agent, cand in named_by
     )
+    statement = next((text for _, text in statements if text), "")
+    if linked and not statement:
+        statement = _signal_crux_statement(crux_id)
     agents: list[Any] = []
     for agent, _ in named_by:
         if agent not in agents:
             agents.append(agent)
     return CruxEntry(
         crux_id=crux_id,
-        statement=next((text for _, text in statements if text), ""),
+        statement=statement,
         load_bearing_score=_merged_score(candidates, "load_bearing_score"),
         uncertainty_score=_merged_score(candidates, "uncertainty_score"),
         contesting_agents=sorted(agents, key=str),
