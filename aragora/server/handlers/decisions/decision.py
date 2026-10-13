@@ -84,17 +84,19 @@ def _save_result(
     *,
     org_id: str | None = None,
     created_by: str | None = None,
-) -> None:
-    """Save a decision result, owned by ``org_id``, to persistent store with fallback."""
+) -> bool:
+    """Save a result owned by ``org_id``; False, writing nothing, if another org owns it."""
     store = _decision_result_store.get()
     if store:
         try:
-            store.save(request_id, data, org_id=org_id, created_by=created_by)
-            return
+            return bool(store.save(request_id, data, org_id=org_id, created_by=created_by))
         except (KeyError, ValueError, OSError, TypeError) as e:
             logger.warning("Failed to persist result, using fallback: %s", e)
     # Fallback to in-memory; an existing owner is kept, as in the store.
     previous = _decision_results_fallback.get(request_id) or {}
+    if previous.get("org_id") and previous["org_id"] != (org_id or data.get("org_id")):
+        logger.warning("Refused to save decision result %s for another org", request_id)
+        return False
     owner_org = previous.get("org_id") or org_id or data.get("org_id")
     owner_user = (
         previous.get("created_by")
@@ -106,6 +108,7 @@ def _save_result(
         "org_id": owner_org,
         "created_by": owner_user,
     }
+    return True
 
 
 def _get_result(request_id: str, org_id: str | None) -> dict[str, Any] | None:
@@ -309,7 +312,7 @@ class DecisionHandler(BaseHandler):
             result = await router.route(request)
 
             # Cache result for polling (persistent)
-            _save_result(
+            if not _save_result(
                 request.request_id,
                 {
                     "request_id": request.request_id,
@@ -319,7 +322,8 @@ class DecisionHandler(BaseHandler):
                 },
                 org_id=scope.org_id,
                 created_by=scope.user_id,
-            )
+            ):
+                return record_not_found("Decision")
 
             return json_response(
                 {
@@ -338,7 +342,7 @@ class DecisionHandler(BaseHandler):
 
         except asyncio.TimeoutError:
             # Save as pending for async polling
-            _save_result(
+            if not _save_result(
                 request.request_id,
                 {
                     "request_id": request.request_id,
@@ -347,12 +351,13 @@ class DecisionHandler(BaseHandler):
                 },
                 org_id=scope.org_id,
                 created_by=scope.user_id,
-            )
+            ):
+                return record_not_found("Decision")
             return error_response("Decision request timed out", 408)
 
         except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError) as e:
             logger.exception("Decision routing failed: %s", e)
-            _save_result(
+            if not _save_result(
                 request.request_id,
                 {
                     "request_id": request.request_id,
@@ -361,7 +366,8 @@ class DecisionHandler(BaseHandler):
                 },
                 org_id=scope.org_id,
                 created_by=scope.user_id,
-            )
+            ):
+                return record_not_found("Decision")
             logger.warning("Handler error: %s", e)
             return error_response("Decision processing failed", 500)
 

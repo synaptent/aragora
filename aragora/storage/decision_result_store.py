@@ -336,6 +336,7 @@ class DecisionResultStore:
                 WHEN decision_results.org_id IS NULL THEN excluded.created_by
                 ELSE decision_results.created_by
             END
+        WHERE decision_results.org_id IS NULL OR decision_results.org_id = excluded.org_id
     """
 
     def save(
@@ -345,7 +346,7 @@ class DecisionResultStore:
         *,
         org_id: str | None = None,
         created_by: str | None = None,
-    ) -> None:
+    ) -> bool:
         """
         Save a decision result.
 
@@ -393,6 +394,9 @@ class DecisionResultStore:
             conn.commit()
             owner = conn.execute(owner_query, (request_id,)).fetchone()
 
+        if owner is not None and owner[0] and owner[0] != entry.org_id:
+            logger.warning("Refused to save decision result %s for another org", request_id)
+            return False
         # The upsert may have kept an earlier owner; cache what was stored.
         if owner is not None:
             entry.org_id, entry.created_by = owner[0], owner[1]
@@ -413,6 +417,7 @@ class DecisionResultStore:
 
         # Enforce max entries with LRU eviction
         self._enforce_max_entries()
+        return True
 
     def get(self, request_id: str) -> dict[str, Any] | None:
         """

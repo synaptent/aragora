@@ -1990,7 +1990,7 @@ class TestSaveAndGetResult:
             "test_id", {"status": "completed"}, org_id=OTHER_ORG, created_by="intruder"
         )
         saved = mod._decision_results_fallback["test_id"]
-        assert saved["status"] == "completed"
+        assert saved["status"] == "pending"
         assert saved["org_id"] == ORG
         assert saved["created_by"] == USER
 

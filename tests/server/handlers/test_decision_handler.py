@@ -141,7 +141,7 @@ class MockDecisionResultStore:
         *,
         org_id: str | None = None,
         created_by: str | None = None,
-    ) -> None:
+    ) -> bool:
         previous = self._results.get(request_id) or {}
         owned = bool(previous.get("org_id"))
         self._results[request_id] = {
@@ -151,6 +151,7 @@ class MockDecisionResultStore:
                 previous.get("created_by") if owned else (created_by or data.get("created_by"))
             ),
         }
+        return True
 
     def get(self, request_id: str) -> dict[str, Any] | None:
         return self._results.get(request_id)
@@ -969,3 +970,37 @@ class TestRetryErrorHandling:
             assert result.status_code == 500
             body = json.loads(result.body)
             assert "failed" in body.get("error", "").lower()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("persistent", [True, False])
+async def test_other_org_cannot_overwrite_a_decision(tmp_path, monkeypatch, persistent):
+    """Org B reusing org A's request_id is answered like a missing decision; A's result stays."""
+    from aragora.server.handlers.decisions import decision as mod
+    from aragora.storage.decision_result_store import DecisionResultStore
+    from aragora.tenancy.record_scope import OrgScope
+
+    store = DecisionResultStore(db_path=tmp_path / "results.db") if persistent else None
+    monkeypatch.setattr(mod._decision_result_store, "get", lambda: store)
+    monkeypatch.setattr(mod, "_decision_results_fallback", {})
+    monkeypatch.setattr(mod, "_get_decision_router", lambda ctx=None: MockDecisionRouter())
+    scopes = {org: OrgScope(org_id=org, user_id=f"{org}-user", role="member") for org in "AB"}
+    h = DecisionHandler({})
+
+    async def create(org, body):
+        monkeypatch.setattr(mod, "require_org_scope", lambda handler: (scopes[org], None))
+        result = await h.handle_post("/api/v1/decisions", {}, create_mock_handler("POST", body))
+        return json.loads(result.body)
+
+    def read(org, request_id):
+        return json.loads(h._get_decision(request_id, scopes[org]).body)
+
+    rid_a = (await create("A", {"content": "A?"}))["request_id"]
+    before = read("A", rid_a)
+    reused = await create("B", {"content": "B?", "request_id": rid_a})
+    refused = mod._save_result(rid_a, {"request_id": rid_a, "status": "failed"}, org_id="B")
+
+    assert reused == read("B", rid_a) == {"error": "Decision not found", "code": "not_found"}
+    assert refused is False
+    assert read("A", rid_a) == before
+    assert before["result"]["answer"] == "Answer for: A?"
