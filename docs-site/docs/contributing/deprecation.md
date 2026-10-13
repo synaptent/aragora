@@ -9,7 +9,7 @@ This document outlines Aragora's comprehensive deprecation policy for API endpoi
 
 ## Overview
 
-Aragora follows a structured deprecation process that balances the need for improvement with stability for existing integrations. All deprecations follow a **2 minor version grace period** before removal.
+Aragora follows a structured deprecation process that balances the need for improvement with stability for existing integrations. All deprecations follow a **2 minor version grace period** before removal, except those listed under [Exceptions to Policy](#exceptions-to-policy).
 
 ### Deprecation Timeline
 
@@ -91,7 +91,7 @@ warnings.warn(
 )
 ```
 
-**Exception: methods whose routes no server dispatches.** A method in either SDK (Python or TypeScript), or in the in-package `aragora.client`, whose route no server handler dispatches has never worked: every call fails with a route-level 404 or `handler_no_result`. Such a method may be removed in any release without the grace period or a `DeprecationWarning`, provided that the change removes no server route, the release's CHANGELOG lists the removal under **Removed**, and [Breaking Changes](../reference/breaking-changes) records it. v2.11.0 and v2.11.1 already removed such methods; v2.11.1 lists its removals (#10138) under **Removed**.
+**Exception: methods whose routes no server dispatches.** A method in either SDK (Python or TypeScript), or in the in-package `aragora.client`, whose route no server handler dispatches has never worked at runtime: every call fails with a route-level 404 or `handler_no_result`. Such a method may be removed in any release without the grace period, a `DeprecationWarning` or the steps under "Testing Requirements Before Removal", provided that the change removes no server route, the release's CHANGELOG lists the removal under **Removed**, and [Breaking Changes](../reference/breaking-changes) records it. The removal can still break the build of code that references the method (or a type exported only for it), which is why the CHANGELOG entry is required. v2.11.1 removed such methods this way (#10138, listed under **Removed**); v2.11.0 removed others before this exception was written and lists them under **Changed**.
 
 ### 4. Internal APIs
 
@@ -323,7 +323,7 @@ The `aragora.crawlers` module is being replaced by `aragora.connectors` which pr
 
 ## Testing Requirements Before Removal
 
-Before removing deprecated code:
+Before removing deprecated code (SDK methods for unserved routes are exempt; see the exception in section 3, SDK Methods):
 
 ### 1. Usage Monitoring
 
@@ -555,7 +555,7 @@ The following situations may warrant shorter deprecation periods:
 1. **Security vulnerabilities**: Critical security issues may require immediate removal
 2. **Legal/compliance requirements**: Regulatory changes may force faster deprecation
 3. **Data integrity issues**: Features that could cause data loss may be removed faster
-4. **SDK methods for unserved routes**: may be removed with no deprecation period under the exception in section 3 (SDK Methods), which still requires a CHANGELOG entry; the advance-notice rules below do not apply to them
+4. **SDK methods for unserved routes**: may be removed with no deprecation period under the exception in section 3 (SDK Methods), which still requires a CHANGELOG entry; neither the advance-notice rules below nor the steps under "Testing Requirements Before Removal" apply to them
 
 In exceptional cases:
 - Minimum 1 release cycle notice
