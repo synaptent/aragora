@@ -434,3 +434,9 @@ import-and-call tests at both paths.
 | `aragora.connectors.supermemory.client` | `aragora.memory.supermemory.client` | #10622 | not before M4 seal |
 | `aragora.connectors.supermemory.config` | `aragora.memory.supermemory.config` | #10622 | not before M4 seal |
 | `aragora.connectors.supermemory.privacy_filter` | `aragora.memory.supermemory.privacy_filter` | #10622 | not before M4 seal |
+| `aragora.nomic.approval` | `aragora.agents.change_approval` | #10625 | not before M4 seal |
+| `aragora.nomic.test_generator` | `aragora.agents.spec_test_generator` | #10625 | not before M4 seal |
+| `aragora.nomic.agent_roles` | `aragora.agents.roles` | #10625 | not before M4 seal |
+| `aragora.nomic.context_builder` | `aragora.rlm.context_builder` | #10625 | not before M4 seal |
+| `aragora.nomic.repository_profile` | `aragora.rlm.repository_profile` | #10625 | not before M4 seal |
+| `aragora.nomic.rlm_codebase` | `aragora.rlm.codebase_summary` | #10625 | not before M4 seal |
