@@ -29,6 +29,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import concurrent.futures
+import functools
 import inspect
 import json
 import logging
@@ -1708,7 +1709,41 @@ def _split_unified_diff(diff: str) -> list[str]:
     return segments
 
 
-def _bound_diff_body(diff: str, max_chars: int) -> tuple[str, bool]:
+def _water_fill(lengths: Sequence[int], budget: int) -> list[int]:
+    """Share ``budget`` smallest first, each item's unused share flowing to the rest."""
+    allocations = [0] * len(lengths)
+    remaining_files = len(lengths)
+    for index in sorted(range(len(lengths)), key=lambda i: lengths[i]):
+        take = min(lengths[index], budget // remaining_files)
+        allocations[index] = take
+        budget -= take
+        remaining_files -= 1
+    return allocations
+
+
+def _deprioritized_allocations(segments: list[str], named: set[str], max_chars: int) -> list[int]:
+    # Every header line and truncation marker is reserved up front, so the
+    # result keeps every file and never exceeds max_chars, even after markers.
+    heads = [len(segment.split("\n", 1)[0]) for segment in segments]
+    budget = max_chars - sum(heads) - len(_PER_FILE_TRUNCATION_MARKER) * len(segments)
+    if budget < 0:
+        raise ValueError("too many changed files to deprioritize paths within the diff cap")
+    allocations = list(heads)
+    for want_named in (False, True):
+        # A segment holds one ``diff --git`` header, so its file list is its path.
+        group = [
+            i for i, s in enumerate(segments) if (_file_list_from_diff(s) in named) is want_named
+        ]
+        extra = _water_fill([len(segments[i]) - heads[i] for i in group], budget)
+        for index, take in zip(group, extra):
+            allocations[index] += take
+        budget -= sum(extra)
+    return allocations
+
+
+def _bound_diff_body(
+    diff: str, max_chars: int, *, deprioritize_paths: Sequence[str] = ()
+) -> tuple[str, bool]:
     """Bound a unified diff to ``max_chars`` without dropping whole files.
 
     A naive ``diff[:max_chars]`` keeps only the files that sort before the budget
@@ -1717,21 +1752,26 @@ def _bound_diff_body(diff: str, max_chars: int) -> tuple[str, bool]:
     absent. Instead the budget is shared across files (smallest first, each
     file's unused budget flowing to the rest) so every changed file contributes
     at least a hunk. Returns ``(text, truncated)``.
+
+    ``deprioritize_paths`` (operator-named changed paths, such as generated files)
+    split what is left after the other files share the budget by the same rule;
+    a named path missing from the diff raises ``ValueError``.
     """
+    named = set(deprioritize_paths)
+    if named:
+        present = {_file_list_from_diff(s) for s in _split_unified_diff(diff)}
+        missing = [path for path in deprioritize_paths if path not in present]
+        if missing:
+            raise ValueError("deprioritized path(s) not in the PR diff: " + ", ".join(missing))
     if len(diff) <= max_chars:
         return diff, False
     segments = _split_unified_diff(diff)
-    if len(segments) <= 1:
+    if named:
+        allocations = _deprioritized_allocations(segments, named, max_chars)
+    elif len(segments) <= 1:
         return diff[:max_chars].rstrip() + _PER_FILE_TRUNCATION_MARKER, True
-    allocations = [0] * len(segments)
-    remaining_budget = max_chars
-    remaining_files = len(segments)
-    for index in sorted(range(len(segments)), key=lambda i: len(segments[i])):
-        share = remaining_budget // remaining_files if remaining_files else 0
-        take = min(len(segments[index]), share)
-        allocations[index] = take
-        remaining_budget -= take
-        remaining_files -= 1
+    else:
+        allocations = _water_fill([len(segment) for segment in segments], max_chars)
     truncated = False
     parts: list[str] = []
     for segment, budget in zip(segments, allocations):
@@ -1939,6 +1979,7 @@ def build_review_prompt(
     diff_text: str,
     name_status: str = "",
     full_files: str = "",
+    deprioritize_paths: Sequence[str] = (),
 ) -> BuiltReviewPrompt:
     """Adversarial review prompt grounded on the exact head.
 
@@ -1952,13 +1993,17 @@ def build_review_prompt(
     diff = diff_text.strip()
     file_list = name_status.strip() or _file_list_from_diff(diff)
     file_count = sum(1 for line in file_list.splitlines() if line.strip())
-    bounded, truncated = _bound_diff_body(diff, _MAX_DIFF_CHARS)
+    bounded, truncated = _bound_diff_body(
+        diff, _MAX_DIFF_CHARS, deprioritize_paths=deprioritize_paths
+    )
     short = head_sha[:7]
     body_header = f"=== DIFF (head {short}) ==="
     if truncated:
+        named = ", ".join(deprioritize_paths)
+        named_note = f"; operator-named paths given their diff share last: {named}" if named else ""
         body_header = (
             f"=== DIFF (head {short}; some hunks omitted for length - the CHANGED FILES "
-            "list above is complete, so treat every listed path as present) ==="
+            f"list above is complete, so treat every listed path as present{named_note}) ==="
         )
     return BuiltReviewPrompt(
         "You are an adversarial senior reviewer giving an independent model review. "
@@ -2944,7 +2989,9 @@ def _fetch_name_status(repo: str, pr: int) -> str:
     return proc.stdout or ""
 
 
-def default_prompt_builder(repo: str, pr: int, ctx: dict[str, Any]) -> str:
+def default_prompt_builder(
+    repo: str, pr: int, ctx: dict[str, Any], *, deprioritize_paths: Sequence[str] = ()
+) -> str:
     head_sha = str(ctx.get("head_sha") or "")
     proc = merge_quorum_io.run(
         ["gh", "pr", "diff", str(pr), "--repo", repo],
@@ -3008,6 +3055,7 @@ def default_prompt_builder(repo: str, pr: int, ctx: dict[str, Any]) -> str:
         diff_text=diff_text,
         name_status=name_status,
         full_files=full_files,
+        deprioritize_paths=deprioritize_paths,
     )
 
 
@@ -4218,6 +4266,7 @@ def run_collect_cli(
     printer: Callable[[str], None] = print,
     claude_review_checkout: str | None = None,
     claude_review_expected_head: str | None = None,
+    deprioritize_paths: Sequence[str] | None = None,
 ) -> int:
     """Shared entry point for the script and ``review-queue collect-evidence``.
 
@@ -4237,6 +4286,9 @@ def run_collect_cli(
     tier and conflicts loudly with ``apply`` (exit 1 before any collection
     work, for the kwarg and the environment variable alike) instead of
     silently overriding it.
+
+    ``deprioritize_paths`` only binds the default prompt builder (see
+    :func:`_bound_diff_body`); no environment, reviewer argument or posting changes.
     """
     fams = tuple(families) if families else DEFAULT_FAMILIES
     resolved_author = author or resolve_author()
@@ -4246,6 +4298,11 @@ def run_collect_cli(
                 f"--never-post (or {_NEVER_POST_ENV}=1) conflicts with --apply: the "
                 "never-post control forbids posting at any tier; drop --apply or "
                 "clear the control"
+            )
+        if deprioritize_paths and prepared_json is not None:
+            raise ValueError(
+                "--deprioritize-path does not apply to --prepared-json: a prepared "
+                "artifact already holds its reviewers' output"
             )
         overall_timeout_seconds = _positive_timeout_seconds(
             overall_timeout_seconds, "overall_timeout_seconds"
@@ -4260,6 +4317,11 @@ def run_collect_cli(
             env_overrides[_CLAUDE_REVIEW_EXPECTED_HEAD_ENV] = claude_review_expected_head
         with _scoped_env(env_overrides):
             if prepared_json is None:
+                builder: dict[str, Any] = {}
+                if deprioritize_paths:
+                    builder["prompt_builder"] = functools.partial(
+                        default_prompt_builder, deprioritize_paths=tuple(deprioritize_paths)
+                    )
                 outcome = collect_evidence(
                     repo=repo,
                     pr=pr,
@@ -4270,6 +4332,7 @@ def run_collect_cli(
                     env=merge_quorum_io.aragora_env(),
                     quorum_reconciler=default_quorum_reconciler if apply else None,
                     overall_timeout_seconds=overall_timeout_seconds,
+                    **builder,
                 )
             else:
                 outcome = apply_prepared_evidence(

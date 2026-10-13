@@ -143,6 +143,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--claude-review-expected-head", help="40-hex SHA the pinned checkout must be at."
     )
+    parser.add_argument(
+        "--deprioritize-path",
+        dest="deprioritize_paths",
+        action="append",
+        metavar="PATH",
+        help=(
+            "Changed path (e.g. a generated file) whose diff gets its share of the "
+            "bounded review prompt last; repeatable. Every changed file stays listed."
+        ),
+    )
     args = parser.parse_args(argv)
     if args.apply and args.never_post:
         parser.error(
@@ -172,6 +182,7 @@ def main(argv: list[str] | None = None) -> int:
         overall_timeout_seconds=args.overall_timeout,
         claude_review_checkout=args.claude_review_checkout,
         claude_review_expected_head=args.claude_review_expected_head,
+        deprioritize_paths=args.deprioritize_paths,
     )
     try:
         outcome = json.loads("\n".join(captured))

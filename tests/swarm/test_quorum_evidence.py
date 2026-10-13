@@ -4798,6 +4798,12 @@ def test_bound_diff_body_with_deprioritize_stays_capped_and_keeps_every_file(cas
     assert _diff_headers(bounded) == _diff_headers(diff)
 
 
+def test_bound_diff_body_deprioritize_refuses_a_cap_too_small_for_every_header() -> None:
+    diff = "".join(f"diff --git a/f{i}.py b/f{i}.py\n+x\n" for i in range(20))
+    with pytest.raises(ValueError, match="too many changed files"):
+        qe._bound_diff_body(diff, 200, deprioritize_paths=("f0.py",))
+
+
 # --- default_prompt_builder: name-status pass-through + graceful fallback ----
 
 
@@ -4881,7 +4887,7 @@ def test_cli_deprioritize_path_only_binds_the_prompt_builder(monkeypatch, capsys
     assert named_env == plain_env
     builder = named.pop("prompt_builder")
     assert named == plain and "prompt_builder" not in plain
-    assert builder.func is qe.default_prompt_builder
+    assert isinstance(builder, functools.partial) and builder.func is qe.default_prompt_builder
     assert builder.keywords == {"deprioritize_paths": ("a.json", "b.md")}
     capsys.readouterr()
     prepared = ["--prepared-json", "p.json", "--deprioritize-path", "a.json"]
