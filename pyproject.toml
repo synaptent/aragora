@@ -236,6 +236,12 @@ gateway = "aragora.gateway.store_registration:register_canonical_gateway_store"
 [project.entry-points."aragora.chat_connector_lookups"]
 chat = "aragora.connectors.chat.lookup_registration:register_chat_connector_lookup_from_registry"
 
+# Run by aragora/debate/decision_plan_bridges.py on the first post-debate bridge lookup
+# that finds no factory, so the debate engine routes decision plans to Jira, Linear or n8n
+# without importing aragora.integrations.
+[project.entry-points."aragora.decision_plan_bridges"]
+integrations = "aragora.integrations.decision_bridge_registration:register_decision_bridge"
+
 # -----------------------------------------------------------------------------
 # uv resolver constraints — security floors for the pip-audit security gate
 # (scripts/run_pip_audit_gate.py). They bound what the lockfile may resolve
