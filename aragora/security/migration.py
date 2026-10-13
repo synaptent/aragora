@@ -343,22 +343,14 @@ def _is_undecrypted_token(token: Any) -> bool:
 def migrate_integration_store(dry_run: bool = False) -> MigrationResult:
     """Migrate integration store secrets."""
     try:
-        from aragora.storage.integration_store import get_integration_store
+        from aragora.storage.integration_store import SENSITIVE_KEYS, get_integration_store
         from aragora.utils.async_utils import run_async
 
         store = get_integration_store()
         result = MigrationResult(store_name="integration_store")
 
-        sensitive_fields = [
-            "api_key",
-            "api_secret",
-            "access_token",
-            "refresh_token",
-            "password",
-            "secret",
-            "credentials",
-            "token",
-        ]
+        # Exactly the keys the store encrypts on save, so every plaintext one is re-saved.
+        sensitive_fields = sorted(SENSITIVE_KEYS)
 
         try:
             configs = _list_store_records(store, result.store_name, limit=_INTEGRATION_LIST_LIMIT)
@@ -414,7 +406,11 @@ def migrate_gmail_token_store(dry_run: bool = False) -> MigrationResult:
     under older key versions alike. A dry run lists and counts without saving.
     """
     try:
-        from aragora.storage.gmail_token_store import ENCRYPTED_FIELDS, get_gmail_token_store
+        from aragora.storage.gmail_token_store import (
+            ENCRYPTED_FIELDS,
+            EncryptionError,
+            get_gmail_token_store,
+        )
         from aragora.utils.async_utils import run_async
 
         store = get_gmail_token_store()
@@ -455,6 +451,7 @@ def migrate_gmail_token_store(dry_run: bool = False) -> MigrationResult:
                 RuntimeError,
                 OSError,
                 sqlite3.Error,
+                EncryptionError,
             ) as e:
                 result.failed_records += 1
                 result.errors.append(f"Error migrating record: {user_id}")
@@ -1102,7 +1099,11 @@ def _get_gmail_store_config() -> dict[str, Any] | None:
     key when saving, so each listed user state is re-saved as it was read.
     """
     try:
-        from aragora.storage.gmail_token_store import ENCRYPTED_FIELDS, get_gmail_token_store
+        from aragora.storage.gmail_token_store import (
+            ENCRYPTED_FIELDS,
+            EncryptionError,
+            get_gmail_token_store,
+        )
         from aragora.utils.async_utils import run_async
 
         store = get_gmail_token_store()
@@ -1121,7 +1122,12 @@ def _get_gmail_store_config() -> dict[str, Any] | None:
         def save_state(user_id: str, record: dict[str, Any]) -> bool:
             if any(_is_undecrypted_token(record.get(name)) for name in ENCRYPTED_FIELDS):
                 raise RuntimeError("Store returned a token it could not decrypt")
-            run_async(store.save(states_by_user[user_id]))
+            try:
+                run_async(store.save(states_by_user[user_id]))
+            except EncryptionError as e:
+                # Counted as a per-record failure by the caller; the store's message
+                # can carry key or path detail, so only the type is passed on.
+                raise RuntimeError(f"Saving tokens failed: {type(e).__name__}") from e
             return True
 
         return {
