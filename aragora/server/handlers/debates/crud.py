@@ -67,8 +67,10 @@ def _stored_debate_org(storage: Any, ref: str) -> str | None:
     """The org owning a private stored debate; None when public, unowned or unknown."""
     read_access = getattr(storage, "get_read_access", None)
     access = read_access(ref) if callable(read_access) else None
-    private = isinstance(access, tuple) and len(access) == 3 and not access[2]
-    return access[1] if private and isinstance(access[1], str) and access[1] else None
+    if not isinstance(access, tuple) or len(access) != 3 or access[2]:
+        return None
+    org_id = access[1]
+    return org_id if isinstance(org_id, str) and org_id else None
 
 
 def _running_debate_org(debate_id: str) -> str | None:
