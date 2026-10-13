@@ -212,6 +212,7 @@ from aragora.control_plane.event_registry import (
     register_task_event_dispatcher,
 )
 from aragora.control_plane.scheduler_registration import register_distributed_scheduler
+from aragora.control_plane.security_registration import register_rbac_security_notifier
 
 # The events layer cannot import the control plane, so the control plane hands
 # it the default task-event dispatcher and the agent-registry factory here.
@@ -219,6 +220,8 @@ register_task_event_dispatcher()
 register_event_agent_registry()
 # Likewise the agents scheduler protocol, for its distributed scheduler adapter.
 register_distributed_scheduler()
+# Likewise RBAC break-glass access, for security-team notifications.
+register_rbac_security_notifier()
 
 __all__ = [
     # Registry
