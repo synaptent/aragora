@@ -12,6 +12,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from aragora.blockchain.receipt_anchor import AnchorRecord, ReceiptAnchor
+from aragora.tenancy.record_scope import OrgScope
+
+_SCOPE = OrgScope(org_id="org-1", user_id="u-1", role="owner")
 
 
 class TestVerifyAnchorNoAnchors:
@@ -267,7 +270,7 @@ class TestRecentAnchorsEndpoint:
 
         from aragora.server.handlers.gauntlet.receipts import GauntletReceiptsMixin
 
-        result = GauntletReceiptsMixin._get_recent_anchors.__wrapped__(mixin, {})
+        result = GauntletReceiptsMixin._get_recent_anchors.__wrapped__(mixin, {}, scope=_SCOPE)
 
         assert result.status_code == 200
         body = json.loads(result.body)
@@ -291,11 +294,16 @@ class TestRecentAnchorsEndpoint:
             )
 
         mixin._receipt_anchor = anchor
+        # Every anchored hash belongs to the caller's org, so the org filter keeps all five.
+        mixin._owned_receipt_hashes = MagicMock(side_effect=lambda hashes, scope: hashes)
 
         from aragora.server.handlers.gauntlet.receipts import GauntletReceiptsMixin
 
-        result = GauntletReceiptsMixin._get_recent_anchors.__wrapped__(mixin, {"limit": "3"})
+        result = GauntletReceiptsMixin._get_recent_anchors.__wrapped__(
+            mixin, {"limit": "3"}, scope=_SCOPE
+        )
 
+        mixin._owned_receipt_hashes.assert_called_once_with({f"hash_{i}" for i in range(5)}, _SCOPE)
         assert result.status_code == 200
         body = json.loads(result.body)
         assert len(body["anchors"]) == 3
@@ -311,7 +319,7 @@ class TestRecentAnchorsEndpoint:
 
         from aragora.server.handlers.gauntlet.receipts import GauntletReceiptsMixin
 
-        result = GauntletReceiptsMixin._get_recent_anchors.__wrapped__(mixin, {})
+        result = GauntletReceiptsMixin._get_recent_anchors.__wrapped__(mixin, {}, scope=_SCOPE)
 
         body = json.loads(result.body)
         assert body["limit"] == 10
