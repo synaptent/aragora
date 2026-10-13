@@ -104,8 +104,8 @@ class _DebatesHandlerProtocol(Protocol):
 
     ctx: dict[str, Any]
 
-    def get_storage(self) -> Any | None:
-        """Get debate storage instance."""
+    def get_storage(self) -> Any:
+        """Get debate storage instance (``@require_storage`` routes never see None)."""
         ...
 
     def read_json_body(self, handler: Any, max_size: int | None = None) -> dict[str, Any] | None:
