@@ -190,6 +190,12 @@ analytics = "aragora.analytics.debate_events:subscribe_debate_analytics"
 [project.entry-points."aragora.workspace_stores"]
 stores = "aragora.stores.debate_registration:register_debate_workspace_stores"
 
+# Run by aragora/debate/template_registry_hooks.py on the first template lookup that
+# finds no registry factory, so team selection reads marketplace templates without
+# importing aragora.marketplace.
+[project.entry-points."aragora.debate_template_registries"]
+marketplace = "aragora.marketplace.debate_registration:register_debate_template_registry"
+
 # Run by aragora/agents/scheduler_protocol.py on the first distributed adapter that finds
 # no scheduler registered, so a process that only imports aragora.agents still builds
 # the control plane's task scheduler.
