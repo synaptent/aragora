@@ -34,6 +34,10 @@ from aragora.debate.decision_plan_bridges import (
     DecisionPlanBridgeNotRegisteredError,
     create_decision_plan_bridge,
 )
+from aragora.debate.gauntlet_runners import (
+    GauntletRunnerNotRegisteredError,
+    create_gauntlet_runner,
+)
 from aragora.debate.post_debate_config import PostDebateConfig, PostDebateResult
 from aragora.debate.post_debate_persistence import PostDebatePersistenceMixin
 from aragora.pipeline.backbone_contracts import BackboneStage, RunLedger, RunStageEvent
@@ -939,9 +943,12 @@ class PostDebateCoordinator(PostDebatePersistenceMixin):
         Returns the ``receipt_id`` on success, ``None`` on failure.
         """
         try:
-            from aragora.gauntlet.receipt_models import DecisionReceipt
-            from aragora.gauntlet.receipt_store import ReceiptState, get_receipt_store
-            from aragora.gauntlet.signing import get_default_signer
+            from aragora.debate.receipt_operations import register_debate_receipt_operations
+            from aragora.models.receipts.gauntlet import DecisionReceipt
+            from aragora.storage.receipt_lifecycle_store import ReceiptState, get_receipt_store
+            from aragora.storage.receipt_signing import get_default_signer
+
+            register_debate_receipt_operations()
 
             # Build a full DecisionReceipt from the debate result
             receipt = DecisionReceipt.from_debate_result(
@@ -1080,9 +1087,7 @@ class PostDebateCoordinator(PostDebatePersistenceMixin):
     ) -> dict[str, Any] | None:
         """Step 2.5: Run lightweight adversarial stress test on high-confidence decisions."""
         try:
-            from aragora.gauntlet.runner import GauntletRunner
-
-            runner = GauntletRunner()
+            runner = create_gauntlet_runner()
             input_content = str(
                 getattr(debate_result, "final_answer", getattr(debate_result, "consensus", ""))
             )
@@ -1101,7 +1106,7 @@ class PostDebateCoordinator(PostDebatePersistenceMixin):
                 "debate_id": debate_id,
                 "verdict": verdict,
             }
-        except ImportError:
+        except (ImportError, GauntletRunnerNotRegisteredError):
             logger.debug("GauntletRunner not available")
             return None
         except (ValueError, TypeError, AttributeError, RuntimeError, OSError, ConnectionError) as e:
@@ -1583,7 +1588,7 @@ class PostDebateCoordinator(PostDebatePersistenceMixin):
         receipt_data = metadata.get("receipt")
         if isinstance(receipt_data, dict):
             try:
-                from aragora.gauntlet.receipt_models import DecisionReceipt
+                from aragora.models.receipts.gauntlet import DecisionReceipt
 
                 return DecisionReceipt.from_dict(receipt_data)
             except (ValueError, TypeError, KeyError):

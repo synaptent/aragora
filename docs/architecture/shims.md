@@ -440,3 +440,4 @@ import-and-call tests at both paths.
 | `aragora.nomic.context_builder` | `aragora.rlm.context_builder` | #10625 | not before M4 seal |
 | `aragora.nomic.repository_profile` | `aragora.rlm.repository_profile` | #10625 | not before M4 seal |
 | `aragora.nomic.rlm_codebase` | `aragora.rlm.codebase_summary` | #10625 | not before M4 seal |
+| `aragora.gauntlet.receipt_store` | `aragora.storage.receipt_lifecycle_store` | #10628 | not before M4 seal |

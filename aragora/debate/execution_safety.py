@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from aragora.debate.provider_diversity import detect_provider
-from aragora.gauntlet.receipt_models import DecisionReceipt
+from aragora.models.receipts.gauntlet import DecisionReceipt
 
 _MODEL_FAMILY_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("claude", re.compile(r"claude", re.I)),
@@ -236,7 +236,7 @@ def _retrieve_persisted_receipt(
         return None, False, False, False
 
     try:
-        from aragora.gauntlet.receipt_store import ReceiptState, get_receipt_store
+        from aragora.storage.receipt_lifecycle_store import ReceiptState, get_receipt_store
 
         store = get_receipt_store()
         stored = store.get(receipt_id)
@@ -289,6 +289,9 @@ def _build_signed_receipt(result: Any) -> tuple[DecisionReceipt | None, bool, bo
         (receipt, signed, integrity_valid, signature_valid)
     """
     try:
+        from aragora.debate.receipt_operations import register_debate_receipt_operations
+
+        register_debate_receipt_operations()
         receipt = DecisionReceipt.from_debate_result(result)
         signed = receipt.sign()
         integrity_valid = signed.verify_integrity()

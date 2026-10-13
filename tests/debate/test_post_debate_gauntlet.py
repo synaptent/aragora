@@ -4,7 +4,7 @@ Validates that:
 1. auto_gauntlet_validate defaults to False
 2. gauntlet runs when confidence >= threshold and enabled
 3. gauntlet skips when confidence < threshold
-4. import error handled gracefully
+4. an unregistered gauntlet handled gracefully
 5. gauntlet_result stored on PostDebateResult
 6. gauntlet failure doesn't cascade to other steps
 """
@@ -15,6 +15,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from aragora.debate.gauntlet_runners import GauntletRunnerNotRegisteredError
 from aragora.debate.post_debate_coordinator import (
     PostDebateConfig,
     PostDebateCoordinator,
@@ -115,10 +116,13 @@ class TestGauntletValidation:
 
         mock_gauntlet.assert_not_called()
 
-    def test_gauntlet_import_error_returns_none(self):
+    def test_unregistered_gauntlet_returns_none(self):
         coordinator = self._make_coordinator()
 
-        with patch("builtins.__import__", side_effect=ImportError("no gauntlet")):
+        with patch(
+            "aragora.debate.post_debate_coordinator.create_gauntlet_runner",
+            side_effect=GauntletRunnerNotRegisteredError("no gauntlet"),
+        ):
             result = coordinator._step_gauntlet_validate("d1", MagicMock(), "test", 0.9)
 
         assert result is None
