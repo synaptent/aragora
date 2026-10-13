@@ -39,6 +39,7 @@ from aragora.security.migration import (
     run_startup_migration,
     rotate_encryption_key,
 )
+from aragora.storage.integration_store import SENSITIVE_KEYS
 
 
 @pytest.fixture(autouse=True)
@@ -236,6 +237,23 @@ def gmail_sqlite_store(tmp_path, throwaway_encryption):
 
 
 @pytest.fixture
+def gmail_encryption_fails():
+    """Encryption is required and the Gmail store cannot encrypt; the cause names a path."""
+    with (
+        patch("aragora.storage.gmail_token_store.is_encryption_required", return_value=True),
+        patch(
+            "aragora.storage.gmail_token_store.get_encryption_service",
+            side_effect=RuntimeError("key file /data/secret-value/master.key unreadable"),
+        ),
+    ):
+        yield
+
+
+def _migration_log(caplog: pytest.LogCaptureFixture) -> str:
+    return " ".join(r.getMessage() for r in caplog.records if r.name == migration_module.__name__)
+
+
+@pytest.fixture
 def integration_sqlite_store(tmp_path, throwaway_encryption):
     from aragora.storage.integration_sqlite import SQLiteIntegrationStore
 
@@ -308,6 +326,18 @@ def _raw_integration_settings(store: Any) -> dict[str, Any]:
     with closing(sqlite3.connect(store.db_path)) as conn:
         rows = conn.execute("SELECT user_id, settings_json FROM integrations")
         return {row[0]: json.loads(row[1]) for row in rows}
+
+
+def _insert_raw_slack_settings(store: Any, settings: dict[str, Any]) -> None:
+    """Insert one plaintext Slack row for ``user-1``, as written before encryption."""
+    with closing(sqlite3.connect(store.db_path)) as conn:
+        conn.execute(
+            "INSERT INTO integrations "
+            "(integration_type, user_id, created_at, updated_at, settings_json) "
+            "VALUES ('slack', 'user-1', 0, 0, ?)",
+            (json.dumps(settings),),
+        )
+        conn.commit()
 
 
 class TestMigrationResult:
@@ -850,6 +880,48 @@ class TestStoreMigrations:
         assert result.errors == ["Migration failed due to an internal error"]
         assert _raw_integration_settings(integration_sqlite_store) == before
 
+    @pytest.mark.parametrize("key", sorted(SENSITIVE_KEYS))
+    def test_migration_encrypts_every_key_the_store_encrypts(self, integration_sqlite_store, key):
+        plaintext = f"FAKE-plain-{key}"
+        _insert_raw_slack_settings(integration_sqlite_store, {key: plaintext, "channel": "#ops"})
+
+        result = migrate_integration_store(dry_run=False)
+
+        assert result.errors == []
+        assert result.migrated_records == 1
+        stored = _raw_integration_settings(integration_sqlite_store)["user-1"]
+        assert stored["channel"] == "#ops"
+        assert stored[key]["_encrypted"] is True
+        assert plaintext not in json.dumps(stored)
+        config = asyncio.run(integration_sqlite_store.get("slack", "user-1"))
+        assert config.settings == {key: plaintext, "channel": "#ops"}
+
+    @pytest.mark.parametrize("key", sorted(SENSITIVE_KEYS))
+    def test_dry_run_counts_every_key_the_store_encrypts_without_writing(
+        self, integration_sqlite_store, key
+    ):
+        _insert_raw_slack_settings(integration_sqlite_store, {key: f"FAKE-plain-{key}"})
+        before = _raw_integration_settings(integration_sqlite_store)
+
+        result = migrate_integration_store(dry_run=True)
+
+        assert result.migrated_records == 1
+        assert result.already_encrypted == 0
+        assert _raw_integration_settings(integration_sqlite_store) == before
+
+    @pytest.mark.parametrize("key", ["api_secret", "credentials", "token"])
+    def test_keys_the_store_never_encrypts_are_not_counted_as_migrated(
+        self, integration_sqlite_store, key
+    ):
+        _insert_raw_slack_settings(integration_sqlite_store, {key: f"FAKE-plain-{key}"})
+        before = _raw_integration_settings(integration_sqlite_store)
+
+        result = migrate_integration_store(dry_run=False)
+
+        assert result.migrated_records == 0
+        assert result.already_encrypted == 1
+        assert _raw_integration_settings(integration_sqlite_store) == before
+
 
 class TestGmailTokenMigration:
     """Gmail migration against a real temp SQLite store and a throwaway key."""
@@ -930,6 +1002,27 @@ class TestGmailTokenMigration:
         assert result.errors == ["Error migrating record: user-1"]
         assert "OperationalError" in caplog.text
         assert "secret-value" not in caplog.text
+
+    def test_encryption_error_on_save_fails_each_record_without_raising(
+        self, gmail_sqlite_store, gmail_encryption_fails, caplog
+    ):
+        _insert_raw_gmail_row(gmail_sqlite_store, "user-a", "ya29.legacy-a", "1//legacy-a")
+        _insert_raw_gmail_row(gmail_sqlite_store, "user-b", "ya29.legacy-b", "1//legacy-b")
+        before = _raw_gmail_tokens(gmail_sqlite_store)
+
+        with caplog.at_level(logging.DEBUG, logger="aragora.security.migration"):
+            result = migrate_gmail_token_store(dry_run=False)
+
+        assert result.success is False
+        assert result.failed_records == 2
+        assert result.migrated_records == 0
+        assert sorted(result.errors) == [
+            "Error migrating record: user-a",
+            "Error migrating record: user-b",
+        ]
+        assert _raw_gmail_tokens(gmail_sqlite_store) == before
+        assert "EncryptionError" in _migration_log(caplog)
+        assert "secret-value" not in _migration_log(caplog) + " ".join(result.errors)
 
     def test_migrate_sync_store_empty(self, sync_backend):
         """Test migration with empty sync store."""
@@ -1510,6 +1603,24 @@ class TestRotationReencryptsRealStores:
         assert result.failed_records == 1
         assert result.errors == ["Error re-encrypting record: user-foreign"]
         assert _raw_gmail_tokens(gmail_sqlite_store)["user-foreign"] == (foreign, "")
+
+    def test_gmail_rotation_counts_encryption_error_without_raising(
+        self, gmail_sqlite_store, gmail_encryption_fails, caplog
+    ):
+        _insert_raw_gmail_row(gmail_sqlite_store, "user-legacy", "ya29.legacy", "1//legacy")
+        before = _raw_gmail_tokens(gmail_sqlite_store)
+
+        with caplog.at_level(logging.DEBUG, logger="aragora.security.migration"):
+            result = rotate_encryption_key(dry_run=False, stores=["gmail"])
+
+        assert result.success is False
+        assert result.new_key_version == 2
+        assert result.records_reencrypted == 0
+        assert result.failed_records == 1
+        assert result.errors == ["Error re-encrypting record: user-legacy"]
+        assert _raw_gmail_tokens(gmail_sqlite_store) == before
+        assert "EncryptionError" in _migration_log(caplog)
+        assert "secret-value" not in _migration_log(caplog) + " ".join(result.errors)
 
     def test_integration_rotation_resaves_settings_under_new_key(
         self, integration_sqlite_store, throwaway_encryption
