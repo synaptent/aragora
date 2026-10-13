@@ -106,6 +106,57 @@ def _missing_required_env_vars(env_vars: str) -> list[str]:
     return candidates
 
 
+def _rejected_required_env_vars(env_vars: str | None) -> list[str]:
+    """Names in a provider spec whose mounted secret file was rejected."""
+    if not env_vars:
+        return []
+    return [
+        var
+        for var in _ENV_VAR_RE.findall(env_vars)
+        if get_secret_presence(var).source == "mounted_file_rejected"
+    ]
+
+
+def _report_rejected_agent_secrets(
+    agent_specs: list[Any],
+    emitter: SyncEventEmitter,
+    debate_id: str,
+) -> list[str]:
+    """Emit a setup error for each requested agent whose mounted key was rejected.
+
+    Returns one ``"<agent> (<secret names>)"`` entry per affected agent. Such an
+    agent gets no OpenRouter or alias fallback: the debate that requested it must
+    fail rather than run without it.
+    """
+    rejected_agents: list[str] = []
+    for spec in agent_specs:
+        registry_spec = AgentRegistry.get_spec(spec.provider)
+        rejected_env = _rejected_required_env_vars(
+            registry_spec.env_vars if registry_spec else None
+        )
+        if not rejected_env:
+            continue
+        agent_name = spec.name or spec.provider
+        names = ", ".join(rejected_env)
+        message = f"Mounted secret rejected for {spec.provider}: {names}"
+        emitter.emit(
+            StreamEvent(
+                type=StreamEventType.AGENT_ERROR,
+                data={
+                    "error_type": "secret_rejected",
+                    "message": message,
+                    "recoverable": False,
+                    "phase": "setup",
+                },
+                agent=agent_name,
+                loop_id=debate_id,
+            )
+        )
+        logger.warning("[debate] %s: %s", debate_id, message)
+        rejected_agents.append(f"{agent_name} ({names})")
+    return rejected_agents
+
+
 def _normalize_documents(value: Any, max_items: int = 50) -> list[str]:
     """Normalize document ID input to a clean list of strings."""
     if not value:
@@ -476,6 +527,15 @@ def execute_debate_thread(
             _set_debate_error(debate_id, "At least 2 agents required for a debate")
             return
 
+        rejected_agents = _report_rejected_agent_secrets(agent_specs, emitter, debate_id)
+        if rejected_agents:
+            _set_debate_error(
+                debate_id,
+                "Mounted secret rejected for requested agent(s): " + ", ".join(rejected_agents),
+                emitter,
+            )
+            return
+
         # Filter specs with OpenRouter fallback for missing keys
         agent_specs, requested_agents, missing_agents = _filter_agent_specs_with_fallback(
             agent_specs,
@@ -620,6 +680,7 @@ def execute_debate_thread(
         asyncio.TimeoutError,
         KeyError,
         AttributeError,
+        SecretSourceError,
     ) as e:
         import traceback
 
