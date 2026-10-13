@@ -683,8 +683,6 @@ class DecisionRouter:
                 arena=arena,
             )
 
-            # DebateResult.summary is a method; storing it unrendered breaks persistence.
-            summary = getattr(debate_result, "summary", None)
             return DecisionResult(
                 request_id=request.request_id,
                 decision_type=DecisionType.DEBATE,
@@ -693,7 +691,7 @@ class DecisionRouter:
                     debate_result.confidence if hasattr(debate_result, "confidence") else 0.8
                 ),
                 consensus_reached=debate_result.consensus_reached,
-                reasoning=summary() if callable(summary) else summary,
+                reasoning=debate_result.summary if hasattr(debate_result, "summary") else None,
                 debate_id=getattr(debate_result, "debate_id", None),
                 debate_result=debate_result,
                 decision_integrity=decision_integrity,
