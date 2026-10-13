@@ -8,6 +8,7 @@ from aragora.server.handlers.gauntlet import GauntletHandler
 from aragora.server.handlers.gauntlet.receipts import GauntletReceiptsMixin
 from aragora.server.handlers.receipts import ReceiptsHandler
 from aragora.server.openapi import generate_openapi_schema
+from aragora.tenancy.record_scope import OrgScope
 
 
 def test_receipt_delivery_anchor_handlers_participate_in_all_handlers() -> None:
@@ -48,7 +49,9 @@ def test_recent_anchor_response_contract_matches_handler_fields() -> None:
 
     mixin = GauntletReceiptsMixin.__new__(GauntletReceiptsMixin)
     mixin._receipt_anchor = ReceiptAnchor()
-    result = GauntletReceiptsMixin._get_recent_anchors.__wrapped__(mixin, {"limit": "7"})
+    result = GauntletReceiptsMixin._get_recent_anchors.__wrapped__(
+        mixin, {"limit": "7"}, scope=OrgScope(org_id="org-a", user_id="user-a", role="admin")
+    )
     body = json.loads(result.body)
 
     assert result.status_code == 200

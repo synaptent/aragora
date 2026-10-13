@@ -27,6 +27,9 @@ from ..base import HandlerResult, error_response, get_int_param, get_string_para
 from ..openapi_decorator import api_endpoint
 from .storage import get_gauntlet_runs, get_owned_run
 
+# Page size used to match anchor hashes against the caller org's receipts.
+_ANCHOR_OWNERSHIP_PAGE = 500
+
 
 def _get_storage_proxy():
     """Resolve storage accessor dynamically for test patching."""
@@ -80,8 +83,8 @@ class GauntletReceiptsMixin:
         },
     )
     @require_permission("gauntlet:read")
-    def _list_receipts(self, query_params: dict) -> HandlerResult:
-        """List recent decision receipts.
+    def _list_receipts(self, query_params: dict, *, scope: OrgScope) -> HandlerResult:
+        """List the caller org's recent decision receipts.
 
         Returns receipts in the format expected by the frontend dashboard:
         { receipts: [{ id, receipt_id, verdict, created_at, artifact_hash, findings_count, ... }] }
@@ -95,7 +98,8 @@ class GauntletReceiptsMixin:
             limit = min(max(limit, 1), 100)
             verdict = get_string_param(query_params, "verdict", None)
 
-            stored_receipts = store.list(
+            stored_receipts = store.list_for_org(
+                scope.org_id,
                 limit=limit,
                 verdict=verdict,
             )
@@ -755,8 +759,8 @@ class GauntletReceiptsMixin:
         },
     )
     @require_permission("gauntlet:read")
-    def _get_recent_anchors(self, query_params: dict) -> HandlerResult:
-        """List recently anchored receipts with their verification status.
+    def _get_recent_anchors(self, query_params: dict, *, scope: OrgScope) -> HandlerResult:
+        """List the caller org's recently anchored receipts with their verification status.
 
         Returns the last N anchor records with receipt metadata.
         """
@@ -766,6 +770,11 @@ class GauntletReceiptsMixin:
 
             anchor = self._get_receipt_anchor()
             all_anchors = anchor.get_anchors()
+            if all_anchors:
+                owned = self._owned_receipt_hashes(
+                    {record.receipt_hash for record in all_anchors}, scope
+                )
+                all_anchors = [record for record in all_anchors if record.receipt_hash in owned]
 
             # Sort by timestamp descending and limit
             sorted_anchors = sorted(all_anchors, key=lambda a: a.timestamp, reverse=True)
@@ -792,9 +801,25 @@ class GauntletReceiptsMixin:
                 }
             )
 
-        except (OSError, RuntimeError, ValueError, TypeError) as e:
+        except (ImportError, OSError, RuntimeError, ValueError, TypeError) as e:
             logger.error("Failed to list recent anchors: %s", e)
             return json_response({"anchors": [], "total": 0, "limit": 10})
+
+    @staticmethod
+    def _owned_receipt_hashes(receipt_hashes: set[str], scope: OrgScope) -> set[str]:
+        """The subset of ``receipt_hashes`` that are checksums of the caller org's receipts."""
+        from aragora.storage.receipt_store import get_receipt_store
+
+        store = get_receipt_store()
+        owned: set[str] = set()
+        offset = 0
+        while owned != receipt_hashes:
+            page = store.list_for_org(scope.org_id, limit=_ANCHOR_OWNERSHIP_PAGE, offset=offset)
+            owned.update(r.checksum for r in page if r.checksum and r.checksum in receipt_hashes)
+            if len(page) < _ANCHOR_OWNERSHIP_PAGE:
+                break
+            offset += _ANCHOR_OWNERSHIP_PAGE
+        return owned
 
     def _get_receipt_anchor(self):
         """Get or create the shared ReceiptAnchor instance."""

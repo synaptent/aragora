@@ -10,10 +10,11 @@ from __future__ import annotations
 import logging
 
 from aragora.rbac.decorators import require_permission
+from aragora.tenancy.record_scope import OrgScope, record_not_found
 
 from ..base import HandlerResult, error_response, get_string_param, json_response
 from ..openapi_decorator import api_endpoint
-from .storage import get_gauntlet_runs
+from .storage import get_owned_run
 
 
 def _get_storage_proxy():
@@ -51,19 +52,18 @@ class GauntletHeatmapMixin:
         },
     )
     @require_permission("gauntlet:read")
-    async def _get_heatmap(self, gauntlet_id: str, query_params: dict) -> HandlerResult:
-        """Get risk heatmap for gauntlet run."""
+    async def _get_heatmap(
+        self, gauntlet_id: str, query_params: dict, *, scope: OrgScope
+    ) -> HandlerResult:
+        """Get risk heatmap for one of the caller org's gauntlet runs."""
         from aragora.gauntlet.heatmap import HeatmapCell, RiskHeatmap
 
-        gauntlet_runs = get_gauntlet_runs()
-
-        run = None
         result = None
         result_obj = None
 
         # Check in-memory first
-        if gauntlet_id in gauntlet_runs:
-            run = gauntlet_runs[gauntlet_id]
+        run = get_owned_run(gauntlet_id, scope)
+        if run is not None:
             if run["status"] != "completed":
                 return error_response("Gauntlet run not completed", 400)
             result = run["result"]
@@ -72,14 +72,14 @@ class GauntletHeatmapMixin:
             # Check persistent storage
             try:
                 storage = _get_storage_proxy()
-                stored = storage.get(gauntlet_id)
+                stored = storage.get(gauntlet_id, scope.org_id)
                 if stored:
                     result = stored
                 else:
-                    return error_response(f"Gauntlet run not found: {gauntlet_id}", 404)
+                    return record_not_found("Gauntlet run")
             except (OSError, RuntimeError, ValueError) as e:
                 logger.warning("Storage lookup failed for %s: %s", gauntlet_id, e)
-                return error_response(f"Gauntlet run not found: {gauntlet_id}", 404)
+                return record_not_found("Gauntlet run")
 
         # Generate heatmap
         if result_obj:

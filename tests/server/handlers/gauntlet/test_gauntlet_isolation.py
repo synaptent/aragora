@@ -229,6 +229,64 @@ ALL_SCOPED_ROUTES = (
 )
 
 
+class TestForeignRunIsIndistinguishableFromMissing:
+    @pytest.mark.asyncio
+    async def test_compare_with_a_foreign_run_is_404(self, gauntlet, act_as):
+        act_as(USER_A)
+        result = await _call(gauntlet, "GET", f"/api/v1/gauntlet/{GID_A}/compare/{GID_B}")
+        assert result.status_code == 404
+        assert _json(result) == RUN_NOT_FOUND
+
+
+class TestForeignDeleteHasNoSideEffect:
+    @pytest.mark.parametrize("target", [GID_A, GID_LIVE_A])
+    @pytest.mark.asyncio
+    async def test_other_org_delete_leaves_the_run(
+        self, gauntlet, gauntlet_storage, act_as, target
+    ):
+        act_as(USER_B)
+        result = await _call(gauntlet, "DELETE", f"/api/v1/gauntlet/{target}")
+
+        assert result.status_code == 404
+        assert gauntlet_storage.get(GID_A, ORG_A) is not None
+        assert GID_LIVE_A in get_gauntlet_runs()
+
+        act_as(USER_A)
+        assert (await _call(gauntlet, "GET", f"/api/v1/gauntlet/{target}")).status_code == 200
+
+
+class TestListsShowOnlyTheCallersOrg:
+    @pytest.mark.parametrize(("user", "expected"), [(USER_A, {GID_A, GID_A2}), (USER_B, {GID_B})])
+    @pytest.mark.asyncio
+    async def test_results(self, gauntlet, act_as, user, expected):
+        act_as(user)
+        body = _json(await _call(gauntlet, "GET", "/api/v1/gauntlet/results"))
+        assert {r["gauntlet_id"] for r in body["results"]} == expected
+        assert body["total"] == len(expected)
+
+    @pytest.mark.parametrize(("user", "expected"), [(USER_A, {"rcpt-ga"}), (USER_B, {"rcpt-gb"})])
+    @pytest.mark.asyncio
+    async def test_receipts(self, gauntlet, act_as, user, expected):
+        act_as(user)
+        body = _json(await _call(gauntlet, "GET", "/api/v1/gauntlet/receipts"))
+        assert {r["receipt_id"] for r in body["receipts"]} == expected
+
+    @pytest.mark.asyncio
+    async def test_recent_anchors(self, gauntlet, act_as, receipt_store):
+        anchor = gauntlet._get_receipt_anchor()
+        for receipt_id in ("rcpt-ga", "rcpt-gb", "rcpt-gnull"):
+            anchor._anchor_locally(receipt_store.get(receipt_id).checksum, {"probe": receipt_id})
+
+        act_as(USER_A)
+        body = _json(await _call(gauntlet, "GET", "/api/v1/receipts/recent-anchors"))
+        assert [a["metadata"]["probe"] for a in body["anchors"]] == ["rcpt-ga"]
+        assert body["total"] == 1
+
+        act_as(USER_B)
+        body = _json(await _call(gauntlet, "GET", "/api/v1/receipts/recent-anchors"))
+        assert [a["metadata"]["probe"] for a in body["anchors"]] == ["rcpt-gb"]
+
+
 class TestUnauthenticatedCallers:
     @pytest.mark.parametrize(("method", "path", "body"), ALL_SCOPED_ROUTES)
     @pytest.mark.asyncio
@@ -237,6 +295,55 @@ class TestUnauthenticatedCallers:
         result = await _call(gauntlet, method, path, body=body)
         assert result.status_code == 401
         assert _json(result)["code"] == "auth_required"
+
+    @pytest.mark.parametrize(("method", "path", "body"), ALL_SCOPED_ROUTES)
+    @pytest.mark.asyncio
+    async def test_static_token_only_gets_403_org_required(
+        self, gauntlet, act_as, monkeypatch, method, path, body
+    ):
+        from aragora.server import auth as server_auth
+
+        monkeypatch.setattr(server_auth.auth_config, "api_token", "static-token-123")
+        act_as(ANONYMOUS)
+        result = await _call(
+            gauntlet, method, path, body=body, headers={"Authorization": "Bearer static-token-123"}
+        )
+        assert result.status_code == 403
+        assert _json(result)["code"] == "org_required"
+
+    @pytest.mark.asyncio
+    async def test_anonymous_delete_has_no_side_effect(self, gauntlet, gauntlet_storage, act_as):
+        act_as(ANONYMOUS)
+        await _call(gauntlet, "DELETE", f"/api/v1/gauntlet/{GID_A}")
+        assert gauntlet_storage.get(GID_A, ORG_A) is not None
+
+
+_OWNER_READS = [
+    pytest.param(method, path, body, own, id=f"{route_id}-{own[-6:]}")
+    for route_id, (method, path, body) in zip(RUN_ROUTE_IDS, PER_RUN_ROUTES)
+    if method == "GET"
+    for own in (GID_A, GID_LIVE_A)
+    # compare reads persisted results only
+    if not ("/compare/" in path and own == GID_LIVE_A)
+]
+
+
+class TestOwnerKeepsAccess:
+    @pytest.mark.parametrize(("method", "path", "body", "own"), _OWNER_READS)
+    @pytest.mark.asyncio
+    async def test_owner_succeeds_on_every_read_route(
+        self, gauntlet, act_as, method, path, body, own
+    ):
+        act_as(USER_A)
+        result = await _call(gauntlet, method, path.format(id=own), body=body)
+        assert result.status_code == 200, result.body[:300]
+
+    @pytest.mark.asyncio
+    async def test_owner_deletes_their_result(self, gauntlet, gauntlet_storage, act_as):
+        act_as(USER_A)
+        result = await _call(gauntlet, "DELETE", f"/api/v1/gauntlet/{GID_A}")
+        assert result.status_code == 200
+        assert gauntlet_storage.get(GID_A, ORG_A) is None
 
 
 def _orchestrator_result(gauntlet_id: str) -> SimpleNamespace:
@@ -307,6 +414,10 @@ class TestRunsCarryTheCreatorsOrg:
         if durable:
             assert enqueue.call_args.kwargs["org_id"] == ORG_A
             assert enqueue.call_args.kwargs["user_id"] == "user-a"
+
+        assert (await _call(gauntlet, "GET", f"/api/v1/gauntlet/{gid}")).status_code == 200
+        act_as(USER_B)
+        assert (await _call(gauntlet, "GET", f"/api/v1/gauntlet/{gid}")).status_code == 404
 
     @pytest.mark.asyncio
     async def test_completed_run_saves_result_and_receipt_for_the_org(

@@ -37,6 +37,11 @@ from aragora.server.handlers.gauntlet import (
     MAX_GAUNTLET_RUNS_IN_MEMORY,
 )
 
+from aragora.tenancy.record_scope import OrgScope as _OrgScope
+
+TEST_ORG = "test-org-001"
+TEST_SCOPE = _OrgScope(org_id=TEST_ORG, user_id="test-user-001", role="admin")
+
 
 # ===========================================================================
 # Test Fixtures and Mocks
@@ -329,6 +334,7 @@ class TestGauntletGetStatus:
     @pytest.mark.asyncio
     async def test_get_status_pending(self, gauntlet_handler):
         _gauntlet_runs["gauntlet-test123"] = {
+            "org_id": TEST_ORG,
             "gauntlet_id": "gauntlet-test123",
             "status": "pending",
             "created_at": datetime.now().isoformat(),
@@ -346,6 +352,7 @@ class TestGauntletGetStatus:
     @pytest.mark.asyncio
     async def test_get_status_completed(self, gauntlet_handler):
         _gauntlet_runs["gauntlet-test123"] = {
+            "org_id": TEST_ORG,
             "gauntlet_id": "gauntlet-test123",
             "status": "completed",
             "result": {"verdict": "APPROVED"},
@@ -420,6 +427,7 @@ class TestGauntletGetReceipt:
     @pytest.mark.asyncio
     async def test_get_receipt_not_completed(self, gauntlet_handler):
         _gauntlet_runs["gauntlet-test123"] = {
+            "org_id": TEST_ORG,
             "gauntlet_id": "gauntlet-test123",
             "status": "running",
         }
@@ -436,6 +444,7 @@ class TestGauntletGetReceipt:
     @pytest.mark.asyncio
     async def test_get_receipt_json_format(self, gauntlet_handler):
         _gauntlet_runs["gauntlet-test123"] = {
+            "org_id": TEST_ORG,
             "gauntlet_id": "gauntlet-test123",
             "status": "completed",
             "input_summary": "Test input",
@@ -491,6 +500,7 @@ class TestGauntletGetHeatmap:
     @pytest.mark.asyncio
     async def test_get_heatmap_not_completed(self, gauntlet_handler):
         _gauntlet_runs["gauntlet-test123"] = {
+            "org_id": TEST_ORG,
             "gauntlet_id": "gauntlet-test123",
             "status": "pending",
         }
@@ -507,6 +517,7 @@ class TestGauntletGetHeatmap:
     @pytest.mark.asyncio
     async def test_get_heatmap_json_format(self, gauntlet_handler):
         _gauntlet_runs["gauntlet-test123"] = {
+            "org_id": TEST_ORG,
             "gauntlet_id": "gauntlet-test123",
             "status": "completed",
             "result": {
@@ -678,7 +689,7 @@ class TestGauntletDeleteResult:
 
     @pytest.mark.asyncio
     async def test_delete_success(self, gauntlet_handler):
-        _gauntlet_runs["gauntlet-test123"] = {"status": "completed"}
+        _gauntlet_runs["gauntlet-test123"] = {"org_id": TEST_ORG, "status": "completed"}
 
         with patch.object(gauntlet_module, "_get_storage") as mock_storage:
             mock_storage_instance = MagicMock()
@@ -727,6 +738,7 @@ class TestGauntletExportReport:
     def _completed_run_data(self) -> dict:
         """Helper: data for a completed in-memory run."""
         return {
+            "org_id": TEST_ORG,
             "gauntlet_id": "gauntlet-test123",
             "status": "completed",
             "input_summary": "Test",
@@ -793,6 +805,7 @@ class TestGauntletExportReport:
     @pytest.mark.asyncio
     async def test_export_not_completed(self, gauntlet_handler):
         _gauntlet_runs["gauntlet-test123"] = {
+            "org_id": TEST_ORG,
             "gauntlet_id": "gauntlet-test123",
             "status": "running",
         }
@@ -850,6 +863,7 @@ class TestGauntletVersionHeaders:
     async def test_versioned_route_has_version_header(self, gauntlet_handler):
         """Versioned routes should include X-API-Version header."""
         _gauntlet_runs["gauntlet-test123"] = {
+            "org_id": TEST_ORG,
             "gauntlet_id": "gauntlet-test123",
             "status": "pending",
         }
@@ -866,6 +880,7 @@ class TestGauntletVersionHeaders:
     async def test_legacy_route_has_deprecation_header(self, gauntlet_handler):
         """Legacy routes should include Deprecation and Sunset headers."""
         _gauntlet_runs["gauntlet-test123"] = {
+            "org_id": TEST_ORG,
             "gauntlet_id": "gauntlet-test123",
             "status": "pending",
         }
@@ -892,12 +907,14 @@ class TestGauntletMemoryManagement:
         """Test that cleanup removes entries older than max age."""
         old_time = datetime.now(timezone.utc).isoformat()
         _gauntlet_runs["old-run"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "created_at": 0,  # Unix epoch - very old
             "completed_at": old_time,
         }
 
         _gauntlet_runs["new-run"] = {
+            "org_id": TEST_ORG,
             "status": "pending",
             "created_at": time.time(),
         }
@@ -910,6 +927,7 @@ class TestGauntletMemoryManagement:
         """Test that cleanup enforces memory limit."""
         for i in range(MAX_GAUNTLET_RUNS_IN_MEMORY + 100):
             _gauntlet_runs[f"run-{i}"] = {
+                "org_id": TEST_ORG,
                 "status": "pending",
                 "created_at": datetime.now().isoformat(),
             }
@@ -941,6 +959,7 @@ class TestGauntletIdValidation:
     async def test_accept_valid_id(self, gauntlet_handler):
         """Test that valid IDs are accepted."""
         _gauntlet_runs["gauntlet-20240114120000-abc123"] = {
+            "org_id": TEST_ORG,
             "gauntlet_id": "gauntlet-20240114120000-abc123",
             "status": "completed",
             "result": {},

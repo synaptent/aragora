@@ -28,6 +28,11 @@ from aragora.server.handlers.gauntlet.heatmap import (
 from aragora.server.handlers.gauntlet.storage import get_gauntlet_runs
 from aragora.server.handlers.utils.responses import HandlerResult
 
+from aragora.tenancy.record_scope import OrgScope as _OrgScope
+
+TEST_ORG = "test-org-001"
+TEST_SCOPE = _OrgScope(org_id=TEST_ORG, user_id="test-user-001", role="admin")
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -114,6 +119,7 @@ class TestGetHeatmapInMemoryCompleted:
         """Default format should return JSON with heatmap data."""
         runs = get_gauntlet_runs()
         runs["g-001"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {
                 "findings": [
@@ -126,7 +132,7 @@ class TestGetHeatmapInMemoryCompleted:
             "result_obj": None,
         }
 
-        result = await handler._get_heatmap("g-001", {})
+        result = await handler._get_heatmap("g-001", {}, scope=TEST_SCOPE)
         assert _status(result) == 200
         body = _body(result)
         assert "cells" in body
@@ -139,12 +145,13 @@ class TestGetHeatmapInMemoryCompleted:
         """Explicit format=json should return JSON."""
         runs = get_gauntlet_runs()
         runs["g-002"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {"findings": [], "total_findings": 0},
             "result_obj": None,
         }
 
-        result = await handler._get_heatmap("g-002", {"format": "json"})
+        result = await handler._get_heatmap("g-002", {"format": "json"}, scope=TEST_SCOPE)
         assert _status(result) == 200
         assert result.content_type == "application/json"
 
@@ -153,6 +160,7 @@ class TestGetHeatmapInMemoryCompleted:
         """format=svg should return SVG image."""
         runs = get_gauntlet_runs()
         runs["g-003"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {
                 "findings": [
@@ -163,7 +171,7 @@ class TestGetHeatmapInMemoryCompleted:
             "result_obj": None,
         }
 
-        result = await handler._get_heatmap("g-003", {"format": "svg"})
+        result = await handler._get_heatmap("g-003", {"format": "svg"}, scope=TEST_SCOPE)
         assert _status(result) == 200
         assert result.content_type == "image/svg+xml"
         svg_content = _body_raw(result)
@@ -174,6 +182,7 @@ class TestGetHeatmapInMemoryCompleted:
         """format=ascii should return text/plain ASCII table."""
         runs = get_gauntlet_runs()
         runs["g-004"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {
                 "findings": [
@@ -184,7 +193,7 @@ class TestGetHeatmapInMemoryCompleted:
             "result_obj": None,
         }
 
-        result = await handler._get_heatmap("g-004", {"format": "ascii"})
+        result = await handler._get_heatmap("g-004", {"format": "ascii"}, scope=TEST_SCOPE)
         assert _status(result) == 200
         assert result.content_type == "text/plain"
         ascii_content = _body_raw(result)
@@ -195,12 +204,13 @@ class TestGetHeatmapInMemoryCompleted:
         """Empty findings should still return valid heatmap."""
         runs = get_gauntlet_runs()
         runs["g-005"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {"findings": [], "total_findings": 0},
             "result_obj": None,
         }
 
-        result = await handler._get_heatmap("g-005", {})
+        result = await handler._get_heatmap("g-005", {}, scope=TEST_SCOPE)
         assert _status(result) == 200
         body = _body(result)
         assert body["cells"] == []
@@ -212,6 +222,7 @@ class TestGetHeatmapInMemoryCompleted:
         """Categories in heatmap should be sorted alphabetically."""
         runs = get_gauntlet_runs()
         runs["g-006"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {
                 "findings": [
@@ -224,7 +235,7 @@ class TestGetHeatmapInMemoryCompleted:
             "result_obj": None,
         }
 
-        result = await handler._get_heatmap("g-006", {})
+        result = await handler._get_heatmap("g-006", {}, scope=TEST_SCOPE)
         body = _body(result)
         assert body["categories"] == ["aaa", "mmm", "zzz"]
 
@@ -233,6 +244,7 @@ class TestGetHeatmapInMemoryCompleted:
         """Severities should always be critical, high, medium, low."""
         runs = get_gauntlet_runs()
         runs["g-007"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {
                 "findings": [{"category": "test", "severity_level": "low"}],
@@ -241,7 +253,7 @@ class TestGetHeatmapInMemoryCompleted:
             "result_obj": None,
         }
 
-        result = await handler._get_heatmap("g-007", {})
+        result = await handler._get_heatmap("g-007", {}, scope=TEST_SCOPE)
         body = _body(result)
         assert body["severities"] == ["critical", "high", "medium", "low"]
 
@@ -250,6 +262,7 @@ class TestGetHeatmapInMemoryCompleted:
         """Each cell should have the correct count of findings."""
         runs = get_gauntlet_runs()
         runs["g-008"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {
                 "findings": [
@@ -263,7 +276,7 @@ class TestGetHeatmapInMemoryCompleted:
             "result_obj": None,
         }
 
-        result = await handler._get_heatmap("g-008", {})
+        result = await handler._get_heatmap("g-008", {}, scope=TEST_SCOPE)
         body = _body(result)
 
         cells_by_key = {(c["category"], c["severity"]): c["count"] for c in body["cells"]}
@@ -277,6 +290,7 @@ class TestGetHeatmapInMemoryCompleted:
         """Heatmap should handle multiple categories correctly."""
         runs = get_gauntlet_runs()
         runs["g-009"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {
                 "findings": [
@@ -289,7 +303,7 @@ class TestGetHeatmapInMemoryCompleted:
             "result_obj": None,
         }
 
-        result = await handler._get_heatmap("g-009", {})
+        result = await handler._get_heatmap("g-009", {}, scope=TEST_SCOPE)
         body = _body(result)
         assert body["categories"] == ["auth", "injection", "xss"]
         # 3 categories x 4 severities = 12 cells
@@ -300,6 +314,7 @@ class TestGetHeatmapInMemoryCompleted:
         """Each category should produce exactly 4 cells (one per severity)."""
         runs = get_gauntlet_runs()
         runs["g-010"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {
                 "findings": [
@@ -311,7 +326,7 @@ class TestGetHeatmapInMemoryCompleted:
             "result_obj": None,
         }
 
-        result = await handler._get_heatmap("g-010", {})
+        result = await handler._get_heatmap("g-010", {}, scope=TEST_SCOPE)
         body = _body(result)
         # 2 categories x 4 severities
         assert len(body["cells"]) == 8
@@ -321,6 +336,7 @@ class TestGetHeatmapInMemoryCompleted:
         """Findings without a category should use 'unknown'."""
         runs = get_gauntlet_runs()
         runs["g-011"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {
                 "findings": [
@@ -331,7 +347,7 @@ class TestGetHeatmapInMemoryCompleted:
             "result_obj": None,
         }
 
-        result = await handler._get_heatmap("g-011", {})
+        result = await handler._get_heatmap("g-011", {}, scope=TEST_SCOPE)
         body = _body(result)
         assert "unknown" in body["categories"]
 
@@ -340,6 +356,7 @@ class TestGetHeatmapInMemoryCompleted:
         """Findings without severity_level should default to 'medium'."""
         runs = get_gauntlet_runs()
         runs["g-012"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {
                 "findings": [
@@ -350,7 +367,7 @@ class TestGetHeatmapInMemoryCompleted:
             "result_obj": None,
         }
 
-        result = await handler._get_heatmap("g-012", {})
+        result = await handler._get_heatmap("g-012", {}, scope=TEST_SCOPE)
         body = _body(result)
         cells_by_key = {(c["category"], c["severity"]): c["count"] for c in body["cells"]}
         assert cells_by_key[("test", "medium")] == 1
@@ -360,6 +377,7 @@ class TestGetHeatmapInMemoryCompleted:
         """Severity level should be lowercased."""
         runs = get_gauntlet_runs()
         runs["g-013"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {
                 "findings": [
@@ -371,7 +389,7 @@ class TestGetHeatmapInMemoryCompleted:
             "result_obj": None,
         }
 
-        result = await handler._get_heatmap("g-013", {})
+        result = await handler._get_heatmap("g-013", {}, scope=TEST_SCOPE)
         body = _body(result)
         cells_by_key = {(c["category"], c["severity"]): c["count"] for c in body["cells"]}
         assert cells_by_key[("test", "high")] == 2
@@ -389,9 +407,9 @@ class TestGetHeatmapNotCompleted:
     async def test_pending_returns_400(self, handler):
         """Pending run should return 400 error."""
         runs = get_gauntlet_runs()
-        runs["g-pending"] = {"status": "pending"}
+        runs["g-pending"] = {"org_id": TEST_ORG, "status": "pending"}
 
-        result = await handler._get_heatmap("g-pending", {})
+        result = await handler._get_heatmap("g-pending", {}, scope=TEST_SCOPE)
         assert _status(result) == 400
         body = _body(result)
         assert "not completed" in body.get("error", "").lower()
@@ -400,18 +418,18 @@ class TestGetHeatmapNotCompleted:
     async def test_running_returns_400(self, handler):
         """Running state should also return 400."""
         runs = get_gauntlet_runs()
-        runs["g-running"] = {"status": "running"}
+        runs["g-running"] = {"org_id": TEST_ORG, "status": "running"}
 
-        result = await handler._get_heatmap("g-running", {})
+        result = await handler._get_heatmap("g-running", {}, scope=TEST_SCOPE)
         assert _status(result) == 400
 
     @pytest.mark.asyncio
     async def test_failed_returns_400(self, handler):
         """Failed status should return 400."""
         runs = get_gauntlet_runs()
-        runs["g-failed"] = {"status": "failed"}
+        runs["g-failed"] = {"org_id": TEST_ORG, "status": "failed"}
 
-        result = await handler._get_heatmap("g-failed", {})
+        result = await handler._get_heatmap("g-failed", {}, scope=TEST_SCOPE)
         assert _status(result) == 400
 
 
@@ -438,7 +456,7 @@ class TestGetHeatmapPersistentStorage:
             "aragora.server.handlers.gauntlet.heatmap._get_storage_proxy",
             return_value=mock_storage,
         ):
-            result = await handler._get_heatmap("g-stored", {})
+            result = await handler._get_heatmap("g-stored", {}, scope=TEST_SCOPE)
 
         assert _status(result) == 200
         body = _body(result)
@@ -454,7 +472,7 @@ class TestGetHeatmapPersistentStorage:
             "aragora.server.handlers.gauntlet.heatmap._get_storage_proxy",
             return_value=mock_storage,
         ):
-            result = await handler._get_heatmap("g-missing", {})
+            result = await handler._get_heatmap("g-missing", {}, scope=TEST_SCOPE)
 
         assert _status(result) == 404
         body = _body(result)
@@ -470,7 +488,7 @@ class TestGetHeatmapPersistentStorage:
             "aragora.server.handlers.gauntlet.heatmap._get_storage_proxy",
             return_value=mock_storage,
         ):
-            result = await handler._get_heatmap("g-oserr", {})
+            result = await handler._get_heatmap("g-oserr", {}, scope=TEST_SCOPE)
 
         assert _status(result) == 404
 
@@ -484,7 +502,7 @@ class TestGetHeatmapPersistentStorage:
             "aragora.server.handlers.gauntlet.heatmap._get_storage_proxy",
             return_value=mock_storage,
         ):
-            result = await handler._get_heatmap("g-rterr", {})
+            result = await handler._get_heatmap("g-rterr", {}, scope=TEST_SCOPE)
 
         assert _status(result) == 404
 
@@ -498,7 +516,7 @@ class TestGetHeatmapPersistentStorage:
             "aragora.server.handlers.gauntlet.heatmap._get_storage_proxy",
             return_value=mock_storage,
         ):
-            result = await handler._get_heatmap("g-valerr", {})
+            result = await handler._get_heatmap("g-valerr", {}, scope=TEST_SCOPE)
 
         assert _status(result) == 404
 
@@ -519,7 +537,7 @@ class TestGetHeatmapPersistentStorage:
             "aragora.server.handlers.gauntlet.heatmap._get_storage_proxy",
             return_value=mock_storage,
         ):
-            result = await handler._get_heatmap("g-stored2", {})
+            result = await handler._get_heatmap("g-stored2", {}, scope=TEST_SCOPE)
 
         body = _body(result)
         cells_by_key = {(c["category"], c["severity"]): c["count"] for c in body["cells"]}
@@ -548,12 +566,13 @@ class TestGetHeatmapFromResultObj:
 
         runs = get_gauntlet_runs()
         runs["g-obj"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {"findings": [], "total_findings": 0},
             "result_obj": fake_result,
         }
 
-        result = await handler._get_heatmap("g-obj", {})
+        result = await handler._get_heatmap("g-obj", {}, scope=TEST_SCOPE)
         assert _status(result) == 200
         body = _body(result)
         assert "injection" in body["categories"]
@@ -570,12 +589,13 @@ class TestGetHeatmapFromResultObj:
 
         runs = get_gauntlet_runs()
         runs["g-obj-svg"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {"findings": [], "total_findings": 0},
             "result_obj": fake_result,
         }
 
-        result = await handler._get_heatmap("g-obj-svg", {"format": "svg"})
+        result = await handler._get_heatmap("g-obj-svg", {"format": "svg"}, scope=TEST_SCOPE)
         assert _status(result) == 200
         assert result.content_type == "image/svg+xml"
         assert "<svg" in _body_raw(result)
@@ -591,12 +611,13 @@ class TestGetHeatmapFromResultObj:
 
         runs = get_gauntlet_runs()
         runs["g-obj-ascii"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {"findings": [], "total_findings": 0},
             "result_obj": fake_result,
         }
 
-        result = await handler._get_heatmap("g-obj-ascii", {"format": "ascii"})
+        result = await handler._get_heatmap("g-obj-ascii", {"format": "ascii"}, scope=TEST_SCOPE)
         assert _status(result) == 200
         assert result.content_type == "text/plain"
         assert "auth" in _body_raw(result)
@@ -608,12 +629,13 @@ class TestGetHeatmapFromResultObj:
 
         runs = get_gauntlet_runs()
         runs["g-obj-empty"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {"findings": [], "total_findings": 0},
             "result_obj": fake_result,
         }
 
-        result = await handler._get_heatmap("g-obj-empty", {})
+        result = await handler._get_heatmap("g-obj-empty", {}, scope=TEST_SCOPE)
         body = _body(result)
         assert body["categories"] == []
         assert body["cells"] == []
@@ -631,12 +653,13 @@ class TestGetHeatmapFromResultObj:
 
         runs = get_gauntlet_runs()
         runs["g-obj-count"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {"findings": [], "total_findings": 0},
             "result_obj": fake_result,
         }
 
-        result = await handler._get_heatmap("g-obj-count", {})
+        result = await handler._get_heatmap("g-obj-count", {}, scope=TEST_SCOPE)
         body = _body(result)
         cells_by_key = {(c["category"], c["severity"]): c["count"] for c in body["cells"]}
         assert cells_by_key[("rce", "critical")] == 2
@@ -657,6 +680,7 @@ class TestGetHeatmapVulnerabilitiesFallback:
         """When findings key is missing, should use vulnerabilities."""
         runs = get_gauntlet_runs()
         runs["g-vuln"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {
                 "vulnerabilities": [
@@ -667,7 +691,7 @@ class TestGetHeatmapVulnerabilitiesFallback:
             "result_obj": None,
         }
 
-        result = await handler._get_heatmap("g-vuln", {})
+        result = await handler._get_heatmap("g-vuln", {}, scope=TEST_SCOPE)
         assert _status(result) == 200
         body = _body(result)
         assert "sqli" in body["categories"]
@@ -677,6 +701,7 @@ class TestGetHeatmapVulnerabilitiesFallback:
         """When findings is empty list, should fallback to vulnerabilities."""
         runs = get_gauntlet_runs()
         runs["g-vuln2"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {
                 "findings": [],
@@ -688,7 +713,7 @@ class TestGetHeatmapVulnerabilitiesFallback:
             "result_obj": None,
         }
 
-        result = await handler._get_heatmap("g-vuln2", {})
+        result = await handler._get_heatmap("g-vuln2", {}, scope=TEST_SCOPE)
         body = _body(result)
         # Falsy findings = [], so `or` kicks in → uses vulnerabilities
         assert "csrf" in body["categories"]
@@ -698,6 +723,7 @@ class TestGetHeatmapVulnerabilitiesFallback:
         """When findings is None, should fallback to vulnerabilities."""
         runs = get_gauntlet_runs()
         runs["g-vuln3"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {
                 "findings": None,
@@ -709,7 +735,7 @@ class TestGetHeatmapVulnerabilitiesFallback:
             "result_obj": None,
         }
 
-        result = await handler._get_heatmap("g-vuln3", {})
+        result = await handler._get_heatmap("g-vuln3", {}, scope=TEST_SCOPE)
         body = _body(result)
         assert "ssrf" in body["categories"]
 
@@ -718,12 +744,13 @@ class TestGetHeatmapVulnerabilitiesFallback:
         """When neither findings nor vulnerabilities exist, should return empty heatmap."""
         runs = get_gauntlet_runs()
         runs["g-nothing"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {"total_findings": 0},
             "result_obj": None,
         }
 
-        result = await handler._get_heatmap("g-nothing", {})
+        result = await handler._get_heatmap("g-nothing", {}, scope=TEST_SCOPE)
         body = _body(result)
         assert body["cells"] == []
         assert body["categories"] == []
@@ -742,12 +769,13 @@ class TestGetHeatmapFormatEdgeCases:
         """Unknown format value should default to JSON."""
         runs = get_gauntlet_runs()
         runs["g-fmt"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {"findings": [], "total_findings": 0},
             "result_obj": None,
         }
 
-        result = await handler._get_heatmap("g-fmt", {"format": "xml"})
+        result = await handler._get_heatmap("g-fmt", {"format": "xml"}, scope=TEST_SCOPE)
         assert _status(result) == 200
         assert result.content_type == "application/json"
 
@@ -756,12 +784,15 @@ class TestGetHeatmapFormatEdgeCases:
         """Format param as list (from query string) should take first value."""
         runs = get_gauntlet_runs()
         runs["g-fmtlist"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {"findings": [], "total_findings": 0},
             "result_obj": None,
         }
 
-        result = await handler._get_heatmap("g-fmtlist", {"format": ["svg", "json"]})
+        result = await handler._get_heatmap(
+            "g-fmtlist", {"format": ["svg", "json"]}, scope=TEST_SCOPE
+        )
         assert _status(result) == 200
         assert result.content_type == "image/svg+xml"
 
@@ -770,12 +801,13 @@ class TestGetHeatmapFormatEdgeCases:
         """SVG with no data should return 'No data' SVG."""
         runs = get_gauntlet_runs()
         runs["g-svgempty"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {"findings": [], "total_findings": 0},
             "result_obj": None,
         }
 
-        result = await handler._get_heatmap("g-svgempty", {"format": "svg"})
+        result = await handler._get_heatmap("g-svgempty", {"format": "svg"}, scope=TEST_SCOPE)
         assert _status(result) == 200
         svg = _body_raw(result)
         assert "No data" in svg
@@ -785,12 +817,13 @@ class TestGetHeatmapFormatEdgeCases:
         """ASCII with no data should return 'No findings to display'."""
         runs = get_gauntlet_runs()
         runs["g-ascempty"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {"findings": [], "total_findings": 0},
             "result_obj": None,
         }
 
-        result = await handler._get_heatmap("g-ascempty", {"format": "ascii"})
+        result = await handler._get_heatmap("g-ascempty", {"format": "ascii"}, scope=TEST_SCOPE)
         assert _status(result) == 200
         assert "No findings to display" in _body_raw(result)
 
@@ -835,6 +868,7 @@ class TestGetHeatmapContentDetails:
         """JSON output should include the matrix field from to_dict()."""
         runs = get_gauntlet_runs()
         runs["g-mat"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {
                 "findings": [
@@ -845,7 +879,7 @@ class TestGetHeatmapContentDetails:
             "result_obj": None,
         }
 
-        result = await handler._get_heatmap("g-mat", {})
+        result = await handler._get_heatmap("g-mat", {}, scope=TEST_SCOPE)
         body = _body(result)
         assert "matrix" in body
         # 1 category, should be a list with one row
@@ -858,6 +892,7 @@ class TestGetHeatmapContentDetails:
         """total_findings should come from the result dict."""
         runs = get_gauntlet_runs()
         runs["g-total"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {
                 "findings": [
@@ -868,7 +903,7 @@ class TestGetHeatmapContentDetails:
             "result_obj": None,
         }
 
-        result = await handler._get_heatmap("g-total", {})
+        result = await handler._get_heatmap("g-total", {}, scope=TEST_SCOPE)
         body = _body(result)
         assert body["total_findings"] == 42
 
@@ -877,6 +912,7 @@ class TestGetHeatmapContentDetails:
         """Missing total_findings key should default to 0."""
         runs = get_gauntlet_runs()
         runs["g-nocount"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {
                 "findings": [
@@ -886,7 +922,7 @@ class TestGetHeatmapContentDetails:
             "result_obj": None,
         }
 
-        result = await handler._get_heatmap("g-nocount", {})
+        result = await handler._get_heatmap("g-nocount", {}, scope=TEST_SCOPE)
         body = _body(result)
         assert body["total_findings"] == 0
 
@@ -895,6 +931,7 @@ class TestGetHeatmapContentDetails:
         """SVG should include category names as text labels."""
         runs = get_gauntlet_runs()
         runs["g-svglabel"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {
                 "findings": [
@@ -905,7 +942,7 @@ class TestGetHeatmapContentDetails:
             "result_obj": None,
         }
 
-        result = await handler._get_heatmap("g-svglabel", {"format": "svg"})
+        result = await handler._get_heatmap("g-svglabel", {"format": "svg"}, scope=TEST_SCOPE)
         svg = _body_raw(result)
         assert "injection" in svg
 
@@ -914,6 +951,7 @@ class TestGetHeatmapContentDetails:
         """SVG should include severity headers."""
         runs = get_gauntlet_runs()
         runs["g-svghdr"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {
                 "findings": [
@@ -924,7 +962,7 @@ class TestGetHeatmapContentDetails:
             "result_obj": None,
         }
 
-        result = await handler._get_heatmap("g-svghdr", {"format": "svg"})
+        result = await handler._get_heatmap("g-svghdr", {"format": "svg"}, scope=TEST_SCOPE)
         svg = _body_raw(result)
         assert "CRITICAL" in svg
         assert "HIGH" in svg
@@ -934,6 +972,7 @@ class TestGetHeatmapContentDetails:
         """ASCII output should contain a TOTAL row."""
         runs = get_gauntlet_runs()
         runs["g-asctotal"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {
                 "findings": [
@@ -944,7 +983,7 @@ class TestGetHeatmapContentDetails:
             "result_obj": None,
         }
 
-        result = await handler._get_heatmap("g-asctotal", {"format": "ascii"})
+        result = await handler._get_heatmap("g-asctotal", {"format": "ascii"}, scope=TEST_SCOPE)
         ascii_text = _body_raw(result)
         assert "TOTAL" in ascii_text
 
@@ -953,6 +992,7 @@ class TestGetHeatmapContentDetails:
         """JSON cells should include an intensity field."""
         runs = get_gauntlet_runs()
         runs["g-intensity"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {
                 "findings": [
@@ -963,7 +1003,7 @@ class TestGetHeatmapContentDetails:
             "result_obj": None,
         }
 
-        result = await handler._get_heatmap("g-intensity", {})
+        result = await handler._get_heatmap("g-intensity", {}, scope=TEST_SCOPE)
         body = _body(result)
         # Find the cell with count > 0
         non_zero_cells = [c for c in body["cells"] if c["count"] > 0]
@@ -975,6 +1015,7 @@ class TestGetHeatmapContentDetails:
         """Cells with count=0 should have intensity=0."""
         runs = get_gauntlet_runs()
         runs["g-zeroint"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {
                 "findings": [
@@ -985,7 +1026,7 @@ class TestGetHeatmapContentDetails:
             "result_obj": None,
         }
 
-        result = await handler._get_heatmap("g-zeroint", {})
+        result = await handler._get_heatmap("g-zeroint", {}, scope=TEST_SCOPE)
         body = _body(result)
         zero_cells = [c for c in body["cells"] if c["count"] == 0]
         assert len(zero_cells) > 0
@@ -997,6 +1038,7 @@ class TestGetHeatmapContentDetails:
         """Multiple findings in same category should not duplicate the category."""
         runs = get_gauntlet_runs()
         runs["g-dup"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {
                 "findings": [
@@ -1009,14 +1051,14 @@ class TestGetHeatmapContentDetails:
             "result_obj": None,
         }
 
-        result = await handler._get_heatmap("g-dup", {})
+        result = await handler._get_heatmap("g-dup", {}, scope=TEST_SCOPE)
         body = _body(result)
         assert body["categories"] == ["auth"]
         assert len(body["cells"]) == 4  # 1 category x 4 severities
 
     @pytest.mark.asyncio
-    async def test_error_response_contains_gauntlet_id(self, handler):
-        """404 error response should include the gauntlet ID."""
+    async def test_not_found_response_carries_no_gauntlet_id(self, handler):
+        """404 is the standard not-found body, identical for any missing or foreign id."""
         mock_storage = MagicMock()
         mock_storage.get.return_value = None
 
@@ -1024,7 +1066,7 @@ class TestGetHeatmapContentDetails:
             "aragora.server.handlers.gauntlet.heatmap._get_storage_proxy",
             return_value=mock_storage,
         ):
-            result = await handler._get_heatmap("g-xyz-789", {})
+            result = await handler._get_heatmap("g-xyz-789", {}, scope=TEST_SCOPE)
 
-        body = _body(result)
-        assert "g-xyz-789" in body.get("error", "")
+        assert _body(result) == {"error": "Gauntlet run not found", "code": "not_found"}
+        mock_storage.get.assert_called_once_with("g-xyz-789", TEST_ORG)

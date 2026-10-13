@@ -25,6 +25,11 @@ import aragora.server.handlers.gauntlet as gauntlet_module
 # Import rate limiting module for clearing between tests
 import importlib
 
+from aragora.tenancy.record_scope import OrgScope as _OrgScope
+
+TEST_ORG = "test-org-001"
+TEST_SCOPE = _OrgScope(org_id=TEST_ORG, user_id="test-user-001", role="admin")
+
 _rate_limit_mod = importlib.import_module("aragora.server.handlers.utils.rate_limit")
 
 
@@ -169,6 +174,7 @@ class MockRiskHeatmap:
 def mock_gauntlet_run():
     """Create a mock gauntlet run."""
     return {
+        "org_id": TEST_ORG,
         "gauntlet_id": "gauntlet-20260111120000-abc123",
         "status": "completed",
         "input_type": "spec",
@@ -828,6 +834,7 @@ class TestMemoryCleanup:
         # Add a very old completed run
         old_time = (datetime.now() - timedelta(hours=3)).isoformat()
         gauntlet_module._gauntlet_runs["gauntlet-20260111100000-old123"] = {
+            "org_id": TEST_ORG,
             "gauntlet_id": "gauntlet-20260111100000-old123",
             "status": "completed",
             "created_at": old_time,
@@ -837,6 +844,7 @@ class TestMemoryCleanup:
         # Add a recent run
         recent_time = datetime.now().isoformat()
         gauntlet_module._gauntlet_runs["gauntlet-20260111120000-new123"] = {
+            "org_id": TEST_ORG,
             "gauntlet_id": "gauntlet-20260111120000-new123",
             "status": "completed",
             "created_at": recent_time,

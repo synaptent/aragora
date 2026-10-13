@@ -23,6 +23,11 @@ from aragora.server.handlers.gauntlet import (
     get_gauntlet_runs,
 )
 
+from aragora.tenancy.record_scope import OrgScope as _OrgScope
+
+TEST_ORG = "test-org-001"
+TEST_SCOPE = _OrgScope(org_id=TEST_ORG, user_id="test-user-001", role="admin")
+
 
 @pytest.fixture
 def handler():
@@ -262,6 +267,7 @@ class TestListResults:
         # Add multiple runs
         for i in range(5):
             _gauntlet_runs[f"gauntlet-test-{i}"] = {
+                "org_id": TEST_ORG,
                 "gauntlet_id": f"gauntlet-test-{i}",
                 "status": "completed",
                 "created_at": f"2025-01-15T10:0{i}:00",
@@ -286,6 +292,7 @@ class TestGetStatus:
     async def test_get_status_found(self, handler):
         """Test status retrieval for existing run."""
         _gauntlet_runs["gauntlet-test-123"] = {
+            "org_id": TEST_ORG,
             "gauntlet_id": "gauntlet-test-123",
             "status": "running",
             "progress_percent": 50,

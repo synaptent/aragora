@@ -420,7 +420,9 @@ class TestHandleParameterizedRoute:
             return_value=HandlerResult(status_code=200, content_type="application/json", body=b"{}")
         )
         path = f"/api/gauntlet/{VALID_ID}/receipt/verify"
-        result = await handler._handle_parameterized_route(path, "POST", {}, mock_h)
+        result = await handler._handle_parameterized_route(
+            path, "POST", {}, mock_h, scope=TEST_SCOPE
+        )
         assert result is not None
         assert _status(result) == 200
         handler._verify_receipt.assert_called_once_with(VALID_ID, mock_h)
@@ -430,7 +432,9 @@ class TestHandleParameterizedRoute:
         """Returns 400 for invalid ID on receipt verify."""
         mock_h = _make_http_handler("POST")
         path = "/api/gauntlet/bad-id/receipt/verify"
-        result = await handler._handle_parameterized_route(path, "POST", {}, mock_h)
+        result = await handler._handle_parameterized_route(
+            path, "POST", {}, mock_h, scope=TEST_SCOPE
+        )
         assert result is not None
         assert _status(result) == 400
 
@@ -441,7 +445,7 @@ class TestHandleParameterizedRoute:
             return_value=HandlerResult(status_code=200, content_type="application/json", body=b"{}")
         )
         path = "/api/receipts/r%2F123/anchor-status"
-        result = await handler._handle_parameterized_route(path, "GET", {}, None)
+        result = await handler._handle_parameterized_route(path, "GET", {}, None, scope=TEST_SCOPE)
         assert result is not None
         handler._get_receipt_anchor_status.assert_called_once_with("r/123", {})
 
@@ -452,7 +456,9 @@ class TestHandleParameterizedRoute:
             return_value=HandlerResult(status_code=200, content_type="application/json", body=b"{}")
         )
         path = f"/api/gauntlet/{VALID_ID}/receipt"
-        result = await handler._handle_parameterized_route(path, "GET", {"format": "json"}, None)
+        result = await handler._handle_parameterized_route(
+            path, "GET", {"format": "json"}, None, scope=TEST_SCOPE
+        )
         assert result is not None
         handler._get_receipt.assert_called_once_with(VALID_ID, {"format": "json"})
 
@@ -460,7 +466,7 @@ class TestHandleParameterizedRoute:
     async def test_get_receipt_invalid_id(self, handler):
         """Returns 400 for invalid ID on get receipt."""
         path = "/api/gauntlet/not-valid/receipt"
-        result = await handler._handle_parameterized_route(path, "GET", {}, None)
+        result = await handler._handle_parameterized_route(path, "GET", {}, None, scope=TEST_SCOPE)
         assert _status(result) == 400
 
     @pytest.mark.asyncio
@@ -470,15 +476,15 @@ class TestHandleParameterizedRoute:
             return_value=HandlerResult(status_code=200, content_type="application/json", body=b"{}")
         )
         path = f"/api/gauntlet/{VALID_ID}/heatmap"
-        result = await handler._handle_parameterized_route(path, "GET", {}, None)
+        result = await handler._handle_parameterized_route(path, "GET", {}, None, scope=TEST_SCOPE)
         assert result is not None
-        handler._get_heatmap.assert_called_once_with(VALID_ID, {})
+        handler._get_heatmap.assert_called_once_with(VALID_ID, {}, scope=TEST_SCOPE)
 
     @pytest.mark.asyncio
     async def test_get_heatmap_invalid_id(self, handler):
         """Returns 400 for invalid ID on heatmap."""
         path = "/api/gauntlet/xxx/heatmap"
-        result = await handler._handle_parameterized_route(path, "GET", {}, None)
+        result = await handler._handle_parameterized_route(path, "GET", {}, None, scope=TEST_SCOPE)
         assert _status(result) == 400
 
     @pytest.mark.asyncio
@@ -489,7 +495,9 @@ class TestHandleParameterizedRoute:
             return_value=HandlerResult(status_code=200, content_type="application/json", body=b"{}")
         )
         path = f"/api/gauntlet/{VALID_ID}/export"
-        result = await handler._handle_parameterized_route(path, "GET", {}, mock_h)
+        result = await handler._handle_parameterized_route(
+            path, "GET", {}, mock_h, scope=TEST_SCOPE
+        )
         assert result is not None
         handler._export_report.assert_called_once_with(VALID_ID, {}, mock_h)
 
@@ -498,7 +506,9 @@ class TestHandleParameterizedRoute:
         """Returns 400 for invalid ID on export."""
         mock_h = _make_http_handler("GET")
         path = "/api/gauntlet/nope/export"
-        result = await handler._handle_parameterized_route(path, "GET", {}, mock_h)
+        result = await handler._handle_parameterized_route(
+            path, "GET", {}, mock_h, scope=TEST_SCOPE
+        )
         assert _status(result) == 400
 
     @pytest.mark.asyncio
@@ -508,29 +518,29 @@ class TestHandleParameterizedRoute:
             return_value=HandlerResult(status_code=200, content_type="application/json", body=b"{}")
         )
         path = f"/api/gauntlet/{VALID_ID}/compare/{VALID_ID2}"
-        result = await handler._handle_parameterized_route(path, "GET", {}, None)
+        result = await handler._handle_parameterized_route(path, "GET", {}, None, scope=TEST_SCOPE)
         assert result is not None
-        handler._compare_results.assert_called_once_with(VALID_ID, VALID_ID2, {})
+        handler._compare_results.assert_called_once_with(VALID_ID, VALID_ID2, {}, scope=TEST_SCOPE)
 
     @pytest.mark.asyncio
     async def test_compare_invalid_first_id(self, handler):
         """Returns 400 for invalid first ID on compare."""
         path = f"/api/gauntlet/bad-id/compare/{VALID_ID2}"
-        result = await handler._handle_parameterized_route(path, "GET", {}, None)
+        result = await handler._handle_parameterized_route(path, "GET", {}, None, scope=TEST_SCOPE)
         assert _status(result) == 400
 
     @pytest.mark.asyncio
     async def test_compare_invalid_second_id(self, handler):
         """Returns 400 for invalid second (compare) ID."""
         path = f"/api/gauntlet/{VALID_ID}/compare/not-valid"
-        result = await handler._handle_parameterized_route(path, "GET", {}, None)
+        result = await handler._handle_parameterized_route(path, "GET", {}, None, scope=TEST_SCOPE)
         assert _status(result) == 400
 
     @pytest.mark.asyncio
     async def test_compare_path_too_short(self, handler):
         """Returns None for compare path with too few segments."""
         path = "/api/gauntlet/compare"
-        result = await handler._handle_parameterized_route(path, "GET", {}, None)
+        result = await handler._handle_parameterized_route(path, "GET", {}, None, scope=TEST_SCOPE)
         # The /compare/ check won't match since path doesn't contain "/compare/"
         # Falls through to GET status check, which returns 400 for "compare" id
         assert result is not None
@@ -542,15 +552,19 @@ class TestHandleParameterizedRoute:
             return_value=HandlerResult(status_code=200, content_type="application/json", body=b"{}")
         )
         path = f"/api/gauntlet/{VALID_ID}"
-        result = await handler._handle_parameterized_route(path, "DELETE", {}, None)
+        result = await handler._handle_parameterized_route(
+            path, "DELETE", {}, None, scope=TEST_SCOPE
+        )
         assert result is not None
-        handler._delete_result.assert_called_once_with(VALID_ID, {})
+        handler._delete_result.assert_called_once_with(VALID_ID, {}, scope=TEST_SCOPE)
 
     @pytest.mark.asyncio
     async def test_delete_invalid_id(self, handler):
         """Returns 400 for invalid ID on delete."""
         path = "/api/gauntlet/bad"
-        result = await handler._handle_parameterized_route(path, "DELETE", {}, None)
+        result = await handler._handle_parameterized_route(
+            path, "DELETE", {}, None, scope=TEST_SCOPE
+        )
         assert _status(result) == 400
 
     @pytest.mark.asyncio
@@ -560,36 +574,38 @@ class TestHandleParameterizedRoute:
             return_value=HandlerResult(status_code=200, content_type="application/json", body=b"{}")
         )
         path = f"/api/gauntlet/{VALID_ID}"
-        result = await handler._handle_parameterized_route(path, "GET", {}, None)
+        result = await handler._handle_parameterized_route(path, "GET", {}, None, scope=TEST_SCOPE)
         assert result is not None
-        handler._get_status.assert_called_once_with(VALID_ID)
+        handler._get_status.assert_called_once_with(VALID_ID, scope=TEST_SCOPE)
 
     @pytest.mark.asyncio
     async def test_get_status_invalid_id(self, handler):
         """Returns 400 for invalid ID on get status."""
         path = "/api/gauntlet/xyz"
-        result = await handler._handle_parameterized_route(path, "GET", {}, None)
+        result = await handler._handle_parameterized_route(path, "GET", {}, None, scope=TEST_SCOPE)
         assert _status(result) == 400
 
     @pytest.mark.asyncio
     async def test_unmatched_method(self, handler):
         """Returns None for unmatched method/path combos."""
         path = f"/api/gauntlet/{VALID_ID}"
-        result = await handler._handle_parameterized_route(path, "PUT", {}, None)
+        result = await handler._handle_parameterized_route(path, "PUT", {}, None, scope=TEST_SCOPE)
         assert result is None
 
     @pytest.mark.asyncio
     async def test_non_gauntlet_path_delete(self, handler):
         """Returns None when DELETE path doesn't start with /api/gauntlet/."""
         result = await handler._handle_parameterized_route(
-            "/api/other/something", "DELETE", {}, None
+            "/api/other/something", "DELETE", {}, None, scope=TEST_SCOPE
         )
         assert result is None
 
     @pytest.mark.asyncio
     async def test_non_gauntlet_path_get(self, handler):
         """Returns None when GET path doesn't start with /api/gauntlet/."""
-        result = await handler._handle_parameterized_route("/api/other/something", "GET", {}, None)
+        result = await handler._handle_parameterized_route(
+            "/api/other/something", "GET", {}, None, scope=TEST_SCOPE
+        )
         assert result is None
 
 
@@ -641,7 +657,7 @@ class TestHandle:
         result = await handler.handle("/api/v1/gauntlet/results", {}, mock_h)
         assert result is not None
         assert _status(result) == 200
-        handler._list_results.assert_called_once_with({})
+        handler._list_results.assert_called_once_with({}, scope=TEST_SCOPE)
 
     @pytest.mark.asyncio
     async def test_route_get_status_parameterized(self, handler):

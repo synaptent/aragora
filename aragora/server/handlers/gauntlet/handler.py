@@ -125,7 +125,12 @@ class GauntletHandler(
         return gauntlet_id, None
 
     async def _handle_parameterized_route(
-        self, path: str, method: str, query_params: dict[str, Any], handler: Any
+        self,
+        path: str,
+        method: str,
+        query_params: dict[str, Any],
+        handler: Any,
+        scope: OrgScope,
     ) -> HandlerResult | None:
         """Handle routes with path parameters.
 
@@ -162,7 +167,7 @@ class GauntletHandler(
             gauntlet_id, err = self._extract_and_validate_id(path, -2)
             if err:
                 return err
-            return await self._get_heatmap(cast(str, gauntlet_id), query_params)
+            return await self._get_heatmap(cast(str, gauntlet_id), query_params, scope=scope)
 
         # GET /api/gauntlet/{id}/export
         if path.endswith("/export") and method == "GET":
@@ -182,21 +187,23 @@ class GauntletHandler(
                 is_valid, err_msg = validate_gauntlet_id(compare_id)
                 if not is_valid:
                     return error_response(f"Invalid compare ID: {err_msg}", 400)
-                return self._compare_results(cast(str, gauntlet_id), compare_id, query_params)
+                return self._compare_results(
+                    cast(str, gauntlet_id), compare_id, query_params, scope=scope
+                )
 
         # DELETE /api/gauntlet/{id}
         if method == "DELETE" and path.startswith("/api/gauntlet/"):
             gauntlet_id, err = self._extract_and_validate_id(path)
             if err:
                 return err
-            return self._delete_result(cast(str, gauntlet_id), query_params)
+            return self._delete_result(cast(str, gauntlet_id), query_params, scope=scope)
 
         # GET /api/gauntlet/{id} - catch-all for status
         if method == "GET" and path.startswith("/api/gauntlet/"):
             gauntlet_id, err = self._extract_and_validate_id(path)
             if err:
                 return err
-            return await self._get_status(cast(str, gauntlet_id))
+            return await self._get_status(cast(str, gauntlet_id), scope=scope)
 
         return None
 
@@ -323,10 +330,12 @@ class GauntletHandler(
             if handler_name == "_start_gauntlet":
                 result = await handler_method(handler, scope=scope)
             else:
-                result = handler_method(query_params)
+                result = handler_method(query_params, scope=scope)
         else:
             # Try parameterized route matching
-            result = await self._handle_parameterized_route(path, method, query_params, handler)
+            result = await self._handle_parameterized_route(
+                path, method, query_params, handler, scope
+            )
 
         # Add version headers to result
         if result is not None:
