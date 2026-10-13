@@ -3,6 +3,10 @@ name: Stale Issues
 # Marks issues inactive for 150 days as `stale` and closes them 30 days later
 # unless they are updated. Pull requests are excluded. Issues labelled
 # triage:protected, pinned, security or roadmap are exempt.
+#
+# Dry run: with `debug-only: true` actions/stale only logs the issues it would
+# label, comment on or close, and changes none of them. Read a run's log
+# before setting it to false.
 
 on:
   schedule:
@@ -25,6 +29,7 @@ jobs:
       - name: Run actions/stale
         uses: actions/stale@4391f3da665fdf50b6810c1a66712fb9ba21aa93 # v11.0.0
         with:
+          debug-only: true
           days-before-stale: 150
           days-before-close: 30
           days-before-pr-stale: -1
