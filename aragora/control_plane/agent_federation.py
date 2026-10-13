@@ -312,7 +312,7 @@ class FederatedAgentPool:
             from aragora.control_plane.regional_sync import RegionalEventType
 
             # Skip events from our own instance
-            source_region = getattr(event, "source_region", None)
+            source_region: Any = getattr(event, "source_region", None)
             if source_region == self._instance_id:
                 return
 
@@ -449,7 +449,7 @@ class FederatedAgentPool:
         strategy = strategy or self._config.load_balance_strategy
 
         if strategy == LoadBalanceStrategy.RANDOM:
-            return random.choice(agents)  # noqa: S311 -- load balancing
+            return random.choice(agents)  # load balancing
 
         if strategy == LoadBalanceStrategy.ROUND_ROBIN:
             # Group by capability for RR
@@ -471,9 +471,9 @@ class FederatedAgentPool:
         if strategy == LoadBalanceStrategy.PREFER_LOCAL:
             # Score agents with local bias
             local_agents = [a for a in agents if a.is_local]
-            if local_agents and random.random() < self._config.local_bias:  # noqa: S311 -- load balancing
-                return random.choice(local_agents)  # noqa: S311 -- load balancing
-            return random.choice(agents)  # noqa: S311 -- load balancing
+            if local_agents and random.random() < self._config.local_bias:  # load balancing
+                return random.choice(local_agents)  # load balancing
+            return random.choice(agents)  # load balancing
 
         return agents[0]
 

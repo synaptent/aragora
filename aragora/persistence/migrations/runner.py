@@ -1130,7 +1130,7 @@ def downgrade(conn: sqlite3.Connection) -> None:
     # If rollback is not supported, raise NotImplementedError:
     # raise NotImplementedError("Rollback not supported for this migration")
     pass
-'''  # noqa: S608 -- template generates migration file, no user input
+'''  # template generates migration file, no user input
 
         file_path.write_text(template)
         logger.info("Created migration: %s", file_path)

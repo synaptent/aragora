@@ -50,11 +50,17 @@ _SeverityLevel: Any = None
 _GAUNTLET_AVAILABLE = False
 
 try:
-    from aragora.gauntlet.config import AttackCategory as _AttackCategory  # noqa: N811
-    from aragora.gauntlet.config import GauntletConfig as _GauntletConfig  # noqa: N811
-    from aragora.gauntlet.config import ProbeCategory as _ProbeCategory  # noqa: N811
-    from aragora.gauntlet.result import SeverityLevel as _SeverityLevel  # noqa: N811
-    from aragora.gauntlet.runner import GauntletRunner as _GauntletRunner  # noqa: N811
+    from aragora.gauntlet.config import AttackCategory, GauntletConfig, ProbeCategory
+    from aragora.gauntlet.result import SeverityLevel
+    from aragora.gauntlet.runner import GauntletRunner
+
+    # Assigned rather than imported `as` the private names: mypy reports an import
+    # over the `Any` fallbacks declared above as a redefinition.
+    _AttackCategory = AttackCategory
+    _GauntletConfig = GauntletConfig
+    _ProbeCategory = ProbeCategory
+    _SeverityLevel = SeverityLevel
+    _GauntletRunner = GauntletRunner
 
     _GAUNTLET_AVAILABLE = True
 except ImportError:

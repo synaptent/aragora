@@ -131,7 +131,7 @@ class ProductionConnectorMixin:
     def _calculate_retry_delay(self, attempt: int) -> float:
         """Calculate retry delay with exponential backoff and jitter."""
         delay = min(self._pcm_base_delay * (2**attempt), self._pcm_max_delay)
-        jitter = delay * DEFAULT_JITTER_FACTOR * random.uniform(-1, 1)  # noqa: S311 -- retry jitter
+        jitter = delay * DEFAULT_JITTER_FACTOR * random.uniform(-1, 1)
         return max(0.1, delay + jitter)
 
     async def _call_with_retry(
@@ -243,7 +243,7 @@ class ProductionConnectorMixin:
 
                     if retry_after is not None and attempt < self._pcm_max_retries:
                         delay = min(retry_after, self._pcm_max_delay)
-                        delay += delay * 0.1 * random.uniform(0, 1)  # noqa: S311 -- retry jitter
+                        delay += delay * 0.1 * random.uniform(0, 1)
                         await asyncio.sleep(delay)
                         continue
 

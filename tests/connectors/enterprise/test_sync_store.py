@@ -495,6 +495,30 @@ class TestSyncJobRecovery:
         await store2.close()
 
     @pytest.mark.asyncio
+    async def test_recovery_can_be_disabled_for_a_store_opened_beside_a_live_owner(self, db_path):
+        """A second store opened with recovery disabled leaves running jobs alone."""
+        owner = SyncStore(database_url=f"sqlite:///{db_path}", use_encryption=False)
+        await owner.initialize()
+        await owner.save_connector("c1", "github", "Test", {})
+        await owner.record_sync_start("c1")
+
+        side_store = SyncStore(
+            database_url=f"sqlite:///{db_path}",
+            use_encryption=False,
+            recover_jobs_on_init=False,
+        )
+        await side_store.initialize()
+
+        history = await side_store.get_sync_history("c1")
+        assert len(history) == 1
+        assert history[0].status == "running"
+        assert history[0].completed_at is None
+        assert (await side_store.get_connector("c1")).status == "active"
+
+        await side_store.close()
+        await owner.close()
+
+    @pytest.mark.asyncio
     async def test_explicit_recovery_call(self, db_path):
         """Should be able to call recovery explicitly."""
 

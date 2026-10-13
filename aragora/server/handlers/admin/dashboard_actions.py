@@ -284,7 +284,7 @@ class DashboardActionsMixin:
                         payload["dashboard_review_state"] = "dismissed"
                         payload["dashboard_reviewed_at"] = datetime.now(timezone.utc).isoformat()
                         cursor.execute(
-                            f"UPDATE debates SET {payload_column} = ? WHERE id = ?",  # noqa: S608
+                            f"UPDATE debates SET {payload_column} = ? WHERE id = ?",
                             (json.dumps(payload), item_id),
                         )
                         conn.commit()
@@ -400,7 +400,7 @@ class DashboardActionsMixin:
                         payload["status"] = "completed"
                         payload["completed_at"] = completed_at
                         cursor.execute(
-                            f"UPDATE debates SET {payload_column} = ? WHERE id = ?",  # noqa: S608
+                            f"UPDATE debates SET {payload_column} = ? WHERE id = ?",
                             (json.dumps(payload), action_id),
                         )
                         persisted = True

@@ -11,16 +11,16 @@ import pytest
 
 pytest.importorskip("aragora_sdk", reason="aragora-sdk not installed")
 
-from aragora_sdk.namespaces.audience import (  # noqa: E402
+from aragora_sdk.namespaces.audience import (
     AsyncAudienceAPI,
     AudienceAPI,
 )
-from aragora_sdk.namespaces.moderation import (  # noqa: E402
+from aragora_sdk.namespaces.moderation import (
     AsyncModerationAPI,
     ModerationAPI,
 )
-from aragora_sdk.namespaces.modes import AsyncModesAPI, ModesAPI  # noqa: E402
-from aragora_sdk.namespaces.spectate import (  # noqa: E402
+from aragora_sdk.namespaces.modes import AsyncModesAPI, ModesAPI
+from aragora_sdk.namespaces.spectate import (
     AsyncSpectateAPI,
     SpectateAPI,
 )

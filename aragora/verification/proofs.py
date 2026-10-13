@@ -415,7 +415,7 @@ except Exception as e:
             temp_path = f.name
 
         try:
-            result = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
+            result = subprocess.run(  # subprocess with fixed args, no shell
                 [sys.executable, temp_path],
                 capture_output=True,
                 timeout=timeout,

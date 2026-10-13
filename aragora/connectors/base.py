@@ -661,7 +661,7 @@ class BaseConnector(ABC):
         delay = min(self._base_delay * (2**attempt), self._max_delay)
 
         # Apply random jitter: delay ± (jitter_factor * delay)
-        jitter = delay * self.DEFAULT_JITTER_FACTOR * random.uniform(-1, 1)  # noqa: S311 -- retry jitter
+        jitter = delay * self.DEFAULT_JITTER_FACTOR * random.uniform(-1, 1)
 
         # Ensure minimum delay of 0.1s
         return max(0.1, delay + jitter)
@@ -829,7 +829,7 @@ class BaseConnector(ABC):
                     if retry_after is not None and attempt < self._max_retries:
                         delay = min(retry_after, self._max_delay)
                         # Add small jitter to Retry-After
-                        delay += delay * 0.1 * random.uniform(0, 1)  # noqa: S311 -- retry jitter
+                        delay += delay * 0.1 * random.uniform(0, 1)
                         logger.info("[%s] Waiting %.1fs (Retry-After)", self.name, delay)
                         await asyncio.sleep(delay)
                         continue

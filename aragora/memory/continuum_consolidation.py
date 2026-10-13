@@ -105,7 +105,7 @@ def promote_batch(
             WHERE id IN ({placeholders})
               AND tier = ?
               AND (last_promotion_at IS NULL OR last_promotion_at < ?)
-            """,  # noqa: S608 -- parameterized query
+            """,  # parameterized query
             (to_tier.value, now, now, *ids, from_tier.value, cutoff_time),
         )
         promoted_count = cursor.rowcount
@@ -117,7 +117,7 @@ def promote_batch(
                 f"""
                 SELECT id, surprise_score FROM continuum_memory
                 WHERE id IN ({placeholders}) AND tier = ?
-                """,  # noqa: S608 -- parameterized query
+                """,  # parameterized query
                 (*ids, to_tier.value),
             )
             promoted_entries = cursor.fetchall()
@@ -187,7 +187,7 @@ def demote_batch(
             UPDATE continuum_memory
             SET tier = ?, updated_at = ?
             WHERE id IN ({placeholders}) AND tier = ?
-            """,  # noqa: S608 -- parameterized query
+            """,  # parameterized query
             (to_tier.value, now, *ids, from_tier.value),
         )
         demoted_count = cursor.rowcount
@@ -198,7 +198,7 @@ def demote_batch(
                 f"""
                 SELECT id, surprise_score FROM continuum_memory
                 WHERE id IN ({placeholders}) AND tier = ?
-                """,  # noqa: S608 -- parameterized query
+                """,  # parameterized query
                 (*ids, to_tier.value),
             )
             demoted_entries = cursor.fetchall()

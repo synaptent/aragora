@@ -243,7 +243,8 @@ class GenericSQLiteStore(GenericStoreBackend):
             try:
                 cursor = conn.cursor()
                 cursor.execute(
-                    f"SELECT data_json FROM {self.TABLE_NAME} WHERE {self.PRIMARY_KEY} = ?",  # noqa: S608 -- table/column name interpolation, parameterized
+                    # table/column name interpolation, parameterized
+                    f"SELECT data_json FROM {self.TABLE_NAME} WHERE {self.PRIMARY_KEY} = ?",
                     (item_id,),
                 )
                 row = cursor.fetchone()
@@ -278,7 +279,8 @@ class GenericSQLiteStore(GenericStoreBackend):
             conn = self._connect()
             try:
                 conn.execute(
-                    f"INSERT OR REPLACE INTO {self.TABLE_NAME} ({col_names}) VALUES ({placeholders})",  # noqa: S608 -- table/column name interpolation, parameterized
+                    # table/column name interpolation, parameterized
+                    f"INSERT OR REPLACE INTO {self.TABLE_NAME} ({col_names}) VALUES ({placeholders})",
                     values,
                 )
                 conn.commit()
@@ -290,7 +292,8 @@ class GenericSQLiteStore(GenericStoreBackend):
             conn = self._connect()
             try:
                 cursor = conn.execute(
-                    f"DELETE FROM {self.TABLE_NAME} WHERE {self.PRIMARY_KEY} = ?",  # noqa: S608 -- table/column name interpolation, parameterized
+                    # table/column name interpolation, parameterized
+                    f"DELETE FROM {self.TABLE_NAME} WHERE {self.PRIMARY_KEY} = ?",
                     (item_id,),
                 )
                 conn.commit()
@@ -303,7 +306,8 @@ class GenericSQLiteStore(GenericStoreBackend):
             conn = self._connect()
             try:
                 cursor = conn.execute(
-                    f"SELECT data_json FROM {self.TABLE_NAME} ORDER BY created_at DESC"  # noqa: S608 -- table name interpolation, parameterized
+                    # table name interpolation, parameterized
+                    f"SELECT data_json FROM {self.TABLE_NAME} ORDER BY created_at DESC"
                 )
                 return [json.loads(row[0]) for row in cursor.fetchall()]
             finally:
@@ -314,7 +318,8 @@ class GenericSQLiteStore(GenericStoreBackend):
             conn = self._connect()
             try:
                 cursor = conn.execute(
-                    f"SELECT 1 FROM {self.TABLE_NAME} WHERE {self.PRIMARY_KEY} = ?",  # noqa: S608 -- table/column name interpolation, parameterized
+                    # table/column name interpolation, parameterized
+                    f"SELECT 1 FROM {self.TABLE_NAME} WHERE {self.PRIMARY_KEY} = ?",
                     (item_id,),
                 )
                 return cursor.fetchone() is not None
@@ -325,7 +330,8 @@ class GenericSQLiteStore(GenericStoreBackend):
         with self._lock:
             conn = self._connect()
             try:
-                cursor = conn.execute(f"SELECT COUNT(*) FROM {self.TABLE_NAME}")  # noqa: S608 -- table name interpolation, parameterized
+                # table name interpolation, parameterized
+                cursor = conn.execute(f"SELECT COUNT(*) FROM {self.TABLE_NAME}")
                 row = cursor.fetchone()
                 return row[0] if row else 0
             finally:
@@ -342,7 +348,8 @@ class GenericSQLiteStore(GenericStoreBackend):
             conn = self._connect()
             try:
                 cursor = conn.execute(
-                    f"SELECT data_json FROM {self.TABLE_NAME} WHERE {column} = ? ORDER BY {order_by}",  # noqa: S608 -- table/column name interpolation, parameterized
+                    # table/column name interpolation, parameterized
+                    f"SELECT data_json FROM {self.TABLE_NAME} WHERE {column} = ? ORDER BY {order_by}",
                     (value,),
                 )
                 return [json.loads(row[0]) for row in cursor.fetchall()]
@@ -360,7 +367,8 @@ class GenericSQLiteStore(GenericStoreBackend):
             conn = self._connect()
             try:
                 cursor = conn.execute(
-                    f"SELECT data_json FROM {self.TABLE_NAME} WHERE {where_clause} ORDER BY {order_by}",  # noqa: S608 -- table name interpolation, parameterized
+                    # table name interpolation, parameterized
+                    f"SELECT data_json FROM {self.TABLE_NAME} WHERE {where_clause} ORDER BY {order_by}",
                     params,
                 )
                 return [json.loads(row[0]) for row in cursor.fetchall()]
@@ -378,7 +386,8 @@ class GenericSQLiteStore(GenericStoreBackend):
             conn = self._connect()
             try:
                 cursor = conn.execute(
-                    f"SELECT data_json FROM {self.TABLE_NAME} WHERE {self.PRIMARY_KEY} = ?",  # noqa: S608 -- table/column name interpolation, parameterized
+                    # table/column name interpolation, parameterized
+                    f"SELECT data_json FROM {self.TABLE_NAME} WHERE {self.PRIMARY_KEY} = ?",
                     (item_id,),
                 )
                 row = cursor.fetchone()
@@ -401,7 +410,8 @@ class GenericSQLiteStore(GenericStoreBackend):
                 set_clause = ", ".join(set_parts)
 
                 conn.execute(
-                    f"UPDATE {self.TABLE_NAME} SET {set_clause} WHERE {self.PRIMARY_KEY} = ?",  # noqa: S608 -- table/column name interpolation, parameterized
+                    # table/column name interpolation, parameterized
+                    f"UPDATE {self.TABLE_NAME} SET {set_clause} WHERE {self.PRIMARY_KEY} = ?",
                     values,
                 )
                 conn.commit()
@@ -460,7 +470,8 @@ class GenericPostgresStore(GenericStoreBackend):
     async def get(self, item_id: str) -> dict[str, Any] | None:
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
-                f"SELECT data_json FROM {self.TABLE_NAME} WHERE {self.PRIMARY_KEY} = $1",  # noqa: S608 -- table/column name interpolation, parameterized
+                # table/column name interpolation, parameterized
+                f"SELECT data_json FROM {self.TABLE_NAME} WHERE {self.PRIMARY_KEY} = $1",
                 item_id,
             )
             if row:
@@ -501,14 +512,15 @@ class GenericPostgresStore(GenericStoreBackend):
                 INSERT INTO {self.TABLE_NAME} ({col_names})
                 VALUES ({placeholders})
                 ON CONFLICT ({self.PRIMARY_KEY}) DO UPDATE SET {update_clause}
-                """,  # noqa: S608 -- table name interpolation, parameterized
+                """,  # table name interpolation, parameterized
                 *values,
             )
 
     async def delete(self, item_id: str) -> bool:
         async with self._pool.acquire() as conn:
             result = await conn.execute(
-                f"DELETE FROM {self.TABLE_NAME} WHERE {self.PRIMARY_KEY} = $1",  # noqa: S608 -- table/column name interpolation, parameterized
+                # table/column name interpolation, parameterized
+                f"DELETE FROM {self.TABLE_NAME} WHERE {self.PRIMARY_KEY} = $1",
                 item_id,
             )
             return result == "DELETE 1"
@@ -523,21 +535,24 @@ class GenericPostgresStore(GenericStoreBackend):
     async def list_all(self) -> list[dict[str, Any]]:
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
-                f"SELECT data_json FROM {self.TABLE_NAME} ORDER BY created_at DESC"  # noqa: S608 -- table name interpolation, parameterized
+                # table name interpolation, parameterized
+                f"SELECT data_json FROM {self.TABLE_NAME} ORDER BY created_at DESC"
             )
             return [self._parse_data_json(row["data_json"]) for row in rows]
 
     async def exists(self, item_id: str) -> bool:
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
-                f"SELECT 1 FROM {self.TABLE_NAME} WHERE {self.PRIMARY_KEY} = $1",  # noqa: S608 -- table/column name interpolation, parameterized
+                # table/column name interpolation, parameterized
+                f"SELECT 1 FROM {self.TABLE_NAME} WHERE {self.PRIMARY_KEY} = $1",
                 item_id,
             )
             return row is not None
 
     async def count(self) -> int:
         async with self._pool.acquire() as conn:
-            row = await conn.fetchrow(f"SELECT COUNT(*) as cnt FROM {self.TABLE_NAME}")  # noqa: S608 -- table name interpolation, parameterized
+            # table name interpolation, parameterized
+            row = await conn.fetchrow(f"SELECT COUNT(*) as cnt FROM {self.TABLE_NAME}")
             return row["cnt"] if row else 0
 
     async def _query_by_column(
@@ -549,7 +564,8 @@ class GenericPostgresStore(GenericStoreBackend):
         """Helper: query items by an indexed column value."""
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
-                f"SELECT data_json FROM {self.TABLE_NAME} WHERE {column} = $1 ORDER BY {order_by}",  # noqa: S608 -- table/column name interpolation, parameterized
+                # table/column name interpolation, parameterized
+                f"SELECT data_json FROM {self.TABLE_NAME} WHERE {column} = $1 ORDER BY {order_by}",
                 value,
             )
             return [self._parse_data_json(row["data_json"]) for row in rows]
@@ -563,7 +579,8 @@ class GenericPostgresStore(GenericStoreBackend):
         """Helper: query with custom WHERE clause."""
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
-                f"SELECT data_json FROM {self.TABLE_NAME} WHERE {where_clause} ORDER BY {order_by}",  # noqa: S608 -- table name interpolation, parameterized
+                # table name interpolation, parameterized
+                f"SELECT data_json FROM {self.TABLE_NAME} WHERE {where_clause} ORDER BY {order_by}",
                 *params,
             )
             return [self._parse_data_json(row["data_json"]) for row in rows]
@@ -577,7 +594,8 @@ class GenericPostgresStore(GenericStoreBackend):
         """Helper: update specific fields in the data_json blob."""
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
-                f"SELECT data_json FROM {self.TABLE_NAME} WHERE {self.PRIMARY_KEY} = $1",  # noqa: S608 -- table/column name interpolation, parameterized
+                # table/column name interpolation, parameterized
+                f"SELECT data_json FROM {self.TABLE_NAME} WHERE {self.PRIMARY_KEY} = $1",
                 item_id,
             )
             if not row:
@@ -601,7 +619,8 @@ class GenericPostgresStore(GenericStoreBackend):
             set_clause = ", ".join(set_parts)
 
             await conn.execute(
-                f"UPDATE {self.TABLE_NAME} SET {set_clause} WHERE {self.PRIMARY_KEY} = ${param_idx}",  # noqa: S608 -- table/column name interpolation, parameterized
+                # table/column name interpolation, parameterized
+                f"UPDATE {self.TABLE_NAME} SET {set_clause} WHERE {self.PRIMARY_KEY} = ${param_idx}",
                 *values,
             )
             return True

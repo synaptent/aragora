@@ -44,7 +44,7 @@ Usage (unchanged):
 # implemented in aragora.moderation.spam submodules.
 
 # Models and data types
-from aragora.moderation.spam.models import (  # noqa: F401
+from aragora.moderation.spam.models import (
     EmailFeatures,
     SpamCategory,
     SpamClassificationResult,
@@ -53,7 +53,7 @@ from aragora.moderation.spam.models import (  # noqa: F401
 )
 
 # Pattern constants
-from aragora.moderation.spam.patterns import (  # noqa: F401
+from aragora.moderation.spam.patterns import (
     DANGEROUS_EXTENSIONS,
     FREE_EMAIL_PROVIDERS,
     KNOWN_SPAM_DOMAINS,
@@ -67,13 +67,13 @@ from aragora.moderation.spam.patterns import (  # noqa: F401
 )
 
 # Feature extraction
-from aragora.moderation.spam.features import SpamFeatures  # noqa: F401
+from aragora.moderation.spam.features import SpamFeatures
 
 # ML model
-from aragora.moderation.spam.model import NaiveBayesClassifier  # noqa: F401
+from aragora.moderation.spam.model import NaiveBayesClassifier
 
 # Classifier and convenience functions
-from aragora.moderation.spam.classifier import (  # noqa: F401
+from aragora.moderation.spam.classifier import (
     SpamClassifier,
     classify_email,
     classify_email_spam,

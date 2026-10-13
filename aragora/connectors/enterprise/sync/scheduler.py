@@ -61,7 +61,7 @@ class RetryPolicy:
         # Add jitter (up to 25% variation)
         if self.jitter:
             jitter_range = delay * 0.25
-            delay += random.uniform(-jitter_range, jitter_range)  # noqa: S311 -- retry jitter
+            delay += random.uniform(-jitter_range, jitter_range)
 
         return max(0, delay)
 

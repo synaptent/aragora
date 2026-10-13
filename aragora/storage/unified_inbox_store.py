@@ -1,6 +1,6 @@
 """Backward-compatible re-exports from aragora.storage.unified_inbox package."""
 
-from aragora.storage.unified_inbox import (  # noqa: F401
+from aragora.storage.unified_inbox import (
     InMemoryUnifiedInboxStore,
     PostgresUnifiedInboxStore,
     SQLiteUnifiedInboxStore,

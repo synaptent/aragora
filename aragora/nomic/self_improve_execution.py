@@ -155,15 +155,15 @@ class SelfImproveExecutionMixin:
             if files_changed and worktree_path:
                 try:
                     commit_result = subprocess.run(
-                        ["git", "add", "-A"],  # noqa: S607 -- fixed command
+                        ["git", "add", "-A"],  # fixed command
                         capture_output=True,
                         text=True,
                         cwd=worktree_path,
                         timeout=10,
                     )
                     if commit_result.returncode == 0:
-                        subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
-                            [  # noqa: S607 -- fixed command
+                        subprocess.run(  # subprocess with fixed args, no shell
+                            [  # fixed command
                                 "git",
                                 "commit",
                                 "-m",
@@ -450,7 +450,7 @@ class SelfImproveExecutionMixin:
                 import subprocess
 
                 diff_result = subprocess.run(
-                    ["git", "diff", "--name-only", "HEAD"],  # noqa: S607 -- fixed command
+                    ["git", "diff", "--name-only", "HEAD"],  # fixed command
                     capture_output=True,
                     text=True,
                     cwd=worktree_path,

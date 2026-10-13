@@ -599,7 +599,7 @@ class NomicOutcomeTracker:
 
         start_time = time.time()
         try:
-            result = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
+            result = subprocess.run(  # subprocess with fixed args, no shell
                 cmd,
                 capture_output=True,
                 text=True,

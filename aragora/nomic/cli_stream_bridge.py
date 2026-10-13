@@ -71,7 +71,7 @@ class CLIStreamBridge:
     def __init__(
         self,
         nomic_port: int = 8767,
-        nomic_host: str = "0.0.0.0",  # noqa: S104 - WS server binds all interfaces by default
+        nomic_host: str = "0.0.0.0",  # WS server binds all interfaces by default
         pipeline_id: str | None = None,
         enable_nomic_server: bool = True,
         enable_pipeline_emitter: bool = True,

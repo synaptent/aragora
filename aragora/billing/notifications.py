@@ -134,13 +134,13 @@ class BillingNotifier:
 
         try:
             data = json.dumps(payload).encode("utf-8")
-            req = Request(  # noqa: S310 -- config webhook URL
+            req = Request(  # config webhook URL
                 self.webhook_url,
                 data=data,
                 headers={"Content-Type": "application/json"},
                 method="POST",
             )
-            with urlopen(req, timeout=10) as response:  # noqa: S310 -- config webhook URL
+            with urlopen(req, timeout=10) as response:  # config webhook URL
                 response.read()
 
             logger.info("Sent webhook notification: %s", payload.get("event"))

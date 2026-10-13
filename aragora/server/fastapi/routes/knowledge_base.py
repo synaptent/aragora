@@ -376,7 +376,7 @@ _query_engine_instance: Any = None
 
 async def get_fact_store(request: Request) -> Any:
     """Dependency to get or create a FactStore."""
-    global _fact_store_instance  # noqa: PLW0603
+    global _fact_store_instance
     _require_knowledge()
 
     # Try app-level context first
@@ -403,7 +403,7 @@ async def get_query_engine(
     store: Any = Depends(get_fact_store),
 ) -> Any:
     """Dependency to get or create a query engine."""
-    global _query_engine_instance  # noqa: PLW0603
+    global _query_engine_instance
     _require_knowledge()
 
     ctx = getattr(request.app.state, "context", None)

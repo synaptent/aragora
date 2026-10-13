@@ -636,7 +636,7 @@ class EnterpriseProxy:
         # Apply jitter
         if settings.jitter:
             jitter_factor = 0.25
-            factor = 1.0 + (random.random() * 2 - 1) * jitter_factor  # noqa: S311 -- retry jitter
+            factor = 1.0 + (random.random() * 2 - 1) * jitter_factor
             delay = delay * factor
 
         return max(0, delay)

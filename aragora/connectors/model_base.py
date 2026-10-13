@@ -105,12 +105,12 @@ def _deserialize_value(value: Any, target_type: Any) -> Any:
 
     # Handle X | None by extracting X
     origin = getattr(target_type, "__origin__", None)
-    if origin is type(None):  # noqa: E721
+    if origin is type(None):
         return None
     if origin:
         args = getattr(target_type, "__args__", ())
         for arg in args:
-            if arg is not type(None):  # noqa: E721
+            if arg is not type(None):
                 target_type = arg
                 break
 

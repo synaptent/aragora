@@ -424,7 +424,7 @@ class SQLiteFindingWorkflowStore(FindingWorkflowStoreBackend):
                     WHERE due_date IS NOT NULL
                       AND due_date < ?
                       AND current_state NOT IN ({placeholders})
-                    """,  # noqa: S608 -- parameterized query
+                    """,  # parameterized query
                     (now, *terminal_states),
                 )
                 return [json.loads(row[0]) for row in cursor.fetchall()]

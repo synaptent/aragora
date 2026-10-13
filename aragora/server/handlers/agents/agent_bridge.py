@@ -736,6 +736,6 @@ def _json_payload(result: HandlerResult) -> dict[str, Any]:
     raw = result.body.decode("utf-8") if isinstance(result.body, bytes) else str(result.body)
     try:
         payload = json.loads(raw) if raw else {}
-    except Exception:
+    except (ValueError, RecursionError):
         return {}
     return payload if isinstance(payload, dict) else {}

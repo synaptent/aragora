@@ -35,7 +35,7 @@ def _attr(module: str, name: str) -> Callable[..., Any]:
 
 
 _CONSUMERS: dict[str, Callable[[], object]] = {
-    "cli.review._has_api_key": lambda: _attr("aragora.cli.review", "_has_api_key")(
+    "review.diff_review._has_api_key": lambda: _attr("aragora.review.diff_review", "_has_api_key")(
         "ANTHROPIC_API_KEY"
     ),
     "config.minimal._secret_available": lambda: _attr(

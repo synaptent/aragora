@@ -193,7 +193,8 @@ class UserRepository:
     def get_by_id(self, user_id: str) -> User | None:
         """Get user by ID."""
         with self._transaction() as cursor:
-            cursor.execute(f"SELECT {self._USER_COLUMNS} FROM users WHERE id = ?", (user_id,))  # noqa: S608 -- column name interpolation, parameterized
+            # column name interpolation, parameterized
+            cursor.execute(f"SELECT {self._USER_COLUMNS} FROM users WHERE id = ?", (user_id,))
             row = cursor.fetchone()
             return self._row_to_user(row) if row else None
 
@@ -201,7 +202,7 @@ class UserRepository:
         """Get user by email."""
         with self._transaction() as cursor:
             cursor.execute(
-                f"SELECT {self._USER_COLUMNS} FROM users WHERE email = ?",  # noqa: S608 -- column constant
+                f"SELECT {self._USER_COLUMNS} FROM users WHERE email = ?",  # column constant
                 (email.lower(),),
             )
             row = cursor.fetchone()
@@ -221,7 +222,7 @@ class UserRepository:
 
         with self._transaction() as cursor:
             cursor.execute(
-                f"SELECT {self._USER_COLUMNS} FROM users WHERE api_key_hash = ?",  # noqa: S608 -- column constant
+                f"SELECT {self._USER_COLUMNS} FROM users WHERE api_key_hash = ?",  # column constant
                 (key_hash,),
             )
             row = cursor.fetchone()
@@ -255,7 +256,7 @@ class UserRepository:
 
         with self._transaction() as cursor:
             placeholders = ",".join("?" * len(unique_ids))
-            query = f"SELECT {self._USER_COLUMNS} FROM users WHERE id IN ({placeholders})"  # nosec B608  # noqa: S608
+            query = f"SELECT {self._USER_COLUMNS} FROM users WHERE id IN ({placeholders})"  # nosec B608
             cursor.execute(query, unique_ids)
             return {row["id"]: self._row_to_user(row) for row in cursor.fetchall()}
 
@@ -297,7 +298,7 @@ class UserRepository:
         values.append(user_id)
 
         with self._transaction() as cursor:
-            query = f"UPDATE users SET {', '.join(updates)} WHERE id = ?"  # nosec B608  # noqa: S608
+            query = f"UPDATE users SET {', '.join(updates)} WHERE id = ?"  # nosec B608
             cursor.execute(query, values)
             return cursor.rowcount > 0
 
@@ -337,7 +338,7 @@ class UserRepository:
 
                 set_clauses = [f"{self._COLUMN_MAP[f]} = ?" for f in valid_fields]
                 set_clauses.append("updated_at = ?")
-                sql = f"UPDATE users SET {', '.join(set_clauses)} WHERE id = ?"  # nosec B608  # noqa: S608
+                sql = f"UPDATE users SET {', '.join(set_clauses)} WHERE id = ?"  # nosec B608
 
                 params_list = []
                 for update in group:

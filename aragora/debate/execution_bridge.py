@@ -435,13 +435,13 @@ class ExecutionBridge:
                 }
             ).encode()
 
-            req = urllib.request.Request(  # noqa: S310 -- webhook URL from config
+            req = urllib.request.Request(  # webhook URL from config
                 webhook_url,
                 data=payload,
                 headers={"Content-Type": "application/json"},
                 method="POST",
             )
-            with urllib.request.urlopen(req, timeout=10) as resp:  # noqa: S310
+            with urllib.request.urlopen(req, timeout=10) as resp:
                 status = resp.status
 
             return ActionResult(

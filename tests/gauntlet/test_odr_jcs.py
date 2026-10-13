@@ -50,7 +50,7 @@ def test_signer_does_not_import_the_exporter():
 
 
 def test_leaf_module_imports_nothing_from_aragora():
-    imports = _imported_modules(_GAUNTLET_DIR / "odr_jcs.py")
+    imports = _imported_modules(Path(odr_jcs.__file__))
     assert not any(name.startswith("aragora") for name in imports), imports
 
 

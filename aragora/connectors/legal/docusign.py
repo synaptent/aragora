@@ -417,7 +417,7 @@ class DocuSignConnector:
                             retry_after = float(
                                 response.headers.get("Retry-After", _BASE_DELAY * (2**attempt))
                             )
-                            jitter = random.uniform(0, retry_after * 0.3)  # noqa: S311 -- retry jitter
+                            jitter = random.uniform(0, retry_after * 0.3)
                             delay = min(retry_after + jitter, _MAX_DELAY)
                             logger.warning(
                                 "DocuSign rate limited, retrying in %.1fs (attempt %d/%d)",
@@ -430,7 +430,7 @@ class DocuSignConnector:
 
                         if response.status >= 500 and attempt < _MAX_RETRIES:
                             delay = min(
-                                _BASE_DELAY * (2**attempt) + random.uniform(0, 1),  # noqa: S311 -- retry jitter
+                                _BASE_DELAY * (2**attempt) + random.uniform(0, 1),
                                 _MAX_DELAY,
                             )
                             logger.warning(
@@ -457,7 +457,7 @@ class DocuSignConnector:
             except asyncio.TimeoutError as e:
                 last_error = e
                 if attempt < _MAX_RETRIES:
-                    delay = min(_BASE_DELAY * (2**attempt) + random.uniform(0, 1), _MAX_DELAY)  # noqa: S311 -- retry jitter
+                    delay = min(_BASE_DELAY * (2**attempt) + random.uniform(0, 1), _MAX_DELAY)
                     logger.warning(
                         "DocuSign request timeout, retrying in %.1fs (attempt %d/%d)",
                         delay,
@@ -469,7 +469,7 @@ class DocuSignConnector:
             except OSError as e:
                 last_error = e
                 if attempt < _MAX_RETRIES:
-                    delay = min(_BASE_DELAY * (2**attempt) + random.uniform(0, 1), _MAX_DELAY)  # noqa: S311 -- retry jitter
+                    delay = min(_BASE_DELAY * (2**attempt) + random.uniform(0, 1), _MAX_DELAY)
                     logger.warning(
                         "DocuSign connection error, retrying in %.1fs (attempt %d/%d)",
                         delay,
@@ -483,7 +483,7 @@ class DocuSignConnector:
                     raise
                 last_error = e
                 if attempt < _MAX_RETRIES:
-                    delay = min(_BASE_DELAY * (2**attempt) + random.uniform(0, 1), _MAX_DELAY)  # noqa: S311 -- retry jitter
+                    delay = min(_BASE_DELAY * (2**attempt) + random.uniform(0, 1), _MAX_DELAY)
                     await asyncio.sleep(delay)
                     continue
 

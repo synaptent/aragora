@@ -131,7 +131,7 @@ class WorktreeAuditor:
     ) -> subprocess.CompletedProcess:
         """Run a git command."""
         cmd = ["git"] + list(args)
-        return subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
+        return subprocess.run(  # subprocess with fixed args, no shell
             cmd,
             cwd=cwd or self.repo_path,
             capture_output=True,

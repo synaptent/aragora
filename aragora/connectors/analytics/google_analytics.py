@@ -293,7 +293,7 @@ class GoogleAnalyticsConnector:
                     retry_after = float(
                         response.headers.get("Retry-After", _BASE_DELAY * (2**attempt))
                     )
-                    jitter = random.uniform(0, retry_after * 0.3)  # noqa: S311 -- retry jitter
+                    jitter = random.uniform(0, retry_after * 0.3)
                     delay = min(retry_after + jitter, _MAX_DELAY)
                     logger.warning(
                         "Google Analytics rate limited, retrying in %.1fs (attempt %d/%d)",
@@ -305,7 +305,7 @@ class GoogleAnalyticsConnector:
                     continue
 
                 if response.status_code >= 500 and attempt < _MAX_RETRIES:
-                    delay = min(_BASE_DELAY * (2**attempt) + random.uniform(0, 1), _MAX_DELAY)  # noqa: S311 -- retry jitter
+                    delay = min(_BASE_DELAY * (2**attempt) + random.uniform(0, 1), _MAX_DELAY)
                     logger.warning(
                         "Google Analytics server error %d, retrying in %.1fs (attempt %d/%d)",
                         response.status_code,
@@ -335,7 +335,7 @@ class GoogleAnalyticsConnector:
             except httpx.TimeoutException as e:
                 last_error = e
                 if attempt < _MAX_RETRIES:
-                    delay = min(_BASE_DELAY * (2**attempt) + random.uniform(0, 1), _MAX_DELAY)  # noqa: S311 -- retry jitter
+                    delay = min(_BASE_DELAY * (2**attempt) + random.uniform(0, 1), _MAX_DELAY)
                     logger.warning(
                         "Google Analytics request timeout, retrying in %.1fs (attempt %d/%d)",
                         delay,
@@ -347,7 +347,7 @@ class GoogleAnalyticsConnector:
             except httpx.ConnectError as e:
                 last_error = e
                 if attempt < _MAX_RETRIES:
-                    delay = min(_BASE_DELAY * (2**attempt) + random.uniform(0, 1), _MAX_DELAY)  # noqa: S311 -- retry jitter
+                    delay = min(_BASE_DELAY * (2**attempt) + random.uniform(0, 1), _MAX_DELAY)
                     logger.warning(
                         "Google Analytics connection error, retrying in %.1fs (attempt %d/%d)",
                         delay,
