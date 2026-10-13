@@ -404,10 +404,33 @@ class TestOrgScopedReads:
         assert store.get_by_gauntlet_for_org("g-a1", ORG_A).receipt_id == "a1"
         assert store.get_by_gauntlet_for_org("g-b1", ORG_A) is None
 
+    def test_list_count_and_search_exclude_other_orgs(self, store):
+        assert {r.receipt_id for r in store.list_for_org(ORG_A, limit=50)} == {"a1", "a2"}
+        assert store.count_for_org(ORG_A) == 2
+        assert store.count_for_org(ORG_B) == 1
+        assert {r.receipt_id for r in store.search_for_org(ORG_A, "statement")} == {"a1", "a2"}
+        assert store.search_count_for_org(ORG_A, "statement") == 2
+
+    def test_stats_retention_and_dsar_cover_only_the_org(self, store):
+        assert store.stats_for_org(ORG_A)["total"] == 2
+        retention = store.retention_status_for_org(ORG_A)
+        assert retention["total_receipts"] == 2
+        receipts, total = store.get_by_user_for_org(ORG_A, "u1")
+        assert (total, [r.receipt_id for r in receipts]) == (1, ["a1"])
+
+    def test_verification_does_not_see_other_orgs(self, store):
+        assert store.verify_integrity("b1", org_id=ORG_A)["error"] == "Receipt not found"
+        assert store.verify_signature("b1", org_id=ORG_A).error == "Receipt not found"
+        results, summary = store.verify_batch(["a1", "b1", "unowned"], org_id=ORG_A)
+        assert [r.error for r in results][1:] == ["Receipt not found", "Receipt not found"]
+        assert summary["total"] == 3
+
     @pytest.mark.parametrize("org_id", ["", "  ", None])
     def test_scoped_reads_refuse_a_blank_org(self, store, org_id):
         with pytest.raises(ValueError):
             store.get_for_org("a1", org_id)
+        with pytest.raises(ValueError):
+            store.list_for_org(org_id)
 
 
 class TestServerReceiptLinkResolver:
