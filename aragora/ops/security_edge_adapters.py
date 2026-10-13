@@ -47,7 +47,7 @@ class OpenClawPolicyEvaluationAdapter:
     """Translate security requests to OpenClaw policy evaluations."""
 
     def evaluate(self, policy: Any, request: EnforcementRequest) -> PolicyEvaluation:
-        from aragora.gateway.openclaw_policy import (
+        from aragora.compat.openclaw_policy import (
             ActionRequest,
             ActionType,
             PolicyDecision,
@@ -75,7 +75,7 @@ class OpenClawPolicyEvaluationAdapter:
         )
 
     def requires_approval(self, policy: Any, request: EnforcementRequest) -> bool:
-        from aragora.gateway.openclaw_policy import (
+        from aragora.compat.openclaw_policy import (
             ActionRequest,
             ActionType,
             PolicyDecision,

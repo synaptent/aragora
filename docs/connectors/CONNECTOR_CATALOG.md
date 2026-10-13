@@ -2,13 +2,13 @@
 
 This catalog is generated from the codebase. Do not edit by hand.
 
-_Generated: 2026-02-23T18:03:13.576690+00:00_
+_Generated: 2026-10-13T00:34:30.195832+00:00_
 
 ## Summary
 
-- Total connectors: 121
+- Total connectors: 120
 - Enterprise connectors: 29
-- Evidence connectors: 24
+- Evidence connectors: 23
 - Operational connectors: 68
 
 ## Enterprise connectors
@@ -89,7 +89,6 @@ _Generated: 2026-02-23T18:03:13.576690+00:00_
 - `NewsAPIConnector` — `aragora.connectors.newsapi`
 - `PubMedConnector` — `aragora.connectors.pubmed`
 - `RedditConnector` — `aragora.connectors.reddit`
-- `RepositoryCrawler` — `aragora.connectors.repository_crawler`
 - `RxNavConnector` — `aragora.connectors.rxnav`
 - `SECConnector` — `aragora.connectors.sec`
 - `SQLConnector` — `aragora.connectors.sql`

@@ -278,8 +278,8 @@ class OpenClawActionStep(BaseStep):
 
     async def _get_proxy(self) -> Any:
         """Get or create the OpenClaw proxy."""
-        from aragora.gateway.openclaw_policy import create_enterprise_policy
-        from aragora.gateway.openclaw_proxy import OpenClawSecureProxy
+        from aragora.compat.openclaw_policy import create_enterprise_policy
+        from aragora.compat.openclaw_proxy import OpenClawSecureProxy
 
         return OpenClawSecureProxy(policy=create_enterprise_policy())
 
@@ -438,8 +438,8 @@ class OpenClawSessionStep(BaseStep):
 
     async def _get_proxy(self) -> Any:
         """Get or create the OpenClaw proxy."""
-        from aragora.gateway.openclaw_policy import create_enterprise_policy
-        from aragora.gateway.openclaw_proxy import OpenClawSecureProxy
+        from aragora.compat.openclaw_policy import create_enterprise_policy
+        from aragora.compat.openclaw_proxy import OpenClawSecureProxy
 
         return OpenClawSecureProxy(policy=create_enterprise_policy())
 

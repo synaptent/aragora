@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from typing import Any
 from collections.abc import Callable
 
-from aragora.gateway.openclaw_policy import (
+from aragora.compat.openclaw_policy import (
     ActionRequest,
     ActionType,
     OpenClawPolicy,
@@ -90,8 +90,8 @@ class OpenClawSecureProxy:
 
     Example:
     ```python
-    from aragora.gateway.openclaw_proxy import OpenClawSecureProxy
-    from aragora.gateway.openclaw_policy import create_enterprise_policy
+    from aragora.compat.openclaw_proxy import OpenClawSecureProxy
+    from aragora.compat.openclaw_policy import create_enterprise_policy
 
     # Create proxy with enterprise policy
     proxy = OpenClawSecureProxy(
