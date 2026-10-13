@@ -4778,11 +4778,13 @@ def test_bound_diff_body_gives_deprioritized_paths_their_share_last() -> None:
 
 @pytest.mark.parametrize(
     "case",
-    ["generated_named", "non_named_exhaust_budget", "all_named", "deletion_named"],
+    "generated_named non_named_exhaust_budget all_named deletion_named many_cut".split(),
 )
 def test_bound_diff_body_with_deprioritize_stays_capped_and_keeps_every_file(case) -> None:
     big = "".join(f"diff --git a/{n} b/{n}\n" + "+b\n" * 40_000 for n in ("x.py", "y.py"))
+    many = "".join(f"diff --git a/m{i} b/m{i}\n" + "+m\n" * 1_000 for i in range(40))
     cases = {
+        "many_cut": (many, ("m0", "m1")),  # 40 truncated files, markers back to back
         "generated_named": (_generated_and_authored_diff()[0], ("docs/api.json", "docs/API.md")),
         "non_named_exhaust_budget": (
             big + "diff --git a/n.md b/n.md\n" + "+n\n" * 9_000,

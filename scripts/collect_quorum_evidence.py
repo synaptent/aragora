@@ -149,8 +149,9 @@ def main(argv: list[str] | None = None) -> int:
         action="append",
         metavar="PATH",
         help=(
-            "Changed path (e.g. a generated file) whose diff gets its share of the "
-            "bounded review prompt last; repeatable. Every changed file stays listed."
+            "Changed path (e.g. a generated file; a renamed file by its new path) whose "
+            "diff gets its share of the bounded review prompt last, possibly none beyond "
+            "its header; repeatable. Every changed file stays listed."
         ),
     )
     args = parser.parse_args(argv)

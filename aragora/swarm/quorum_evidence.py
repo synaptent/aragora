@@ -1722,8 +1722,8 @@ def _water_fill(lengths: Sequence[int], budget: int) -> list[int]:
 
 
 def _deprioritized_allocations(segments: list[str], named: set[str], max_chars: int) -> list[int]:
-    # Every header line and truncation marker is reserved up front, so the
-    # result keeps every file and never exceeds max_chars, even after markers.
+    # Header lines and one truncation marker per file are reserved up front and the
+    # parts join with no separator, so every header survives and max_chars holds.
     heads = [len(segment.split("\n", 1)[0]) for segment in segments]
     budget = max_chars - sum(heads) - len(_PER_FILE_TRUNCATION_MARKER) * len(segments)
     if budget < 0:
@@ -1753,9 +1753,10 @@ def _bound_diff_body(
     file's unused budget flowing to the rest) so every changed file contributes
     at least a hunk. Returns ``(text, truncated)``.
 
-    ``deprioritize_paths`` (operator-named changed paths, such as generated files)
-    split what is left after the other files share the budget by the same rule;
-    a named path missing from the diff raises ``ValueError``.
+    ``deprioritize_paths`` (operator-named changed paths, such as generated files;
+    a renamed file by its new path) split what is left after the other files share
+    the budget by the same rule, so a named file may keep only its header line; a
+    named path missing from the diff raises ``ValueError``.
     """
     named = set(deprioritize_paths)
     if named:
