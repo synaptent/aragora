@@ -14,7 +14,7 @@ Routing Criteria:
 - Multi-stakeholder decisions with conflicting interests
 
 Usage:
-    from aragora.gateway.decision_router import (
+    from aragora.routing.gateway_decision_router import (
         DecisionRouter,
         RoutingCriteria,
         RouteDecision,
@@ -49,14 +49,6 @@ Usage:
 """
 
 from __future__ import annotations
-
-import warnings
-
-warnings.warn(
-    "aragora.gateway.decision_router is deprecated. Use aragora.core.decision_router instead.",
-    DeprecationWarning,
-    stacklevel=2,
-)
 
 import asyncio
 import logging

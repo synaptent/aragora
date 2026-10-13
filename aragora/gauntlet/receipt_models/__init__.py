@@ -19,7 +19,7 @@ if not TYPE_CHECKING:
     # Alias first: the adapter modules below may import this path while it loads.
     sys.modules[__name__] = _receipts
 
-from aragora.agents.failure_semantics import all_responses_are_failures as _all_failures
+from aragora.agents.receipt_hooks import register_receipt_agent_hooks
 from aragora.gauntlet import receipt_exporters as _receipt_exporters
 from aragora.models.receipts import operations as _operations
 
@@ -39,21 +39,10 @@ def _compliance_generator(**kwargs: Any) -> Any:
     return ReceiptComplianceGenerator(**kwargs)
 
 
-def _detect_provider(model: str) -> str:
-    # Lazy: aragora.debate pulls in the whole debate engine.
-    try:
-        from aragora.debate.provider_diversity import detect_provider
-
-        return detect_provider(model)
-    except ImportError:
-        return "unknown"
-
-
 _operations.register_signing(_DeferredReceiptSigning())
 _operations.register_exporters(_receipt_exporters)
 _operations.register_compliance_generator(_compliance_generator)
-_operations.register_provider_detector(_detect_provider)
-_operations.register_failure_classifier(_all_failures)
+register_receipt_agent_hooks()
 
 if TYPE_CHECKING:
     from aragora.models.receipts.gauntlet import (

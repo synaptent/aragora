@@ -30,6 +30,10 @@ import threading
 import uuid
 from typing import Any
 
+from aragora.debate.decision_plan_bridges import (
+    DecisionPlanBridgeNotRegisteredError,
+    create_decision_plan_bridge,
+)
 from aragora.debate.post_debate_config import PostDebateConfig, PostDebateResult
 from aragora.debate.post_debate_persistence import PostDebatePersistenceMixin
 from aragora.pipeline.backbone_contracts import BackboneStage, RunLedger, RunStageEvent
@@ -1257,9 +1261,7 @@ class PostDebateCoordinator(PostDebatePersistenceMixin):
     def _step_decision_bridge(self, plan: dict[str, Any]) -> dict[str, Any] | None:
         """Route decision plan to external project management tools."""
         try:
-            from aragora.integrations.decision_bridge import DecisionBridge
-
-            bridge = DecisionBridge()
+            bridge = create_decision_plan_bridge()
             bridge_result = self._run_async_callable(bridge.handle_decision_plan, plan)
             if bridge_result:
                 result_dict = (
@@ -1268,7 +1270,7 @@ class PostDebateCoordinator(PostDebatePersistenceMixin):
                 logger.info("Decision bridge completed: %s", result_dict)
                 return {"type": "decision_bridge", **result_dict}
             return None
-        except ImportError:
+        except (ImportError, DecisionPlanBridgeNotRegisteredError):
             logger.debug("DecisionBridge not available")
             return None
         except (ValueError, TypeError, AttributeError, RuntimeError) as e:

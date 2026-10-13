@@ -87,7 +87,7 @@ class UnifiedDecisionRouter:
         """Lazy-load Gateway router."""
         if self._gateway_router is None:
             try:
-                from aragora.gateway import (
+                from aragora.routing.gateway_decision_router import (
                     DecisionRouter as GatewayRouter,
                     RoutingCriteria,
                 )
@@ -187,7 +187,7 @@ class UnifiedDecisionRouter:
             )
 
             # Map Gateway destination to Core decision type
-            from aragora.gateway import RouteDestination
+            from aragora.routing.gateway_decision_router import RouteDestination
 
             if decision.destination == RouteDestination.DEBATE:
                 request.decision_type = DecisionType.DEBATE
@@ -323,7 +323,7 @@ class UnifiedDecisionRouter:
             return
 
         try:
-            from aragora.gateway import RoutingCriteria
+            from aragora.routing.gateway_decision_router import RoutingCriteria
 
             from aragora.routing.config import load_gateway_routing_config
 
@@ -373,7 +373,7 @@ class UnifiedDecisionRouter:
             return
 
         try:
-            from aragora.gateway import DecisionRoutingRule as RoutingRule, RouteDestination
+            from aragora.routing.gateway_decision_router import RouteDestination, RoutingRule
 
             dest_map = {
                 "debate": RouteDestination.DEBATE,

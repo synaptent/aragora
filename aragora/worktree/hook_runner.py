@@ -3,27 +3,65 @@ Hook Runner - Git Worktree Persistence.
 
 Manages git hooks for persistent storage of agent state.
 Enables disaster recovery and session persistence via worktrees.
+
+``aragora.extensions.gastown.hooks`` and ``aragora.extensions.gastown.models``
+re-export ``HookRunner``, ``Hook`` and ``HookType`` from this module.
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
-from dataclasses import asdict
+from dataclasses import asdict, dataclass, field
 import hashlib
 import logging
 import os
 import subprocess
 import uuid
 from datetime import datetime, timezone
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
 from aragora.nomic.stores.paths import resolve_store_dir
 from aragora.worktree.lifecycle import WorktreeLifecycleService
-from .models import Hook, HookType
+
+__all__ = ["Hook", "HookRunner", "HookType"]
 
 logger = logging.getLogger(__name__)
+
+
+class HookType(Enum):
+    """Types of git hooks for persistence."""
+
+    PRE_COMMIT = "pre-commit"
+    POST_COMMIT = "post-commit"
+    PRE_PUSH = "pre-push"
+    POST_CHECKOUT = "post-checkout"
+    POST_MERGE = "post-merge"
+    PREPARE_COMMIT_MSG = "prepare-commit-msg"
+
+
+@dataclass
+class Hook:
+    """
+    Git hook for persistent storage.
+
+    Hooks store agent state in git worktrees, enabling persistence
+    across sessions and disaster recovery.
+    """
+
+    id: str
+    rig_id: str
+    type: HookType
+    path: str
+    content: str = ""
+    enabled: bool = True
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    last_triggered: datetime | None = None
+    trigger_count: int = 0
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 class HookRunner:

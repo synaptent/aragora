@@ -238,7 +238,7 @@ class RevalidationScheduler:
         # If we have a task scheduler, use it
         if self._task_scheduler:
             try:
-                from aragora.control_plane.scheduler import TaskPriority
+                from aragora.types.task_scheduling import TaskPriority
 
                 priority_map = {
                     "low": TaskPriority.LOW,

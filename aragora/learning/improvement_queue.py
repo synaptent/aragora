@@ -88,3 +88,6 @@ def get_improvement_queue() -> ImprovementQueue:
             if _global_queue is None:
                 _global_queue = ImprovementQueue()
     return _global_queue
+
+
+__all__ = ["ImprovementQueue", "ImprovementSuggestion", "get_improvement_queue"]

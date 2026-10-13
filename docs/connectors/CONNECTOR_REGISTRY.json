@@ -24,7 +24,7 @@
     "enterprise.healthcare": 2,
     "enterprise.itsm": 1,
     "enterprise.streaming": 3,
-    "evidence": 22,
+    "evidence": 21,
     "knowledge": 1,
     "legal": 3,
     "lowcode": 2,
@@ -40,7 +40,7 @@
   },
   "by_kind": {
     "enterprise": 29,
-    "evidence": 24,
+    "evidence": 23,
     "operational": 68
   },
   "connectors": [
@@ -378,14 +378,6 @@
       "module": "aragora.connectors.reddit",
       "name": "RedditConnector",
       "path": "aragora/connectors/reddit.py",
-      "status": "implemented"
-    },
-    {
-      "category": "evidence",
-      "kind": "evidence",
-      "module": "aragora.connectors.repository_crawler",
-      "name": "RepositoryCrawler",
-      "path": "aragora/connectors/repository_crawler.py",
       "status": "implemented"
     },
     {
@@ -1013,6 +1005,6 @@
       "status": "implemented"
     }
   ],
-  "generated_at": "2026-02-23T18:03:13.576690+00:00",
-  "total": 121
+  "generated_at": "2026-10-13T00:34:30.195832+00:00",
+  "total": 120
 }
