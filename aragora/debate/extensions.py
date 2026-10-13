@@ -759,12 +759,15 @@ class ArenaExtensions:
             from aragora.events.task_events import (
                 emit_task_completed,
                 get_task_event_dispatcher,
+                load_declared_task_event_dispatcher_providers,
                 set_task_event_dispatcher,
             )
 
             # Use configured dispatcher or get default
             if self.notification_dispatcher is not None:
                 set_task_event_dispatcher(self.notification_dispatcher)
+            else:
+                load_declared_task_event_dispatcher_providers()
 
             # Get dispatcher (configured or default)
             dispatcher = get_task_event_dispatcher()
