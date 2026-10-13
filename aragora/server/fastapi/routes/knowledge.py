@@ -353,7 +353,7 @@ def _item_to_summary(item: Any, relevance: float = 0.0) -> KnowledgeItemSummary:
     """Convert a knowledge item to a summary."""
     if isinstance(item, dict):
         return KnowledgeItemSummary(
-            id=item.get("id", item.get("item_id", "")),
+            id=item.get("id") or item.get("item_id") or "",
             title=item.get("title", ""),
             content_type=item.get("content_type", "text"),
             source=item.get("source", ""),
@@ -378,7 +378,7 @@ def _item_to_detail(item: Any) -> KnowledgeItemDetail:
     """Convert a knowledge item to full detail."""
     if isinstance(item, dict):
         return KnowledgeItemDetail(
-            id=item.get("id", item.get("item_id", "")),
+            id=item.get("id") or item.get("item_id") or "",
             title=item.get("title", ""),
             content=item.get("content", ""),
             content_type=item.get("content_type", "text"),
@@ -743,7 +743,7 @@ async def list_adapters(
                 elif isinstance(a, dict):
                     adapters.append(
                         AdapterInfo(
-                            name=a.get("name", a.get("id", "")),
+                            name=a.get("name") or a.get("id") or "",
                             description=a.get("description", ""),
                             status=a.get("status", "active"),
                         )
@@ -862,7 +862,7 @@ async def get_staleness_analysis(
                 logger.debug("KM get_stats unavailable for staleness: %s", e)
                 raw_stats = None
             if isinstance(raw_stats, dict):
-                total_items = raw_stats.get("total_items", raw_stats.get("count", 0))
+                total_items = int(raw_stats.get("total_items", raw_stats.get("count", 0)) or 0)
 
         return StalenessResponse(
             total_items=total_items,
