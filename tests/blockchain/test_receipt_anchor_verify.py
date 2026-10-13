@@ -183,7 +183,7 @@ class TestReceiptAnchorStatusEndpoint:
     def test_receipt_not_found(self):
         """Returns 404 when receipt does not exist."""
         mock_store = MagicMock()
-        mock_store.get.return_value = None
+        mock_store.get_for_org.return_value = None
 
         mixin = self._make_mixin()
 
@@ -191,9 +191,10 @@ class TestReceiptAnchorStatusEndpoint:
             from aragora.server.handlers.gauntlet.receipts import GauntletReceiptsMixin
 
             result = GauntletReceiptsMixin._get_receipt_anchor_status.__wrapped__(
-                mixin, "nonexistent-id", {}
+                mixin, "nonexistent-id", {}, scope=_SCOPE
             )
 
+        mock_store.get_for_org.assert_called_once_with("nonexistent-id", "org-1")
         assert result.status_code == 404
 
     def test_receipt_found_with_anchor(self):
@@ -203,7 +204,7 @@ class TestReceiptAnchorStatusEndpoint:
         mock_receipt.checksum = receipt_hash
 
         mock_store = MagicMock()
-        mock_store.get.return_value = mock_receipt
+        mock_store.get_for_org.return_value = mock_receipt
 
         # Create a real ReceiptAnchor with a pre-existing local anchor
         real_anchor = ReceiptAnchor()
@@ -223,9 +224,10 @@ class TestReceiptAnchorStatusEndpoint:
             from aragora.server.handlers.gauntlet.receipts import GauntletReceiptsMixin
 
             result = GauntletReceiptsMixin._get_receipt_anchor_status.__wrapped__(
-                mixin, "receipt-123", {}
+                mixin, "receipt-123", {}, scope=_SCOPE
             )
 
+        mock_store.get_for_org.assert_called_once_with("receipt-123", "org-1")
         assert result.status_code == 200
         body = json.loads(result.body)
         assert body["anchored"] is True
@@ -238,7 +240,7 @@ class TestReceiptAnchorStatusEndpoint:
         mock_receipt.checksum = ""
 
         mock_store = MagicMock()
-        mock_store.get.return_value = mock_receipt
+        mock_store.get_for_org.return_value = mock_receipt
 
         mixin = self._make_mixin()
 
@@ -246,7 +248,7 @@ class TestReceiptAnchorStatusEndpoint:
             from aragora.server.handlers.gauntlet.receipts import GauntletReceiptsMixin
 
             result = GauntletReceiptsMixin._get_receipt_anchor_status.__wrapped__(
-                mixin, "receipt-no-hash", {}
+                mixin, "receipt-no-hash", {}, scope=_SCOPE
             )
 
         assert result.status_code == 200

@@ -221,6 +221,13 @@ def mock_receipt():
     return FakeReceipt()
 
 
+@pytest.fixture
+def caller_owns_the_run(mock_storage):
+    """Verification only proceeds for a run stored for the caller's org."""
+    mock_storage.get.return_value = {"gauntlet_id": "stored"}
+    return mock_storage
+
+
 @pytest.fixture(autouse=True)
 def _patch_receipt_webhooks():
     """Prevent webhook calls from leaking."""
@@ -303,6 +310,7 @@ class TestGetReceiptJSON:
         ]
         runs = get_gauntlet_runs()
         runs["g-001"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {"total_findings": 3, "verdict": "PASS", "confidence": 0.9},
             "result_obj": None,
@@ -312,7 +320,7 @@ class TestGetReceiptJSON:
         }
 
         with patch(_DR, return_value=mock_receipt):
-            result = await mixin._get_receipt("g-001", {})
+            result = await mixin._get_receipt("g-001", {}, scope=TEST_SCOPE)
 
         assert _status(result) == 200
         data = _parse(result)
@@ -325,6 +333,7 @@ class TestGetReceiptJSON:
         runs = get_gauntlet_runs()
         fake_result_obj = FakeResult()
         runs["g-002"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {"total_findings": 5},
             "result_obj": fake_result_obj,
@@ -333,7 +342,7 @@ class TestGetReceiptJSON:
 
         with patch(_DR) as MockDR:
             MockDR.from_mode_result.return_value = mock_receipt
-            result = await mixin._get_receipt("g-002", {})
+            result = await mixin._get_receipt("g-002", {}, scope=TEST_SCOPE)
 
         assert _status(result) == 200
         MockDR.from_mode_result.assert_called_once_with(fake_result_obj, input_hash="hash456")
@@ -342,10 +351,10 @@ class TestGetReceiptJSON:
     async def test_not_completed_returns_error(self, mixin):
         """Non-completed run returns an error."""
         runs = get_gauntlet_runs()
-        runs["g-003"] = {"status": "running"}
+        runs["g-003"] = {"org_id": TEST_ORG, "status": "running"}
 
         with patch(_GER, return_value=({"error": "not_completed"}, 400)):
-            result = await mixin._get_receipt("g-003", {})
+            result = await mixin._get_receipt("g-003", {}, scope=TEST_SCOPE)
 
         assert _status(result) == 400
 
@@ -362,10 +371,10 @@ class TestGetReceiptJSON:
         }
 
         with patch(_DR, return_value=mock_receipt):
-            result = await mixin._get_receipt("g-missing", {})
+            result = await mixin._get_receipt("g-missing", {}, scope=TEST_SCOPE)
 
         assert _status(result) == 200
-        mock_storage.get.assert_called_once_with("g-missing")
+        mock_storage.get.assert_called_once_with("g-missing", TEST_ORG)
 
     @pytest.mark.asyncio
     async def test_not_found_anywhere_returns_404(self, mixin, mock_storage):
@@ -373,7 +382,7 @@ class TestGetReceiptJSON:
         mock_storage.get.return_value = None
 
         with patch(_GER, return_value=({"error": "gauntlet_not_found"}, 404)):
-            result = await mixin._get_receipt("g-gone", {})
+            result = await mixin._get_receipt("g-gone", {}, scope=TEST_SCOPE)
 
         assert _status(result) == 404
 
@@ -383,7 +392,7 @@ class TestGetReceiptJSON:
         mock_storage.get.side_effect = OSError("disk fail")
 
         with patch(_GER, return_value=({"error": "storage_error"}, 500)):
-            result = await mixin._get_receipt("g-err", {})
+            result = await mixin._get_receipt("g-err", {}, scope=TEST_SCOPE)
 
         assert _status(result) == 500
 
@@ -393,7 +402,7 @@ class TestGetReceiptJSON:
         mock_storage.get.side_effect = RuntimeError("db offline")
 
         with patch(_GER, return_value=({"error": "storage_error"}, 500)):
-            result = await mixin._get_receipt("g-rte", {})
+            result = await mixin._get_receipt("g-rte", {}, scope=TEST_SCOPE)
 
         assert _status(result) == 500
 
@@ -403,7 +412,7 @@ class TestGetReceiptJSON:
         mock_storage.get.side_effect = ValueError("bad data")
 
         with patch(_GER, return_value=({"error": "storage_error"}, 500)):
-            result = await mixin._get_receipt("g-val", {})
+            result = await mixin._get_receipt("g-val", {}, scope=TEST_SCOPE)
 
         assert _status(result) == 500
 
@@ -416,7 +425,7 @@ class TestGetReceiptAsyncSafety:
         """Slow sync storage should be offloaded from the async receipt path."""
 
         class _SlowStorage:
-            def get(self, gauntlet_id: str) -> dict[str, Any]:
+            def get(self, gauntlet_id: str, org_id: str | None = None) -> dict[str, Any]:
                 time.sleep(0.2)
                 return {
                     "total_findings": 2,
@@ -437,7 +446,7 @@ class TestGetReceiptAsyncSafety:
             ),
             patch(_DR, return_value=mock_receipt),
         ):
-            result = await mixin._get_receipt("g-slow-store", {"signed": "false"})
+            result = await mixin._get_receipt("g-slow-store", {"signed": "false"}, scope=TEST_SCOPE)
 
         ticks = await task
 
@@ -458,6 +467,7 @@ class TestGetReceiptSigning:
         """Receipt is signed by default."""
         runs = get_gauntlet_runs()
         runs["g-sign"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {"total_findings": 0},
             "result_obj": None,
@@ -476,7 +486,7 @@ class TestGetReceiptSigning:
         mock_receipt.sign = track_sign
 
         with patch(_DR, return_value=mock_receipt):
-            result = await mixin._get_receipt("g-sign", {})
+            result = await mixin._get_receipt("g-sign", {}, scope=TEST_SCOPE)
 
         assert _status(result) == 200
         assert len(sign_called) == 1
@@ -486,6 +496,7 @@ class TestGetReceiptSigning:
         """Signing is skipped when signed=false."""
         runs = get_gauntlet_runs()
         runs["g-nosign"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {"total_findings": 0},
             "result_obj": None,
@@ -498,7 +509,7 @@ class TestGetReceiptSigning:
         mock_receipt.sign = lambda signer=None: sign_called.append(True)
 
         with patch(_DR, return_value=mock_receipt):
-            result = await mixin._get_receipt("g-nosign", {"signed": "false"})
+            result = await mixin._get_receipt("g-nosign", {"signed": "false"}, scope=TEST_SCOPE)
 
         assert _status(result) == 200
         assert len(sign_called) == 0
@@ -508,6 +519,7 @@ class TestGetReceiptSigning:
         """If signing raises ImportError, continue with unsigned receipt."""
         runs = get_gauntlet_runs()
         runs["g-signerr"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {"total_findings": 0},
             "result_obj": None,
@@ -519,7 +531,7 @@ class TestGetReceiptSigning:
         mock_receipt.sign = MagicMock(side_effect=ImportError("no crypto"))
 
         with patch(_DR, return_value=mock_receipt):
-            result = await mixin._get_receipt("g-signerr", {})
+            result = await mixin._get_receipt("g-signerr", {}, scope=TEST_SCOPE)
 
         assert _status(result) == 200
 
@@ -528,6 +540,7 @@ class TestGetReceiptSigning:
         """If signing raises ValueError, continue with unsigned receipt."""
         runs = get_gauntlet_runs()
         runs["g-sigvalerr"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {"total_findings": 0},
             "result_obj": None,
@@ -539,7 +552,7 @@ class TestGetReceiptSigning:
         mock_receipt.sign = MagicMock(side_effect=ValueError("bad key"))
 
         with patch(_DR, return_value=mock_receipt):
-            result = await mixin._get_receipt("g-sigvalerr", {})
+            result = await mixin._get_receipt("g-sigvalerr", {}, scope=TEST_SCOPE)
 
         assert _status(result) == 200
 
@@ -552,6 +565,7 @@ class TestGetReceiptSigning:
 def _completed_run():
     """Helper to create a completed gauntlet run dict."""
     return {
+        "org_id": TEST_ORG,
         "status": "completed",
         "result": {"total_findings": 3, "verdict": "PASS"},
         "result_obj": None,
@@ -570,7 +584,7 @@ class TestGetReceiptFormats:
         runs["g-html"] = _completed_run()
 
         with patch(_DR, return_value=mock_receipt):
-            result = await mixin._get_receipt("g-html", {"format": "html"})
+            result = await mixin._get_receipt("g-html", {"format": "html"}, scope=TEST_SCOPE)
 
         assert _status(result) == 200
         assert result.content_type == "text/html"
@@ -582,7 +596,7 @@ class TestGetReceiptFormats:
         runs["g-md"] = _completed_run()
 
         with patch(_DR, return_value=mock_receipt):
-            result = await mixin._get_receipt("g-md", {"format": "md"})
+            result = await mixin._get_receipt("g-md", {"format": "md"}, scope=TEST_SCOPE)
 
         assert _status(result) == 200
         assert result.content_type == "text/markdown"
@@ -594,7 +608,7 @@ class TestGetReceiptFormats:
         runs["g-sarif"] = _completed_run()
 
         with patch(_DR, return_value=mock_receipt):
-            result = await mixin._get_receipt("g-sarif", {"format": "sarif"})
+            result = await mixin._get_receipt("g-sarif", {"format": "sarif"}, scope=TEST_SCOPE)
 
         assert _status(result) == 200
         assert result.content_type == "application/sarif+json"
@@ -608,7 +622,7 @@ class TestGetReceiptFormats:
         runs["g-pdf"] = _completed_run()
 
         with patch(_DR, return_value=mock_receipt):
-            result = await mixin._get_receipt("g-pdf", {"format": "pdf"})
+            result = await mixin._get_receipt("g-pdf", {"format": "pdf"}, scope=TEST_SCOPE)
 
         assert _status(result) == 200
         assert result.content_type == "application/pdf"
@@ -624,7 +638,7 @@ class TestGetReceiptFormats:
         mock_receipt.to_pdf = MagicMock(side_effect=ImportError("no weasyprint"))
 
         with patch(_DR, return_value=mock_receipt):
-            result = await mixin._get_receipt("g-nopdf", {"format": "pdf"})
+            result = await mixin._get_receipt("g-nopdf", {"format": "pdf"}, scope=TEST_SCOPE)
 
         assert _status(result) == 501
         data = _parse(result)
@@ -636,7 +650,7 @@ class TestGetReceiptFormats:
         runs["g-csv"] = _completed_run()
 
         with patch(_DR, return_value=mock_receipt):
-            result = await mixin._get_receipt("g-csv", {"format": "csv"})
+            result = await mixin._get_receipt("g-csv", {"format": "csv"}, scope=TEST_SCOPE)
 
         assert _status(result) == 200
         assert result.content_type == "text/csv"
@@ -650,7 +664,7 @@ class TestGetReceiptFormats:
         runs["g-json"] = _completed_run()
 
         with patch(_DR, return_value=mock_receipt):
-            result = await mixin._get_receipt("g-json", {"format": "json"})
+            result = await mixin._get_receipt("g-json", {"format": "json"}, scope=TEST_SCOPE)
 
         assert _status(result) == 200
         assert result.content_type == "application/json"
@@ -662,7 +676,7 @@ class TestGetReceiptFormats:
         runs["g-unk"] = _completed_run()
 
         with patch(_DR, return_value=mock_receipt):
-            result = await mixin._get_receipt("g-unk", {"format": "xml"})
+            result = await mixin._get_receipt("g-unk", {"format": "xml"}, scope=TEST_SCOPE)
 
         assert _status(result) == 200
         assert result.content_type == "application/json"
@@ -682,6 +696,7 @@ class TestGetReceiptConstruction:
         runs = get_gauntlet_runs()
         gid = "gauntlet-123456789abc"
         runs[gid] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {
                 "critical_count": 1,
@@ -706,7 +721,7 @@ class TestGetReceiptConstruction:
             return FakeReceipt(**{k: v for k, v in kwargs.items() if hasattr(FakeReceipt, k)})
 
         with patch(_DR, side_effect=fake_init):
-            result = await mixin._get_receipt(gid, {"signed": "false"})
+            result = await mixin._get_receipt(gid, {"signed": "false"}, scope=TEST_SCOPE)
 
         assert _status(result) == 200
         assert captured["receipt_id"] == f"receipt-{gid[-12:]}"
@@ -741,7 +756,7 @@ class TestGetReceiptConstruction:
             return FakeReceipt(**{k: v for k, v in kwargs.items() if hasattr(FakeReceipt, k)})
 
         with patch(_DR, side_effect=fake_init):
-            result = await mixin._get_receipt("g-stored", {"signed": "false"})
+            result = await mixin._get_receipt("g-stored", {"signed": "false"}, scope=TEST_SCOPE)
 
         assert _status(result) == 200
         assert captured["input_summary"] == "Stored decision"
@@ -777,7 +792,7 @@ class TestGetReceiptConstruction:
             return FakeReceipt(**{k: v for k, v in kwargs.items() if hasattr(FakeReceipt, k)})
 
         with patch(_DR, side_effect=fake_init):
-            result = await mixin._get_receipt("g-stored", {"signed": "false"})
+            result = await mixin._get_receipt("g-stored", {"signed": "false"}, scope=TEST_SCOPE)
 
         assert _status(result) == 200
         assert captured["agent_responses"][0]["llm_label"] == "claude-sonnet-4 via Anthropic"
@@ -842,7 +857,7 @@ class TestDecisionReceiptAgentResponses:
             return FakeReceipt(**{k: v for k, v in kwargs.items() if hasattr(FakeReceipt, k)})
 
         with patch(_DR, side_effect=fake_init):
-            result = await mixin._get_receipt("g-empty", {"signed": "false"})
+            result = await mixin._get_receipt("g-empty", {"signed": "false"}, scope=TEST_SCOPE)
 
         assert _status(result) == 200
         assert captured["verdict"] == "UNKNOWN"
@@ -891,6 +906,7 @@ def _valid_verify_body(gauntlet_id: str = "g-verify") -> dict[str, Any]:
     }
 
 
+@pytest.mark.usefixtures("caller_owns_the_run")
 class TestVerifyReceipt:
     """Tests for _verify_receipt endpoint."""
 
@@ -898,7 +914,7 @@ class TestVerifyReceipt:
     async def test_missing_body_returns_400(self, mixin):
         """None body returns 400."""
         handler = _make_handler_with_body(None)
-        result = await mixin._verify_receipt("g-001", handler)
+        result = await mixin._verify_receipt("g-001", handler, scope=TEST_SCOPE)
         assert _status(result) == 400
         data = _parse(result)
         assert (
@@ -906,24 +922,37 @@ class TestVerifyReceipt:
         )
 
     @pytest.mark.asyncio
+    async def test_run_the_caller_does_not_own_is_not_found(self, mixin, mock_storage):
+        """Another org's run answers like a missing one, before the body is read."""
+        mock_storage.get.return_value = None
+        get_gauntlet_runs()["g-other"] = {"org_id": "org-other", "status": "completed"}
+        handler = _make_handler_with_body(_valid_verify_body("g-other"))
+
+        result = await mixin._verify_receipt("g-other", handler, scope=TEST_SCOPE)
+
+        assert _status(result) == 404
+        assert _parse(result) == {"error": "Gauntlet run not found", "code": "not_found"}
+        mock_storage.get.assert_called_once_with("g-other", TEST_ORG)
+
+    @pytest.mark.asyncio
     async def test_missing_receipt_field_returns_400(self, mixin):
         """Body without 'receipt' field returns 400."""
         handler = _make_handler_with_body({"signature": "sig", "signature_metadata": {}})
-        result = await mixin._verify_receipt("g-001", handler)
+        result = await mixin._verify_receipt("g-001", handler, scope=TEST_SCOPE)
         assert _status(result) == 400
 
     @pytest.mark.asyncio
     async def test_missing_signature_field_returns_400(self, mixin):
         """Body without 'signature' field returns 400."""
         handler = _make_handler_with_body({"receipt": {}, "signature_metadata": {}})
-        result = await mixin._verify_receipt("g-001", handler)
+        result = await mixin._verify_receipt("g-001", handler, scope=TEST_SCOPE)
         assert _status(result) == 400
 
     @pytest.mark.asyncio
     async def test_missing_signature_metadata_returns_400(self, mixin):
         """Body without 'signature_metadata' field returns 400."""
         handler = _make_handler_with_body({"receipt": {}, "signature": "sig"})
-        result = await mixin._verify_receipt("g-001", handler)
+        result = await mixin._verify_receipt("g-001", handler, scope=TEST_SCOPE)
         assert _status(result) == 400
 
     @pytest.mark.asyncio
@@ -938,7 +967,7 @@ class TestVerifyReceipt:
 
         with patch(_SR) as MockSR:
             MockSR.from_dict.side_effect = KeyError("algorithm")
-            result = await mixin._verify_receipt("g-001", handler)
+            result = await mixin._verify_receipt("g-001", handler, scope=TEST_SCOPE)
 
         assert _status(result) == 400
         data = _parse(result)
@@ -952,7 +981,7 @@ class TestVerifyReceipt:
 
         with patch(_SR) as MockSR:
             MockSR.from_dict.side_effect = TypeError("wrong type")
-            result = await mixin._verify_receipt("g-001", handler)
+            result = await mixin._verify_receipt("g-001", handler, scope=TEST_SCOPE)
 
         assert _status(result) == 400
 
@@ -964,7 +993,7 @@ class TestVerifyReceipt:
 
         with patch(_SR) as MockSR:
             MockSR.from_dict.side_effect = ValueError("bad value")
-            result = await mixin._verify_receipt("g-001", handler)
+            result = await mixin._verify_receipt("g-001", handler, scope=TEST_SCOPE)
 
         assert _status(result) == 400
 
@@ -993,7 +1022,7 @@ class TestVerifyReceipt:
             patch(_DR, return_value=mock_receipt_obj),
         ):
             MockSR.from_dict.return_value = mock_signed
-            result = await mixin._verify_receipt("g-verify", handler)
+            result = await mixin._verify_receipt("g-verify", handler, scope=TEST_SCOPE)
 
         assert _status(result) == 200
         data = _parse(result)
@@ -1027,7 +1056,7 @@ class TestVerifyReceipt:
             patch(_DR, return_value=mock_receipt_obj),
         ):
             MockSR.from_dict.return_value = mock_signed
-            result = await mixin._verify_receipt("g-MISMATCH", handler)
+            result = await mixin._verify_receipt("g-MISMATCH", handler, scope=TEST_SCOPE)
 
         data = _parse(result)
         assert data["id_match"] is False
@@ -1059,7 +1088,7 @@ class TestVerifyReceipt:
             patch(_DR, return_value=mock_receipt_obj),
         ):
             MockSR.from_dict.return_value = mock_signed
-            result = await mixin._verify_receipt("g-badsig", handler)
+            result = await mixin._verify_receipt("g-badsig", handler, scope=TEST_SCOPE)
 
         data = _parse(result)
         assert data["signature_valid"] is False
@@ -1090,7 +1119,7 @@ class TestVerifyReceipt:
             patch(_DR, return_value=mock_receipt_obj),
         ):
             MockSR.from_dict.return_value = mock_signed
-            result = await mixin._verify_receipt("g-sigex", handler)
+            result = await mixin._verify_receipt("g-sigex", handler, scope=TEST_SCOPE)
 
         data = _parse(result)
         assert data["signature_valid"] is False
@@ -1121,7 +1150,7 @@ class TestVerifyReceipt:
             patch(_DR, return_value=mock_receipt_obj),
         ):
             MockSR.from_dict.return_value = mock_signed
-            result = await mixin._verify_receipt("g-integ", handler)
+            result = await mixin._verify_receipt("g-integ", handler, scope=TEST_SCOPE)
 
         data = _parse(result)
         assert data["integrity_valid"] is False
@@ -1154,7 +1183,7 @@ class TestVerifyReceipt:
             patch(_DR, return_value=mock_receipt_obj),
         ):
             MockSR.from_dict.return_value = mock_signed
-            result = await mixin._verify_receipt("g-integex", handler)
+            result = await mixin._verify_receipt("g-integex", handler, scope=TEST_SCOPE)
 
         data = _parse(result)
         assert data["integrity_valid"] is False
@@ -1185,7 +1214,7 @@ class TestVerifyReceipt:
             patch(_DR, return_value=mock_receipt_obj),
         ):
             MockSR.from_dict.return_value = mock_signed
-            result = await mixin._verify_receipt("g-meta", handler)
+            result = await mixin._verify_receipt("g-meta", handler, scope=TEST_SCOPE)
 
         data = _parse(result)
         assert data["signature_metadata"]["algorithm"] == "ed25519"
@@ -1217,7 +1246,7 @@ class TestVerifyReceipt:
             patch(_DR, return_value=mock_receipt_obj),
         ):
             MockSR.from_dict.return_value = mock_signed
-            result = await mixin._verify_receipt("g-time", handler)
+            result = await mixin._verify_receipt("g-time", handler, scope=TEST_SCOPE)
 
         data = _parse(result)
         assert "verified_at" in data
@@ -1248,7 +1277,7 @@ class TestVerifyReceipt:
         ):
             MockSR.from_dict.return_value = mock_signed
             # Use mismatched gauntlet_id
-            result = await mixin._verify_receipt("g-WRONG", handler)
+            result = await mixin._verify_receipt("g-WRONG", handler, scope=TEST_SCOPE)
 
         data = _parse(result)
         assert data["verified"] is False
@@ -1883,7 +1912,7 @@ class TestGetReceiptWebhookNotifications:
                 },
             ),
         ):
-            result = await mixin._get_receipt("g-wh-json", {"signed": "false"})
+            result = await mixin._get_receipt("g-wh-json", {"signed": "false"}, scope=TEST_SCOPE)
 
         assert _status(result) == 200
         mock_notifier.notify_receipt_exported.assert_called_once()
@@ -1907,7 +1936,9 @@ class TestGetReceiptWebhookNotifications:
                 },
             ),
         ):
-            result = await mixin._get_receipt("g-wh-html", {"format": "html", "signed": "false"})
+            result = await mixin._get_receipt(
+                "g-wh-html", {"format": "html", "signed": "false"}, scope=TEST_SCOPE
+            )
 
         mock_notifier.notify_receipt_exported.assert_called_once()
         call_kwargs = mock_notifier.notify_receipt_exported.call_args
@@ -1928,7 +1959,7 @@ class TestGetReceiptWebhookNotifications:
                 },
             ),
         ):
-            result = await mixin._get_receipt("g-wh-skip", {"signed": "false"})
+            result = await mixin._get_receipt("g-wh-skip", {"signed": "false"}, scope=TEST_SCOPE)
 
         assert _status(result) == 200
 
@@ -1949,7 +1980,9 @@ class TestGetReceiptWebhookNotifications:
                 },
             ),
         ):
-            result = await mixin._get_receipt("g-wh-csv", {"format": "csv", "signed": "false"})
+            result = await mixin._get_receipt(
+                "g-wh-csv", {"format": "csv", "signed": "false"}, scope=TEST_SCOPE
+            )
 
         mock_notifier.notify_receipt_exported.assert_called_once()
         call_kwargs = mock_notifier.notify_receipt_exported.call_args
@@ -1972,7 +2005,9 @@ class TestGetReceiptWebhookNotifications:
                 },
             ),
         ):
-            result = await mixin._get_receipt("g-wh-sarif", {"format": "sarif", "signed": "false"})
+            result = await mixin._get_receipt(
+                "g-wh-sarif", {"format": "sarif", "signed": "false"}, scope=TEST_SCOPE
+            )
 
         mock_notifier.notify_receipt_exported.assert_called_once()
         call_kwargs = mock_notifier.notify_receipt_exported.call_args
@@ -1995,7 +2030,9 @@ class TestGetReceiptWebhookNotifications:
                 },
             ),
         ):
-            result = await mixin._get_receipt("g-wh-md", {"format": "md", "signed": "false"})
+            result = await mixin._get_receipt(
+                "g-wh-md", {"format": "md", "signed": "false"}, scope=TEST_SCOPE
+            )
 
         mock_notifier.notify_receipt_exported.assert_called_once()
         call_kwargs = mock_notifier.notify_receipt_exported.call_args
@@ -2007,6 +2044,7 @@ class TestGetReceiptWebhookNotifications:
 # ============================================================================
 
 
+@pytest.mark.usefixtures("caller_owns_the_run")
 class TestVerifyReceiptWebhooks:
     """Tests for webhook calls during receipt verification."""
 
@@ -2050,7 +2088,7 @@ class TestVerifyReceiptWebhooks:
             ),
         ):
             MockSR.from_dict.return_value = mock_signed
-            result = await mixin._verify_receipt("g-wh-ok", handler)
+            result = await mixin._verify_receipt("g-wh-ok", handler, scope=TEST_SCOPE)
 
         mock_notifier.notify_receipt_verified.assert_called_once()
 
@@ -2074,7 +2112,7 @@ class TestVerifyReceiptWebhooks:
             ),
         ):
             MockSR.from_dict.return_value = mock_signed
-            result = await mixin._verify_receipt("g-wh-fail", handler)
+            result = await mixin._verify_receipt("g-wh-fail", handler, scope=TEST_SCOPE)
 
         mock_notifier.notify_receipt_integrity_failed.assert_called_once()
 
@@ -2099,7 +2137,7 @@ class TestVerifyReceiptWebhooks:
             ),
         ):
             MockSR.from_dict.return_value = mock_signed
-            result = await mixin._verify_receipt("g-wh-err", handler)
+            result = await mixin._verify_receipt("g-wh-err", handler, scope=TEST_SCOPE)
 
         assert _status(result) == 200
 
@@ -2118,6 +2156,7 @@ class TestGetReceiptEdgeCases:
         runs = get_gauntlet_runs()
         gid = "gauntlet-XYZW12345678"
         runs[gid] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {"total_findings": 0},
             "result_obj": None,
@@ -2133,7 +2172,7 @@ class TestGetReceiptEdgeCases:
             return FakeReceipt(**{k: v for k, v in kwargs.items() if hasattr(FakeReceipt, k)})
 
         with patch(_DR, side_effect=fake_init):
-            result = await mixin._get_receipt(gid, {"signed": "false"})
+            result = await mixin._get_receipt(gid, {"signed": "false"}, scope=TEST_SCOPE)
 
         assert _status(result) == 200
         assert captured["receipt_id"] == f"receipt-{gid[-12:]}"
@@ -2145,7 +2184,7 @@ class TestGetReceiptEdgeCases:
         runs["g-list"] = _completed_run()
 
         with patch(_DR, return_value=mock_receipt):
-            result = await mixin._get_receipt("g-list", {"format": ["html"]})
+            result = await mixin._get_receipt("g-list", {"format": ["html"]}, scope=TEST_SCOPE)
 
         assert _status(result) == 200
         assert result.content_type == "text/html"
@@ -2157,7 +2196,7 @@ class TestGetReceiptEdgeCases:
         runs["g-default"] = _completed_run()
 
         with patch(_DR, return_value=mock_receipt):
-            result = await mixin._get_receipt("g-default", {})
+            result = await mixin._get_receipt("g-default", {}, scope=TEST_SCOPE)
 
         assert _status(result) == 200
         assert result.content_type == "application/json"
@@ -2178,7 +2217,7 @@ class TestGetReceiptEdgeCases:
         mock_receipt.sign = track_sign
 
         with patch(_DR, return_value=mock_receipt):
-            result = await mixin._get_receipt("g-strue", {"signed": "true"})
+            result = await mixin._get_receipt("g-strue", {"signed": "true"}, scope=TEST_SCOPE)
 
         assert _status(result) == 200
         assert len(sign_called) == 1
@@ -2189,6 +2228,7 @@ class TestGetReceiptEdgeCases:
         runs = get_gauntlet_runs()
         fake_result = FakeResult()
         runs["g-nohash"] = {
+            "org_id": TEST_ORG,
             "status": "completed",
             "result": {"total_findings": 0},
             "result_obj": fake_result,
@@ -2196,7 +2236,7 @@ class TestGetReceiptEdgeCases:
 
         with patch(_DR) as MockDR:
             MockDR.from_mode_result.return_value = mock_receipt
-            result = await mixin._get_receipt("g-nohash", {"signed": "false"})
+            result = await mixin._get_receipt("g-nohash", {"signed": "false"}, scope=TEST_SCOPE)
 
         assert _status(result) == 200
         MockDR.from_mode_result.assert_called_once_with(fake_result, input_hash=None)
@@ -2224,7 +2264,7 @@ class TestGetReceiptEdgeCases:
             return FakeReceipt(**{k: v for k, v in kwargs.items() if hasattr(FakeReceipt, k)})
 
         with patch(_DR, side_effect=fake_init):
-            result = await mixin._get_receipt("g-full", {"signed": "false"})
+            result = await mixin._get_receipt("g-full", {"signed": "false"}, scope=TEST_SCOPE)
 
         assert _status(result) == 200
         assert captured["risk_summary"]["critical"] == 5
@@ -2233,6 +2273,7 @@ class TestGetReceiptEdgeCases:
         assert captured["verdict"] == "FAIL"
 
 
+@pytest.mark.usefixtures("caller_owns_the_run")
 class TestVerifyReceiptEdgeCases:
     """Additional edge case tests for _verify_receipt."""
 
@@ -2240,7 +2281,7 @@ class TestVerifyReceiptEdgeCases:
     async def test_empty_body_returns_400(self, mixin):
         """Empty dict body is treated as missing required fields."""
         handler = _make_handler_with_body({})
-        result = await mixin._verify_receipt("g-empty", handler)
+        result = await mixin._verify_receipt("g-empty", handler, scope=TEST_SCOPE)
         assert _status(result) == 400
 
     @pytest.mark.asyncio
@@ -2268,7 +2309,7 @@ class TestVerifyReceiptEdgeCases:
             patch(_DR, return_value=mock_receipt_obj),
         ):
             MockSR.from_dict.return_value = mock_signed
-            result = await mixin._verify_receipt("g-imerr", handler)
+            result = await mixin._verify_receipt("g-imerr", handler, scope=TEST_SCOPE)
 
         data = _parse(result)
         assert data["signature_valid"] is False
@@ -2299,7 +2340,7 @@ class TestVerifyReceiptEdgeCases:
             patch(_DR, return_value=mock_receipt_obj),
         ):
             MockSR.from_dict.return_value = mock_signed
-            result = await mixin._verify_receipt("g-valerr", handler)
+            result = await mixin._verify_receipt("g-valerr", handler, scope=TEST_SCOPE)
 
         data = _parse(result)
         assert data["signature_valid"] is False
@@ -2330,7 +2371,7 @@ class TestVerifyReceiptEdgeCases:
             patch(_DR, return_value=mock_receipt_obj),
         ):
             MockSR.from_dict.return_value = mock_signed
-            result = await mixin._verify_receipt("g-none", handler)
+            result = await mixin._verify_receipt("g-none", handler, scope=TEST_SCOPE)
 
         data = _parse(result)
         assert data["id_match"] is False
@@ -2360,7 +2401,7 @@ class TestVerifyReceiptEdgeCases:
             patch(_DR, return_value=mock_receipt_obj),
         ):
             MockSR.from_dict.return_value = mock_signed
-            result = await mixin._verify_receipt("g-fail200", handler)
+            result = await mixin._verify_receipt("g-fail200", handler, scope=TEST_SCOPE)
 
         # Both success and failure return 200
         assert _status(result) == 200

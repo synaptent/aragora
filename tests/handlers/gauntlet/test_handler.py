@@ -425,7 +425,7 @@ class TestHandleParameterizedRoute:
         )
         assert result is not None
         assert _status(result) == 200
-        handler._verify_receipt.assert_called_once_with(VALID_ID, mock_h)
+        handler._verify_receipt.assert_called_once_with(VALID_ID, mock_h, scope=TEST_SCOPE)
 
     @pytest.mark.asyncio
     async def test_receipt_verify_invalid_id(self, handler):
@@ -447,7 +447,7 @@ class TestHandleParameterizedRoute:
         path = "/api/receipts/r%2F123/anchor-status"
         result = await handler._handle_parameterized_route(path, "GET", {}, None, scope=TEST_SCOPE)
         assert result is not None
-        handler._get_receipt_anchor_status.assert_called_once_with("r/123", {})
+        handler._get_receipt_anchor_status.assert_called_once_with("r/123", {}, scope=TEST_SCOPE)
 
     @pytest.mark.asyncio
     async def test_get_receipt(self, handler):
@@ -460,7 +460,7 @@ class TestHandleParameterizedRoute:
             path, "GET", {"format": "json"}, None, scope=TEST_SCOPE
         )
         assert result is not None
-        handler._get_receipt.assert_called_once_with(VALID_ID, {"format": "json"})
+        handler._get_receipt.assert_called_once_with(VALID_ID, {"format": "json"}, scope=TEST_SCOPE)
 
     @pytest.mark.asyncio
     async def test_get_receipt_invalid_id(self, handler):
@@ -491,6 +491,7 @@ class TestHandleParameterizedRoute:
     async def test_get_export(self, handler):
         """Routes GET /export to _export_report."""
         mock_h = _make_http_handler("GET")
+        handler._owns_gauntlet_run = AsyncMock(return_value=True)
         handler._export_report = AsyncMock(
             return_value=HandlerResult(status_code=200, content_type="application/json", body=b"{}")
         )
@@ -499,7 +500,21 @@ class TestHandleParameterizedRoute:
             path, "GET", {}, mock_h, scope=TEST_SCOPE
         )
         assert result is not None
-        handler._export_report.assert_called_once_with(VALID_ID, {}, mock_h)
+        handler._export_report.assert_called_once_with(VALID_ID, {}, mock_h, scope=TEST_SCOPE)
+
+    @pytest.mark.asyncio
+    async def test_get_export_of_a_run_outside_the_org_is_404(self, handler):
+        """GET /export answers 404 without reaching _export_report for a run the org lacks."""
+        mock_h = _make_http_handler("GET")
+        handler._owns_gauntlet_run = AsyncMock(return_value=False)
+        handler._export_report = AsyncMock()
+        path = f"/api/gauntlet/{VALID_ID}/export"
+        result = await handler._handle_parameterized_route(
+            path, "GET", {}, mock_h, scope=TEST_SCOPE
+        )
+        assert _status(result) == 404
+        handler._owns_gauntlet_run.assert_awaited_once_with(VALID_ID, TEST_SCOPE)
+        handler._export_report.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_get_export_invalid_id(self, handler):
@@ -810,6 +825,7 @@ class TestHandle:
     async def test_handle_export_route(self, handler):
         """GET /api/v1/gauntlet/{id}/export is handled."""
         mock_h = _make_http_handler("GET")
+        handler._owns_gauntlet_run = AsyncMock(return_value=True)
         handler._export_report = AsyncMock(
             return_value=HandlerResult(status_code=200, content_type="application/json", body=b"{}")
         )

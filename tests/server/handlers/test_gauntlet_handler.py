@@ -900,6 +900,10 @@ class TestGauntletGetReceipt:
 class TestGauntletVerifyReceipt:
     """Tests for verify receipt endpoint."""
 
+    @pytest.fixture(autouse=True)
+    def _caller_owns_the_run(self):
+        _gauntlet_runs["gauntlet-test123"] = {"org_id": TEST_ORG, "status": "completed"}
+
     @pytest.mark.asyncio
     async def test_verify_receipt_missing_body(self, gauntlet_handler):
         handler = make_mock_handler(

@@ -596,6 +596,7 @@ class TestExportReportJSON:
     async def test_export_in_memory_completed(self, mixin):
         runs = get_gauntlet_runs()
         runs["exp-1"] = {
+            "org_id": TEST_ORG,
             "gauntlet_id": "exp-1",
             "status": "completed",
             "result": {
@@ -619,7 +620,7 @@ class TestExportReportJSON:
             "created_at": "2025-01-01T00:00:00",
             "completed_at": "2025-01-01T00:05:00",
         }
-        result = await mixin._export_report("exp-1", {})
+        result = await mixin._export_report("exp-1", {}, scope=TEST_SCOPE)
         assert result.status_code == 200
         data = _parse(result)
         assert data["gauntlet_id"] == "exp-1"
@@ -632,8 +633,13 @@ class TestExportReportJSON:
     @pytest.mark.asyncio
     async def test_export_not_completed_returns_400(self, mixin):
         runs = get_gauntlet_runs()
-        runs["exp-2"] = {"gauntlet_id": "exp-2", "status": "running", "result": None}
-        result = await mixin._export_report("exp-2", {})
+        runs["exp-2"] = {
+            "org_id": TEST_ORG,
+            "gauntlet_id": "exp-2",
+            "status": "running",
+            "result": None,
+        }
+        result = await mixin._export_report("exp-2", {}, scope=TEST_SCOPE)
         assert result.status_code == 400
 
     @pytest.mark.asyncio
@@ -650,7 +656,7 @@ class TestExportReportJSON:
             "medium_count": 0,
             "low_count": 0,
         }
-        result = await mixin._export_report("stored-1", {"format": "json"})
+        result = await mixin._export_report("stored-1", {"format": "json"}, scope=TEST_SCOPE)
         assert result.status_code == 200
         data = _parse(result)
         assert data["summary"]["verdict"] == "REJECTED"
@@ -658,31 +664,32 @@ class TestExportReportJSON:
     @pytest.mark.asyncio
     async def test_export_not_found(self, mixin, mock_storage):
         mock_storage.get.return_value = None
-        result = await mixin._export_report("missing", {})
+        result = await mixin._export_report("missing", {}, scope=TEST_SCOPE)
         assert result.status_code == 404
 
     @pytest.mark.asyncio
     async def test_export_storage_error_returns_404(self, mixin, mock_storage):
         mock_storage.get.side_effect = RuntimeError("db down")
-        result = await mixin._export_report("err-1", {})
+        result = await mixin._export_report("err-1", {}, scope=TEST_SCOPE)
         assert result.status_code == 404
 
     @pytest.mark.asyncio
     async def test_export_storage_os_error(self, mixin, mock_storage):
         mock_storage.get.side_effect = OSError("disk")
-        result = await mixin._export_report("err-2", {})
+        result = await mixin._export_report("err-2", {}, scope=TEST_SCOPE)
         assert result.status_code == 404
 
     @pytest.mark.asyncio
     async def test_export_storage_value_error(self, mixin, mock_storage):
         mock_storage.get.side_effect = ValueError("bad")
-        result = await mixin._export_report("err-3", {})
+        result = await mixin._export_report("err-3", {}, scope=TEST_SCOPE)
         assert result.status_code == 404
 
     @pytest.mark.asyncio
     async def test_export_without_findings(self, mixin):
         runs = get_gauntlet_runs()
         runs["nf-1"] = {
+            "org_id": TEST_ORG,
             "gauntlet_id": "nf-1",
             "status": "completed",
             "result": {
@@ -698,7 +705,7 @@ class TestExportReportJSON:
                 "low_count": 0,
             },
         }
-        result = await mixin._export_report("nf-1", {"include_findings": "false"})
+        result = await mixin._export_report("nf-1", {"include_findings": "false"}, scope=TEST_SCOPE)
         data = _parse(result)
         assert "findings" not in data
 
@@ -706,6 +713,7 @@ class TestExportReportJSON:
     async def test_export_without_heatmap(self, mixin):
         runs = get_gauntlet_runs()
         runs["nh-1"] = {
+            "org_id": TEST_ORG,
             "gauntlet_id": "nh-1",
             "status": "completed",
             "result": {
@@ -721,7 +729,7 @@ class TestExportReportJSON:
                 "low_count": 0,
             },
         }
-        result = await mixin._export_report("nh-1", {"include_heatmap": "false"})
+        result = await mixin._export_report("nh-1", {"include_heatmap": "false"}, scope=TEST_SCOPE)
         data = _parse(result)
         assert "heatmap" not in data
 
@@ -729,11 +737,12 @@ class TestExportReportJSON:
     async def test_export_defaults_missing_result_fields(self, mixin):
         runs = get_gauntlet_runs()
         runs["def-1"] = {
+            "org_id": TEST_ORG,
             "gauntlet_id": "def-1",
             "status": "completed",
             "result": {},
         }
-        result = await mixin._export_report("def-1", {})
+        result = await mixin._export_report("def-1", {}, scope=TEST_SCOPE)
         data = _parse(result)
         assert data["summary"]["verdict"] == "UNKNOWN"
         assert data["summary"]["confidence"] == 0
@@ -752,6 +761,7 @@ class TestExportReportHeatmap:
     async def test_heatmap_cells(self, mixin):
         runs = get_gauntlet_runs()
         runs["hm-1"] = {
+            "org_id": TEST_ORG,
             "gauntlet_id": "hm-1",
             "status": "completed",
             "result": {
@@ -771,7 +781,7 @@ class TestExportReportHeatmap:
                 ],
             },
         }
-        result = await mixin._export_report("hm-1", {})
+        result = await mixin._export_report("hm-1", {}, scope=TEST_SCOPE)
         data = _parse(result)
         heatmap = data["heatmap"]
         assert "auth" in heatmap["categories"]
@@ -785,6 +795,7 @@ class TestExportReportHeatmap:
     async def test_heatmap_multiple_categories(self, mixin):
         runs = get_gauntlet_runs()
         runs["hm-2"] = {
+            "org_id": TEST_ORG,
             "gauntlet_id": "hm-2",
             "status": "completed",
             "result": {
@@ -805,7 +816,7 @@ class TestExportReportHeatmap:
                 ],
             },
         }
-        result = await mixin._export_report("hm-2", {})
+        result = await mixin._export_report("hm-2", {}, scope=TEST_SCOPE)
         data = _parse(result)
         heatmap = data["heatmap"]
         assert sorted(heatmap["categories"]) == ["auth", "data"]
@@ -817,6 +828,7 @@ class TestExportReportHeatmap:
         """When findings key is missing, use vulnerabilities."""
         runs = get_gauntlet_runs()
         runs["hm-3"] = {
+            "org_id": TEST_ORG,
             "gauntlet_id": "hm-3",
             "status": "completed",
             "result": {
@@ -835,7 +847,7 @@ class TestExportReportHeatmap:
                 ],
             },
         }
-        result = await mixin._export_report("hm-3", {})
+        result = await mixin._export_report("hm-3", {}, scope=TEST_SCOPE)
         data = _parse(result)
         assert "config" in data["heatmap"]["categories"]
 
@@ -843,6 +855,7 @@ class TestExportReportHeatmap:
     async def test_heatmap_empty_findings(self, mixin):
         runs = get_gauntlet_runs()
         runs["hm-4"] = {
+            "org_id": TEST_ORG,
             "gauntlet_id": "hm-4",
             "status": "completed",
             "result": {
@@ -858,7 +871,7 @@ class TestExportReportHeatmap:
                 "low_count": 0,
             },
         }
-        result = await mixin._export_report("hm-4", {})
+        result = await mixin._export_report("hm-4", {}, scope=TEST_SCOPE)
         data = _parse(result)
         assert data["heatmap"]["cells"] == []
         assert data["heatmap"]["categories"] == []
@@ -868,6 +881,7 @@ class TestExportReportHeatmap:
         """If severity_level is missing, falls back to severity field."""
         runs = get_gauntlet_runs()
         runs["hm-5"] = {
+            "org_id": TEST_ORG,
             "gauntlet_id": "hm-5",
             "status": "completed",
             "result": {
@@ -886,7 +900,7 @@ class TestExportReportHeatmap:
                 ],
             },
         }
-        result = await mixin._export_report("hm-5", {})
+        result = await mixin._export_report("hm-5", {}, scope=TEST_SCOPE)
         data = _parse(result)
         low_cell = next(
             c for c in data["heatmap"]["cells"] if c["severity"] == "low" and c["category"] == "net"
@@ -904,6 +918,7 @@ class TestExportReportHTML:
 
     def _make_run(self, gauntlet_id="html-1", verdict="APPROVED"):
         return {
+            "org_id": TEST_ORG,
             "gauntlet_id": gauntlet_id,
             "status": "completed",
             "result": {
@@ -937,7 +952,7 @@ class TestExportReportHTML:
     async def test_html_format(self, mixin):
         runs = get_gauntlet_runs()
         runs["html-1"] = self._make_run()
-        result = await mixin._export_report("html-1", {"format": "html"})
+        result = await mixin._export_report("html-1", {"format": "html"}, scope=TEST_SCOPE)
         assert result.status_code == 200
         assert result.content_type == "text/html"
         body = result.body.decode("utf-8")
@@ -948,7 +963,7 @@ class TestExportReportHTML:
     async def test_full_html_format(self, mixin):
         runs = get_gauntlet_runs()
         runs["html-2"] = self._make_run("html-2")
-        result = await mixin._export_report("html-2", {"format": "full_html"})
+        result = await mixin._export_report("html-2", {"format": "full_html"}, scope=TEST_SCOPE)
         assert result.status_code == 200
         assert result.content_type == "text/html"
 
@@ -956,7 +971,7 @@ class TestExportReportHTML:
     async def test_html_verdict_color_approved(self, mixin):
         runs = get_gauntlet_runs()
         runs["vc-1"] = self._make_run("vc-1", "APPROVED")
-        result = await mixin._export_report("vc-1", {"format": "html"})
+        result = await mixin._export_report("vc-1", {"format": "html"}, scope=TEST_SCOPE)
         body = result.body.decode("utf-8")
         assert "#22c55e" in body  # green for APPROVED
 
@@ -964,7 +979,7 @@ class TestExportReportHTML:
     async def test_html_verdict_color_rejected(self, mixin):
         runs = get_gauntlet_runs()
         runs["vc-2"] = self._make_run("vc-2", "REJECTED")
-        result = await mixin._export_report("vc-2", {"format": "html"})
+        result = await mixin._export_report("vc-2", {"format": "html"}, scope=TEST_SCOPE)
         body = result.body.decode("utf-8")
         assert "#ef4444" in body  # red for REJECTED
 
@@ -972,7 +987,7 @@ class TestExportReportHTML:
     async def test_html_verdict_color_pass(self, mixin):
         runs = get_gauntlet_runs()
         runs["vc-3"] = self._make_run("vc-3", "PASS")
-        result = await mixin._export_report("vc-3", {"format": "html"})
+        result = await mixin._export_report("vc-3", {"format": "html"}, scope=TEST_SCOPE)
         body = result.body.decode("utf-8")
         assert "#22c55e" in body  # green for PASS
 
@@ -980,7 +995,7 @@ class TestExportReportHTML:
     async def test_html_verdict_color_fail(self, mixin):
         runs = get_gauntlet_runs()
         runs["vc-4"] = self._make_run("vc-4", "FAIL")
-        result = await mixin._export_report("vc-4", {"format": "html"})
+        result = await mixin._export_report("vc-4", {"format": "html"}, scope=TEST_SCOPE)
         body = result.body.decode("utf-8")
         assert "#ef4444" in body  # red for FAIL
 
@@ -988,7 +1003,7 @@ class TestExportReportHTML:
     async def test_html_verdict_color_unknown(self, mixin):
         runs = get_gauntlet_runs()
         runs["vc-5"] = self._make_run("vc-5", "PENDING")
-        result = await mixin._export_report("vc-5", {"format": "html"})
+        result = await mixin._export_report("vc-5", {"format": "html"}, scope=TEST_SCOPE)
         body = result.body.decode("utf-8")
         assert "#eab308" in body  # yellow for unknown
 
@@ -997,7 +1012,7 @@ class TestExportReportHTML:
         malicious_id = '<script>alert("xss")</script>'
         runs = get_gauntlet_runs()
         runs[malicious_id] = self._make_run(malicious_id)
-        result = await mixin._export_report(malicious_id, {"format": "html"})
+        result = await mixin._export_report(malicious_id, {"format": "html"}, scope=TEST_SCOPE)
         body = result.body.decode("utf-8")
         # The raw script tag must NOT appear in the output
         assert "<script>" not in body
@@ -1008,7 +1023,7 @@ class TestExportReportHTML:
         run = self._make_run("xss-v")
         run["result"]["verdict"] = '<img onerror="alert(1)" src=x>'
         runs["xss-v"] = run
-        result = await mixin._export_report("xss-v", {"format": "html"})
+        result = await mixin._export_report("xss-v", {"format": "html"}, scope=TEST_SCOPE)
         body = result.body.decode("utf-8")
         assert '<img onerror="alert(1)"' not in body
 
@@ -1028,7 +1043,7 @@ class TestExportReportHTML:
         ]
         run["result"]["total_findings"] = 30
         runs["many-f"] = run
-        result = await mixin._export_report("many-f", {"format": "html"})
+        result = await mixin._export_report("many-f", {"format": "html"}, scope=TEST_SCOPE)
         body = result.body.decode("utf-8")
         # Count finding divs - should be 20 max
         assert body.count('class="finding ') <= 20
@@ -1038,7 +1053,7 @@ class TestExportReportHTML:
         runs = get_gauntlet_runs()
         runs["nfh-1"] = self._make_run("nfh-1")
         result = await mixin._export_report(
-            "nfh-1", {"format": "html", "include_findings": "false"}
+            "nfh-1", {"format": "html", "include_findings": "false"}, scope=TEST_SCOPE
         )
         body = result.body.decode("utf-8")
         assert "Findings Detail" not in body
@@ -1047,7 +1062,7 @@ class TestExportReportHTML:
     async def test_unsupported_format(self, mixin):
         runs = get_gauntlet_runs()
         runs["uf-1"] = self._make_run("uf-1")
-        result = await mixin._export_report("uf-1", {"format": "xml"})
+        result = await mixin._export_report("uf-1", {"format": "xml"}, scope=TEST_SCOPE)
         assert result.status_code == 400
         data = _parse(result)
         assert "Unsupported format" in data.get("error", "")
@@ -1074,6 +1089,7 @@ class TestExportReportEnhanced:
 
         runs = get_gauntlet_runs()
         runs["enh-1"] = {
+            "org_id": TEST_ORG,
             "gauntlet_id": "enh-1",
             "status": "completed",
             "result": {
@@ -1090,7 +1106,7 @@ class TestExportReportEnhanced:
             },
             "result_obj": result_obj,
         }
-        result = await mixin._export_report("enh-1", {})
+        result = await mixin._export_report("enh-1", {}, scope=TEST_SCOPE)
         data = _parse(result)
         assert data["enhanced"]["verdict_reasoning"] == "Strong compliance."
 
@@ -1110,6 +1126,7 @@ class TestExportReportEnhanced:
 
         runs = get_gauntlet_runs()
         runs["enh-2"] = {
+            "org_id": TEST_ORG,
             "gauntlet_id": "enh-2",
             "status": "completed",
             "result": {
@@ -1126,7 +1143,7 @@ class TestExportReportEnhanced:
             },
             "result_obj": result_obj,
         }
-        result = await mixin._export_report("enh-2", {})
+        result = await mixin._export_report("enh-2", {}, scope=TEST_SCOPE)
         data = _parse(result)
         assert data["enhanced"]["attack_summary"]["total"] == 10
 
@@ -1145,6 +1162,7 @@ class TestExportReportEnhanced:
 
         runs = get_gauntlet_runs()
         runs["enh-3"] = {
+            "org_id": TEST_ORG,
             "gauntlet_id": "enh-3",
             "status": "completed",
             "result": {
@@ -1161,7 +1179,7 @@ class TestExportReportEnhanced:
             },
             "result_obj": result_obj,
         }
-        result = await mixin._export_report("enh-3", {})
+        result = await mixin._export_report("enh-3", {}, scope=TEST_SCOPE)
         data = _parse(result)
         assert data["enhanced"]["probe_summary"] == "probe-info"
 
@@ -1180,7 +1198,7 @@ class TestExportReportEnhanced:
             "medium_count": 0,
             "low_count": 0,
         }
-        result = await mixin._export_report("no-enh", {"format": "json"})
+        result = await mixin._export_report("no-enh", {"format": "json"}, scope=TEST_SCOPE)
         data = _parse(result)
         assert "enhanced" not in data
 
@@ -1191,6 +1209,7 @@ class TestExportReportEnhanced:
 
         runs = get_gauntlet_runs()
         runs["enh-4"] = {
+            "org_id": TEST_ORG,
             "gauntlet_id": "enh-4",
             "status": "completed",
             "result": {
@@ -1207,7 +1226,7 @@ class TestExportReportEnhanced:
             },
             "result_obj": result_obj,
         }
-        result = await mixin._export_report("enh-4", {})
+        result = await mixin._export_report("enh-4", {}, scope=TEST_SCOPE)
         data = _parse(result)
         assert "enhanced" not in data
 
@@ -1224,6 +1243,7 @@ class TestExportReportMetadata:
     async def test_input_from_in_memory_run(self, mixin):
         runs = get_gauntlet_runs()
         runs["meta-1"] = {
+            "org_id": TEST_ORG,
             "gauntlet_id": "meta-1",
             "status": "completed",
             "result": {
@@ -1244,7 +1264,7 @@ class TestExportReportMetadata:
             "created_at": "2025-06-01T00:00:00",
             "completed_at": "2025-06-01T00:01:00",
         }
-        result = await mixin._export_report("meta-1", {})
+        result = await mixin._export_report("meta-1", {}, scope=TEST_SCOPE)
         data = _parse(result)
         assert data["input"]["summary"] == "my input"
         assert data["input"]["type"] == "code"
@@ -1269,7 +1289,7 @@ class TestExportReportMetadata:
             "input_type": "text",
             "input_hash": "def",
         }
-        result = await mixin._export_report("stored-meta", {"format": "json"})
+        result = await mixin._export_report("stored-meta", {"format": "json"}, scope=TEST_SCOPE)
         data = _parse(result)
         assert data["input"]["summary"] == "stored summary"
         # When loaded from storage, timing is empty strings
@@ -1279,6 +1299,7 @@ class TestExportReportMetadata:
     async def test_generated_at_present(self, mixin):
         runs = get_gauntlet_runs()
         runs["gen-1"] = {
+            "org_id": TEST_ORG,
             "gauntlet_id": "gen-1",
             "status": "completed",
             "result": {
@@ -1294,7 +1315,7 @@ class TestExportReportMetadata:
                 "low_count": 0,
             },
         }
-        result = await mixin._export_report("gen-1", {})
+        result = await mixin._export_report("gen-1", {}, scope=TEST_SCOPE)
         data = _parse(result)
         assert "generated_at" in data
         # Should be a valid ISO timestamp
@@ -1314,6 +1335,7 @@ class TestExportReportVulnerabilityCompat:
         """When 'findings' is absent, 'vulnerabilities' is used."""
         runs = get_gauntlet_runs()
         runs["compat-1"] = {
+            "org_id": TEST_ORG,
             "gauntlet_id": "compat-1",
             "status": "completed",
             "result": {
@@ -1332,7 +1354,7 @@ class TestExportReportVulnerabilityCompat:
                 ],
             },
         }
-        result = await mixin._export_report("compat-1", {})
+        result = await mixin._export_report("compat-1", {}, scope=TEST_SCOPE)
         data = _parse(result)
         assert len(data["findings"]) == 1
         assert data["findings"][0]["title"] == "Open port"
@@ -1342,6 +1364,7 @@ class TestExportReportVulnerabilityCompat:
         """When both 'findings' and 'vulnerabilities' exist, 'findings' wins."""
         runs = get_gauntlet_runs()
         runs["compat-2"] = {
+            "org_id": TEST_ORG,
             "gauntlet_id": "compat-2",
             "status": "completed",
             "result": {
@@ -1363,6 +1386,6 @@ class TestExportReportVulnerabilityCompat:
                 ],
             },
         }
-        result = await mixin._export_report("compat-2", {})
+        result = await mixin._export_report("compat-2", {}, scope=TEST_SCOPE)
         data = _parse(result)
         assert data["findings"][0]["title"] == "Finding A"

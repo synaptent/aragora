@@ -17,7 +17,7 @@ from urllib.parse import parse_qs, unquote
 from aragora.observability.metrics import track_handler
 from aragora.server.validation.entities import validate_gauntlet_id
 from aragora.server.versioning.compat import strip_version_prefix
-from aragora.tenancy.record_scope import OrgScope, require_org_scope
+from aragora.tenancy.record_scope import OrgScope, record_not_found, require_org_scope
 
 from ..base import BaseHandler, HandlerResult, error_response
 from ..utils.rate_limit import rate_limit
@@ -146,21 +146,21 @@ class GauntletHandler(
             # /api/receipts/{receipt_id}/anchor-status => ['', 'api', 'receipts', '{id}', 'anchor-status']
             if len(parts) >= 5:
                 receipt_id = unquote(parts[3])
-                return self._get_receipt_anchor_status(receipt_id, query_params)
+                return self._get_receipt_anchor_status(receipt_id, query_params, scope=scope)
 
         # POST /api/gauntlet/{id}/receipt/verify
         if path.endswith("/receipt/verify") and method == "POST":
             gauntlet_id, err = self._extract_and_validate_id(path, -3)
             if err:
                 return err
-            return await self._verify_receipt(cast(str, gauntlet_id), handler)
+            return await self._verify_receipt(cast(str, gauntlet_id), handler, scope=scope)
 
         # GET /api/gauntlet/{id}/receipt
         if path.endswith("/receipt") and method == "GET":
             gauntlet_id, err = self._extract_and_validate_id(path, -2)
             if err:
                 return err
-            return await self._get_receipt(cast(str, gauntlet_id), query_params)
+            return await self._get_receipt(cast(str, gauntlet_id), query_params, scope=scope)
 
         # GET /api/gauntlet/{id}/heatmap
         if path.endswith("/heatmap") and method == "GET":
@@ -174,7 +174,14 @@ class GauntletHandler(
             gauntlet_id, err = self._extract_and_validate_id(path, -2)
             if err:
                 return err
-            return await self._export_report(cast(str, gauntlet_id), query_params, handler)
+            # Checked before the permission decorator on _export_report runs (it raises
+            # for callers without the grant), so a run outside the caller's org answers
+            # like a missing one whatever the caller's export permission.
+            if not await self._owns_gauntlet_run(cast(str, gauntlet_id), scope):
+                return record_not_found("Gauntlet run")
+            return await self._export_report(
+                cast(str, gauntlet_id), query_params, handler, scope=scope
+            )
 
         # GET /api/gauntlet/{id}/compare/{id2}
         if "/compare/" in path and method == "GET":
