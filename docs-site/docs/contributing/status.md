@@ -168,7 +168,7 @@ Manually maintained:
 - **HTTP handlers**: 700+
 - **Agent types**: 43
 - **RBAC permissions**: 420+
-- **Version**: v2.11.1
+- **Version**: v2.12.0
 
 ---
 
@@ -572,7 +572,7 @@ Independent verification found substantial launch-ready infrastructure, but Arag
 
 ## Current Release
 
-Current released version is **v2.11.1** (released 2026-09-28).
+Current released version is **v2.12.0** (released 2026-10-10).
 
 ### v2.5.0 - Type Safety & SDK Expansion (January 2026)
 

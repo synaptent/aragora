@@ -655,6 +655,11 @@ def complete_repo(cva, tmp_path):
         "# Step 3: Upgrade to v3.7.2\npip install aragora==3.7.2\n"
         'backup --label "pre-upgrade-v3.7.2"\n### v2.9.0 Behavioral Changes\nOld behavior.\n',
     )
+    add(
+        "aragora/live/README.md",
+        '{ "status": "ok", "app": "aragora-live", "version": "3.7.2", "commit": "unknown" }\n'
+        '{ "status": "ok", "app": "other", "version": "2.9.0" }\n',
+    )
     for path, text in files.items():
         target = tmp_path / path
         target.parent.mkdir(parents=True, exist_ok=True)

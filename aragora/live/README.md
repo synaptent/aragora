@@ -180,7 +180,7 @@ variables in a server environment. Unset values use these defaults; `true` or
 `GET /healthz/` returns HTTP 200 with compact JSON and `Cache-Control: no-store`:
 
 ```json
-{ "status": "ok", "app": "aragora-live", "version": "2.11.1", "commit": "unknown" }
+{ "status": "ok", "app": "aragora-live", "version": "2.12.0", "commit": "unknown" }
 ```
 
 `version` comes from this app's `package.json` at build time. `commit` is the

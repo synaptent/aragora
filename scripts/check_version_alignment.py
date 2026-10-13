@@ -676,6 +676,11 @@ DOC_SOURCES: list[tuple[str, Path, str]] = [
         Path("aragora/__version__.py"),
         r"(# Release date \(ISO 8601 format\) — set when the v)(\d+\.\d+\.\d+)( tag is pushed)",
     ),
+    (
+        "aragora/live/README.md (healthz example)",
+        Path("aragora/live/README.md"),
+        r'(\{ "status": "ok", "app": "aragora-live", "version": ")(\d+\.\d+\.\d+)(")',
+    ),
 ]
 
 # npm lockfiles carry the package version twice: at the top level and in the
