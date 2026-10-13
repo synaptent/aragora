@@ -2,8 +2,11 @@
 
 The organization reaches the writer only through ``arena.knowledge_org_id``
 (set by the server's debate factory from an authenticated request) or an
-explicit ``org_id`` keyword. Without one the outcome stays unstamped, so
-organization-filtered reads never return it.
+explicit ``org_id`` keyword. A stamped outcome is also marked
+``organization``-visible, so visibility-aware reads return it to actors of
+that organization in any workspace and to no other organization. Without an
+organization the outcome stays unstamped and carries no visibility key, as
+before, so organization-filtered reads never return it.
 """
 
 from __future__ import annotations
@@ -18,6 +21,7 @@ from aragora.debate.knowledge_mound_ops import KnowledgeMoundOperations
 from aragora.debate.post_debate_coordinator import PostDebateCoordinator
 
 ORG_KEY = "org_id"
+VISIBILITY_KEY = "visibility"
 
 
 def _result(**overrides) -> SimpleNamespace:
@@ -54,7 +58,9 @@ class TestOpsStamp:
 
         await ops.ingest_debate_outcome(_result(), SimpleNamespace(task="t"), org_id="org-a")
 
-        assert _stored_metadata(mound)[ORG_KEY] == "org-a"
+        metadata = _stored_metadata(mound)
+        assert metadata[ORG_KEY] == "org-a"
+        assert metadata[VISIBILITY_KEY] == "organization"
 
     @pytest.mark.asyncio
     async def test_no_org_leaves_outcome_unstamped(self):
@@ -63,7 +69,9 @@ class TestOpsStamp:
 
         await ops.ingest_debate_outcome(_result(), SimpleNamespace(task="t"))
 
-        assert ORG_KEY not in _stored_metadata(mound)
+        metadata = _stored_metadata(mound)
+        assert ORG_KEY not in metadata
+        assert VISIBILITY_KEY not in metadata
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("org_id", ["", None, 123])
@@ -73,7 +81,9 @@ class TestOpsStamp:
 
         await ops.ingest_debate_outcome(_result(), SimpleNamespace(task="t"), org_id=org_id)
 
-        assert ORG_KEY not in _stored_metadata(mound)
+        metadata = _stored_metadata(mound)
+        assert ORG_KEY not in metadata
+        assert VISIBILITY_KEY not in metadata
 
 
 class TestManagerPassThrough:
@@ -111,7 +121,9 @@ class TestPostDebateCoordinatorPassThrough:
 
         assert coordinator._step_ingest_outcome("debate-1", _result(), "task") is True
 
-        assert _stored_metadata(mound)[ORG_KEY] == "org-a"
+        metadata = _stored_metadata(mound)
+        assert metadata[ORG_KEY] == "org-a"
+        assert metadata[VISIBILITY_KEY] == "organization"
 
     def test_default_is_unstamped(self):
         mound = _mound()
@@ -119,7 +131,9 @@ class TestPostDebateCoordinatorPassThrough:
 
         assert coordinator._step_ingest_outcome("debate-1", _result(), "task") is True
 
-        assert ORG_KEY not in _stored_metadata(mound)
+        metadata = _stored_metadata(mound)
+        assert ORG_KEY not in metadata
+        assert VISIBILITY_KEY not in metadata
 
 
 class TestArenaDelegate:
@@ -153,26 +167,31 @@ class TestArenaDelegate:
         arena._km_manager.ingest_outcome.assert_awaited_once_with(result, arena.env, org_id=None)
 
 
+async def _sqlite_mound(tmp_path, monkeypatch, workspace_id: str):
+    from aragora.knowledge.mound import KnowledgeMound, MoundBackend, MoundConfig
+    from aragora.knowledge.mound.semantic_store import EmbeddingProvider, SemanticStore
+
+    # Hash embeddings keep the test offline; the org stamp does not depend on them.
+    monkeypatch.setattr(
+        SemanticStore,
+        "_auto_detect_provider",
+        lambda self: EmbeddingProvider(dimension=256),
+    )
+    mound = KnowledgeMound(  # type: ignore[abstract]
+        config=MoundConfig(backend=MoundBackend.SQLITE, sqlite_path=tmp_path / "km.db"),
+        workspace_id=workspace_id,
+    )
+    await mound.initialize()
+    return mound
+
+
 class TestRealSqliteMound:
     @pytest.mark.asyncio
     async def test_stamp_persists_through_real_mound_for_inline_org_filter(
         self, tmp_path, monkeypatch
     ):
-        """Org filter is inline; main's query_with_visibility is deliberately unchanged."""
-        from aragora.knowledge.mound import KnowledgeMound, MoundBackend, MoundConfig
-        from aragora.knowledge.mound.semantic_store import EmbeddingProvider, SemanticStore
-
-        # Hash embeddings keep the test offline; the org stamp does not depend on them.
-        monkeypatch.setattr(
-            SemanticStore,
-            "_auto_detect_provider",
-            lambda self: EmbeddingProvider(dimension=256),
-        )
-        mound = KnowledgeMound(
-            config=MoundConfig(backend=MoundBackend.SQLITE, sqlite_path=tmp_path / "km.db"),
-            workspace_id="ws-org",
-        )
-        await mound.initialize()
+        """Reads that compare the stamp inline see only their organization's outcome."""
+        mound = await _sqlite_mound(tmp_path, monkeypatch, "ws-org")
         try:
             ops = KnowledgeMoundOperations(knowledge_mound=mound)
             env = SimpleNamespace(task="Design a rate limiter")
@@ -197,6 +216,56 @@ class TestRealSqliteMound:
         assert for_org("org-b") == []
         unstamped = [i for i in items if i.metadata.get("debate_id") == "d-none"]
         assert len(unstamped) == 1 and ORG_KEY not in unstamped[0].metadata
+
+    @pytest.mark.asyncio
+    async def test_stamped_outcome_is_visible_across_workspaces_to_its_org_only(
+        self, tmp_path, monkeypatch
+    ):
+        # The server's singleton Mound writes debate outcomes to the shared "default" workspace.
+        mound = await _sqlite_mound(tmp_path, monkeypatch, "default")
+        try:
+            ops = KnowledgeMoundOperations(knowledge_mound=mound)
+            env = SimpleNamespace(task="Design a rate limiter")
+            await ops.ingest_debate_outcome(
+                _result(id="d-a", final_answer="Org A picks a token bucket"), env, org_id="org-a"
+            )
+            await ops.ingest_debate_outcome(
+                _result(id="d-none", final_answer="Anonymous run picks a leaky bucket"), env
+            )
+            # Identical text from another organization deduplicates onto org-a's node.
+            await ops.ingest_debate_outcome(
+                _result(id="d-b", final_answer="Org A picks a token bucket"), env, org_id="org-b"
+            )
+
+            async def visible(org: str | None, actor_workspace: str) -> list[str]:
+                found = await mound.query_with_visibility(
+                    "Debate Conclusion",
+                    actor_id="user-1",
+                    actor_workspace_id=actor_workspace,
+                    actor_org_id=org,
+                    limit=50,
+                    workspace_id="default",
+                )
+                return sorted(i.metadata["debate_id"] for i in found.items)
+
+            assert await visible("org-a", "ws-other") == ["d-a"]
+            assert await visible("org-a", "default") == ["d-a"]
+            assert await visible("org-b", "default") == []
+            assert await visible("org-b", "ws-other") == []
+            assert await visible(None, "default") == []
+
+            stored = (await mound.query("Debate Conclusion", limit=50)).items
+        finally:
+            await mound.close()
+
+        by_debate = {i.metadata["debate_id"]: i.metadata for i in stored}
+        assert sorted(by_debate) == ["d-a", "d-none"]
+        assert by_debate["d-a"][ORG_KEY] == "org-a"
+        assert by_debate["d-a"][VISIBILITY_KEY] == "organization"
+        # Unstamped outcomes keep main's shape. store() records no workspace_id in metadata,
+        # so the default workspace rule returns them to no actor, exactly as before.
+        assert ORG_KEY not in by_debate["d-none"]
+        assert VISIBILITY_KEY not in by_debate["d-none"]
 
 
 def test_stamp_key_matches_the_key_org_filtered_reads_compare():
