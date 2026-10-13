@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from aragora.debate.knowledge_mound_ops import KnowledgeMoundOperations
     from aragora.debate.prompt_builder import PromptBuilder
     from aragora.debate.roles_manager import RolesManager
-    from aragora.spectate.stream import SpectatorStream
+    from aragora.events.spectate.stream import SpectatorStream
 
 logger = logging.getLogger(__name__)
 

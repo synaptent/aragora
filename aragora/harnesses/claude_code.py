@@ -38,6 +38,10 @@ from aragora.harnesses.base import (
     SessionContext,
     SessionResult,
 )
+from aragora.harnesses.mcp_config import (
+    ImplMcpConfigNotRegisteredError,
+    generate_impl_mcp_config,
+)
 from aragora.pipeline.execution_mode import ExecutionMode
 from aragora.swarm.harness_health import (
     get_harness_health_registry,
@@ -567,11 +571,9 @@ I'll ask you questions about the codebase. Provide helpful, accurate answers."""
         # Wire MCP tools when enabled
         if self.config.use_mcp_tools:
             try:
-                from aragora.mcp.impl_config import generate_impl_mcp_config
-
                 mcp_config_path = generate_impl_mcp_config(repo_path)
                 cmd.extend(["--mcp-config", str(mcp_config_path)])
-            except (ImportError, OSError) as exc:
+            except (ImportError, OSError, ImplMcpConfigNotRegisteredError) as exc:
                 logger.warning("MCP config generation failed: %s", exc)
 
             # Scope allowed tools
