@@ -224,6 +224,18 @@ server = "aragora.server.tenancy_bindings:register_tenancy_bindings"
 [project.entry-points."aragora.approval_notifiers"]
 approvals = "aragora.approvals.notifier_registration:register_chat_approval_notifier"
 
+# Run by aragora/stores/gateway_store_hook.py on the first canonical gateway store lookup
+# that finds no factory, so aragora.stores builds the gateway store without importing
+# aragora.gateway.
+[project.entry-points."aragora.gateway_stores"]
+gateway = "aragora.gateway.store_registration:register_canonical_gateway_store"
+
+# Run by aragora/events/chat_connectors.py on the first chat connector lookup that finds
+# none registered, so pipeline progress reaches chat channels without importing
+# aragora.connectors.
+[project.entry-points."aragora.chat_connector_lookups"]
+chat = "aragora.connectors.chat.lookup_registration:register_chat_connector_lookup_from_registry"
+
 # -----------------------------------------------------------------------------
 # uv resolver constraints — security floors for the pip-audit security gate
 # (scripts/run_pip_audit_gate.py). They bound what the lockfile may resolve
