@@ -14,14 +14,16 @@ Features:
 from __future__ import annotations
 
 import asyncio
+import base64
 import concurrent.futures
 import logging
 import os
 import sqlite3
+import struct
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, TypeVar, cast
+from typing import Any, TypeVar
 from collections.abc import Callable, Coroutine
 
 logger = logging.getLogger(__name__)
@@ -263,6 +265,65 @@ class EncryptionMigrator:
 
 # Store-specific migration functions
 
+_INTEGRATION_RECORD_ID_FIELD = "__integration_record_id__"
+
+
+class _StoreListingError(RuntimeError):
+    """A store could not list its records; the cause is logged, never reported."""
+
+
+def _list_store_records(store: Any, store_name: str) -> list[Any]:
+    """Await ``store.list_all()``, turning every non-import failure into a listing error.
+
+    ImportError propagates so callers keep their optional-dependency handling.
+    """
+    from aragora.utils.async_utils import run_async
+
+    try:
+        return list(run_async(store.list_all()))
+    except ImportError:
+        raise
+    except Exception as e:  # noqa: BLE001 - driver errors (sqlite3, asyncpg) are not builtins
+        logger.error("Listing records failed for %s: %s", store_name, e)
+        raise _StoreListingError(f"Listing records failed for {store_name}") from e
+
+
+def _finish_migration(result: MigrationResult) -> MigrationResult:
+    result.completed_at = datetime.now(timezone.utc)
+    result.duration_seconds = (result.completed_at - result.started_at).total_seconds()
+    logger.info(
+        "Migration complete for %s: %s migrated, %s already encrypted, %s failed",
+        result.store_name,
+        result.migrated_records,
+        result.already_encrypted,
+        result.failed_records,
+    )
+    return result
+
+
+def _listing_failed(result: MigrationResult) -> MigrationResult:
+    result.errors.append("Migration failed due to an internal error")
+    result.failed_records = max(1, result.total_records)
+    return _finish_migration(result)
+
+
+def _is_undecrypted_token(token: Any) -> bool:
+    """Return True when a Gmail store handed back a token it could not decrypt.
+
+    Gmail backends return the stored ciphertext unchanged when decryption fails,
+    and saving it again would encrypt the ciphertext a second time.
+    """
+    if not isinstance(token, str) or not token:
+        return False
+    from aragora.security.encryption import EncryptedData
+
+    try:
+        data = EncryptedData.from_bytes(base64.b64decode(token, validate=True))
+    except (ValueError, struct.error):
+        return False
+    # An AES-GCM ciphertext always carries a nonce and at least the 16-byte tag.
+    return bool(data.nonce) and len(data.ciphertext) >= 16
+
 
 def migrate_integration_store(dry_run: bool = False) -> MigrationResult:
     """Migrate integration store secrets."""
@@ -284,7 +345,10 @@ def migrate_integration_store(dry_run: bool = False) -> MigrationResult:
             "token",
         ]
 
-        configs = list(run_async(store.list_all()))
+        try:
+            configs = _list_store_records(store, result.store_name)
+        except _StoreListingError:
+            return _listing_failed(result)
         result.total_records = len(configs)
 
         logger.info(
@@ -319,18 +383,7 @@ def migrate_integration_store(dry_run: bool = False) -> MigrationResult:
                 result.errors.append(f"Error migrating record: {record_id}")
                 logger.warning("Failed to migrate record %s: %s", record_id, e)
 
-        result.completed_at = datetime.now(timezone.utc)
-        result.duration_seconds = (result.completed_at - result.started_at).total_seconds()
-
-        logger.info(
-            "Migration complete for %s: %s migrated, %s already encrypted, %s failed",
-            result.store_name,
-            result.migrated_records,
-            result.already_encrypted,
-            result.failed_records,
-        )
-
-        return result
+        return _finish_migration(result)
     except ImportError as e:
         logger.warning("Integration store not available: %s", e)
         return MigrationResult(
@@ -339,31 +392,60 @@ def migrate_integration_store(dry_run: bool = False) -> MigrationResult:
 
 
 def migrate_gmail_token_store(dry_run: bool = False) -> MigrationResult:
-    """Migrate Gmail token store secrets."""
+    """Re-save Gmail OAuth tokens so the store encrypts them with the active key.
+
+    Gmail backends decrypt tokens in ``list_all()`` and encrypt them in
+    ``save()``, so re-saving a user's state migrates plaintext tokens and tokens
+    under older key versions alike. A dry run lists and counts without saving.
+    """
     try:
-        from aragora.storage.gmail_token_store import get_gmail_token_store
+        from aragora.storage.gmail_token_store import ENCRYPTED_FIELDS, get_gmail_token_store
+        from aragora.utils.async_utils import run_async
 
         store = get_gmail_token_store()
-        migrator = EncryptionMigrator(dry_run=dry_run)
+        result = MigrationResult(store_name="gmail_token_store")
 
-        sensitive_fields = ["access_token", "refresh_token"]
+        try:
+            states = _list_store_records(store, result.store_name)
+        except _StoreListingError:
+            return _listing_failed(result)
+        result.total_records = len(states)
 
-        def list_all():
-            # GmailTokenStore may not have list_all, get states instead
-            if hasattr(store, "list_all"):
-                return list(store.list_all())
-            return []
-
-        def save(user_id, record):
-            return store.save_state(user_id, record)
-
-        return migrator.migrate_store(
-            store_name="gmail_token_store",
-            list_fn=list_all,
-            save_fn=save,
-            sensitive_fields=sensitive_fields,
-            id_field="user_id",
+        logger.info(
+            "Starting migration for %s: %s records",
+            result.store_name,
+            result.total_records,
         )
+
+        for state in states:
+            user_id = str(getattr(state, "user_id", "") or "unknown")
+            try:
+                tokens = [getattr(state, name) for name in ENCRYPTED_FIELDS]
+                if not any(tokens):
+                    result.already_encrypted += 1
+                    continue
+                if any(_is_undecrypted_token(token) for token in tokens):
+                    raise ValueError("Store returned a token it could not decrypt")
+
+                if dry_run:
+                    logger.debug("[DRY RUN] Would migrate record: %s", user_id)
+                else:
+                    run_async(store.save(state))
+                result.migrated_records += 1
+            except (
+                AttributeError,
+                KeyError,
+                ValueError,
+                TypeError,
+                RuntimeError,
+                OSError,
+                sqlite3.Error,
+            ) as e:
+                result.failed_records += 1
+                result.errors.append(f"Error migrating record: {user_id}")
+                logger.warning("Failed to migrate record %s: %s", user_id, e)
+
+        return _finish_migration(result)
     except ImportError as e:
         logger.warning("Gmail token store not available: %s", e)
         return MigrationResult(
@@ -831,6 +913,25 @@ def rotate_encryption_key(
         new_key_version=old_version + 1,
     )
 
+    store_configs = {
+        "integration": _get_integration_store_config,
+        "gmail": _get_gmail_store_config,
+        "sync": _get_sync_store_config,
+    }
+    stores_to_process = stores or list(store_configs)
+    unknown_stores = [
+        name for name in stores_to_process if not isinstance(name, str) or name not in store_configs
+    ]
+    if unknown_stores:
+        # Reject before rotating so a mistyped name cannot rotate the key and skip its store.
+        result.new_key_version = old_version
+        result.failed_records += len(unknown_stores)
+        for name in unknown_stores:
+            label = name if isinstance(name, str) else type(name).__name__
+            result.errors.append(f"Unknown store for key rotation: {label[:64]}")
+        logger.warning("Key rotation rejected; unknown stores: %s", unknown_stores)
+        return result
+
     if dry_run:
         logger.info(
             "[DRY RUN] Would rotate key %s from v%s to v%s",
@@ -877,19 +978,8 @@ def rotate_encryption_key(
                 e,
             )
 
-        # Re-encrypt stores
-        stores_to_process = stores or ["integration", "gmail", "sync"]
-        store_configs = {
-            "integration": _get_integration_store_config,
-            "gmail": _get_gmail_store_config,
-            "sync": _get_sync_store_config,
-        }
-
         for store_name in stores_to_process:
-            config_fn = store_configs.get(store_name)
-            if not config_fn:
-                logger.warning("Unknown store for key rotation: %s", store_name)
-                continue
+            config_fn = store_configs[store_name]
             config: dict[str, Any] | None = None
             try:
                 config = config_fn()
@@ -950,45 +1040,81 @@ def rotate_encryption_key(
 
 
 def _get_integration_store_config() -> dict[str, Any] | None:
-    """Get configuration for integration store re-encryption."""
+    """Get configuration for integration store re-encryption.
+
+    The store decrypts settings when listing and encrypts them with the active
+    key when saving, so each listed config is re-saved as it was read.
+    """
     try:
-        from aragora.storage.integration_store import get_integration_store
+        from aragora.storage.integration_store import SENSITIVE_KEYS, get_integration_store
+        from aragora.utils.async_utils import run_async
 
         store = get_integration_store()
+        configs_by_id: dict[str, Any] = {}
+
+        def list_configs() -> list[dict[str, Any]]:
+            configs = _list_store_records(store, "integration_store")
+            configs_by_id.clear()
+            records: list[dict[str, Any]] = []
+            for config in configs:
+                record_id = f"{config.user_id or 'default'}:{config.type}"
+                configs_by_id[record_id] = config
+                settings = config.settings or {}
+                records.append({**settings, _INTEGRATION_RECORD_ID_FIELD: record_id})
+            return records
+
+        def save_config(record_id: str, _record: dict[str, Any]) -> bool:
+            run_async(store.save(configs_by_id[record_id]))
+            return True
 
         return {
-            "list_fn": lambda: list(cast(Any, store).list_all()),
-            "save_fn": lambda id, record: cast(Any, store).save(record),
-            "sensitive_fields": [
-                "api_key",
-                "api_secret",
-                "access_token",
-                "refresh_token",
-                "password",
-                "secret",
-                "credentials",
-                "token",
-            ],
-            "id_field": "integration_id",
+            "list_fn": list_configs,
+            "save_fn": save_config,
+            # Every key the store encrypts, so a setting it failed to decrypt
+            # fails the record instead of being encrypted a second time.
+            "sensitive_fields": sorted(SENSITIVE_KEYS),
+            "id_field": _INTEGRATION_RECORD_ID_FIELD,
+            "force_resave": True,
         }
     except ImportError:
         return None
 
 
 def _get_gmail_store_config() -> dict[str, Any] | None:
-    """Get configuration for Gmail store re-encryption."""
+    """Get configuration for Gmail store re-encryption.
+
+    The store decrypts tokens when listing and encrypts them with the active
+    key when saving, so each listed user state is re-saved as it was read.
+    """
     try:
-        from aragora.storage.gmail_token_store import get_gmail_token_store
+        from aragora.storage.gmail_token_store import ENCRYPTED_FIELDS, get_gmail_token_store
+        from aragora.utils.async_utils import run_async
 
         store = get_gmail_token_store()
+        states_by_user: dict[str, Any] = {}
+
+        def list_states() -> list[dict[str, Any]]:
+            states = _list_store_records(store, "gmail_token_store")
+            states_by_user.clear()
+            records: list[dict[str, Any]] = []
+            for state in states:
+                states_by_user[state.user_id] = state
+                tokens = {name: getattr(state, name) for name in ENCRYPTED_FIELDS}
+                records.append({**tokens, "user_id": state.user_id})
+            return records
+
+        def save_state(user_id: str, record: dict[str, Any]) -> bool:
+            if any(_is_undecrypted_token(record.get(name)) for name in ENCRYPTED_FIELDS):
+                raise RuntimeError("Store returned a token it could not decrypt")
+            run_async(store.save(states_by_user[user_id]))
+            return True
 
         return {
-            "list_fn": lambda: list(cast(Any, store).list_all())
-            if hasattr(store, "list_all")
-            else [],
-            "save_fn": lambda id, record: cast(Any, store).save_state(id, record),
-            "sensitive_fields": ["access_token", "refresh_token"],
+            "list_fn": list_states,
+            "save_fn": save_state,
+            "sensitive_fields": list(ENCRYPTED_FIELDS),
             "id_field": "user_id",
+            "force_resave": True,
         }
     except ImportError:
         return None
