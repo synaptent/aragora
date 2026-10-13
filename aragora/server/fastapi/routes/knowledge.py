@@ -26,7 +26,8 @@ Migration Notes:
 Access: reads require ``knowledge:read`` and writes ``knowledge:write``. Every route
 also requires the caller's organization (403 ``knowledge_org_required`` without one).
 Mound items are returned only when ``metadata["org_id"]`` equals the caller's
-organization; unstamped items are withheld. Writes are stamped with the caller's
+organization; unstamped items are withheld. Gap-detector records without a stamp are
+attributed through the Mound items they name. Writes are stamped with the caller's
 organization, never one taken from the request body. Counts (stats, staleness
 totals, gap counts) remain Mound-wide aggregates.
 """
@@ -52,9 +53,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v2", tags=["Knowledge"])
 
 MOUND_ORG_KEY = "org_id"
-# Candidates read per search before the org filter; reads never page with offset
-# because Mound.query re-ranks every read and applies the offset after ranking.
+# Candidates read per search before the org filter, unless the Mound reports its own
+# per-read cap. Reads never page with offset because Mound.query re-ranks every read
+# and applies the offset after ranking, so pages overlap and skip items.
 _ORG_READ_WINDOW = 100
+# Mound item ids named by a gap-detector record: a contradiction names two, a stale entry one.
+_RECORD_ID_FIELDS = (("item_a_id", "item_b_id"), ("item_id",), ("id",))
 
 
 # =============================================================================
@@ -312,6 +316,14 @@ def _result_entries(results: Any) -> list[Any]:
     return list(entries) if isinstance(entries, (list, tuple)) else []
 
 
+def _read_window(km: Any) -> int:
+    """Candidates per read: the stock Mound caps every read at ``config.max_query_limit``."""
+    cap = getattr(getattr(km, "config", None), "max_query_limit", None)
+    return (
+        cap if isinstance(cap, int) and not isinstance(cap, bool) and cap > 0 else _ORG_READ_WINDOW
+    )
+
+
 async def _search_for_org(
     km: Any, methods: tuple[str, str], query: str, org_id: str, **filters: Any
 ) -> list[KnowledgeItemSummary]:
@@ -319,9 +331,16 @@ async def _search_for_org(
     method = next((name for name in methods if hasattr(km, name)), None)
     if method is None:
         return []
-    results = await _call_km_method(km, method, query, limit=_ORG_READ_WINDOW, **filters)
+    window = _read_window(km)
+    entries = _result_entries(await _call_km_method(km, method, query, limit=window, **filters))
+    if len(entries) >= window:
+        logger.info(
+            "Knowledge search read a full window of %d candidates; the caller's items ranked "
+            "below it are not returned",
+            window,
+        )
     summaries: list[KnowledgeItemSummary] = []
-    for result in _for_org(_result_entries(results), org_id):
+    for result in _for_org(entries, org_id):
         if isinstance(result, tuple) and len(result) == 2:
             item, score = result
             summaries.append(_item_to_summary(item, relevance=float(score)))
@@ -330,16 +349,55 @@ async def _search_for_org(
     return summaries
 
 
-async def _get_for_org(km: Any, item_id: str, org_id: str) -> Any:
-    """The item when it carries the caller's org stamp; 404 otherwise, as if absent."""
-    item = None
+async def _get_item(km: Any, item_id: str) -> Any:
     for method in ("get", "get_item", "get_by_id"):
         if hasattr(km, method):
-            item = await _call_km_method(km, method, item_id)
-            break
+            return await _call_km_method(km, method, item_id)
+    return None
+
+
+async def _get_for_org(km: Any, item_id: str, org_id: str) -> Any:
+    """The item when it carries the caller's org stamp; 404 otherwise, as if absent."""
+    item = await _get_item(km, item_id)
     if not item or _item_org(item) != org_id:
         raise NotFoundError(f"Knowledge item {item_id} not found")
     return item
+
+
+def _record_item_ids(record: Any) -> list[str]:
+    for fields in _RECORD_ID_FIELDS:
+        values = [
+            record.get(name) if isinstance(record, dict) else getattr(record, name, None)
+            for name in fields
+        ]
+        ids = [value for value in values if isinstance(value, str) and value]
+        if len(ids) == len(fields):
+            return ids
+    return []
+
+
+async def _records_for_org(km: Any, records: Any, org_id: str) -> list[Any]:
+    """Gap-detector records that belong to ``org_id``.
+
+    A record's own stamp decides when it has one. Stock ``StaleKnowledge`` and
+    ``Contradiction`` records carry no metadata, so they belong to the caller only when
+    every Mound item they name carries the caller's stamp; a missing or unstamped item
+    withholds the record.
+    """
+    owners: dict[str, str | None] = {}
+    kept = []
+    for record in list(records or [])[:_ORG_READ_WINDOW]:
+        stamp = _item_org(record)
+        if stamp is None:
+            item_ids = _record_item_ids(record)
+            for item_id in item_ids:
+                if item_id not in owners:
+                    owners[item_id] = _item_org(await _get_item(km, item_id))
+            if item_ids and all(owners[item_id] == org_id for item_id in item_ids):
+                stamp = org_id
+        if stamp == org_id:
+            kept.append(record)
+    return kept
 
 
 def _plain(value: Any) -> Any:
@@ -576,13 +634,13 @@ async def get_knowledge_gaps(
 
             stale = await detector.detect_staleness(max_age_days=max_age_days)
             stale_entries: list[StalenessItem] = []
-            for s in _for_org(stale, org_id)[:50]:
+            for s in (await _records_for_org(km, stale, org_id))[:50]:
                 s_dict = s.to_dict() if hasattr(s, "to_dict") else s
                 if isinstance(s_dict, dict):
                     stale_entries.append(
                         StalenessItem(
-                            id=s_dict.get("id", ""),
-                            title=s_dict.get("title", ""),
+                            id=s_dict.get("id") or s_dict.get("item_id") or "",
+                            title=s_dict.get("title") or s_dict.get("content_preview") or "",
                             source=s_dict.get("source", ""),
                             created_at=s_dict.get("created_at"),
                             updated_at=s_dict.get("updated_at"),
@@ -593,7 +651,7 @@ async def get_knowledge_gaps(
 
             raw_contradictions = await detector.detect_contradictions()
             contradictions: list[dict[str, Any]] = []
-            for contradiction in _for_org(raw_contradictions, org_id)[:50]:
+            for contradiction in (await _records_for_org(km, raw_contradictions, org_id))[:50]:
                 contradiction_dict = (
                     contradiction.to_dict() if hasattr(contradiction, "to_dict") else contradiction
                 )

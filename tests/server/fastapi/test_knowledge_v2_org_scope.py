@@ -142,7 +142,7 @@ def test_ingest_stamps_the_callers_org_over_a_body_org(world) -> None:
     assert response.json()["item"]["metadata"]["org_id"] == world.callers["acme"].org
 
 
-def test_staleness_and_gaps_withhold_entries_without_the_callers_stamp(world, monkeypatch) -> None:
+def test_staleness_withholds_items_without_the_callers_stamp(world) -> None:
     acme, beta = world.callers["acme"].org, world.callers["beta"].org
     entries = [
         {"id": "own", "metadata": {"org_id": acme}},
@@ -156,18 +156,35 @@ def test_staleness_and_gaps_withhold_entries_without_the_callers_stamp(world, mo
     assert response.status_code == 200, response.text
     assert [item["id"] for item in response.json()["items"]] == ["own"]
 
+
+def test_gaps_attribute_detector_records_through_the_items_they_name(world, monkeypatch) -> None:
+    from aragora.knowledge.gap_detector import Contradiction, StaleKnowledge
+
+    ids = world.ids
+
+    def stale(who: str) -> StaleKnowledge:
+        return StaleKnowledge(ids[who], f"note {who}", "d", 120.0, 0.5, None, 0.9)
+
+    def clash(a: str, b: str) -> Contradiction:
+        return Contradiction(ids[a], ids[b], a, b, "d", 0.8)
+
     class _Detector:
         def __init__(self, mound, workspace_id) -> None:
             pass
 
         async def detect_staleness(self, max_age_days):
-            return entries
+            return [stale(who) for who in ("acme", "beta", "unstamped")]
 
         async def detect_contradictions(self):
-            return [{"item_a_id": "other", "metadata": {"org_id": beta}}, {"item_a_id": "x"}]
+            return [clash("acme", "acme"), clash("acme", "beta"), clash("unstamped", "acme")]
 
     monkeypatch.setattr("aragora.knowledge.gap_detector.KnowledgeGapDetector", _Detector)
-    gaps = _call(world, "acme", "GET", "/api/v2/knowledge/gaps")
-    assert gaps.status_code == 200, gaps.text
-    assert [entry["id"] for entry in gaps.json()["stale_entries"]] == ["own"]
-    assert gaps.json()["contradictions"] == []
+    for who in ("acme", "beta"):
+        gaps = _call(world, who, "GET", "/api/v2/knowledge/gaps")
+        assert gaps.status_code == 200, gaps.text
+        assert [entry["id"] for entry in gaps.json()["stale_entries"]] == [ids[who]]
+    pairs = [(c["item_a_id"], c["item_b_id"]) for c in gaps.json()["contradictions"]]
+    assert pairs == []
+    acme = _call(world, "acme", "GET", "/api/v2/knowledge/gaps").json()
+    pairs = [(c["item_a_id"], c["item_b_id"]) for c in acme["contradictions"]]
+    assert pairs == [(ids["acme"], ids["acme"])]
