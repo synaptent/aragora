@@ -9,20 +9,23 @@ import pytest
 os.environ.setdefault("ARAGORA_USE_SECRETS_MANAGER", "0")
 
 from aragora.server.fastapi.routes.receipts import get_receipt, list_receipts
+from aragora.tenancy.record_scope import OrgScope
+
+_SCOPE = OrgScope(org_id="org-1", user_id="user-1", role="member")
 
 
 class _SlowReceiptListStore:
-    def list_recent(self, **kwargs):
+    def list_for_org(self, org_id, **kwargs):
         time.sleep(0.2)
         return []
 
-    def count(self, **kwargs):
+    def count_for_org(self, org_id, **kwargs):
         time.sleep(0.2)
         return 0
 
 
 class _SlowReceiptGetStore:
-    def get(self, receipt_id: str):
+    def get_for_org(self, receipt_id: str, org_id: str):
         time.sleep(0.2)
         return {
             "receipt_id": receipt_id,
@@ -36,6 +39,7 @@ class _SlowReceiptGetStore:
             "findings": [],
             "agents_involved": ["claude"],
             "checksum": "abc123",
+            "org_id": org_id,
         }
 
 
@@ -58,6 +62,8 @@ async def test_list_receipts_does_not_block_event_loop_for_sync_store() -> None:
         limit=10,
         offset=0,
         verdict=None,
+        debate_id=None,
+        scope=_SCOPE,
         store=_SlowReceiptListStore(),
     )
     ticks = await task
@@ -74,6 +80,7 @@ async def test_get_receipt_does_not_block_event_loop_for_sync_store() -> None:
 
     response = await get_receipt(
         receipt_id="receipt-123",
+        scope=_SCOPE,
         store=_SlowReceiptGetStore(),
     )
     ticks = await task

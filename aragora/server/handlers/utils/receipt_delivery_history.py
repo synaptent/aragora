@@ -10,6 +10,10 @@ from __future__ import annotations
 
 from typing import Any
 
+#: Entry field naming the org that owns the delivered receipt; an entry without
+#: it is visible to no org, and readers strip it from every response.
+DELIVERY_ORG_KEY = "_org_id"
+
 _receipt_delivery_history: list[dict[str, Any]] = []
 
 

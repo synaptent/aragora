@@ -24,25 +24,45 @@ from aragora.rbac.models import AuthorizationContext
 from aragora.server.fastapi import create_app
 from aragora.server.fastapi.dependencies.auth import require_authenticated
 from aragora.server.handlers.utils.receipt_delivery_history import (
+    DELIVERY_ORG_KEY,
     get_receipt_delivery_history_store,
 )
 from aragora.storage.receipt_store import StoredReceipt
+from aragora.tenancy.record_scope import OrgScope, require_org_scope_fastapi
+
+ORG_ID = "org-1"
+
+
+def _org_of(receipt):
+    if isinstance(receipt, dict):
+        return receipt.get("org_id")
+    return getattr(receipt, "org_id", None)
 
 
 @pytest.fixture
 def app():
-    """Create a test FastAPI app."""
-    return create_app()
+    """Create a test FastAPI app whose callers belong to ``ORG_ID``."""
+    app = create_app()
+    app.dependency_overrides[require_org_scope_fastapi] = lambda: OrgScope(
+        org_id=ORG_ID, user_id="user-1", role="member"
+    )
+    return app
 
 
 @pytest.fixture
 def mock_receipt_store():
-    """Create a mock receipt store."""
+    """Mock receipt store; ``get_for_org`` filters ``get`` by owner like the real store."""
     store = MagicMock()
-    store.list_recent = MagicMock(return_value=[])
-    store.count = MagicMock(return_value=0)
+    store.list_for_org = MagicMock(return_value=[])
+    store.count_for_org = MagicMock(return_value=0)
     store.get = MagicMock(return_value=None)
     store.get_by_id = MagicMock(return_value=None)
+
+    def _get_for_org(receipt_id, org_id):
+        receipt = store.get(receipt_id)
+        return receipt if receipt is not None and _org_of(receipt) == org_id else None
+
+    store.get_for_org = MagicMock(side_effect=_get_for_org)
     return store
 
 
@@ -140,6 +160,7 @@ def sample_receipt_dict():
         "duration_seconds": 45.2,
         "audit_trail_id": None,
         "checksum": "abc123",
+        "org_id": ORG_ID,
     }
 
 
@@ -159,6 +180,7 @@ def sample_stored_receipt(sample_receipt_dict):
         checksum=sample_receipt_dict["checksum"],
         audit_trail_id=sample_receipt_dict["audit_trail_id"],
         data=sample_receipt_dict,
+        org_id=ORG_ID,
     )
 
 
@@ -191,15 +213,15 @@ class TestListReceipts:
     def test_list_receipts_forwards_debate_id_filter(self, app, sample_stored_receipt):
         """List receipts forwards debate_id filtering to durable stores."""
 
-        calls: dict[str, dict[str, object]] = {}
+        calls: dict[str, tuple[str, dict[str, object]]] = {}
 
         class StorageBackedStore:
-            def list(self, **kwargs):
-                calls["list"] = kwargs
+            def list_for_org(self, org_id, **kwargs):
+                calls["list"] = (org_id, kwargs)
                 return [sample_stored_receipt]
 
-            def count(self, **kwargs):
-                calls["count"] = kwargs
+            def count_for_org(self, org_id, **kwargs):
+                calls["count"] = (org_id, kwargs)
                 return 1
 
         app.state.context = {
@@ -214,8 +236,9 @@ class TestListReceipts:
 
         response = client.get("/api/v2/receipts?debate_id=debate-123")
         assert response.status_code == 200
-        assert calls["list"]["debate_id"] == "debate-123"
-        assert calls["count"]["debate_id"] == "debate-123"
+        assert calls["list"][0] == calls["count"][0] == ORG_ID
+        assert calls["list"][1]["debate_id"] == "debate-123"
+        assert calls["count"][1]["debate_id"] == "debate-123"
 
     def test_list_receipts_filters_list_all_fallback_by_debate_id(self, app):
         """List-all fallback should still respect debate_id filtering."""
@@ -223,8 +246,18 @@ class TestListReceipts:
         class ListAllStore:
             def list_all(self):
                 return [
-                    {"receipt_id": "receipt-1", "debate_id": "debate-123", "verdict": "APPROVED"},
-                    {"receipt_id": "receipt-2", "debate_id": "debate-999", "verdict": "APPROVED"},
+                    {
+                        "receipt_id": "receipt-1",
+                        "debate_id": "debate-123",
+                        "verdict": "APPROVED",
+                        "org_id": ORG_ID,
+                    },
+                    {
+                        "receipt_id": "receipt-2",
+                        "debate_id": "debate-999",
+                        "verdict": "APPROVED",
+                        "org_id": ORG_ID,
+                    },
                 ]
 
         app.state.context = {
@@ -245,8 +278,8 @@ class TestListReceipts:
 
     def test_list_receipts_with_data(self, client, mock_receipt_store, sample_receipt_dict):
         """List receipts returns receipt summaries."""
-        mock_receipt_store.list_recent.return_value = [sample_receipt_dict]
-        mock_receipt_store.count.return_value = 1
+        mock_receipt_store.list_for_org.return_value = [sample_receipt_dict]
+        mock_receipt_store.count_for_org.return_value = 1
 
         response = client.get("/api/v2/receipts")
         assert response.status_code == 200
@@ -258,13 +291,13 @@ class TestListReceipts:
         assert data["total"] == 1
 
     def test_list_receipts_with_storage_store_objects(self, app, sample_stored_receipt):
-        """List receipts should support the durable store's list(...) API."""
+        """List receipts should support the durable store's org-scoped list API."""
 
         class StorageBackedStore:
-            def list(self, **kwargs):
+            def list_for_org(self, org_id, **kwargs):
                 return [sample_stored_receipt]
 
-            def count(self, **kwargs):
+            def count_for_org(self, org_id, **kwargs):
                 return 1
 
         app.state.context = {
@@ -318,7 +351,7 @@ class TestGetReceipt:
 
     def test_get_receipt_with_nested_data(self, client, mock_receipt_store, sample_receipt_dict):
         """Get receipt handles stored receipts with nested 'data' key."""
-        mock_receipt_store.get.return_value = {"data": sample_receipt_dict}
+        mock_receipt_store.get.return_value = {"data": sample_receipt_dict, "org_id": ORG_ID}
 
         response = client.get("/api/v2/receipts/rcpt_test123")
         assert response.status_code == 200
@@ -373,7 +406,7 @@ class TestVerifyReceipt:
             verdict="APPROVED",
             confidence=0.9,
         )
-        receipt_dict = receipt.to_dict()
+        receipt_dict = {**receipt.to_dict(), "org_id": ORG_ID}
         mock_receipt_store.get.return_value = receipt_dict
 
         response = client.get("/api/v2/receipts/rcpt_integrity_test/verify")
@@ -588,8 +621,8 @@ class TestSearchReceipts:
 
     def test_search_returns_200_empty(self, client, mock_receipt_store):
         """Search with no results returns 200 with empty list."""
-        mock_receipt_store.search = MagicMock(return_value=[])
-        mock_receipt_store.search_count = MagicMock(return_value=0)
+        mock_receipt_store.search_for_org = MagicMock(return_value=[])
+        mock_receipt_store.search_count_for_org = MagicMock(return_value=0)
 
         response = client.get("/api/v2/receipts/search?q=test")
         assert response.status_code == 200
@@ -605,8 +638,8 @@ class TestSearchReceipts:
 
     def test_search_returns_results(self, client, mock_receipt_store, sample_receipt_dict):
         """Search returns matching receipts."""
-        mock_receipt_store.search = MagicMock(return_value=[sample_receipt_dict])
-        mock_receipt_store.search_count = MagicMock(return_value=1)
+        mock_receipt_store.search_for_org = MagicMock(return_value=[sample_receipt_dict])
+        mock_receipt_store.search_count_for_org = MagicMock(return_value=1)
 
         response = client.get("/api/v2/receipts/search?q=security")
         assert response.status_code == 200
@@ -617,20 +650,21 @@ class TestSearchReceipts:
 
     def test_search_with_filters(self, client, mock_receipt_store):
         """Search passes verdict and risk_level filters."""
-        mock_receipt_store.search = MagicMock(return_value=[])
-        mock_receipt_store.search_count = MagicMock(return_value=0)
+        mock_receipt_store.search_for_org = MagicMock(return_value=[])
+        mock_receipt_store.search_count_for_org = MagicMock(return_value=0)
 
         response = client.get("/api/v2/receipts/search?q=test&verdict=APPROVED&risk_level=LOW")
         assert response.status_code == 200
-        mock_receipt_store.search.assert_called_once()
-        call_kwargs = mock_receipt_store.search.call_args
+        mock_receipt_store.search_for_org.assert_called_once()
+        call_kwargs = mock_receipt_store.search_for_org.call_args
+        assert call_kwargs.args == (ORG_ID,)
         assert call_kwargs.kwargs.get("verdict") == "APPROVED"
         assert call_kwargs.kwargs.get("risk_level") == "LOW"
 
     def test_search_with_pagination(self, client, mock_receipt_store):
         """Search supports pagination."""
-        mock_receipt_store.search = MagicMock(return_value=[])
-        mock_receipt_store.search_count = MagicMock(return_value=0)
+        mock_receipt_store.search_for_org = MagicMock(return_value=[])
+        mock_receipt_store.search_count_for_org = MagicMock(return_value=0)
 
         response = client.get("/api/v2/receipts/search?q=test&limit=10&offset=5")
         assert response.status_code == 200
@@ -649,7 +683,7 @@ class TestReceiptStats:
 
     def test_stats_returns_200(self, client, mock_receipt_store):
         """Stats returns aggregate statistics."""
-        mock_receipt_store.get_stats = MagicMock(
+        mock_receipt_store.stats_for_org = MagicMock(
             return_value={
                 "total": 100,
                 "verified": 85,
@@ -669,7 +703,7 @@ class TestReceiptStats:
 
     def test_stats_empty_store(self, client, mock_receipt_store):
         """Stats with empty store returns zeros."""
-        mock_receipt_store.get_stats = MagicMock(return_value={})
+        mock_receipt_store.stats_for_org = MagicMock(return_value={})
 
         response = client.get("/api/v2/receipts/stats")
         assert response.status_code == 200
@@ -678,7 +712,7 @@ class TestReceiptStats:
 
     def test_stats_preserve_delivery_aggregates_from_store(self, client, mock_receipt_store):
         """Stats should keep delivery aggregates surfaced by the store."""
-        mock_receipt_store.get_stats = MagicMock(
+        mock_receipt_store.stats_for_org = MagicMock(
             return_value={
                 "total": 12,
                 "verified": 10,
@@ -699,7 +733,7 @@ class TestReceiptStats:
 
     def test_stats_derive_delivery_rate_from_store_counts(self, client, mock_receipt_store):
         """Stats should compute a missing delivery rate from the returned counts."""
-        mock_receipt_store.get_stats = MagicMock(
+        mock_receipt_store.stats_for_org = MagicMock(
             return_value={
                 "total": 12,
                 "verified": 10,
@@ -712,11 +746,13 @@ class TestReceiptStats:
             [
                 {
                     "receiptId": "r-1",
+                    DELIVERY_ORG_KEY: ORG_ID,
                     "status": "delivered",
                     "deliveredAt": "2026-04-08T00:00:00Z",
                 },
                 {
                     "receiptId": "r-2",
+                    DELIVERY_ORG_KEY: ORG_ID,
                     "status": "failed",
                     "deliveredAt": "2026-04-08T00:01:00Z",
                 },
@@ -733,26 +769,30 @@ class TestReceiptStats:
 
     def test_stats_backfill_delivery_aggregates_from_history(self, client, mock_receipt_store):
         """Stats should derive delivery aggregates when the store omits them."""
-        mock_receipt_store.get_stats = MagicMock(return_value={"total": 5, "verified": 4})
+        mock_receipt_store.stats_for_org = MagicMock(return_value={"total": 5, "verified": 4})
         get_receipt_delivery_history_store().extend(
             [
                 {
                     "receiptId": "r-1",
+                    DELIVERY_ORG_KEY: ORG_ID,
                     "status": "delivered",
                     "deliveredAt": "2026-04-08T00:00:00Z",
                 },
                 {
                     "receiptId": "r-2",
+                    DELIVERY_ORG_KEY: ORG_ID,
                     "status": "success",
                     "deliveredAt": "2026-04-08T00:01:00Z",
                 },
                 {
                     "receiptId": "r-3",
+                    DELIVERY_ORG_KEY: ORG_ID,
                     "status": "pending",
                     "deliveredAt": "2026-04-08T00:02:00Z",
                 },
                 {
                     "receiptId": "r-4",
+                    DELIVERY_ORG_KEY: ORG_ID,
                     "status": "failed",
                     "deliveredAt": "2026-04-08T00:03:00Z",
                 },
@@ -769,24 +809,28 @@ class TestReceiptStats:
 
     def test_stats_ignore_test_and_orphan_delivery_history(self, client, mock_receipt_store):
         """Stats should ignore test sends and non-receipt history entries."""
-        mock_receipt_store.get_stats = MagicMock(return_value={"total": 1, "verified": 1})
+        mock_receipt_store.stats_for_org = MagicMock(return_value={"total": 1, "verified": 1})
         get_receipt_delivery_history_store().extend(
             [
                 {
+                    DELIVERY_ORG_KEY: ORG_ID,
                     "status": "success",
                     "is_test": True,
                     "receiptId": "test-1",
                 },
                 {
+                    DELIVERY_ORG_KEY: ORG_ID,
                     "status": "failed",
                     "is_test": True,
                     "receiptId": "test-2",
                 },
                 {
+                    DELIVERY_ORG_KEY: ORG_ID,
                     "status": "delivered",
                     "receiptId": "real-1",
                 },
                 {
+                    DELIVERY_ORG_KEY: ORG_ID,
                     "status": "failed",
                     "channel_type": "slack",
                 },
@@ -905,7 +949,8 @@ class TestVerifyReceiptSignature:
         response = client.post("/api/v2/receipts/missing/verify-signature")
         assert response.status_code == 404
 
-    def test_verify_signature_success(self, client, mock_receipt_store):
+    def test_verify_signature_success(self, client, mock_receipt_store, sample_receipt_dict):
+        mock_receipt_store.get.return_value = sample_receipt_dict
         result = MagicMock()
         result.error = None
         result.to_dict.return_value = {
@@ -925,6 +970,7 @@ class TestVerifyReceiptSignature:
         assert data["receipt_id"] == "rcpt_test123"
         assert data["signature_valid"] is True
         assert data["algorithm"] == "hmac-sha256"
+        mock_receipt_store.verify_signature.assert_called_once_with("rcpt_test123", org_id=ORG_ID)
 
 
 class TestSendToChannel:
@@ -984,6 +1030,9 @@ class TestSendToChannel:
         assert data["receipt_id"] == "rcpt_test123"
         assert data["channel_type"] == "email"
         assert data["message_id"] == "msg-123"
+        assert [entry[DELIVERY_ORG_KEY] for entry in get_receipt_delivery_history_store()] == [
+            ORG_ID
+        ]
 
 
 class TestGetSharedReceipt:
