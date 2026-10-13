@@ -4,10 +4,13 @@ Tests for encryption migration utilities.
 Tests automatic detection, migration, and startup migration functionality.
 """
 
+import argparse
 import ast
 import asyncio
 import importlib
+import json
 import logging
+import secrets
 import sqlite3
 import sys
 import threading
@@ -206,6 +209,84 @@ def _prepare_live_rotation(service: MagicMock) -> None:
     service._keys = {"default": MagicMock(version=1)}
     service._active_key_id = "default"
     service.rotate_key.return_value = MagicMock(key_id="default", version=2)
+
+
+def _no_integration_store():
+    """Make the integration store optional-absent so a live rotation touches no store."""
+    return patch("aragora.security.migration._get_integration_store_config", return_value=None)
+
+
+@pytest.fixture
+def throwaway_encryption(monkeypatch):
+    """Install an in-process service with a random throwaway key; no secrets are read."""
+    from aragora.security import encryption
+
+    service = encryption.EncryptionService(master_key=secrets.token_bytes(32))
+    monkeypatch.setattr(encryption, "_encryption_service", service)
+    return service
+
+
+@pytest.fixture
+def gmail_sqlite_store(tmp_path, throwaway_encryption):
+    from aragora.storage.gmail_token_store import SQLiteGmailTokenStore
+
+    store = SQLiteGmailTokenStore(tmp_path / "gmail_tokens.db")
+    with patch("aragora.storage.gmail_token_store.get_gmail_token_store", return_value=store):
+        yield store
+
+
+@pytest.fixture
+def integration_sqlite_store(tmp_path, throwaway_encryption):
+    from aragora.storage.integration_sqlite import SQLiteIntegrationStore
+
+    store = SQLiteIntegrationStore(tmp_path / "integrations.db")
+    with patch("aragora.storage.integration_store.get_integration_store", return_value=store):
+        yield store
+
+
+def _key_version(ciphertext: str) -> int:
+    from aragora.security.encryption import EncryptedData
+
+    return EncryptedData.from_base64(ciphertext).key_version
+
+
+def _raw_gmail_tokens(store: Any) -> dict[str, tuple[str, str]]:
+    with closing(sqlite3.connect(store.db_path)) as conn:
+        rows = conn.execute("SELECT user_id, access_token, refresh_token FROM gmail_tokens")
+        return {row[0]: (row[1], row[2]) for row in rows}
+
+
+def _insert_raw_gmail_row(store: Any, user_id: str, access_token: str, refresh_token: str) -> None:
+    with closing(sqlite3.connect(store.db_path)) as conn:
+        conn.execute(
+            "INSERT INTO gmail_tokens "
+            "(user_id, access_token, refresh_token, created_at, updated_at) "
+            "VALUES (?, ?, ?, 0, 0)",
+            (user_id, access_token, refresh_token),
+        )
+        conn.commit()
+
+
+def _save_gmail_state(store: Any, user_id: str, access_token: str, refresh_token: str) -> None:
+    from aragora.storage.gmail_token_store import GmailUserState
+
+    state = GmailUserState(user_id=user_id, access_token=access_token, refresh_token=refresh_token)
+    asyncio.run(store.save(state))
+
+
+def _seed_gmail_under_old_key(store: Any, service: Any) -> None:
+    """One user encrypted under key v1, one legacy plaintext row, then rotate to v2."""
+    _save_gmail_state(store, "user-encrypted", "ya29.encrypted-access", "1//encrypted-refresh")
+    _insert_raw_gmail_row(store, "user-legacy", "ya29.legacy-access", "1//legacy-refresh")
+    service.rotate_key("master")
+
+
+def _foreign_ciphertext(plaintext: str, user_id: str) -> str:
+    """Ciphertext under a key the installed service does not hold."""
+    from aragora.security.encryption import EncryptionService
+
+    foreign = EncryptionService(master_key=secrets.token_bytes(32))
+    return foreign.encrypt(plaintext, associated_data=user_id).to_base64()
 
 
 class TestMigrationResult:
@@ -623,10 +704,18 @@ class TestStoreMigrations:
             assert result.store_name == "gmail_token_store"
             assert len(result.errors) > 0
 
-    def test_migrate_gmail_token_store_list_failure_fails_closed(self):
+    @pytest.mark.parametrize(
+        "error",
+        [
+            OSError("refresh_token=secret-value"),
+            sqlite3.OperationalError("unable to open /data/secret-value/gmail_tokens.db"),
+        ],
+    )
+    def test_migrate_gmail_token_store_list_failure_fails_closed(self, error):
         """A configured Gmail store that cannot list its records is a failed migration."""
         store = MagicMock()
-        store.list_all.side_effect = OSError("refresh_token=secret-value")
+        store.list_all = AsyncMock(side_effect=error)
+        store.save = AsyncMock(return_value=None)
 
         with patch(
             "aragora.storage.gmail_token_store.get_gmail_token_store",
@@ -639,7 +728,143 @@ class TestStoreMigrations:
         assert result.success is False
         assert result.errors == ["Migration failed due to an internal error"]
         assert "secret-value" not in " ".join(result.errors)
-        store.save_state.assert_not_called()
+        store.list_all.assert_awaited_once()
+        store.save.assert_not_awaited()
+
+    @pytest.mark.parametrize(
+        "error",
+        [
+            OSError("api_key=secret-value"),
+            RuntimeError("dsn=postgres://user:secret-value@db"),
+            sqlite3.OperationalError("unable to open /data/secret-value/integrations.db"),
+        ],
+    )
+    def test_migrate_integration_store_list_failure_fails_closed(self, error):
+        """A listing error is a sanitized failed result, not an escaping exception."""
+        store = MagicMock()
+        store.list_all = AsyncMock(side_effect=error)
+        store.save = AsyncMock(return_value=None)
+
+        with patch(
+            "aragora.storage.integration_store.get_integration_store",
+            return_value=store,
+        ):
+            result = migrate_integration_store(dry_run=False)
+
+        assert result.store_name == "integration_store"
+        assert result.failed_records == 1
+        assert result.success is False
+        assert result.errors == ["Migration failed due to an internal error"]
+        assert "secret-value" not in " ".join(result.errors)
+        store.list_all.assert_awaited_once()
+        store.save.assert_not_awaited()
+
+    def test_migrate_integration_store_list_import_error_stays_best_effort(self):
+        """An optional dependency missing at list time keeps the unavailable result."""
+        store = MagicMock()
+        store.list_all = AsyncMock(side_effect=ImportError("asyncpg"))
+
+        with patch(
+            "aragora.storage.integration_store.get_integration_store",
+            return_value=store,
+        ):
+            result = migrate_integration_store(dry_run=False)
+
+        assert result.errors == ["Integration store not available"]
+        assert result.failed_records == 0
+
+    @pytest.mark.parametrize(
+        "error",
+        [
+            RuntimeError("dsn=postgres://user:secret-value@db"),
+            sqlite3.OperationalError("unable to open /data/secret-value/integrations.db"),
+        ],
+    )
+    def test_cli_migrate_exits_nonzero_when_integration_listing_fails(self, error, capsys):
+        from aragora.cli.security import cmd_migrate
+
+        store = MagicMock()
+        store.list_all = AsyncMock(side_effect=error)
+        store.save = AsyncMock(return_value=None)
+
+        with patch(
+            "aragora.storage.integration_store.get_integration_store",
+            return_value=store,
+        ):
+            exit_code = cmd_migrate(argparse.Namespace(dry_run=True, stores="integration"))
+
+        output = capsys.readouterr().out
+        assert exit_code == 1
+        assert "integration_store" in output
+        assert "Failed: 1" in output
+        assert "secret-value" not in output
+        store.save.assert_not_awaited()
+
+
+class TestGmailTokenMigration:
+    """Gmail migration against a real temp SQLite store and a throwaway key."""
+
+    def test_dry_run_counts_tokens_without_writing(self, gmail_sqlite_store, throwaway_encryption):
+        _seed_gmail_under_old_key(gmail_sqlite_store, throwaway_encryption)
+        before = _raw_gmail_tokens(gmail_sqlite_store)
+
+        result = migrate_gmail_token_store(dry_run=True)
+
+        assert result.store_name == "gmail_token_store"
+        assert result.total_records == 2
+        assert result.migrated_records == 2
+        assert result.failed_records == 0
+        assert result.errors == []
+        assert _raw_gmail_tokens(gmail_sqlite_store) == before
+
+    def test_migration_resaves_tokens_under_current_key(
+        self, gmail_sqlite_store, throwaway_encryption
+    ):
+        _seed_gmail_under_old_key(gmail_sqlite_store, throwaway_encryption)
+
+        result = migrate_gmail_token_store(dry_run=False)
+
+        assert result.total_records == 2
+        assert result.migrated_records == 2
+        assert result.failed_records == 0
+        raw = _raw_gmail_tokens(gmail_sqlite_store)
+        assert {_key_version(token) for tokens in raw.values() for token in tokens} == {2}
+        states = {s.user_id: s for s in asyncio.run(gmail_sqlite_store.list_all())}
+        assert (states["user-encrypted"].access_token, states["user-encrypted"].refresh_token) == (
+            "ya29.encrypted-access",
+            "1//encrypted-refresh",
+        )
+        assert (states["user-legacy"].access_token, states["user-legacy"].refresh_token) == (
+            "ya29.legacy-access",
+            "1//legacy-refresh",
+        )
+
+    def test_user_without_tokens_is_not_resaved(self, gmail_sqlite_store):
+        _save_gmail_state(gmail_sqlite_store, "user-disconnected", "", "")
+        before = _raw_gmail_tokens(gmail_sqlite_store)
+
+        result = migrate_gmail_token_store(dry_run=False)
+
+        assert result.total_records == 1
+        assert result.already_encrypted == 1
+        assert result.migrated_records == 0
+        assert result.success is True
+        assert _raw_gmail_tokens(gmail_sqlite_store) == before
+
+    def test_undecryptable_token_fails_record_and_is_left_untouched(
+        self, gmail_sqlite_store, throwaway_encryption
+    ):
+        _seed_gmail_under_old_key(gmail_sqlite_store, throwaway_encryption)
+        foreign = _foreign_ciphertext("ya29.foreign-access", "user-foreign")
+        _insert_raw_gmail_row(gmail_sqlite_store, "user-foreign", foreign, "")
+
+        result = migrate_gmail_token_store(dry_run=False)
+
+        assert result.total_records == 3
+        assert result.migrated_records == 2
+        assert result.failed_records == 1
+        assert result.errors == ["Error migrating record: user-foreign"]
+        assert _raw_gmail_tokens(gmail_sqlite_store)["user-foreign"] == (foreign, "")
 
     def test_migrate_sync_store_empty(self, sync_backend):
         """Test migration with empty sync store."""
@@ -736,11 +961,14 @@ class TestMigrationAuditProvider:
         encryption_service.rotate_key.return_value = new_key
         register_migration_audit_provider(MagicMock(side_effect=ImportError("unavailable")))
 
-        with patch(
-            "aragora.security.encryption.get_encryption_service",
-            return_value=encryption_service,
+        with (
+            patch(
+                "aragora.security.encryption.get_encryption_service",
+                return_value=encryption_service,
+            ),
+            _no_integration_store(),
         ):
-            result = rotate_encryption_key(dry_run=False, stores=["unknown"])
+            result = rotate_encryption_key(dry_run=False, stores=["integration"])
 
         assert result.success is True
         assert result.old_key_version == 1
@@ -756,11 +984,14 @@ class TestMigrationAuditProvider:
         )
 
         with caplog.at_level(logging.WARNING, logger="aragora.security.migration"):
-            with patch(
-                "aragora.security.encryption.get_encryption_service",
-                return_value=encryption_service,
+            with (
+                patch(
+                    "aragora.security.encryption.get_encryption_service",
+                    return_value=encryption_service,
+                ),
+                _no_integration_store(),
             ):
-                result = rotate_encryption_key(dry_run=False, stores=["unknown"])
+                result = rotate_encryption_key(dry_run=False, stores=["integration"])
 
         assert result.success is True
         assert result.new_key_version == 2
@@ -773,11 +1004,14 @@ class TestMigrationAuditProvider:
         encryption_service.rotate_key.return_value = MagicMock(key_id="default", version=2)
 
         with caplog.at_level(logging.WARNING, logger="aragora.security.migration"):
-            with patch(
-                "aragora.security.encryption.get_encryption_service",
-                return_value=encryption_service,
+            with (
+                patch(
+                    "aragora.security.encryption.get_encryption_service",
+                    return_value=encryption_service,
+                ),
+                _no_integration_store(),
             ):
-                result = rotate_encryption_key(dry_run=False, stores=["unknown"])
+                result = rotate_encryption_key(dry_run=False, stores=["integration"])
 
         assert result.success is True
         assert result.new_key_version == 2
@@ -1084,6 +1318,161 @@ class TestMigrationAuditProvider:
         _assert_used_shared_store(sync_backend, shared_pool_loop)
 
 
+class TestRotationStoreSelection:
+    """Store names are validated before the key rotates."""
+
+    @pytest.fixture
+    def encryption_service(self):
+        service = MagicMock()
+        _prepare_live_rotation(service)
+        return service
+
+    @pytest.mark.parametrize("dry_run", [False, True])
+    @pytest.mark.parametrize("stores", [["unknown"], ["gmail", "unknown"]])
+    def test_unknown_store_fails_before_rotating(self, encryption_service, dry_run, stores):
+        audit = MagicMock()
+        register_migration_audit_provider(audit)
+        gmail_config = MagicMock(return_value=None)
+
+        with (
+            patch(
+                "aragora.security.encryption.get_encryption_service",
+                return_value=encryption_service,
+            ),
+            patch("aragora.security.migration._get_gmail_store_config", gmail_config),
+        ):
+            result = rotate_encryption_key(dry_run=dry_run, stores=stores)
+
+        assert result.success is False
+        assert result.failed_records == 1
+        assert result.errors == ["Unknown store for key rotation: unknown"]
+        assert result.stores_processed == 0
+        assert result.old_key_version == 1
+        assert result.new_key_version == 1
+        encryption_service.rotate_key.assert_not_called()
+        gmail_config.assert_not_called()
+        audit.assert_not_called()
+
+    def test_admin_handler_reports_unknown_store_as_error(self, encryption_service):
+        from aragora.server.handlers.admin.security import SecurityHandler
+
+        handler = SecurityHandler({})
+        with (
+            patch(
+                "aragora.security.encryption.get_encryption_service",
+                return_value=encryption_service,
+            ),
+            patch("aragora.security.encryption.CRYPTO_AVAILABLE", True),
+            patch("aragora.audit.unified.audit_security") as audit_security,
+        ):
+            response = asyncio.run(
+                handler._rotate_key.__wrapped__(
+                    handler, MagicMock(), MagicMock(), {"stores": ["unknown"], "force": True}
+                )
+            )
+
+        body = json.loads(response.body.decode())
+        assert body["success"] is False
+        assert body["failed_records"] == 1
+        assert body["errors"] == ["Unknown store for key rotation: unknown"]
+        assert body["new_key_version"] == 1
+        encryption_service.rotate_key.assert_not_called()
+        audit_security.assert_not_called()
+
+    @pytest.mark.parametrize(
+        ("store_name", "factory"),
+        [
+            ("integration", "aragora.storage.integration_store.get_integration_store"),
+            ("gmail", "aragora.storage.gmail_token_store.get_gmail_token_store"),
+        ],
+    )
+    def test_store_listing_error_is_counted_failure(self, encryption_service, store_name, factory):
+        store = MagicMock()
+        store.list_all = AsyncMock(
+            side_effect=sqlite3.OperationalError("disk I/O error: /data/secret-value.db")
+        )
+        store.save = AsyncMock(return_value=None)
+
+        with (
+            patch(
+                "aragora.security.encryption.get_encryption_service",
+                return_value=encryption_service,
+            ),
+            patch(factory, return_value=store),
+        ):
+            result = rotate_encryption_key(dry_run=False, stores=[store_name])
+
+        assert result.success is False
+        assert result.failed_records >= 1
+        assert result.errors == ["Re-encryption failed due to an internal error"]
+        assert "secret-value" not in " ".join(result.errors)
+        store.list_all.assert_awaited_once()
+        store.save.assert_not_awaited()
+
+
+class TestRotationReencryptsRealStores:
+    """Live rotation against real temp SQLite stores and a throwaway key."""
+
+    def test_gmail_rotation_resaves_tokens_under_new_key(
+        self, gmail_sqlite_store, throwaway_encryption
+    ):
+        _save_gmail_state(gmail_sqlite_store, "user-1", "ya29.access", "1//refresh")
+        _save_gmail_state(gmail_sqlite_store, "user-2", "ya29.access-2", "")
+
+        result = rotate_encryption_key(dry_run=False, stores=["gmail"])
+
+        assert result.errors == []
+        assert result.success is True
+        assert result.new_key_version == 2
+        assert result.records_reencrypted == 2
+        raw = _raw_gmail_tokens(gmail_sqlite_store)
+        assert {_key_version(token) for token in raw["user-1"]} == {2}
+        assert _key_version(raw["user-2"][0]) == 2
+        state = asyncio.run(gmail_sqlite_store.get("user-1"))
+        assert (state.access_token, state.refresh_token) == ("ya29.access", "1//refresh")
+
+    def test_gmail_rotation_counts_undecryptable_token_and_leaves_it(
+        self, gmail_sqlite_store, throwaway_encryption
+    ):
+        _save_gmail_state(gmail_sqlite_store, "user-1", "ya29.access", "1//refresh")
+        foreign = _foreign_ciphertext("ya29.foreign-access", "user-foreign")
+        _insert_raw_gmail_row(gmail_sqlite_store, "user-foreign", foreign, "")
+
+        result = rotate_encryption_key(dry_run=False, stores=["gmail"])
+
+        assert result.success is False
+        assert result.records_reencrypted == 1
+        assert result.failed_records == 1
+        assert result.errors == ["Error re-encrypting record: user-foreign"]
+        assert _raw_gmail_tokens(gmail_sqlite_store)["user-foreign"] == (foreign, "")
+
+    def test_integration_rotation_resaves_settings_under_new_key(
+        self, integration_sqlite_store, throwaway_encryption
+    ):
+        from aragora.storage.integration_store import IntegrationConfig
+
+        config = IntegrationConfig(
+            type="slack",
+            user_id="user-1",
+            settings={"bot_token": "xoxb-secret", "channel": "#ops"},
+        )
+        asyncio.run(integration_sqlite_store.save(config))
+
+        result = rotate_encryption_key(dry_run=False, stores=["integration"])
+
+        assert result.errors == []
+        assert result.success is True
+        assert result.records_reencrypted == 1
+        with closing(sqlite3.connect(integration_sqlite_store.db_path)) as conn:
+            (settings_json,) = conn.execute("SELECT settings_json FROM integrations").fetchone()
+        stored = json.loads(settings_json)
+        assert stored["channel"] == "#ops"
+        assert stored["bot_token"]["_encrypted"] is True
+        assert _key_version(stored["bot_token"]["_value"]) == 2
+        (listed,) = asyncio.run(integration_sqlite_store.list_all())
+        assert listed.settings == {"bot_token": "xoxb-secret", "channel": "#ops"}
+
+
 class TestMigrationAuditComposition:
     """The ops adapter routes key-rotation events to the unified audit log."""
 
@@ -1129,8 +1518,9 @@ class TestMigrationAuditComposition:
                 "aragora.security.encryption.get_encryption_service",
                 return_value=encryption_service,
             ),
+            _no_integration_store(),
         ):
-            result = rotate_encryption_key(dry_run=False, stores=["unknown"])
+            result = rotate_encryption_key(dry_run=False, stores=["integration"])
 
         assert result.success is True
         audit_security.assert_called_once_with(
