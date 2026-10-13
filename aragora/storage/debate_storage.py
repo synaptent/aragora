@@ -260,9 +260,9 @@ class DebateStorage(SQLiteStore):
                 """
                 INSERT INTO debates (
                     id, slug, task, agents, artifact_json,
-                    consensus_reached, confidence
+                    consensus_reached, confidence, is_public
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 0)
             """,
                 (
                     artifact.artifact_id,
@@ -345,6 +345,8 @@ class DebateStorage(SQLiteStore):
         Save debate data directly (without DebateArtifact).
 
         Useful for saving streaming debates before full artifact is built.
+        New debates are private (``is_public = 0``); only ``set_public``
+        (the share flow) makes a debate public.
 
         Args:
             debate_data: Debate data dict
@@ -361,9 +363,9 @@ class DebateStorage(SQLiteStore):
                 """
                 INSERT INTO debates (
                     id, slug, task, agents, artifact_json,
-                    consensus_reached, confidence, org_id
+                    consensus_reached, confidence, org_id, is_public
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
             """,
                 (
                     debate_id,
@@ -666,6 +668,14 @@ class DebateStorage(SQLiteStore):
             cursor = conn.execute("SELECT is_public FROM debates WHERE id = ?", (debate_id,))
             row = cursor.fetchone()
         return bool(row and row[0])
+
+    def get_read_access(self, debate_id: str) -> tuple[str, str | None, bool] | None:
+        """Return ``(id, org_id, is_public)`` for a stored debate id, else None."""
+        with self.connection() as conn:
+            row = conn.execute(
+                "SELECT id, org_id, is_public FROM debates WHERE id = ?", (debate_id,)
+            ).fetchone()
+        return (row[0], row[1] or None, bool(row[2])) if row else None
 
     def set_public(self, debate_id: str, is_public: bool, org_id: str | None = None) -> bool:
         """
