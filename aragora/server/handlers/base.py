@@ -1161,8 +1161,9 @@ class BaseHandler:
     _INVALID_JSON_BODY = object()
 
     # When True, the handler registry calls handle_post(path, body, handler) with the
-    # parsed JSON object body instead of the query dict, and answers 400 itself when
-    # the body is not a JSON object.
+    # parsed JSON object body instead of the query dict. It answers itself 411 for a
+    # request without Content-Length or with Transfer-Encoding, and 400 for an invalid
+    # Content-Length or a body that is not a JSON object.
     HANDLE_POST_JSON_BODY = False
 
     def _read_json_body_value(self, handler: Any, max_size: int | None = None) -> Any:

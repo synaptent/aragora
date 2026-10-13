@@ -9,14 +9,12 @@ real HANDLER_REGISTRY dispatch with a JWT access token.
 
 from __future__ import annotations
 
-import importlib
 import inspect
 import io
 import json
 import threading
-from types import SimpleNamespace
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -32,13 +30,10 @@ pytestmark = pytest.mark.no_auto_auth
 # handler whose handle_post names that argument body or data.
 BODY_READERS: list[tuple[str, str]] = [
     ("_ml_handler", "/api/v1/ml/embed"),
-    ("_smart_upload_handler", "/api/v1/upload/smart"),
     ("_evolution_ab_testing_handler", "/api/v1/evolution/ab-tests"),
     ("_breakpoints_handler", "/api/v1/breakpoints/bp-1/resolve"),
-    ("_tournament_handler", "/api/v1/tournaments"),
     ("_gmail_ingest_handler", "/api/v1/gmail/search"),
     ("_universal_graph_handler", "/api/v1/pipeline/graphs"),
-    ("_orchestration_handler", "/api/v1/orchestration/deliberate"),
 ]
 # Registered handlers whose handle_post takes a body argument but are not opted in.
 NOT_BODY_READERS: dict[str, str] = {
@@ -47,7 +42,17 @@ NOT_BODY_READERS: dict[str, str] = {
     "_decomposition_handler": "never reads the body argument",
     "_slack_handler": "reads the raw body from rfile itself",
     "_chat_handler": "reads the raw body from rfile itself",
+    "_smart_upload_handler": "its options would set user, workspace and tenant attribution",
+    "_tournament_handler": "tournament creation has no participant cap",
+    "_orchestration_handler": "async deliberation would run on a per-request event loop",
 }
+# Not opted in, so handle_post keeps receiving the (empty) query dict.
+QUERY_DICT_POSTS: list[tuple[str, str]] = [
+    ("_knowledge_handler", "/api/v1/knowledge/query"),
+    ("_smart_upload_handler", "/api/v1/upload/smart"),
+    ("_tournament_handler", "/api/v1/tournaments"),
+    ("_orchestration_handler", "/api/v1/orchestration/deliberate"),
+]
 
 
 class _RegistryMixin(HandlerRegistryMixin):
@@ -95,6 +100,7 @@ def _dispatch(
     content_length: str | None = None,
     rfile: Any = None,
     attrs: dict[str, Any] | None = None,
+    headers: dict[str, str] | None = None,
 ) -> tuple[int, dict[str, Any]]:
     instance: Any = registry_cls()
     for name, value in (attrs or {}).items():
@@ -112,6 +118,7 @@ def _dispatch(
         instance.headers["Content-Length"] = (
             str(len(raw)) if content_length is None else content_length
         )
+    instance.headers.update(headers or {})
     instance.rfile = io.BytesIO(raw) if rfile is None else rfile
     instance.wfile = io.BytesIO()
     instance.send_response = MagicMock()
@@ -213,8 +220,7 @@ def test_body_reading_post_handler_rejects_a_body_that_is_not_a_json_object(regi
     }
 
 
-@pytest.mark.parametrize("content_length", ["0", ""], ids=["zero", "absent"])
-def test_bodyless_post_is_not_read_from_the_socket(registry_cls, content_length):
+def test_zero_length_post_is_bodyless_and_not_read_from_the_socket(registry_cls):
     # A keep-alive socket with nothing more to send blocks on read().
     blocking_rfile = MagicMock()
     blocking_rfile.read.side_effect = AssertionError("rfile.read on a bodyless POST")
@@ -224,11 +230,7 @@ def test_bodyless_post_is_not_read_from_the_socket(registry_cls, content_length)
         return_value=_FakeEmbeddingService(),
     ):
         status, payload = _dispatch(
-            registry_cls,
-            "/api/v1/ml/embed",
-            b"",
-            content_length=content_length,
-            rfile=blocking_rfile,
+            registry_cls, "/api/v1/ml/embed", b"", content_length="0", rfile=blocking_rfile
         )
 
     blocking_rfile.read.assert_not_called()
@@ -236,18 +238,67 @@ def test_bodyless_post_is_not_read_from_the_socket(registry_cls, content_length)
     assert "text or texts is required" in json.dumps(payload)
 
 
-def test_post_handlers_without_the_declaration_keep_the_query_dict(registry_cls, monkeypatch):
-    knowledge_handler = registry_cls._knowledge_handler
-    assert getattr(knowledge_handler, "HANDLE_POST_JSON_BODY", False) is False
+_LENGTH_REQUIRED = (
+    411,
+    "Content-Length is required and Transfer-Encoding is not supported",
+    "length_required",
+)
+_INVALID_LENGTH = (400, "Content-Length must be a non-negative integer", "invalid_content_length")
+
+
+@pytest.mark.parametrize(
+    ("content_length", "headers", "expected"),
+    [
+        ("", {}, _LENGTH_REQUIRED),
+        ("", {"Transfer-Encoding": "chunked"}, _LENGTH_REQUIRED),
+        ("17", {"Transfer-Encoding": "chunked"}, _LENGTH_REQUIRED),
+        ("17", {"Transfer-Encoding": "gzip"}, _LENGTH_REQUIRED),
+        ("abc", {}, _INVALID_LENGTH),
+        ("-1", {}, _INVALID_LENGTH),
+        ("\u00b2", {}, _INVALID_LENGTH),
+    ],
+    ids=["absent", "chunked", "chunked-with-length", "other-coding", "text", "negative", "u00b2"],
+)
+def test_post_without_a_usable_length_is_refused_unread(
+    registry_cls, monkeypatch, content_length, headers, expected
+):
+    blocking_rfile = MagicMock()
+    blocking_rfile.read.side_effect = AssertionError("rfile.read without a usable length")
+    handle_post = MagicMock(side_effect=AssertionError("handle_post without a usable length"))
+    monkeypatch.setattr(registry_cls._ml_handler, "handle_post", handle_post)
+
+    status, payload = _dispatch(
+        registry_cls,
+        "/api/v1/ml/embed",
+        b'{"text": "hello"}',
+        content_length=content_length,
+        rfile=blocking_rfile,
+        headers=headers,
+    )
+
+    blocking_rfile.read.assert_not_called()
+    handle_post.assert_not_called()
+    assert (status, payload) == (
+        expected[0],
+        {"error": {"message": expected[1], "code": expected[2]}},
+    )
+
+
+@pytest.mark.parametrize(("attr", "path"), QUERY_DICT_POSTS, ids=[p for _, p in QUERY_DICT_POSTS])
+def test_post_handlers_without_the_declaration_keep_the_query_dict(
+    registry_cls, monkeypatch, attr, path
+):
+    handler = getattr(registry_cls, attr)
+    assert getattr(handler, "HANDLE_POST_JSON_BODY", False) is False
     received: list[Any] = []
 
     def spy(request_path, query_params, *args, **kwargs):
         received.append(query_params)
         return json_response({"ok": True})
 
-    monkeypatch.setattr(knowledge_handler, "handle_post", spy, raising=False)
+    monkeypatch.setattr(handler, "handle_post", spy, raising=False)
 
-    status, _ = _dispatch(registry_cls, "/api/v1/knowledge/query", b'{"question": "q"}')
+    status, _ = _dispatch(registry_cls, path, b'{"question": "q"}')
 
     assert status == 200
     assert received == [{}]
@@ -480,46 +531,6 @@ def test_ml_scoring_routes_accept_input_at_the_caps(registry_cls, path, body, me
 
     assert status == 200, payload
     getattr(component, method).assert_called_once()
-
-
-def _upload_result(filename: str) -> Any:
-    return SimpleNamespace(
-        id=f"up-{filename}",
-        filename=filename,
-        status="completed",
-        category=SimpleNamespace(value="document"),
-        error=None,
-    )
-
-
-@pytest.mark.parametrize(("count", "expected_status"), [(50, 200), (51, 400)])
-def test_upload_batch_caps_the_file_count(registry_cls, count, expected_status):
-    from aragora.server.middleware.rate_limit.distributed import reset_distributed_limiter
-
-    # The upload routes allow 20 requests a minute per client, shared with any earlier
-    # test in this process.
-    importlib.import_module("aragora.server.handlers.utils.rate_limit").clear_all_limiters()
-    reset_distributed_limiter()
-    files = [{"filename": f"f{i}.txt", "content": ""} for i in range(count)]
-    upload = AsyncMock(side_effect=lambda content, filename, *a, **k: _upload_result(filename))
-
-    # Of the default roles only owner and admin hold upload.create.
-    with patch("aragora.server.handlers.features.smart_upload.smart_upload", upload):
-        status, payload = _dispatch(
-            registry_cls,
-            "/api/v1/upload/batch",
-            json.dumps({"files": files}).encode("utf-8"),
-            role="admin",
-        )
-
-    assert status == expected_status, payload
-    if expected_status == 400:
-        assert payload == {
-            "error": {"message": "At most 50 files per batch", "code": "too_many_files"}
-        }
-        upload.assert_not_called()
-    else:
-        assert payload["count"] == 50
 
 
 @pytest.mark.parametrize(

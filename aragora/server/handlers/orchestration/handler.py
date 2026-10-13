@@ -96,8 +96,6 @@ class OrchestrationHandler(SecureHandler):
     - orchestration:admin - Administrative operations
     """
 
-    HANDLE_POST_JSON_BODY = True
-
     RESOURCE_TYPE = "orchestration"
 
     # Knowledge source type to permission mapping

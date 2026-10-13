@@ -117,29 +117,46 @@ HANDLERS_AVAILABLE = all(
 )
 
 
-def _request_declares_body(request_handler: Any) -> bool:
-    """Whether the request has a body to read: one already buffered on the handler
-    (``handler.body`` or ``handler.request.body``, which read_json_body reads first),
-    a positive Content-Length or chunked encoding.
+def _json_post_body(handler: Any, request_handler: Any) -> Any:
+    """The JSON object body for a HANDLE_POST_JSON_BODY handler, or the error response.
 
-    Reading the socket of a request that announces none of these waits on a keep-alive
-    connection until the client sends more or closes it.
+    A body already buffered on the request (``handler.body`` or ``handler.request.body``,
+    which read_json_body reads first) is read as is. Otherwise only Content-Length frames
+    the body: http.server does not decode Transfer-Encoding, and without Content-Length
+    a request body ends only when the client closes the connection, so both answer 411
+    before anything is read from the socket. Content-Length 0 means no body.
     """
-    for buffered in (
-        getattr(request_handler, "body", None),
-        getattr(getattr(request_handler, "request", None), "body", None),
+    from aragora.server.handlers.utils.responses import error_response
+
+    if not any(
+        isinstance(buffered, (str, bytes, bytearray))
+        for buffered in (
+            getattr(request_handler, "body", None),
+            getattr(getattr(request_handler, "request", None), "body", None),
+        )
     ):
-        if isinstance(buffered, (str, bytes, bytearray)):
-            return True
-    headers = getattr(request_handler, "headers", None)
-    if headers is None:
-        return False
-    if "chunked" in (headers.get("Transfer-Encoding", "") or "").lower():
-        return True
-    try:
-        return int(headers.get("Content-Length", "") or 0) > 0
-    except (TypeError, ValueError):
-        return False
+        headers = getattr(request_handler, "headers", None) or {}
+        length = headers.get("Content-Length")
+        if length is None or headers.get("Transfer-Encoding") is not None:
+            return error_response(
+                "Content-Length is required and Transfer-Encoding is not supported",
+                411,
+                code="length_required",
+            )
+        length = str(length).strip()
+        # isascii: str.isdigit also accepts digits such as superscript two that int() rejects.
+        if not (length.isascii() and length.isdigit()):
+            return error_response(
+                "Content-Length must be a non-negative integer",
+                400,
+                code="invalid_content_length",
+            )
+        if int(length) == 0:
+            return {}
+    body = handler.read_json_body(request_handler)
+    if body is None:
+        return error_response("Request body must be a JSON object", 400, code="invalid_json_body")
+    return body
 
 
 class HandlerRegistryMixin:
@@ -520,15 +537,11 @@ class HandlerRegistryMixin:
             ):
                 # These handlers take the parsed JSON body, not the query dict, as
                 # handle_post's second argument.
-                body = handler.read_json_body(self) if _request_declares_body(self) else {}
-                if body is None:
-                    from aragora.server.handlers.utils.responses import error_response
-
-                    result = error_response(
-                        "Request body must be a JSON object", 400, code="invalid_json_body"
-                    )
-                else:
+                body = _json_post_body(handler, self)
+                if isinstance(body, dict):
                     result = handler.handle_post(dispatch_path, body, self)
+                else:
+                    result = body
             elif method == "POST" and hasattr(handler, "handle_post"):
                 result = handler.handle_post(dispatch_path, query_dict, self)
             elif method == "DELETE" and hasattr(handler, "handle_delete"):

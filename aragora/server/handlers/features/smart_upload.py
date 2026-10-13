@@ -1059,8 +1059,6 @@ if HANDLER_BASE_AVAILABLE:
     class SmartUploadHandler(BaseHandler):
         """HTTP handler for smart file uploads."""
 
-        HANDLE_POST_JSON_BODY = True
-
         ROUTES = [
             "/api/v1/upload/smart",
             "/api/v1/upload/batch",
@@ -1209,15 +1207,9 @@ if HANDLER_BASE_AVAILABLE:
             """Handle batch upload."""
             import base64
 
-            from .documents_batch import MAX_BATCH_SIZE
-
             files = body.get("files", [])
             if not files:
                 return error_response("No files provided", 400)
-            if len(files) > MAX_BATCH_SIZE:
-                return error_response(
-                    f"At most {MAX_BATCH_SIZE} files per batch", 400, code="too_many_files"
-                )
 
             org_id = await self._verified_org_id(handler)
             results = []

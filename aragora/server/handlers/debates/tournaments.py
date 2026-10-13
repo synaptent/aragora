@@ -66,8 +66,6 @@ class TournamentHandler(BaseHandler):
         """Initialize handler with optional context."""
         self.ctx = ctx or {}
 
-    HANDLE_POST_JSON_BODY = True
-
     ROUTES = [
         "/api/tournaments",
         "/api/tournaments/*",
