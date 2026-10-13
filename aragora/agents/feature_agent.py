@@ -206,7 +206,7 @@ class FeatureDevelopmentAgent:
         """Lazy load test generator."""
         if self._test_generator is None:
             try:
-                from aragora.nomic.test_generator import TestGenerator
+                from aragora.agents.spec_test_generator import TestGenerator
 
                 self._test_generator = TestGenerator()
             except ImportError:
@@ -218,7 +218,7 @@ class FeatureDevelopmentAgent:
         """Lazy load approval workflow."""
         if self._approval_workflow is None:
             try:
-                from aragora.nomic.approval import ApprovalWorkflow
+                from aragora.agents.change_approval import ApprovalWorkflow
 
                 self._approval_workflow = ApprovalWorkflow()
             except ImportError:
@@ -528,7 +528,7 @@ class FeatureDevelopmentAgent:
             self._log("Approval workflow not available")
             return
 
-        from aragora.nomic.approval import FileChange
+        from aragora.agents.change_approval import FileChange
 
         # Create file changes for approval
         changes = []

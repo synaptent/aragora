@@ -8,6 +8,9 @@ The events layer cannot import the control plane, so the fallback dispatcher
 is supplied by registration: ``aragora.control_plane`` registers its default
 notification dispatcher through
 :func:`register_default_task_event_dispatcher_provider` when it is imported.
+A caller that wants that fallback in a process that never imports the control
+plane runs :func:`load_declared_task_event_dispatcher_providers`, which runs the
+registrations declared under the ``aragora.task_event_dispatchers`` entry point.
 
 Usage:
     from aragora.events.task_events import (
@@ -32,8 +35,11 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from aragora.events.notification_types import NotificationEventType, NotificationPriority
+from aragora.utils.declared_registrations import DeclaredRegistrations
 
 logger = logging.getLogger(__name__)
+
+TASK_EVENT_DISPATCHERS_ENTRY_POINT_GROUP = "aragora.task_event_dispatchers"
 
 
 class TaskEventDispatcher(Protocol):
@@ -97,6 +103,7 @@ class TaskEvent:
 
 _dispatcher: TaskEventDispatcher | None = None
 _default_dispatcher_provider: TaskEventDispatcherProvider | None = None
+_declared_registrations = DeclaredRegistrations(TASK_EVENT_DISPATCHERS_ENTRY_POINT_GROUP)
 
 
 def set_task_event_dispatcher(dispatcher: TaskEventDispatcher) -> None:
@@ -131,6 +138,20 @@ def register_default_task_event_dispatcher_provider(
 def registered_count() -> int:
     """Return how many default dispatcher providers are registered (0 or 1)."""
     return 0 if _default_dispatcher_provider is None else 1
+
+
+def load_declared_task_event_dispatcher_providers() -> int:
+    """Run the default dispatcher registrations declared under the entry-point group.
+
+    The declared registrations run at most once per process; lookups do not run
+    them, so a process only gets the fallback when a caller asks for it here.
+
+    Returns:
+        How many default dispatcher providers are registered afterwards (0 or 1).
+    """
+    if _default_dispatcher_provider is None:
+        _declared_registrations.load()
+    return registered_count()
 
 
 def get_task_event_dispatcher() -> TaskEventDispatcher | None:
@@ -512,6 +533,7 @@ __all__ = [
     "TaskEventDispatcher",
     "TaskEventDispatcherNotRegisteredError",
     "TaskEventDispatcherProvider",
+    "load_declared_task_event_dispatcher_providers",
     "register_default_task_event_dispatcher_provider",
     "registered_count",
     "resolve_task_event_dispatcher",

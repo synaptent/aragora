@@ -131,7 +131,7 @@ in HTML templating frameworks.
 
 **Status:** Accepted -- intentional.
 
-`aragora/extensions/gastown/hooks.py:251` sets `0o755` on git hook scripts, which is the
+`aragora/worktree/hook_runner.py:290` sets `0o755` on git hook scripts, which is the
 standard permission for executable scripts.
 
 ### LOW Severity (567 findings)

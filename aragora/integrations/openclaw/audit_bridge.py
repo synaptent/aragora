@@ -66,7 +66,7 @@ class OpenClawAuditBridge:
     Example:
     ```python
     from aragora.integrations.openclaw import OpenClawAuditBridge
-    from aragora.gateway.openclaw_proxy import OpenClawSecureProxy
+    from aragora.compat.openclaw_proxy import OpenClawSecureProxy
     from aragora.knowledge.mound.core import KnowledgeMound
 
     # Create bridge

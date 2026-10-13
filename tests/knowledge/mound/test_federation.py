@@ -554,7 +554,7 @@ class TestCoordinatorRegistration:
             mode=FederationMode.PULL,
         )
 
-        with patch.dict(sys.modules, {"aragora.coordination.cross_workspace": fake_module}):
+        with patch.dict(sys.modules, {"aragora.tenancy.cross_workspace": fake_module}):
             await mound._register_with_coordinator(region)
 
         workspace = register_workspace.call_args.args[0]
@@ -574,7 +574,7 @@ class TestCoordinatorRegistration:
         region.mode = "unsupported-mode"  # type: ignore[assignment]
 
         with (
-            patch.dict(sys.modules, {"aragora.coordination.cross_workspace": fake_module}),
+            patch.dict(sys.modules, {"aragora.tenancy.cross_workspace": fake_module}),
             patch("aragora.knowledge.mound.ops.federation.logger.warning") as warning,
         ):
             await mound._register_with_coordinator(region)

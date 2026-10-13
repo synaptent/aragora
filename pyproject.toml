@@ -192,9 +192,57 @@ analytics = "aragora.analytics.debate_events:subscribe_debate_analytics"
 [project.entry-points."aragora.workspace_stores"]
 stores = "aragora.stores.debate_registration:register_debate_workspace_stores"
 
+# Run by aragora/debate/template_registry_hooks.py on the first template lookup that
+# finds no registry factory, so team selection reads marketplace templates without
+# importing aragora.marketplace.
+[project.entry-points."aragora.debate_template_registries"]
+marketplace = "aragora.marketplace.debate_registration:register_debate_template_registry"
+
+# Run by aragora/agents/scheduler_protocol.py on the first distributed adapter that finds
+# no scheduler registered, so a process that only imports aragora.agents still builds
+# the control plane's task scheduler.
+[project.entry-points."aragora.distributed_schedulers"]
+control_plane = "aragora.control_plane.scheduler_registration:register_distributed_scheduler"
+
+# Run by aragora/debate/extensions.py, through aragora/events/task_events.py, before a
+# debate notification with no configured dispatcher, so a process that only runs debates
+# still falls back to the control plane's default notification dispatcher.
+[project.entry-points."aragora.task_event_dispatchers"]
+control_plane = "aragora.control_plane.event_registry:register_task_event_dispatcher"
+
+# Run by aragora/rbac/security_notifier.py the first time break-glass access needs to
+# alert the security team and nothing registered a sender, so a process that only
+# imports aragora.rbac still notifies through the control plane.
+[project.entry-points."aragora.security_notifiers"]
+control_plane = "aragora.control_plane.security_registration:register_rbac_security_notifier"
+
 # Lets aragora/tenancy/record_scope.py reach the server without importing it.
 [project.entry-points."aragora.tenancy_bindings"]
 server = "aragora.server.tenancy_bindings:register_tenancy_bindings"
+
+# Run by aragora/events/approval_requests.py on the first approval request that finds
+# no notifier, so workflows, pipelines and computer use still reach the chat approval
+# notifier without importing aragora.approvals.
+[project.entry-points."aragora.approval_notifiers"]
+approvals = "aragora.approvals.notifier_registration:register_chat_approval_notifier"
+
+# Run by aragora/stores/gateway_store_hook.py on the first canonical gateway store lookup
+# that finds no factory, so aragora.stores builds the gateway store without importing
+# aragora.gateway.
+[project.entry-points."aragora.gateway_stores"]
+gateway = "aragora.gateway.store_registration:register_canonical_gateway_store"
+
+# Run by aragora/events/chat_connectors.py on the first chat connector lookup that finds
+# none registered, so pipeline progress reaches chat channels without importing
+# aragora.connectors.
+[project.entry-points."aragora.chat_connector_lookups"]
+chat = "aragora.connectors.chat.lookup_registration:register_chat_connector_lookup_from_registry"
+
+# Run by aragora/debate/decision_plan_bridges.py on the first post-debate bridge lookup
+# that finds no factory, so the debate engine routes decision plans to Jira, Linear or n8n
+# without importing aragora.integrations.
+[project.entry-points."aragora.decision_plan_bridges"]
+integrations = "aragora.integrations.decision_bridge_registration:register_decision_bridge"
 
 # -----------------------------------------------------------------------------
 # uv resolver constraints — security floors for the pip-audit security gate
@@ -281,7 +329,7 @@ ignore = ["E402", "E501", "E731", "E741", "E712", "C401", "C405", "C408", "C416"
 "aragora/training/tinker_client.py" = ["T201", "BLE001"]
 "aragora/debate/breakpoints.py" = ["T201", "BLE001"]
 "aragora/nomic/gates.py" = ["T201", "BLE001"]
-"aragora/nomic/approval.py" = ["T201", "BLE001"]
+"aragora/agents/change_approval.py" = ["T201", "BLE001"]
 "aragora/nomic/scope_guard.py" = ["T201", "BLE001"]
 "aragora/server/__main__.py" = ["T201", "BLE001"]
 "aragora/server/startup/health_check.py" = ["T201", "BLE001"]
@@ -457,7 +505,7 @@ ignore = ["E402", "E501", "E731", "E741", "E712", "C401", "C405", "C408", "C416"
 "aragora/storage/*.py" = ["BLE001", "G004"]
 "aragora/connectors/blockchain/connector.py" = ["BLE001", "G004"]
 "aragora/connectors/enterprise/database/*.py" = ["BLE001", "G004"]
-"aragora/connectors/supermemory/*.py" = ["BLE001", "G004"]
+"aragora/memory/supermemory/*.py" = ["BLE001", "G004"]
 "aragora/knowledge/mound/api/*.py" = ["BLE001", "G004"]
 "aragora/knowledge/mound/core.py" = ["BLE001", "G004"]
 "aragora/knowledge/mound/checkpoint.py" = ["BLE001", "G004"]

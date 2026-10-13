@@ -25,7 +25,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from aragora.connectors.supermemory import SupermemoryClient, SupermemoryConfig
+    from aragora.memory.supermemory import SupermemoryClient, SupermemoryConfig
     from aragora.debate import DebateResult
 
 from aragora.knowledge.mound.adapters._base import (
@@ -90,7 +90,7 @@ class SupermemoryAdapter(SemanticSearchMixin, KnowledgeMoundAdapter):
     - get_cross_session_insights: Retrieve patterns from past sessions
 
     Usage:
-        from aragora.connectors.supermemory import SupermemoryConfig, SupermemoryClient
+        from aragora.memory.supermemory import SupermemoryConfig, SupermemoryClient
         from aragora.knowledge.mound.adapters import SupermemoryAdapter
 
         config = SupermemoryConfig.from_env()
@@ -151,7 +151,7 @@ class SupermemoryAdapter(SemanticSearchMixin, KnowledgeMoundAdapter):
             return None
 
         try:
-            from aragora.connectors.supermemory import SupermemoryClient, get_client
+            from aragora.memory.supermemory import SupermemoryClient, get_client
 
             # Try to get from singleton or create new
             if self._config is not None:
@@ -176,7 +176,7 @@ class SupermemoryAdapter(SemanticSearchMixin, KnowledgeMoundAdapter):
             return None
 
         try:
-            from aragora.connectors.supermemory import PrivacyFilter
+            from aragora.memory.supermemory import PrivacyFilter
 
             self._privacy_filter = PrivacyFilter()
             return self._privacy_filter
