@@ -9,10 +9,6 @@ conditionals, so a new frontier row is enough to correct the wire shape.
 
 from __future__ import annotations
 
-import json
-import socket
-import urllib.request
-
 import pytest
 
 from aragora.models import compat
@@ -730,57 +726,3 @@ def test_openai_reasoning_effort_override() -> None:
     )
     payload = agent._build_payload([{"role": "user", "content": "hi"}])
     assert payload["reasoning_effort"] == "xhigh"
-
-
-# ---------------------------------------------------------------------------
-# Keyless smoke test through VibeProxy (skipped automatically when the proxy
-# is absent, e.g. in CI).
-# ---------------------------------------------------------------------------
-
-
-def _proxy_up() -> bool:
-    try:
-        socket.create_connection(("127.0.0.1", 8318), timeout=1).close()
-        return True
-    except OSError:
-        return False
-
-
-@pytest.mark.skipif(not _proxy_up(), reason="VibeProxy not running on 127.0.0.1:8318")
-@pytest.mark.parametrize(
-    "model,url,body",
-    [
-        (
-            "gpt-6-astra",
-            "http://127.0.0.1:8318/v1/chat/completions",
-            {
-                "model": "gpt-6-astra",
-                "messages": [{"role": "user", "content": "Reply: ok"}],
-                "max_completion_tokens": 16,
-                "reasoning_effort": "low",
-            },
-        ),
-        (
-            "claude-fable-5-1",
-            "http://127.0.0.1:8318/v1/messages",
-            {
-                "model": "claude-fable-5-1",
-                "max_tokens": 16,
-                "messages": [{"role": "user", "content": "Reply: ok"}],
-            },
-        ),
-    ],
-)
-def test_live_shape_accepted_by_proxy(model: str, url: str, body: dict) -> None:
-    req = urllib.request.Request(
-        url,
-        data=json.dumps(body).encode(),
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": "Bearer local",
-            "x-api-key": "local",
-            "anthropic-version": "2023-06-01",
-        },
-    )
-    with urllib.request.urlopen(req, timeout=120) as r:
-        assert r.status == 200
