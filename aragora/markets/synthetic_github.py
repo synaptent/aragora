@@ -1,7 +1,8 @@
 """Synthetic GitHub prediction market connector (AGT-04, issue #6065).
 
-Thin facade over :mod:`aragora.markets` in the same connector namespace
-as the external-venue adapters. Gated behind ``ARAGORA_SYNTHETIC_MARKETS_ENABLED``.
+Thin facade over the other :mod:`aragora.markets` modules;
+:mod:`aragora.connectors.prediction_markets` re-exports it next to the
+external-venue adapters. Gated behind ``ARAGORA_SYNTHETIC_MARKETS_ENABLED``.
 
 Out of scope: periodic scheduling, credit bookkeeping, per-agent Brier (AGT-05).
 """

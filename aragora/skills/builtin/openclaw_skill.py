@@ -157,8 +157,8 @@ class OpenClawSkill(Skill):
         if self._proxy is not None:
             return self._proxy
 
-        from aragora.gateway.openclaw_policy import create_enterprise_policy
-        from aragora.gateway.openclaw_proxy import OpenClawSecureProxy
+        from aragora.compat.openclaw_policy import create_enterprise_policy
+        from aragora.compat.openclaw_proxy import OpenClawSecureProxy
 
         self._proxy = OpenClawSecureProxy(policy=create_enterprise_policy())
         return self._proxy

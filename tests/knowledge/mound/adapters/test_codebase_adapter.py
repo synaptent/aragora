@@ -227,13 +227,13 @@ class TestCrawlAndSync:
     @pytest.mark.asyncio
     async def test_crawl_and_sync_import_guard(self, adapter, mock_mound):
         """Verify crawl_and_sync returns 0 when RepositoryCrawler is unavailable."""
-        with patch.dict("sys.modules", {"aragora.connectors.repository_crawler": None}):
+        with patch.dict("sys.modules", {"aragora.analysis.codebase.repository_crawler": None}):
             count = await adapter.crawl_and_sync("/some/path")
             assert count == 0
 
     @pytest.mark.asyncio
     async def test_crawl_and_sync_import_error(self, adapter):
-        with patch.dict("sys.modules", {"aragora.connectors.repository_crawler": None}):
+        with patch.dict("sys.modules", {"aragora.analysis.codebase.repository_crawler": None}):
             count = await adapter.crawl_and_sync("/some/path")
             assert count == 0
 

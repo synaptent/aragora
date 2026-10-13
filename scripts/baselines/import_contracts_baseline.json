@@ -1,8 +1,8 @@
 {
   "_comment": "Shrink-only baseline of import-linter layer-contract violations (fail-on-new). Frozen from origin/main by scripts/ci/check_import_contracts.py --freeze. New violations fail the checker; this baseline may only shrink. Layer membership was cross-checked against aragora/module_tiers.yaml (see .importlinter).",
   "config": ".importlinter",
-  "frozen_from_ref": "f754e076ca9b1c8a96cd23ba3635957e254cf713",
-  "frozen_at": "2026-10-12T23:19:23Z",
+  "frozen_from_ref": "7d461a3733ca90c14a020f1e605f8034f0038e01",
+  "frozen_at": "2026-10-13T00:34:24Z",
   "layers": [
     "interface",
     "application",
@@ -45,14 +45,11 @@
         "aragora.knowledge -> aragora.coordination",
         "aragora.knowledge -> aragora.integrations",
         "aragora.knowledge -> aragora.server",
-        "aragora.markets -> aragora.connectors",
         "aragora.memory -> aragora.connectors",
         "aragora.memory -> aragora.nomic",
         "aragora.modes -> aragora.server",
-        "aragora.nomic -> aragora.connectors",
         "aragora.nomic -> aragora.server",
         "aragora.notifications -> aragora.server",
-        "aragora.ops -> aragora.gateway",
         "aragora.ops -> aragora.server",
         "aragora.pipeline -> aragora.connectors",
         "aragora.pipeline -> aragora.server",
@@ -65,14 +62,12 @@
         "aragora.services -> aragora.connectors",
         "aragora.services -> aragora.integrations",
         "aragora.services -> aragora.server",
-        "aragora.skills -> aragora.gateway",
         "aragora.skills -> aragora.server",
         "aragora.stores -> aragora.gateway",
         "aragora.swarm -> aragora.cli",
         "aragora.swarm -> aragora.connectors",
         "aragora.verticals -> aragora.connectors",
-        "aragora.workflow -> aragora.connectors",
-        "aragora.workflow -> aragora.gateway"
+        "aragora.workflow -> aragora.connectors"
       ]
     }
   }
