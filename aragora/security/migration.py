@@ -267,25 +267,40 @@ class EncryptionMigrator:
 
 _INTEGRATION_RECORD_ID_FIELD = "__integration_record_id__"
 
+# Integration backends cap list_all() at 1000 rows unless given a limit and
+# cannot page, so they are asked for one row past this bound to detect a store
+# too large to process in a single pass.
+_INTEGRATION_LIST_LIMIT = 1_000_000
+
 
 class _StoreListingError(RuntimeError):
     """A store could not list its records; the cause is logged, never reported."""
 
 
-def _list_store_records(store: Any, store_name: str) -> list[Any]:
+def _list_store_records(store: Any, store_name: str, limit: int | None = None) -> list[Any]:
     """Await ``store.list_all()``, turning every non-import failure into a listing error.
 
-    ImportError propagates so callers keep their optional-dependency handling.
+    With ``limit``, a store holding more than ``limit`` records is a listing
+    error rather than a silently partial list. ImportError propagates so
+    callers keep their optional-dependency handling.
     """
     from aragora.utils.async_utils import run_async
 
     try:
-        return list(run_async(store.list_all()))
+        if limit is None:
+            records = list(run_async(store.list_all()))
+        else:
+            records = list(run_async(store.list_all(limit=limit + 1)))
     except ImportError:
         raise
     except Exception as e:  # noqa: BLE001 - driver errors (sqlite3, asyncpg) are not builtins
-        logger.error("Listing records failed for %s: %s", store_name, e)
+        # Driver messages can carry DSNs or file paths, so only the type is logged.
+        logger.error("Listing records failed for %s: %s", store_name, type(e).__name__)
         raise _StoreListingError(f"Listing records failed for {store_name}") from e
+    if limit is not None and len(records) > limit:
+        logger.error("Listing records for %s exceeded the %d-record bound", store_name, limit)
+        raise _StoreListingError(f"Listing records exceeded the bound for {store_name}")
+    return records
 
 
 def _finish_migration(result: MigrationResult) -> MigrationResult:
@@ -346,7 +361,7 @@ def migrate_integration_store(dry_run: bool = False) -> MigrationResult:
         ]
 
         try:
-            configs = _list_store_records(store, result.store_name)
+            configs = _list_store_records(store, result.store_name, limit=_INTEGRATION_LIST_LIMIT)
         except _StoreListingError:
             return _listing_failed(result)
         result.total_records = len(configs)
@@ -443,7 +458,7 @@ def migrate_gmail_token_store(dry_run: bool = False) -> MigrationResult:
             ) as e:
                 result.failed_records += 1
                 result.errors.append(f"Error migrating record: {user_id}")
-                logger.warning("Failed to migrate record %s: %s", user_id, e)
+                logger.warning("Failed to migrate record %s: %s", user_id, type(e).__name__)
 
         return _finish_migration(result)
     except ImportError as e:
@@ -1053,7 +1068,7 @@ def _get_integration_store_config() -> dict[str, Any] | None:
         configs_by_id: dict[str, Any] = {}
 
         def list_configs() -> list[dict[str, Any]]:
-            configs = _list_store_records(store, "integration_store")
+            configs = _list_store_records(store, "integration_store", limit=_INTEGRATION_LIST_LIMIT)
             configs_by_id.clear()
             records: list[dict[str, Any]] = []
             for config in configs:

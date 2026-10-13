@@ -289,6 +289,27 @@ def _foreign_ciphertext(plaintext: str, user_id: str) -> str:
     return foreign.encrypt(plaintext, associated_data=user_id).to_base64()
 
 
+def _insert_raw_integration_rows(store: Any, count: int) -> None:
+    """Insert rows with plaintext settings, as written before settings were encrypted."""
+    with closing(sqlite3.connect(store.db_path)) as conn:
+        conn.executemany(
+            "INSERT INTO integrations "
+            "(integration_type, user_id, created_at, updated_at, settings_json) "
+            "VALUES (?, ?, 0, 0, ?)",
+            [
+                ("slack", f"user-{index}", json.dumps({"api_key": f"plain-key-{index}"}))
+                for index in range(count)
+            ],
+        )
+        conn.commit()
+
+
+def _raw_integration_settings(store: Any) -> dict[str, Any]:
+    with closing(sqlite3.connect(store.db_path)) as conn:
+        rows = conn.execute("SELECT user_id, settings_json FROM integrations")
+        return {row[0]: json.loads(row[1]) for row in rows}
+
+
 class TestMigrationResult:
     """Tests for MigrationResult dataclass."""
 
@@ -711,15 +732,15 @@ class TestStoreMigrations:
             sqlite3.OperationalError("unable to open /data/secret-value/gmail_tokens.db"),
         ],
     )
-    def test_migrate_gmail_token_store_list_failure_fails_closed(self, error):
+    def test_migrate_gmail_token_store_list_failure_fails_closed(self, error, caplog):
         """A configured Gmail store that cannot list its records is a failed migration."""
         store = MagicMock()
         store.list_all = AsyncMock(side_effect=error)
         store.save = AsyncMock(return_value=None)
 
-        with patch(
-            "aragora.storage.gmail_token_store.get_gmail_token_store",
-            return_value=store,
+        with (
+            patch("aragora.storage.gmail_token_store.get_gmail_token_store", return_value=store),
+            caplog.at_level(logging.ERROR, logger="aragora.security.migration"),
         ):
             result = migrate_gmail_token_store(dry_run=False)
 
@@ -727,7 +748,8 @@ class TestStoreMigrations:
         assert result.failed_records == 1
         assert result.success is False
         assert result.errors == ["Migration failed due to an internal error"]
-        assert "secret-value" not in " ".join(result.errors)
+        assert type(error).__name__ in caplog.text
+        assert "secret-value" not in " ".join(result.errors) + caplog.text
         store.list_all.assert_awaited_once()
         store.save.assert_not_awaited()
 
@@ -739,15 +761,15 @@ class TestStoreMigrations:
             sqlite3.OperationalError("unable to open /data/secret-value/integrations.db"),
         ],
     )
-    def test_migrate_integration_store_list_failure_fails_closed(self, error):
+    def test_migrate_integration_store_list_failure_fails_closed(self, error, caplog):
         """A listing error is a sanitized failed result, not an escaping exception."""
         store = MagicMock()
         store.list_all = AsyncMock(side_effect=error)
         store.save = AsyncMock(return_value=None)
 
-        with patch(
-            "aragora.storage.integration_store.get_integration_store",
-            return_value=store,
+        with (
+            patch("aragora.storage.integration_store.get_integration_store", return_value=store),
+            caplog.at_level(logging.ERROR, logger="aragora.security.migration"),
         ):
             result = migrate_integration_store(dry_run=False)
 
@@ -755,7 +777,8 @@ class TestStoreMigrations:
         assert result.failed_records == 1
         assert result.success is False
         assert result.errors == ["Migration failed due to an internal error"]
-        assert "secret-value" not in " ".join(result.errors)
+        assert type(error).__name__ in caplog.text
+        assert "secret-value" not in " ".join(result.errors) + caplog.text
         store.list_all.assert_awaited_once()
         store.save.assert_not_awaited()
 
@@ -799,6 +822,33 @@ class TestStoreMigrations:
         assert "Failed: 1" in output
         assert "secret-value" not in output
         store.save.assert_not_awaited()
+
+    def test_migrate_integration_store_lists_past_backend_default_limit(
+        self, integration_sqlite_store
+    ):
+        """Integration backends cap list_all() at 1000 rows unless asked for more."""
+        _insert_raw_integration_rows(integration_sqlite_store, 1001)
+
+        result = migrate_integration_store(dry_run=True)
+
+        assert result.errors == []
+        assert result.total_records == 1001
+        assert result.migrated_records == 1001
+
+    def test_migrate_integration_store_fails_closed_when_listing_is_truncated(
+        self, integration_sqlite_store
+    ):
+        _insert_raw_integration_rows(integration_sqlite_store, 3)
+        before = _raw_integration_settings(integration_sqlite_store)
+
+        with patch.object(migration_module, "_INTEGRATION_LIST_LIMIT", 2):
+            result = migrate_integration_store(dry_run=False)
+
+        assert result.success is False
+        assert result.failed_records == 1
+        assert result.migrated_records == 0
+        assert result.errors == ["Migration failed due to an internal error"]
+        assert _raw_integration_settings(integration_sqlite_store) == before
 
 
 class TestGmailTokenMigration:
@@ -865,6 +915,21 @@ class TestGmailTokenMigration:
         assert result.failed_records == 1
         assert result.errors == ["Error migrating record: user-foreign"]
         assert _raw_gmail_tokens(gmail_sqlite_store)["user-foreign"] == (foreign, "")
+
+    def test_save_failure_log_omits_exception_text(self, gmail_sqlite_store, caplog):
+        _save_gmail_state(gmail_sqlite_store, "user-1", "ya29.access", "1//refresh")
+        save_error = sqlite3.OperationalError("unable to open /data/secret-value/gmail_tokens.db")
+
+        with (
+            patch.object(gmail_sqlite_store, "save", AsyncMock(side_effect=save_error)),
+            caplog.at_level(logging.DEBUG, logger="aragora.security.migration"),
+        ):
+            result = migrate_gmail_token_store(dry_run=False)
+
+        assert result.failed_records == 1
+        assert result.errors == ["Error migrating record: user-1"]
+        assert "OperationalError" in caplog.text
+        assert "secret-value" not in caplog.text
 
     def test_migrate_sync_store_empty(self, sync_backend):
         """Test migration with empty sync store."""
@@ -1471,6 +1536,35 @@ class TestRotationReencryptsRealStores:
         assert _key_version(stored["bot_token"]["_value"]) == 2
         (listed,) = asyncio.run(integration_sqlite_store.list_all())
         assert listed.settings == {"bot_token": "xoxb-secret", "channel": "#ops"}
+
+    def test_integration_rotation_reencrypts_past_backend_default_limit(
+        self, integration_sqlite_store, throwaway_encryption
+    ):
+        _insert_raw_integration_rows(integration_sqlite_store, 1001)
+
+        result = rotate_encryption_key(dry_run=False, stores=["integration"])
+
+        assert result.errors == []
+        assert result.success is True
+        assert result.records_reencrypted == 1001
+        raw = _raw_integration_settings(integration_sqlite_store)
+        assert len(raw) == 1001
+        assert {_key_version(settings["api_key"]["_value"]) for settings in raw.values()} == {2}
+
+    def test_integration_rotation_fails_closed_when_listing_is_truncated(
+        self, integration_sqlite_store, throwaway_encryption
+    ):
+        _insert_raw_integration_rows(integration_sqlite_store, 3)
+        before = _raw_integration_settings(integration_sqlite_store)
+
+        with patch.object(migration_module, "_INTEGRATION_LIST_LIMIT", 2):
+            result = rotate_encryption_key(dry_run=False, stores=["integration"])
+
+        assert result.success is False
+        assert result.failed_records >= 1
+        assert result.records_reencrypted == 0
+        assert result.errors == ["Re-encryption failed due to an internal error"]
+        assert _raw_integration_settings(integration_sqlite_store) == before
 
 
 class TestMigrationAuditComposition:
