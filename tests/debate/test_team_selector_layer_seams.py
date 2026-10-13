@@ -167,8 +167,6 @@ def test_an_injected_registry_skips_the_hook(isolated_hook):
 
 
 def test_pyproject_declares_the_marketplace_registration():
-    if sys.version_info < (3, 11):
-        pytest.importorskip("tomli")
     declared = DeclaredRegistrations(
         hooks.TEMPLATE_REGISTRIES_ENTRY_POINT_GROUP
     )._source_declarations()
@@ -259,8 +257,6 @@ def test_importing_the_marketplace_does_not_load_the_debate_engine(tmp_path):
 
 
 def test_a_debate_only_process_reaches_the_marketplace_templates(tmp_path):
-    if sys.version_info < (3, 11):
-        pytest.importorskip("tomli")
     result = _run(
         "import sys\n"
         "from aragora.debate.team_selector import TeamSelector\n"
