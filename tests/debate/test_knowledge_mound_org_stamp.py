@@ -155,7 +155,10 @@ class TestArenaDelegate:
 
 class TestRealSqliteMound:
     @pytest.mark.asyncio
-    async def test_org_filtered_read_returns_only_the_matching_stamp(self, tmp_path, monkeypatch):
+    async def test_stamp_persists_through_real_mound_for_inline_org_filter(
+        self, tmp_path, monkeypatch
+    ):
+        """Org filter is inline; main's query_with_visibility is deliberately unchanged."""
         from aragora.knowledge.mound import KnowledgeMound, MoundBackend, MoundConfig
         from aragora.knowledge.mound.semantic_store import EmbeddingProvider, SemanticStore
 

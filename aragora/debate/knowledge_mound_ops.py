@@ -25,7 +25,9 @@ logger = logging.getLogger(__name__)
 # Type alias for notification callback
 NotifyCallback = Callable[[str, Any], None]
 
-# Metadata key compared by organization-filtered Knowledge Mound reads.
+# Metadata key compared by reads that filter on the organization stamp. It does
+# not set a visibility level; workspace-visible items ignore it in
+# _filter_by_visibility.
 MOUND_ORG_KEY = "org_id"
 
 
@@ -164,9 +166,10 @@ class KnowledgeMoundOperations:
         Args:
             result: The debate result to ingest
             env: The debate environment with task details
-            org_id: Authenticated organization that started the debate. Without
-                a non-empty value the outcome stays unstamped, so
-                organization-filtered reads never return it.
+            org_id: Authenticated organization that started the debate, stored
+                under MOUND_ORG_KEY. Reads that filter on that key return the
+                outcome only to this organization and never return an
+                unstamped one. The visibility level is unchanged.
         """
         if not self.knowledge_mound or not self.enable_ingestion:
             return

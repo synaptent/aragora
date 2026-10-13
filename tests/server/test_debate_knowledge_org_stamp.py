@@ -80,7 +80,10 @@ class TestDebateController:
         request.org_id = org_id
         executor = Mock()
 
-        with patch.object(controller, "_get_executor", return_value=executor):
+        with (
+            patch.object(controller, "_get_executor", return_value=executor),
+            patch.object(controller, "_quick_classify", return_value=None),
+        ):
             assert controller.start_debate(request).success is True
 
         config = executor.submit.call_args.args[1]
