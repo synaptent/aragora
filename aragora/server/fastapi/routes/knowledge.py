@@ -22,6 +22,13 @@ Migration Notes:
     - FastAPI dependency injection for auth and storage
     - Proper HTTP status codes (422 for validation, 404 for not found)
     - OpenAPI schema auto-generation
+
+Access: reads require ``knowledge:read`` and writes ``knowledge:write``. Every route
+also requires the caller's organization (403 ``knowledge_org_required`` without one).
+Mound items are returned only when ``metadata["org_id"]`` equals the caller's
+organization; unstamped items are withheld. Writes are stamped with the caller's
+organization, never one taken from the request body. Counts (stats, staleness
+totals, gap counts) remain Mound-wide aggregates.
 """
 
 from __future__ import annotations
@@ -29,6 +36,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
+from enum import Enum
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -37,11 +45,16 @@ from pydantic import BaseModel, Field
 from aragora.rbac.models import AuthorizationContext
 
 from ..dependencies.auth import require_permission
-from ..middleware.error_handling import NotFoundError
+from ..middleware.error_handling import APIError, NotFoundError
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v2", tags=["Knowledge"])
+
+MOUND_ORG_KEY = "org_id"
+# Candidates read per search before the org filter; reads never page with offset
+# because Mound.query re-ranks every read and applies the offset after ranking.
+_ORG_READ_WINDOW = 100
 
 
 # =============================================================================
@@ -263,6 +276,79 @@ async def _call_km_method(km: Any, method_name: str, *args: Any, **kwargs: Any) 
 # =============================================================================
 
 
+def _caller_org(auth: AuthorizationContext) -> str:
+    """The organization every Mound read and write is confined to (verified auth only)."""
+    if not auth.org_id:
+        raise APIError(
+            "Knowledge Mound access requires an organization",
+            status_code=403,
+            code="knowledge_org_required",
+        )
+    return auth.org_id
+
+
+def _item_org(entry: Any) -> str | None:
+    """The org stamp of a Mound item, an ``(item, score)`` pair, or None when unstamped."""
+    if isinstance(entry, tuple) and len(entry) == 2:
+        entry = entry[0]
+    metadata = (
+        entry.get("metadata") if isinstance(entry, dict) else getattr(entry, "metadata", None)
+    )
+    org_id = metadata.get(MOUND_ORG_KEY) if isinstance(metadata, dict) else None
+    return org_id if isinstance(org_id, str) and org_id else None
+
+
+def _for_org(entries: Any, org_id: str) -> list[Any]:
+    """Entries stamped with ``org_id``; unstamped and other-org entries are withheld."""
+    kept = [entry for entry in entries or [] if _item_org(entry) == org_id]
+    if len(kept) < len(entries or []):
+        logger.debug("Withheld %d Mound entries outside the caller's org", len(entries) - len(kept))
+    return kept
+
+
+def _result_entries(results: Any) -> list[Any]:
+    """Stock ``KnowledgeMound.query`` returns a ``QueryResult``; other backends a list."""
+    entries = getattr(results, "items", results)
+    return list(entries) if isinstance(entries, (list, tuple)) else []
+
+
+async def _search_for_org(
+    km: Any, methods: tuple[str, str], query: str, org_id: str, **filters: Any
+) -> list[KnowledgeItemSummary]:
+    """Run the first available search method and keep only the caller's org items."""
+    method = next((name for name in methods if hasattr(km, name)), None)
+    if method is None:
+        return []
+    results = await _call_km_method(km, method, query, limit=_ORG_READ_WINDOW, **filters)
+    summaries: list[KnowledgeItemSummary] = []
+    for result in _for_org(_result_entries(results), org_id):
+        if isinstance(result, tuple) and len(result) == 2:
+            item, score = result
+            summaries.append(_item_to_summary(item, relevance=float(score)))
+        else:
+            summaries.append(_item_to_summary(result))
+    return summaries
+
+
+async def _get_for_org(km: Any, item_id: str, org_id: str) -> Any:
+    """The item when it carries the caller's org stamp; 404 otherwise, as if absent."""
+    item = None
+    for method in ("get", "get_item", "get_by_id"):
+        if hasattr(km, method):
+            item = await _call_km_method(km, method, item_id)
+            break
+    if not item or _item_org(item) != org_id:
+        raise NotFoundError(f"Knowledge item {item_id} not found")
+    return item
+
+
+def _plain(value: Any) -> Any:
+    """Stock Mound items carry ``KnowledgeSource``/``ConfidenceLevel`` enums."""
+    if isinstance(value, Enum):
+        return value.to_float() if hasattr(value, "to_float") else value.value
+    return value
+
+
 def _item_to_summary(item: Any, relevance: float = 0.0) -> KnowledgeItemSummary:
     """Convert a knowledge item to a summary."""
     if isinstance(item, dict):
@@ -280,8 +366,8 @@ def _item_to_summary(item: Any, relevance: float = 0.0) -> KnowledgeItemSummary:
         id=getattr(item, "id", getattr(item, "item_id", "")),
         title=getattr(item, "title", ""),
         content_type=getattr(item, "content_type", "text"),
-        source=getattr(item, "source", ""),
-        confidence=getattr(item, "confidence", 0.0),
+        source=_plain(getattr(item, "source", "")),
+        confidence=_plain(getattr(item, "confidence", 0.0)),
         created_at=str(getattr(item, "created_at", "")) if hasattr(item, "created_at") else None,
         tags=getattr(item, "tags", []),
         relevance_score=getattr(item, "relevance_score", relevance),
@@ -310,8 +396,8 @@ def _item_to_detail(item: Any) -> KnowledgeItemDetail:
         title=getattr(item, "title", ""),
         content=getattr(item, "content", ""),
         content_type=getattr(item, "content_type", "text"),
-        source=getattr(item, "source", ""),
-        confidence=getattr(item, "confidence", 0.0),
+        source=_plain(getattr(item, "source", "")),
+        confidence=_plain(getattr(item, "confidence", 0.0)),
         created_at=str(getattr(item, "created_at", "")) if hasattr(item, "created_at") else None,
         updated_at=str(getattr(item, "updated_at", "")) if hasattr(item, "updated_at") else None,
         tags=getattr(item, "tags", []),
@@ -333,6 +419,7 @@ async def search_knowledge(
     limit: int = Query(20, ge=1, le=100, description="Max results to return"),
     content_type: str | None = Query(None, description="Filter by content type"),
     source: str | None = Query(None, description="Filter by source"),
+    auth: AuthorizationContext = Depends(require_permission("knowledge:read")),
     km=Depends(get_knowledge_mound),
 ) -> KnowledgeSearchResponse:
     """
@@ -340,35 +427,20 @@ async def search_knowledge(
 
     Returns knowledge items matching the query with relevance scoring.
     Supports filtering by content type and source.
+    Requires `knowledge:read`; returns only items stamped with the caller's org.
     """
+    org_id = _caller_org(auth)
     if not km:
         raise HTTPException(status_code=503, detail="Knowledge Mound not available")
 
     try:
-        items: list[KnowledgeItemSummary] = []
-
-        # Build search kwargs
-        search_kwargs: dict[str, Any] = {"limit": limit}
+        filters: dict[str, Any] = {}
         if content_type:
-            search_kwargs["content_type"] = content_type
+            filters["content_type"] = content_type
         if source:
-            search_kwargs["source"] = source
+            filters["source"] = source
 
-        # Try semantic search first, fall back to simple search
-        if hasattr(km, "search"):
-            results = await _call_km_method(km, "search", query, **search_kwargs)
-        elif hasattr(km, "query"):
-            results = await _call_km_method(km, "query", query, **search_kwargs)
-        else:
-            results = []
-
-        # Convert results - handle (item, score) tuples or plain items
-        for result in results:
-            if isinstance(result, tuple) and len(result) == 2:
-                item, score = result
-                items.append(_item_to_summary(item, relevance=float(score)))
-            else:
-                items.append(_item_to_summary(result))
+        items = await _search_for_org(km, ("search", "query"), query, org_id, **filters)
 
         return KnowledgeSearchResponse(
             items=items[:limit],
@@ -385,6 +457,7 @@ async def search_knowledge(
 async def search_knowledge_post(
     body: SemanticSearchRequest,
     request: Request,
+    auth: AuthorizationContext = Depends(require_permission("knowledge:read")),
     km=Depends(get_knowledge_mound),
 ) -> KnowledgeSearchResponse:
     """
@@ -399,6 +472,7 @@ async def search_knowledge_post(
         limit=body.limit,
         content_type=body.content_type,
         source=body.source,
+        auth=auth,
         km=km,
     )
 
@@ -406,6 +480,7 @@ async def search_knowledge_post(
 @router.get("/knowledge/stats", response_model=KnowledgeStatsResponse)
 async def get_knowledge_stats(
     request: Request,
+    auth: AuthorizationContext = Depends(require_permission("knowledge:read")),
     km=Depends(get_knowledge_mound),
 ) -> KnowledgeStatsResponse:
     """
@@ -414,6 +489,7 @@ async def get_knowledge_stats(
     Returns aggregate statistics about the knowledge mound including
     item counts, adapter info, and storage details.
     """
+    _caller_org(auth)
     if not km:
         return KnowledgeStatsResponse(storage_backend="not_initialized")
 
@@ -459,6 +535,7 @@ async def get_knowledge_gaps(
         90, ge=1, le=365, description="Max age in days before an item is stale"
     ),
     workspace_id: str = Query("default", description="Workspace ID"),
+    auth: AuthorizationContext = Depends(require_permission("knowledge:read")),
     km=Depends(get_knowledge_mound),
 ) -> KnowledgeGapsResponse:
     """
@@ -466,7 +543,9 @@ async def get_knowledge_gaps(
 
     Uses the KnowledgeGapDetector to analyze the knowledge mound for areas
     that need attention: missing coverage, stale entries, and contradictions.
+    Stale entries and contradictions are limited to the caller's org stamp.
     """
+    org_id = _caller_org(auth)
     if not km:
         return KnowledgeGapsResponse(
             workspace_id=workspace_id,
@@ -497,7 +576,7 @@ async def get_knowledge_gaps(
 
             stale = await detector.detect_staleness(max_age_days=max_age_days)
             stale_entries: list[StalenessItem] = []
-            for s in stale[:50]:
+            for s in _for_org(stale, org_id)[:50]:
                 s_dict = s.to_dict() if hasattr(s, "to_dict") else s
                 if isinstance(s_dict, dict):
                     stale_entries.append(
@@ -514,7 +593,7 @@ async def get_knowledge_gaps(
 
             raw_contradictions = await detector.detect_contradictions()
             contradictions: list[dict[str, Any]] = []
-            for contradiction in raw_contradictions[:50]:
+            for contradiction in _for_org(raw_contradictions, org_id)[:50]:
                 contradiction_dict = (
                     contradiction.to_dict() if hasattr(contradiction, "to_dict") else contradiction
                 )
@@ -548,30 +627,21 @@ async def get_knowledge_gaps(
 @router.get("/knowledge/items/{item_id}", response_model=KnowledgeItemDetail)
 async def get_knowledge_item(
     item_id: str,
+    auth: AuthorizationContext = Depends(require_permission("knowledge:read")),
     km=Depends(get_knowledge_mound),
 ) -> KnowledgeItemDetail:
     """
     Get knowledge item by ID.
 
     Returns full details of a specific knowledge item including content and metadata.
+    Items not stamped with the caller's org answer 404.
     """
+    org_id = _caller_org(auth)
     if not km:
         raise HTTPException(status_code=503, detail="Knowledge Mound not available")
 
     try:
-        item = None
-
-        if hasattr(km, "get"):
-            item = await _call_km_method(km, "get", item_id)
-        elif hasattr(km, "get_item"):
-            item = await _call_km_method(km, "get_item", item_id)
-        elif hasattr(km, "get_by_id"):
-            item = await _call_km_method(km, "get_by_id", item_id)
-
-        if not item:
-            raise NotFoundError(f"Knowledge item {item_id} not found")
-
-        return _item_to_detail(item)
+        return _item_to_detail(await _get_for_org(km, item_id, org_id))
 
     except NotFoundError:
         raise
@@ -590,8 +660,10 @@ async def ingest_knowledge_item(
     Ingest a new knowledge item.
 
     Adds a knowledge item to the mound for future debate context.
-    Requires `knowledge:write` permission.
+    Requires `knowledge:write` permission. The item is stamped with the
+    caller's org; an org in the body metadata is overwritten.
     """
+    org_id = _caller_org(auth)
     if not km:
         raise HTTPException(status_code=503, detail="Knowledge Mound not available")
 
@@ -599,6 +671,7 @@ async def ingest_knowledge_item(
         import uuid
 
         item_id = f"ki_{uuid.uuid4().hex[:12]}"
+        metadata = {**body.metadata, MOUND_ORG_KEY: org_id}
 
         item_data: dict[str, Any] = {
             "id": item_id,
@@ -607,7 +680,7 @@ async def ingest_knowledge_item(
             "content_type": body.content_type,
             "source": body.source,
             "tags": body.tags,
-            "metadata": body.metadata,
+            "metadata": metadata,
         }
 
         # Try to ingest via the knowledge mound API
@@ -632,7 +705,7 @@ async def ingest_knowledge_item(
                 content_type=body.content_type,
                 source=body.source,
                 tags=body.tags,
-                metadata=body.metadata,
+                metadata=metadata,
             ),
         )
 
@@ -651,9 +724,11 @@ async def ingest_knowledge_item(
 @router.get("/knowledge/adapters", response_model=AdapterListResponse)
 async def list_adapters(
     request: Request,
+    auth: AuthorizationContext = Depends(require_permission("knowledge:read")),
     km=Depends(get_knowledge_mound),
 ) -> AdapterListResponse:
     """List available Knowledge Mound adapters."""
+    _caller_org(auth)
     if not km:
         return AdapterListResponse(adapters=[], total=0)
 
@@ -692,17 +767,21 @@ async def list_adapters(
 @router.post("/knowledge/query", response_model=StructuredQueryResponse)
 async def structured_query(
     body: StructuredQueryRequest,
+    auth: AuthorizationContext = Depends(require_permission("knowledge:read")),
     km=Depends(get_knowledge_mound),
 ) -> StructuredQueryResponse:
-    """Execute a structured query against the Knowledge Mound with filters."""
+    """Execute a structured query against the Knowledge Mound with filters.
+
+    Requires `knowledge:read`; returns only items stamped with the caller's org.
+    """
+    org_id = _caller_org(auth)
     if not km:
         raise HTTPException(status_code=503, detail="Knowledge Mound not available")
 
     try:
-        items: list[KnowledgeItemSummary] = []
         filters_applied: dict[str, Any] = {}
 
-        search_kwargs: dict[str, Any] = {"limit": body.limit}
+        search_kwargs: dict[str, Any] = {}
         if body.content_type:
             search_kwargs["content_type"] = body.content_type
             filters_applied["content_type"] = body.content_type
@@ -719,20 +798,7 @@ async def structured_query(
             search_kwargs["min_confidence"] = body.min_confidence
             filters_applied["min_confidence"] = body.min_confidence
 
-        # Try structured query, fall back to search
-        if hasattr(km, "query"):
-            results = await _call_km_method(km, "query", body.query, **search_kwargs)
-        elif hasattr(km, "search"):
-            results = await _call_km_method(km, "search", body.query, **search_kwargs)
-        else:
-            results = []
-
-        for result in results:
-            if isinstance(result, tuple) and len(result) == 2:
-                item, score = result
-                items.append(_item_to_summary(item, relevance=float(score)))
-            else:
-                items.append(_item_to_summary(result))
+        items = await _search_for_org(km, ("query", "search"), body.query, org_id, **search_kwargs)
 
         return StructuredQueryResponse(
             items=items[: body.limit],
@@ -753,9 +819,11 @@ async def get_staleness_analysis(
         30.0, ge=1.0, le=365.0, description="Days before an item is considered stale"
     ),
     limit: int = Query(50, ge=1, le=100, description="Max stale items to return"),  # type: ignore[assignment]
+    auth: AuthorizationContext = Depends(require_permission("knowledge:read")),
     km=Depends(get_knowledge_mound),
 ) -> StalenessResponse:
-    """Analyze staleness of knowledge items."""
+    """Analyze staleness of knowledge items; listed items are limited to the caller's org."""
+    org_id = _caller_org(auth)
     if not km:
         return StalenessResponse(threshold_days=threshold_days)
 
@@ -781,7 +849,7 @@ async def get_staleness_analysis(
                             id=getattr(i, "id", ""),
                             title=getattr(i, "title", ""),
                         )
-                        for i in raw.get("items", [])
+                        for i in _for_org(raw.get("items", []), org_id)
                     ],
                     threshold_days=threshold_days,
                 )
@@ -815,20 +883,16 @@ async def delete_knowledge_item(
     auth: AuthorizationContext = Depends(require_permission("knowledge:write")),
     km=Depends(get_knowledge_mound),
 ) -> DeleteKnowledgeResponse:
-    """Delete a knowledge item by ID. Requires knowledge:write permission."""
+    """Delete a knowledge item by ID. Requires knowledge:write permission.
+
+    Items not stamped with the caller's org answer 404 and are left untouched.
+    """
+    org_id = _caller_org(auth)
     if not km:
         raise HTTPException(status_code=503, detail="Knowledge Mound not available")
 
     try:
-        # Verify item exists
-        existing = None
-        if hasattr(km, "get"):
-            existing = await _call_km_method(km, "get", item_id)
-        elif hasattr(km, "get_item"):
-            existing = await _call_km_method(km, "get_item", item_id)
-
-        if not existing:
-            raise NotFoundError(f"Knowledge item {item_id} not found")
+        await _get_for_org(km, item_id, org_id)
 
         # Attempt deletion
         deleted = False
