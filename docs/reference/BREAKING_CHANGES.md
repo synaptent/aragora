@@ -11,6 +11,115 @@ For detailed migration guides, see:
 
 ## Version 2.x
 
+The sections from v2.4.1 onward restate, release by release, the [CHANGELOG](../../CHANGELOG.md) entries that remove, rename or deprecate something callers may depend on, or that change a default, a response shape or an exit code. Each released entry carries the PR number the CHANGELOG gives it. The CHANGELOG gives none before v2.9.0-rc.1, nor for the v2.9.0-rc.1 entries restated here, so those entries have none. The CHANGELOG remains the complete record.
+
+### Unreleased
+
+Merged on `main` after the v2.11.1 release. The first two entries come from the CHANGELOG's `[Unreleased]` section. The SDK removals come from the "Unreleased" sections of `sdk/python/BREAKING_CHANGES.md` and `sdk/typescript/BREAKING_CHANGES.md` and from [SDK Breaking Changes](#sdk-breaking-changes) below. Where those sources give no PR number (the budget guard entry and the SDK removals), the number shown is that of the change's merge commit on `main`.
+
+- **Knowledge facts need an organization** (#10298, listed as Breaking). On the v1 and v2 knowledge-base APIs, chunk search answers 403 `knowledge_fact_access_closed`, and the other fact routes serve only the caller's organization. Creating or importing facts without an authenticated organization answers 403 `knowledge_org_required`. Knowledge Mound fact sync is closed (`sync_from_facts` raises `OrgScopeRequiredError`), in-process readers that open a fact store without an organization fail closed, and the `aragora knowledge` commands `query`, `facts`, `process` and `stats` exit 2 when they reach the fact store. Facts stored without an organization are quarantined; see "Legacy facts without an organization (operator-only)" in `docs/knowledge/KNOWLEDGE_MOUND_OPERATIONS.md`.
+- **Budget guard ledger path** (#10210). A relative `ARAGORA_DATA_DIR` or `ARAGORA_NOMIC_DIR` is anchored under the home directory, so the ledger moves from `<working directory>/<dir>/budget_guard.json` to `~/<dir>/budget_guard.json`. Before upgrading mid-month, copy the old file there or set `ARAGORA_BUDGET_GUARD_STORE` to its absolute path; otherwise this month's recorded spend restarts at zero. An absolute data directory keeps the same ledger.
+- **SDK and client methods for unserved routes are removed**, and no server route is removed: TypeScript `ModesAPI.getMode` and `SpectateAPI.connectSSE`, with Python `get_mode` and `connect_sse` on the sync and async clients (#9112); TypeScript `crossPollination.unsubscribe`, `apAutomation.addAPInvoice` and `policies.resolveViolation` (contract-drift batch 5, #10204); TypeScript `AragoraClient.exportReplay` (#10279); `aragora.client` `ReplayAPI.export` and `export_async` (#10388).
+
+---
+
+### v2.11.1 (2026-09-28)
+
+- **SDK methods for unserved routes are removed** (#10138, contract-drift batch 4). Both SDKs drop the methods whose routes no server handler dispatched; those calls could only fail with a route-level 404 or `handler_no_result`. No server route is removed. The full list, with replacements where they exist, is under "Unreleased (2026-09-21)" in `sdk/python/BREAKING_CHANGES.md` and `sdk/typescript/BREAKING_CHANGES.md`.
+
+---
+
+### v2.11.0 (2026-09-25)
+
+No server routes are removed. A user upgrading from 2.9.x also picks up every v2.10.0 change.
+
+- **ODR v0.2 is the default emitter output** (#10165). Request v0.1 with `--odr-version 0.1`, `?odr_version=0.1` or `ARAGORA_ODR_PROFILE_VERSION=0.1`.
+- **SDK methods whose routes no server dispatched are removed** from both SDKs: the phantom agents/backups endpoint pairs (#9983) and the final tranche of phantom routes (#9987). `sdk/python/BREAKING_CHANGES.md` and `sdk/typescript/BREAKING_CHANGES.md` list them.
+- **Python SDK:** automatic `Retry-After` waits are capped at 60 s, and incomplete HTTP-date forms are rejected (#10056).
+- **TypeScript SDK:** a stream that closes without a terminal event throws `ConnectionError` instead of a synthesized `debate_end` (#10014).
+- **Gauntlet CLI exit codes** (#10100): an unconditional PASS/APPROVED exits 0, a conditional or review verdict exits 2, and a rejection, an unknown verdict or non-completion exits 1.
+
+---
+
+### v2.10.0 (2026-09-04)
+
+The CHANGELOG records no breaking changes to the public Python API.
+
+- **SDK methods for phantom endpoints are removed** from both SDKs by contract-drift paydown batches (#9969, #9976).
+
+---
+
+### v2.9.0 (2026-04-25)
+
+- **Mode 3 review briefs** can return `approve_with_followups` where they returned `repair_first`: `REPAIR_FIRST` is downgraded when the severity map reports no `high` finding (#6505, #6510). Callers that pass no severity data keep the three-class behavior.
+- **PostgreSQL `webhook_configs`:** migration `v20260424000000_align_webhook_configs_schema.py` keeps the data while moving `org_id` to `workspace_id`, `is_active` to `active` and `events` to `events_json` (#6575).
+
+---
+
+### v2.9.0-rc.1 (2026-04-24)
+
+- **Deprecated:** the individual `supermemory`, `knowledge`, `evolution` and `ML` Arena parameters emit deprecation warnings; use `SupermemoryConfig`, `KnowledgeConfig`, `EvolutionConfig` and `MLConfig`.
+- **Response shape:** the cost handler (7 endpoints) and the usage dashboard (6 endpoints) wrap their responses in `{"data": {...}}`.
+- **Default:** knowledge extraction is enabled by default in debate outcomes.
+
+---
+
+### v2.8.1-rc.1 (2026-02-25)
+
+**No breaking changes** recorded in the CHANGELOG.
+
+---
+
+### v2.8.0 (2026-02-16)
+
+- **SDK voice namespace:** the stale voice namespace is removed; voice is re-wired into the sync and async clients with gateway methods.
+- **TypeScript SDK:** 37 methods send a corrected HTTP verb (GET/POST/DELETE/PATCH aligned with the server endpoints).
+
+---
+
+### v2.7.4 (2026-02-14)
+
+- **SDK:** 1,888 lines of stale SDK methods are removed, and stale TypeScript namespace methods are pruned.
+- **Packaging:** the non-PyPI `rlm` is removed from the extras; the RLM dependency comes from PyPI instead of a git URL.
+- **Deprecation:** `success_response` now emits the `DeprecationWarning` its documentation describes.
+
+---
+
+### v2.7.3 (2026-02-13)
+
+**No breaking changes** recorded in the CHANGELOG.
+
+---
+
+### v2.7.2 (2026-02-13)
+
+- **RBAC:** the middleware denies unrecognized routes by default instead of allowing them.
+
+---
+
+### v2.7.1 (2026-02-13)
+
+- **SDK:** stale SDK methods and stale TypeScript integrations namespace methods are removed.
+- **OpenAPI:** 86 orphaned routes are removed from the OpenAPI spec.
+
+---
+
+### v2.7.0 (2026-02-13)
+
+- **Deprecated:** the individual supermemory, knowledge, evolution and ML Arena parameters, in favor of `SupermemoryConfig`, `KnowledgeConfig`, `EvolutionConfig` and `MLConfig`; `Arena.create()` warns on the legacy parameter style.
+- **SDK:** 2,952+ lines of stale SDK methods are removed across 8 namespaces, including methods without backend route coverage.
+- **Removed code:** 17 dead modules and 10 orchestrator shims.
+- **Deployment:** `deploy/k8s/` is merged into `deploy/kubernetes/`.
+- **V1 API sunset preparation:** a deprecation enforcer middleware, a versioned router and a migration guide.
+
+---
+
+### v2.4.1 (2026-01-31)
+
+**No breaking changes** recorded in the CHANGELOG.
+
+---
+
 ### v2.4.0 (2026-01-25)
 
 **No breaking changes.** This release focuses on SDK expansion and bug fixes.
@@ -207,4 +316,4 @@ Use the template at [templates/breaking_change_template.md](../templates/breakin
 
 ---
 
-*Last updated: 2026-10-07*
+*Last updated: 2026-10-13*

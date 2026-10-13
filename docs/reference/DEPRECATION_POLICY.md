@@ -86,6 +86,8 @@ warnings.warn(
 )
 ```
 
+**Exception: methods whose routes no server dispatches.** A method in either SDK (Python or TypeScript), or in the in-package `aragora.client`, whose route no server handler dispatches has never worked: every call fails with a route-level 404 or `handler_no_result`. Such a method may be removed in any release without the grace period or a `DeprecationWarning`, provided that the change removes no server route, the release's CHANGELOG lists the removal under **Removed**, and [Breaking Changes](./BREAKING_CHANGES.md) records it. v2.11.0 and v2.11.1 already removed such methods; v2.11.1 lists its removals (#10138) under **Removed**.
+
 ### 4. Internal APIs
 
 Internal modules, classes, and functions not intended for public use.
@@ -548,6 +550,7 @@ The following situations may warrant shorter deprecation periods:
 1. **Security vulnerabilities**: Critical security issues may require immediate removal
 2. **Legal/compliance requirements**: Regulatory changes may force faster deprecation
 3. **Data integrity issues**: Features that could cause data loss may be removed faster
+4. **SDK methods for unserved routes**: may be removed with no deprecation period under the exception in section 3 (SDK Methods), which still requires a CHANGELOG entry; the advance-notice rules below do not apply to them
 
 In exceptional cases:
 - Minimum 1 release cycle notice
@@ -564,4 +567,4 @@ For deprecation questions or migration assistance:
 
 ---
 
-*Last updated: 2026-03-05*
+*Last updated: 2026-10-13*
