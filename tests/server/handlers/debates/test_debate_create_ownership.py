@@ -657,8 +657,9 @@ class TestReadUsesStoredOrg:
             assert (other.status_code, _body(other)) == (404, NOT_FOUND), path
             assert read(_user(ORG_A), path).status_code == 200, path
 
-    def test_callers_without_the_org_are_refused_whatever_the_artifact_says(self, read, storage):
+    def test_only_the_public_flag_opens_a_debate_to_other_callers(self, read, storage):
         self._save(storage, "deb-claim", ORG_A, visibility="public", source="landing")
+        assert storage.set_public(self._save(storage, "deb-public", ORG_A), True)
         path = "/api/v1/debates/deb-claim"
 
         anon, no_org = read(ANON, path), read(_user(None, "user-x"), path)
@@ -666,22 +667,24 @@ class TestReadUsesStoredOrg:
         assert (anon.status_code, _body(anon)["code"]) == (401, "auth_required")
         assert (no_org.status_code, _body(no_org)["code"]) == (403, "org_required")
         assert read(USER_B, path).status_code == 404
+        for user in (ANON, USER_B):
+            assert read(user, "/api/v1/debates/deb-public").status_code == 200
 
-    @pytest.mark.parametrize("user", [ANON, USER_B])
-    def test_public_and_unowned_debates_read_as_before(self, read, storage, user):
-        assert storage.set_public(self._save(storage, "deb-public", ORG_A), True)
+    def test_debates_without_a_recorded_org_keep_the_earlier_checks(self, storage):
+        from aragora.server.debate_utils import _active_debates
+        from aragora.server.handlers.debates import crud
+
         self._save(storage, "deb-legacy", None)
+        _active_debates["deb-running-x"] = {"id": "deb-running-x", "task": "No org", "agents": "a"}
 
-        assert read(user, "/api/v1/debates/deb-public").status_code == 200
-        assert read(user, "/api/v1/debates/deb-legacy").status_code == 200
+        assert crud._stored_debate_org(storage, "deb-legacy") is None
+        assert crud._running_debate_org("deb-running-x") is None
+        assert crud._org_read_denial(MagicMock(), None) is None
 
     def test_running_debate_is_read_only_by_its_creator_org(self, read, storage):
-        from aragora.server.debate_utils import _active_debates
-
         controller = _real_controller(storage)
         controller._get_executor = Mock(return_value=Mock())  # type: ignore[method-assign]
         debate_id = controller.start_debate(DebateRequest(question="Q?", org_id=ORG_A)).debate_id
-        _active_debates["deb-running-x"] = {"id": "deb-running-x", "task": "No org", "agents": "a"}
         path = f"/api/v1/debates/{debate_id}"
 
         owner, other = read(_user(ORG_A), path), read(USER_B, path)
@@ -689,4 +692,3 @@ class TestReadUsesStoredOrg:
         assert (owner.status_code, _body(owner)["in_progress"]) == (200, True)
         assert (other.status_code, _body(other)) == (404, NOT_FOUND)
         assert read(ANON, path).status_code == 401
-        assert read(USER_B, "/api/v1/debates/deb-running-x").status_code == 200

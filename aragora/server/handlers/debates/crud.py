@@ -324,8 +324,7 @@ class CrudOperationsMixin:
         storage = self.get_storage()
         debate = storage.get_debate(slug)
         if debate:
-            denied = _org_read_denial(handler, _stored_debate_org(storage, slug))
-            if denied:
+            if denied := _org_read_denial(handler, _stored_debate_org(storage, slug)):
                 return denied
 
             # Public playground debates are accessible without authentication
@@ -395,8 +394,7 @@ class CrudOperationsMixin:
                 )
                 return error_response(f"Debate not found: {slug}", 404)
 
-            denied = _org_read_denial(handler, _running_debate_org(slug))
-            if denied:
+            if denied := _org_read_denial(handler, _running_debate_org(slug)):
                 return denied
 
             active = active_raw
