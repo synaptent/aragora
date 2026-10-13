@@ -427,3 +427,4 @@ import-and-call tests at both paths.
 | `aragora.nomic.feedback_orchestrator:ImprovementGoal` | `aragora.learning.improvement_goal_queue:ImprovementGoal` | #10615 | not before M4 seal |
 | `aragora.nomic.feedback_orchestrator:FeedbackGoal` | `aragora.learning.improvement_goal_queue:FeedbackGoal` | #10615 | not before M4 seal |
 | `aragora.nomic.feedback_orchestrator:ImprovementQueue` | `aragora.learning.improvement_goal_queue:ImprovementQueue` | #10615 | not before M4 seal |
+| `aragora.control_plane.registry:AgentStatus` | `aragora.types.agent_status:AgentStatus` | #10616 | not before M4 seal |
