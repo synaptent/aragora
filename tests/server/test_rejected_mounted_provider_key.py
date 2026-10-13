@@ -11,6 +11,7 @@ of dying in its thread.
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
@@ -167,6 +168,102 @@ async def test_a_rejected_openrouter_key_is_reported_rejected_not_missing(
     assert health["fallback"]["openrouter_available"] is False
     assert health["fallback"]["openrouter_rejected"] is True
     _assert_redacted(raw, directory)
+
+
+@pytest.mark.asyncio
+async def test_strict_mode_endpoints_answer_while_critical_keys_are_outside_custody(
+    mount_keys: Callable[..., Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("ARAGORA_SECRETS_STRICT", "true")
+    directory = mount_keys(ANTHROPIC_API_KEY=0o600, OPENAI_API_KEY=0o644)
+    monkeypatch.setenv("GEMINI_API_KEY", _ENV_VALUE)
+
+    status, body, raw = await _get("/api/agents/availability")
+
+    assert status == 200
+    assert body["agents"]["anthropic-api"]["available"] is True
+    openai = body["agents"]["openai-api"]
+    assert openai["available"] is False
+    assert openai["rejected_env_vars"] == ["OPENAI_API_KEY"]
+    assert openai["missing_env_vars"] == []
+    gemini = body["agents"]["gemini"]
+    assert gemini["available"] is False
+    assert gemini["rejected_env_vars"] == []
+    assert "GEMINI_API_KEY" in gemini["missing_env_vars"]
+    assert body["openrouter_available"] is False
+    assert body["agents"]["deepseek"]["available"] is False
+    _assert_redacted(raw, directory)
+
+    status, health, raw = await _get("/api/agents/health")
+
+    assert status == 200
+    assert health["agents"]["anthropic-api"]["available"] is True
+    assert health["agents"]["openai-api"]["api_key_rejected"] is True
+    assert health["agents"]["gemini"]["available"] is False
+    assert health["agents"]["gemini"]["api_key_configured"] is False
+    assert health["fallback"]["openrouter_available"] is False
+    _assert_redacted(raw, directory)
+
+
+def _rejected_key_warnings(caplog: pytest.LogCaptureFixture) -> list[str]:
+    return [
+        record.getMessage()
+        for record in caplog.records
+        if record.levelno >= logging.WARNING
+        and "OPENROUTER_API_KEY" in record.getMessage()
+        and "rejected" in record.getMessage()
+    ]
+
+
+@pytest.mark.asyncio
+async def test_a_rejected_openrouter_key_disables_the_cli_fallback_and_keeps_the_cli_error(
+    mount_keys: Callable[..., Path],
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from aragora.agents import cli_agents
+
+    directory = mount_keys(ANTHROPIC_API_KEY=0o600, OPENROUTER_API_KEY=0o644)
+    monkeypatch.setenv("OPENROUTER_API_KEY", _ENV_VALUE)
+    monkeypatch.setattr(cli_agents, "build_claude_command", lambda base, **_: (list(base), False))
+    agent = cli_agents.ClaudeAgent(
+        name="cli_rejected_fallback", model="claude-opus-5", role="proposer", enable_fallback=True
+    )
+    cli_error = RuntimeError("rate limit exceeded (429): too many requests")
+
+    async def rate_limited(command: list[str], input_text: str | None = None) -> str:
+        raise cli_error
+
+    monkeypatch.setattr(agent, "_run_cli", rate_limited)
+
+    with caplog.at_level(logging.WARNING):
+        assert agent._get_fallback_agent() is None
+        with pytest.raises(RuntimeError) as raised:
+            await agent.generate("Synthetic prompt", [])
+
+    assert raised.value is cli_error
+    assert _rejected_key_warnings(caplog)
+    _assert_redacted(caplog.text, directory)
+
+
+def test_a_rejected_openrouter_key_disables_the_quota_fallback(
+    mount_keys: Callable[..., Path],
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from aragora.agents.fallback import QuotaFallbackMixin
+
+    class _QuotaAgent(QuotaFallbackMixin):
+        name = "quota_rejected_fallback"
+
+    directory = mount_keys(ANTHROPIC_API_KEY=0o600, OPENROUTER_API_KEY=0o644)
+    monkeypatch.setenv("OPENROUTER_API_KEY", _ENV_VALUE)
+
+    with caplog.at_level(logging.WARNING):
+        assert _QuotaAgent()._get_openrouter_fallback() is None
+
+    assert _rejected_key_warnings(caplog)
+    _assert_redacted(caplog.text, directory)
 
 
 def _run_debate(

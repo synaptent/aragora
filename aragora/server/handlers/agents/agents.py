@@ -117,14 +117,21 @@ def _secret_configured(name: str) -> bool:
     if _secret_rejected(name):
         return False
     try:
-        from aragora.config.secrets import get_secret
-
-        value = get_secret(name)
-        if value and value.strip():
-            return True
-    except (ImportError, KeyError, ValueError, OSError) as e:
+        from aragora.config.secrets import SecretNotFoundError, get_secret
+    except ImportError as e:
         # Secrets module may not be available, fall back to env vars
-        logger.debug("Could not get secret '%s': %s", name, e)
+        logger.debug("Could not import secrets module for '%s': %s", name, e)
+    else:
+        try:
+            value = get_secret(name)
+            if value and value.strip():
+                return True
+        except SecretNotFoundError:
+            # Strict mode: a critical key outside approved custody is not configured,
+            # and an environment copy must not stand in for it.
+            return False
+        except (ImportError, KeyError, ValueError, OSError) as e:
+            logger.debug("Could not get secret '%s': %s", name, e)
     env_value = os.getenv(name)
     return bool(env_value and env_value.strip())
 
