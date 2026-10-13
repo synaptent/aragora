@@ -15,7 +15,7 @@ import itertools
 import json
 import sys
 import threading
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -25,6 +25,7 @@ from aragora.auth.mfa_enforcement import MFAEnforcementMiddleware, MFAStatus
 from aragora.billing.jwt_auth import create_access_token
 from aragora.connectors.runtime_registry import ConnectorStatus
 from aragora.rbac.decorators import MFARequiredError, PermissionDeniedError, RoleRequiredError
+from aragora.rbac.defaults import get_role_permissions
 from aragora.rbac.middleware import DEFAULT_ROUTE_PERMISSIONS
 from aragora.server import unified_server
 from aragora.server.auth import auth_config
@@ -232,6 +233,8 @@ RULES: dict[tuple[str, str], str] = {
     ("GET", "/api/v1/connectors/types"): "",
     ("DELETE", "/api/v1/analytics/metabase"): "analytics.configure",
     ("DELETE", "/api/analytics/metabase"): "analytics.configure",
+    ("POST", "/api/v1/analytics/connect"): "analytics.configure",
+    ("POST", "/api/analytics/connect"): "analytics.configure",
     ("GET", "/api/v1/documents/processing/stats"): "documents.read",
     ("GET", "/api/v1/teams"): "bots.read",
     ("POST", "/api/v1/cross-pollination/conflicts/c1/resolve"): "cross_pollination.write",
@@ -320,6 +323,18 @@ def test_analytics_delete_outside_a_platform_stays_default_denied(path: str) -> 
 
 
 @pytest.mark.no_auto_auth
+@pytest.mark.parametrize("caller", ["member", "analyst"])
+@pytest.mark.parametrize("path", ["/api/v1/analytics/connect", "/api/analytics/connect"])
+def test_analytics_read_alone_cannot_connect_a_platform(path: str, caller: str) -> None:
+    held = get_role_permissions(caller)
+    assert "analytics.read" in held and "analytics.configure" not in held
+    answer = _server_rbac("POST", path, caller)
+    assert answer is not None
+    status, body = answer
+    assert (status, body["required_permission"]) == (403, "analytics.configure"), body
+
+
+@pytest.mark.no_auto_auth
 @pytest.mark.parametrize("caller", ROLES)
 def test_email_rules_and_grants_are_unchanged(caller: str) -> None:
     rule = _first_rule("GET", "/api/v1/email/snoozed")
@@ -369,6 +384,9 @@ DISPATCH: dict[tuple[str, str], tuple[str, str]] = {
     ("GET", "/api/v1/connectors/types"): ("200 200 200 200 200 200", "200 200 200 200 200 401"),
     ("DELETE", "/api/v1/analytics/metabase"): ("404 404 403 403 403 401",) * 2,
     ("DELETE", "/api/analytics/metabase"): ("404 404 403 403 403 401",) * 2,
+    # The empty request body names no platform.
+    ("POST", "/api/v1/analytics/connect"): ("400 400 403 403 403 401",) * 2,
+    ("POST", "/api/analytics/connect"): ("400 400 403 403 403 401",) * 2,
     ("GET", "/api/v1/documents/processing/stats"): (
         "200 200 403 200 403 403",
         "200 200 403 200 403 401",
@@ -599,3 +617,31 @@ def test_rbac_package_import_failure_answers_503(registry, monkeypatch) -> None:
         503,
         {"error": "Feature temporarily unavailable", "code": "subsystem_unavailable"},
     )
+
+
+class _BrokenRBACDecorators(ModuleType):
+    """A decorators module whose names fail to load with something other than ImportError."""
+
+    def __init__(self, error: Exception) -> None:
+        super().__init__("aragora.rbac.decorators")
+        self._error = error
+
+    def __getattr__(self, name: str) -> Any:
+        raise self._error
+
+
+@pytest.mark.no_auto_auth
+@pytest.mark.parametrize(
+    ("error", "code"),
+    [
+        (RuntimeError("decorators failed to initialize"), "handler_error"),
+        (ZeroDivisionError("decorators failed to initialize"), "unexpected_exception"),
+    ],
+    ids=["runtime-error", "unlisted-error"],
+)
+def test_rbac_package_non_import_failure_answers_500(
+    registry, monkeypatch, error: Exception, code: str
+) -> None:
+    monkeypatch.setitem(sys.modules, "aragora.rbac.decorators", _BrokenRBACDecorators(error))
+    status, body = _dispatch(registry, "GET", "/api/v1/memory/tier-stats", "owner")
+    assert (status, body["code"]) == (500, code), body

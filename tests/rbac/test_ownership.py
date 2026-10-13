@@ -678,6 +678,123 @@ class TestImplicitOwnerPermissions:
         assert decision.context == owner_context
 
 
+class TestOwnershipOrganizationScope:
+    """An ownership record only counts inside the organization that holds it."""
+
+    @pytest.fixture
+    def manager(self):
+        return OwnershipManager(enable_cache=True)
+
+    @pytest.mark.parametrize("permission_key", ["debates.read", "debates.delete"])
+    def test_same_user_in_another_org_gets_no_owner_permission(self, manager, permission_key):
+        manager.set_owner(ResourceType.DEBATE, "debate-1", "owner-user", "org-1")
+        other_org = AuthorizationContext(user_id="owner-user", org_id="org-2")
+
+        assert (
+            manager.check_owner_permission(
+                other_org, ResourceType.DEBATE, permission_key, "debate-1"
+            )
+            is None
+        )
+
+    def test_same_user_in_same_org_keeps_owner_permission(self, manager):
+        manager.set_owner(ResourceType.DEBATE, "debate-1", "owner-user", "org-1")
+        same_org = AuthorizationContext(user_id="owner-user", org_id="org-1")
+
+        decision = manager.check_owner_permission(
+            same_org, ResourceType.DEBATE, "debates.delete", "debate-1"
+        )
+
+        assert decision is not None
+        assert decision.allowed is True
+
+    def test_caller_without_org_is_denied_on_org_record(self, manager):
+        manager.set_owner(ResourceType.DEBATE, "debate-1", "owner-user", "org-1")
+        no_org = AuthorizationContext(user_id="owner-user", org_id=None)
+
+        assert (
+            manager.check_owner_permission(no_org, ResourceType.DEBATE, "debates.read", "debate-1")
+            is None
+        )
+
+    def test_record_without_org_is_denied_to_caller_with_org(self, manager):
+        manager.set_owner(ResourceType.DEBATE, "debate-1", "owner-user", "")
+        with_org = AuthorizationContext(user_id="owner-user", org_id="org-1")
+
+        assert (
+            manager.check_owner_permission(
+                with_org, ResourceType.DEBATE, "debates.read", "debate-1"
+            )
+            is None
+        )
+
+    def test_record_and_caller_both_without_org_keep_owner_permission(self, manager):
+        manager.set_owner(ResourceType.DEBATE, "debate-1", "owner-user", "")
+        no_org = AuthorizationContext(user_id="owner-user", org_id=None)
+
+        decision = manager.check_owner_permission(
+            no_org, ResourceType.DEBATE, "debates.read", "debate-1"
+        )
+
+        assert decision is not None
+        assert decision.allowed is True
+
+    def test_scoped_lookups_compare_the_record_org(self, manager):
+        manager.set_owner(ResourceType.DEBATE, "debate-1", "owner-user", "org-1")
+        # Warm the unscoped cache first so a scoped lookup cannot reuse it.
+        assert manager.get_owner(ResourceType.DEBATE, "debate-1") == "owner-user"
+
+        assert manager.get_owner(ResourceType.DEBATE, "debate-1", org_id="org-1") == "owner-user"
+        assert manager.get_owner(ResourceType.DEBATE, "debate-1", org_id="org-2") is None
+        assert manager.get_owner(ResourceType.DEBATE, "debate-1", org_id=None) is None
+        assert manager.is_owner("owner-user", ResourceType.DEBATE, "debate-1", org_id="org-1")
+        assert not manager.is_owner("owner-user", ResourceType.DEBATE, "debate-1", org_id="org-2")
+        assert not manager.is_owner("owner-user", ResourceType.DEBATE, "debate-1", org_id=None)
+
+    def test_set_owner_same_owner_new_org_moves_the_record(self, manager):
+        manager.set_owner(ResourceType.DEBATE, "debate-1", "owner-user", "org-1")
+        assert manager.get_owner(ResourceType.DEBATE, "debate-1") == "owner-user"
+
+        record = manager.set_owner(ResourceType.DEBATE, "debate-1", "owner-user", "org-2")
+
+        assert record.org_id == "org-2"
+        assert manager.get_ownership_record(ResourceType.DEBATE, "debate-1").org_id == "org-2"
+        assert manager.get_owner(ResourceType.DEBATE, "debate-1") == "owner-user"
+        assert manager.get_owner(ResourceType.DEBATE, "debate-1", org_id="org-2") == "owner-user"
+        assert manager.get_owner(ResourceType.DEBATE, "debate-1", org_id="org-1") is None
+        assert manager.get_owned_resources("owner-user", org_id="org-1") == []
+        assert len(manager.get_owned_resources("owner-user", org_id="org-2")) == 1
+        old_org = AuthorizationContext(user_id="owner-user", org_id="org-1")
+        new_org = AuthorizationContext(user_id="owner-user", org_id="org-2")
+        assert (
+            manager.check_owner_permission(old_org, ResourceType.DEBATE, "debates.read", "debate-1")
+            is None
+        )
+        decision = manager.check_owner_permission(
+            new_org, ResourceType.DEBATE, "debates.read", "debate-1"
+        )
+        assert decision is not None
+        assert decision.allowed is True
+
+    def test_permission_checker_ownership_fallback_is_org_scoped(self, manager):
+        from aragora.rbac.checker import PermissionChecker
+
+        manager.set_owner(ResourceType.DEBATE, "debate-1", "owner-user", "org-1")
+        set_ownership_manager(manager)
+        try:
+            checker = PermissionChecker(enable_cache=False)
+            other_org = AuthorizationContext(user_id="owner-user", org_id="org-2")
+            same_org = AuthorizationContext(user_id="owner-user", org_id="org-1")
+
+            denied = checker.check_permission(other_org, "debates.update", "debate-1")
+            allowed = checker.check_permission(same_org, "debates.update", "debate-1")
+        finally:
+            set_ownership_manager(None)
+
+        assert denied.allowed is False
+        assert allowed.allowed is True
+
+
 class TestCustomOwnerPermissions:
     """Tests for custom owner permission configurations."""
 
@@ -982,6 +1099,22 @@ class TestConvenienceFunctions:
 
         assert decision is not None
         assert decision.allowed is True
+
+    def test_convenience_functions_scope_ownership_to_the_org(self):
+        set_resource_owner(ResourceType.DEBATE, "debate-1", "user-1", "org-1")
+
+        assert get_resource_owner(ResourceType.DEBATE, "debate-1", org_id="org-2") is None
+        assert is_resource_owner("user-1", ResourceType.DEBATE, "debate-1", org_id="org-2") is False
+        assert is_resource_owner("user-1", ResourceType.DEBATE, "debate-1", org_id="org-1") is True
+        assert (
+            check_owner_permission(
+                AuthorizationContext(user_id="user-1", org_id="org-2"),
+                ResourceType.DEBATE,
+                "debates.read",
+                "debate-1",
+            )
+            is None
+        )
 
 
 class TestDefaultOwnerPermissions:
