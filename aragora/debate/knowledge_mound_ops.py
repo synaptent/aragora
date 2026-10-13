@@ -25,6 +25,9 @@ logger = logging.getLogger(__name__)
 # Type alias for notification callback
 NotifyCallback = Callable[[str, Any], None]
 
+# Metadata key compared by organization-filtered Knowledge Mound reads.
+MOUND_ORG_KEY = "org_id"
+
 
 class KnowledgeMoundOperations:
     """Operations for integrating Knowledge Mound with debate orchestration.
@@ -150,6 +153,8 @@ class KnowledgeMoundOperations:
         self,
         result: DebateResult,
         env: Environment | None = None,
+        *,
+        org_id: str | None = None,
     ) -> None:
         """Store debate outcome in Knowledge Mound for future retrieval.
 
@@ -159,6 +164,9 @@ class KnowledgeMoundOperations:
         Args:
             result: The debate result to ingest
             env: The debate environment with task details
+            org_id: Authenticated organization that started the debate. Without
+                a non-empty value the outcome stays unstamped, so
+                organization-filtered reads never return it.
         """
         if not self.knowledge_mound or not self.enable_ingestion:
             return
@@ -194,6 +202,11 @@ class KnowledgeMoundOperations:
                 metadata["crux_claims"] = [
                     str(c.get("claim", c))[:200] for c in result.debate_cruxes[:5]
                 ]
+
+            if isinstance(org_id, str) and org_id:
+                metadata[MOUND_ORG_KEY] = org_id
+            else:
+                metadata.pop(MOUND_ORG_KEY, None)
 
             # Ingest the consensus conclusion
             ingestion_result = await self.knowledge_mound.store(

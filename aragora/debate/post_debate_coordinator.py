@@ -60,10 +60,12 @@ class PostDebateCoordinator(PostDebatePersistenceMixin):
         config: PostDebateConfig | None = None,
         settlement_tracker: Any | None = None,
         knowledge_mound: Any | None = None,
+        org_id: str | None = None,
     ):
         self.config = config or PostDebateConfig()
         self._settlement_tracker = settlement_tracker
         self._knowledge_mound = knowledge_mound
+        self._org_id = org_id
         self._ledger: RunLedger | None = None
         self._backbone_runtime: Any | None = None
         self._backbone_runtime_failed = False
@@ -902,7 +904,9 @@ class PostDebateCoordinator(PostDebatePersistenceMixin):
                 enable_ingestion=True,
             )
             env = Environment(task=task) if task else None
-            self._run_async_callable(ops.ingest_debate_outcome, debate_result, env=env)
+            self._run_async_callable(
+                ops.ingest_debate_outcome, debate_result, env=env, org_id=self._org_id
+            )
             logger.info(
                 "post_debate_outcome_ingested debate_id=%s",
                 debate_id,

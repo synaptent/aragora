@@ -518,15 +518,18 @@ class ArenaKnowledgeManager:
             logger.debug("Pulse context fetch error: %s", e)
             return []
 
-    async def ingest_outcome(self, result: DebateResult, env: Environment) -> None:
+    async def ingest_outcome(
+        self, result: DebateResult, env: Environment, *, org_id: str | None = None
+    ) -> None:
         """Store debate outcome in Knowledge Mound for future retrieval.
 
         Args:
             result: The debate result to store
             env: Environment with task context
+            org_id: Authenticated organization that started the debate, if any
         """
         if self._knowledge_ops is not None:
-            await self._knowledge_ops.ingest_debate_outcome(result, env=env)
+            await self._knowledge_ops.ingest_debate_outcome(result, env=env, org_id=org_id)
 
         # Optional: sync outcome to Supermemory (external persistence)
         if not self.enable_supermemory or not self.supermemory_adapter:

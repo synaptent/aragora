@@ -136,9 +136,13 @@ class ArenaDelegatesMixin:
     async def _ingest_debate_outcome(self, result: DebateResult) -> None:
         """Store debate outcome in Knowledge Mound for future retrieval.
 
-        Delegates to ArenaKnowledgeManager.ingest_outcome().
+        Delegates to ArenaKnowledgeManager.ingest_outcome(). The stamp comes
+        only from ``knowledge_org_id``, which the server sets from the
+        authenticated request; ``org_id`` is caller-settable billing attribution.
         """
-        await self._km_manager.ingest_outcome(result, self.env)
+        await self._km_manager.ingest_outcome(
+            result, self.env, org_id=getattr(self, "knowledge_org_id", None)
+        )
 
     # ------------------------------------------------------------------
     # BeliefNetwork Delegate
