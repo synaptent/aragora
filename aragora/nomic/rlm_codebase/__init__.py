@@ -7,6 +7,7 @@ The module lives in :mod:`aragora.rlm.codebase_summary`; this module re-exports 
 from __future__ import annotations
 
 from aragora.rlm.codebase_summary import (
+    DEFAULT_QUERY as DEFAULT_QUERY,
     CodebaseCorpus,
     CodebaseRLMResult,
     build_codebase_corpus,

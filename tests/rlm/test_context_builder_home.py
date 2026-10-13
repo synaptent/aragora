@@ -55,6 +55,20 @@ def test_the_modules_are_defined_in_the_rlm_package(old, new):
     assert sorted(importlib.import_module(old).__all__) == sorted(names)
 
 
+def test_the_old_summary_path_keeps_the_default_query():
+    assert (
+        importlib.import_module("aragora.nomic.rlm_codebase").DEFAULT_QUERY
+        is importlib.import_module("aragora.rlm.codebase_summary").DEFAULT_QUERY
+    )
+
+
+def test_the_debate_anchor_inventory_names_the_moved_files_at_their_homes():
+    from aragora.debate.context_engineering import _ANCHOR_GROUPS
+
+    paths = dict(_ANCHOR_GROUPS)["Nomic Loop"]
+    assert [path for path in paths if not (REPO_ROOT / path).is_file()] == []
+
+
 def test_the_codebase_context_builder_extends_the_moved_builder():
     from aragora.rlm.codebase_context import CodebaseContextBuilder
 
