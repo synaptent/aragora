@@ -84,7 +84,18 @@ if TYPE_CHECKING:
     from aragora.debate.embeddings import DebateEmbeddingsDatabase
     from aragora.memory.store import CritiqueStore
     from aragora.ranking.elo import EloSystem
+    from aragora.rbac.decorators import (
+        MFARequiredError as _MFARequiredError,
+        PermissionDeniedError as _PermissionDeniedError,
+        RoleRequiredError as _RoleRequiredError,
+    )
     from aragora.storage.debate_storage import DebateStorage
+else:
+
+    class _RBACDenialsNotLoaded(Exception):
+        """Never raised; holds the RBAC denial names until _try_modular_handler imports them."""
+
+    _MFARequiredError = _PermissionDeniedError = _RoleRequiredError = _RBACDenialsNotLoaded
 
 logger = logging.getLogger(__name__)
 
@@ -341,6 +352,8 @@ class HandlerRegistryMixin:
 
         Returns True if handled, False if should fall through to legacy routes.
         """
+        global _MFARequiredError, _PermissionDeniedError, _RoleRequiredError
+
         if not HANDLERS_AVAILABLE:
             return False
 
@@ -401,13 +414,14 @@ class HandlerRegistryMixin:
 
         try:
             # Initialized handlers have already loaded the RBAC package; importing it at
-            # module level would load it for every importer of this registry. It is the first
-            # statement here: a failed import answers 503 through `except ImportError`, which
-            # is matched before the clause that names these classes is evaluated.
+            # module level would load it for every importer of this registry. A failed import
+            # answers 503 through `except ImportError`. Any other failure leaves the
+            # module-level fallbacks bound, so the clause that names these classes can
+            # still be evaluated.
             from aragora.rbac.decorators import (
-                MFARequiredError,
-                PermissionDeniedError,
-                RoleRequiredError,
+                MFARequiredError as _MFARequiredError,
+                PermissionDeniedError as _PermissionDeniedError,
+                RoleRequiredError as _RoleRequiredError,
             )
 
             # Extract auth context and store on request handler for permission checks
@@ -578,14 +592,14 @@ class HandlerRegistryMixin:
             PermissionError,
             LookupError,
             TimeoutError,
-            PermissionDeniedError,
-            RoleRequiredError,
-            MFARequiredError,
+            _PermissionDeniedError,
+            _RoleRequiredError,
+            _MFARequiredError,
         ) as e:
             # Check for permission-related errors
             error_msg = str(e)
             if (
-                isinstance(e, (PermissionDeniedError, RoleRequiredError, MFARequiredError))
+                isinstance(e, (_PermissionDeniedError, _RoleRequiredError, _MFARequiredError))
                 or "AuthorizationContext" in error_msg
                 or "Permission" in error_msg
             ):
@@ -593,7 +607,7 @@ class HandlerRegistryMixin:
                     "[handlers] Permission denied in %s: %s", handler.__class__.__name__, e
                 )
                 denial: dict[str, Any] = {"error": "Permission denied", "code": "forbidden"}
-                if isinstance(e, MFARequiredError):
+                if isinstance(e, _MFARequiredError):
                     # Keeps the MFA middleware's code and says where MFA is set up.
                     denial = {
                         "error": "MFA required",
