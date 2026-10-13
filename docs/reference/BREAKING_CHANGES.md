@@ -11,11 +11,11 @@ For detailed migration guides, see:
 
 ## Version 2.x
 
-The sections from v2.4.1 onward restate, release by release, the [CHANGELOG](../../CHANGELOG.md) entries that remove, rename or deprecate something callers may depend on, or that change a default, a response shape or an exit code. Each released entry carries the PR number the CHANGELOG gives it. The CHANGELOG gives none before v2.9.0-rc.1, nor for the v2.9.0-rc.1 entries restated here, so those entries have none. The CHANGELOG's `[Pre-v0.2.0]` section, which sits between v2.4.1 and v2.7.0, records no breaking change and has no section here. The CHANGELOG remains the complete record.
+The sections from v2.4.1 onward restate, release by release, the [CHANGELOG](../../CHANGELOG.md) entries that remove, rename or deprecate something callers may depend on, or that change a default, a response shape or an exit code. Each released entry carries the PR number the CHANGELOG gives it. The CHANGELOG gives none before v2.9.0-rc.1, nor for the v2.9.0-rc.1 entries restated here, so those entries have none. The CHANGELOG's `[Pre-v0.2.0]` section, which sits between v2.4.1 and v2.7.0, records no breaking change and has no section here. For released versions the CHANGELOG remains the complete record.
 
 ### Unreleased
 
-Merged on `main` after the v2.11.1 release. The first two entries come from the CHANGELOG's `[Unreleased]` section. The SDK removals come from the section headed `Unreleased (2026-09-27)` in `sdk/python/BREAKING_CHANGES.md`, the sections headed `Unreleased (2026-09-27)`, `Unreleased (2026-09-28)` and `Unreleased (2026-10-03)` in `sdk/typescript/BREAKING_CHANGES.md` (the earlier sections those files still label Unreleased shipped in v2.11.1 or before), and from [SDK Breaking Changes](#sdk-breaking-changes) below. Where those sources give no PR number (the budget guard entry and the SDK removals), the number shown is that of the change's merge commit on `main`.
+Merged on `main` after the v2.11.1 release. The first two entries come from the CHANGELOG's `[Unreleased]` section. The SDK removals come from the section headed `Unreleased (2026-09-27)` in `sdk/python/BREAKING_CHANGES.md`, the sections headed `Unreleased (2026-09-27)`, `Unreleased (2026-09-28)` and `Unreleased (2026-10-03)` in `sdk/typescript/BREAKING_CHANGES.md` (the earlier sections those files still label Unreleased shipped in v2.11.1 or before), and from [SDK Breaking Changes](#sdk-breaking-changes) below. Where those sources give no PR number (the budget guard entry and the SDK removals), the number shown is that of the change's merge commit on `main`. The CHANGELOG's `[Unreleased]` section does not list the SDK removals yet; under the exception in the [Deprecation Policy](./DEPRECATION_POLICY.md), the release that ships them lists them under **Removed**.
 
 - **Knowledge facts need an organization** (#10298, listed as Breaking). On the v1 and v2 knowledge-base APIs, chunk search answers 403 `knowledge_fact_access_closed`, and the other fact routes serve only the caller's organization. Creating or importing facts without an authenticated organization answers 403 `knowledge_org_required`. Knowledge Mound fact sync is closed (`sync_from_facts` raises `OrgScopeRequiredError`), in-process readers that open a fact store without an organization fail closed, and the `aragora knowledge` commands `query`, `facts`, `process` and `stats` exit 2 when they reach the fact store. Facts stored without an organization are quarantined; see "Legacy facts without an organization (operator-only)" in `docs/knowledge/KNOWLEDGE_MOUND_OPERATIONS.md`. Some knowledge reads are not yet scoped to the organization: Knowledge Mound reads and mirroring stay workspace-scoped, and the in-memory embedding store keeps chunk text under the chunk id alone, so when two organizations store the same chunk id, a search in the earlier one can return the later one's text. The CHANGELOG's Fixed entry "Knowledge ingestion is scoped to the uploader's organization again" gives the details.
 - **Budget guard ledger path** (#10210). A relative `ARAGORA_DATA_DIR` or `ARAGORA_NOMIC_DIR` is anchored under the home directory, so the ledger moves from `<working directory>/<dir>/budget_guard.json` to `~/<dir>/budget_guard.json`. Before upgrading mid-month, copy the old file there or set `ARAGORA_BUDGET_GUARD_STORE` to its absolute path; otherwise this month's recorded spend restarts at zero. An absolute data directory keeps the same ledger.
@@ -25,7 +25,7 @@ Merged on `main` after the v2.11.1 release. The first two entries come from the 
 
 ### v2.11.1 (2026-09-28)
 
-- **SDK methods for unserved routes are removed** (#10138, contract-drift batch 4). Both SDKs drop the methods whose routes no server handler dispatched; those calls could only fail with a route-level 404 or `handler_no_result`. No server route is removed. The full list, with replacements where they exist, is under "Unreleased (2026-09-21)" in `sdk/python/BREAKING_CHANGES.md` and `sdk/typescript/BREAKING_CHANGES.md`.
+- **SDK methods for unserved routes are removed** (#10138, contract-drift batch 4). Both SDKs drop the methods whose routes no server handler dispatched; those calls could only fail with a route-level 404 or `handler_no_result`. No server route is removed. The full list, with replacements where they exist, is under "Unreleased (2026-09-21)" in `sdk/python/BREAKING_CHANGES.md` and `sdk/typescript/BREAKING_CHANGES.md`. The Python removals shipped in `aragora-sdk` 2.11.0 (PyPI, 2026-09-27); the TypeScript removals reach npm users with the next `@aragora/sdk` publish (the CHANGELOG gives npm's latest as 2.7.4).
 
 ---
 
@@ -53,6 +53,7 @@ The CHANGELOG records no breaking changes to the public Python API.
 
 - **Mode 3 review briefs** can return `approve_with_followups` where they returned `repair_first`: `REPAIR_FIRST` is downgraded when the severity map reports no `high` finding (#6505, #6510). Callers that pass no severity data keep the three-class behavior.
 - **PostgreSQL `webhook_configs`:** migration `v20260424000000_align_webhook_configs_schema.py` keeps the data while moving `org_id` to `workspace_id`, `is_active` to `active` and `events` to `events_json` (#6575).
+- **Mode 3 panel budget ceiling** rises from 8.00 to 10.00 USD (#6514).
 
 ---
 
@@ -116,7 +117,9 @@ The CHANGELOG records no breaking changes to the public Python API.
 
 ### v2.4.1 (2026-01-31)
 
-**No breaking changes** recorded in the CHANGELOG.
+The CHANGELOG labels no change in this release as breaking.
+
+- **Token signing** uses full 256-bit HMAC-SHA256 signatures instead of truncated 64-bit signatures (listed under Security).
 
 ---
 
@@ -226,6 +229,8 @@ See [DEPRECATION_POLICY.md](./DEPRECATION_POLICY.md) for the full deprecation ti
 | `POST /api/v1/debate` | Endpoint | `POST /api/v2/debates` |
 | `GET /api/v1/agents` | Endpoint | `GET /api/v2/agents` |
 | `GET /api/v1/health` | Endpoint | `GET /api/v2/system/health` |
+
+That date has passed. The CHANGELOG records no removal of the v1 API through v2.11.1 or in `[Unreleased]`; v2.7.0 records only the sunset preparation (a deprecation enforcer middleware, a versioned router and a migration guide).
 
 ---
 
