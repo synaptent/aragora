@@ -177,7 +177,7 @@ async def _validate_audit_logging() -> tuple[list[ValidationIssue], ComponentHea
 
     try:
         # Check for audit module
-        from aragora.server.handlers import auditing  # noqa: F401
+        from aragora.server.handlers.debates import auditing  # noqa: F401
 
         # Check for audit store configuration
         audit_enabled = os.getenv("ARAGORA_AUDIT_ENABLED", "true").lower() == "true"

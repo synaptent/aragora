@@ -156,7 +156,7 @@ class TestCiteEvidenceTool:
         mock_db.update = MagicMock()
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
         ):
             result = await cite_evidence_tool(
@@ -176,7 +176,7 @@ class TestCiteEvidenceTool:
     async def test_cite_storage_not_available(self):
         """Test citation when storage not available."""
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=None,
         ):
             result = await cite_evidence_tool(
@@ -195,7 +195,7 @@ class TestCiteEvidenceTool:
         mock_db.get.return_value = None
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
         ):
             result = await cite_evidence_tool(
@@ -217,7 +217,7 @@ class TestCiteEvidenceTool:
         mock_db.update = MagicMock()
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
         ):
             result = await cite_evidence_tool(
@@ -257,7 +257,7 @@ class TestVerifyCitationTool:
         mock_pool.get_session.return_value = mock_session_ctx
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=mock_pool,
         ):
             result = await verify_citation_tool(url="https://example.com/paper")
@@ -284,7 +284,7 @@ class TestVerifyCitationTool:
         mock_pool.get_session.return_value = mock_session_ctx
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=mock_pool,
         ):
             result = await verify_citation_tool(url="https://example.com/missing")
@@ -309,7 +309,7 @@ class TestVerifyCitationTool:
         mock_pool.get_session.return_value = mock_session_ctx
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=mock_pool,
         ):
             result = await verify_citation_tool(url="https://slow.example.com")
@@ -331,7 +331,7 @@ class TestVerifyCitationTool:
         mock_pool.get_session.return_value = mock_session_ctx
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=mock_pool,
         ):
             result = await verify_citation_tool(url="https://broken.example.com")

@@ -16,6 +16,66 @@ MODULE_PATH = ROOT / ".github/workflows/contract_drift_trusted_bootstrap.py"
 WORKFLOW_PATH = ROOT / ".github/workflows/contract-drift-trusted-bootstrap.yml"
 LAUNCHER_PATH = ROOT / ".github/workflows/contract_drift_trusted_launcher.py"
 MANIFEST_PATH = ROOT / ".github/workflows/contract-drift-trusted-bootstrap-manifest.json"
+# Sparse pack captured from the synaptent/aragora object database. It contains
+# the five named commits, the tree objects on each asserted path, and only the
+# blob bodies needed to execute the production bootstrap. Regeneration walks
+# these exact commits/paths, hashes each object with `git cat-file`, and feeds
+# the sorted object IDs to `git pack-objects --stdout`; the pack digest below
+# and the content-addressed commit/tree/blob assertions authenticate the result.
+REAL_NEXT_EVENT_PACK = ROOT / "tests/fixtures/contract_drift_trusted_bootstrap_real_next_event.pack"
+REAL_NEXT_EVENT_PACK_SHA256 = "2e5436cd6d0fbbb692cd4a1fd289ae7e8d80b6594f49cc612f09c493c2414bb8"
+REAL_NEXT_EVENT_COMMITS = {
+    "h3": "1722a6145c0c23a2c1c0d20be5ed1329bb01d666",
+    "repin_merge": "5080b125d3c9595efdca020db5e60266e01ac9c5",
+    "h4": "f50902a19bdc6cce7049da87212dc27759f727a0",
+    "absorption": "967b1c82a285affbd191b57bdaf08512d6e6e3f7",
+    "final_merge": "d3e45fafe6dd04508882935c813f6896abc859d7",
+}
+REAL_NEXT_EVENT_TREES = {
+    "h3": "5968bb1e02018a83b9da36b07d7dd33b6464c8bb",
+    "repin_merge": "0764416df6fc7f2144b4194e577d69a542612fe7",
+    "h4": "5968bb1e02018a83b9da36b07d7dd33b6464c8bb",
+    "absorption": "c9da37c67d9b905d995feb4d773554f430074262",
+    "final_merge": "c9da37c67d9b905d995feb4d773554f430074262",
+}
+REAL_NEXT_EVENT_PARENTS = {
+    "h3": ("d4ab26e4b30b7f65956b4cdd9d738837b78ca4a3",),
+    "repin_merge": ("e98e641b50ea89c46270454c6649bebd8059deda",),
+    "h4": (REAL_NEXT_EVENT_COMMITS["h3"],),
+    "absorption": (
+        REAL_NEXT_EVENT_COMMITS["h4"],
+        REAL_NEXT_EVENT_COMMITS["repin_merge"],
+    ),
+    "final_merge": (REAL_NEXT_EVENT_COMMITS["repin_merge"],),
+}
+REAL_NEXT_EVENT_TRUSTED_BLOBS = {
+    ".github/workflows/contract-drift-trusted-bootstrap.yml": (
+        "ca2b4e487c94805480b6654fb70f9423bf11b6bd",
+        "1201a6df450583f9e35c8fe5d92907fa3d4f68e3",
+    ),
+    ".github/workflows/contract_drift_trusted_bootstrap.py": (
+        "4a84a2d843f9d853f0a72e17609a0a5fe16a10a0",
+        "f2596d975960e1ce18a0d3a988bc40eb16fda967",
+    ),
+    ".github/workflows/contract_drift_trusted_launcher.py": (
+        "d4c3e0abf6821ecd45b8661b75add43e4dd0ef5b",
+        "d4c3e0abf6821ecd45b8661b75add43e4dd0ef5b",
+    ),
+    ".github/workflows/contract-drift-trusted-bootstrap-manifest.json": (
+        "cb13440ca5d98a885c9e3241f63f046faab6b8d6",
+        "90f5a63ed23cbcd4a775625aa8568c10392d28b8",
+    ),
+}
+REAL_NEXT_EVENT_OWNED_BLOBS = {
+    ".github/workflows/contract-drift-governance.yml": ("59052ae3f3181bed86de7a00d835746993b22c96"),
+    "scripts/baselines/contract_drift_inventory.json": ("fe67eb452614f69a2aea55f0efe6ed6814d57dfa"),
+    "scripts/check_contract_drift_ratchet.py": ("2a3a1f7767869c8a3c57a811a82bb5aba9f1119e"),
+    "scripts/generate_contract_drift_inventory.py": ("f446cdd18f5b60bf377bbc7a4f1fd8df8073c53d"),
+    "tests/scripts/test_check_contract_drift_ratchet.py": (
+        "345b745cd3e2ef37576868e424bff15c3336f638"
+    ),
+    "tests/scripts/test_contract_drift_workflow.py": ("672e357c9566056d426bf501b10e4eb6d9635f0e"),
+}
 SPEC = importlib.util.spec_from_file_location("contract_drift_trusted_bootstrap", MODULE_PATH)
 assert SPEC and SPEC.loader
 bootstrap = importlib.util.module_from_spec(SPEC)
@@ -44,7 +104,13 @@ def _canonical(value: Any) -> bytes:
     return (rendered + "\n").encode()
 
 
-def _build_fixture(tmp_path: Path, mutation: str = "") -> SimpleNamespace:
+def _build_fixture(
+    tmp_path: Path,
+    mutation: str = "",
+    *,
+    checker_source: str | None = None,
+    inventory_source: str = "VALUE = 1\n",
+) -> SimpleNamespace:
     repo = tmp_path / "repo"
     repo.mkdir()
     _git(repo, "init", "-q")
@@ -65,7 +131,9 @@ def _build_fixture(tmp_path: Path, mutation: str = "") -> SimpleNamespace:
     base = _git(repo, "rev-parse", "HEAD")
 
     _git(repo, "checkout", "-qb", "candidate", base)
-    if mutation == "analyzer-rejected":
+    if checker_source is not None:
+        checker = checker_source
+    elif mutation == "analyzer-rejected":
         checker = (
             "import json,os,sys\n"
             "print(json.dumps({'comparison':"
@@ -82,7 +150,7 @@ def _build_fixture(tmp_path: Path, mutation: str = "") -> SimpleNamespace:
             "'launcher':os.environ['CDG_EXECUTED_LAUNCHER_SHA256'],'status':'pass'}))\n"
         )
     _write(repo, bootstrap.ANALYZER_FILES[0], checker)
-    _write(repo, bootstrap.ANALYZER_FILES[1], "VALUE = 1\n")
+    _write(repo, bootstrap.ANALYZER_FILES[1], inventory_source)
     _write(repo, bootstrap.ANALYZER_FILES[2], _canonical({"schema": "test-program"}))
     original_digests = tuple(
         hashlib.sha256((repo / path).read_bytes()).hexdigest() for path in bootstrap.ANALYZER_FILES
@@ -248,6 +316,379 @@ def _run(fixture: SimpleNamespace, tmp_path: Path) -> dict[str, Any]:
             ),
         ),
     )
+
+
+ISOLATION_CHECKER = (
+    "import json,os,sys\n"
+    "from scripts import generate_contract_drift_inventory as inventory\n"
+    "try:\n"
+    " from scripts import namespace_payload\n"
+    "except ImportError:\n"
+    " namespace_payload = None\n"
+    "try:\n"
+    " import pth_payload\n"
+    "except ImportError:\n"
+    " pth_payload = None\n"
+    "print(json.dumps({"
+    "'authority_root':os.environ['CDG_AUTHORITY_ROOT'],"
+    "'checker_file':__file__,"
+    "'cwd':os.getcwd(),"
+    "'cwd_entries':sorted(os.listdir()),"
+    "'inventory_file':inventory.__file__,"
+    "'inventory_marker':inventory.AUTHORITY_MARKER,"
+    "'inventory_version':inventory.__version__,"
+    "'launcher':os.environ['CDG_EXECUTED_LAUNCHER_SHA256'],"
+    "'namespace_payload':getattr(namespace_payload,'AUTHORITY_MARKER',None),"
+    "'pth_payload':getattr(pth_payload,'AUTHORITY_MARKER',None),"
+    "'status':'pass',"
+    "'sys_path':sys.path"
+    "}))\n"
+)
+BASE_INVENTORY = "__version__ = '1.0.0'\nAUTHORITY_MARKER = 'base-owned-bundle'\n"
+
+
+def _build_isolation_fixture(tmp_path: Path) -> SimpleNamespace:
+    return _build_fixture(
+        tmp_path,
+        checker_source=ISOLATION_CHECKER,
+        inventory_source=BASE_INVENTORY,
+    )
+
+
+def _user_site(user_base: Path, *, interpreter: str | Path | None = None) -> Path:
+    import os
+
+    env = os.environ.copy()
+    env["PYTHONUSERBASE"] = str(user_base)
+    proc = subprocess.run(
+        [
+            str(interpreter or sys.executable),
+            "-S",
+            "-c",
+            "import site; print(site.getusersitepackages())",
+        ],
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    result = Path(proc.stdout.strip())
+    assert result.is_absolute()
+    return result
+
+
+def _real_next_event_repo(tmp_path: Path) -> Path:
+    pack = REAL_NEXT_EVENT_PACK.read_bytes()
+    assert hashlib.sha256(pack).hexdigest() == REAL_NEXT_EVENT_PACK_SHA256
+    repo = tmp_path / "real-next-event"
+    repo.mkdir()
+    _git(repo, "init", "-q")
+    subprocess.run(
+        ["git", "-C", str(repo), "index-pack", "--stdin"],
+        input=pack,
+        check=True,
+        capture_output=True,
+    )
+    return repo
+
+
+def _commit_identity(repo: Path, sha: str) -> tuple[str, tuple[str, ...]]:
+    raw = _git(repo, "cat-file", "commit", sha)
+    headers = raw.split("\n\n", 1)[0].splitlines()
+    tree = next(line.removeprefix("tree ") for line in headers if line.startswith("tree "))
+    parents = tuple(line.removeprefix("parent ") for line in headers if line.startswith("parent "))
+    return tree, parents
+
+
+def _blob_oids(repo: Path, sha: str, paths: tuple[str, ...]) -> dict[str, str]:
+    proc = subprocess.run(
+        ["git", "-C", str(repo), "ls-tree", "-z", sha, "--", *paths],
+        check=True,
+        capture_output=True,
+    )
+    result: dict[str, str] = {}
+    for raw in proc.stdout.rstrip(b"\0").split(b"\0"):
+        metadata, path = raw.split(b"\t", 1)
+        _mode, object_type, oid = metadata.split(b" ")
+        assert object_type == b"blob"
+        result[path.decode()] = oid.decode()
+    assert set(result) == set(paths)
+    return result
+
+
+def _real_event(tmp_path: Path, base_sha: str, head_sha: str, label: str) -> Path:
+    event = tmp_path / f"{label}.json"
+    event.write_bytes(
+        _canonical(
+            {
+                "pull_request": {
+                    "base": {
+                        "ref": "main",
+                        "repo": {"full_name": "synaptent/aragora"},
+                        "sha": base_sha,
+                    },
+                    "head": {
+                        "repo": {"full_name": "synaptent/aragora"},
+                        "sha": head_sha,
+                    },
+                },
+                "repository": {"full_name": "synaptent/aragora"},
+            }
+        )
+    )
+    return event
+
+
+def _run_real_next_event(
+    repo: Path,
+    tmp_path: Path,
+    *,
+    head_sha: str,
+    label: str,
+) -> dict[str, Any]:
+    base_sha = REAL_NEXT_EVENT_COMMITS["repin_merge"]
+    return bootstrap.run_bootstrap(
+        repo=repo,
+        event_path=_real_event(tmp_path, base_sha, head_sha, label),
+        base_sha=base_sha,
+        head_sha=head_sha,
+        output_dir=tmp_path / f"{label}-output",
+        policy=bootstrap.BootstrapPolicy(expected_head_sha=head_sha),
+        executed_launcher=MODULE_PATH,
+        run_provenance=bootstrap.RunProvenance(
+            event_name="pull_request_target",
+            repository="synaptent/aragora",
+            run_attempt=1,
+            run_id=12345,
+            workflow_ref=(
+                "synaptent/aragora/.github/workflows/"
+                "contract-drift-trusted-bootstrap.yml@refs/heads/main"
+            ),
+        ),
+    )
+
+
+def _run_launcher_without_isolation(
+    fixture: SimpleNamespace,
+    tmp_path: Path,
+    user_base: Path,
+) -> dict[str, Any]:
+    bundle_root = tmp_path / "unsafe-control-bundle"
+    bootstrap._materialize_bundle(fixture.repo, fixture.head, bundle_root)
+    empty_cwd = tmp_path / "unsafe-control-cwd"
+    empty_cwd.mkdir()
+    env = {
+        "CDG_AUTHORITY_ROOT": str(bundle_root),
+        "CDG_EXECUTED_LAUNCHER_SHA256": hashlib.sha256(LAUNCHER_PATH.read_bytes()).hexdigest(),
+        "CDG_FIRST_TRANSITION_COMPARISON_SHA256": "a" * 64,
+        "CDG_TRUSTED_BUNDLE": "unsafe-control",
+        "HOME": str(tmp_path / "unsafe-home"),
+        "PATH": "/usr/bin:/bin",
+        "PYTHONUSERBASE": str(user_base),
+    }
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-B",
+            str(LAUNCHER_PATH),
+            str(bundle_root),
+            str(bundle_root / bootstrap.ANALYZER_FILES[0]),
+        ],
+        cwd=empty_cwd,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    result = json.loads(proc.stdout)
+    assert isinstance(result, dict)
+    return result
+
+
+def _assert_production_isolation(
+    result: dict[str, Any],
+    *hostile_roots: Path,
+) -> None:
+    assert result["status"] == "pass"
+    analysis = result["analysis"]
+    authority_root = Path(analysis["authority_root"]).resolve()
+    assert analysis["inventory_marker"] == "base-owned-bundle"
+    assert analysis["inventory_version"] == "1.0.0"
+    assert analysis["namespace_payload"] is None
+    assert analysis["pth_payload"] is None
+    assert analysis["launcher"] == hashlib.sha256(LAUNCHER_PATH.read_bytes()).hexdigest()
+    assert bootstrap.ANALYZER_FLAGS == ("-I", "-S", "-B")
+    assert Path(analysis["cwd"]).resolve() == authority_root
+    assert analysis["cwd_entries"] == [".github", "scripts"]
+    checker_path = Path(analysis["checker_file"])
+    if not checker_path.is_absolute():
+        checker_path = Path(analysis["cwd"]) / checker_path
+    assert checker_path.resolve() == authority_root / bootstrap.ANALYZER_FILES[0]
+    assert Path(analysis["inventory_file"]).resolve() == (
+        authority_root / bootstrap.ANALYZER_FILES[1]
+    )
+
+    sys_path = analysis["sys_path"]
+    assert "" not in sys_path
+    resolved_sys_path = [Path(entry).resolve() for entry in sys_path]
+    assert resolved_sys_path[0] == authority_root
+    assert resolved_sys_path.count(authority_root) == 1
+    stdlib_roots = (Path(sys.base_prefix).resolve(), Path(sys.exec_prefix).resolve())
+    for entry in resolved_sys_path[1:]:
+        assert any(entry.is_relative_to(root) for root in stdlib_roots)
+    for hostile_root in hostile_roots:
+        resolved_hostile_root = hostile_root.resolve()
+        assert all(not entry.is_relative_to(resolved_hostile_root) for entry in resolved_sys_path)
+
+
+def test_same_version_global_package_shadow_isolated(tmp_path, monkeypatch):
+    fixture = _build_isolation_fixture(tmp_path)
+    user_base = tmp_path / "hostile-global"
+    user_site = _user_site(user_base)
+    _write(user_site, "scripts/__init__.py", "__version__ = '1.0.0'\n")
+    _write(
+        user_site,
+        "scripts/generate_contract_drift_inventory.py",
+        "__version__ = '1.0.0'\nAUTHORITY_MARKER = 'hostile-global-shadow'\n",
+    )
+
+    control = _run_launcher_without_isolation(fixture, tmp_path, user_base)
+    assert control["inventory_version"] == "1.0.0"
+    assert control["inventory_marker"] == "hostile-global-shadow"
+
+    monkeypatch.setenv("PYTHONUSERBASE", str(user_base))
+    result = _run(fixture, tmp_path)
+    _assert_production_isolation(result, user_base)
+
+
+def test_namespace_package_contribution_isolated(tmp_path, monkeypatch):
+    fixture = _build_isolation_fixture(tmp_path)
+    user_base = tmp_path / "hostile-namespace"
+    user_site = _user_site(user_base)
+    _write(
+        user_site,
+        "scripts/namespace_payload.py",
+        "AUTHORITY_MARKER = 'hostile-namespace-contribution'\n",
+    )
+
+    control = _run_launcher_without_isolation(fixture, tmp_path, user_base)
+    assert control["namespace_payload"] == "hostile-namespace-contribution"
+
+    monkeypatch.setenv("PYTHONUSERBASE", str(user_base))
+    result = _run(fixture, tmp_path)
+    _assert_production_isolation(result, user_base)
+
+
+def test_pth_injector_isolated(tmp_path, monkeypatch):
+    fixture = _build_isolation_fixture(tmp_path)
+    user_base = tmp_path / "hostile-pth"
+    user_site = _user_site(user_base)
+    injected = tmp_path / "pth-injected"
+    marker = tmp_path / "pth-executed"
+    _write(
+        injected,
+        "pth_payload.py",
+        "AUTHORITY_MARKER = 'hostile-pth-injector'\n",
+    )
+    _write(
+        user_site,
+        "hostile-bootstrap.pth",
+        f"import sys;sys.path.insert(0,{str(injected)!r});"
+        f"open({str(marker)!r},'w').write('executed')\n",
+    )
+
+    control = _run_launcher_without_isolation(fixture, tmp_path, user_base)
+    assert control["pth_payload"] == "hostile-pth-injector"
+    assert marker.read_text() == "executed"
+    marker.unlink()
+
+    monkeypatch.setenv("PYTHONUSERBASE", str(user_base))
+    result = _run(fixture, tmp_path)
+    assert not marker.exists()
+    _assert_production_isolation(result, user_base, injected)
+
+
+def test_user_site_uses_selected_interpreter_site_module(tmp_path, monkeypatch):
+    user_base = tmp_path / "user-base"
+    reported = tmp_path / "framework-layout" / "site-packages"
+    interpreter = tmp_path / "selected-python.exe"
+    probe = "import site; print(site.getusersitepackages())"
+
+    def _selected_python(command, **kwargs):
+        assert command == [str(interpreter), "-S", "-c", probe]
+        assert kwargs["env"]["PYTHONUSERBASE"] == str(user_base)
+        return SimpleNamespace(stdout=f"{reported}\n")
+
+    monkeypatch.setattr(subprocess, "run", _selected_python)
+
+    assert _user_site(user_base, interpreter=interpreter) == reported
+
+
+def test_real_next_event_fixture_binds_authentic_sequence_objects(tmp_path):
+    repo = _real_next_event_repo(tmp_path)
+    for label, sha in REAL_NEXT_EVENT_COMMITS.items():
+        assert _git(repo, "rev-parse", "--verify", f"{sha}^{{commit}}") == sha
+        assert _commit_identity(repo, sha) == (
+            REAL_NEXT_EVENT_TREES[label],
+            REAL_NEXT_EVENT_PARENTS[label],
+        )
+
+    all_paths = tuple(REAL_NEXT_EVENT_TRUSTED_BLOBS) + tuple(REAL_NEXT_EVENT_OWNED_BLOBS)
+    blobs = {
+        label: _blob_oids(
+            repo,
+            REAL_NEXT_EVENT_COMMITS[label],
+            tuple(REAL_NEXT_EVENT_TRUSTED_BLOBS) if label == "repin_merge" else all_paths,
+        )
+        for label in REAL_NEXT_EVENT_COMMITS
+    }
+    for path, (pre_repin_blob, repinned_blob) in REAL_NEXT_EVENT_TRUSTED_BLOBS.items():
+        assert blobs["h3"][path] == pre_repin_blob
+        assert blobs["h4"][path] == pre_repin_blob
+        for label in ("repin_merge", "absorption", "final_merge"):
+            assert blobs[label][path] == repinned_blob
+    assert {
+        path
+        for path, (pre_repin_blob, repinned_blob) in REAL_NEXT_EVENT_TRUSTED_BLOBS.items()
+        if pre_repin_blob != repinned_blob
+    } == {
+        ".github/workflows/contract-drift-trusted-bootstrap.yml",
+        ".github/workflows/contract_drift_trusted_bootstrap.py",
+        ".github/workflows/contract-drift-trusted-bootstrap-manifest.json",
+    }
+
+    for path, expected_blob in REAL_NEXT_EVENT_OWNED_BLOBS.items():
+        for label in ("h3", "h4", "absorption", "final_merge"):
+            assert blobs[label][path] == expected_blob
+
+
+def test_authentic_h4_rejects_then_absorption_admits_next_event(tmp_path):
+    repo = _real_next_event_repo(tmp_path)
+    with pytest.raises(
+        bootstrap.BootstrapError,
+        match=(
+            "proposed tree overrides trusted surface: "
+            r"\.github/workflows/contract-drift-trusted-bootstrap\.yml"
+        ),
+    ):
+        _run_real_next_event(
+            repo,
+            tmp_path,
+            head_sha=REAL_NEXT_EVENT_COMMITS["h4"],
+            label="pre-absorption-h4",
+        )
+
+    result = _run_real_next_event(
+        repo,
+        tmp_path,
+        head_sha=REAL_NEXT_EVENT_COMMITS["absorption"],
+        label="post-absorption",
+    )
+    assert result["status"] == "pass"
+    assert result["analysis"]["passing"] is True
+    assert result["analysis"]["error_code"] == "authority_transition_required"
+    assert result["trusted_base_sha"] == REAL_NEXT_EVENT_COMMITS["repin_merge"]
+    assert result["candidate_head_sha"] == REAL_NEXT_EVENT_COMMITS["absorption"]
 
 
 def test_workflow_uses_base_owned_python_without_merge_checkout():

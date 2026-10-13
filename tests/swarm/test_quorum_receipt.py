@@ -209,11 +209,211 @@ def test_bridge_metadata_records_pr_provenance():
 def test_example_merge_quorum_receipt_matches_emitter():
     # The committed example is the emitter<->verifier contract for PR-review
     # receipts (verified independently in aragora-verify). It must equal exactly
-    # what the bridge + odr_export emit today.
+    # what the bridge + odr_export emit today at its profile, v0.1 (explicit,
+    # since the library default is v0.2).
     import json
     from pathlib import Path
 
     example = Path("docs/specs/examples/example-merge-quorum-receipt.odr.json")
-    expected = decision_receipt_to_odr(collect_outcome_to_decision_receipt(_outcome()))
+    expected = decision_receipt_to_odr(
+        collect_outcome_to_decision_receipt(_outcome()), odr_version="0.1"
+    )
     actual = json.loads(example.read_text(encoding="utf-8"))
     assert actual == expected, "example merge-quorum receipt is stale; regenerate it"
+
+
+def test_v02_bridge_findings_use_gate_reader():
+    outcome = _outcome()
+    outcome.items[0].body = (
+        "- **[P3]** advisory from PASS\n"
+        "```\n[P0] fenced\n```\n> [P0] quoted\n    [P0] indented\n"
+        "[P2] None\n[P3] N/A\n"
+    )
+    receipt = collect_outcome_to_decision_receipt(outcome)
+    doc = decision_receipt_to_odr(receipt, odr_version="0.2")
+    dissent = doc["quorum"]["dissent"]
+    assert [f["severity"] for f in dissent["findings"]] == ["P3", "P1"]
+    assert dissent["findings"][0]["text"] == "advisory from PASS"
+    assert [f["blocking"] for f in dissent["findings"]] == [False, True]
+    assert dissent["severity_max"] == "P1" and dissent["blocking"] is True
+    legacy = decision_receipt_to_odr(receipt)
+    for key in ("present", "dissenting_agents", "views"):
+        assert dissent[key] == legacy["quorum"]["dissent"][key]
+    jsonschema.validate(doc, load_odr_schema())
+
+
+def test_v02_bridge_gate_blocking_is_not_finding_severity():
+    outcome = _outcome(tier=4)
+    for item in outcome.items:
+        item.severity_gated = True
+    outcome.items[-1].body = "[P2] advisory dissent"
+    receipt = collect_outcome_to_decision_receipt(outcome)
+    doc = decision_receipt_to_odr(receipt, odr_version="0.2")
+    assert all(v["blocking"] is False for v in doc["quorum"]["verdicts"])
+    assert doc["quorum"]["dissent"]["present"] is False
+    assert doc["quorum"]["dissent"]["dissenting_agents"] == []
+    for verdict in doc["quorum"]["verdicts"]:
+        assert verdict["model_id"] == "undisclosed"
+        assert "role" not in verdict and "posted_at" not in verdict
+        assert verdict["head_sha"] == outcome.head_sha
+    outcome.items[-1].body = "[P1] blocking dissent"
+    doc = decision_receipt_to_odr(collect_outcome_to_decision_receipt(outcome), odr_version="0.2")
+    assert doc["quorum"]["verdicts"][-1]["blocking"] is True
+    assert doc["quorum"]["dissent"]["dissenting_agents"] == ["grok"]
+    assert doc["quorum"]["dissent"]["present"] is True
+    jsonschema.validate(doc, load_odr_schema())
+
+
+def test_v02_bridge_dict_retains_observations_and_provenance():
+    from aragora.swarm.quorum_evidence import ReviewerResult
+
+    outcome = _outcome()
+    outcome.failures = [ReviewerResult(family="grok", ok=False, text="", error="transport boom")]
+    raw = outcome.to_dict()
+    raw["timed_out_families"] = ["openai"]
+    raw["base_sha"] = "b" * 40
+    receipt = collect_outcome_to_decision_receipt(raw)
+    assert type(receipt.settlement_metadata["pr"]) is int
+    doc = decision_receipt_to_odr(receipt, odr_version="0.2")
+    assert doc["subject"]["base_sha"] == "b" * 40
+    assert doc["subject"]["pr_number"] == 8667
+    assert doc["quorum"]["rule"]["required_signals"] == 2
+    assert doc["reasoning"]["observations"] == [
+        {"kind": "failure", "family": "grok", "detail": "transport boom"},
+        {"kind": "timeout", "family": "openai", "detail": "reviewer exceeded collection deadline"},
+    ]
+    assert "adjudication" not in doc
+    assert "observations" not in decision_receipt_to_odr(receipt, odr_version="0.1")["reasoning"]
+    jsonschema.validate(doc, load_odr_schema())
+
+
+def test_v02_bridge_adjudication_and_rule_preserve_source():
+    from aragora.swarm.review_adjudicator import AdjudicationResult, AdjudicationVerdict
+
+    raw = _outcome().to_dict()
+    raw["adjudication"] = AdjudicationResult(
+        verdict=AdjudicationVerdict.SETTLE, reason="resolved"
+    ).to_receipt_dict()
+    receipt = collect_outcome_to_decision_receipt(raw)
+    doc = decision_receipt_to_odr(receipt, odr_version="0.2")
+    assert doc["adjudication"]["verdict"] == "settle"
+    assert doc["adjudication"]["reason"] == "resolved"
+    # The member is the verbatim AdjudicationResult shape: omitted when absent,
+    # never a presence marker, so no "status" key may be injected.
+    assert "status" not in doc["adjudication"]
+    assert {"kind", "verdict", "reason"} <= set(doc["adjudication"])
+    assert "adjudication" not in decision_receipt_to_odr(receipt, odr_version="0.1")
+    assert doc["attestation"]["mechanism"]["policy_version"] == raw["policy_version"]
+    assert doc["attestation"]["mechanism"]["action_reason"] == raw["action_reason"]
+    jsonschema.validate(doc, load_odr_schema())
+
+
+def test_v02_bridge_omits_out_of_profile_severities(caplog):
+    # The gate reader accepts any single digit after "P"; the ODR severity enum
+    # stops at P3, so a "[P4]" reviewer line must be dropped, never emitted.
+    import logging
+
+    outcome = _outcome()
+    outcome.items[0].body = "[P4] out of enum advisory\n[P9] also out of enum\n[P3] kept advisory"
+    with caplog.at_level(logging.WARNING, logger="aragora.swarm.quorum_receipt"):
+        receipt = collect_outcome_to_decision_receipt(outcome)
+    doc = decision_receipt_to_odr(receipt, odr_version="0.2")
+    dissent = doc["quorum"]["dissent"]
+    assert [f["severity"] for f in dissent["findings"]] == ["P3", "P1"]
+    assert dissent["findings"][0]["text"] == "kept advisory"
+    assert dissent["severity_max"] == "P1"
+    warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 2
+    assert "P4" in warnings[0] and "P9" in warnings[1]
+    jsonschema.validate(doc, load_odr_schema())
+
+
+# --- decision_basis="reviews": for callers that never post evidence (the Action) ---
+
+
+def _single_family_outcome() -> CollectOutcome:
+    """Tier 3 needs two distinct western families; only claude answered."""
+    from aragora.swarm.quorum_evidence import ReviewerResult
+
+    return CollectOutcome(
+        repo="synaptent/aragora",
+        pr=8667,
+        head_sha="c" * 40,
+        head_committed_at="2026-06-27T10:00:00+00:00",
+        tier=3,
+        action="prepare",
+        action_reason="supportive quorum incomplete; prepared evidence only",
+        tiered_gate=False,
+        items=[
+            EvidenceItem(family="claude", body="PASS: fine", would_count=True, verdict="pass"),
+        ],
+        failures=[ReviewerResult(family="openai", text="", ok=False, error="timed out")],
+    )
+
+
+def test_reviews_basis_passes_a_unanimous_prepare_only_outcome():
+    receipt = collect_outcome_to_decision_receipt(_supportive_outcome(), decision_basis="reviews")
+
+    assert receipt.verdict == "PASS"
+    assert receipt.consensus_proof is not None
+    assert receipt.consensus_proof.reached is True
+    assert receipt.consensus_proof.supporting_agents == ["claude", "openai"]
+    assert "decision_basis=reviews" in receipt.verdict_reasoning
+    assert receipt.settlement_metadata["decision_basis"] == "reviews"
+
+
+def test_posted_basis_is_still_the_default_for_prepare_only_outcomes():
+    default = collect_outcome_to_decision_receipt(_supportive_outcome())
+    explicit = collect_outcome_to_decision_receipt(_supportive_outcome(), decision_basis="posted")
+
+    for receipt in (default, explicit):
+        assert receipt.verdict == "CHANGES_REQUESTED"
+        assert receipt.consensus_proof is not None
+        assert receipt.consensus_proof.reached is False
+        assert "decision_basis" not in receipt.settlement_metadata
+    assert default.to_dict() == explicit.to_dict()
+
+
+def test_reviews_basis_keeps_reviewer_dissent_blocking():
+    receipt = collect_outcome_to_decision_receipt(_outcome(), decision_basis="reviews")
+
+    assert receipt.verdict == "CHANGES_REQUESTED"
+    assert receipt.consensus_proof is not None
+    assert receipt.consensus_proof.reached is False
+    assert "grok" in receipt.consensus_proof.dissenting_agents
+
+
+def test_reviews_basis_requires_the_tier_quorum_when_a_reviewer_failed():
+    receipt = collect_outcome_to_decision_receipt(
+        _single_family_outcome(), decision_basis="reviews"
+    )
+
+    assert receipt.verdict == "CHANGES_REQUESTED"
+    assert receipt.consensus_proof is not None
+    assert receipt.consensus_proof.reached is False
+    assert "quorum rule not satisfied" in receipt.verdict_reasoning
+
+
+def test_reviews_basis_is_recorded_in_the_signed_odr_mechanism():
+    reviews = decision_receipt_to_odr(
+        collect_outcome_to_decision_receipt(_supportive_outcome(), decision_basis="reviews"),
+        odr_version="0.2",
+    )
+    posted = decision_receipt_to_odr(
+        collect_outcome_to_decision_receipt(_supportive_outcome()), odr_version="0.2"
+    )
+    schema = load_odr_schema()
+    jsonschema.validate(reviews, schema)
+    jsonschema.validate(posted, schema)
+
+    assert reviews["claim"]["verdict"] == "PASS"
+    assert reviews["attestation"]["mechanism"]["decision_basis"] == "reviews"
+    assert posted["claim"]["verdict"] == "CHANGES_REQUESTED"
+    assert "decision_basis" not in posted["attestation"]["mechanism"]
+
+
+def test_unknown_decision_basis_is_rejected():
+    import pytest
+
+    with pytest.raises(ValueError, match="decision_basis"):
+        collect_outcome_to_decision_receipt(_supportive_outcome(), decision_basis="assumed")

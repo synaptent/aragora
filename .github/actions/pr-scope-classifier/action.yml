@@ -58,6 +58,7 @@ runs:
             - 'scripts/**'
           lint_python:
             - 'aragora/**'
+            - 'aragora-verify/**'
             - 'tests/**'
             - 'scripts/**'
             - 'pyproject.toml'
@@ -66,6 +67,8 @@ runs:
             - 'deploy/**'
             - 'security/policies/**'
             - 'aragora-operator/**'
+            - '.importlinter'
+            - '.github/actions/pr-scope-classifier/**'
           quality:
             - 'aragora/debate/output_quality.py'
             - 'aragora/debate/repo_grounding.py'
@@ -191,7 +194,7 @@ runs:
             - 'pyproject.toml'
             - 'requirements*.txt'
           autopilot:
-            - 'aragora/server/handlers/self_improve.py'
+            - 'aragora/server/handlers/autonomous/self_improve.py'
             - 'aragora/worktree/**'
             - 'scripts/codex_worktree_autopilot.py'
             - 'tests/handlers/test_self_improve_api.py'

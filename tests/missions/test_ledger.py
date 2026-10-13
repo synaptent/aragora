@@ -277,6 +277,18 @@ def test_select_claims_orphaned_in_progress_when_owner_fence_is_clear(tmp_path):
     assert select_for(state, led, "wA", now=100.0) == "f1"
 
 
+def test_select_claims_awaiting_claim_features(tmp_path):
+    """AWAITING_CLAIM is the intake bridge's claimable-wait state (#8758 round-2
+    P1): a decomposed child waiting for a worker/branch must be claimable by the
+    ordinary stigmergic pickup, with zero manual status resets."""
+    from aragora.missions.state import Status
+
+    state = _mission(2)
+    state.features[0].status = Status.AWAITING_CLAIM
+    led = _ledger(tmp_path)
+    assert select_for(state, led, "wA", now=100.0) == "f1"
+
+
 def test_ledger_load_tolerates_unknown_fields(tmp_path):
     """[P3] forward-compat: a ledger written by a newer schema (extra lease/
     constraint fields) loads instead of crashing with TypeError."""

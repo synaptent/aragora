@@ -21,8 +21,9 @@ from aragora.knowledge.embeddings import (
     ChunkMatch,
     InMemoryEmbeddingService,
     WeaviateEmbeddingService,
+    chunk_namespace,
 )
-from aragora.knowledge.fact_store import FactStore, InMemoryFactStore
+from aragora.knowledge.fact_store import FactStore, InMemoryFactStore, ScopedFactStore
 from aragora.knowledge.types import (
     Fact,
     FactFilters,
@@ -34,6 +35,15 @@ if TYPE_CHECKING:
     pass
 
 logger = logging.getLogger(__name__)
+
+
+def _org_chunk_key(fact_store: object, workspace_id: str, org_id: str | None) -> str:
+    """(org, workspace) chunk key: the caller's org, else the scoped store's; none raises."""
+    if isinstance(fact_store, ScopedFactStore):
+        if org_id is not None and org_id != fact_store.org_id:
+            raise ValueError("org_id does not match the scoped org")
+        org_id = fact_store.org_id
+    return chunk_namespace(workspace_id, org_id, require_org=True)
 
 
 class AgentProtocol(Protocol):
@@ -86,6 +96,7 @@ class QueryContext:
     extracted_facts: list[Fact] = field(default_factory=list)
     agent_responses: dict[str, str] = field(default_factory=dict)
     start_time: float = field(default_factory=time.time)
+    org_id: str | None = None
 
 
 class DatasetQueryEngine:
@@ -112,7 +123,7 @@ class DatasetQueryEngine:
 
     def __init__(
         self,
-        fact_store: FactStore | InMemoryFactStore | None = None,
+        fact_store: FactStore | InMemoryFactStore | ScopedFactStore | None = None,
         embedding_service: WeaviateEmbeddingService | InMemoryEmbeddingService | None = None,
         agents: list[AgentProtocol] | None = None,
         default_agent: AgentProtocol | None = None,
@@ -151,6 +162,8 @@ class DatasetQueryEngine:
         question: str,
         workspace_id: str,
         options: QueryOptions | None = None,
+        *,
+        org_id: str | None = None,
     ) -> QueryResult:
         """Answer a question about the dataset using multi-agent analysis.
 
@@ -158,6 +171,7 @@ class DatasetQueryEngine:
             question: Natural language question
             workspace_id: Workspace containing documents
             options: Query options
+            org_id: If given, facts are read and written only within this org
 
         Returns:
             QueryResult with answer, facts, evidence, and confidence
@@ -173,6 +187,7 @@ class DatasetQueryEngine:
             query=question,
             workspace_id=workspace_id,
             options=options,
+            org_id=org_id,
         )
 
         try:
@@ -231,22 +246,26 @@ class DatasetQueryEngine:
             return self._error_result(ctx, "Unexpected query failure")
 
     async def _search_chunks(self, ctx: QueryContext) -> list[ChunkMatch]:
-        """Search for relevant chunks."""
+        """Search the caller's organization's chunks; raises OrgScopeRequiredError without one."""
+        key = _org_chunk_key(self._fact_store, ctx.workspace_id, ctx.org_id)
         try:
-            return await self._embedding_service.hybrid_search(
+            matches = await self._embedding_service.hybrid_search(
                 query=ctx.query,
-                workspace_id=ctx.workspace_id,
+                workspace_id=key,
                 limit=ctx.options.max_chunks,
                 alpha=ctx.options.search_alpha,
                 min_score=ctx.options.min_chunk_score,
             )
         except (ConnectionError, TimeoutError, RuntimeError) as e:
             logger.warning("Embedding search failed, trying keyword: %s", e)
-            return await self._embedding_service.keyword_search(
+            matches = await self._embedding_service.keyword_search(
                 query=ctx.query,
-                workspace_id=ctx.workspace_id,
+                workspace_id=key,
                 limit=ctx.options.max_chunks,
             )
+        for match in matches:
+            match.workspace_id = ctx.workspace_id
+        return matches
 
     async def _get_existing_facts(self, ctx: QueryContext) -> list[Fact]:
         """Get existing facts relevant to the query."""
@@ -254,6 +273,7 @@ class DatasetQueryEngine:
             workspace_id=ctx.workspace_id,
             min_confidence=ctx.options.min_fact_confidence,
             limit=20,
+            org_id=ctx.org_id,
         )
         return self._fact_store.query_facts(ctx.query, filters)
 
@@ -490,6 +510,7 @@ Only include facts that are directly supported by the source material."""
                             source_documents=[c.document_id for c in ctx.chunks[:3]],
                             confidence=0.6,  # Initial confidence
                             validation_status=ValidationStatus.UNVERIFIED,
+                            org_id=ctx.org_id,
                         )
                         facts.append(fact)
 
@@ -561,6 +582,8 @@ Only include facts that are directly supported by the source material."""
         workspace_id: str,
         min_confidence: float = 0.5,
         limit: int = 20,
+        *,
+        org_id: str | None = None,
     ) -> list[Fact]:
         """Get facts relevant to a query without generating new answer.
 
@@ -571,6 +594,7 @@ Only include facts that are directly supported by the source material."""
             workspace_id: Workspace to search
             min_confidence: Minimum confidence filter
             limit: Maximum facts to return
+            org_id: If given, only facts owned by this org
 
         Returns:
             List of relevant facts
@@ -579,6 +603,7 @@ Only include facts that are directly supported by the source material."""
             workspace_id=workspace_id,
             min_confidence=min_confidence,
             limit=limit,
+            org_id=org_id,
         )
         return self._fact_store.query_facts(question, filters)
 
@@ -586,17 +611,20 @@ Only include facts that are directly supported by the source material."""
         self,
         fact_id: str,
         agents: list[AgentProtocol] | None = None,
+        *,
+        org_id: str | None = None,
     ) -> Fact:
         """Verify a fact using multiple agents.
 
         Args:
             fact_id: Fact to verify
             agents: Agents to use for verification
+            org_id: If given, only a fact owned by this org can be read or updated
 
         Returns:
             Updated fact with verification results
         """
-        fact = self._fact_store.get_fact(fact_id)
+        fact = self._fact_store.get_fact(fact_id, org_id=org_id)
         if not fact:
             raise ValueError(f"Fact not found: {fact_id}")
 
@@ -655,9 +683,10 @@ Then briefly explain your reasoning."""
                 fact_id,
                 validation_status=new_status,
                 confidence=new_confidence,
+                org_id=org_id,
             )
 
-            return self._fact_store.get_fact(fact_id) or fact
+            return self._fact_store.get_fact(fact_id, org_id=org_id) or fact
 
         return fact
 
@@ -678,7 +707,7 @@ class SimpleQueryEngine:
 
     def __init__(
         self,
-        fact_store: FactStore | InMemoryFactStore | None = None,
+        fact_store: FactStore | InMemoryFactStore | ScopedFactStore | None = None,
         embedding_service: WeaviateEmbeddingService | InMemoryEmbeddingService | None = None,
     ):
         """Initialize simple engine."""
@@ -690,19 +719,21 @@ class SimpleQueryEngine:
         question: str,
         workspace_id: str,
         options: QueryOptions | None = None,
+        *,
+        org_id: str | None = None,
     ) -> QueryResult:
         """Simple query that returns search results without agent analysis.
 
-        For basic search when agents aren't available.
+        For basic search when agents aren't available. Facts and chunks are read
+        only within org_id, or the scoped fact store's org; without either the
+        query raises OrgScopeRequiredError.
         """
         options = options or QueryOptions()
         start_time = time.time()
 
-        # Search for relevant chunks
-        chunks = await self.search(question, workspace_id, options.max_chunks)
-
-        # Get relevant facts
-        facts = await self.get_facts(question, workspace_id, limit=10)
+        # Facts first: a missing or mismatched org fails before any chunk is read.
+        facts = await self.get_facts(question, workspace_id, limit=10, org_id=org_id)
+        chunks = await self.search(question, workspace_id, options.max_chunks, org_id=org_id)
 
         # Build simple answer from chunks
         if chunks:
@@ -732,22 +763,30 @@ class SimpleQueryEngine:
         query: str,
         workspace_id: str,
         limit: int = 10,
+        *,
+        org_id: str | None = None,
     ) -> list[ChunkMatch]:
-        """Search for relevant chunks."""
-        return await self._embedding_service.hybrid_search(
+        """Search the chunks of org_id (else the scoped store's org); raises without an org."""
+        key = _org_chunk_key(self._fact_store, workspace_id, org_id)
+        matches = await self._embedding_service.hybrid_search(
             query=query,
-            workspace_id=workspace_id,
+            workspace_id=key,
             limit=limit,
         )
+        for match in matches:
+            match.workspace_id = workspace_id
+        return matches
 
     async def get_facts(
         self,
         query: str,
         workspace_id: str,
         limit: int = 20,
+        *,
+        org_id: str | None = None,
     ) -> list[Fact]:
         """Get relevant facts."""
-        filters = FactFilters(workspace_id=workspace_id, limit=limit)
+        filters = FactFilters(workspace_id=workspace_id, limit=limit, org_id=org_id)
         return self._fact_store.query_facts(query, filters)
 
     def add_fact(
@@ -756,6 +795,8 @@ class SimpleQueryEngine:
         workspace_id: str,
         evidence_ids: list[str] | None = None,
         source_documents: list[str] | None = None,
+        *,
+        org_id: str | None = None,
     ) -> Fact:
         """Add a fact directly."""
         return self._fact_store.add_fact(
@@ -763,6 +804,7 @@ class SimpleQueryEngine:
             workspace_id=workspace_id,
             evidence_ids=evidence_ids,
             source_documents=source_documents,
+            org_id=org_id,
         )
 
     def close(self) -> None:

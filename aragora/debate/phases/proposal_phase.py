@@ -88,6 +88,8 @@ class ProposalPhase:
         molecule_tracker: MoleculeTracker | None = None,
         # Arena config for feature flags (sandbox verification, etc.)
         arena_config: Any = None,
+        # Optional phase-local timeout override. None preserves adaptive defaults.
+        proposal_timeout_seconds: float | None = None,
     ):
         """
         Initialize the proposal phase.
@@ -133,6 +135,7 @@ class ProposalPhase:
 
         # Arena config for feature flags
         self._arena_config = arena_config
+        self.proposal_timeout_seconds = proposal_timeout_seconds
 
     @staticmethod
     def _is_effectively_empty_response(content: Any) -> bool:
@@ -335,8 +338,13 @@ class ProposalPhase:
 
         try:
             # Use complexity-scaled timeout from governor
-            base_timeout = getattr(agent, "timeout", AGENT_TIMEOUT_SECONDS)
-            timeout = governor.get_scaled_timeout(float(base_timeout))
+            if self.proposal_timeout_seconds is None:
+                base_timeout = getattr(agent, "timeout", AGENT_TIMEOUT_SECONDS)
+                timeout = governor.get_scaled_timeout(float(base_timeout))
+            else:
+                timeout = float(self.proposal_timeout_seconds)
+                if timeout <= 0:
+                    raise ValueError("proposal_timeout_seconds must be positive")
             # Use unique task_id to prevent token interleaving between concurrent agents
             task_id = f"{agent.name}:proposal"
             with streaming_task_context(task_id):

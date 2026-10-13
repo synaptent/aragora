@@ -169,7 +169,7 @@ class TestTricksterEvents:
 
     def test_stream_event_types_include_trickster(self):
         """StreamEventType should include trickster events."""
-        from aragora.server.stream.events import StreamEventType
+        from aragora.events.types import StreamEventType
 
         assert hasattr(StreamEventType, "HOLLOW_CONSENSUS")
         assert hasattr(StreamEventType, "TRICKSTER_INTERVENTION")
@@ -177,7 +177,7 @@ class TestTricksterEvents:
     def test_spectator_maps_trickster_events(self):
         """SpectatorMixin should support trickster event types."""
         from aragora.debate.phases.spectator import SpectatorMixin
-        from aragora.server.stream.events import StreamEventType
+        from aragora.events.types import StreamEventType
 
         # SpectatorMixin is used as a mixin for debate phases
         # Verify it can handle trickster-related events

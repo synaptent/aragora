@@ -33,6 +33,8 @@ from typing import Any
 from collections.abc import Callable
 from uuid import uuid4
 
+from aragora.exceptions import AuthorizationError
+
 logger = logging.getLogger(__name__)
 
 
@@ -701,7 +703,7 @@ class DocumentAuditor:
             try:
                 stored_count = await self._knowledge_adapter.store_session_findings(session)
                 logger.info("Stored %s findings as facts in knowledge base", stored_count)
-            except (ValueError, RuntimeError, OSError) as e:
+            except (ValueError, RuntimeError, OSError, AuthorizationError) as e:
                 logger.warning("Failed to store findings in knowledge base: %s", e)
                 session.errors.append(f"Knowledge storage error: {e}")
 
@@ -831,7 +833,7 @@ class DocumentAuditor:
 
         # Load documents from the document store
         try:
-            from aragora.server.documents import DocumentStore
+            from aragora.documents.parsing import DocumentStore
 
             store = DocumentStore()
         except ImportError:

@@ -16,9 +16,13 @@ directly below rather than via mixin.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any
 from collections.abc import Callable
 
+from aragora.events.agent_registry_hooks import (
+    AgentRegistryNotRegisteredError,
+    create_agent_registry,
+)
 from aragora.events.subscribers.config import (
     AsyncDispatchConfig,
     RetryConfig,
@@ -53,19 +57,6 @@ except ImportError:
 
 
 logger = logging.getLogger(__name__)
-
-
-class CompressorProtocol(Protocol):
-    """Protocol for RLM compressor with access pattern recording."""
-
-    def record_access_pattern(
-        self,
-        tier: str,
-        cache_hit: bool,
-        importance: float,
-    ) -> None:
-        """Record a memory access pattern for compression optimization."""
-        ...
 
 
 class CrossSubscriberManager(
@@ -219,38 +210,15 @@ class CrossSubscriberManager(
         """
         Memory retrieval → RLM feedback.
 
-        When memory is retrieved, inform RLM about retrieval patterns
-        to optimize compression strategies. Tracks access patterns
-        for adaptive compression.
+        Records the retrieval pattern (tier, cache hit) in the debug log and in
+        this subscriber's stats. No RLM compressor consumes access patterns, so
+        the handler does not call into ``aragora.rlm``.
         """
         data = event.data
         tier = data.get("tier", "unknown")
         hit = data.get("cache_hit", False)
-        importance = data.get("importance", 0.5)
 
-        # Track access pattern for RLM optimization
         logger.debug("Memory retrieval: tier=%s, cache_hit=%s", tier, hit)
-
-        # Update RLM compression hints based on access patterns
-        try:
-            import aragora.rlm.compressor as compressor_module
-
-            # get_compressor may not exist yet (planned feature)
-            get_compressor = getattr(compressor_module, "get_compressor", None)
-            if get_compressor is None:
-                return
-
-            compressor: CompressorProtocol | None = get_compressor()
-            if compressor and hasattr(compressor, "record_access_pattern"):
-                compressor.record_access_pattern(
-                    tier=tier,
-                    cache_hit=hit,
-                    importance=importance,
-                )
-        except ImportError:
-            pass  # RLM module not available
-        except (RuntimeError, TypeError, AttributeError, ValueError) as e:
-            logger.debug("RLM pattern recording failed: %s", e)
 
     def _handle_debate_end_to_cost_tracking(self, event: StreamEvent) -> None:
         """Debate end → Cost tracking record.
@@ -266,7 +234,7 @@ class CrossSubscriberManager(
         if not total_cost:
             return
 
-        logger.debug(f"Recording debate cost: {debate_id} ${total_cost:.4f}")
+        logger.debug("Recording debate cost: %s $%.4f", debate_id, total_cost)
 
         try:
             from aragora.billing.cost_tracker import get_cost_tracker
@@ -296,8 +264,10 @@ class CrossSubscriberManager(
         confidence = data.get("confidence", 0.0)
 
         logger.debug(
-            f"Debate ended for explainability: {debate_id} "
-            f"consensus={consensus} confidence={confidence:.2f}"
+            "Debate ended for explainability: %s consensus=%s confidence=%.2f",
+            debate_id,
+            consensus,
+            confidence,
         )
 
     def _handle_culture_to_debate(self, event: StreamEvent) -> None:
@@ -320,7 +290,7 @@ class CrossSubscriberManager(
         workspace_id = data.get("workspace_id", "")
 
         logger.debug(
-            f"Culture patterns available: {patterns_count} patterns in workspace {workspace_id}"
+            "Culture patterns available: %s patterns in workspace %s", patterns_count, workspace_id
         )
 
         # Culture patterns are used passively during debate initialization
@@ -395,11 +365,9 @@ class CrossSubscriberManager(
         )
 
         try:
-            from aragora.control_plane.registry import AgentRegistry
-
             import asyncio
 
-            registry = AgentRegistry()
+            registry = create_agent_registry()
 
             if event_subtype in ("birth", "agent_birth"):
                 capabilities = data.get("capabilities", [])
@@ -453,6 +421,11 @@ class CrossSubscriberManager(
 
         except ImportError:
             pass  # Control plane not available
+        except AgentRegistryNotRegisteredError:
+            logger.debug(
+                "Genesis → control plane sync skipped for %s: aragora.control_plane is not imported",
+                agent_id,
+            )
         except (RuntimeError, TypeError, AttributeError, ValueError) as e:
             logger.debug("Genesis → control plane sync failed: %s", e)
 

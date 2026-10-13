@@ -1,4 +1,8 @@
-"""Pipeline handlers - decision plan management and stage transitions."""
+"""Pipeline handlers - decision plan management and stage transitions.
+
+Additional modules (import directly, without expanding eager package exports):
+dag_operations, pipeline_graph and pipeline_telemetry.
+"""
 
 from .decomposition import DecompositionHandler
 from .execute import PipelineExecuteHandler

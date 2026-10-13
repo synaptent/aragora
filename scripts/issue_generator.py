@@ -70,7 +70,7 @@ class IssueGenerator:
 
     def scan_for_issues(self) -> list[Issue]:
         """Scan codebase for concrete issues."""
-        issues = []
+        issues: list[Issue] = []
 
         # 1. Find TODO/FIXME comments
         issues.extend(self._extract_todo_issues())
@@ -219,7 +219,7 @@ class IssueGenerator:
 
     def _extract_todo_issues(self) -> list[Issue]:
         """Convert TODO/FIXME comments to issues."""
-        issues = []
+        issues: list[Issue] = []
 
         for pattern, priority in [("FIXME", 2), ("TODO", 3), ("HACK", 3), ("XXX", 2)]:
             matches = self._run_grep(pattern)
@@ -249,7 +249,7 @@ class IssueGenerator:
 
     def _find_exception_debt(self) -> list[Issue]:
         """Find broad 'except Exception:' patterns."""
-        issues = []
+        issues: list[Issue] = []
         pattern = r"except\s+Exception\s*:"
         matches = self._run_grep(pattern)
 
@@ -283,7 +283,7 @@ class IssueGenerator:
 
     def _find_large_files(self) -> list[Issue]:
         """Find files larger than 500 lines."""
-        issues = []
+        issues: list[Issue] = []
         threshold = 500
 
         for py_file in self.repo_path.rglob("*.py"):
@@ -315,11 +315,15 @@ class IssueGenerator:
             except (OSError, UnicodeDecodeError):
                 continue
 
-        return sorted(issues, key=lambda i: -int(re.search(r"\((\d+)", i.title).group(1)))[:10]
+        def _loc(issue: Issue) -> int:
+            match = re.search(r"\((\d+)", issue.title)
+            return int(match.group(1)) if match else 0
+
+        return sorted(issues, key=lambda i: -_loc(i))[:10]
 
     def _find_untested_modules(self) -> list[Issue]:
         """Find modules without corresponding test files."""
-        issues = []
+        issues: list[Issue] = []
         test_dir = self.repo_path / "tests"
 
         if not test_dir.exists():
@@ -409,7 +413,7 @@ class IssueGenerator:
 
     def _find_deprecated_usage(self) -> list[Issue]:
         """Find deprecated patterns and APIs."""
-        issues = []
+        issues: list[Issue] = []
 
         deprecated_patterns = [
             (

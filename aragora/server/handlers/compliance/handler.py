@@ -61,11 +61,15 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from aragora.deletion_coordinator import get_deletion_coordinator
 from aragora.events.handler_events import emit_handler_event, QUERIED
+from aragora.privacy.deletion import get_deletion_scheduler, get_legal_hold_manager
 from aragora.server.handlers.base import BaseHandler, HandlerResult, error_response
 from aragora.server.handlers.utils.rate_limit import rate_limit
 from aragora.rbac.decorators import PermissionDeniedError, require_permission
 from aragora.observability.metrics import track_handler
+from aragora.storage.audit_store import get_audit_store
+from aragora.storage.receipt_store import get_receipt_store
 
 from .soc2 import SOC2Mixin
 from .gdpr import GDPRMixin
@@ -113,6 +117,19 @@ class ComplianceHandler(
     def __init__(self, server_context: dict[str, Any]):
         """Initialize with server context."""
         super().__init__(server_context)
+
+    def _get_legal_hold_manager(self) -> Any:
+        """Keep handler-level provider overrides out of the mixin's imports."""
+        try:
+            return get_legal_hold_manager()
+        except (ImportError, AttributeError):
+            return super()._get_legal_hold_manager()
+
+    def _get_legal_hold_audit_store(self) -> Any:
+        try:
+            return get_audit_store()
+        except (ImportError, AttributeError):
+            return super()._get_legal_hold_audit_store()
 
     def can_handle(self, path: str, method: str = "GET") -> bool:
         """Check if this handler can process the request."""
@@ -330,4 +347,14 @@ def create_compliance_handler(server_context: dict[str, Any]) -> ComplianceHandl
     return ComplianceHandler(server_context)
 
 
-__all__ = ["ComplianceHandler", "create_compliance_handler"]
+__all__ = [
+    "ComplianceHandler",
+    "create_compliance_handler",
+    # Store getters are re-exported here because the mixins resolve them
+    # through this module so tests can patch a single target.
+    "get_receipt_store",
+    "get_audit_store",
+    "get_legal_hold_manager",
+    "get_deletion_scheduler",
+    "get_deletion_coordinator",
+]

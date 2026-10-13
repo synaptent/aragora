@@ -375,18 +375,19 @@ def _append_jsonl(path: Path, snapshot: dict[str, Any]) -> None:
         handle.write(json.dumps(snapshot, sort_keys=True) + "\n")
 
 
+def _dict_field(snapshot: dict[str, Any], key: str) -> dict[str, Any]:
+    value = snapshot.get(key)
+    return value if isinstance(value, dict) else {}
+
+
 def _compare_states(previous: dict[str, Any] | None, current: dict[str, Any]) -> list[str]:
     if previous is None:
         return []
 
     alerts: list[str] = []
 
-    prev_sessions = (
-        previous.get("bridge_sessions") if isinstance(previous.get("bridge_sessions"), dict) else {}
-    )
-    cur_sessions = (
-        current.get("bridge_sessions") if isinstance(current.get("bridge_sessions"), dict) else {}
-    )
+    prev_sessions = _dict_field(previous, "bridge_sessions")
+    cur_sessions = _dict_field(current, "bridge_sessions")
     for name, session in cur_sessions.items():
         if not isinstance(session, dict) or name.startswith("_"):
             continue
@@ -401,8 +402,8 @@ def _compare_states(previous: dict[str, Any] | None, current: dict[str, Any]) ->
                 f"branch {prev_session.get('branch', '-')} -> {session.get('branch', '-')}"
             )
 
-    prev_queue = previous.get("queue") if isinstance(previous.get("queue"), dict) else {}
-    cur_queue = current.get("queue") if isinstance(current.get("queue"), dict) else {}
+    prev_queue = _dict_field(previous, "queue")
+    cur_queue = _dict_field(current, "queue")
     if prev_queue.get("front_numbers") != cur_queue.get("front_numbers"):
         alerts.append(
             f"boss-ready front changed: {prev_queue.get('front_numbers', [])} -> {cur_queue.get('front_numbers', [])}"
@@ -412,20 +413,16 @@ def _compare_states(previous: dict[str, Any] | None, current: dict[str, Any]) ->
             f"boss-ready count changed: {prev_queue.get('count')} -> {cur_queue.get('count')}"
         )
 
-    prev_metrics = (
-        previous.get("boss_metrics") if isinstance(previous.get("boss_metrics"), dict) else {}
-    )
-    cur_metrics = (
-        current.get("boss_metrics") if isinstance(current.get("boss_metrics"), dict) else {}
-    )
+    prev_metrics = _dict_field(previous, "boss_metrics")
+    cur_metrics = _dict_field(current, "boss_metrics")
     if prev_metrics.get("stale") != cur_metrics.get("stale"):
         alerts.append(
             f"boss metrics stale flipped: {prev_metrics.get('stale')} -> {cur_metrics.get('stale')} "
             f"(age={cur_metrics.get('age_minutes')}m)"
         )
 
-    prev_prs = previous.get("prs") if isinstance(previous.get("prs"), dict) else {}
-    cur_prs = current.get("prs") if isinstance(current.get("prs"), dict) else {}
+    prev_prs = _dict_field(previous, "prs")
+    cur_prs = _dict_field(current, "prs")
     for pr_number, pr in cur_prs.items():
         if not isinstance(pr, dict):
             continue
@@ -445,12 +442,8 @@ def _compare_states(previous: dict[str, Any] | None, current: dict[str, Any]) ->
             elif prev_failed:
                 alerts.append(f"PR #{pr_number} failing checks cleared")
 
-    prev_search = (
-        previous.get("issue_pr_search") if isinstance(previous.get("issue_pr_search"), dict) else {}
-    )
-    cur_search = (
-        current.get("issue_pr_search") if isinstance(current.get("issue_pr_search"), dict) else {}
-    )
+    prev_search = _dict_field(previous, "issue_pr_search")
+    cur_search = _dict_field(current, "issue_pr_search")
     if prev_search.get("pr_numbers") != cur_search.get("pr_numbers"):
         alerts.append(
             f"issue #{cur_search.get('issue_number')} PR matches changed: "

@@ -115,4 +115,12 @@ export class ReviewQueueAPI {
       '/api/v1/review-queue/stats'
     );
   }
+
+  /** Fetch rolling-window triage metrics (7-day and 30-day windows). */
+  async triageMetrics(): Promise<Record<string, unknown>> {
+    return this.client.request<Record<string, unknown>>(
+      'GET',
+      '/api/v1/review-queue/triage-metrics'
+    );
+  }
 }

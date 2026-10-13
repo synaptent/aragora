@@ -234,6 +234,30 @@ class TestParallelGeneration:
 
         with_timeout.assert_called()
 
+    @pytest.mark.asyncio
+    async def test_explicit_proposal_timeout_overrides_agent_only_in_this_phase(self):
+        seen_timeouts = []
+
+        async def with_timeout(awaitable, _agent_name, *, timeout_seconds):
+            seen_timeouts.append(timeout_seconds)
+            return await awaitable
+
+        agent = MockAgent(name="claude")
+        agent.timeout = 999.0
+        phase = ProposalPhase(
+            build_proposal_prompt=MagicMock(return_value="prompt"),
+            generate_with_agent=AsyncMock(return_value="proposal"),
+            with_timeout=with_timeout,
+            proposal_timeout_seconds=37.0,
+        )
+        ctx = DebateContext(env=MockEnvironment(), proposers=[agent])
+        ctx.result = MockDebateResult()
+
+        await phase.execute(ctx)
+
+        assert seen_timeouts == [37.0]
+        assert agent.timeout == 999.0
+
 
 # ============================================================================
 # Message and Event Tests

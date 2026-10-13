@@ -14,6 +14,7 @@ from typing import Any, Optional
 from unittest.mock import AsyncMock, MagicMock, patch
 import hashlib
 
+import asyncpg
 import pytest
 
 from aragora.connectors.enterprise.base import SyncState, SyncStatus
@@ -507,17 +508,31 @@ class TestSync:
         assert "id" in item.metadata["columns"]
 
     @pytest.mark.asyncio
-    async def test_sync_items_error_handling(self, postgres_connector, sample_columns):
-        """Test sync handles table errors gracefully."""
+    @pytest.mark.parametrize(
+        "table_error",
+        [
+            pytest.param(
+                asyncpg.exceptions.ConnectionDoesNotExistError(
+                    "connection was closed in the middle of operation"
+                ),
+                id="connection-lost-mid-query",
+            ),
+            pytest.param(asyncpg.InterfaceError("connection is closed"), id="connection-closed"),
+        ],
+    )
+    async def test_sync_items_error_handling(
+        self, postgres_connector, sample_users_rows, sample_columns, table_error
+    ):
+        """Test a per-table asyncpg error is recorded and sync moves on to the next table."""
         state = SyncState(connector_id="postgres", status=SyncStatus.IDLE)
 
         mock_conn = AsyncMock()
         mock_conn.fetch = AsyncMock(
             side_effect=[
                 sample_columns,
-                Exception("Connection lost"),  # Error on first table
+                table_error,  # Row fetch fails on the first table ("users")
                 sample_columns,
-                [],  # Second table works
+                sample_users_rows[:1],  # Second table ("orders") works
             ]
         )
 
@@ -530,8 +545,30 @@ class TestSync:
         async for item in postgres_connector.sync_items(state, batch_size=10):
             items.append(item)
 
-        # Should continue to next table after error
-        assert "users:" in state.errors[0]
+        assert state.errors == ["users: sync failed"]
+        assert [item.metadata["table"] for item in items] == ["orders"]
+        assert mock_conn.fetch.await_count == 4
+
+    @pytest.mark.asyncio
+    async def test_sync_items_unexpected_error_propagates(self, postgres_connector, sample_columns):
+        """Test an error type outside the per-table clause aborts the sync."""
+        state = SyncState(connector_id="postgres", status=SyncStatus.IDLE)
+
+        mock_conn = AsyncMock()
+        mock_conn.fetch = AsyncMock(side_effect=[sample_columns, Exception("Connection lost")])
+
+        mock_pool = MagicMock()
+        mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
+        mock_pool.acquire.return_value.__aexit__.return_value = None
+        postgres_connector._pool = mock_pool
+
+        with pytest.raises(Exception, match="Connection lost") as exc_info:
+            async for _ in postgres_connector.sync_items(state, batch_size=10):
+                pass
+
+        assert exc_info.type is Exception
+        assert state.errors == []
+        assert mock_conn.fetch.await_count == 2
 
 
 # =============================================================================
@@ -574,23 +611,18 @@ class TestSearch:
 
     @pytest.mark.asyncio
     async def test_search_fallback_to_ilike(self, postgres_connector, sample_columns):
-        """Test search falls back to ILIKE when FTS fails."""
-        call_count = [0]
-
-        async def mock_fetch(*args, **kwargs):
-            call_count[0] += 1
-            if call_count[0] == 1:
-                # First call: FTS fails - use RuntimeError which is caught by the connector
-                raise RuntimeError("FTS not configured")
-            elif call_count[0] == 2:
-                # Second call: get columns
-                return sample_columns
-            else:
-                # Third call: ILIKE search
-                return [{"id": 1, "username": "alice", "email": "alice@example.com"}]
+        """Test search falls back to ILIKE when the FTS query raises an asyncpg error."""
+        alice = {"id": 1, "username": "alice", "email": "alice@example.com"}
 
         mock_conn = AsyncMock()
-        mock_conn.fetch = AsyncMock(side_effect=mock_fetch)
+        mock_conn.fetch = AsyncMock(
+            side_effect=[
+                # FTS query fails: the table has no "content" column
+                asyncpg.exceptions.UndefinedColumnError('column "content" does not exist'),
+                sample_columns,  # Column lookup for the fallback
+                [alice],  # ILIKE query
+            ]
+        )
 
         mock_pool = MagicMock()
         mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
@@ -608,8 +640,34 @@ class TestSearch:
         ):
             results = await postgres_connector.search("alice", limit=5)
 
-        # Should have results from fallback ILIKE search
-        assert len(results) >= 0  # May or may not find results depending on mock
+        assert results == [{"table": "users", "data": alice, "rank": 0.5}]
+        fallback_query, fallback_pattern, _ = mock_conn.fetch.await_args_list[2].args
+        assert "ILIKE" in fallback_query
+        assert fallback_pattern == "%alice%"
+
+    @pytest.mark.asyncio
+    async def test_search_unexpected_error_propagates(self, postgres_connector):
+        """Test an FTS error outside the search clauses propagates without the ILIKE fallback."""
+        mock_conn = AsyncMock()
+        mock_conn.fetch = AsyncMock(side_effect=RuntimeError("FTS not configured"))
+
+        mock_pool = MagicMock()
+        mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
+        mock_pool.acquire.return_value.__aexit__.return_value = None
+        postgres_connector._pool = mock_pool
+
+        postgres_connector.tables = []
+
+        with patch.object(
+            postgres_connector,
+            "_discover_tables",
+            new_callable=AsyncMock,
+            return_value=["users"],
+        ):
+            with pytest.raises(RuntimeError, match="FTS not configured"):
+                await postgres_connector.search("alice", limit=5)
+
+        assert mock_conn.fetch.await_count == 1
 
 
 # =============================================================================

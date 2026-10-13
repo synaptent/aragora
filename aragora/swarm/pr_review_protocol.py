@@ -819,8 +819,8 @@ class PRReviewProtocol:
     def _recommendation_from_outputs(
         self, reviewer_outputs: Sequence[ReviewerOutput]
     ) -> tuple[str, str, float, str]:
-        totals = {recommendation: 0.0 for recommendation in Recommendation}
-        counts = {recommendation: 0 for recommendation in Recommendation}
+        totals = dict.fromkeys(Recommendation, 0.0)
+        counts = dict.fromkeys(Recommendation, 0)
         for output in reviewer_outputs:
             weight = max(float(output.confidence), 0.05)
             totals[output.recommendation_class] += weight

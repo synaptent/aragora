@@ -103,17 +103,26 @@ ChannelHealthHandler = _safe_import(
 # =============================================================================
 
 UnifiedInboxHandler = _safe_import("aragora.server.handlers.features", "UnifiedInboxHandler")
-InboxCommandHandler = _safe_import("aragora.server.handlers.inbox_command", "InboxCommandHandler")
+InboxCommandHandler = _safe_import(
+    "aragora.server.handlers.inbox.inbox_command", "InboxCommandHandler"
+)
 SharedInboxHandler = _safe_import(
     "aragora.server.handlers.shared_inbox.handler", "SharedInboxHandler"
 )
 InboxTrustWedgeHandler = _safe_import(
     "aragora.server.handlers.inbox.trust_wedge_handler", "InboxTrustWedgeHandler"
 )
+TeamInboxMentionsHandler = _safe_import(
+    "aragora.server.handlers.inbox.team_inbox", "TeamInboxMentionsHandler"
+)
 
 # Email triage, feedback hub, notification history/preferences
-EmailTriageHandler = _safe_import("aragora.server.handlers.email_triage", "EmailTriageHandler")
-FeedbackHubHandler = _safe_import("aragora.server.handlers.feedback_hub", "FeedbackHubHandler")
+EmailTriageHandler = _safe_import(
+    "aragora.server.handlers.email.email_triage", "EmailTriageHandler"
+)
+FeedbackHubHandler = _safe_import(
+    "aragora.server.handlers.agents.feedback_hub", "FeedbackHubHandler"
+)
 NotificationHistoryHandler = _safe_import(
     "aragora.server.handlers.notifications.history", "NotificationHistoryHandler"
 )
@@ -174,6 +183,7 @@ SOCIAL_HANDLER_REGISTRY: list[tuple[str, object]] = [
     ("_unified_inbox_handler", UnifiedInboxHandler),
     ("_inbox_command_handler", InboxCommandHandler),
     ("_shared_inbox_handler", SharedInboxHandler),
+    ("_team_inbox_mentions_handler", TeamInboxMentionsHandler),
     # Email triage
     ("_email_triage_handler", EmailTriageHandler),
     # Feedback hub
@@ -226,6 +236,7 @@ __all__ = [
     "UnifiedInboxHandler",
     "InboxCommandHandler",
     "SharedInboxHandler",
+    "TeamInboxMentionsHandler",
     "NotificationHistoryHandler",
     "NotificationPreferencesHandler",
     "NotificationTemplatesHandler",

@@ -323,7 +323,14 @@ jobs:
     # keeps the workflow-level read-only permissions unchanged.
     permissions:
       actions: write
+      # Read-only: check out the default-branch shared selection helper
+      # (scripts/quorum_evidence_retrigger_select.sh). Nothing in this job
+      # can write repository contents.
+      contents: read
       pull-requests: read
+      # Read-only: the draft-run partition in Guard 3 reads the PR's
+      # ready_for_review transitions from the issue-events timeline.
+      issues: read
     # Debounce comment floods: a newer evidence comment for the same PR
     # cancels an older still-pending retrigger. cancel-in-progress here is
     # safe precisely because this job is NOT the required check — the
@@ -334,69 +341,58 @@ jobs:
       group: quorum-evidence-retrigger-${{ github.event.issue.number }}
       cancel-in-progress: true
     steps:
-      - name: Guard and re-trigger stale quorum evaluation
+      # Guard 1: the comment's FIRST markdown heading must name a known
+      # reviewer family — the same convention the quorum evidence parsers
+      # key on (review_queue.py heading inference + canonical model-family
+      # markers). Anything else no-ops successfully.
+      - name: Evidence-heading guard
+        id: heading
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
-          PR_NUMBER: ${{ github.event.issue.number }}
           # Attacker-controlled content enters ONLY via env (never inline
           # ${{ }} inside run:), so comment markdown cannot inject shell.
           COMMENT_BODY: ${{ github.event.comment.body }}
         shell: bash
         run: |
           set -euo pipefail
-
-          # Guard 1: the comment's FIRST markdown heading must name a known
-          # reviewer family — the same convention the quorum evidence
-          # parsers key on (review_queue.py heading inference + canonical
-          # model-family markers). Anything else no-ops successfully.
           heading="$(printf '%s\n' "$COMMENT_BODY" | grep -m1 -E '^[[:space:]]{0,3}#{1,6}[[:space:]]' || true)"
           if [[ -z "$heading" ]]; then
+            echo "match=false" >> "$GITHUB_OUTPUT"
             echo "No markdown heading in comment — not evidence-shaped; no-op."
             exit 0
           fi
           families='claude|anthropic|codex|tesla|harvey|factory|grok|xai|gemini|openai|gpt|mistral|codestral|deepseek|qwen|kimi|moonshot|yi|glm|zhipu|minimax|hermes'
           heading_lower="$(printf '%s' "$heading" | tr '[:upper:]' '[:lower:]')"
           if ! printf '%s' "$heading_lower" | grep -qE "(^|[^a-z0-9])(${families})([^a-z0-9]|$)"; then
+            echo "match=false" >> "$GITHUB_OUTPUT"
             echo "First heading names no known reviewer family — no-op."
             exit 0
           fi
+          echo "match=true" >> "$GITHUB_OUTPUT"
 
-          # Guard 2: PR must be open and non-draft (drafts defer the gate).
-          pr_json="$(gh api "repos/${GH_REPO}/pulls/${PR_NUMBER}")"
-          pr_state="$(jq -r '.state' <<<"$pr_json")"
-          pr_draft="$(jq -r '.draft' <<<"$pr_json")"
-          head_sha="$(jq -r '.head.sha' <<<"$pr_json")"
-          if [[ "$pr_state" != "open" || "$pr_draft" != "false" ]]; then
-            echo "PR #${PR_NUMBER} state=${pr_state} draft=${pr_draft} — gate not active; no-op."
-            exit 0
-          fi
+      - name: Check out the shared selection helper (default branch)
+        if: steps.heading.outputs.match == 'true'
+        uses: actions/checkout@v4
+        with:
+          # Always run the BASE repo's default-branch copy of the helper —
+          # never PR code (the enforcing evaluation job's same ref pin).
+          ref: ${{ github.event.repository.default_branch }}
+          # This checkout exists solely to fetch the helper; a non-cone
+          # sparse checkout materializes that single file instead of the
+          # full tree on every evidence comment.
+          sparse-checkout: scripts/quorum_evidence_retrigger_select.sh
+          sparse-checkout-cone-mode: false
 
-          # Guard 3: only re-run a COMPLETED, non-success evaluation bound to
-          # the CURRENT head SHA. In-flight runs will already see the new
-          # comment; a green gate needs no recount; runs for old heads are
-          # correctly superseded by the next pull_request event.
-          run_json="$(gh api "repos/${GH_REPO}/actions/workflows/aragora-merge-quorum.yml/runs?event=pull_request&head_sha=${head_sha}&per_page=1" \
-            --jq '.workflow_runs[0] // empty')"
-          if [[ -z "$run_json" ]]; then
-            echo "No prior head-bound evaluation run for ${head_sha} — no-op."
-            exit 0
-          fi
-          run_id="$(jq -r '.id' <<<"$run_json")"
-          run_status="$(jq -r '.status' <<<"$run_json")"
-          run_conclusion="$(jq -r '.conclusion' <<<"$run_json")"
-          if [[ "$run_status" != "completed" ]]; then
-            echo "Latest evaluation run ${run_id} is ${run_status} — it will see this comment; no-op."
-            exit 0
-          fi
-          if [[ "$run_conclusion" == "success" ]]; then
-            echo "Latest evaluation run ${run_id} already succeeded — no-op."
-            exit 0
-          fi
-
-          echo "Re-running stale evaluation run ${run_id} (conclusion=${run_conclusion}) for PR #${PR_NUMBER} head ${head_sha}."
-          # Tolerate rerun races (e.g. a manual rerun already in progress):
-          # failure to request a rerun must not turn comment activity into
-          # red noise. The A1 reconciler remains the safety net.
-          gh run rerun "$run_id" --repo "$GH_REPO" \
-            || echo "::warning::rerun request for run ${run_id} failed (possibly already re-running); no-op."
+      # Guards 2-3: gate-deferral check + deterministic newest-survivor
+      # selection + burst dedup live in the shared helper so this job and
+      # the standalone aragora-merge-quorum-retrigger.yml helper cannot
+      # drift apart (docs/specs/QUORUM_EVIDENCE_RETRIGGER.md, PR #9754).
+      - name: Guard and re-trigger stale quorum evaluation
+        if: steps.heading.outputs.match == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/quorum_evidence_retrigger_select.sh

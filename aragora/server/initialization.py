@@ -1011,7 +1011,7 @@ def init_handler_stores(nomic_dir: Path) -> dict:
 
     # DocumentStore for file uploads
     try:
-        from aragora.server.documents import DocumentStore
+        from aragora.documents.parsing import DocumentStore
 
         doc_dir = nomic_dir / "documents"
         stores["document_store"] = DocumentStore(doc_dir)
@@ -1278,7 +1278,7 @@ def init_postgres_stores_sync() -> dict[str, bool]:
         return asyncio.run(init_postgres_stores())
 
 
-async def upgrade_handler_stores(nomic_dir: Path) -> dict[str, str]:
+async def upgrade_handler_stores(nomic_dir: Path | None) -> dict[str, str]:
     """Upgrade handler stores from SQLite to PostgreSQL using the shared pool.
 
     Called during server ``start()`` AFTER ``run_startup_sequence()`` creates

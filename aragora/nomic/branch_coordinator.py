@@ -157,7 +157,7 @@ class BranchCoordinator:
     def _run_git(self, *args: str, check: bool = True) -> subprocess.CompletedProcess:
         """Run a git command."""
         cmd = ["git"] + list(args)
-        return subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
+        return subprocess.run(  # subprocess with fixed args, no shell
             cmd,
             cwd=self.repo_path,
             capture_output=True,
@@ -173,7 +173,7 @@ class BranchCoordinator:
     ) -> subprocess.CompletedProcess:
         """Run a git command in a worktree directory."""
         cmd = ["git"] + list(args)
-        return subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
+        return subprocess.run(  # subprocess with fixed args, no shell
             cmd,
             cwd=worktree_path,
             capture_output=True,

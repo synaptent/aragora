@@ -138,7 +138,7 @@ def get_loop_name(aragora_path: Path) -> str:
 async def run_with_streaming(
     cycles: int = 3,
     port: int = 8080,
-    aragora_path: Path = None,
+    aragora_path: Path | None = None,
     auto_commit: bool = False,
 ):
     """Run nomic loop with streaming enabled."""

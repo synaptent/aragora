@@ -457,7 +457,7 @@ class TestSNSSQSConnectorConnection:
 
         # Setup mock client
         mock_client = AsyncMock()
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         connector._sqs_client = mock_client
 
         await connector.disconnect()

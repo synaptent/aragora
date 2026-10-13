@@ -601,7 +601,7 @@
       "code": "",
       "col_offset": 17,
       "end_col_offset": 56,
-      "filename": "aragora/server/handlers/playground.py",
+      "filename": "aragora/server/handlers/demo/playground.py",
       "issue_confidence": "HIGH",
       "issue_cwe": {
         "id": 22,

@@ -22,9 +22,34 @@ scripts/preflight_mypy.sh --diff-base origin/release-2026.05
 The script:
 
 1. Resolves the changed `*.py` files via `git diff --name-only <base>...HEAD`.
-2. If none, prints `no python changes; mypy preflight skipped` and exits 0.
-3. Otherwise runs `mypy --pretty <files...>` using the repo's existing config
-   and exits with mypy's exit code (plus a short remediation hint on failure).
+2. Repo-config pass: if none changed, prints
+   `no python changes; repo-config mypy pass skipped`; otherwise runs
+   `mypy --pretty <files...>` using the repo's existing config (plus a short
+   remediation hint on failure).
+3. Pre-push hook parity: always runs the repo's own pre-push hook with
+   `pre-commit run typecheck-changed --hook-stage pre-push --all-files --verbose`.
+   The hook plans `origin/main...HEAD` (whatever `--diff-base` says) and runs
+   CI's changed-file form, `mypy --ignore-missing-imports --follow-imports=skip
+   --show-error-codes`, on the changed `aragora/**.py` files, or
+   `scripts/test_tiers.sh typecheck` when config files force a full run. It
+   uses the mypy version and stub packages pinned in `.pre-commit-config.yaml`.
+4. Exits with the repo-config pass's mypy exit code if it failed, otherwise
+   with the hook's exit code. It exits 2 if `pre-commit` is missing, or if
+   `mypy` is missing when Python files changed.
+
+Neither pass subsumes the other, so the preflight requires both. With
+`--follow-imports=skip` the hook cannot see attributes that only an unchanged
+base class initializes and reports them as `[has-type]`; the repo config
+(`follow_imports = "silent"`) resolves them. In the other direction, the
+repo-config pass follows imports and reports errors such as `[arg-type]`
+against unchanged modules, which the hook treats as `Any`. The hook's stub
+set can also change verdicts relative to a project virtualenv that has the
+runtime packages installed. Running the hook itself keeps the preflight in
+step with what `git push` will enforce.
+
+The gate selects files from **committed state only** — python edits outside
+the committed diff (staged, unstaged, or untracked) are never type-checked
+(the script prints a stderr warning naming them), so run it after committing.
 
 ## Integration suggestion
 
@@ -37,5 +62,10 @@ scripts/preflight_mypy.sh || {
 }
 ```
 
-A future lane may wire this into `pre-push` (see the project README for opt-in
-hook installation guidance); that wiring is intentionally out of scope here.
+## Tests
+
+`tests/scripts/test_preflight_mypy.py` covers the script with PATH shims. Its
+real-hook fixtures run the actual hook and mypy only when
+`PREFLIGHT_MYPY_HOOK_INTEGRATION=1` is set, because the first pre-commit run
+may need network access to fetch every hook repository in
+`.pre-commit-config.yaml` and to build the hook's environment.

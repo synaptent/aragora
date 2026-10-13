@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import copy
 import hashlib
 import inspect
@@ -9,6 +10,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import time
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -17,9 +19,28 @@ from typing import Any, Literal, cast, overload
 import pytest
 import scripts.check_contract_drift_ratchet as ratchet
 import scripts.generate_contract_drift_inventory as gen
+from tests.scripts._contract_drift_historical_git import ensure_pr_9320_head
+
+if sys.platform == "win32":
+    import msvcrt
+else:
+    import fcntl
 
 PROGRAM_REL = "scripts/baselines/contract_drift_program.json"
 _DISCOVER_CANONICAL_ARTIFACT = ratchet._discover_canonical_artifact
+_CDG_TEST_ROOT = Path(__file__).resolve().parents[2]
+_DECISION_351_PACK = (
+    _CDG_TEST_ROOT / "tests/fixtures/contract_drift_decision_351_immutable_evidence.pack"
+)
+_REAL_NEXT_EVENT_PACK = (
+    _CDG_TEST_ROOT / "tests/fixtures/contract_drift_trusted_bootstrap_real_next_event.pack"
+)
+_EXPECTED_DECISION_351_PACK_SHA256 = (
+    "df888b46a3f94d784dd005773ac70b45d98140d955c5252e6b555a3d4b9e83ea"
+)
+_EXPECTED_REAL_NEXT_EVENT_PACK_SHA256 = (
+    "2e5436cd6d0fbbb692cd4a1fd289ae7e8d80b6594f49cc612f09c493c2414bb8"
+)
 
 
 def _write_json(path: Path, payload: dict) -> None:
@@ -1515,7 +1536,7 @@ def _clone_repository_with_synthetic_accepted_authority(
     *,
     cohort_path: Path,
     provenance_path: Path,
-) -> tuple[Path, str, str, bool]:
+) -> tuple[Path, str, str]:
     source_repo = Path(__file__).resolve().parents[2]
     repo_root = tmp_path / "synthetic-authority-repo"
     subprocess.run(
@@ -1529,27 +1550,87 @@ def _clone_repository_with_synthetic_accepted_authority(
     inventory_path = repo_root / gen.DEFAULT_INVENTORY
     inventory = json.loads(inventory_path.read_bytes())
     accepted_authority = inventory.get("accepted_authority")
-    has_accepted_authority = isinstance(accepted_authority, dict)
-    if accepted_authority is not None and not has_accepted_authority:
-        raise AssertionError("production accepted authority is malformed")
-    if has_accepted_authority:
-        canonical_artifacts = accepted_authority.get("canonical_artifacts")
-        if not isinstance(canonical_artifacts, dict):
-            raise AssertionError("production accepted authority lacks canonical artifacts")
-        before = copy.deepcopy(inventory)
-        original_canonical_artifacts = copy.deepcopy(canonical_artifacts)
-        cohort = json.loads(cohort_path.read_bytes())
-        provenance = json.loads(provenance_path.read_bytes())
-        canonical_artifacts["original_cohort"] = cohort
-        canonical_artifacts["sdk_provenance"] = provenance
-        reverted = copy.deepcopy(inventory)
-        reverted_artifacts = reverted["accepted_authority"]["canonical_artifacts"]
-        reverted_artifacts["original_cohort"] = original_canonical_artifacts["original_cohort"]
-        reverted_artifacts["sdk_provenance"] = original_canonical_artifacts["sdk_provenance"]
-        assert reverted == before
-        _write_json(inventory_path, inventory)
+    if not isinstance(accepted_authority, dict):
+        raise AssertionError("production accepted authority is missing or malformed")
+    canonical_artifacts = accepted_authority.get("canonical_artifacts")
+    if not isinstance(canonical_artifacts, dict):
+        raise AssertionError("production accepted authority lacks canonical artifacts")
+    before = copy.deepcopy(inventory)
+    original_canonical_artifacts = copy.deepcopy(canonical_artifacts)
+    cohort = json.loads(cohort_path.read_bytes())
+    provenance = json.loads(provenance_path.read_bytes())
+    canonical_artifacts["original_cohort"] = cohort
+    canonical_artifacts["sdk_provenance"] = provenance
+    reverted = copy.deepcopy(inventory)
+    reverted_artifacts = reverted["accepted_authority"]["canonical_artifacts"]
+    reverted_artifacts["original_cohort"] = original_canonical_artifacts["original_cohort"]
+    reverted_artifacts["sdk_provenance"] = original_canonical_artifacts["sdk_provenance"]
+    assert reverted == before
+    _write_json(inventory_path, inventory)
     fixture_sha = _commit(repo_root, "bind synthetic accepted authority")
-    return repo_root, production_sha, fixture_sha, has_accepted_authority
+    return repo_root, production_sha, fixture_sha
+
+
+def _mutate_cloned_production_inventory(
+    monkeypatch: pytest.MonkeyPatch,
+    mutate: Any,
+) -> None:
+    real_run = subprocess.run
+
+    def run_then_mutate(
+        argv: list[str],
+        *args: Any,
+        **kwargs: Any,
+    ) -> subprocess.CompletedProcess[Any]:
+        result = real_run(argv, *args, **kwargs)
+        if argv[:3] == ["git", "clone", "-q"]:
+            inventory_path = Path(argv[-1]) / gen.DEFAULT_INVENTORY
+            inventory = json.loads(inventory_path.read_bytes())
+            mutate(inventory)
+            _write_json(inventory_path, inventory)
+        return result
+
+    monkeypatch.setattr(subprocess, "run", run_then_mutate)
+
+
+@pytest.mark.parametrize(
+    ("mutate", "message"),
+    (
+        pytest.param(
+            lambda inventory: inventory.pop("accepted_authority"),
+            "production accepted authority",
+            id="missing-authority",
+        ),
+        pytest.param(
+            lambda inventory: inventory.__setitem__("accepted_authority", None),
+            "production accepted authority",
+            id="malformed-authority",
+        ),
+        pytest.param(
+            lambda inventory: inventory["accepted_authority"].pop("canonical_artifacts"),
+            "lacks canonical artifacts",
+            id="missing-canonical-artifacts",
+        ),
+    ),
+)
+def test_synthetic_accepted_authority_fixture_rejects_invalid_production_authority(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mutate: Any,
+    message: str,
+):
+    cohort_path, provenance_path = _write_synthetic_canonical_artifacts(
+        tmp_path,
+        monkeypatch,
+    )
+    _mutate_cloned_production_inventory(monkeypatch, mutate)
+
+    with pytest.raises(AssertionError, match=message):
+        _clone_repository_with_synthetic_accepted_authority(
+            tmp_path,
+            cohort_path=cohort_path,
+            provenance_path=provenance_path,
+        )
 
 
 def _fixture_sdk_partitions() -> dict[str, list[str]]:
@@ -1650,6 +1731,24 @@ def _boundary_git_repo(
         (repo / "fixture.txt").write_text(f"boundary-{index}\n", encoding="utf-8")
         shas[boundary] = _commit(repo, boundary)
     return repo, start_sha, shas
+
+
+def _fixture_git_changed_paths(repo: Path, base_sha: str, head_sha: str) -> list[str]:
+    raw = subprocess.check_output(
+        [
+            "git",
+            "-C",
+            str(repo),
+            "diff",
+            "--no-renames",
+            "--name-only",
+            "-z",
+            f"{base_sha}^{{tree}}",
+            f"{head_sha}^{{tree}}",
+        ]
+    )
+    assert not raw or raw.endswith(b"\0")
+    return sorted(path.decode("utf-8") for path in raw[:-1].split(b"\0") if path)
 
 
 def _stable_attestation_claim() -> dict[str, Any]:
@@ -2075,6 +2174,7 @@ def _stub_boundary_dependencies(monkeypatch: pytest.MonkeyPatch) -> None:
 def _stub_boundary_evidence_index(
     monkeypatch: pytest.MonkeyPatch,
     *,
+    repo: Path,
     index_path: Path,
     index_length: int,
     index_sha256: str,
@@ -2108,11 +2208,20 @@ def _stub_boundary_evidence_index(
             }
             for record in governed
         }
+        authenticated_pr_files = {
+            record["pr"]: _fixture_git_changed_paths(
+                repo,
+                record["base_sha"],
+                record["head_sha"],
+            )
+            for record in governed
+        }
         return (
             resources,
             summary,
             {
                 "authenticated_pr_changes": authenticated_pr_changes,
+                "authenticated_pr_files": authenticated_pr_files,
                 "expected_rule_suite_ref": "refs/heads/main",
                 "fixture_evidence_index": True,
                 "repository_id": 1126097105,
@@ -2162,6 +2271,7 @@ def _boundary_result(
     _stub_boundary_dependencies(monkeypatch)
     _stub_boundary_evidence_index(
         monkeypatch,
+        repo=repo,
         index_path=index_path,
         index_length=index_length,
         index_sha256=index_sha256,
@@ -2185,12 +2295,10 @@ def test_boundary_pass_fixture_uses_production_artifact_and_authority_authentica
         tmp_path,
         monkeypatch,
     )
-    repo_root, start_sha, end_sha, _has_accepted_authority = (
-        _clone_repository_with_synthetic_accepted_authority(
-            tmp_path,
-            cohort_path=cohort_path,
-            provenance_path=provenance_path,
-        )
+    repo_root, start_sha, end_sha = _clone_repository_with_synthetic_accepted_authority(
+        tmp_path,
+        cohort_path=cohort_path,
+        provenance_path=provenance_path,
     )
     operation_log: list[dict[str, Any]] = []
     authority = ratchet._authenticate_authority_manifest(
@@ -2530,29 +2638,26 @@ def test_canonical_cohort_and_provenance_artifacts_are_in_authority_closure(
         "sha256",
         hashlib.sha256(original_raw).hexdigest(),
     )
-    repo_root, production_sha, end_sha, has_accepted_authority = (
-        _clone_repository_with_synthetic_accepted_authority(
-            tmp_path,
-            cohort_path=cohort_path,
-            provenance_path=provenance_path,
-        )
+    repo_root, production_sha, end_sha = _clone_repository_with_synthetic_accepted_authority(
+        tmp_path,
+        cohort_path=cohort_path,
+        provenance_path=provenance_path,
     )
-    if has_accepted_authority:
-        with pytest.raises(
-            gen.AuthorityClosureError,
-            match="accepted authority differs from authenticated canonical artifacts",
-        ):
-            ratchet._authenticate_authority_manifest(
-                repo_root=repo_root,
-                end_sha=production_sha,
-                authority_manifest_path=None,
-                authority_manifest_byte_length=None,
-                authority_manifest_sha256=None,
-                cohort_artifact_path=cohort_path,
-                sdk_provenance_artifact_path=provenance_path,
-                scratch_root=tmp_path,
-                operation_log=[],
-            )
+    with pytest.raises(
+        gen.AuthorityClosureError,
+        match="accepted authority differs from authenticated canonical artifacts",
+    ):
+        ratchet._authenticate_authority_manifest(
+            repo_root=repo_root,
+            end_sha=production_sha,
+            authority_manifest_path=None,
+            authority_manifest_byte_length=None,
+            authority_manifest_sha256=None,
+            cohort_artifact_path=cohort_path,
+            sdk_provenance_artifact_path=provenance_path,
+            scratch_root=tmp_path,
+            operation_log=[],
+        )
     captured: dict[str, Any] = {}
     original_build = ratchet.inventory_mod.build_authority_manifest
 
@@ -2942,6 +3047,7 @@ def test_caller_summaries_and_parse_reserialize_are_not_proof(
     _stub_boundary_dependencies(monkeypatch)
     _stub_boundary_evidence_index(
         monkeypatch,
+        repo=repo,
         index_path=index_path,
         index_length=len(raw),
         index_sha256=hashlib.sha256(raw).hexdigest(),
@@ -2962,6 +3068,7 @@ def test_caller_summaries_and_parse_reserialize_are_not_proof(
     index_path.write_bytes(pretty)
     _stub_boundary_evidence_index(
         monkeypatch,
+        repo=repo,
         index_path=index_path,
         index_length=len(pretty),
         index_sha256=hashlib.sha256(pretty).hexdigest(),
@@ -3165,6 +3272,7 @@ def test_canonical_route_fact_fails_when_exact_ref_baseline_contradicts(
     _stub_boundary_dependencies(monkeypatch)
     _stub_boundary_evidence_index(
         monkeypatch,
+        repo=repo,
         index_path=index_path,
         index_length=index_length,
         index_sha256=index_sha256,
@@ -3263,6 +3371,7 @@ def test_later_boundary_fails_when_route_debt_is_reintroduced(
     _stub_boundary_dependencies(monkeypatch)
     _stub_boundary_evidence_index(
         monkeypatch,
+        repo=repo,
         index_path=index_path,
         index_length=index_length,
         index_sha256=index_sha256,
@@ -3307,6 +3416,7 @@ def test_sdk_zero_debt_fails_when_exact_ref_baseline_contradicts(
     _stub_boundary_dependencies(monkeypatch)
     _stub_boundary_evidence_index(
         monkeypatch,
+        repo=repo,
         index_path=index_path,
         index_length=index_length,
         index_sha256=index_sha256,
@@ -3345,6 +3455,7 @@ def test_core_sdk_allows_remaining_extended_exact_ref_baseline_debt(
     _stub_boundary_dependencies(monkeypatch)
     _stub_boundary_evidence_index(
         monkeypatch,
+        repo=repo,
         index_path=index_path,
         index_length=index_length,
         index_sha256=index_sha256,
@@ -3395,6 +3506,7 @@ def test_evidence_reauthentication_blocks_toctou_movement(
     _stub_boundary_dependencies(monkeypatch)
     _stub_boundary_evidence_index(
         monkeypatch,
+        repo=repo,
         index_path=index_path,
         index_length=index_length,
         index_sha256=index_sha256,
@@ -3462,6 +3574,7 @@ def test_boundary_uses_private_scratch_child_and_removes_it(
     _stub_boundary_dependencies(monkeypatch)
     _stub_boundary_evidence_index(
         monkeypatch,
+        repo=repo,
         index_path=index_path,
         index_length=index_length,
         index_sha256=index_sha256,
@@ -3934,6 +4047,31 @@ def test_live_release_pagination_runs_to_exhaustion(monkeypatch: pytest.MonkeyPa
     assert set(identities) == set(requests)
 
 
+def test_stage2_inner_rerun_uses_process_lock():
+    assert "_stage1_rerun_lock" in inspect.getsource(test_stage2_reruns_full_stage1_matrix)
+
+
+@contextlib.contextmanager
+def _stage1_rerun_lock():
+    lock_path = Path(tempfile.gettempdir()) / "aragora-cdg-stage1-rerun.lock"
+    with lock_path.open("a+b") as lock:
+        if sys.platform == "win32":
+            lock.write(b"\0")
+            lock.flush()
+            lock.seek(0)
+            msvcrt.locking(lock.fileno(), msvcrt.LK_LOCK, 1)
+        else:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            if sys.platform == "win32":
+                lock.seek(0)
+                msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+
+
 def test_stage2_reruns_full_stage1_matrix():
     stage1_names = {
         "test_all_loaded_repository_modules_are_under_exact_ref_extraction_root",
@@ -3949,13 +4087,14 @@ def test_stage2_reruns_full_stage1_matrix():
     }
     assert ratchet.STAGE1_REQUIRED_TESTS == tuple(sorted(stage1_names))
     repo = Path(ratchet.__file__).resolve().parents[1]
-    proc = subprocess.run(
-        [sys.executable, "-m", "pytest", *ratchet.STAGE1_TEST_MATRIX, "-q"],
-        cwd=repo,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    with _stage1_rerun_lock():
+        proc = subprocess.run(
+            [sys.executable, "-m", "pytest", *ratchet.STAGE1_TEST_MATRIX, "-q"],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
     assert proc.returncode == 0, proc.stdout + proc.stderr
 
 
@@ -4149,6 +4288,8 @@ def test_read_only_cli_rejects_mutating_git_and_subprocess_actions():
         ["git", "merge", "main"],
         ["git", "push", "origin", "HEAD"],
         ["git", "config", "user.name", "unsafe"],
+        ["git", "-c", "diff.context=3", "merge", "main"],
+        ["git", "-c"],
         ["gh", "pr", "merge", "1"],
         ["gh", "run", "rerun", "1"],
         ["gh", "release", "upload", "tag", "asset"],
@@ -4158,7 +4299,139 @@ def test_read_only_cli_rejects_mutating_git_and_subprocess_actions():
         with pytest.raises(ValueError, match="mutating|unsupported"):
             ratchet._guard_subprocess_argv(argv)
     ratchet._guard_subprocess_argv(["git", "status", "--porcelain=v1"])
+    ratchet._guard_subprocess_argv(["git", "-c", "diff.context=3", "diff", "HEAD^", "HEAD"])
     ratchet._guard_subprocess_argv(["gh", "api", "--method", "GET", "repos/o/r"])
+
+
+def test_read_only_git_guard_rejects_command_executing_config_pairs():
+    # Inline `-c` bypasses the GIT_CONFIG_GLOBAL/NOSYSTEM scrub, and keys such
+    # as core.fsmonitor / diff.external / core.pager execute attacker-chosen
+    # commands even under read-only subcommands.
+    for argv in (
+        ["git", "-c", "core.fsmonitor=/tmp/evil", "status", "--porcelain=v1"],
+        ["git", "-c", "diff.external=/tmp/evil", "diff", "HEAD^", "HEAD"],
+        ["git", "-c", "core.pager=/tmp/evil", "log"],
+    ):
+        with pytest.raises(ValueError, match="unsupported git -c configuration"):
+            ratchet._guard_subprocess_argv(argv)
+
+
+def test_read_only_git_guard_config_allowlist_is_fail_closed():
+    # Only the exact call-site key=value literals pass: an allowlisted key
+    # with a different value, unknown keys, and case variants are all
+    # rejected rather than falling through to the subcommand allowlist.
+    for pair in (
+        "diff.context=99",
+        "diff.algorithm=patience",
+        "diff.noprefix=true",
+        "credential.helper=!/tmp/evil",
+        "core.sshCommand=/tmp/evil",
+        "Diff.Context=3",
+        "diff.context",
+        "",
+    ):
+        with pytest.raises(ValueError, match="unsupported git -c configuration"):
+            ratchet._guard_subprocess_argv(["git", "-c", pair, "status", "--porcelain=v1"])
+
+
+def test_read_only_git_guard_accepts_exact_call_site_patch_argv(tmp_path: Path):
+    # The exact argv shape built by the historical-receipt patch call sites.
+    argv = [
+        "git",
+        "-c",
+        "diff.noprefix=false",
+        "-c",
+        "diff.mnemonicPrefix=false",
+        "-c",
+        "diff.algorithm=myers",
+        "-c",
+        "diff.context=3",
+        "-C",
+        str(tmp_path),
+        "diff",
+        "--no-ext-diff",
+        "--no-textconv",
+        "--no-renames",
+        "--no-color",
+        "--no-indent-heuristic",
+        "--full-index",
+        "--unified=3",
+        "--src-prefix=a/",
+        "--dst-prefix=b/",
+        "-O/dev/null",
+        "base^{tree}",
+        "head^{tree}",
+    ]
+    ratchet._guard_subprocess_argv(argv)
+    assert ratchet._git_subcommand(argv) == "diff"
+
+
+def test_read_only_git_config_literal_allowlist_matches_call_sites():
+    assert ratchet._READ_ONLY_GIT_CONFIG_LITERALS == frozenset(
+        {
+            "diff.algorithm=myers",
+            "diff.context=3",
+            "diff.mnemonicPrefix=false",
+            "diff.noprefix=false",
+        }
+    )
+
+
+def test_read_only_git_guard_rejects_config_env_joined_form():
+    # --config-env=<name>=<envvar> is git's environment-sourced equivalent of
+    # -c (including command-executing keys) and slips past the generic option
+    # skip as a plain "--" token, bypassing the -c allowlist entirely.
+    for argv in (
+        ["git", "--config-env=core.pager=EVIL_PAGER", "log"],
+        ["git", "--config-env=core.fsmonitor=EVIL_MONITOR", "status", "--porcelain=v1"],
+        ["git", "--config-env=diff.external=EVIL_DIFF", "diff", "HEAD^", "HEAD"],
+    ):
+        with pytest.raises(ValueError, match="config-env"):
+            ratchet._guard_subprocess_argv(argv)
+
+
+def test_read_only_git_guard_rejects_config_env_separate_form():
+    # The two-token spelling must be rejected as --config-env fail-closed, not
+    # merely misclassified when its value token falls through as a subcommand.
+    for argv in (
+        ["git", "--config-env", "core.pager=EVIL_PAGER", "log"],
+        ["git", "--config-env", "diff.external=EVIL_DIFF", "diff", "HEAD^", "HEAD"],
+        ["git", "--config-env", "core.fsmonitor=EVIL_MONITOR", "rev-parse", "HEAD"],
+    ):
+        with pytest.raises(ValueError, match="config-env"):
+            ratchet._guard_subprocess_argv(argv)
+
+
+def test_read_only_git_scrubs_config_without_scrubbing_gh(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    calls: list[tuple[list[str], dict[str, str]]] = []
+
+    def fake_run(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[bytes]:
+        calls.append((argv, kwargs["env"]))
+        return subprocess.CompletedProcess(argv, 0, stdout=b"", stderr=b"")
+
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", "/hostile/global")
+    monkeypatch.delenv("GIT_CONFIG_NOSYSTEM", raising=False)
+    monkeypatch.setattr(ratchet.subprocess, "run", fake_run)
+    ratchet._run_read_only(
+        ["git", "status", "--porcelain=v1"],
+        operation_log=[],
+        resource="git-status",
+    )
+    ratchet._run_read_only(
+        ["gh", "api", "--method", "GET", "repos/o/r"],
+        operation_log=[],
+        resource="github-api",
+    )
+    git_env = calls[0][1]
+    assert git_env["GIT_CONFIG_GLOBAL"] == os.devnull
+    assert git_env["GIT_CONFIG_NOSYSTEM"] == "1"
+    assert git_env["GIT_NO_REPLACE_OBJECTS"] == "1"
+    assert git_env["LC_ALL"] == "C"
+    gh_env = calls[1][1]
+    assert gh_env["GIT_CONFIG_GLOBAL"] == "/hostile/global"
+    assert "GIT_CONFIG_NOSYSTEM" not in gh_env
 
 
 def _accepted_authority() -> dict[str, Any]:
@@ -4166,21 +4439,360 @@ def _accepted_authority() -> dict[str, Any]:
     return json.loads(path.read_text())["accepted_authority"]
 
 
-def test_accepted_authority_keeps_genesis_and_reconciles_live_witnesses():
+def _accepted_authority_at_ref(
+    ref: str,
+    *,
+    repo_root: Path | None = None,
+) -> dict[str, Any]:
+    if repo_root is None:
+        repo_root = Path(ratchet.__file__).resolve().parents[1]
+    document = ratchet._git_json(repo_root, ref, gen.DEFAULT_INVENTORY)
+    authority = document.get("accepted_authority")
+    assert isinstance(authority, dict)
+    return authority
+
+
+def _git_text(repo: Path, *args: str) -> str:
+    return subprocess.check_output(
+        ["git", "-C", str(repo), *args],
+        text=True,
+    ).strip()
+
+
+def _git_bytes(repo: Path, *args: str) -> bytes:
+    return subprocess.check_output(["git", "-C", str(repo), *args])
+
+
+def _commit_record(repo: Path, oid: str) -> dict[str, Any]:
+    body = _git_text(repo, "cat-file", "commit", oid)
+    headers, _, message = body.partition("\n\n")
+    tree = ""
+    parents: list[str] = []
+    committed_at = -1
+    for line in headers.splitlines():
+        key, _, value = line.partition(" ")
+        if key == "tree":
+            tree = value
+        elif key == "parent":
+            parents.append(value)
+        elif key == "committer":
+            committed_at = int(value.rsplit(" ", 2)[-2])
+    assert tree and committed_at >= 0
+    return {
+        "oid": oid,
+        "tree": tree,
+        "parents": tuple(parents),
+        "committed_at": committed_at,
+        "subject": message.splitlines()[0],
+    }
+
+
+def _object_ids(repo: Path, kind: str) -> tuple[str, ...]:
+    records = _git_text(
+        repo,
+        "cat-file",
+        "--batch-all-objects",
+        "--batch-check=%(objectname) %(objecttype)",
+    ).splitlines()
+    return tuple(sorted(line.split()[0] for line in records if line.split()[1] == kind))
+
+
+def _decision_351_repo(tmp_path: Path) -> Path:
+    repo = tmp_path / "decision-351-evidence"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    for pack_path, expected_sha256 in (
+        (_DECISION_351_PACK, _EXPECTED_DECISION_351_PACK_SHA256),
+        (_REAL_NEXT_EVENT_PACK, _EXPECTED_REAL_NEXT_EVENT_PACK_SHA256),
+    ):
+        pack = pack_path.read_bytes()
+        assert hashlib.sha256(pack).hexdigest() == expected_sha256
+        subprocess.run(
+            ["git", "-C", str(repo), "index-pack", "--stdin"],
+            input=pack,
+            check=True,
+            capture_output=True,
+        )
+    return repo
+
+
+def _decision_351_facts(repo: Path) -> dict[str, dict[str, Any]]:
+    commits = {oid: _commit_record(repo, oid) for oid in _object_ids(repo, "commit")}
+    missing_parents = {
+        parent
+        for record in commits.values()
+        for parent in record["parents"]
+        if parent not in commits
+    }
+    h3_candidates = [
+        record
+        for record in commits.values()
+        if len(record["parents"]) == 1
+        and record["parents"][0] in commits
+        and len(commits[record["parents"][0]]["parents"]) == 1
+        and commits[record["parents"][0]]["parents"][0] in commits
+        and len(commits[commits[record["parents"][0]]["parents"][0]]["parents"]) == 2
+    ]
+    assert len(h3_candidates) == 1
+    h3 = h3_candidates[0]
+    assert len(h3["parents"]) == 1
+    h2 = commits[h3["parents"][0]]
+    assert len(h2["parents"]) == 1
+    h1 = commits[h2["parents"][0]]
+    assert len(h1["parents"]) == 2
+    base = commits[h1["parents"][1]]
+
+    h4_candidates = [
+        record
+        for record in commits.values()
+        if record["parents"] == (h3["oid"],) and record["tree"] == h3["tree"]
+    ]
+    assert len(h4_candidates) == 1
+    h4 = h4_candidates[0]
+
+    absorption_candidates = [
+        record
+        for record in commits.values()
+        if len(record["parents"]) == 2 and record["parents"][0] == h4["oid"]
+    ]
+    assert len(absorption_candidates) == 1
+    absorption = absorption_candidates[0]
+    repin = commits[absorption["parents"][1]]
+    assert set(repin["parents"]) <= missing_parents
+
+    merge_candidates = [
+        record
+        for record in commits.values()
+        if record["parents"] == (repin["oid"],) and record["tree"] == absorption["tree"]
+    ]
+    assert len(merge_candidates) == 1
+    return {
+        "base": base,
+        "h1": h1,
+        "h2": h2,
+        "h3": h3,
+        "repin": repin,
+        "h4": h4,
+        "absorption": absorption,
+        "merge": merge_candidates[0],
+    }
+
+
+def _genesis_authority(authority: dict[str, Any]) -> dict[str, Any]:
+    """Reconstruct the all-active genesis form of the accepted authority.
+
+    The committed authority now carries the serve-side catch-up paydown
+    (257 resolved records). Truncating every disposition history back to the
+    genesis event reproduces the exact pre-paydown base, letting tests
+    exercise the paydown comparison against the real committed head.
+    """
+    genesis = copy.deepcopy(authority)
+    for item in genesis["active_inventory"]:
+        item["status"] = "active"
+        item["disposition_history"] = [dict(ratchet.GENESIS_DISPOSITION)]
+    genesis["active_inventory_sha256"] = ratchet._sha256_bytes(
+        ratchet._canonical_json_bytes(genesis["active_inventory"])
+    )
+    manifest = {key: value for key, value in genesis.items() if key != "manifest_sha256"}
+    genesis["manifest_sha256"] = ratchet._sha256_bytes(ratchet._canonical_json_bytes(manifest))
+    return genesis
+
+
+def _paydown_waves(authority: dict[str, Any]) -> list[tuple[str, list[str]]]:
+    """Group the committed paydown into digest-bound waves, in replay order.
+
+    Every resolved record's final event binds the active set it leaves behind,
+    so the records sharing one digest form a wave and the waves chain from
+    genesis: a wave is next exactly when its digest equals the digest of the
+    remaining set minus its own ids. Returns ``(digest, sorted ids)`` pairs.
+    """
+    waves: dict[str, list[str]] = {}
+    as_of_by_digest: dict[str, str] = {}
+    for item in authority["active_inventory"]:
+        last = item["disposition_history"][-1]
+        if item["status"] == "active":
+            assert len(item["disposition_history"]) == 1
+            continue
+        assert item["status"] == "resolved" and last["status"] == "resolved"
+        digest = last["evidence"]["fact"]["active_original_record_ids_sha256"]
+        waves.setdefault(digest, []).append(item["original_record_id"])
+        as_of_by_digest.setdefault(digest, last["as_of"])
+        assert as_of_by_digest[digest] == last["as_of"]
+    remaining = {item["original_record_id"] for item in authority["active_inventory"]}
+    replayed: list[tuple[str, list[str]]] = []
+    while waves:
+        bound = [
+            digest
+            for digest, ids in waves.items()
+            if ratchet._sha256_bytes(ratchet._canonical_json_bytes(sorted(remaining - set(ids))))
+            == digest
+        ]
+        assert len(bound) == 1, "paydown wave is not bound to the active set it leaves"
+        ids = sorted(waves.pop(bound[0]))
+        remaining -= set(ids)
+        replayed.append((bound[0], ids))
+    dates = [as_of_by_digest[digest] for digest, _ids in replayed]
+    assert dates == sorted(dates), "paydown waves replay out of chronological order"
+    return replayed
+
+
+def _replay_committed_paydown(
+    authority: dict[str, Any], *, repo_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> list[tuple[str, list[str]]]:
+    """Replay the committed paydown through the production comparator.
+
+    ``compare_accepted_authorities`` binds the appended events of one head to
+    that head's live digest, so a multi-wave authority is judged one wave at a
+    time: wave k's base carries waves < k and its head carries waves <= k,
+    each validated against the baseline witnesses of its own moment. Those
+    witnesses are the committed baselines plus the cohort literals of every
+    later wave, served through ``load_git_docs`` under synthetic refs; the
+    analyzer bundle is still checked against the real tree.
+    """
+    waves = _paydown_waves(authority)
+    records = {
+        record["original_record_id"]: record
+        for record in authority["canonical_artifacts"]["original_cohort"]["original_records"]
+    }
+    alias_of = {
+        list_key: alias for alias, (_p, keys) in gen.BASELINE_SPECS.items() for list_key in keys
+    }
+    committed_docs = gen.load_working_docs(repo_root)
+    docs_by_ref: dict[str, dict[str, Any]] = {}
+    for index in range(len(waves) + 1):
+        docs = copy.deepcopy(committed_docs)
+        for _digest, ids in waves[index:]:
+            for record_id in ids:
+                record = records[record_id]
+                docs[alias_of[record["source_json_key"]]][record["source_json_key"]].append(
+                    record["exact_historical_literal_record"]
+                )
+        docs_by_ref[f"wave-{index}"] = docs
+
+    def fake_git_docs(root: Path, ref: str) -> dict[str, dict[str, Any]]:
+        return copy.deepcopy(docs_by_ref[ref])
+
+    real_validate_bundle = ratchet._validate_bundle
+    monkeypatch.setattr(ratchet.inventory_mod, "load_git_docs", fake_git_docs)
+    monkeypatch.setattr(
+        ratchet, "_validate_bundle", lambda auth, root, ref=None: real_validate_bundle(auth, root)
+    )
+    committed = {item["original_record_id"]: item for item in authority["active_inventory"]}
+    previous = _genesis_authority(authority)
+    for index, (_digest, ids) in enumerate(waves, start=1):
+        applied = {record_id for _d, wave_ids in waves[:index] for record_id in wave_ids}
+        head = copy.deepcopy(previous)
+        head["active_inventory"] = [
+            copy.deepcopy(committed[item["original_record_id"]])
+            if item["original_record_id"] in applied
+            else item
+            for item in head["active_inventory"]
+        ]
+        head["active_inventory_sha256"] = ratchet._sha256_bytes(
+            ratchet._canonical_json_bytes(head["active_inventory"])
+        )
+        _relink_authority_manifest(head)
+        compared = ratchet.compare_accepted_authorities(
+            previous,
+            head,
+            repo_root=repo_root,
+            base_ref=f"wave-{index - 1}",
+            head_ref=f"wave-{index}",
+        )
+        assert (compared["passing"], compared["status"]) == (True, "pass")
+        assert compared["added_original_record_ids"] == []
+        assert compared["removed_original_record_ids"] == ids
+        previous = head
+    assert previous == authority
+    return waves
+
+
+def test_served_replay_html_remains_active_in_accepted_inventory():
+    authority, root = _accepted_authority(), Path(ratchet.__file__).parents[1]
+    record = next(
+        item
+        for item in authority["canonical_artifacts"]["original_cohort"]["original_records"]
+        if item["exact_historical_literal_record"] == "GET /api/replays/{param}/html"
+    )
+    record_id = record["original_record_id"]
+    disposition = next(
+        item for item in authority["active_inventory"] if item["original_record_id"] == record_id
+    )
+    assert disposition["status"] == "active"
+    assert disposition["disposition_history"] == [ratchet.GENESIS_DISPOSITION]
+    summary = ratchet.validate_accepted_authority(authority, repo_root=root)
+    assert record_id in summary["live_original_record_ids"]
+
+
+def test_accepted_authority_keeps_genesis_and_reconciles_live_witnesses(
+    monkeypatch: pytest.MonkeyPatch,
+):
     authority, root = _accepted_authority(), Path(ratchet.__file__).parents[1]
     summary = ratchet.validate_accepted_authority(authority, repo_root=root)
     assert (summary["original_record_total"], summary["sdk_provenance_record_total"]) == (655, 598)
-    assert (len(summary["active_original_record_ids"]), len(summary["live_original_record_ids"])) == (655, 400)  # fmt: skip
-    paydown, live = copy.deepcopy(authority), set(summary["live_original_record_ids"])
-    live_digest = ratchet._sha256_bytes(ratchet._canonical_json_bytes(sorted(live)))
-    for item in paydown["active_inventory"]:
-        if item["original_record_id"] in live:
-            continue
-        fact = {"active_original_record_ids_sha256": live_digest, "as_of": "2026-07-27", "original_record_id": item["original_record_id"]}  # fmt: skip
-        item.update(status="resolved", disposition_history=[ratchet.GENESIS_DISPOSITION, {"as_of": fact["as_of"], "evidence": {"fact": fact, "sha256": ratchet._fact_digest(ratchet.PAYDOWN_SCHEMA, fact)}, "status": "resolved"}])  # fmt: skip
-    paydown["active_inventory_sha256"] = ratchet._sha256_bytes(ratchet._canonical_json_bytes(paydown["active_inventory"]))  # fmt: skip
-    paydown["manifest_sha256"] = ratchet._sha256_bytes(ratchet._canonical_json_bytes({key: value for key, value in paydown.items() if key != "manifest_sha256"}))  # fmt: skip
-    assert len(ratchet.compare_accepted_authorities(authority, paydown, repo_root=root)["removed_original_record_ids"]) == 255  # fmt: skip
+    assert (len(summary["active_original_record_ids"]), len(summary["live_original_record_ids"])) == (235, 235)  # fmt: skip
+    # The committed authority equals the genesis authority plus the digest-bound
+    # paydown waves (255 historical + the 2 VAL-CDG-016 serve-side literals,
+    # then 59 TypeScript and 51 SDK literals, then 25 SDK literals, then 25 more
+    # SDK literals, then 3 more SDK literals): 420 resolved records, each wave
+    # passing the production comparator against the wave before it.
+    genesis = _genesis_authority(authority)
+    genesis_summary = ratchet.validate_accepted_authority(genesis, repo_root=root)
+    assert len(genesis_summary["active_original_record_ids"]) == 655
+    waves = _replay_committed_paydown(authority, repo_root=root, monkeypatch=monkeypatch)
+    assert [len(ids) for _digest, ids in waves] == [257, 59, 51, 25, 25, 3]
+    removed = sorted(record_id for _digest, ids in waves for record_id in ids)
+    assert removed == sorted(
+        set(genesis_summary["active_original_record_ids"])
+        - set(summary["active_original_record_ids"])
+    )
+    live_digest = ratchet._sha256_bytes(
+        ratchet._canonical_json_bytes(sorted(summary["live_original_record_ids"]))
+    )
+    assert waves[-1][0] == live_digest
+
+
+@pytest.mark.parametrize(
+    ("wave_index", "expected_counts", "resolved_on"),
+    [
+        (1, {"typescript_sdk_drift": 59}, "2026-09-04"),
+        (2, {"python_sdk_drift": 20, "typescript_sdk_drift": 31}, "2026-09-06"),
+    ],
+)
+def test_sdk_paydowns_are_resolved_in_legacy_inventory(
+    wave_index: int, expected_counts: dict[str, int], resolved_on: str
+):
+    root = Path(ratchet.__file__).parents[1]
+    authority = _accepted_authority()
+    # Skip only the historical wave; retain batch 1 coverage alongside batch 2.
+    retired_ids = set(_paydown_waves(authority)[wave_index][1])
+    assert len(retired_ids) == sum(expected_counts.values())
+    cohort_records = {
+        record["original_record_id"]: record
+        for record in authority["canonical_artifacts"]["original_cohort"]["original_records"]
+    }
+    dispositions = {
+        item["original_record_id"]: item["disposition_history"][-1]
+        for item in authority["active_inventory"]
+    }
+    inventory = json.loads((root / "scripts/baselines/contract_drift_inventory.json").read_text())
+    rows = {item["id"]: item for item in inventory["items"]}
+
+    for source, count in expected_counts.items():
+        source_ids = {
+            record_id
+            for record_id in retired_ids
+            if cohort_records[record_id]["source_json_key"] == source
+        }
+        assert len(source_ids) == count
+        for record_id in source_ids:
+            literal = gen.normalize_key(
+                cohort_records[record_id]["exact_historical_literal_record"]
+            )
+            row = rows[f"{source}:{literal}"]
+            assert row["status"] == "resolved", row["id"]
+            assert row["resolved_on"] == resolved_on
+            assert row["resolved_on"] == dispositions[record_id]["as_of"]
 
 
 def test_accepted_authority_rejects_unbound_paydown_and_bundle():
@@ -4209,7 +4821,13 @@ def _residue_fixture(root: Path) -> tuple[dict[str, Any], dict[str, dict[str, An
     original = {f"{r['source_json_key']}:{gen.normalize_key(r['exact_historical_literal_record'])}" for r in records}  # fmt: skip
     docs = gen.load_working_docs(root)
     ids = set(gen.collect_ids(docs))
-    entry = next(e for e in docs["routes"]["missing_in_spec"] if f"missing_in_spec:{gen.normalize_key(e)}" not in original and f"orphaned_in_spec:{gen.normalize_key(e)}" not in ids)  # fmt: skip
+    # Orphan reconciliation PR-1 emptied missing_in_spec, exhausting in-repo
+    # residue candidates; synthesize an outside-cohort entry so the residue
+    # freeze mechanics stay covered hermetically (refs are faked below).
+    entry = "/api/v1/__residue-tolerance-fixture__"
+    assert f"missing_in_spec:{gen.normalize_key(entry)}" not in original
+    assert f"missing_in_spec:{entry}" not in ids and f"orphaned_in_spec:{entry}" not in ids
+    docs["routes"]["missing_in_spec"].append(entry)
     return authority, docs, entry
 
 
@@ -4229,7 +4847,7 @@ def test_live_residue_is_frozen_shrink_only_against_tolerance_ref(monkeypatch):
     kwargs = {"repo_root": root, "live_ref": "candidate-ref", "residue_ref": "tolerance-ref"}
     removal_live = ratchet._live_witnesses(authority, **kwargs)
     equal_live = ratchet._live_witnesses(authority, repo_root=root, live_ref="tolerance-ref", residue_ref="tolerance-ref")  # fmt: skip
-    assert removal_live == equal_live and len(equal_live) == 400
+    assert removal_live == equal_live and len(equal_live) == 235
     head_docs["routes"]["missing_in_spec"].append(f"{entry}/guard-v2-new")
     with pytest.raises(ValueError, match="new live baseline keys outside immutable original cohort") as one_new:  # fmt: skip
         ratchet._live_witnesses(authority, **kwargs)
@@ -4256,8 +4874,206 @@ def test_residue_tolerance_refs_bind_event_base_and_first_parent(monkeypatch):
     root = Path(ratchet.__file__).parents[1]
     ratchet.compare_accepted_authorities(_accepted_authority(), _accepted_authority(), repo_root=root, base_ref="base-sha", head_ref="head-sha")  # fmt: skip
     source = subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()  # fmt: skip
+    parent = subprocess.run(["git", "-C", str(root), "rev-parse", f"{source}^"], capture_output=True, text=True, check=True).stdout.strip()  # fmt: skip
     ratchet.build_accepted_result(mode="receipt", repo_root=root, inventory_path=root / "scripts/baselines/contract_drift_inventory.json", source_sha=source)  # fmt: skip
-    assert calls == [("base-sha", "base-sha"), ("head-sha", "base-sha"), (source, f"{source}^")]
+    assert calls == [("base-sha", "base-sha"), ("head-sha", "base-sha"), (source, parent)]
+
+
+def test_real_h2_h3_pair_tolerates_all_483_inherited_residue_keys(tmp_path: Path):
+    root = _decision_351_repo(tmp_path)
+    facts = _decision_351_facts(root)
+    authority = _accepted_authority_at_ref(facts["h3"]["oid"], repo_root=root)
+    records = authority["canonical_artifacts"]["original_cohort"]["original_records"]
+    original_keys = {
+        f"{record['source_json_key']}:{gen.normalize_key(record['exact_historical_literal_record'])}"
+        for record in records
+    }
+    h2_residue = ratchet._outside_cohort_residue(root, facts["h2"]["oid"], original_keys)
+    h3_residue = ratchet._outside_cohort_residue(root, facts["h3"]["oid"], original_keys)
+    assert h2_residue == h3_residue
+    assert len(h3_residue) == 483
+    live = ratchet._live_witnesses(
+        authority,
+        repo_root=root,
+        live_ref=facts["h3"]["oid"],
+        residue_ref=facts["h2"]["oid"],
+    )
+    assert len(live) == 400
+
+
+def test_real_h2_residue_fixture_rejects_new_and_rekeyed_keys_but_allows_removal(
+    tmp_path: Path,
+):
+    root = _decision_351_repo(tmp_path)
+    facts = _decision_351_facts(root)
+    authority = _accepted_authority_at_ref(facts["h3"]["oid"], repo_root=root)
+    records = authority["canonical_artifacts"]["original_cohort"]["original_records"]
+    original_keys = {
+        f"{record['source_json_key']}:{gen.normalize_key(record['exact_historical_literal_record'])}"
+        for record in records
+    }
+    h2_docs = gen.load_git_docs(root, facts["h2"]["oid"])
+    h2_ids = set(gen.collect_ids(h2_docs))
+    repo = tmp_path / "real-h2-residue"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    _write_docs(repo, h2_docs)
+    base = _commit(repo, "real H2 baseline bytes")
+
+    removed_docs = copy.deepcopy(h2_docs)
+    residue_entry = next(
+        entry
+        for entry in removed_docs["routes"]["missing_in_spec"]
+        if f"missing_in_spec:{gen.normalize_key(entry)}" not in original_keys
+        and f"orphaned_in_spec:{gen.normalize_key(entry)}" not in h2_ids
+    )
+    removed_docs["routes"]["missing_in_spec"].remove(residue_entry)
+    _write_docs(repo, removed_docs)
+    removal = _commit(repo, "remove inherited residue")
+    removal_live = ratchet._live_witnesses(
+        authority,
+        repo_root=repo,
+        live_ref=removal,
+        residue_ref=base,
+    )
+    assert len(removal_live) == 400
+
+    new_docs = copy.deepcopy(h2_docs)
+    new_entry = "/api/v1/__guard-v2-reference-closure-new__"
+    new_docs["routes"]["missing_in_spec"].append(new_entry)
+    _write_docs(repo, new_docs)
+    new_ref = _commit(repo, "add new residue")
+    with pytest.raises(
+        ValueError,
+        match="new live baseline keys outside immutable original cohort",
+    ) as added:
+        ratchet._live_witnesses(
+            authority,
+            repo_root=repo,
+            live_ref=new_ref,
+            residue_ref=base,
+        )
+    assert (
+        str(added.value) == "new live baseline keys outside immutable original cohort versus "
+        f"{base}: ['missing_in_spec:{new_entry}']"
+    )
+
+    rekeyed_docs = copy.deepcopy(h2_docs)
+    rekeyed_docs["routes"]["missing_in_spec"].remove(residue_entry)
+    rekeyed_docs["routes"]["orphaned_in_spec"].append(residue_entry)
+    _write_docs(repo, rekeyed_docs)
+    rekeyed_ref = _commit(repo, "re-key inherited residue")
+    with pytest.raises(
+        ValueError,
+        match="new live baseline keys outside immutable original cohort",
+    ) as rekeyed:
+        ratchet._live_witnesses(
+            authority,
+            repo_root=repo,
+            live_ref=rekeyed_ref,
+            residue_ref=base,
+        )
+    assert (
+        str(rekeyed.value) == "new live baseline keys outside immutable original cohort versus "
+        f"{base}: ['orphaned_in_spec:{gen.normalize_key(residue_entry)}']"
+    )
+
+
+def _run_accepted_cli(
+    repo: Path,
+    *,
+    mode: str,
+    source_ref: str | None,
+) -> tuple[subprocess.CompletedProcess[str], dict[str, Any]]:
+    command = [
+        sys.executable,
+        str(Path(ratchet.__file__)),
+        "--mode",
+        mode,
+        "--repo-root",
+        str(repo),
+        "--inventory",
+        gen.DEFAULT_INVENTORY,
+        "--json",
+    ]
+    if mode == "program":
+        command.extend(["--as-of", "2026-04-17", "--strict"])
+    if source_ref is not None:
+        command.extend(["--ref", source_ref])
+    env = {**os.environ}
+    env.pop("CDG_AUTHORITY_ROOT", None)
+    proc = subprocess.run(
+        command,
+        cwd=repo,
+        capture_output=True,
+        env=env,
+        text=True,
+    )
+    return proc, json.loads(proc.stdout)
+
+
+@pytest.mark.parametrize("mode", ["program", "receipt"])
+def test_accepted_main_modes_require_explicit_immutable_ref(
+    tmp_path: Path,
+    mode: str,
+):
+    repo, _base, _head = _hermetic_repo(tmp_path)
+    proc, result = _run_accepted_cli(repo, mode=mode, source_ref=None)
+    assert proc.returncode == 1
+    assert result["status"] == "fail" and result["passing"] is False
+    assert result["error_code"] == "accepted_authority_ref_required"
+    assert "--ref" in result["error"]
+
+
+@pytest.mark.parametrize("mode", ["program", "receipt"])
+def test_accepted_main_modes_reject_malformed_unresolvable_and_noncommit_refs(
+    tmp_path: Path,
+    mode: str,
+):
+    repo, base, head = _hermetic_repo(tmp_path)
+    tree = subprocess.check_output(
+        ["git", "-C", str(repo), "rev-parse", f"{head}^{{tree}}"],
+        text=True,
+    ).strip()
+    hostile_refs = ("HEAD", head[:12], head.upper(), "0" * 40, tree, base)
+    for source_ref in hostile_refs:
+        proc, result = _run_accepted_cli(repo, mode=mode, source_ref=source_ref)
+        assert proc.returncode == 1, source_ref
+        assert result["status"] == "fail" and result["passing"] is False
+        assert result["error_code"] == "accepted_authority_ref_invalid"
+        assert "--ref" in result["error"] or "first parent" in result["error"]
+
+
+@pytest.mark.parametrize("mode", ["program", "receipt"])
+def test_accepted_main_modes_bind_non_head_ref_and_ignore_dirty_worktree_authority(
+    tmp_path: Path,
+    mode: str,
+):
+    repo, _base, source = _hermetic_repo(tmp_path)
+    (repo / "later.txt").write_text("later commit\n", encoding="utf-8")
+    later = _commit(repo, "later")
+    assert source != later
+    (repo / gen.DEFAULT_INVENTORY).write_text(
+        '{"accepted_authority":"ambient-hostile"}\n',
+        encoding="utf-8",
+    )
+    (repo / "scripts/baselines/contract_drift_program.json").write_text(
+        '{"start_date":"2099-01-01","start_total_items":0,'
+        '"weekly_reduction":0.5,"grace_weeks":0}\n',
+        encoding="utf-8",
+    )
+    for _alias, (rel_path, _keys) in gen.BASELINE_SPECS.items():
+        (repo / rel_path).write_text("{}\n", encoding="utf-8")
+    proc, result = _run_accepted_cli(repo, mode=mode, source_ref=source)
+    assert proc.returncode == 0, proc.stderr
+    assert result["status"] == "pass" and result["passing"] is True
+    if mode == "program":
+        assert result["program"]["source_sha"] == source
+        assert result["program"]["start_date"] == "2026-04-17"
+        assert result["current"]["total_items"] == 235
+    else:
+        assert result["source_sha"] == source
+        assert result["authority"]["first_parent_chain"][0] == source
 
 
 # ------------------------- VAL-CDG-005 (pr side): file evidence and growth
@@ -4290,6 +5106,7 @@ def _live_pr_files_probe(
     pr_additions: int = 400,
     pr_deletions: int = 400,
     duplicate_file_ids: bool = False,
+    files_link_header: str | None = None,
     mutate: Any | None = None,
     releases_payload: Any | None = None,
     tag_ref_object: Any | None = None,
@@ -4305,6 +5122,9 @@ def _live_pr_files_probe(
     values only — the capsule payload bytes never embed them, so any triple
     (including the real allocator's unpredictable large IDs) must validate.
     """
+    file_names = [
+        "fixture.txt" if index == 0 else f"file-{index}.txt" for index in range(files_count)
+    ]
     repo, start_sha, boundary_shas = _boundary_git_repo(tmp_path)
     end_sha = boundary_shas["corrective_bootstrap"]
     resources = _boundary_payloads("corrective_bootstrap", start_sha, end_sha, boundary_shas, repo=repo)  # fmt: skip
@@ -4381,10 +5201,7 @@ def _live_pr_files_probe(
     # The first file record carries the real path changed by the disposable
     # boundary commit so the recomputed first-parent semantic delta stays
     # inside the authenticated disposition.
-    files = [
-        {"filename": "fixture.txt" if index == 0 else f"file-{index}.txt", "id": index + 1}
-        for index in range(files_count)
-    ]
+    files = [{"filename": filename, "id": index + 1} for index, filename in enumerate(file_names)]
     if duplicate_file_ids:
         files = [dict(item, id=1) for item in files]
     observed_changed_files = files_count if changed_files is None else changed_files
@@ -4402,7 +5219,12 @@ def _live_pr_files_probe(
         if "per_page=100&page=" in endpoint:
             page = int(endpoint.rsplit("page=", 1)[1])
             if "/pulls/9999/files" in endpoint:
-                return files[(page - 1) * 100 : page * 100], identity
+                files_identity = (
+                    identity
+                    if files_link_header is None
+                    else dict(identity, link=files_link_header)
+                )
+                return files[(page - 1) * 100 : page * 100], files_identity
             if endpoint.startswith("repos/synaptent/aragora/releases?"):
                 if releases_payload is not None:
                     return (releases_payload if page == 1 else []), identity
@@ -4519,16 +5341,27 @@ def _live_pr_files_probe(
         return {"resource": resource, "verified": bool(argv)}, verification_identity
 
     monkeypatch.setattr(ratchet, "_run_live_verification", fake_verify)
-    _discovered, _summary, context = ratchet._collect_live_evidence(
-        github_repository="synaptent/aragora",
-        github_branch="main",
-        boundary="corrective_bootstrap",
-        start_sha=start_sha,
-        end_sha=end_sha,
-        repo_root=repo,
-        scratch_root=tmp_path,
-        operation_log=[],
-    )
+    original_semantic_delta = ratchet._first_parent_semantic_delta
+    if files_count != 1:
+        expected_paths = set(file_names)
+        setattr(
+            ratchet,
+            "_first_parent_semantic_delta",
+            lambda *_args, **_kwargs: set(expected_paths),
+        )
+    try:
+        _discovered, _summary, context = ratchet._collect_live_evidence(
+            github_repository="synaptent/aragora",
+            github_branch="main",
+            boundary="corrective_bootstrap",
+            start_sha=start_sha,
+            end_sha=end_sha,
+            repo_root=repo,
+            scratch_root=tmp_path,
+            operation_log=[],
+        )
+    finally:
+        setattr(ratchet, "_first_parent_semantic_delta", original_semantic_delta)
     return context, requested
 
 
@@ -4782,6 +5615,207 @@ def test_pr_files_paginate_to_exhaustion_and_reconcile_changed_files(
         )
 
 
+def test_zeroed_stats_dropout_accepted_only_under_dual_witness(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    # PERMANENT GitHub REST stats dropout (the PR #9850 shape): the pulls
+    # endpoint zeroes changed_files/additions/deletions while the files
+    # endpoint enumerates the true disposition. The default files_count=1
+    # exercises the REAL recomputed first-parent semantic delta over the
+    # disposable boundary repository (no injected delta).
+    context, requested = _live_pr_files_probe(
+        tmp_path,
+        monkeypatch,
+        changed_files=0,
+        pr_additions=0,
+        pr_deletions=0,
+    )
+    assert context["authenticated_pr_files"] == {9999: ["fixture.txt"]}
+    assert context["authenticated_pr_changes"] == {9999: {"additions": 0, "deletions": 0}}
+    assert any("/pulls/9999/files?per_page=100&page=1" in e for e in requested)
+    # Multi-page zeroed enumerations still paginate to exhaustion and
+    # reconcile against the (injected) semantic delta.
+    context_multi, requested_multi = _live_pr_files_probe(
+        tmp_path / "multi",
+        monkeypatch,
+        files_count=103,
+        changed_files=0,
+        pr_additions=0,
+        pr_deletions=0,
+    )
+    assert sum(1 for e in requested_multi if "/pulls/9999/files" in e) == 2
+    assert context_multi["authenticated_pr_files"][9999] == sorted(
+        ["fixture.txt", *(f"file-{index}.txt" for index in range(1, 103))]
+    )
+
+
+def test_zeroed_stats_dropout_requires_fully_zeroed_rest_signature(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    # changed_files=0 with nonzero REST additions/deletions is NOT the stats
+    # dropout signature; it remains incomplete file discovery.
+    with pytest.raises(ValueError, match="file discovery is incomplete"):
+        _live_pr_files_probe(
+            tmp_path / "nonzero-stats",
+            monkeypatch,
+            files_count=3,
+            changed_files=0,
+        )
+    with pytest.raises(ValueError, match="file discovery is incomplete"):
+        _live_pr_files_probe(
+            tmp_path / "zero-additions-only",
+            monkeypatch,
+            files_count=3,
+            changed_files=0,
+            pr_additions=0,
+        )
+
+
+def test_zeroed_stats_dropout_genuine_truncation_fails_closed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    # A zeroed-stats PR whose short files page still advertises rel="next"
+    # is a genuinely truncated enumeration, not a curable dropout.
+    with pytest.raises(ValueError, match="ended before an advertised next page"):
+        _live_pr_files_probe(
+            tmp_path,
+            monkeypatch,
+            files_count=3,
+            changed_files=0,
+            pr_additions=0,
+            pr_deletions=0,
+            files_link_header='<https://api.github.com/x?per_page=100&page=2>; rel="next"',
+        )
+
+
+def test_zeroed_stats_dropout_witness_binds_semantic_delta_exactly(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    observed_zeroed = {"additions": 0, "changed_files": 0, "deletions": 0}
+    # Rename dispositions participate through previous_filename, exactly as
+    # in the downstream VAL-CDG-018 witness.
+    monkeypatch.setattr(
+        ratchet,
+        "_first_parent_semantic_delta",
+        lambda *_args, **_kwargs: {"new.txt", "old.txt"},
+    )
+    operation_log: list[dict[str, Any]] = []
+    ratchet._require_stats_dropout_completeness_witness(
+        repo_root=tmp_path,
+        pr=9850,
+        observed_pr=observed_zeroed,
+        files=[{"filename": "new.txt", "id": 1, "previous_filename": "old.txt"}],
+        first_parent_sha="a" * 40,
+        merge_sha="b" * 40,
+        operation_log=operation_log,
+    )
+    assert [entry["kind"] for entry in operation_log] == ["stats_dropout_witness"]
+    # Both mismatch directions fail closed.
+    monkeypatch.setattr(
+        ratchet,
+        "_first_parent_semantic_delta",
+        lambda *_args, **_kwargs: {"fixture.txt", "foreign.txt"},
+    )
+    with pytest.raises(ValueError, match="does not equal the recomputed first-parent"):
+        ratchet._require_stats_dropout_completeness_witness(
+            repo_root=tmp_path,
+            pr=9850,
+            observed_pr=observed_zeroed,
+            files=[{"filename": "fixture.txt", "id": 1}],
+            first_parent_sha="a" * 40,
+            merge_sha="b" * 40,
+            operation_log=[],
+        )
+    monkeypatch.setattr(ratchet, "_first_parent_semantic_delta", lambda *_args, **_kwargs: set())
+    with pytest.raises(ValueError, match="does not equal the recomputed first-parent"):
+        ratchet._require_stats_dropout_completeness_witness(
+            repo_root=tmp_path,
+            pr=9850,
+            observed_pr=observed_zeroed,
+            files=[{"filename": "fixture.txt", "id": 1}],
+            first_parent_sha="a" * 40,
+            merge_sha="b" * 40,
+            operation_log=[],
+        )
+    # A bool changed_files is not the zeroed dropout signature even though
+    # False == 0 in Python.
+    with pytest.raises(ValueError, match="file discovery is incomplete"):
+        ratchet._require_stats_dropout_completeness_witness(
+            repo_root=tmp_path,
+            pr=9850,
+            observed_pr={"additions": 0, "changed_files": False, "deletions": 0},
+            files=[{"filename": "fixture.txt", "id": 1}],
+            first_parent_sha="a" * 40,
+            merge_sha="b" * 40,
+            operation_log=[],
+        )
+    # Defensive floors: an empty enumeration and noncanonical first-parent
+    # bindings are never curable.
+    with pytest.raises(ValueError, match="file enumeration is empty"):
+        ratchet._require_stats_dropout_completeness_witness(
+            repo_root=tmp_path,
+            pr=9850,
+            observed_pr=observed_zeroed,
+            files=[],
+            first_parent_sha="a" * 40,
+            merge_sha="b" * 40,
+            operation_log=[],
+        )
+    with pytest.raises(ValueError, match="lacks canonical first-parent bindings"):
+        ratchet._require_stats_dropout_completeness_witness(
+            repo_root=tmp_path,
+            pr=9850,
+            observed_pr=observed_zeroed,
+            files=[{"filename": "fixture.txt", "id": 1}],
+            first_parent_sha="a" * 40,
+            merge_sha="953c501c",
+            operation_log=[],
+        )
+
+
+def test_paginated_short_page_with_advertised_next_link_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    # Link-exhaustion proof: a short page that still advertises rel="next"
+    # is an inconsistent (truncated) enumeration and fails closed; a
+    # rel="prev"-only terminal page remains exhausted.
+    def serve(link: Any) -> Any:
+        identity = {
+            "byte_length": 1,
+            "etag": '"e"',
+            "link": link,
+            "sha256": "0" * 64,
+            "updated_at": None,
+        }
+        return lambda endpoint, *, operation_log: ([{"id": 1}], identity)
+
+    monkeypatch.setattr(
+        ratchet,
+        "_gh_api_get_stable",
+        serve('<https://api.github.com/x?per_page=100&page=2>; rel="next"'),
+    )
+    with pytest.raises(ValueError, match="ended before an advertised next page"):
+        ratchet._gh_api_paginated("repos/synaptent/aragora/pulls/9850/files", operation_log=[])
+    monkeypatch.setattr(
+        ratchet,
+        "_gh_api_get_stable",
+        serve('<https://api.github.com/x?per_page=100&page=1>; rel="prev"'),
+    )
+    records, _identities = ratchet._gh_api_paginated(
+        "repos/synaptent/aragora/pulls/9850/files", operation_log=[]
+    )
+    assert len(records) == 1
+    # A malformed (non-string) Link identity fails closed rather than being
+    # treated as exhausted.
+    monkeypatch.setattr(ratchet, "_gh_api_get_stable", serve(7))
+    with pytest.raises(ValueError, match="Link header is malformed"):
+        ratchet._gh_api_paginated("repos/synaptent/aragora/pulls/9850/files", operation_log=[])
+
+
 def test_files_api_incomplete_uses_exact_tree_diff_with_pinned_rename_policy(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -5007,7 +6041,9 @@ def test_pr_mode_reports_complete_exact_original_record_set_diagnostics(
     assert not compared["passing"]
 
 
-def test_pr_mode_passes_equal_or_subset_original_record_ids(tmp_path: Path):
+def test_pr_mode_passes_equal_or_subset_original_record_ids(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     # Equal head: identical baselines pass with empty deltas.
     paths, repo, base = _seed(tmp_path, program=RED_PROGRAM)
     equal = _result(paths, "2026-07-16", repo=repo, cohort=base, mode="pr", base_ref=base)
@@ -5047,25 +6083,20 @@ def test_pr_mode_passes_equal_or_subset_original_record_ids(tmp_path: Path):
             i for i, lk in base_ids.items() if lk == list_key
         }
     # Accepted-authority layer: an exact evidenced paydown subset passes with
-    # the complete sorted removed set and no added IDs.
+    # the complete sorted removed set and no added IDs. The committed head IS
+    # that paydown relative to its reconstructed all-active genesis base,
+    # one comparator-verified wave at a time.
     root = Path(ratchet.__file__).parents[1]
     authority = _accepted_authority()
     summary = ratchet.validate_accepted_authority(authority, repo_root=root)
     live = set(summary["live_original_record_ids"])
-    paydown = copy.deepcopy(authority)
-    live_digest = ratchet._sha256_bytes(ratchet._canonical_json_bytes(sorted(live)))
-    for item in paydown["active_inventory"]:
-        if item["original_record_id"] in live:
-            continue
-        fact = {"active_original_record_ids_sha256": live_digest, "as_of": "2026-07-27", "original_record_id": item["original_record_id"]}  # fmt: skip
-        item.update(status="resolved", disposition_history=[ratchet.GENESIS_DISPOSITION, {"as_of": fact["as_of"], "evidence": {"fact": fact, "sha256": ratchet._fact_digest(ratchet.PAYDOWN_SCHEMA, fact)}, "status": "resolved"}])  # fmt: skip
-    paydown["active_inventory_sha256"] = ratchet._sha256_bytes(ratchet._canonical_json_bytes(paydown["active_inventory"]))  # fmt: skip
-    paydown["manifest_sha256"] = ratchet._sha256_bytes(ratchet._canonical_json_bytes({key: value for key, value in paydown.items() if key != "manifest_sha256"}))  # fmt: skip
-    compared = ratchet.compare_accepted_authorities(authority, paydown, repo_root=root)
-    assert (compared["passing"], compared["status"]) == (True, "pass")
-    assert compared["added_original_record_ids"] == []
-    removed = compared["removed_original_record_ids"]
-    assert removed == sorted(removed) and len(removed) == 255
+    genesis_summary = ratchet.validate_accepted_authority(
+        _genesis_authority(authority), repo_root=root
+    )
+    waves = _replay_committed_paydown(authority, repo_root=root, monkeypatch=monkeypatch)
+    removed = sorted(record_id for _digest, ids in waves for record_id in ids)
+    assert set(genesis_summary["active_original_record_ids"]) - set(removed) == live
+    assert removed == sorted(removed) and len(removed) == 420
     assert set(removed).isdisjoint(live)
 
 
@@ -5184,7 +6215,7 @@ def test_accepted_inventory_annotation_tamper_does_not_change_enforcement():
     # Untampered enforcement outcome (the invariant being defended).
     summary = ratchet.validate_accepted_authority(_accepted_authority(), repo_root=root)
     assert summary["original_record_total"] == 655
-    assert len(summary["live_original_record_ids"]) == 400
+    assert len(summary["live_original_record_ids"]) == 235
     # Any annotation key added to an accepted-inventory row fails closed: the
     # row schema is exactly {category, disposition_history, original_record_id,
     # status}, so tamper can never ride along as metadata.
@@ -5732,6 +6763,7 @@ def test_deterministic_boundary_status_pass_is_reachable(
         _stub_boundary_dependencies(monkeypatch)
         _stub_boundary_evidence_index(
             monkeypatch,
+            repo=repo,
             index_path=index_path,
             index_length=index_length,
             index_sha256=index_sha256,
@@ -5824,7 +6856,9 @@ def _hermetic_repo(
     for rel in _HERMETIC_FILES:
         destination = repo / rel
         destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_bytes((src / rel).read_bytes())
+        destination.write_bytes(
+            subprocess.check_output(["git", "-C", str(src), "show", f"HEAD:{rel}"])
+        )
     if mutate_base_inventory is not None:
         inventory = json.loads((repo / _HERMETIC_INVENTORY).read_text())
         mutate_base_inventory(inventory)
@@ -6659,7 +7693,9 @@ def test_pr_mode_exact_original_record_diagnostics_are_sorted_complete_and_untru
     assert result["pr_delta"]["counts"]["verify_python_sdk_drift"]["delta"] == 25
 
 
-def test_pr_mode_passes_strict_original_record_subset(tmp_path: Path):
+def test_pr_mode_passes_strict_original_record_subset(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     # A strict subset in two categories (with matching resolutions) passes
     # while the program schedule stays honestly red.
     paths, repo, base = _seed(tmp_path, program=RED_PROGRAM)
@@ -6685,26 +7721,21 @@ def test_pr_mode_passes_strict_original_record_subset(tmp_path: Path):
     assert result["pr_delta"]["counts"]["verify_python_sdk_drift"]["delta"] == -1
     assert result["pr_delta"]["counts"]["routes_missing_in_spec"]["delta"] == -1
     # Accepted-authority layer: a global+per-category strict subset head
-    # passes with exact removed IDs and empty added IDs.
+    # passes with exact removed IDs and empty added IDs. The committed head
+    # is that subset relative to its reconstructed all-active genesis base,
+    # reached through comparator-verified paydown waves.
     root = Path(ratchet.__file__).parents[1]
     authority = _accepted_authority()
     summary = ratchet.validate_accepted_authority(authority, repo_root=root)
     live = set(summary["live_original_record_ids"])
-    live_digest = ratchet._sha256_bytes(ratchet._canonical_json_bytes(sorted(live)))
-    paydown = copy.deepcopy(authority)
-    for item in paydown["active_inventory"]:
-        if item["original_record_id"] in live:
-            continue
-        fact = {"active_original_record_ids_sha256": live_digest, "as_of": "2026-07-27", "original_record_id": item["original_record_id"]}  # fmt: skip
-        item.update(status="resolved", disposition_history=[ratchet.GENESIS_DISPOSITION, {"as_of": fact["as_of"], "evidence": {"fact": fact, "sha256": ratchet._fact_digest(ratchet.PAYDOWN_SCHEMA, fact)}, "status": "resolved"}])  # fmt: skip
-    paydown["active_inventory_sha256"] = ratchet._sha256_bytes(ratchet._canonical_json_bytes(paydown["active_inventory"]))  # fmt: skip
-    paydown["manifest_sha256"] = ratchet._sha256_bytes(ratchet._canonical_json_bytes({key: value for key, value in paydown.items() if key != "manifest_sha256"}))  # fmt: skip
-    compared = ratchet.compare_accepted_authorities(authority, paydown, repo_root=root)
-    assert compared["passing"] and compared["status"] == "pass"
-    assert compared["added_original_record_ids"] == []
-    expected_removed = sorted(set(summary["active_original_record_ids"]) - live)
-    assert compared["removed_original_record_ids"] == expected_removed
-    assert len(expected_removed) == 255
+    genesis_summary = ratchet.validate_accepted_authority(
+        _genesis_authority(authority), repo_root=root
+    )
+    waves = _replay_committed_paydown(authority, repo_root=root, monkeypatch=monkeypatch)
+    replayed_removed = sorted(record_id for _digest, ids in waves for record_id in ids)
+    expected_removed = sorted(set(genesis_summary["active_original_record_ids"]) - live)
+    assert replayed_removed == expected_removed
+    assert len(expected_removed) == 420
 
 
 # ---- VAL-CDG-008: exact UTC week arithmetic, non-backdated final as-of
@@ -6800,6 +7831,10 @@ def test_before_start_and_partial_week_do_not_decay(tmp_path: Path):
 def test_local_timezone_cannot_change_default_as_of(monkeypatch: pytest.MonkeyPatch):
     root = Path(ratchet.__file__).parents[1]
     inventory = root / "scripts/baselines/contract_drift_inventory.json"
+    source = subprocess.check_output(
+        ["git", "-C", str(root), "rev-parse", "HEAD"],
+        text=True,
+    ).strip()
     utc_today = datetime.now(UTC).date().isoformat()
     observed: dict[str, str] = {}
     for timezone_name in ("Pacific/Kiritimati", "Etc/GMT+11", "UTC"):
@@ -6807,7 +7842,10 @@ def test_local_timezone_cannot_change_default_as_of(monkeypatch: pytest.MonkeyPa
         time.tzset()
         try:
             result = ratchet.build_accepted_result(
-                mode="program", repo_root=root, inventory_path=inventory
+                mode="program",
+                repo_root=root,
+                inventory_path=inventory,
+                source_sha=source,
             )
         finally:
             monkeypatch.setenv("TZ", "UTC")
@@ -6822,15 +7860,27 @@ def test_local_timezone_cannot_change_default_as_of(monkeypatch: pytest.MonkeyPa
 def test_malformed_or_future_live_as_of_fails_closed():
     root = Path(ratchet.__file__).parents[1]
     inventory = root / "scripts/baselines/contract_drift_inventory.json"
+    source = subprocess.check_output(
+        ["git", "-C", str(root), "rev-parse", "HEAD"],
+        text=True,
+    ).strip()
     future = (datetime.now(UTC).date() + timedelta(days=2)).isoformat()
     result = ratchet.build_accepted_result(
-        mode="program", repo_root=root, inventory_path=inventory, as_of=future
+        mode="program",
+        repo_root=root,
+        inventory_path=inventory,
+        as_of=future,
+        source_sha=source,
     )
     assert (result["status"], result["passing"]) == ("fail", False)
     assert result["error_code"] == "future_as_of"
     for malformed in ("07/31/2026", "2026-7-1x", "yesterday", "2026-13-40"):
         malformed_result = ratchet.build_accepted_result(
-            mode="program", repo_root=root, inventory_path=inventory, as_of=malformed
+            mode="program",
+            repo_root=root,
+            inventory_path=inventory,
+            as_of=malformed,
+            source_sha=source,
         )
         assert (malformed_result["status"], malformed_result["passing"]) == ("fail", False)
         assert malformed_result["error_code"] == "invalid_as_of"
@@ -6938,16 +7988,43 @@ def _load_bootstrap():
 
 bootstrap = _load_bootstrap()
 
-# Decision-351 corrective guard-v2 atom constants (validated against the
-# checked-in trusted-bootstrap policy and the live analyzer bytes below).
-GUARD_V2_PATCH_SHA256 = "3f4d656bc4678997899508f92c649b845655145351dc36d8a47e5112d84a004b"
-GUARD_V2_FILES = 6
-GUARD_V2_ADDITIONS = 687
-GUARD_V2_DELETIONS = 178
-GUARD_V2_DELTA = 865
-H2_SHA = "d4ab26e4b30b7f65956b4cdd9d738837b78ca4a3"
-H3_SHA = "1722a6145c0c23a2c1c0d20be5ed1329bb01d666"
-H4_SHA = "f50902a19bdc6cce7049da87212dc27759f727a0"
+_EXPECTED_GUARD_V2_PATCH_SHA256 = "3f4d656bc4678997899508f92c649b845655145351dc36d8a47e5112d84a004b"
+_EXPECTED_GUARD_V2_PATCH_PATHS = (
+    ".github/workflows/contract-drift-governance.yml",
+    "scripts/baselines/contract_drift_inventory.json",
+    "scripts/check_contract_drift_ratchet.py",
+    "tests/scripts/test_check_contract_drift_ratchet.py",
+)
+_EXPECTED_GUARD_V2_RESPONSE = (
+    (55, 166, ".github/workflows/contract-drift-governance.yml"),
+    (1, 0, "scripts/baselines/contract_drift_inventory.json"),
+    (428, 9, "scripts/check_contract_drift_ratchet.py"),
+    (78, 3, "scripts/generate_contract_drift_inventory.py"),
+    (99, 0, "tests/scripts/test_check_contract_drift_ratchet.py"),
+    (26, 0, "tests/scripts/test_contract_drift_workflow.py"),
+)
+_EXPECTED_GUARD_V2_DELTA = 865
+
+
+def _decision_351_patch_blob(repo: Path) -> bytes:
+    candidates = [
+        _git_bytes(repo, "cat-file", "blob", oid)
+        for oid in _object_ids(repo, "blob")
+        if int(_git_text(repo, "cat-file", "-s", oid)) > 5_000_000
+    ]
+    patches = [blob for blob in candidates if blob.startswith(b"diff --git ")]
+    assert len(patches) == 1
+    return patches[0]
+
+
+def _mission_guard_v2_patch() -> Path | None:
+    runtime_settings = os.environ.get("FACTORY_RUNTIME_SETTINGS_PATH")
+    if runtime_settings is None:
+        return None
+    patch = Path(runtime_settings).resolve().parent / "library/guard-v2.patch"
+    return patch if patch.is_file() else None
+
+
 OLD_H2_PIN_SHA = "017ce1d7a4024f3001858d2385cd153c1ffc8bb2"
 CORRECTIVE_BASE_SHA = "d5c9df5cea5719404b54c34fdb62a89daf65a92f"
 PR_9346_FACT = {
@@ -6972,6 +8049,41 @@ def _real_inventory() -> dict:
 
 def _real_authority() -> dict:
     return _real_inventory()["accepted_authority"]
+
+
+def _bound_authority_bytes(binding: dict[str, Any]) -> bytes:
+    authority_root = os.environ.get("CDG_AUTHORITY_ROOT")
+    if authority_root:
+        return (Path(authority_root) / binding["path"]).read_bytes()
+    return (_REPO_ROOT / binding["path"]).read_bytes()
+
+
+@pytest.fixture(autouse=True)
+def _authenticate_committed_authority_while_checker_is_dirty(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    authority = _real_authority()
+    checker_binding = next(
+        binding
+        for binding in authority["analyzer_bundle"]["files"]
+        if binding["path"] == "scripts/check_contract_drift_ratchet.py"
+    )
+    live_checker = _REPO_ROOT / checker_binding["path"]
+    if hashlib.sha256(live_checker.read_bytes()).hexdigest() == checker_binding["sha256"]:
+        yield
+        return
+    with tempfile.TemporaryDirectory(prefix="cdg-committed-authority-") as temp:
+        root = Path(temp)
+        for binding in authority["analyzer_bundle"]["files"]:
+            target = root / binding["path"]
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(
+                subprocess.check_output(
+                    ["git", "-C", str(_REPO_ROOT), "show", f"HEAD:{binding['path']}"]
+                )
+            )
+        monkeypatch.setenv("CDG_AUTHORITY_ROOT", str(root))
+        yield
 
 
 def _relink_fact(schema: str, value: dict) -> dict:
@@ -7148,77 +8260,113 @@ def test_corrective_bootstrap_is_bounded_and_descends_from_current_main(
 
 
 def test_corrective_guard_v2_sequence_is_h2_then_h3_repin_merge_then_empty_h4(tmp_path: Path):
-    # Replay the Decision-351 additive sequence on a disposable repository and
-    # bind the exact git semantics the contract requires: H2 -> H3 (guard-v2
-    # patch product) -> trusted re-pin -> empty additive H4 preserving the H3
-    # tree and all PR-owned blobs.
-    repo = tmp_path / "sequence"
-    repo.mkdir()
-    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
-    (repo / "guard.py").write_text("STATE = 'base'\n", encoding="utf-8")
-    (repo / "manifest.json").write_text('{"pin": "old"}\n', encoding="utf-8")
-    base = _commit(repo, "base")
-    (repo / "guard.py").write_text("STATE = 'h2'\n", encoding="utf-8")
-    h2 = _commit(repo, "h2")
-    (repo / "guard.py").write_text("STATE = 'h3-guard-v2'\n", encoding="utf-8")
-    h3 = _commit(repo, "h3 guard-v2")
-    (repo / "manifest.json").write_text('{"pin": "h3"}\n', encoding="utf-8")
-    repin = _commit(repo, "repin")
-    subprocess.run(
-        ["git", "commit", "-q", "--allow-empty", "-m", "h4 empty additive"],
-        cwd=repo,
-        check=True,
+    repo = _decision_351_repo(tmp_path)
+    facts = _decision_351_facts(repo)
+    base = facts["base"]
+    h1 = facts["h1"]
+    h2 = facts["h2"]
+    h3 = facts["h3"]
+    repin = facts["repin"]
+    h4 = facts["h4"]
+    absorption = facts["absorption"]
+    merge = facts["merge"]
+
+    assert base["oid"] == "8f1dd9684a3bf311e65b40de2ab35415612cc051"
+    assert h2["oid"] == "d4ab26e4b30b7f65956b4cdd9d738837b78ca4a3"
+    assert h3["oid"] == "1722a6145c0c23a2c1c0d20be5ed1329bb01d666"
+    assert repin["oid"] == "5080b125d3c9595efdca020db5e60266e01ac9c5"
+    assert h4["oid"] == "f50902a19bdc6cce7049da87212dc27759f727a0"
+    assert absorption["oid"] == "967b1c82a285affbd191b57bdaf08512d6e6e3f7"
+    assert merge["oid"] == "d3e45fafe6dd04508882935c813f6896abc859d7"
+
+    assert h1["parents"][1] == base["oid"]
+    assert h2["parents"] == (h1["oid"],)
+    assert h3["parents"] == (h2["oid"],)
+    assert h4["parents"] == (h3["oid"],)
+    assert h4["tree"] == h3["tree"]
+    assert absorption["parents"] == (h4["oid"], repin["oid"])
+    assert merge["parents"] == (repin["oid"],)
+    assert merge["tree"] == absorption["tree"]
+    ordered = (base, h1, h2, h3, repin, h4, absorption, merge)
+    assert [record["committed_at"] for record in ordered] == sorted(
+        record["committed_at"] for record in ordered
     )
-    h4 = subprocess.check_output(["git", "-C", str(repo), "rev-parse", "HEAD"], text=True).strip()
-    order = subprocess.check_output(
-        ["git", "-C", str(repo), "rev-list", "--reverse", f"{base}..{h4}"], text=True
-    ).split()
-    assert order == [h2, h3, repin, h4]
-    tree = lambda ref: subprocess.check_output(  # noqa: E731
-        ["git", "-C", str(repo), "rev-parse", f"{ref}^{{tree}}"], text=True
-    ).strip()
-    assert tree(h4) == tree(repin) and h4 != repin
-    blob = lambda ref, path: subprocess.check_output(  # noqa: E731
-        ["git", "-C", str(repo), "rev-parse", f"{ref}:{path}"], text=True
-    ).strip()
-    assert blob(h4, "guard.py") == blob(h3, "guard.py")
-    # The checked-in policy pins the H3 product as the immutable analyzer
-    # source of the historical first transition; the live analyzer bytes are
-    # pinned by the accepted authority manifest (which later authorized
-    # rotations, e.g. the capsule tag-convention checker, rebind in place).
-    assert bootstrap.ANALYZER_SOURCE_SHA == H3_SHA
-    assert bootstrap.SHA_RE.fullmatch(bootstrap.ANALYZER_SOURCE_SHA)
-    assert bootstrap.BootstrapPolicy().transition_base_sha == "d5c9df5cea5719404b54c34fdb62a89daf65a92f"  # fmt: skip
+    assert "#9679" in repin["subject"]
+    assert "Decision-351 absorption" in absorption["subject"]
+    assert "#9645" in merge["subject"]
+    assert bootstrap.ANALYZER_SOURCE_SHA == h3["oid"]
+    assert bootstrap.BootstrapPolicy().transition_base_sha == CORRECTIVE_BASE_SHA
     for binding in _real_authority()["analyzer_bundle"]["files"]:
-        live = hashlib.sha256((_REPO_ROOT / binding["path"]).read_bytes()).hexdigest()
+        live = hashlib.sha256(_bound_authority_bytes(binding)).hexdigest()
         assert live == binding["sha256"]
 
 
 def test_corrective_guard_v2_binds_exact_patch_and_six_file_687_178_865_response(tmp_path: Path):
-    # The Decision-351 atom: exact guard-v2 patch digest, exactly six files,
-    # additions=687, deletions=178, implementation_delta=865.
-    assert len(GUARD_V2_PATCH_SHA256) == 64 and int(GUARD_V2_PATCH_SHA256, 16)
-    assert GUARD_V2_ADDITIONS + GUARD_V2_DELETIONS == GUARD_V2_DELTA
-    assert GUARD_V2_FILES == 6
-    assert GUARD_V2_DELTA > 800
+    repo = _decision_351_repo(tmp_path)
+    facts = _decision_351_facts(repo)
+    patch_blob = _decision_351_patch_blob(repo)
+    immutable_diff = _git_bytes(
+        repo,
+        "diff",
+        "--no-ext-diff",
+        "--binary",
+        "--full-index",
+        facts["h2"]["oid"],
+        facts["h3"]["oid"],
+    )
+    assert patch_blob == immutable_diff
+    assert hashlib.sha256(patch_blob).hexdigest() == _EXPECTED_GUARD_V2_PATCH_SHA256
+
+    mission_patch = _mission_guard_v2_patch()
+    if mission_patch is not None:
+        assert mission_patch.read_bytes() == patch_blob
+
+    patch_paths = tuple(
+        _git_text(
+            repo,
+            "diff",
+            "--name-only",
+            facts["h2"]["oid"],
+            facts["h3"]["oid"],
+        ).splitlines()
+    )
+    assert patch_paths == _EXPECTED_GUARD_V2_PATCH_PATHS
+
+    response = tuple(
+        (int(additions), int(deletions), path)
+        for additions, deletions, path in (
+            line.split("\t", 2)
+            for line in _git_text(
+                repo,
+                "diff",
+                "--numstat",
+                facts["base"]["oid"],
+                facts["h3"]["oid"],
+            ).splitlines()
+        )
+    )
+    assert response == _EXPECTED_GUARD_V2_RESPONSE
+    additions = sum(record[0] for record in response)
+    deletions = sum(record[1] for record in response)
+    delta = additions + deletions
+    assert (len(response), additions, deletions, delta) == (6, 687, 178, 865)
+    assert delta == _EXPECTED_GUARD_V2_DELTA and delta > 800
     # The census (contract L76) admits the guard-v2 delta as authenticated
     # governed evidence; because 865 exceeds the paydown cap, the atom can
     # never be admitted as a core/extended paydown fact (max_pr_delta <= 800
     # in _validate_sdk_paydown), only on the corrective proof plane.
     census = ratchet._validate_governed_prs(
         _governed_pr_resource("1" * 40, "2" * 40),
-        authenticated_pr_changes={
-            9999: {"additions": GUARD_V2_ADDITIONS, "deletions": GUARD_V2_DELETIONS}
-        },
+        authenticated_pr_changes={9999: {"additions": additions, "deletions": deletions}},
         repo_root=tmp_path,
         operation_log=[],
     )
-    assert census[0]["authenticated_pr_delta"] == GUARD_V2_DELTA
+    assert census[0]["authenticated_pr_delta"] == delta
     # The corrective proof plane it rides instead carries no PR-delta field at
     # all: its exact closed field set is the bounded-transition proof.
     with pytest.raises(ValueError, match="corrective_bootstrap proof"):
         ratchet._validate_corrective_bootstrap(
-            {"max_pr_delta": GUARD_V2_DELTA},
+            {"max_pr_delta": delta},
             {},
             authority={},
             repo_root=tmp_path,
@@ -7228,11 +8376,13 @@ def test_corrective_guard_v2_binds_exact_patch_and_six_file_687_178_865_response
     # bootstrap policy; the live analyzer bytes are pinned by the accepted
     # authority manifest, which authorized rotations rebind in place.
     for binding in _real_authority()["analyzer_bundle"]["files"]:
-        live = hashlib.sha256((_REPO_ROOT / binding["path"]).read_bytes()).hexdigest()
+        live = hashlib.sha256(_bound_authority_bytes(binding)).hexdigest()
         assert live == binding["sha256"]
 
 
-def test_corrective_guard_v2_old_h2_and_017ce1d7_evidence_are_historical_only():
+def test_corrective_guard_v2_old_h2_and_017ce1d7_evidence_are_historical_only(
+    tmp_path: Path,
+):
     # The superseded H2 pin head and its evidence cannot be posted, settled,
     # or reused: no live enforcement surface references it.
     live_surfaces = [
@@ -7252,8 +8402,27 @@ def test_corrective_guard_v2_old_h2_and_017ce1d7_evidence_are_historical_only():
         assert OLD_H2_PIN_SHA not in text, surface
         assert OLD_H2_PIN_SHA[:12] not in text, surface
     # The accepted analyzer source is the H3 product, not the old H2 pin.
+    repo = _decision_351_repo(tmp_path)
+    facts = _decision_351_facts(repo)
     assert bootstrap.ANALYZER_SOURCE_SHA != OLD_H2_PIN_SHA
-    assert bootstrap.ANALYZER_SOURCE_SHA == H3_SHA
+    assert bootstrap.ANALYZER_SOURCE_SHA == facts["h3"]["oid"]
+    h2_source = subprocess.check_output(
+        [
+            "git",
+            "-C",
+            str(repo),
+            "show",
+            f"{facts['h2']['oid']}:scripts/check_contract_drift_ratchet.py",
+        ],
+        text=True,
+    )
+    current_source = Path(ratchet.__file__).read_text(encoding="utf-8")
+    zero_residue_rule = (
+        'raise ValueError(f"live baseline keys outside immutable original cohort: {residue}")'
+    )
+    assert zero_residue_rule in h2_source
+    assert zero_residue_rule not in current_source
+    assert "residue - tolerated" in current_source
     # Settlement identity is head-exact: evidence bound to the old head can
     # never authorize the live head (exact-head token mismatch).
     stale = _settlement_comment(9645, OLD_H2_PIN_SHA)
@@ -7638,7 +8807,12 @@ def test_classifier_uses_parity_without_accepted_authority():
 def test_corrective_uses_transition_check_not_ordinary_pr_success(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
-    original_inventory = (_REPO_ROOT / gen.DEFAULT_INVENTORY).read_text(encoding="utf-8")
+    # A first transition must install the all-active genesis authority; the
+    # committed authority now carries the catch-up paydown, so reconstruct
+    # the genesis form for the synthetic transition head.
+    original_doc = json.loads((_REPO_ROOT / gen.DEFAULT_INVENTORY).read_text(encoding="utf-8"))
+    original_doc["accepted_authority"] = _genesis_authority(original_doc["accepted_authority"])
+    genesis_inventory = json.dumps(original_doc)
 
     def drop_authority(inventory: dict) -> None:
         del inventory["accepted_authority"]
@@ -7649,7 +8823,7 @@ def test_corrective_uses_transition_check_not_ordinary_pr_success(
         tmp_path,
         mutate_base_inventory=drop_authority,
         head_writes={
-            str(_HERMETIC_INVENTORY): original_inventory,
+            str(_HERMETIC_INVENTORY): genesis_inventory,
             "README.md": "corrective head\n",
         },
     )
@@ -7931,7 +9105,7 @@ def test_cdg_800_cap_applies_only_to_core_extended_paydown_with_exact_corrective
     assert "per-PR size cap" in broken["error"]
     # The exact corrective guard-v2 atom (+687/-178 = 865 across six files)
     # rides the corrective proof plane, which carries no PR-delta cap field.
-    assert GUARD_V2_DELTA == 865 and GUARD_V2_DELTA > 800
+    assert _EXPECTED_GUARD_V2_DELTA == 865 and _EXPECTED_GUARD_V2_DELTA > 800
     repo, start_sha, boundary_shas = _boundary_git_repo(tmp_path / "corrective")
     corrective = _boundary_payloads(
         "corrective_bootstrap",
@@ -8516,26 +9690,46 @@ def test_normal_protected_exact_head_merge_is_last_and_never_admin(
 def test_base_without_accepted_authority_requires_transition(tmp_path: Path):
     # An inventory without the accepted-authority manifest yields the
     # dedicated transition error, never head-authority execution.
+    repo = tmp_path / "transition-repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    (repo / "parent.txt").write_text("parent\n", encoding="utf-8")
+    _commit(repo, "parent")
     inventory = _real_inventory()
     del inventory["accepted_authority"]
-    bare = tmp_path / "inventory.json"
+    bare = repo / gen.DEFAULT_INVENTORY
+    bare.parent.mkdir(parents=True)
     bare.write_text(json.dumps(inventory), encoding="utf-8")
+    source = _commit(repo, "inventory without authority")
     result = ratchet.build_accepted_result(
-        mode="program", repo_root=_REPO_ROOT, inventory_path=bare
+        mode="program",
+        repo_root=repo,
+        inventory_path=Path(gen.DEFAULT_INVENTORY),
+        source_sha=source,
     )
     assert result["status"] == "fail" and result["passing"] is False
     assert result["error_code"] == "authority_transition_required"
-    # A missing/unreadable inventory is the same closed transition failure.
+    # A source commit without the canonical inventory is the same closed
+    # transition failure.
+    bare.unlink()
+    missing_source = _commit(repo, "inventory absent")
     missing = ratchet.build_accepted_result(
-        mode="program", repo_root=_REPO_ROOT, inventory_path=tmp_path / "absent.json"
+        mode="program",
+        repo_root=repo,
+        inventory_path=Path(gen.DEFAULT_INVENTORY),
+        source_sha=missing_source,
     )
     assert missing["error_code"] == "authority_transition_required"
     # Degraded-schema bases (manifest present but not an object) fail the
     # same way rather than executing whatever the head proposes.
     inventory["accepted_authority"] = "not-a-manifest"
     bare.write_text(json.dumps(inventory), encoding="utf-8")
+    degraded_source = _commit(repo, "malformed authority")
     degraded = ratchet.build_accepted_result(
-        mode="program", repo_root=_REPO_ROOT, inventory_path=bare
+        mode="program",
+        repo_root=repo,
+        inventory_path=Path(gen.DEFAULT_INVENTORY),
+        source_sha=degraded_source,
     )
     assert degraded["error_code"] == "authority_transition_required"
 
@@ -8556,11 +9750,13 @@ def test_corrective_merge_parent_requires_transition(tmp_path: Path):
         )
     )
     assert not isinstance(parent_doc.get("accepted_authority"), dict)
-    # PR mode under PARENT's inventory fails authority_transition_required.
-    parent_inventory = tmp_path / "parent-inventory.json"
-    parent_inventory.write_text(json.dumps(parent_doc), encoding="utf-8")
+    # Program mode at PARENT's immutable inventory fails
+    # authority_transition_required.
     result = ratchet.build_accepted_result(
-        mode="program", repo_root=_REPO_ROOT, inventory_path=parent_inventory
+        mode="program",
+        repo_root=_REPO_ROOT,
+        inventory_path=Path(gen.DEFAULT_INVENTORY),
+        source_sha=parent,
     )
     assert result["error_code"] == "authority_transition_required"
     assert result["passing"] is False
@@ -8689,7 +9885,13 @@ def test_transition_reconstructs_all_655_ids_and_598_provenance_records():
     summary = ratchet.validate_accepted_authority(_real_authority(), repo_root=_REPO_ROOT)
     assert summary["original_record_total"] == 655
     assert summary["sdk_provenance_record_total"] == 598
-    assert len(summary["active_original_record_ids"]) == 655
+    assert len(summary["active_original_record_ids"]) == 235
+    # The genesis reconstruction of the committed authority still spans the
+    # full 655-record cohort — paydown resolves records, never removes them.
+    genesis_summary = ratchet.validate_accepted_authority(
+        _genesis_authority(_real_authority()), repo_root=_REPO_ROOT
+    )
+    assert len(genesis_summary["active_original_record_ids"]) == 655
     # Reconstruction is not trust-the-artifact: a self-consistent-looking but
     # wrong ID payload digest is recomputed and rejected.
     cohort = _real_authority()["canonical_artifacts"]["original_cohort"]
@@ -8909,20 +10111,23 @@ def test_strict_subset_requires_separate_authenticated_paydown():
         _relink_authority_manifest(target)
 
     # A strict subset with exact appended paydown evidence is a paydown
-    # disposition — not a transition — and passes the comparison.
-    paydown = copy.deepcopy(authority)
+    # disposition — not a transition — and passes the comparison. Build the
+    # synthetic paydown from the all-active genesis base so its histories
+    # append to the base rather than rewriting committed paydown events.
+    genesis = _genesis_authority(authority)
+    paydown = copy.deepcopy(genesis)
     resolve(paydown, live_digest)
-    compared = ratchet.compare_accepted_authorities(authority, paydown, repo_root=root)
+    compared = ratchet.compare_accepted_authorities(genesis, paydown, repo_root=root)
     assert compared["passing"] is True
-    assert len(compared["removed_original_record_ids"]) == 255
+    assert len(compared["removed_original_record_ids"]) == 420
     assert compared["authority"] == {"source": "accepted_authority"}
     assert "transition" not in compared
     # The same subset without the exact appended active-set digest cannot be
     # folded through: it fails the paydown authentication.
-    unauthenticated = copy.deepcopy(authority)
+    unauthenticated = copy.deepcopy(genesis)
     resolve(unauthenticated, "0" * 64)
     with pytest.raises(ValueError, match="exact appended paydown evidence"):
-        ratchet.compare_accepted_authorities(authority, unauthenticated, repo_root=root)
+        ratchet.compare_accepted_authorities(genesis, unauthenticated, repo_root=root)
 
 
 def test_transition_changes_only_versioned_analyzer_schema_dependency_projection_evidence_and_active_representation(  # noqa: E501
@@ -9445,19 +10650,178 @@ def test_legacy_entrypoints_delegate_to_canonical_inventory(monkeypatch: pytest.
         text=True,
         check=True,
     ).stdout.strip()
+    parent = subprocess.run(
+        ["git", "-C", str(_REPO_ROOT), "rev-parse", f"{source}^"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
     result = ratchet.build_accepted_result(
         mode="receipt",
         repo_root=_REPO_ROOT,
         inventory_path=_REPO_ROOT / gen.DEFAULT_INVENTORY,
         source_sha=source,
     )
-    assert calls == [(source, f"{source}^")]
+    assert calls == [(source, parent)]
     assert result["authority"]["source"] == "accepted_authority"
     # Live-witness reconciliation delegates to the canonical inventory
     # loaders rather than reading baselines through a private copy.
     live_source = inspect.getsource(ratchet._live_witnesses)
     assert "inventory_mod.load_git_docs" in live_source
     assert "inventory_mod.collect_ids" in live_source
+
+
+def test_historical_receipt_mode_supports_the_exact_9320_pair(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    assert ensure_pr_9320_head(_CDG_TEST_ROOT) == PR_9320_FACT["head_sha"]
+    monkeypatch.setattr(
+        ratchet,
+        "validate_accepted_authority",
+        lambda *args, **kwargs: {
+            "active_original_record_ids": [],
+            "analyzer_bundle_sha256": "",
+            "live_original_record_ids": [],
+        },
+    )
+    result = ratchet.build_accepted_result(
+        mode="receipt",
+        repo_root=_REPO_ROOT,
+        inventory_path=_REPO_ROOT / gen.DEFAULT_INVENTORY,
+        source_sha=subprocess.check_output(
+            ["git", "-C", str(_REPO_ROOT), "rev-parse", "HEAD"],
+            text=True,
+        ).strip(),
+        historical_base_sha="14d1ef53e23c5466c0491ed93f72752944c78cd4",
+        historical_head_sha="aba6b14c94eca3a9c825b1a303ea67684d5f8daa",
+        historical_merge_sha="0b28f68b9f4d204ae14814169093723ea84c1364",
+        historical_first_parent_sha="e448b840dad03ee28accd218c14a27fa8b87c7b4",
+    )
+    assert result["status"] == "pass"
+    assert result["passing"] is True
+    assert result["execution"] == {
+        "base_sha": "14d1ef53e23c5466c0491ed93f72752944c78cd4",
+        "first_parent_sha": "e448b840dad03ee28accd218c14a27fa8b87c7b4",
+        "first_parent_patch_byte_length": 6054,
+        "first_parent_patch_sha256": (
+            "7c53f6c8b9bd17847cdb4ecc5dfa1c7aa1699105faabc47439a4437709a175b4"
+        ),
+        "head_sha": "aba6b14c94eca3a9c825b1a303ea67684d5f8daa",
+        "head_tree_sha": "e5c6c3d07a918cf43fffed6d4a9f472bc10a674a",
+        "merge_sha": "0b28f68b9f4d204ae14814169093723ea84c1364",
+        "merge_tree_sha": "79c1c374eed261c42468dc526d837e726e73425a",
+        "semantic_delta_paths": [
+            "aragora/server/handlers/social/__init__.py",
+            "aragora/server/handlers/social/sharing.py",
+            "tests/handlers/social/test_sharing.py",
+        ],
+        "source_sha": subprocess.check_output(
+            ["git", "-C", str(_REPO_ROOT), "rev-parse", "HEAD"],
+            text=True,
+        ).strip(),
+    }
+
+
+def test_historical_receipt_patch_binding_ignores_hostile_git_config(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    assert ensure_pr_9320_head(_CDG_TEST_ROOT) == PR_9320_FACT["head_sha"]
+    global_config = tmp_path / "hostile-gitconfig"
+    global_config.write_text(
+        "[diff]\n"
+        "\tnoprefix = true\n"
+        "\talgorithm = histogram\n"
+        "\tcontext = 19\n"
+        "[core]\n"
+        "\tabbrev = 40\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(global_config))
+    monkeypatch.delenv("GIT_CONFIG_NOSYSTEM", raising=False)
+    monkeypatch.setattr(
+        ratchet,
+        "validate_accepted_authority",
+        lambda *args, **kwargs: {
+            "active_original_record_ids": [],
+            "analyzer_bundle_sha256": "",
+            "live_original_record_ids": [],
+        },
+    )
+    result = ratchet.build_accepted_result(
+        mode="receipt",
+        repo_root=_REPO_ROOT,
+        inventory_path=_REPO_ROOT / gen.DEFAULT_INVENTORY,
+        source_sha=subprocess.check_output(
+            ["git", "-C", str(_REPO_ROOT), "rev-parse", "HEAD"],
+            text=True,
+        ).strip(),
+        historical_base_sha="14d1ef53e23c5466c0491ed93f72752944c78cd4",
+        historical_head_sha=cast(str, PR_9320_FACT["head_sha"]),
+        historical_merge_sha=cast(str, PR_9320_FACT["merge_sha"]),
+        historical_first_parent_sha="e448b840dad03ee28accd218c14a27fa8b87c7b4",
+    )
+    assert result["status"] == "pass"
+    assert result["execution"]["first_parent_patch_byte_length"] == 6054
+    assert result["execution"]["first_parent_patch_sha256"] == (
+        "7c53f6c8b9bd17847cdb4ecc5dfa1c7aa1699105faabc47439a4437709a175b4"
+    )
+
+
+def test_historical_receipt_mode_fails_closed_on_incomplete_or_mismatched_pair(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(
+        ratchet,
+        "validate_accepted_authority",
+        lambda *args, **kwargs: {
+            "active_original_record_ids": [],
+            "analyzer_bundle_sha256": "",
+            "live_original_record_ids": [],
+        },
+    )
+    source_sha = subprocess.check_output(
+        ["git", "-C", str(_REPO_ROOT), "rev-parse", "HEAD"],
+        text=True,
+    ).strip()
+    incomplete = ratchet.build_accepted_result(
+        mode="receipt",
+        repo_root=_REPO_ROOT,
+        inventory_path=_REPO_ROOT / gen.DEFAULT_INVENTORY,
+        source_sha=source_sha,
+        historical_merge_sha="0b28f68b9f4d204ae14814169093723ea84c1364",
+    )
+    assert incomplete["error_code"] == "accepted_authority_historical_pair_incomplete"
+    assert incomplete["passing"] is False
+
+    mismatched = ratchet.build_accepted_result(
+        mode="receipt",
+        repo_root=_REPO_ROOT,
+        inventory_path=_REPO_ROOT / gen.DEFAULT_INVENTORY,
+        source_sha=source_sha,
+        historical_base_sha="14d1ef53e23c5466c0491ed93f72752944c78cd4",
+        historical_head_sha="aba6b14c94eca3a9c825b1a303ea67684d5f8daa",
+        historical_merge_sha="0b28f68b9f4d204ae14814169093723ea84c1364",
+        historical_first_parent_sha="14d1ef53e23c5466c0491ed93f72752944c78cd4",
+    )
+    assert mismatched["error_code"] == "accepted_authority_historical_pair_mismatch"
+    assert mismatched["passing"] is False
+
+    wrong_base = ratchet.build_accepted_result(
+        mode="receipt",
+        repo_root=_REPO_ROOT,
+        inventory_path=_REPO_ROOT / gen.DEFAULT_INVENTORY,
+        source_sha=source_sha,
+        historical_base_sha="e448b840dad03ee28accd218c14a27fa8b87c7b4",
+        historical_head_sha="aba6b14c94eca3a9c825b1a303ea67684d5f8daa",
+        historical_merge_sha="0b28f68b9f4d204ae14814169093723ea84c1364",
+        historical_first_parent_sha="e448b840dad03ee28accd218c14a27fa8b87c7b4",
+    )
+    assert wrong_base["error_code"] in {
+        "accepted_authority_historical_pair_invalid",
+        "accepted_authority_historical_pair_mismatch",
+    }
+    assert wrong_base["passing"] is False
 
 
 def test_no_reachable_classification_filtered_or_raw_baseline_fallback():
@@ -9477,6 +10841,10 @@ def test_no_reachable_classification_filtered_or_raw_baseline_fallback():
         mode="program",
         repo_root=_REPO_ROOT,
         inventory_path=_REPO_ROOT / gen.DEFAULT_INVENTORY,
+        source_sha=subprocess.check_output(
+            ["git", "-C", str(_REPO_ROOT), "rev-parse", "HEAD"],
+            text=True,
+        ).strip(),
     )
     assert result["authority"]["source"] == "accepted_authority"
 
@@ -9627,10 +10995,108 @@ def test_real_shaped_stale_base_squash_passes_via_semantic_delta_witness(tmp_pat
         for entry in operation_log
         if entry["kind"] == "squash_binding_witness"
     }
-    # The clean squash records tree equality; the stale-base squash records
-    # the recomputed first-parent semantic delta, never head-tree equality.
-    assert witnesses["squash-binding:9695"] == "head_tree_equality"
+    corroborations = {
+        entry["resource"]: entry["response_identity"]["corroborating_witnesses"]
+        for entry in operation_log
+        if entry["kind"] == "squash_binding_witness"
+    }
+    # Both squashes bind through exact semantic equality. Tree equality is
+    # structured corroboration only, never the binding witness identity.
+    assert witnesses["squash-binding:9695"] == "first_parent_semantic_delta"
     assert witnesses["squash-binding:9696"] == "first_parent_semantic_delta"
+    assert corroborations == {
+        "squash-binding:9695": ["head_tree_equality"],
+        "squash-binding:9696": [],
+    }
+
+
+def test_squash_semantic_delta_round_trips_hostile_github_filenames(tmp_path: Path):
+    repo = tmp_path / "hostile-semantic-delta"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    base = _commit(repo, "base")
+    paths = {
+        "hostile/back\\slash.txt",
+        'hostile/double"quote.txt',
+        "hostile/line\nbreak.txt",
+        "hostile/tab\tname.txt",
+        "hostile/路径-雪.txt",
+    }
+    for relative in paths:
+        path = repo / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(relative, encoding="utf-8")
+    merge = _commit(repo, "hostile paths")
+    operation_log: list[dict[str, Any]] = []
+
+    assert (
+        ratchet._first_parent_semantic_delta(
+            repo,
+            first_parent_sha=base,
+            merge_sha=merge,
+            pr=9707,
+            operation_log=operation_log,
+        )
+        == paths
+    )
+    semantic_diff = next(
+        entry for entry in operation_log if entry["resource"] == "squash-semantic-delta:9707"
+    )
+    assert "-z" in semantic_diff["identifier"].split()
+    merge_tree = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", f"{merge}^{{tree}}"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    assert (
+        ratchet._require_squash_binding_witness(
+            repo_root=repo,
+            pr=9707,
+            head_tree_sha=merge_tree,
+            merge_tree_sha=merge_tree,
+            first_parent_sha=base,
+            merge_sha=merge,
+            owned_paths=sorted(paths),
+            operation_log=[],
+        )
+        == "first_parent_semantic_delta"
+    )
+
+
+@pytest.mark.parametrize(
+    ("stdout", "message"),
+    (
+        (b"unterminated", "unterminated NUL-delimited path output"),
+        (b"valid.txt\0\0", "empty path record"),
+        (b"\xff\0", "cannot round-trip through a GitHub UTF-8 filename"),
+        (b"duplicate.txt\0duplicate.txt\0", "duplicate paths"),
+    ),
+)
+def test_squash_semantic_delta_rejects_malformed_raw_git_paths(
+    monkeypatch: pytest.MonkeyPatch,
+    stdout: bytes,
+    message: str,
+):
+    monkeypatch.setattr(
+        ratchet,
+        "_run_read_only",
+        lambda argv, **_kwargs: subprocess.CompletedProcess(
+            argv,
+            0,
+            stdout=stdout,
+            stderr=b"",
+        ),
+    )
+
+    with pytest.raises(ValueError, match=message):
+        ratchet._first_parent_semantic_delta(
+            Path("."),
+            first_parent_sha="1" * 40,
+            merge_sha="2" * 40,
+            pr=9707,
+            operation_log=[],
+        )
 
 
 def test_foreign_path_semantic_delta_fails_closed(tmp_path: Path):
@@ -9647,6 +11113,30 @@ def test_foreign_path_semantic_delta_fails_closed(tmp_path: Path):
             start_sha=shape["start"],
             end_sha=shape["merge"],
             authenticated_pr_files={9695: ["sibling.txt"], 9696: ["something-else.txt"]},
+            operation_log=[],
+        )
+
+
+def test_head_tree_equality_rejects_strict_subset_of_owned_paths(tmp_path: Path):
+    # Tree equality is corroboration only: an authenticated disposition with
+    # an extra owned path must fail even when the PR-head and squash trees are
+    # identical and every actual delta path is owned.
+    shape = _stale_base_squash_repo(tmp_path)
+    clean_tree = subprocess.run(
+        ["git", "-C", str(shape["repo"]), "rev-parse", f"{shape['prior_merge']}^{{tree}}"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    with pytest.raises(ValueError, match="authenticated paths missing from semantic delta"):
+        ratchet._require_squash_binding_witness(
+            repo_root=shape["repo"],
+            pr=9695,
+            head_tree_sha=clean_tree,
+            merge_tree_sha=clean_tree,
+            first_parent_sha=shape["start"],
+            merge_sha=shape["prior_merge"],
+            owned_paths=["declared-but-missing.txt", "sibling.txt"],
             operation_log=[],
         )
 
@@ -9833,3 +11323,399 @@ def test_live_evidence_plane_accepts_stale_base_squash_and_rejects_foreign_delta
 
     with pytest.raises(ValueError, match="lacks first-parent or tree equality"):
         _live_pr_files_probe(tmp_path / "claim", monkeypatch, mutate=wrong_receipt_tree)
+
+
+def _github_json_transport(bodies: dict[str, Any]) -> Any:
+    # GitHub's weak entity tags are derived from the exact response body, so
+    # any byte change to the body also changes the ETag header.
+    def run(argv: list[str], **_kwargs: Any) -> subprocess.CompletedProcess[bytes]:
+        body = ratchet._canonical_json_bytes(bodies[argv[-1]])
+        etag = hashlib.sha256(body).hexdigest()[:32].encode()
+        stdout = b'HTTP/2 200 OK\r\nETag: W/"' + etag + b'"\r\n\r\n' + body
+        return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr=b"")
+
+    return run
+
+
+def _github_identity(
+    monkeypatch: pytest.MonkeyPatch,
+    endpoint: str,
+    body: Any,
+) -> dict[str, Any]:
+    monkeypatch.setattr(ratchet, "_run_read_only", _github_json_transport({endpoint: body}))
+    _payload, identity = ratchet._gh_api_get(endpoint, operation_log=[])
+    return identity
+
+
+def _tick(value: Any) -> Any:
+    if isinstance(value, bool):
+        return not value
+    if isinstance(value, int):
+        return value + 1
+    return f"{value}-ticked"
+
+
+def _volatile_fixture_repository() -> dict[str, Any]:
+    return {
+        "default_branch": "main",
+        "description": "fixture",
+        "forks": 3,
+        "forks_count": 3,
+        "full_name": "synaptent/aragora",
+        "id": 1126097105,
+        "name": "aragora",
+        "network_count": 3,
+        "open_issues": 1019,
+        "open_issues_count": 1019,
+        "pushed_at": "2026-09-02T03:27:50Z",
+        "size": 4096,
+        "stargazers_count": 7,
+        "subscribers_count": 2,
+        "updated_at": "2026-09-01T00:00:00Z",
+        "watchers": 7,
+        "watchers_count": 7,
+    }
+
+
+def _volatile_fixture_pull_request(end_sha: str) -> dict[str, Any]:
+    return {
+        "additions": 400,
+        "base": {"ref": "main", "repo": _volatile_fixture_repository(), "sha": "f" * 40},
+        "changed_files": 1,
+        "deletions": 400,
+        "head": {"ref": "structex/fixture", "repo": _volatile_fixture_repository(), "sha": end_sha},
+        "merge_commit_sha": "e" * 40,
+        "mergeable": None,
+        "mergeable_state": "unknown",
+        "merged_at": "2026-08-31T00:00:00Z",
+        "number": 8766,
+        "title": "fixture",
+        "updated_at": "2026-08-31T00:00:00Z",
+    }
+
+
+def _volatile_fixture_release(end_sha: str) -> dict[str, Any]:
+    tag = f"cdg-route_truth-{end_sha}"
+    return {
+        "assets": [
+            {
+                "digest": "sha256:" + "1" * 64,
+                "download_count": 12,
+                "id": 538132370,
+                "name": "checksums.txt",
+                "size": 159,
+                "updated_at": "2026-08-31T14:55:16Z",
+            },
+            {
+                "digest": "sha256:" + "2" * 64,
+                "download_count": 12,
+                "id": 538132327,
+                "name": "manifest.json",
+                "size": 302,
+                "updated_at": "2026-08-31T14:55:14Z",
+            },
+            {
+                "digest": "sha256:" + "3" * 64,
+                "download_count": 12,
+                "id": 538132338,
+                "name": "payload.json",
+                "size": 90447,
+                "updated_at": "2026-08-31T14:55:15Z",
+            },
+        ],
+        "draft": False,
+        "id": 379772162,
+        "immutable": True,
+        "prerelease": False,
+        "tag_name": tag,
+        "target_commitish": end_sha,
+        "updated_at": "2026-08-31T14:56:04Z",
+    }
+
+
+def _bump_download_counts(release: dict[str, Any], by: int = 6) -> dict[str, Any]:
+    ticked = copy.deepcopy(release)
+    for asset in ticked["assets"]:
+        asset["download_count"] += by
+    return ticked
+
+
+def _tick_repository_counters(repository: dict[str, Any]) -> dict[str, Any]:
+    ticked = dict(repository)
+    for field in ratchet._VOLATILE_REPOSITORY_FIELDS:
+        ticked[field] = _tick(repository[field])
+    return ticked
+
+
+def test_release_identity_excludes_only_asset_download_counts(monkeypatch: pytest.MonkeyPatch):
+    # The verifier's own paired octet-stream asset downloads bump every
+    # assets[].download_count inside the release body it captured before the
+    # downloads, so that counter alone must not read as concurrent movement.
+    end_sha = "2b94459bc0e316c3c0c1eb285695bf2a0c73c647"
+    endpoint = f"repos/synaptent/aragora/releases/{379772162}"
+    release = _volatile_fixture_release(end_sha)
+    before = _github_identity(monkeypatch, endpoint, release)
+    ticked = _github_identity(monkeypatch, endpoint, _bump_download_counts(release))
+    assert ratchet._remote_identity_moved(before, ticked) is False
+    assert before["excluded_volatile_fields"] == ["assets[].download_count"]
+    assert before["etag"] is None
+    assert before["updated_at"] == release["updated_at"]
+    assert before["sha256"] == ticked["sha256"]
+
+    def mutate_asset(index: int, field: str) -> Any:
+        def apply(body: dict[str, Any]) -> None:
+            body["assets"][index][field] = _tick(body["assets"][index][field])
+
+        return apply
+
+    def mutate_field(field: str) -> Any:
+        def apply(body: dict[str, Any]) -> None:
+            body[field] = _tick(body[field])
+
+        return apply
+
+    semantic = {
+        "asset size": mutate_asset(0, "size"),
+        "asset digest": mutate_asset(1, "digest"),
+        "asset id": mutate_asset(2, "id"),
+        "asset name": mutate_asset(0, "name"),
+        "tag_name": mutate_field("tag_name"),
+        "target_commitish": mutate_field("target_commitish"),
+        "draft": mutate_field("draft"),
+        "immutable": mutate_field("immutable"),
+        "prerelease": mutate_field("prerelease"),
+        "updated_at": mutate_field("updated_at"),
+    }
+    for label, apply in semantic.items():
+        moved_body = _bump_download_counts(release)
+        apply(moved_body)
+        moved = _github_identity(monkeypatch, endpoint, moved_body)
+        assert ratchet._remote_identity_moved(before, moved) is True, label
+
+    # The paginated release listing embeds the same per-asset counters and is
+    # reauthenticated too; a newly published release still moves it.
+    listing = "repos/synaptent/aragora/releases?per_page=100&page=1"
+    listing_before = _github_identity(monkeypatch, listing, [release])
+    listing_ticked = _github_identity(monkeypatch, listing, [_bump_download_counts(release)])
+    assert ratchet._remote_identity_moved(listing_before, listing_ticked) is False
+    assert listing_before["excluded_volatile_fields"] == ["[].assets[].download_count"]
+    extra = copy.deepcopy(release)
+    extra["id"] = 379772163
+    extra["tag_name"] = "v-other"
+    listing_grown = _github_identity(monkeypatch, listing, [release, extra])
+    assert ratchet._remote_identity_moved(listing_before, listing_grown) is True
+
+
+def test_repository_and_pull_request_identity_exclude_only_embedded_activity_counters(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    # Issue open/close, pushes to any branch, and stars tick counters inside
+    # the repository object (also nested as base.repo/head.repo in governed
+    # PR bodies) during a multi-minute run; only those counters are excluded.
+    end_sha = "2b94459bc0e316c3c0c1eb285695bf2a0c73c647"
+    repo_endpoint = "repos/synaptent/aragora"
+    repository = _volatile_fixture_repository()
+    before = _github_identity(monkeypatch, repo_endpoint, repository)
+    assert before["etag"] is None
+    assert before["updated_at"] is None
+    assert before["excluded_volatile_fields"] == list(ratchet._VOLATILE_REPOSITORY_FIELDS)
+    assert set(ratchet._VOLATILE_REPOSITORY_FIELDS) == {
+        "forks",
+        "forks_count",
+        "network_count",
+        "open_issues",
+        "open_issues_count",
+        "pushed_at",
+        "size",
+        "stargazers_count",
+        "subscribers_count",
+        "updated_at",
+        "watchers",
+        "watchers_count",
+    }
+    for field in ratchet._VOLATILE_REPOSITORY_FIELDS:
+        ticked = dict(repository)
+        ticked[field] = _tick(repository[field])
+        moved = ratchet._remote_identity_moved(
+            before, _github_identity(monkeypatch, repo_endpoint, ticked)
+        )
+        assert moved is False, field
+    all_ticked = _github_identity(monkeypatch, repo_endpoint, _tick_repository_counters(repository))
+    assert ratchet._remote_identity_moved(before, all_ticked) is False
+    for field in ("default_branch", "description", "full_name", "id", "name"):
+        changed = _tick_repository_counters(repository)
+        changed[field] = _tick(repository[field])
+        moved = ratchet._remote_identity_moved(
+            before, _github_identity(monkeypatch, repo_endpoint, changed)
+        )
+        assert moved is True, field
+
+    pr_endpoint = "repos/synaptent/aragora/pulls/8766"
+    pull_request = _volatile_fixture_pull_request(end_sha)
+    pr_before = _github_identity(monkeypatch, pr_endpoint, pull_request)
+    assert pr_before["etag"] is None
+    assert pr_before["updated_at"] == pull_request["updated_at"]
+    assert pr_before["excluded_volatile_fields"] == [
+        f"{side}.repo.{field}"
+        for side in ("base", "head")
+        for field in ratchet._VOLATILE_REPOSITORY_FIELDS
+    ]
+    ticked_pr = copy.deepcopy(pull_request)
+    for side in ("base", "head"):
+        ticked_pr[side]["repo"] = _tick_repository_counters(pull_request[side]["repo"])
+    assert (
+        ratchet._remote_identity_moved(
+            pr_before, _github_identity(monkeypatch, pr_endpoint, ticked_pr)
+        )
+        is False
+    )
+
+    def nested(path: tuple[str, ...]) -> Any:
+        def apply(body: dict[str, Any]) -> None:
+            target = body
+            for key in path[:-1]:
+                target = target[key]
+            target[path[-1]] = _tick(target[path[-1]])
+
+        return apply
+
+    semantic = {
+        "head sha": nested(("head", "sha")),
+        "base sha": nested(("base", "sha")),
+        "head ref": nested(("head", "ref")),
+        "head repo full_name": nested(("head", "repo", "full_name")),
+        "merge_commit_sha": nested(("merge_commit_sha",)),
+        "mergeable_state": nested(("mergeable_state",)),
+        "merged_at": nested(("merged_at",)),
+        "changed_files": nested(("changed_files",)),
+        "title": nested(("title",)),
+        "updated_at": nested(("updated_at",)),
+    }
+    for label, apply in semantic.items():
+        moved_body = copy.deepcopy(ticked_pr)
+        apply(moved_body)
+        moved = ratchet._remote_identity_moved(
+            pr_before, _github_identity(monkeypatch, pr_endpoint, moved_body)
+        )
+        assert moved is True, label
+
+    # Endpoints outside the three normalized classes keep the raw-body plane.
+    branch = "repos/synaptent/aragora/branches/main"
+    raw = _github_identity(monkeypatch, branch, {"commit": {"sha": end_sha}, "name": "main"})
+    assert raw["etag"] is not None
+    assert "excluded_volatile_fields" not in raw
+
+
+def test_stable_get_tolerates_counter_ticks_between_paired_fetches_and_blocks_on_content(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    endpoint = "repos/synaptent/aragora"
+    repository = _volatile_fixture_repository()
+    served = iter([repository, _tick_repository_counters(repository)])
+
+    def ticking(argv: list[str], **_kwargs: Any) -> subprocess.CompletedProcess[bytes]:
+        return _github_json_transport({endpoint: next(served)})(argv)
+
+    monkeypatch.setattr(ratchet, "_run_read_only", ticking)
+    operation_log: list[dict[str, Any]] = []
+    payload, identity = ratchet._gh_api_get_stable(endpoint, operation_log=operation_log)
+    assert payload["open_issues_count"] == repository["open_issues_count"] + 1
+    assert payload["full_name"] == "synaptent/aragora"
+    assert identity["etag"] is None
+    assert [entry["movement_observed"] for entry in operation_log] == [False, False]
+    assert all(entry["raw_etag"] for entry in operation_log)
+    assert operation_log[0]["sha256"] != operation_log[1]["sha256"]
+    assert operation_log[0]["response_identity"] == operation_log[1]["response_identity"]
+
+    flipping = iter([repository, {**repository, "default_branch": "develop"}] * 3)
+
+    def content_moves(argv: list[str], **_kwargs: Any) -> subprocess.CompletedProcess[bytes]:
+        return _github_json_transport({endpoint: next(flipping)})(argv)
+
+    monkeypatch.setattr(ratchet, "_run_read_only", content_moves)
+    blocked_log: list[dict[str, Any]] = []
+    with pytest.raises(ratchet.BoundaryBlocked, match="moved concurrently"):
+        ratchet._gh_api_get_stable(endpoint, operation_log=blocked_log)
+    assert [entry["movement_observed"] for entry in blocked_log] == [True] * 6
+
+
+def test_reauthentication_tolerates_volatile_counter_ticks_and_blocks_on_content_movement(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    end_sha = "2b94459bc0e316c3c0c1eb285695bf2a0c73c647"
+    repo_endpoint = "repos/synaptent/aragora"
+    pr_endpoint = "repos/synaptent/aragora/pulls/8766"
+    release_endpoint = "repos/synaptent/aragora/releases/379772162"
+    listing_endpoint = "repos/synaptent/aragora/releases?per_page=100&page=1"
+    release = _volatile_fixture_release(end_sha)
+    before_bodies: dict[str, Any] = {
+        repo_endpoint: _volatile_fixture_repository(),
+        pr_endpoint: _volatile_fixture_pull_request(end_sha),
+        release_endpoint: release,
+        listing_endpoint: [release],
+    }
+    monkeypatch.setattr(ratchet, "_run_read_only", _github_json_transport(before_bodies))
+    operation_log: list[dict[str, Any]] = []
+    endpoint_identities: dict[str, dict[str, Any]] = {}
+    for endpoint in sorted(before_bodies):
+        _payload, identity = ratchet._gh_api_get_stable(endpoint, operation_log=operation_log)
+        endpoint_identities[endpoint] = identity
+    context = {
+        "asset_identities": {},
+        "endpoint_identities": endpoint_identities,
+        "github_repository": "synaptent/aragora",
+        "local_asset_identities": {},
+        "verification_commands": [],
+    }
+    before_snapshot = {
+        "assets": {},
+        "endpoints": endpoint_identities,
+        "local_assets": {},
+        "repository": "synaptent/aragora",
+        "verifications": [],
+    }
+    # End of run: the janitor ticked the repository counters and the
+    # verifier's own asset downloads bumped every download_count.
+    ticked_pr = copy.deepcopy(before_bodies[pr_endpoint])
+    for side in ("base", "head"):
+        ticked_pr[side]["repo"] = _tick_repository_counters(ticked_pr[side]["repo"])
+    ticked_bodies: dict[str, Any] = {
+        repo_endpoint: _tick_repository_counters(before_bodies[repo_endpoint]),
+        pr_endpoint: ticked_pr,
+        release_endpoint: _bump_download_counts(release),
+        listing_endpoint: [_bump_download_counts(release)],
+    }
+    monkeypatch.setattr(ratchet, "_run_read_only", _github_json_transport(ticked_bodies))
+    after_snapshot = ratchet._reauthenticate_live_context(
+        context,
+        operation_log=operation_log,
+        end_sha=end_sha,
+    )
+    assert ratchet._canonical_json_bytes(after_snapshot) == ratchet._canonical_json_bytes(
+        before_snapshot
+    )
+
+    def move_head_sha(body: dict[str, Any]) -> None:
+        body["head"]["sha"] = "d" * 40
+
+    def move_asset_digest(body: dict[str, Any]) -> None:
+        body["assets"][2]["digest"] = "sha256:" + "f" * 64
+
+    def move_repository_name(body: dict[str, Any]) -> None:
+        body["full_name"] = "synaptent/renamed"
+
+    def publish_extra_release(body: list[dict[str, Any]]) -> None:
+        body.append({**copy.deepcopy(release), "id": 379772163, "tag_name": "v-other"})
+
+    for endpoint, apply in (
+        (pr_endpoint, move_head_sha),
+        (release_endpoint, move_asset_digest),
+        (repo_endpoint, move_repository_name),
+        (listing_endpoint, publish_extra_release),
+    ):
+        moved_bodies = copy.deepcopy(ticked_bodies)
+        apply(moved_bodies[endpoint])
+        monkeypatch.setattr(ratchet, "_run_read_only", _github_json_transport(moved_bodies))
+        with pytest.raises(ratchet.BoundaryBlocked, match="moved concurrently") as excinfo:
+            ratchet._reauthenticate_live_context(context, operation_log=[], end_sha=end_sha)
+        assert str(excinfo.value).endswith(endpoint)

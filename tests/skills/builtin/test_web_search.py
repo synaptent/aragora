@@ -395,7 +395,7 @@ class TestTavilyProvider:
 
         with patch.dict("os.environ", {"TAVILY_API_KEY": "test_key"}):
             with patch(
-                "aragora.server.http_client_pool.get_http_pool",
+                "aragora.observability.http_client_pool.get_http_pool",
                 return_value=mock_pool,
             ):
                 results = await skill._search_tavily("test", 10)
@@ -418,7 +418,7 @@ class TestTavilyProvider:
 
         with patch.dict("os.environ", {"TAVILY_API_KEY": "test_key"}):
             with patch(
-                "aragora.server.http_client_pool.get_http_pool",
+                "aragora.observability.http_client_pool.get_http_pool",
                 return_value=mock_pool,
             ):
                 with patch.object(skill, "_search_duckduckgo", new_callable=AsyncMock) as mock_ddg:
@@ -493,7 +493,7 @@ class TestGoogleProvider:
             },
         ):
             with patch(
-                "aragora.server.http_client_pool.get_http_pool",
+                "aragora.observability.http_client_pool.get_http_pool",
                 return_value=mock_pool,
             ):
                 results = await skill._search_google("test", 10)
@@ -528,7 +528,7 @@ class TestGoogleProvider:
             },
         ):
             with patch(
-                "aragora.server.http_client_pool.get_http_pool",
+                "aragora.observability.http_client_pool.get_http_pool",
                 return_value=mock_pool,
             ):
                 await skill._search_google("test", 20)
@@ -556,7 +556,7 @@ class TestGoogleProvider:
             },
         ):
             with patch(
-                "aragora.server.http_client_pool.get_http_pool",
+                "aragora.observability.http_client_pool.get_http_pool",
                 return_value=mock_pool,
             ):
                 with patch.object(skill, "_search_duckduckgo", new_callable=AsyncMock) as mock_ddg:

@@ -257,10 +257,15 @@ class BatchWebhookDispatcher:
 
         if self._deliver_callback:
             # Import tracing lazily to avoid circular imports
+            trace_webhook_batch: Callable[..., Any] | None
             try:
-                from aragora.observability.tracing import trace_webhook_batch
+                from aragora.observability.tracing import (
+                    trace_webhook_batch as _trace_webhook_batch,
+                )
             except ImportError:
                 trace_webhook_batch = None
+            else:
+                trace_webhook_batch = _trace_webhook_batch
 
             payload = batch.to_payload()
             batch_size = len(batch.events)

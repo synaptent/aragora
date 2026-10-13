@@ -6,7 +6,10 @@ from pathlib import Path
 
 import pytest
 
+from aragora.swarm.boss_validation import extract_issue_validation_contract
 from aragora.swarm.micro_decomposer import build_micro_work_orders
+from aragora.swarm.spec import SwarmSpec
+from aragora.swarm.task_sanitizer import TaskSanitizer
 
 
 @pytest.fixture
@@ -56,6 +59,37 @@ def test_nonexistent_path_returns_empty(tmp_path: Path) -> None:
         file_scope_hints=["aragora/does_not_exist/"],
         repo_root=tmp_path,
     )
+    assert orders == []
+
+
+def test_nonexistent_file_with_missing_parent_returns_empty(tmp_path: Path) -> None:
+    orders = build_micro_work_orders(
+        goal="Create a missing test",
+        file_scope_hints=["tests/missing/test_new.py"],
+        repo_root=tmp_path,
+    )
+    assert orders == []
+
+
+@pytest.mark.parametrize(
+    ("goal", "missing_path"),
+    [
+        ("Remove the obsolete module", "aragora/routing/obsolete.py"),
+        ("Update references after renaming this module", "aragora/routing/renamed.py"),
+    ],
+)
+def test_missing_non_test_hint_does_not_create_work_order(
+    repo_root: Path,
+    goal: str,
+    missing_path: str,
+) -> None:
+    orders = build_micro_work_orders(
+        goal=goal,
+        file_scope_hints=[missing_path],
+        repo_root=repo_root,
+    )
+
+    assert not (repo_root / missing_path).exists()
     assert orders == []
 
 
@@ -185,3 +219,48 @@ def test_prefers_test_first_for_conditional_test_only_issue(tmp_path: Path) -> N
         "tests/cli/test_swarm_command.py",
         "aragora/cli/parser.py",
     ]
+
+
+def test_new_test_target_and_no_source_edits_emit_test_only_orders(tmp_path: Path) -> None:
+    (tmp_path / "aragora" / "swarm").mkdir(parents=True)
+    (tmp_path / "tests" / "swarm").mkdir(parents=True)
+    (tmp_path / "aragora" / "swarm" / "supervisor_workers.py").write_text(
+        "def dispatch_worker():\n    pass\n"
+    )
+
+    title = "Add unit tests for swarm/supervisor_workers.py"
+    body = """## Scope
+Add comprehensive unit tests for `aragora/swarm/supervisor_workers.py`.
+
+## Why
+This module handles worker lifecycle in the supervisor. No tests exist today.
+
+## Acceptance criteria
+- Test file at `tests/swarm/test_supervisor_workers.py` (new file)
+- Cover worker dispatch, lease management, and failure handling
+- All tests pass with `pytest tests/swarm/test_supervisor_workers.py -v`
+- No modifications to the source module
+"""
+    sanitization = TaskSanitizer(repo_root=tmp_path).sanitize(title, body)
+    sanitized_body = sanitization.sanitized_text.removeprefix(title).strip()
+    file_scope_hints = SwarmSpec.infer_file_scope_hints(sanitized_body)
+    acceptance_criteria = extract_issue_validation_contract(sanitized_body)
+
+    source_path = "aragora/swarm/supervisor_workers.py"
+    test_path = "tests/swarm/test_supervisor_workers.py"
+    orders = build_micro_work_orders(
+        goal=f"{title}\n\n{sanitized_body}",
+        file_scope_hints=file_scope_hints,
+        acceptance_criteria=acceptance_criteria,
+        repo_root=tmp_path,
+    )
+
+    assert file_scope_hints == [source_path, test_path]
+    assert not (tmp_path / test_path).exists()
+    assert [order["title"] for order in orders] == [
+        "Write tests for supervisor_workers.py",
+        "Run validation and fix failures",
+    ]
+    assert orders[0]["file_scope"] == [test_path]
+    assert orders[1]["file_scope"] == [test_path]
+    assert all(source_path not in order["file_scope"] for order in orders)

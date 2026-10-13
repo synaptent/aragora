@@ -248,7 +248,7 @@ class TestSLOWebhookIntegrationFlow:
 
     def test_webhook_handler_endpoints(self):
         """Test the webhook handler SLO endpoints."""
-        from aragora.server.handlers.webhooks import WebhookHandler
+        from aragora.server.handlers.webhook_management import WebhookHandler
 
         ctx: dict[str, Any] = {}
         handler = WebhookHandler(ctx)
@@ -275,7 +275,7 @@ class TestSLOWebhookIntegrationFlow:
             SLOWebhookConfig,
             init_slo_webhooks,
         )
-        from aragora.server.handlers.webhooks import WebhookHandler
+        from aragora.server.handlers.webhook_management import WebhookHandler
 
         notifications: list[dict[str, Any]] = []
 

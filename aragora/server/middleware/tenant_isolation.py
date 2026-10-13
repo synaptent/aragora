@@ -462,7 +462,9 @@ class TenantIsolationMiddleware:
         log_level = logging.INFO if allowed else logging.WARNING
         security_logger.log(
             log_level,
-            f"Tenant access {'granted' if allowed else 'denied'}: {attempt.to_dict()}",
+            "Tenant access %s: %s",
+            "granted" if allowed else "denied",
+            attempt.to_dict(),
         )
 
     def get_audit_log(

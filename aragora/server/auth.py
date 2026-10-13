@@ -12,7 +12,7 @@ import os
 import secrets
 import threading
 import time
-from typing import Any
+from typing import Any, cast
 
 from aragora.config import (
     DEFAULT_RATE_LIMIT,
@@ -640,9 +640,61 @@ class AuthConfig:
         return None
 
 
-# Global auth config instance
-auth_config = AuthConfig()
-auth_config.configure_from_env()
+# Global auth config instance, created lazily via PEP 562 module __getattr__.
+#
+# AuthConfig.__init__ parses AuthSettings (get_settings().auth) and starts the
+# cleanup thread; doing that at import time means a cold settings cache plus an
+# invalid ARAGORA_* variable kills pytest at collection (before any test runs)
+# and misattributes env-pollution failures. Deferring to first use keeps
+# `from aragora.server.auth import auth_config`, module attribute access, and
+# patching of `aragora.server.auth.auth_config` all working unchanged.
+_auth_config: AuthConfig | None = None
+_auth_config_lock = threading.Lock()
+
+
+def get_auth_config() -> AuthConfig:
+    """Return the process-wide AuthConfig, creating and configuring it on first use."""
+    global _auth_config
+    cfg = _auth_config
+    if cfg is None:
+        with _auth_config_lock:
+            cfg = _auth_config
+            if cfg is None:
+                cfg = AuthConfig()
+                try:
+                    cfg.configure_from_env()
+                except BaseException:
+                    # __init__ already started the cleanup thread; reap it so a
+                    # failing configuration (e.g. production mode without a
+                    # token) cannot leak one thread per first-use retry.
+                    cfg.stop_cleanup_thread()
+                    raise
+                _auth_config = cfg
+    return cfg
+
+
+def _active_auth_config() -> AuthConfig:
+    """Resolve the auth config for this module's own helpers.
+
+    A bare global reference would bypass both module ``__getattr__`` and any
+    test that patches the ``aragora.server.auth.auth_config`` attribute, so
+    helpers resolve through the module namespace at call time. A ``None``
+    override is treated as unset.
+    """
+    override = globals().get("auth_config")
+    if override is not None:
+        return cast("AuthConfig", override)
+    return get_auth_config()
+
+
+def __getattr__(name: str) -> AuthConfig:
+    if name == "auth_config":
+        return get_auth_config()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def __dir__() -> list[str]:
+    return sorted({*globals(), "auth_config"})
 
 
 def check_auth(
@@ -662,6 +714,8 @@ def check_auth(
         authenticated is True if authenticated or auth disabled.
         rate_limit_remaining is -1 if rate limiting not applicable.
     """
+    auth_config = _active_auth_config()
+
     # Always check IP rate limit for DoS protection (even without auth)
     ip_remaining = -1
     if ip_address:
@@ -762,7 +816,7 @@ def generate_shareable_link(
         URL with session parameter, or base_url if auth is disabled
     """
     # Generate session (stores token server-side)
-    session_id = auth_config.generate_session(loop_id, expires_in)
+    session_id = _active_auth_config().generate_session(loop_id, expires_in)
     if not session_id:
         return base_url
 
@@ -779,4 +833,4 @@ def resolve_shareable_session(session_id: str) -> tuple[bool, str, str]:
     Returns:
         Tuple of (is_valid, token, loop_id)
     """
-    return auth_config.resolve_session(session_id)
+    return _active_auth_config().resolve_session(session_id)

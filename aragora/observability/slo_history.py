@@ -235,7 +235,7 @@ class SLOHistoryStore:
             WHERE {where_clause}
             ORDER BY timestamp DESC
             LIMIT ?
-        """  # noqa: S608 -- dynamic clause from internal state
+        """  # dynamic clause from internal state
         params.append(limit)
 
         with self._connect() as conn:
@@ -281,7 +281,8 @@ class SLOHistoryStore:
             params.append(cutoff)
 
         where_clause = " AND ".join(conditions) if conditions else "1=1"
-        sql = f"SELECT COUNT(*) as cnt FROM slo_violations WHERE {where_clause}"  # noqa: S608 -- dynamic clause from internal state
+        # dynamic clause from internal state
+        sql = f"SELECT COUNT(*) as cnt FROM slo_violations WHERE {where_clause}"
 
         with self._connect() as conn:
             row = conn.execute(sql, params).fetchone()

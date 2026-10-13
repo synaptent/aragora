@@ -261,7 +261,7 @@ def _cmd_status(args: argparse.Namespace) -> None:
 
     # Get worktree list
     result = subprocess.run(
-        ["git", "worktree", "list", "--porcelain"],  # noqa: S607 -- fixed command
+        ["git", "worktree", "list", "--porcelain"],  # fixed command
         capture_output=True,
         text=True,
         cwd=repo_root,
@@ -283,8 +283,9 @@ def _cmd_status(args: argparse.Namespace) -> None:
             elif line == "" and current_path and current_branch:
                 if current_branch not in ("main", "master"):
                     # Get ahead/behind
-                    ab_result = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
-                        ["git", "rev-list", "--left-right", "--count", f"main...{current_branch}"],  # noqa: S607 -- fixed command
+                    ab_result = subprocess.run(  # subprocess with fixed args, no shell
+                        # fixed command
+                        ["git", "rev-list", "--left-right", "--count", f"main...{current_branch}"],
                         capture_output=True,
                         text=True,
                         cwd=repo_root,
@@ -420,7 +421,8 @@ def _cmd_merge(args: argparse.Namespace) -> None:
         cmd.append("--dry-run")
 
     print("Running worktree merge...")
-    result = subprocess.run(cmd, cwd=Path.cwd(), check=False)  # noqa: S603 -- subprocess with fixed args, no shell
+    # subprocess with fixed args, no shell
+    result = subprocess.run(cmd, cwd=Path.cwd(), check=False)
     sys.exit(result.returncode)
 
 
@@ -432,7 +434,8 @@ def _cmd_sync(args: argparse.Namespace) -> None:
     if rebase:
         cmd.append("--rebase")
 
-    result = subprocess.run(cmd, cwd=Path.cwd(), check=False)  # noqa: S603 -- subprocess with fixed args, no shell
+    # subprocess with fixed args, no shell
+    result = subprocess.run(cmd, cwd=Path.cwd(), check=False)
     sys.exit(result.returncode)
 
 

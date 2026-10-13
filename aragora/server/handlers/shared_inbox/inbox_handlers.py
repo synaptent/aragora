@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 
 def _get_store() -> Any:
     """Get store with test patch support."""
-    module = sys.modules.get("aragora.server.handlers._shared_inbox_handler")
+    module = sys.modules.get("aragora.server.handlers.shared_inbox._shared_inbox_handler")
     if module is not None:
         patched = getattr(module, "_get_store", None)
         if patched is not None and patched is not _get_store:
@@ -50,7 +50,7 @@ def _get_store() -> Any:
 
 def _get_activity_store() -> Any:
     """Get activity store with test patch support."""
-    module = sys.modules.get("aragora.server.handlers._shared_inbox_handler")
+    module = sys.modules.get("aragora.server.handlers.shared_inbox._shared_inbox_handler")
     if module is not None:
         patched = getattr(module, "_get_activity_store", None)
         if patched is not None and patched is not _get_activity_store:
@@ -70,7 +70,7 @@ def _log_activity(
 
     Checks for patched _get_activity_store and uses it for logging.
     """
-    module = sys.modules.get("aragora.server.handlers._shared_inbox_handler")
+    module = sys.modules.get("aragora.server.handlers.shared_inbox._shared_inbox_handler")
     if module is not None:
         # Check for direct _log_activity mock (for assert_called tests)
         patched = getattr(module, "_log_activity", None)
@@ -684,7 +684,7 @@ async def handle_update_message_status(
                 if hasattr(store, "update_message_status"):
                     store.update_message_status(message_id, status)
                 elif hasattr(store, "update_message"):
-                    updates = {"status": status}
+                    updates: dict[str, Any] = {"status": status}
                     if is_resolved:
                         updates["resolved_at"] = now.isoformat()
                         updates["resolved_by"] = updated_by

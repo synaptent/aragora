@@ -4,9 +4,8 @@
  * Provides access to media assets including audio files and podcast episodes.
  *
  * Features:
- * - Audio file metadata retrieval and management
  * - Direct audio URL generation
- * - Audio upload
+ * - Audio file listing
  * - Podcast episode management
  * - RSS feed access
  *
@@ -14,17 +13,11 @@
  * ```typescript
  * const client = createClient({ baseUrl: 'https://api.aragora.ai', apiKey: 'your-key' });
  *
- * // Get audio metadata
- * const audio = await client.media.getAudio('audio_123');
+ * // Build a direct playback URL for a debate's audio
+ * const url = client.media.getAudioUrl('debate_456');
  *
  * // List podcast episodes
  * const { episodes } = await client.media.listPodcastEpisodes({ limit: 10 });
- *
- * // Upload audio
- * const uploaded = await client.media.uploadAudio({
- *   filePath: '/path/to/audio.mp3',
- *   debateId: 'debate_456'
- * });
  * ```
  */
 
@@ -163,7 +156,7 @@ interface MediaClientInterface {
  * Media API namespace.
  *
  * Provides methods for media asset management:
- * - Get, list, upload, and delete audio files
+ * - Direct audio URLs, audio listing and upload
  * - Podcast episode management
  * - RSS feed access
  *
@@ -171,11 +164,11 @@ interface MediaClientInterface {
  * ```typescript
  * const client = createClient({ baseUrl: 'https://api.aragora.ai', apiKey: 'your-key' });
  *
- * // Get audio metadata
- * const audio = await client.media.getAudio('audio_123');
+ * // Build a direct playback URL for a debate's audio
+ * const url = client.media.getAudioUrl('debate_456');
  *
- * // List audio files for a debate
- * const { audio_files } = await client.media.listAudio({ debateId: 'debate_456' });
+ * // Browse podcast episodes
+ * const { episodes } = await client.media.listPodcastEpisodes({ limit: 10 });
  * ```
  */
 export class MediaAPI {
@@ -184,22 +177,6 @@ export class MediaAPI {
   // =========================================================================
   // Audio Files
   // =========================================================================
-
-  /**
-   * Get audio file metadata by ID.
-   *
-   * @param audioId - The audio file identifier
-   * @returns Audio file metadata including format, duration, size, and URL
-   *
-   * @example
-   * ```typescript
-   * const audio = await client.media.getAudio('audio_123');
-   * console.log(`Duration: ${audio.duration_seconds}s, Format: ${audio.format}`);
-   * ```
-   */
-  async getAudio(audioId: string): Promise<AudioFile> {
-    return this.client.request('GET', `/api/v1/media/audio/${audioId}`);
-  }
 
   /**
    * Get the direct audio file URL for a debate or audio file.
@@ -252,53 +229,6 @@ export class MediaAPI {
     });
   }
 
-  /**
-   * Upload an audio file.
-   *
-   * @param params - Upload parameters
-   * @param params.filePath - Path to the audio file
-   * @param params.debateId - Optional debate ID to associate with
-   * @param params.format - Audio format (mp3, aac, m4a, wav, ogg)
-   * @param params.metadata - Optional metadata for the audio file
-   * @returns Uploaded audio file details
-   *
-   * @example
-   * ```typescript
-   * const uploaded = await client.media.uploadAudio({
-   *   filePath: '/path/to/recording.mp3',
-   *   debateId: 'debate_123',
-   *   format: 'mp3',
-   *   metadata: { speaker: 'Agent A' }
-   * });
-   * ```
-   */
-  async uploadAudio(params: AudioUploadParams): Promise<AudioFile> {
-    const json: Record<string, unknown> = {
-      file_path: params.filePath,
-    };
-    if (params.debateId !== undefined) json.debate_id = params.debateId;
-    if (params.format !== undefined) json.format = params.format;
-    if (params.metadata !== undefined) json.metadata = params.metadata;
-
-    return this.client.request('POST', '/api/v1/media/audio', { json });
-  }
-
-  /**
-   * Delete an audio file.
-   *
-   * @param audioId - The audio file identifier
-   * @returns Confirmation of deletion
-   *
-   * @example
-   * ```typescript
-   * const result = await client.media.deleteAudio('audio_123');
-   * console.log(result.message); // "Audio file deleted"
-   * ```
-   */
-  async deleteAudio(audioId: string): Promise<{ deleted: boolean; message: string }> {
-    return this.client.request('DELETE', `/api/v1/media/audio/${audioId}`);
-  }
-
   // =========================================================================
   // Podcast Episodes
   // =========================================================================
@@ -328,22 +258,6 @@ export class MediaAPI {
     return this.client.request('GET', '/api/v1/podcast/episodes', {
       params: Object.keys(params).length > 0 ? params : undefined,
     });
-  }
-
-  /**
-   * Get a specific podcast episode by ID.
-   *
-   * @param episodeId - The episode identifier
-   * @returns Episode details including title, description, audio URL, and duration
-   *
-   * @example
-   * ```typescript
-   * const episode = await client.media.getPodcastEpisode('episode_123');
-   * console.log(`${episode.title}: ${episode.description}`);
-   * ```
-   */
-  async getPodcastEpisode(episodeId: string): Promise<PodcastEpisode> {
-    return this.client.request('GET', `/api/v1/podcast/episodes/${episodeId}`);
   }
 
   /**

@@ -1,7 +1,12 @@
 {
-  "start_date": "2026-04-24",
-  "initial_missing_from_both_sdks": 32,
-  "weekly_reduction_missing_from_both_sdks": 3,
-  "initial_stale_python_sdk_paths": 87,
-  "weekly_reduction_stale_python_sdk_paths": 3
+  "schema": "check-sdk-parity-committed-budget-v1",
+  "committed_max_missing_from_both_sdks": 0,
+  "committed_max_stale_python_sdk_paths": 36,
+  "advisory_cadence": {
+    "start_date": "2026-04-24",
+    "initial_missing_from_both_sdks": 32,
+    "weekly_reduction_missing_from_both_sdks": 3,
+    "initial_stale_python_sdk_paths": 87,
+    "weekly_reduction_stale_python_sdk_paths": 3
+  }
 }

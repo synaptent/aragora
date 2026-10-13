@@ -30,14 +30,17 @@ from datetime import datetime, timezone
 from typing import Any
 
 from aragora.server.handlers.base import (
+    BaseHandler,
     error_response,
     require_permission,
     safe_error_message,
     success_response,
 )
 from aragora.server.handlers.openapi_decorator import api_endpoint
+from aragora.server.handlers.utils import decorators as handler_decorators
 from aragora.server.handlers.utils.lazy_stores import LazyStoreFactory
 from aragora.server.handlers.utils.responses import HandlerResult
+from aragora.server.versioning.compat import strip_version_prefix
 
 logger = logging.getLogger(__name__)
 
@@ -821,6 +824,54 @@ def get_team_inbox_handlers() -> dict[str, Any]:
     }
 
 
+class TeamInboxMentionsHandler(BaseHandler):
+    """Registry-dispatched handler for the current user's @mentions.
+
+    ``handle_get_mentions`` above is an emitter-level function that was never
+    reachable through the HTTP dispatch registry; this handler serves the
+    spec-documented ``GET /api/v1/inbox/mentions`` operation truthfully.
+    """
+
+    ROUTES = ["/api/v1/inbox/mentions"]
+
+    def can_handle(self, path: str) -> bool:
+        return strip_version_prefix(path.split("?")[0]) == "/api/inbox/mentions"
+
+    @handler_decorators.require_permission("inbox:read")
+    async def handle(  # type: ignore[override]
+        self,
+        path: str,
+        query_params: dict[str, Any],
+        handler: Any,
+        user: Any = None,
+    ) -> HandlerResult | None:
+        method = (getattr(handler, "command", None) or "GET").upper()
+        if method != "GET":
+            return None
+
+        unacknowledged_only = query_params.get("unacknowledged_only", False)
+        if isinstance(unacknowledged_only, str):
+            unacknowledged_only = unacknowledged_only.lower() == "true"
+
+        user_id = getattr(user, "user_id", None) or "default"
+        try:
+            emitter = get_team_inbox_emitter_instance()
+            mentions = await emitter.get_mentions_for_user(
+                user_id=user_id,
+                unacknowledged_only=bool(unacknowledged_only),
+            )
+            return success_response(
+                {
+                    "mentions": [m.to_dict() for m in mentions],
+                    "count": len(mentions),
+                    "unacknowledged_count": sum(1 for m in mentions if not m.acknowledged),
+                }
+            )
+        except (KeyError, ValueError, TypeError, AttributeError, RuntimeError) as e:
+            logger.exception("Failed to get mentions")
+            return error_response(safe_error_message(e, "get mentions"), status=500)
+
+
 __all__ = [
     # Team members
     "handle_get_team_members",
@@ -839,6 +890,8 @@ __all__ = [
     "handle_acknowledge_mention",
     # Activity
     "handle_get_activity_feed",
+    # Registry-dispatched handlers
+    "TeamInboxMentionsHandler",
     # Registration
     "get_team_inbox_handlers",
 ]

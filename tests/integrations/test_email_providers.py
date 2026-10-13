@@ -215,7 +215,7 @@ class TestSendGridProvider:
         mock_session = MagicMock()
         mock_session.post = MagicMock()
         mock_session.post.return_value.__aenter__ = AsyncMock(return_value=mock_response)
-        mock_session.post.return_value.__aexit__ = AsyncMock()
+        mock_session.post.return_value.__aexit__ = AsyncMock(return_value=False)
 
         with patch.object(integration, "_get_session", return_value=mock_session):
             result = await integration._send_via_sendgrid(
@@ -239,7 +239,7 @@ class TestSendGridProvider:
         mock_session = MagicMock()
         mock_session.post = MagicMock()
         mock_session.post.return_value.__aenter__ = AsyncMock(return_value=mock_response)
-        mock_session.post.return_value.__aexit__ = AsyncMock()
+        mock_session.post.return_value.__aexit__ = AsyncMock(return_value=False)
 
         with patch.object(integration, "_get_session", return_value=mock_session):
             result = await integration._send_via_sendgrid(
@@ -260,7 +260,7 @@ class TestSendGridProvider:
         mock_session.post.return_value.__aenter__ = AsyncMock(
             side_effect=aiohttp.ClientError("Connection refused")
         )
-        mock_session.post.return_value.__aexit__ = AsyncMock()
+        mock_session.post.return_value.__aexit__ = AsyncMock(return_value=False)
 
         with patch.object(integration, "_get_session", return_value=mock_session):
             result = await integration._send_via_sendgrid(
@@ -292,7 +292,7 @@ class TestSendGridProvider:
         mock_session = MagicMock()
         mock_context = MagicMock()
         mock_context.__aenter__ = capture_post
-        mock_context.__aexit__ = AsyncMock()
+        mock_context.__aexit__ = AsyncMock(return_value=False)
         mock_session.post = MagicMock(return_value=mock_context)
 
         with patch.object(integration, "_get_session", return_value=mock_session):

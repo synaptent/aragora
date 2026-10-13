@@ -3,6 +3,15 @@
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def isolate_odr_signing_environment(monkeypatch):
+    """ODR custody is opt-in per test, never inherited from the operator."""
+    monkeypatch.delenv("ARAGORA_ODR_SIGNING_KEY_FILE", raising=False)
+    monkeypatch.delenv("ARAGORA_ODR_SIGNING_KEY_SECRET", raising=False)
+    monkeypatch.delenv("ARAGORA_ODR_SIGNING_KEY_STRICT_MODE", raising=False)
+    monkeypatch.setenv("ARAGORA_USE_SECRETS_MANAGER", "false")
+
+
 @pytest.fixture
 def clean_env(monkeypatch):
     """Clear API key environment variables for testing.

@@ -143,13 +143,13 @@ def mock_audit_store():
 @pytest.fixture(autouse=True)
 def _patch_stores(monkeypatch, mock_hold_manager, mock_audit_store):
     """Patch external stores used by legal hold mixin and other compliance mixins."""
-    # Legal hold mixin's helpers
+    # The composed handler supplies the legal-hold dependencies.
     monkeypatch.setattr(
-        "aragora.server.handlers.compliance.legal_hold.get_legal_hold_manager",
+        "aragora.server.handlers.compliance.handler.get_legal_hold_manager",
         lambda: mock_hold_manager,
     )
     monkeypatch.setattr(
-        "aragora.server.handlers.compliance.legal_hold.get_audit_store",
+        "aragora.server.handlers.compliance.handler.get_audit_store",
         lambda: mock_audit_store,
     )
 
@@ -1257,74 +1257,66 @@ class TestLegalHoldEdgeCases:
 
 
 # ============================================================================
-# get_legal_hold_manager / get_audit_store Indirection Tests
+# Legal-hold dependency-provider tests
 # ============================================================================
 
 
-class TestGetLegalHoldManagerIndirection:
-    """Tests for the get_legal_hold_manager indirection function."""
-
-    def test_uses_compliance_handler_compat_when_available(self, monkeypatch):
-        """When compliance_handler module has get_legal_hold_manager, use it."""
+@pytest.mark.parametrize(
+    ("getter", "hook"),
+    [
+        ("get_legal_hold_manager", "_get_legal_hold_manager"),
+        ("get_audit_store", "_get_legal_hold_audit_store"),
+    ],
+)
+class TestLegalHoldDependencyProviders:
+    def test_standalone_mixin_does_not_depend_on_handler(self, monkeypatch, getter, hook):
+        from aragora.server.handlers.compliance import handler as handler_module
         from aragora.server.handlers.compliance import legal_hold
 
-        mock_mgr = MagicMock(name="compat_hold_manager")
-        mock_compat = MagicMock()
-        mock_compat.get_legal_hold_manager.return_value = mock_mgr
+        dependency = object()
+        base_provider = MagicMock(return_value=dependency)
+        monkeypatch.setattr(legal_hold, f"_base_{getter}", base_provider)
+        handler_provider = MagicMock(side_effect=AssertionError("concrete handler used"))
+        monkeypatch.setattr(handler_module, getter, handler_provider)
 
-        # Save original and restore after test
-        original = legal_hold.get_legal_hold_manager
+        assert getattr(LegalHoldMixin(), hook)() is dependency
+        base_provider.assert_called_once_with()
+        handler_provider.assert_not_called()
 
-        # Patch the import to return our mock compat module
-        with patch.dict("sys.modules", {"aragora.server.handlers.compliance_handler": mock_compat}):
-            # Re-import to get fresh function that will use the patched module
-            result = legal_hold.get_legal_hold_manager()
-            # It may use compat or base depending on import caching
-            assert result is not None
+    def test_composed_handler_resolves_provider_at_call_time(self, monkeypatch, getter, hook):
+        from aragora.server.handlers.compliance import handler as handler_module
 
-    def test_falls_back_to_base_when_import_fails(self, monkeypatch):
-        """When compliance_handler import fails, uses _base_get_legal_hold_manager."""
+        handler = ComplianceHandler({})
+        for _ in range(2):
+            dependency = object()
+            provider = MagicMock(return_value=dependency)
+            monkeypatch.setattr(handler_module, getter, provider)
+            assert getattr(handler, hook)() is dependency
+            provider.assert_called_once_with()
+
+    @pytest.mark.parametrize("error_type", [ImportError, AttributeError])
+    def test_unavailable_handler_provider_falls_back(self, monkeypatch, getter, hook, error_type):
+        from aragora.server.handlers.compliance import handler as handler_module
         from aragora.server.handlers.compliance import legal_hold
 
-        mock_base_mgr = MagicMock(name="base_hold_manager")
-        monkeypatch.setattr(legal_hold, "_base_get_legal_hold_manager", lambda: mock_base_mgr)
+        dependency = object()
+        base_provider = MagicMock(return_value=dependency)
+        monkeypatch.setattr(legal_hold, f"_base_{getter}", base_provider)
+        provider = MagicMock(side_effect=error_type("provider unavailable"))
+        monkeypatch.setattr(handler_module, getter, provider)
 
-        # Force ImportError on the compat module
-        with patch(
-            "aragora.server.handlers.compliance_handler.get_legal_hold_manager",
-            side_effect=ImportError("No module"),
-            create=True,
-        ):
-            result = legal_hold.get_legal_hold_manager()
-            assert result is not None
+        assert getattr(ComplianceHandler({}), hook)() is dependency
+        provider.assert_called_once_with()
+        base_provider.assert_called_once_with()
 
-
-class TestGetAuditStoreIndirection:
-    """Tests for the get_audit_store indirection function."""
-
-    def test_uses_compliance_handler_compat_when_available(self, monkeypatch):
-        """When compliance_handler module has get_audit_store, use it."""
+    def test_runtime_failure_is_not_replaced_with_another_store(self, monkeypatch, getter, hook):
+        from aragora.server.handlers.compliance import handler as handler_module
         from aragora.server.handlers.compliance import legal_hold
 
-        mock_store = MagicMock(name="compat_audit_store")
-        mock_compat = MagicMock()
-        mock_compat.get_audit_store.return_value = mock_store
+        base_provider = MagicMock()
+        monkeypatch.setattr(legal_hold, f"_base_{getter}", base_provider)
+        monkeypatch.setattr(handler_module, getter, MagicMock(side_effect=RuntimeError("offline")))
 
-        with patch.dict("sys.modules", {"aragora.server.handlers.compliance_handler": mock_compat}):
-            result = legal_hold.get_audit_store()
-            assert result is not None
-
-    def test_falls_back_to_base_when_import_fails(self, monkeypatch):
-        """When compliance_handler import fails, uses _base_get_audit_store."""
-        from aragora.server.handlers.compliance import legal_hold
-
-        mock_base_store = MagicMock(name="base_audit_store")
-        monkeypatch.setattr(legal_hold, "_base_get_audit_store", lambda: mock_base_store)
-
-        with patch(
-            "aragora.server.handlers.compliance_handler.get_audit_store",
-            side_effect=ImportError("No module"),
-            create=True,
-        ):
-            result = legal_hold.get_audit_store()
-            assert result is not None
+        with pytest.raises(RuntimeError, match="offline"):
+            getattr(ComplianceHandler({}), hook)()
+        base_provider.assert_not_called()

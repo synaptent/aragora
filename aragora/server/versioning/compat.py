@@ -10,10 +10,13 @@ import re
 from dataclasses import dataclass, field
 from datetime import date
 
+from aragora.__version__ import __version__
 from aragora.server.versioning.router import APIVersion
 
-# Current release version
-API_RELEASE_VERSION = "2.0.3"
+# Current release version, sent as X-API-Release. Derived from the package
+# version (kept aligned by scripts/check_version_alignment.py) instead of a
+# literal that went stale at 2.0.3.
+API_RELEASE_VERSION = __version__
 
 
 @dataclass

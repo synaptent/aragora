@@ -244,8 +244,10 @@ class TopicQualityFilter:
         filtered.sort(key=lambda x: x.overall_score, reverse=True)
 
         logger.debug(
-            f"Quality filter: {len(topics)} topics -> {len(filtered)} acceptable "
-            f"(threshold={threshold:.2f})"
+            "Quality filter: %s topics -> %s acceptable (threshold=%.2f)",
+            len(topics),
+            len(filtered),
+            threshold,
         )
 
         return filtered

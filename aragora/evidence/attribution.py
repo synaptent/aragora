@@ -451,8 +451,10 @@ class SourceReputationManager:
         self.scorer.compute_incremental_update(reputation, verification)
 
         logger.debug(
-            f"Recorded {outcome.value} verification for source {source_id}, "
-            f"new score: {reputation.reputation_score:.3f}"
+            "Recorded %s verification for source %s, new score: %.3f",
+            outcome.value,
+            source_id,
+            reputation.reputation_score,
         )
 
         return verification

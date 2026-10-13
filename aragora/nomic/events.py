@@ -96,7 +96,7 @@ class Event:
         """Auto-populate tracing fields from current context if not provided."""
         if self.correlation_id is None and self.trace_id is None:
             try:
-                from aragora.server.middleware.tracing import get_trace_id, get_span_id
+                from aragora.observability.middleware.tracing import get_trace_id, get_span_id
 
                 self.trace_id = get_trace_id()
                 self.span_id = get_span_id()

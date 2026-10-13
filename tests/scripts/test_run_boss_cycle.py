@@ -4,6 +4,7 @@ import os
 import subprocess
 from pathlib import Path
 
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_PATH = REPO_ROOT / "scripts" / "run_boss_cycle.sh"
@@ -32,6 +33,9 @@ fi
 if [[ "${1:-}" == "-c" && "${2:-}" == *"${FAKE_PYTHON3_IMPORT_FAIL_PATTERN:-__never_match__}"* ]]; then
   exit "${FAKE_PYTHON3_IMPORT_FAIL_EXIT:-23}"
 fi
+if [[ "${1:-}" == "-c" ]]; then
+  exit 0
+fi
 exit "${FAKE_PYTHON3_REFILL_EXIT:-0}"
 """,
         encoding="utf-8",
@@ -50,16 +54,21 @@ def _runtime_calls(log_path: Path) -> list[list[str]]:
     return [call for call in _read_calls(log_path) if call[:1] != ["-c"]]
 
 
-def test_run_boss_cycle_runs_post_loop_refill_after_success(tmp_path: Path) -> None:
+@pytest.mark.parametrize("refill_exit", [0, 1])
+def test_run_boss_cycle_propagates_post_loop_refill_status(
+    tmp_path: Path, refill_exit: int
+) -> None:
     _fake_python3, log_path = _write_fake_python3(tmp_path)
     env = os.environ.copy()
     env["PATH"] = f"{tmp_path}:/usr/bin:/bin:/usr/sbin:/sbin"
     env["FAKE_PYTHON3_LOG"] = str(log_path)
     env["FAKE_PYTHON3_BOSS_EXIT"] = "0"
-    env["FAKE_PYTHON3_REFILL_EXIT"] = "0"
+    env["FAKE_PYTHON3_REFILL_EXIT"] = str(refill_exit)
     env["ARAGORA_POST_LOOP_DRY_RUN"] = "1"
     env["ARAGORA_POST_LOOP_MAX_ISSUES"] = "7"
     env["ARAGORA_POST_LOOP_ISSUE_REFILL"] = "1"
+    env["ARAGORA_SUBSTRATE_CAP"] = "0.3"
+    env["ARAGORA_CLOSURE_FLOOR"] = "0.25"
 
     result = subprocess.run(
         [
@@ -79,7 +88,7 @@ def test_run_boss_cycle_runs_post_loop_refill_after_success(tmp_path: Path) -> N
         check=False,
     )
 
-    assert result.returncode == 0
+    assert result.returncode == refill_exit
     calls = _runtime_calls(log_path)
     assert len(calls) == 2
     assert calls[0][:5] == ["-u", "-m", "aragora.cli.main", "swarm", "boss-loop"]
@@ -93,6 +102,10 @@ def test_run_boss_cycle_runs_post_loop_refill_after_success(tmp_path: Path) -> N
         "7",
         "--label",
         "lane:test",
+        "--substrate-cap",
+        "0.3",
+        "--closure-floor",
+        "0.25",
         "--dry-run",
     ]
 

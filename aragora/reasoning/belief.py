@@ -814,7 +814,7 @@ class BeliefNetwork:
             return {}
 
         # Initialize with uniform centrality
-        centralities = {nid: 1.0 / n for nid in self.nodes}
+        centralities = dict.fromkeys(self.nodes, 1.0 / n)
 
         # Iterate PageRank-style
         damping = 0.85
@@ -1039,7 +1039,7 @@ class BeliefNetwork:
 
 # Re-export crux detection classes for backward compatibility
 # (extracted to aragora.reasoning.crux_detector for better modularity)
-from aragora.reasoning.crux_detector import (  # noqa: E402
+from aragora.reasoning.crux_detector import (
     BeliefPropagationAnalyzer,
     CruxAnalysisResult,
     CruxClaim,

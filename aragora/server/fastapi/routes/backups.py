@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import Response
 
 from aragora.rbac.models import AuthorizationContext
 from aragora.server.fastapi.compat import _FakeHandler, _handler_result_to_response
 from aragora.server.fastapi.dependencies.auth import require_permission
-from aragora.server.handlers.backup_handler import BackupHandler
+from aragora.server.handlers.admin.backup_handler import BackupHandler
 
 router = APIRouter(prefix="/api/v2", tags=["Backups"])
 
@@ -22,7 +24,7 @@ def _request_context(request: Request) -> dict[str, object]:
 def _build_handler(request: Request, auth: AuthorizationContext) -> BackupHandler:
     ctx = _request_context(request)
     handler = BackupHandler(ctx)
-    backup_manager = ctx.get("backup_manager")
+    backup_manager: Any = ctx.get("backup_manager")
     if backup_manager is not None:
         handler._manager = backup_manager
     handler._auth_context = auth

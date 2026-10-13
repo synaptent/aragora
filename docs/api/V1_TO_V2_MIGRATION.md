@@ -62,7 +62,7 @@ When `ARAGORA_USE_FASTAPI=true` is set, `aragora serve` starts FastAPI/uvicorn i
 
 ```bash
 # Terminal 1: v1 on default port
-aragora serve --http-port 8080
+aragora serve --api-port 8080
 
 # Terminal 2: v2 on separate port
 ARAGORA_FASTAPI_PORT=8081 uvicorn aragora.server.fastapi.factory:app --port 8081
@@ -422,7 +422,7 @@ You can run v1 and v2 simultaneously for a gradual migration:
 
 ```bash
 # v1 on port 8080 (default)
-aragora serve --http-port 8080
+aragora serve --api-port 8080
 
 # v2 on port 8081 (separate process)
 uvicorn aragora.server.fastapi.factory:app --host 0.0.0.0 --port 8081

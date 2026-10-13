@@ -261,7 +261,7 @@ def cleanup_backups(
     stats: CleanupStats,
 ) -> list[tuple[Path, str, str]]:
     """Clean up old backup directories."""
-    actions = []
+    actions: list[tuple[Path, str, str]] = []
     backups_dir = nomic_dir / "backups"
     if not backups_dir.exists():
         return actions
@@ -318,7 +318,7 @@ def cleanup_sessions(
     stats: CleanupStats,
 ) -> list[tuple[Path, str, str]]:
     """Clean up old session directories."""
-    actions = []
+    actions: list[tuple[Path, str, str]] = []
     sessions_dir = nomic_dir / "sessions"
     if not sessions_dir.exists():
         return actions
@@ -353,7 +353,7 @@ def cleanup_checkpoints(
     stats: CleanupStats,
 ) -> list[tuple[Path, str, str]]:
     """Clean up old checkpoint files."""
-    actions = []
+    actions: list[tuple[Path, str, str]] = []
     checkpoints_dir = nomic_dir / "checkpoints"
     if not checkpoints_dir.exists():
         return actions
@@ -388,7 +388,7 @@ def cleanup_artifacts(
     stats: CleanupStats,
 ) -> list[tuple[Path, str, str]]:
     """Clean up old artifact directories in root-artifacts."""
-    actions = []
+    actions: list[tuple[Path, str, str]] = []
     artifacts_dir = nomic_dir / "root-artifacts"
     if not artifacts_dir.exists():
         return actions
@@ -427,7 +427,7 @@ def cleanup_obsolete_files(
     stats: CleanupStats,
 ) -> list[tuple[Path, str, str]]:
     """Clean up obsolete database files."""
-    actions = []
+    actions: list[tuple[Path, str, str]] = []
 
     for filename in OBSOLETE_FILES:
         path = nomic_dir / filename
@@ -456,7 +456,7 @@ def cleanup_wal_files(
 
     Only removes WAL/SHM files for databases that don't exist.
     """
-    actions = []
+    actions: list[tuple[Path, str, str]] = []
 
     for pattern in ("*.db-wal", "*.db-shm"):
         for path in nomic_dir.glob(pattern):
@@ -480,7 +480,7 @@ def cleanup_wal_files(
 
 def analyze_directory(nomic_dir: Path) -> dict:
     """Analyze the .nomic directory and return statistics."""
-    stats = {
+    stats: dict[str, float] = {
         "total_size_mb": 0,
         "db_count": 0,
         "db_size_mb": 0,

@@ -61,6 +61,136 @@ def get_complexity_governor() -> Any:
     return _get_governor()
 
 
+class _VoteTaskOwner:
+    """Own vote tasks until each is consumed or safely detached exactly once."""
+
+    def __init__(self, tasks: list[asyncio.Task[Any]]):
+        self._tasks = tuple(tasks)
+        self._order = {task: index for index, task in enumerate(tasks)}
+        self._classifications: dict[asyncio.Task[Any], str] = {}
+        self._loop = asyncio.get_running_loop()
+
+    def classification(self, task: asyncio.Task[Any]) -> str | None:
+        """Return the task's terminal ownership classification, if assigned."""
+        return self._classifications.get(task)
+
+    def _report_detached_failure(
+        self,
+        task: asyncio.Task[Any],
+        error: BaseException,
+    ) -> None:
+        if isinstance(error, Exception):
+            logger.warning(
+                "detached_vote_task_failed error=%s: %s",
+                type(error).__name__,
+                error,
+            )
+            return
+        self._loop.call_exception_handler(
+            {
+                "message": "Detached vote task raised a control-flow exception",
+                "exception": error,
+                "task": task,
+            }
+        )
+
+    def _retrieve_detached_result(self, task: asyncio.Task[Any]) -> None:
+        try:
+            result = task.result()
+        except BaseException as error:  # noqa: BLE001 - retrieve every off-path result
+            if isinstance(error, asyncio.CancelledError):
+                return
+            self._report_detached_failure(task, error)
+            return
+
+        if isinstance(result, tuple) and len(result) == 2:
+            vote_result = result[1]
+            if isinstance(vote_result, BaseException) and not isinstance(vote_result, Exception):
+                self._report_detached_failure(task, vote_result)
+
+    def _detach(self, task: asyncio.Task[Any]) -> None:
+        if task in self._classifications:
+            return
+        self._classifications[task] = "detached"
+        task.add_done_callback(self._retrieve_detached_result)
+
+    def consume(
+        self,
+        task: asyncio.Task[Any],
+        consumer: Callable[[asyncio.Task[Any]], None],
+    ) -> None:
+        """Claim and synchronously consume one completed task once."""
+        if task in self._classifications:
+            return
+        self._classifications[task] = "consumed"
+        consumer(task)
+
+    def settle(
+        self,
+        consumer: Callable[[asyncio.Task[Any]], None],
+        *,
+        propagate: bool,
+    ) -> None:
+        """Drain completed tasks, then cancel and observe all unfinished tasks."""
+        first_error: BaseException | None = None
+
+        def consume_or_record(task: asyncio.Task[Any]) -> None:
+            nonlocal first_error
+            try:
+                self.consume(task, consumer)
+            except BaseException as error:  # noqa: BLE001 - ownership must finish first
+                if propagate and first_error is None:
+                    first_error = error
+                else:
+                    self._report_detached_failure(task, error)
+
+        # Preserve work that was already complete at the decision boundary.
+        for task in self._tasks:
+            if task not in self._classifications and task.done():
+                consume_or_record(task)
+
+        # A failed cancel can mean completion won the race; re-check before
+        # detaching so that result is classified as completed work.
+        for task in self._tasks:
+            if task in self._classifications:
+                continue
+            if task.cancel():
+                self._detach(task)
+            elif task.done():
+                consume_or_record(task)
+            else:
+                self._detach(task)
+
+        if first_error is not None:
+            raise first_error
+
+    async def run(
+        self,
+        consumer: Callable[[asyncio.Task[Any]], None],
+        should_stop: Callable[[], bool] | None = None,
+    ) -> bool:
+        """Consume completions until exhaustion or a caller-defined stop boundary."""
+        pending = set(self._tasks)
+        try:
+            while pending:
+                done, pending = await asyncio.wait(
+                    pending,
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                for task in sorted(done, key=self._order.__getitem__):
+                    self.consume(task, consumer)
+                    if should_stop is not None and should_stop():
+                        self.settle(consumer, propagate=True)
+                        return True
+            return False
+        except asyncio.CancelledError:
+            self.settle(consumer, propagate=False)
+            raise
+        except BaseException:  # noqa: BLE001 - make sibling tasks safe before propagation
+            self.settle(consumer, propagate=False)
+            raise
+
+
 @dataclass
 class VoteCollectorConfig:
     """Configuration for VoteCollector."""
@@ -253,17 +383,21 @@ class VoteCollector:
                 return (agent, e)
 
         vote_tasks = [asyncio.create_task(cast_vote(agent)) for agent in ctx.agents]
+        owner = _VoteTaskOwner(vote_tasks)
 
-        for completed_task in asyncio.as_completed(vote_tasks):
+        def consume_vote(completed_task: asyncio.Task[Any]) -> None:
             try:
-                agent, vote_result = await completed_task
+                agent, vote_result = completed_task.result()
             except asyncio.CancelledError:
                 raise
             except Exception as e:  # noqa: BLE001 - phase isolation
                 logger.error(
                     "task_exception phase=vote_permutation perm=%s error=%s", permutation_idx, e
                 )
-                continue
+                return
+
+            if isinstance(vote_result, BaseException) and not isinstance(vote_result, Exception):
+                raise vote_result
 
             if vote_result is None or isinstance(vote_result, Exception):
                 if isinstance(vote_result, Exception):
@@ -272,6 +406,8 @@ class VoteCollector:
                     )
             else:
                 votes.append(vote_result)
+
+        await owner.run(consume_vote)
 
         return votes
 
@@ -414,16 +550,22 @@ class VoteCollector:
             """Collect votes from all agents concurrently with RLM early termination."""
             total_agents = len(ctx.agents)
             vote_tasks = [asyncio.create_task(cast_vote(agent)) for agent in ctx.agents]
-            early_terminated = False
+            owner = _VoteTaskOwner(vote_tasks)
+            early_leader: str | None = None
 
-            for completed_task in asyncio.as_completed(vote_tasks):
+            def consume_vote(completed_task: asyncio.Task[Any]) -> None:
                 try:
-                    agent, vote_result = await completed_task
+                    agent, vote_result = completed_task.result()
                 except asyncio.CancelledError:
                     raise
                 except Exception as e:  # noqa: BLE001 - phase isolation
                     logger.error("task_exception phase=vote error=%s", e)
-                    continue
+                    return
+
+                if isinstance(vote_result, BaseException) and not isinstance(
+                    vote_result, Exception
+                ):
+                    raise vote_result
 
                 if vote_result is None or isinstance(vote_result, Exception):
                     if isinstance(vote_result, Exception):
@@ -441,35 +583,34 @@ class VoteCollector:
                     votes.append(vote_result)
                     self._handle_vote_success(ctx, agent, vote_result)
 
-                    # RLM early termination check
-                    has_majority, leader = self._check_clear_majority(votes, total_agents)
-                    if has_majority:
-                        # Cancel remaining tasks - we have a clear winner
-                        for task in vote_tasks:
-                            if not task.done():
-                                task.cancel()
-                        early_terminated = True
+            def should_stop() -> bool:
+                nonlocal early_leader
+                has_majority, leader = self._check_clear_majority(votes, total_agents)
+                if has_majority:
+                    early_leader = leader
+                return has_majority
 
-                        # Notify spectator about early termination
-                        if self._notify_spectator:
-                            self._notify_spectator(
-                                "rlm_early_termination",
-                                details=f"Clear majority for '{leader}' ({len(votes)}/{total_agents} votes)",
-                                metric=len(votes) / total_agents,
-                                agent="system",
-                            )
-
-                        # Emit hook for WebSocket clients
-                        if "on_rlm_early_termination" in self.hooks:
-                            self.hooks["on_rlm_early_termination"](
-                                leader=leader,
-                                votes_collected=len(votes),
-                                total_agents=total_agents,
-                            )
-
-                        break  # Exit collection loop
+            early_terminated = await owner.run(consume_vote, should_stop)
 
             if early_terminated:
+                if self._notify_spectator:
+                    self._notify_spectator(
+                        "rlm_early_termination",
+                        details=(
+                            f"Clear majority for '{early_leader}' "
+                            f"({len(votes)}/{total_agents} votes)"
+                        ),
+                        metric=len(votes) / total_agents,
+                        agent="system",
+                    )
+
+                if "on_rlm_early_termination" in self.hooks:
+                    self.hooks["on_rlm_early_termination"](
+                        leader=early_leader,
+                        votes_collected=len(votes),
+                        total_agents=total_agents,
+                    )
+
                 logger.info(
                     "vote_collection_early_terminated collected=%s total_agents=%s",
                     len(votes),
@@ -542,16 +683,23 @@ class VoteCollector:
             """Collect votes from all agents with error counting for unanimity checks."""
             nonlocal voting_errors
             vote_tasks = [asyncio.create_task(cast_vote(agent)) for agent in ctx.agents]
+            owner = _VoteTaskOwner(vote_tasks)
 
-            for completed_task in asyncio.as_completed(vote_tasks):
+            def consume_vote(completed_task: asyncio.Task[Any]) -> None:
+                nonlocal voting_errors
                 try:
-                    agent, vote_result = await completed_task
+                    agent, vote_result = completed_task.result()
                 except asyncio.CancelledError:
                     raise
                 except Exception as e:  # noqa: BLE001 - phase isolation
                     logger.error("task_exception phase=unanimous_vote error=%s", e)
                     voting_errors += 1
-                    continue
+                    return
+
+                if isinstance(vote_result, BaseException) and not isinstance(
+                    vote_result, Exception
+                ):
+                    raise vote_result
 
                 if vote_result is None or isinstance(vote_result, Exception):
                     if isinstance(vote_result, Exception):
@@ -571,6 +719,8 @@ class VoteCollector:
                 else:
                     votes.append(vote_result)
                     self._handle_vote_success(ctx, agent, vote_result, unanimous=True)
+
+            await owner.run(consume_vote)
 
         # Apply outer timeout to prevent N*agent_timeout runaway
         try:

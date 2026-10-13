@@ -727,7 +727,7 @@ def _run_server_demo() -> None:
     print()
 
     try:
-        subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
+        subprocess.run(  # subprocess with fixed args, no shell
             [sys.executable, "-m", "aragora.cli.main", "serve", "--demo"],
             check=False,
         )
@@ -760,7 +760,7 @@ def _run_real_demo(topic: str, receipt_path: str | None = None) -> None:
     print()
 
     try:
-        from aragora.server.handlers.playground import start_playground_debate
+        from aragora.server.handlers.demo.playground import start_playground_debate
 
         start_time = time.monotonic()
         result = start_playground_debate(

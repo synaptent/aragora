@@ -8,6 +8,7 @@ Endpoints tested:
 """
 
 import json
+import os
 import sqlite3
 import pytest
 from pathlib import Path
@@ -62,9 +63,16 @@ def replays_handler_no_nomic():
 
 @pytest.fixture
 def mock_replay_dir(mock_nomic_dir):
-    """Factory to create replay directories with meta.json and events.jsonl."""
+    """Factory to create replay directories with meta.json and events.jsonl.
+
+    Each replay gets an explicit mtime one second after the previous one, so creation
+    order decides the newest-first listing even when the filesystem records identical
+    timestamps for directories created back to back.
+    """
+    created = 0
 
     def create_replay(replay_id, topic="Test Topic", agents=None, events=None):
+        nonlocal created
         replays_dir = mock_nomic_dir / "replays"
         replays_dir.mkdir(exist_ok=True)
         replay_dir = replays_dir / replay_id
@@ -82,6 +90,11 @@ def mock_replay_dir(mock_nomic_dir):
         if events:
             lines = [json.dumps(e) for e in events]
             (replay_dir / "events.jsonl").write_text("\n".join(lines))
+
+        # Writing the files above updates the directory mtime, so set it last.
+        created += 1
+        stamp = 1_700_000_000 + created
+        os.utime(replay_dir, (stamp, stamp))
 
         return replay_dir
 
@@ -209,6 +222,44 @@ class TestListReplays:
         assert data[1]["id"] == "replay-001"
         assert data[1]["topic"] == "First debate"
         assert data[1]["agents"] == ["claude", "gpt4"]
+
+    @pytest.mark.parametrize(
+        "iterdir_reverse", [False, True], ids=["iterdir-ascending", "iterdir-descending"]
+    )
+    def test_list_mtime_tie_orders_by_name_descending(
+        self, replays_handler, mock_replay_dir, iterdir_reverse
+    ):
+        """Replays with identical mtimes list by name descending, whatever order iterdir yields."""
+        for name in ("replay-a", "replay-b", "replay-c"):
+            replay_dir = mock_replay_dir(name)
+            os.utime(replay_dir, (1_700_000_000, 1_700_000_000))
+
+        real_iterdir = Path.iterdir
+
+        def ordered_iterdir(self):
+            return iter(sorted(real_iterdir(self), key=lambda p: p.name, reverse=iterdir_reverse))
+
+        with patch.object(Path, "iterdir", ordered_iterdir):
+            result = replays_handler.handle("/api/v1/replays", {}, None)
+
+        assert result is not None
+        assert result.status_code == 200
+        ids = [entry["id"] for entry in json.loads(result.body)]
+        assert ids == ["replay-c", "replay-b", "replay-a"]
+
+    def test_list_newer_mtime_wins_over_name(self, replays_handler, mock_replay_dir):
+        """The name tie-break never overrides a newer modification time."""
+        older = mock_replay_dir("replay-z", topic="Older")
+        newer = mock_replay_dir("replay-a", topic="Newer")
+        os.utime(older, (1_700_000_000, 1_700_000_000))
+        os.utime(newer, (1_700_000_100, 1_700_000_100))
+
+        result = replays_handler.handle("/api/v1/replays", {}, None)
+
+        assert result is not None
+        assert result.status_code == 200
+        ids = [entry["id"] for entry in json.loads(result.body)]
+        assert ids == ["replay-a", "replay-z"]
 
     def test_list_skips_malformed_meta(self, replays_handler, mock_nomic_dir):
         """Malformed meta.json files are skipped gracefully."""

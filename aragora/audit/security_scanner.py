@@ -972,8 +972,11 @@ class SecurityScanner:
 
         elapsed = (report.completed_at - start_time).total_seconds()
         logger.info(
-            f"[{scan_id}] Completed in {elapsed:.2f}s: "
-            f"{report.total_findings} findings ({report.critical_count} critical)"
+            "[%s] Completed in %.2fs: %s findings (%s critical)",
+            scan_id,
+            elapsed,
+            report.total_findings,
+            report.critical_count,
         )
 
         return report

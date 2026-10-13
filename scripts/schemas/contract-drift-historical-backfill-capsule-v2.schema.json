@@ -1,0 +1,316 @@
+{
+  "$id": "https://github.com/synaptent/aragora/blob/main/scripts/schemas/contract-drift-historical-backfill-capsule-v2.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "attestation": {
+      "additionalProperties": false,
+      "properties": {
+        "predicate_type": {"const": "https://in-toto.io/attestation/release/v0.2"},
+        "repository": {"pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", "type": "string"},
+        "schema": {"const": "contract-drift-historical-backfill-attestation-v1"},
+        "signer_san_regexp": {"const": "^https://dotcom\\.releases\\.github\\.com$"},
+        "source_digest": {
+          "description": "Exact merged implementation SHA supplying the signer workflow; distinct from the historical squash merge SHA.",
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "subject_asset_names": {"const": ["manifest.json", "payload.json", "checksums.txt"]},
+        "verified": {"const": true},
+        "workflow": {"const": "actions/attest@v4"},
+        "workflow_path": {"const": ".github/workflows/contract-drift-boundary.yml"}
+      },
+      "required": [
+        "predicate_type",
+        "repository",
+        "schema",
+        "signer_san_regexp",
+        "source_digest",
+        "subject_asset_names",
+        "verified",
+        "workflow",
+        "workflow_path"
+      ],
+      "type": "object"
+    },
+    "authority": {
+      "additionalProperties": false,
+      "properties": {
+        "active_inventory_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "analyzer_bundle_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "authority_manifest_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "category_counts_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "dependency_manifest_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "inventory_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "operation_projection_record_digest_set_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "operation_projection_schema_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "original_record_id_set_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "public_symbol_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "route_boundary_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "sdk_original_record_id_set_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "sdk_provenance_record_digest_set_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "core_original_record_id_set_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "extended_original_record_id_set_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "source_sha": {"pattern": "^[0-9a-f]{40}$", "type": "string"}
+      },
+      "required": [
+        "active_inventory_sha256",
+        "analyzer_bundle_sha256",
+        "authority_manifest_sha256",
+        "category_counts_sha256",
+        "dependency_manifest_sha256",
+        "inventory_sha256",
+        "operation_projection_record_digest_set_sha256",
+        "operation_projection_schema_sha256",
+        "original_record_id_set_sha256",
+        "public_symbol_sha256",
+        "route_boundary_sha256",
+        "sdk_original_record_id_set_sha256",
+        "sdk_provenance_record_digest_set_sha256",
+        "core_original_record_id_set_sha256",
+        "extended_original_record_id_set_sha256",
+        "source_sha"
+      ],
+      "type": "object"
+    },
+    "canonical_serialization": {"type": "string"},
+    "capsule_schema": {"const": "scripts/schemas/contract-drift-historical-backfill-capsule-v2.schema.json"},
+    "disposition": {
+      "additionalProperties": false,
+      "properties": {
+        "authoritative_for_future_admission": {"const": false},
+        "precedential": {"const": false},
+        "status": {"const": "historical_nonconforming"}
+      },
+      "required": ["authoritative_for_future_admission", "precedential", "status"],
+      "type": "object"
+    },
+    "historical_pull_request": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {"minLength": 1, "type": "string"},
+        "base_sha": {"pattern": "^[0-9a-f]{40}$", "type": "string"},
+        "changed_files": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "additions": {"minimum": 0, "type": "integer"},
+              "deletions": {"minimum": 0, "type": "integer"},
+              "path": {"minLength": 1, "type": "string"}
+            },
+            "required": ["additions", "deletions", "path"],
+            "type": "object"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "first_parent_patch_byte_length": {"const": 6054},
+        "first_parent_patch_sha256": {
+          "const": "7c53f6c8b9bd17847cdb4ecc5dfa1c7aa1699105faabc47439a4437709a175b4"
+        },
+        "first_parent_sha": {"pattern": "^[0-9a-f]{40}$", "type": "string"},
+        "head_sha": {"pattern": "^[0-9a-f]{40}$", "type": "string"},
+        "head_tree_sha": {"const": "e5c6c3d07a918cf43fffed6d4a9f472bc10a674a"},
+        "merge_sha": {"pattern": "^[0-9a-f]{40}$", "type": "string"},
+        "merge_tree_sha": {"const": "79c1c374eed261c42468dc526d837e726e73425a"},
+        "merged_at": {"minLength": 1, "type": "string"},
+        "pr": {"minimum": 1, "type": "integer"}
+      },
+      "required": [
+        "actor",
+        "base_sha",
+        "changed_files",
+        "first_parent_patch_byte_length",
+        "first_parent_patch_sha256",
+        "first_parent_sha",
+        "head_sha",
+        "head_tree_sha",
+        "merge_sha",
+        "merge_tree_sha",
+        "merged_at",
+        "pr"
+      ],
+      "type": "object"
+    },
+    "projection": {
+      "additionalProperties": false,
+      "properties": {
+        "edge_count": {"minimum": 1, "type": "integer"},
+        "max_edges": {"minimum": 1, "type": "integer"},
+        "membership_count": {"minimum": 1, "type": "integer"},
+        "multi_edge_originals": {"minimum": 0, "type": "integer"},
+        "record_digest_set_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+        "records": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "category": {"minLength": 1, "type": "string"},
+              "exact_historical_literal_record": {"minLength": 1, "type": "string"},
+              "operation_edges": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "evidence": {"minItems": 1, "type": "array"},
+                    "method": {"enum": ["CONNECT", "DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT", "TRACE"]},
+                    "normalized_operation": {"minLength": 3, "type": "string"},
+                    "normalized_path": {"pattern": "^/", "type": "string"}
+                  },
+                  "required": ["evidence", "method", "normalized_operation", "normalized_path"],
+                  "type": "object"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "original_record_id": {"pattern": "^cdg1:[0-9a-f]{64}$", "type": "string"},
+              "projection_status": {"enum": ["resolved", "unresolved"]},
+              "record_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+              "schema": {"const": "cdg-operation-projection-record-v1"},
+              "sdk_language": {
+                "items": {"minLength": 1, "type": "string"},
+                "type": "array"
+              }
+            },
+            "required": [
+              "category",
+              "exact_historical_literal_record",
+              "operation_edges",
+              "original_record_id",
+              "projection_status",
+              "record_sha256",
+              "schema",
+              "sdk_language"
+            ],
+            "type": "object"
+          },
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "edge_count",
+        "max_edges",
+        "membership_count",
+        "multi_edge_originals",
+        "record_digest_set_sha256",
+        "records"
+      ],
+      "type": "object"
+    },
+    "receipt": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_name": {"minLength": 1, "type": "string"},
+        "base_sha": {"pattern": "^[0-9a-f]{40}$", "type": "string"},
+        "check_run_id": {"minimum": 1, "type": "integer"},
+        "conclusion": {"const": "success"},
+        "first_parent_sha": {"pattern": "^[0-9a-f]{40}$", "type": "string"},
+        "head_sha": {"pattern": "^[0-9a-f]{40}$", "type": "string"},
+        "job_id": {"minimum": 1, "type": "integer"},
+        "merge_sha": {"pattern": "^[0-9a-f]{40}$", "type": "string"},
+        "required_contexts": {"items": {"type": "object"}, "minItems": 6, "type": "array"},
+        "run_attempt": {"minimum": 1, "type": "integer"},
+        "schema": {"const": "contract-drift-historical-backfill-receipt-v1"},
+        "source_sha": {
+          "description": "Exact implementation/checker ref at which the historical receipt workflow succeeded; distinct from the historical squash merge SHA.",
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "workflow_name": {"const": "Contract Drift Governance"},
+        "workflow_path": {"const": ".github/workflows/contract-drift-governance.yml"},
+        "workflow_run_id": {"minimum": 1, "type": "integer"}
+      },
+      "required": [
+        "artifact_name",
+        "base_sha",
+        "check_run_id",
+        "conclusion",
+        "first_parent_sha",
+        "head_sha",
+        "job_id",
+        "merge_sha",
+        "required_contexts",
+        "run_attempt",
+        "schema",
+        "source_sha",
+        "workflow_name",
+        "workflow_path",
+        "workflow_run_id"
+      ],
+      "type": "object"
+    },
+    "release": {
+      "additionalProperties": false,
+      "properties": {
+        "asset_names": {"const": ["manifest.json", "payload.json", "checksums.txt"]},
+        "exact_full_sha_tag": {"pattern": "^[0-9a-f]{40}$", "type": "string"},
+        "immutable": {"const": true},
+        "release_api_id": {"minimum": 1, "type": "integer"},
+        "tag_name": {"pattern": "^backfill-v2-[0-9a-f]{40}$", "type": "string"},
+        "tag_target_sha": {
+          "description": "Exact merged implementation SHA containing the signer workflow; distinct from the historical SHA named by exact_full_sha_tag.",
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "verified": {"const": true}
+      },
+      "required": [
+        "asset_names",
+        "exact_full_sha_tag",
+        "immutable",
+        "release_api_id",
+        "tag_name",
+        "tag_target_sha",
+        "verified"
+      ],
+      "type": "object"
+    },
+    "repository": {"pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", "type": "string"},
+    "rule_suite": {
+      "additionalProperties": false,
+      "properties": {
+        "after_sha": {
+          "description": "Exact merged implementation SHA whose refs/heads/main push produced the passing rule-suite record; distinct from the historical squash merge SHA, which predates the repository's rule-suite ledger.",
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "id": {"minimum": 1, "type": "integer"},
+        "ref": {"const": "refs/heads/main"},
+        "repository_id": {"minimum": 1, "type": "integer"},
+        "repository_name": {"pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", "type": "string"},
+        "result": {"const": "pass"},
+        "schema": {"const": "contract-drift-historical-backfill-rule-suite-v1"}
+      },
+      "required": ["after_sha", "id", "ref", "repository_id", "repository_name", "result", "schema"],
+      "type": "object"
+    },
+    "schema": {"const": "contract-drift-historical-backfill-successor-v2"},
+    "supersedes": {
+      "additionalProperties": false,
+      "properties": {
+        "reason": {"minLength": 1, "type": "string"},
+        "release_api_id": {"const": 363450207},
+        "status": {"const": "superseded_historical_evidence"},
+        "tag_name": {"const": "backfill-0b28f68b9f4d204ae14814169093723ea84c1364"}
+      },
+      "required": ["reason", "release_api_id", "status", "tag_name"],
+      "type": "object"
+    }
+  },
+  "required": [
+    "attestation",
+    "authority",
+    "canonical_serialization",
+    "capsule_schema",
+    "disposition",
+    "historical_pull_request",
+    "projection",
+    "receipt",
+    "release",
+    "repository",
+    "rule_suite",
+    "schema",
+    "supersedes"
+  ],
+  "title": "Contract Drift historical backfill successor capsule payload",
+  "type": "object"
+}

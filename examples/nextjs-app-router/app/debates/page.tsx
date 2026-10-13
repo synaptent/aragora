@@ -1,5 +1,8 @@
 import Link from 'next/link';
 import { getServerClient } from '@/lib/aragora';
+import { debateView } from '@/lib/debate-view';
+
+export const dynamic = 'force-dynamic';
 
 // Fetch debates on the server
 async function getDebates() {
@@ -33,7 +36,7 @@ export default async function DebatesPage() {
         </div>
       ) : (
         <div className="grid">
-          {debates.map((debate: any) => (
+          {debates.map(debate => (
             <Link
               key={debate.debate_id}
               href={`/debates/${debate.debate_id}`}
@@ -53,7 +56,7 @@ export default async function DebatesPage() {
                   {debate.task?.length > 60 ? '...' : ''}
                 </h3>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-                  {debate.agents?.length || 0} agents | Round {debate.current_round || 0}/{debate.total_rounds || 9}
+                  {debate.agents?.length || 0} agents | {debateView(debate).roundsCompleted} rounds completed
                 </p>
               </div>
             </Link>

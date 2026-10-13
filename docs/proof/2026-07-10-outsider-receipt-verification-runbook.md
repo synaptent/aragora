@@ -43,7 +43,7 @@ Name: aragora-verify
 Version: 0.1.1
 ```
 
-Run the exact command sequence from `docs/STRANGER_TEST.md` in an empty
+Run the exact command sequence from `docs/guides/STRANGER_TEST.md` in an empty
 directory:
 
 ```bash
@@ -173,7 +173,7 @@ mismatch without broadening #8858 into an API access-policy change.
 
 ## Observer handoff for #8858
 
-Send the observer only the public `docs/STRANGER_TEST.md` instructions, not
+Send the observer only the public `docs/guides/STRANGER_TEST.md` instructions, not
 this maintainer analysis. Ask them to record:
 
 1. installation, demo, and verification duration;

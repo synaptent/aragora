@@ -227,13 +227,13 @@ AGENT_METADATA = [
     },
     # Moonshot (Kimi)
     {
-        "name": "kimi-k2",
+        "name": "kimi-k3",
         "provider": "moonshot",
-        "model_id": "moonshotai/kimi-k2",
-        "context_window": 131072,
-        "specialties": ["long-context", "chinese", "reasoning"],
-        "strengths": ["Long context", "Strong Chinese", "Agentic"],
-        "release_date": "2025-01",
+        "model_id": "moonshotai/kimi-k3",
+        "context_window": 1048576,
+        "specialties": ["long-context", "multimodal", "reasoning"],
+        "strengths": ["Long context", "Strong Chinese", "Agentic", "Vision"],
+        "release_date": "2026-07",
     },
 ]
 

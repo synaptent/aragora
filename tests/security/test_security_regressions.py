@@ -136,7 +136,7 @@ class TestSecureHandlerInheritance:
 
     def test_webhook_handler_extends_secure_handler(self):
         """WebhookHandler must extend SecureHandler."""
-        from aragora.server.handlers.webhooks import WebhookHandler
+        from aragora.server.handlers.webhook_management import WebhookHandler
         from aragora.server.handlers.secure import SecureHandler
 
         assert issubclass(WebhookHandler, SecureHandler), (

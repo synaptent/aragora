@@ -36,10 +36,8 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Any
 
-from aragora.control_plane.leader import (
-    is_distributed_state_required,
-    DistributedStateError,
-)
+from aragora.config.distributed import is_distributed_state_required
+from aragora.control_plane.leader import DistributedStateError
 
 logger = logging.getLogger(__name__)
 
@@ -862,7 +860,7 @@ class RedisSessionStore(SessionStore):
         self._prefix = self._config.key_prefix
 
         # Get Redis client
-        from aragora.server.redis_config import get_redis_client
+        from aragora.utils.redis_config import get_redis_client
 
         redis_client = get_redis_client()
         if redis_client is None:
@@ -1471,7 +1469,7 @@ def get_session_store(force_memory: bool = False) -> SessionStore:
 
         # Try Redis first
         try:
-            from aragora.server.redis_config import is_redis_available
+            from aragora.utils.redis_config import is_redis_available
 
             if is_redis_available():
                 _session_store = RedisSessionStore()

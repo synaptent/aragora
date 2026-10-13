@@ -1,0 +1,13 @@
+{
+  "verifier": {
+    "verified": true,
+    "exit_code": 0,
+    "reasons": []
+  },
+  "aragora_verify": {
+    "ok": true,
+    "exit_code": 0,
+    "reasons": []
+  },
+  "description": "Blocking dissent: severity_max P1 and dissent.blocking true; the receipt still verifies."
+}

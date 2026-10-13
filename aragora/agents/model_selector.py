@@ -425,8 +425,8 @@ MODEL_PROFILES: dict[str, ModelProfile] = {
     ),
     # Qwen
     "qwen": ModelProfile(
-        model_id="qwen3-max",
-        display_name="Qwen3 Max",
+        model_id="qwen3.8-max",
+        display_name="Qwen 3.8 Max",
         provider="alibaba",
         capabilities={
             ModelCapability.REASONING: 0.92,
@@ -441,9 +441,9 @@ MODEL_PROFILES: dict[str, ModelProfile] = {
             ModelCapability.INSTRUCTION_FOLLOWING: 0.90,
             ModelCapability.FACTUAL_ACCURACY: 0.84,
         },
-        max_context_tokens=262000,
-        max_output_tokens=8192,
-        cost_input_per_1k=0.0012,
+        max_context_tokens=1_000_000,
+        max_output_tokens=131_072,
+        cost_input_per_1k=0.002,
         cost_output_per_1k=0.006,
         avg_latency_ms=700,
         reliability_score=0.93,
@@ -475,8 +475,8 @@ MODEL_PROFILES: dict[str, ModelProfile] = {
     ),
     # Kimi (Moonshot AI)
     "kimi": ModelProfile(
-        model_id="kimi-k2.6",
-        display_name="Kimi K2.6",
+        model_id="kimi-k3",
+        display_name="Kimi K3",
         provider="moonshot",
         capabilities={
             ModelCapability.REASONING: 0.91,
@@ -491,12 +491,13 @@ MODEL_PROFILES: dict[str, ModelProfile] = {
             ModelCapability.INSTRUCTION_FOLLOWING: 0.90,
             ModelCapability.FACTUAL_ACCURACY: 0.82,
         },
-        max_context_tokens=256000,
-        max_output_tokens=8192,
-        cost_input_per_1k=0.0007448,
-        cost_output_per_1k=0.004655,
+        max_context_tokens=1_048_576,
+        max_output_tokens=32_768,
+        cost_input_per_1k=0.003,
+        cost_output_per_1k=0.015,
         avg_latency_ms=800,
         reliability_score=0.91,
+        supports_vision=True,
     ),
     # Llama 4
     "llama4-maverick": ModelProfile(

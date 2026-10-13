@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 from aragora.pipeline.execution_mode import ExecutionMode as SafetyMode
-from aragora.server.decision_integrity_utils import execute_decision_plan_with_backbone
+from aragora.pipeline.decision_integrity_utils import execute_decision_plan_with_backbone
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ def _seed_cli_backbone_run(
 ) -> str:
     """Seed a RunLedger for CLI-created plans and mirror receipt state."""
     from aragora.pipeline.executor import store_plan
-    from aragora.server.decision_integrity_utils import (
+    from aragora.pipeline.decision_integrity_utils import (
         ensure_decision_plan_backbone_run,
         sync_decision_plan_backbone_receipt,
     )

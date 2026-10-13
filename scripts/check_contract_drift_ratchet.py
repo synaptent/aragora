@@ -173,6 +173,18 @@ _READ_ONLY_GIT_SUBCOMMANDS = frozenset(
         "status",
     }
 )
+# Inline `-c` bypasses the GIT_CONFIG_GLOBAL/GIT_CONFIG_NOSYSTEM scrub in
+# _run_read_only, and config keys such as core.fsmonitor, diff.external, or
+# core.pager execute arbitrary commands even under read-only subcommands, so
+# only the exact key=value literals used by this script's call sites pass.
+_READ_ONLY_GIT_CONFIG_LITERALS = frozenset(
+    {
+        "diff.algorithm=myers",
+        "diff.context=3",
+        "diff.mnemonicPrefix=false",
+        "diff.noprefix=false",
+    }
+)
 _FORBIDDEN_CALLER_FIELDS = frozenset(
     {
         "actions",
@@ -420,6 +432,18 @@ def _git_subcommand(argv: list[str]) -> str:
         if item == "-C":
             index += 2
             continue
+        if item == "-c":
+            if index + 1 >= len(argv):
+                return ""
+            if argv[index + 1] not in _READ_ONLY_GIT_CONFIG_LITERALS:
+                raise ValueError(f"unsupported git -c configuration rejected: {argv[index + 1]}")
+            index += 2
+            continue
+        if item == "--config-env" or item.startswith("--config-env="):
+            # Environment-sourced equivalent of -c: it can set any config key
+            # (including command-executing ones) and would otherwise fall
+            # through the generic option skip, bypassing the -c allowlist.
+            raise ValueError(f"unsupported git --config-env rejected: {item}")
         if item.startswith("--git-dir=") or item.startswith("--work-tree="):
             index += 1
             continue
@@ -507,8 +531,17 @@ def _run_read_only(
     log_operation: bool = True,
 ) -> subprocess.CompletedProcess[bytes]:
     _guard_subprocess_argv(argv)
-    env = {**os.environ, "GIT_OPTIONAL_LOCKS": "0"}
     executable = Path(argv[0]).name
+    env = {**os.environ, "GIT_OPTIONAL_LOCKS": "0"}
+    if executable == "git":
+        env.update(
+            {
+                "GIT_CONFIG_GLOBAL": os.devnull,
+                "GIT_CONFIG_NOSYSTEM": "1",
+                "GIT_NO_REPLACE_OBJECTS": "1",
+                "LC_ALL": "C",
+            }
+        )
     try:
         if executable == "git":
             proc = subprocess.run(["git", *argv[1:]], capture_output=True, env=env, check=False)
@@ -1619,6 +1652,95 @@ def _parse_http_response(raw: bytes) -> tuple[dict[str, str], bytes]:
     return headers, body
 
 
+# Counters GitHub embeds in repository objects tick on activity unrelated to
+# the governed content: issue open/close, pushes to any branch, stars, forks,
+# watchers, and size recomputation. They appear at the top level of
+# `repos/{owner}/{repo}` and nested as `base.repo` / `head.repo` inside pull
+# request bodies, so a multi-minute run observes them moving while every
+# governed field stays put. Only these fields leave the identity plane; main
+# movement stays independently bound through the raw `branches/{branch}` body.
+_VOLATILE_REPOSITORY_FIELDS = (
+    "forks",
+    "forks_count",
+    "network_count",
+    "open_issues",
+    "open_issues_count",
+    "pushed_at",
+    "size",
+    "stargazers_count",
+    "subscribers_count",
+    "updated_at",
+    "watchers",
+    "watchers_count",
+)
+_REPOSITORY_ENDPOINT_RE = re.compile(r"^repos/[^/?]+/[^/?]+$")
+_PULL_REQUEST_ENDPOINT_RE = re.compile(r"^repos/[^/?]+/[^/?]+/pulls/[0-9]+$")
+_RELEASE_ENDPOINT_RE = re.compile(r"^repos/[^/?]+/[^/?]+/releases/[0-9]+$")
+_RELEASE_LISTING_ENDPOINT_RE = re.compile(
+    r"^repos/[^/?]+/[^/?]+/releases\?per_page=[0-9]+&page=[0-9]+$"
+)
+
+
+def _without_volatile_repository_fields(repository: Any) -> Any:
+    if not isinstance(repository, dict):
+        return repository
+    return {
+        key: value for key, value in repository.items() if key not in _VOLATILE_REPOSITORY_FIELDS
+    }
+
+
+def _without_asset_download_counts(release: Any) -> Any:
+    if not isinstance(release, dict) or not isinstance(release.get("assets"), list):
+        return release
+    normalized = dict(release)
+    normalized["assets"] = [
+        {key: value for key, value in asset.items() if key != "download_count"}
+        if isinstance(asset, dict)
+        else asset
+        for asset in release["assets"]
+    ]
+    return normalized
+
+
+def _normalize_volatile_counters(endpoint: str, payload: Any) -> tuple[Any, list[str] | None]:
+    """Return the identity-plane view of a GitHub body plus the excluded fields.
+
+    Endpoints outside the four classified shapes keep the raw-body plane
+    (``None``): their weak ETag and exact bytes still bind. The verifier's own
+    paired octet-stream asset downloads bump ``assets[].download_count`` inside
+    the release body it captured beforehand, so release bodies and the
+    paginated release listing are classified alongside repository and pull
+    request objects. The excluded list is the declared policy for the endpoint
+    class, not the fields that happened to be present.
+    """
+    if _REPOSITORY_ENDPOINT_RE.match(endpoint):
+        return _without_volatile_repository_fields(payload), list(_VOLATILE_REPOSITORY_FIELDS)
+    if _PULL_REQUEST_ENDPOINT_RE.match(endpoint):
+        normalized = payload
+        if isinstance(payload, dict):
+            normalized = dict(payload)
+            for side in ("base", "head"):
+                reference = payload.get(side)
+                if isinstance(reference, dict) and isinstance(reference.get("repo"), dict):
+                    normalized[side] = {
+                        **reference,
+                        "repo": _without_volatile_repository_fields(reference["repo"]),
+                    }
+        return normalized, [
+            f"{side}.repo.{field}"
+            for side in ("base", "head")
+            for field in _VOLATILE_REPOSITORY_FIELDS
+        ]
+    if _RELEASE_ENDPOINT_RE.match(endpoint):
+        return _without_asset_download_counts(payload), ["assets[].download_count"]
+    if _RELEASE_LISTING_ENDPOINT_RE.match(endpoint):
+        normalized = payload
+        if isinstance(payload, list):
+            normalized = [_without_asset_download_counts(item) for item in payload]
+        return normalized, ["[].assets[].download_count"]
+    return payload, None
+
+
 def _gh_api_get(
     endpoint: str,
     *,
@@ -1642,12 +1764,24 @@ def _gh_api_get(
         payload = json.loads(body, object_pairs_hook=_duplicate_key_object)
     except (json.JSONDecodeError, ValueError) as exc:
         raise ValueError(f"GitHub response for {endpoint} is malformed: {exc}") from exc
+    normalized, excluded_fields = _normalize_volatile_counters(endpoint, payload)
+    if excluded_fields is None:
+        identity_bytes = body
+        etag = headers.get("etag")
+    else:
+        # GitHub's weak ETag is derived from the raw body, so it moves with
+        # the excluded counters and cannot stay in the identity plane.
+        identity_bytes = _canonical_json_bytes(normalized)
+        etag = None
     identity = {
-        "byte_length": len(body),
-        "etag": headers.get("etag"),
-        "sha256": _sha256_bytes(body),
-        "updated_at": payload.get("updated_at") if isinstance(payload, dict) else None,
+        "byte_length": len(identity_bytes),
+        "etag": etag,
+        "link": headers.get("link"),
+        "sha256": _sha256_bytes(identity_bytes),
+        "updated_at": normalized.get("updated_at") if isinstance(normalized, dict) else None,
     }
+    if excluded_fields is not None:
+        identity["excluded_volatile_fields"] = excluded_fields
     _append_operation(
         operation_log,
         kind="remote_resource",
@@ -1656,6 +1790,8 @@ def _gh_api_get(
         raw=body,
         response_identity=identity,
     )
+    if excluded_fields is not None:
+        operation_log[-1]["raw_etag"] = headers.get("etag")
     if preserve_raw:
         raw_response = body.decode("utf-8", errors="strict")
         operation_log[-1]["raw_response"] = raw_response
@@ -1687,7 +1823,9 @@ def _gh_api_get_stable(
         operation_log[-2]["movement_observed"] = moved
         operation_log[-1]["movement_observed"] = moved
         if not moved:
-            if before_payload != after_payload:
+            before_view, _excluded = _normalize_volatile_counters(endpoint, before_payload)
+            after_view, _excluded = _normalize_volatile_counters(endpoint, after_payload)
+            if before_view != after_view:
                 raise ValueError(
                     f"authenticated GitHub resource contradicted stable identity: {endpoint}"
                 )
@@ -1766,6 +1904,25 @@ def _gh_api_get_raw_stable(
     raise BoundaryBlocked(f"authenticated GitHub asset moved concurrently: {endpoint}")
 
 
+def _link_header_advertises_next(link_header: Any) -> bool:
+    """Report whether an RFC 8288 Link header advertises another page.
+
+    GitHub omits rel="next" on the terminal page of a paginated collection,
+    so a short page that still advertises rel="next" is a truncated
+    enumeration, not an exhausted one. Absent Link identity stays exhausted:
+    single-page collections carry no Link header at all.
+    """
+    if link_header is None:
+        return False
+    if not isinstance(link_header, str):
+        raise ValueError("authenticated GitHub pagination Link header is malformed")
+    for segment in link_header.split(","):
+        for param in segment.split(";")[1:]:
+            if param.strip().lower() in {'rel="next"', "rel=next"}:
+                return True
+    return False
+
+
 def _gh_api_paginated(
     endpoint: str,
     *,
@@ -1788,6 +1945,11 @@ def _gh_api_paginated(
         identities[page_endpoint] = identity
         records.extend(payload)
         if len(payload) < 100:
+            if _link_header_advertises_next(identity.get("link")):
+                raise ValueError(
+                    "authenticated GitHub pagination ended before an advertised "
+                    f"next page: {page_endpoint}"
+                )
             break
         page += 1
         if page > 10_000:
@@ -2628,7 +2790,7 @@ def _collect_live_evidence(
         )
         endpoint_identities[rule_suite_endpoint] = {
             key: rule_suite_identity.get(key)
-            for key in ("byte_length", "etag", "sha256", "updated_at")
+            for key in ("byte_length", "etag", "link", "sha256", "updated_at")
         }
     else:
         _authenticate_persisted_rule_suite_claim(
@@ -2754,23 +2916,18 @@ def _collect_live_evidence(
         )
         endpoint_identities.update(file_identities)
         if len(files) != observed_pr.get("changed_files"):
-            raise ValueError(f"authenticated governed PR #{number} file discovery is incomplete")
+            _require_stats_dropout_completeness_witness(
+                repo_root=repo_root,
+                pr=number,
+                observed_pr=observed_pr,
+                files=files,
+                first_parent_sha=record.get("base_sha"),
+                merge_sha=receipt_by_pr.get(number, {}).get("merge_sha"),
+                operation_log=operation_log,
+            )
         if record.get("changed_files_complete") is not True:
             raise ValueError(f"capsule governed PR #{number} denies complete file discovery")
-        owned_paths: set[str] = set()
-        for item in files:
-            filename = item.get("filename") if isinstance(item, dict) else None
-            if not isinstance(filename, str) or not filename:
-                raise ValueError(f"authenticated governed PR #{number} file record is malformed")
-            owned_paths.add(filename)
-            previous = item.get("previous_filename")
-            if previous is not None:
-                if not isinstance(previous, str) or not previous:
-                    raise ValueError(
-                        f"authenticated governed PR #{number} file record is malformed"
-                    )
-                owned_paths.add(previous)
-        authenticated_pr_files[number] = sorted(owned_paths)
+        authenticated_pr_files[number] = _authenticated_pr_owned_paths(files, pr=number)
         receipt = receipt_by_pr.get(number)
         if not isinstance(receipt, dict):
             raise ValueError(f"capsule governed PR #{number} lacks a first-parent receipt")
@@ -2808,11 +2965,10 @@ def _collect_live_evidence(
             raise ValueError(
                 f"authenticated governed PR #{number} lacks first-parent or tree equality"
             )
-        # VAL-CDG-018 squash binding: tree equality is one sufficient witness;
-        # otherwise the semantic delta recomputed from the squash merge's
-        # first parent (immutable local git, pinned rename policy) must equal
-        # the authenticated PR disposition. Never require PR-head tree
-        # equality as the squash binding.
+        # VAL-CDG-018 squash binding: the semantic delta recomputed from the
+        # squash merge's first parent (immutable local git, pinned rename and
+        # path-byte policies) must exactly equal the authenticated PR
+        # disposition. PR-head tree equality is corroboration only.
         _require_squash_binding_witness(
             repo_root=repo_root,
             pr=number,
@@ -3765,6 +3921,11 @@ def _first_parent_semantic_delta(
     rename is a removal at the old path plus an addition at the new path and
     both must be inside the authenticated disposition. Renamed content can
     never masquerade as an unchanged or foreign path.
+
+    Git emits raw NUL-delimited path bytes. GitHub file dispositions expose
+    filenames as JSON strings transported in UTF-8, so only exact UTF-8 paths
+    can be compared reversibly across both authorities. Non-UTF-8 Git paths
+    fail closed rather than being quoted, normalized, or replacement-decoded.
     """
     diff = _run_read_only(
         [
@@ -3774,13 +3935,36 @@ def _first_parent_semantic_delta(
             "diff",
             "--no-renames",
             "--name-only",
+            "-z",
             f"{first_parent_sha}^{{tree}}",
             f"{merge_sha}^{{tree}}",
         ],
         operation_log=operation_log,
         resource=f"squash-semantic-delta:{pr}",
     )
-    return {line for line in diff.stdout.decode("utf-8").splitlines() if line}
+    if not diff.stdout:
+        return set()
+    if not diff.stdout.endswith(b"\0"):
+        raise ValueError(
+            f"squash semantic delta for PR #{pr} has unterminated NUL-delimited path output"
+        )
+    raw_paths = diff.stdout[:-1].split(b"\0")
+    if any(not raw_path for raw_path in raw_paths):
+        raise ValueError(f"squash semantic delta for PR #{pr} has an empty path record")
+    paths: list[str] = []
+    for raw_path in raw_paths:
+        try:
+            path = raw_path.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise ValueError(
+                f"squash semantic delta for PR #{pr} contains a Git path that cannot "
+                "round-trip through a GitHub UTF-8 filename"
+            ) from exc
+        paths.append(path)
+    delta = set(paths)
+    if len(delta) != len(paths):
+        raise ValueError(f"squash semantic delta for PR #{pr} contains duplicate paths")
+    return delta
 
 
 def _require_squash_binding_witness(
@@ -3796,13 +3980,11 @@ def _require_squash_binding_witness(
 ) -> str:
     """Bind a squash merge to its authenticated PR disposition (VAL-CDG-018).
 
-    Head-tree == merge-tree equality is ONE sufficient witness; otherwise the
-    exact semantic delta recomputed from the squash merge's first parent to
-    the squash merge (immutable local git trees, pinned rename policy) must
-    equal the authenticated PR disposition's owned-path delta under the
-    authority accepted at the first parent. PR-head tree equality is never
-    REQUIRED as the squash binding, and a delta reaching outside the
-    authenticated disposition fails closed even when equality holds.
+    The exact semantic delta recomputed from the squash merge's first parent
+    to the squash merge (immutable local git trees, pinned rename policy) must
+    equal the authenticated PR disposition's owned-path delta. Head-tree ==
+    merge-tree equality remains a corroborating witness when present, but it
+    is never sufficient and never replaces exact semantic set equality.
     """
     delta = _first_parent_semantic_delta(
         repo_root,
@@ -3813,47 +3995,173 @@ def _require_squash_binding_witness(
     )
     equality = head_tree_sha == merge_tree_sha
     if owned_paths is None:
-        if not equality:
-            raise ValueError(
-                f"first-parent receipt for PR #{pr} lacks a squash binding witness: "
-                "head tree differs from the squash merge tree and no authenticated "
-                "PR disposition delta is available"
-            )
-        witness = "head_tree_equality"
-    else:
-        owned = set(owned_paths)
-        if foreign := sorted(delta - owned):
-            raise ValueError(
-                f"squash semantic delta for PR #{pr} touches paths outside the "
-                f"authenticated disposition: {foreign}"
-            )
-        if equality:
-            witness = "head_tree_equality"
-        elif delta == owned:
-            witness = "first_parent_semantic_delta"
-        else:
-            raise ValueError(
-                f"first-parent receipt for PR #{pr} lacks a squash binding witness: "
-                "head tree differs from the squash merge tree and the recomputed "
-                "first-parent semantic delta does not equal the authenticated "
-                "disposition"
-            )
+        raise ValueError(
+            f"first-parent receipt for PR #{pr} lacks a squash binding witness: "
+            "no authenticated PR disposition paths are available for exact "
+            "semantic-delta comparison"
+        )
+    owned = set(owned_paths)
+    foreign = sorted(delta - owned)
+    missing = sorted(owned - delta)
+    if foreign or missing:
+        differences = []
+        if foreign:
+            differences.append(f"paths outside the authenticated disposition: {foreign}")
+        if missing:
+            differences.append(f"authenticated paths missing from semantic delta: {missing}")
+        raise ValueError(
+            f"squash semantic delta for PR #{pr} does not equal the authenticated "
+            f"disposition: {'; '.join(differences)}"
+        )
+    witness = "first_parent_semantic_delta"
+    corroborating_witnesses = ["head_tree_equality"] if equality else []
     _append_operation(
         operation_log,
         kind="squash_binding_witness",
         resource=f"squash-binding:{pr}",
         identifier=witness,
+        response_identity={
+            "binding_witness": witness,
+            "corroborating_witnesses": corroborating_witnesses,
+        },
         raw=_canonical_json_bytes(
             {
+                "corroborating_witnesses": corroborating_witnesses,
                 "first_parent_sha": first_parent_sha,
                 "merge_sha": merge_sha,
+                "owned_paths": sorted(owned),
                 "pr": pr,
                 "semantic_delta": sorted(delta),
-                "witness": witness,
+                "binding_witness": witness,
             }
         ),
     )
     return witness
+
+
+def _authenticated_pr_owned_paths(files: list[dict[str, Any]], *, pr: int) -> list[str]:
+    """Collect the authenticated disposition's owned paths for one PR.
+
+    Renames own both sides: previous_filename is a removal at the old path
+    and filename an addition at the new path, matching the pinned
+    --no-renames policy of the recomputed first-parent semantic delta.
+    """
+    owned_paths: set[str] = set()
+    for item in files:
+        filename = item.get("filename") if isinstance(item, dict) else None
+        if not isinstance(filename, str) or not filename:
+            raise ValueError(f"authenticated governed PR #{pr} file record is malformed")
+        owned_paths.add(filename)
+        previous = item.get("previous_filename")
+        if previous is not None:
+            if not isinstance(previous, str) or not previous:
+                raise ValueError(f"authenticated governed PR #{pr} file record is malformed")
+            owned_paths.add(previous)
+    return sorted(owned_paths)
+
+
+def _require_stats_dropout_completeness_witness(
+    *,
+    repo_root: Path,
+    pr: int,
+    observed_pr: dict[str, Any],
+    files: list[dict[str, Any]],
+    first_parent_sha: Any,
+    merge_sha: Any,
+    operation_log: list[dict[str, Any]],
+) -> None:
+    """Cure ONLY the fully zeroed REST stats dropout, by dual witness.
+
+    GitHub REST permanently reports changed_files=0/additions=0/deletions=0
+    for some very large merged PRs (observed on PR #9850) while the files
+    endpoint still enumerates the true disposition, so the exact
+    len(files) == changed_files completeness witness would fail closed on
+    every boundary interval containing such a merge. Acceptance requires a
+    dual witness:
+
+    - Link-exhausted pagination: _gh_api_paginated fails closed whenever a
+      short page still advertises rel="next", so any enumeration that
+      reaches this witness is exhausted by construction (and a zeroed
+      changed_files mismatch implies the enumeration is nonempty).
+    - Exact equality of the enumerated owned-path set (previous_filename
+      included) with the VAL-CDG-018 first-parent semantic delta recomputed
+      from immutable local git.
+
+    GraphQL changedFiles corroboration is deliberately not consulted: the
+    read-only subprocess guard admits only GET/HEAD gh HTTP requests (the
+    graphql endpoint needs mutating-shaped -f fields), and a remote count
+    witness is strictly dominated by exact local path-set equality.
+
+    Any non-zeroed count mismatch keeps the pre-existing fail-closed raise,
+    so normal-PR witness semantics are unchanged. The zeroed REST
+    additions/deletions still bind verbatim into authenticated_pr_changes
+    as the (zeroed) REST stats of record.
+    """
+    rest_counts = (
+        observed_pr.get("changed_files"),
+        observed_pr.get("additions"),
+        observed_pr.get("deletions"),
+    )
+    if any(isinstance(value, bool) or value != 0 for value in rest_counts):
+        raise ValueError(f"authenticated governed PR #{pr} file discovery is incomplete")
+    if not files:
+        raise ValueError(f"authenticated governed PR #{pr} zeroed-stats file enumeration is empty")
+    enumerated = set(_authenticated_pr_owned_paths(files, pr=pr))
+    if (
+        not isinstance(first_parent_sha, str)
+        or not FULL_SHA_RE.fullmatch(first_parent_sha)
+        or not isinstance(merge_sha, str)
+        or not FULL_SHA_RE.fullmatch(merge_sha)
+    ):
+        raise ValueError(
+            f"authenticated governed PR #{pr} zeroed-stats witness lacks canonical "
+            "first-parent bindings"
+        )
+    delta = _first_parent_semantic_delta(
+        repo_root,
+        first_parent_sha=first_parent_sha,
+        merge_sha=merge_sha,
+        pr=pr,
+        operation_log=operation_log,
+    )
+    foreign = sorted(delta - enumerated)
+    missing = sorted(enumerated - delta)
+    if foreign or missing:
+        differences = []
+        if foreign:
+            differences.append(f"semantic-delta paths outside the enumeration: {foreign}")
+        if missing:
+            differences.append(f"enumerated paths missing from the semantic delta: {missing}")
+        raise ValueError(
+            f"authenticated governed PR #{pr} zeroed-stats enumeration does not equal "
+            f"the recomputed first-parent semantic delta: {'; '.join(differences)}"
+        )
+    binding_witnesses = [
+        "link_exhausted_pagination",
+        "first_parent_semantic_delta_equality",
+    ]
+    _append_operation(
+        operation_log,
+        kind="stats_dropout_witness",
+        resource=f"stats-dropout:{pr}",
+        identifier="zeroed_stats_dual_witness",
+        response_identity={
+            "binding_witnesses": binding_witnesses,
+            "enumerated_path_count": len(enumerated),
+        },
+        raw=_canonical_json_bytes(
+            {
+                "binding_witnesses": binding_witnesses,
+                "enumerated_paths": sorted(enumerated),
+                "first_parent_sha": first_parent_sha,
+                "merge_sha": merge_sha,
+                "pr": pr,
+                "rest_additions": 0,
+                "rest_changed_files": 0,
+                "rest_deletions": 0,
+            }
+        ),
+    )
 
 
 def _reconcile_prs_and_receipts(
@@ -3936,11 +4244,10 @@ def _reconcile_prs_and_receipts(
                 f"first-parent receipt for PR #{receipt['pr']} misstates the squash merge "
                 "tree: local git recompute contradicts the claimed merge_tree_sha"
             )
-        # VAL-CDG-018 squash binding: the recomputed merge tree (not the
-        # record claim) is compared against the receipt head tree as ONE
-        # sufficient witness; a stale-base squash instead binds through the
-        # recomputed first-parent semantic delta equal to the authenticated
-        # PR disposition. Fail closed when neither witness holds.
+        # VAL-CDG-018 squash binding: the recomputed first-parent semantic
+        # delta must exactly equal the authenticated PR disposition. The
+        # independently recomputed merge tree may corroborate PR-head tree
+        # equality, but equality alone never binds the squash.
         _require_squash_binding_witness(
             repo_root=repo_root,
             pr=receipt["pr"],
@@ -4498,6 +4805,62 @@ def _git_json(repo_root: Path, sha: str, path: str) -> dict[str, Any]:
     return _git_json_at_ref(repo_root, sha, path, operation_log=[])
 
 
+def _repository_relative_path(repo_root: Path, path: Path, *, label: str) -> str:
+    if path.is_absolute():
+        try:
+            relative = path.resolve().relative_to(repo_root.resolve())
+        except ValueError as exc:
+            raise ValueError(f"{label} must be inside the repository") from exc
+    else:
+        if not path.parts or ".." in path.parts:
+            raise ValueError(f"{label} must be a safe repository-relative path")
+        relative = path
+    value = relative.as_posix()
+    if value in {"", "."}:
+        raise ValueError(f"{label} must name a repository file")
+    return value
+
+
+def _resolve_accepted_source(repo_root: Path, source_sha: str) -> tuple[str, str]:
+    operation_log: list[dict[str, Any]] = []
+    try:
+        source = _resolve_full_sha(
+            repo_root,
+            source_sha,
+            label="accepted-authority --ref",
+            operation_log=operation_log,
+        )
+    except ValueError as exc:
+        if FULL_SHA_RE.fullmatch(source_sha):
+            raise ValueError(
+                f"accepted-authority --ref is unavailable or is not an exact commit: {source_sha}"
+            ) from exc
+        raise
+    try:
+        proc = _run_read_only(
+            [
+                "git",
+                "-C",
+                str(repo_root),
+                "rev-parse",
+                "--verify",
+                f"{source}^1^{{commit}}",
+            ],
+            operation_log=operation_log,
+            resource="accepted-authority-tolerance-parent",
+        )
+    except ValueError as exc:
+        raise ValueError(
+            f"accepted-authority --ref first parent is unavailable: {source}"
+        ) from exc
+    parent = proc.stdout.decode("ascii").strip()
+    if not FULL_SHA_RE.fullmatch(parent):
+        raise ValueError(
+            f"accepted-authority --ref first parent is malformed: {source}"
+        )
+    return source, parent
+
+
 def _bundle_metadata(authority: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, str]]]:
     bundle = authority.get("analyzer_bundle")
     if not isinstance(bundle, dict) or set(bundle) != {"dependencies", "files", "interpreter_flags", "launcher_sha256", "schema"} or bundle["schema"] != "contract-drift-analyzer-bundle-v1" or bundle["dependencies"] != [] or bundle["interpreter_flags"] != list(ANALYZER_FLAGS) or bundle["launcher_sha256"] != _sha256_bytes(HERMETIC_LAUNCHER):
@@ -4684,9 +5047,27 @@ def build_accepted_result(
     inventory_path: Path,
     as_of: str | None = None,
     source_sha: str | None = None,
+    historical_base_sha: str | None = None,
+    historical_head_sha: str | None = None,
+    historical_merge_sha: str | None = None,
+    historical_first_parent_sha: str | None = None,
 ) -> dict[str, Any]:
+    if source_sha is None:
+        return _accepted_failure(
+            "accepted-authority program/receipt modes require an explicit immutable --ref",
+            "accepted_authority_ref_required",
+        )
     try:
-        inventory = _strict_json_bytes(inventory_path.read_bytes(), "accepted inventory")
+        source, residue_ref = _resolve_accepted_source(repo_root, source_sha)
+        inventory_rel = _repository_relative_path(
+            repo_root,
+            inventory_path,
+            label="accepted inventory path",
+        )
+    except ValueError as exc:
+        return _accepted_failure(str(exc), "accepted_authority_ref_invalid")
+    try:
+        inventory = _git_json(repo_root, source, inventory_rel)
     except (OSError, ValueError) as exc:
         return _accepted_failure(str(exc), "authority_transition_required")
     authority = inventory.get("accepted_authority")
@@ -4695,19 +5076,216 @@ def build_accepted_result(
             "resolved base has no accepted authority manifest", "authority_transition_required"
         )
     try:
-        summary = validate_accepted_authority(authority, repo_root=repo_root, live_ref=source_sha, residue_ref=f"{source_sha}^" if source_sha else None)  # fmt: skip
+        summary = validate_accepted_authority(
+            authority,
+            repo_root=repo_root,
+            live_ref=source,
+            residue_ref=residue_ref,
+        )
     except (OSError, ValueError) as exc:
         return _accepted_failure(str(exc), "accepted_authority_invalid")
     if mode == "receipt":
-        source = source_sha or ""
-        valid = FULL_SHA_RE.fullmatch(source)
-        proc = subprocess.run(["git", "-C", str(repo_root), "rev-list", "--first-parent", source], capture_output=True, text=True) if valid else None  # fmt: skip
-        chain = proc.stdout.splitlines() if proc and proc.returncode == 0 else []
-        passing = bool(chain and chain[0] == source_sha)
+        historical_values = {
+            "base_sha": historical_base_sha,
+            "first_parent_sha": historical_first_parent_sha,
+            "head_sha": historical_head_sha,
+            "merge_sha": historical_merge_sha,
+        }
+        if any(value is not None for value in historical_values.values()):
+            if not all(value is not None for value in historical_values.values()):
+                return _accepted_failure(
+                    "historical receipt requires base, head, merge, and first-parent SHAs together",
+                    "accepted_authority_historical_pair_incomplete",
+                )
+            try:
+                resolved = {
+                    label: _resolve_full_sha(
+                        repo_root,
+                        cast(str, value),
+                        label=f"historical receipt {label}",
+                        operation_log=[],
+                    )
+                    for label, value in historical_values.items()
+                }
+                first_parent = (
+                    _run_read_only(
+                        [
+                            "git",
+                            "-C",
+                            str(repo_root),
+                            "rev-parse",
+                            f"{resolved['merge_sha']}^1",
+                        ],
+                        operation_log=[],
+                        resource="historical-receipt-first-parent",
+                    )
+                    .stdout.decode("ascii")
+                    .strip()
+                )
+                merge_tree = (
+                    _run_read_only(
+                        [
+                            "git",
+                            "-C",
+                            str(repo_root),
+                            "rev-parse",
+                            f"{resolved['merge_sha']}^{{tree}}",
+                        ],
+                        operation_log=[],
+                        resource="historical-receipt-merge-tree",
+                    )
+                    .stdout.decode("ascii")
+                    .strip()
+                )
+                head_tree = (
+                    _run_read_only(
+                        [
+                            "git",
+                            "-C",
+                            str(repo_root),
+                            "rev-parse",
+                            f"{resolved['head_sha']}^{{tree}}",
+                        ],
+                        operation_log=[],
+                        resource="historical-receipt-head-tree",
+                    )
+                    .stdout.decode("ascii")
+                    .strip()
+                )
+                for ancestor, descendant, label in (
+                    (
+                        resolved["base_sha"],
+                        resolved["head_sha"],
+                        "historical receipt base is not an ancestor of the PR head",
+                    ),
+                    (
+                        resolved["base_sha"],
+                        resolved["first_parent_sha"],
+                        "historical receipt base is not an ancestor of the merge first parent",
+                    ),
+                    (
+                        resolved["base_sha"],
+                        resolved["merge_sha"],
+                        "historical receipt base is not an ancestor of the squash merge",
+                    ),
+                ):
+                    if not _is_ancestor(repo_root, ancestor, descendant, []):
+                        raise ValueError(label)
+                semantic_delta = sorted(
+                    _first_parent_semantic_delta(
+                        repo_root,
+                        first_parent_sha=resolved["first_parent_sha"],
+                        merge_sha=resolved["merge_sha"],
+                        pr=0,
+                        operation_log=[],
+                    )
+                )
+                head_semantic_delta = sorted(
+                    _first_parent_semantic_delta(
+                        repo_root,
+                        first_parent_sha=resolved["base_sha"],
+                        merge_sha=resolved["head_sha"],
+                        pr=0,
+                        operation_log=[],
+                    )
+                )
+                patch_args = [
+                    "git",
+                    "-c",
+                    "diff.noprefix=false",
+                    "-c",
+                    "diff.mnemonicPrefix=false",
+                    "-c",
+                    "diff.algorithm=myers",
+                    "-c",
+                    "diff.context=3",
+                    "-C",
+                    str(repo_root),
+                    "diff",
+                    "--no-ext-diff",
+                    "--no-textconv",
+                    "--no-renames",
+                    "--no-color",
+                    "--no-indent-heuristic",
+                    "--full-index",
+                    "--unified=3",
+                    "--src-prefix=a/",
+                    "--dst-prefix=b/",
+                    "-O/dev/null",
+                ]
+                head_patch = _run_read_only(
+                    [
+                        *patch_args,
+                        f"{resolved['base_sha']}^{{tree}}",
+                        f"{resolved['head_sha']}^{{tree}}",
+                    ],
+                    operation_log=[],
+                    resource="historical-receipt-base-head-patch",
+                ).stdout
+                merge_patch = _run_read_only(
+                    [
+                        *patch_args,
+                        f"{resolved['first_parent_sha']}^{{tree}}",
+                        f"{resolved['merge_sha']}^{{tree}}",
+                    ],
+                    operation_log=[],
+                    resource="historical-receipt-first-parent-merge-patch",
+                ).stdout
+            except ValueError as exc:
+                return _accepted_failure(
+                    str(exc),
+                    "accepted_authority_historical_pair_invalid",
+                )
+            if first_parent != resolved["first_parent_sha"]:
+                return _accepted_failure(
+                    "historical receipt merge first parent contradicts the exact pair",
+                    "accepted_authority_historical_pair_mismatch",
+                )
+            if head_semantic_delta != semantic_delta:
+                return _accepted_failure(
+                    "historical receipt base/head paths differ from first-parent/merge paths",
+                    "accepted_authority_historical_pair_mismatch",
+                )
+            if head_patch != merge_patch:
+                return _accepted_failure(
+                    "historical receipt base/head patch differs from first-parent/merge patch",
+                    "accepted_authority_historical_pair_mismatch",
+                )
+            return {
+                "authority": {
+                    "historical_exact_pair": resolved,
+                    "source": "accepted_authority",
+                },
+                "execution": {
+                    **resolved,
+                    "first_parent_patch_byte_length": len(merge_patch),
+                    "first_parent_patch_sha256": _sha256_bytes(merge_patch),
+                    "head_tree_sha": head_tree,
+                    "merge_tree_sha": merge_tree,
+                    "semantic_delta_paths": semantic_delta,
+                    "source_sha": source,
+                },
+                "passing": True,
+                "source_sha": source,
+                "status": "pass",
+            }
+        try:
+            proc = _run_read_only(
+                ["git", "-C", str(repo_root), "rev-list", "--first-parent", source],
+                operation_log=[],
+                resource="accepted-authority-first-parent-chain",
+            )
+        except ValueError as exc:
+            return _accepted_failure(
+                str(exc),
+                "accepted_authority_receipt_failed",
+            )
+        chain = proc.stdout.decode("ascii").splitlines()
+        passing = bool(chain and chain[0] == source)
         return {
             "authority": {"first_parent_chain": chain, "source": "accepted_authority"},
             "passing": passing,
-            "source_sha": source_sha,
+            "source_sha": source,
             "status": "pass" if passing else "fail",
         }
     as_of_value = as_of or datetime.now(UTC).date().isoformat()
@@ -4718,7 +5296,14 @@ def build_accepted_result(
     if as_of_date > datetime.now(UTC).date():
         return _accepted_failure("live as-of may not be future-dated", "future_as_of")
     try:
-        program = _load_program(repo_root / "scripts/baselines/contract_drift_program.json")
+        program = _parse_program(
+            _git_json(
+                repo_root,
+                source,
+                "scripts/baselines/contract_drift_program.json",
+            ),
+            label="Program baseline",
+        )
         weeks = max(0, (as_of_date - program["start_date"]).days // 7)
         target = _target_after_weeks(program["start_total_items"], program["weekly_reduction"], weeks)  # fmt: skip
     except (OSError, ValueError) as exc:
@@ -4728,7 +5313,7 @@ def build_accepted_result(
     program_result = {
         "as_of": as_of_value,
         "effective_weeks": weeks,
-        "source_sha": source_sha,
+        "source_sha": source,
         "start_date": program["start_date"].isoformat(),
         "start_total_items": program["start_total_items"],
         "weekly_reduction": program["weekly_reduction"],
@@ -4789,24 +5374,30 @@ def _target_after_weeks(start_total: int, weekly_reduction: float, weeks: int) -
     return target
 
 
-def _load_program(program_baseline: Path) -> dict[str, Any]:
-    program = _load_json_strict(program_baseline, "Program baseline")
+def _parse_program(program: dict[str, Any], *, label: str) -> dict[str, Any]:
     start_date_raw = program.get("start_date")
     start_total = int(program.get("start_total_items", -1))
     weekly_reduction = float(program.get("weekly_reduction", -1.0))
     grace_weeks = int(program.get("grace_weeks", 0))
     if not start_date_raw:
-        raise ValueError("Program baseline must include 'start_date'")
+        raise ValueError(f"{label} must include 'start_date'")
     if start_total < 0:
-        raise ValueError("Program baseline has invalid 'start_total_items'")
+        raise ValueError(f"{label} has invalid 'start_total_items'")
     if not (0.0 < weekly_reduction < 1.0):
-        raise ValueError("Program baseline 'weekly_reduction' must be between 0 and 1")
+        raise ValueError(f"{label} 'weekly_reduction' must be between 0 and 1")
     return {
         "start_date": date.fromisoformat(start_date_raw),
         "start_total_items": start_total,
         "weekly_reduction": weekly_reduction,
         "grace_weeks": grace_weeks,
     }
+
+
+def _load_program(program_baseline: Path) -> dict[str, Any]:
+    return _parse_program(
+        _load_json_strict(program_baseline, "Program baseline"),
+        label="Program baseline",
+    )
 
 
 def _evaluate_classes(
@@ -5288,6 +5879,26 @@ def main() -> int:
     )
     parser.add_argument("--head-ref", default=None, help="Immutable PR head SHA")
     parser.add_argument("--ref", default=None, help="Immutable source SHA for main modes")
+    parser.add_argument(
+        "--historical-base-sha",
+        default=None,
+        help="Exact historical PR base SHA for receipt mode",
+    )
+    parser.add_argument(
+        "--historical-head-sha",
+        default=None,
+        help="Exact historical PR head SHA for receipt mode",
+    )
+    parser.add_argument(
+        "--historical-merge-sha",
+        default=None,
+        help="Exact historical squash-merge SHA for receipt mode",
+    )
+    parser.add_argument(
+        "--historical-first-parent-sha",
+        default=None,
+        help="Exact historical merge first-parent SHA for receipt mode",
+    )
     parser.add_argument("--trusted-bundle", default=None, help=argparse.SUPPRESS)
     parser.add_argument("--repo-root", type=Path, default=Path("."))
     parser.add_argument(
@@ -5445,19 +6056,36 @@ def main() -> int:
         print(json.dumps(result, sort_keys=True) if args.json else result)
         return 0 if result["passing"] else 1
 
-    accepted_default = args.inventory.exists() and isinstance(
-        _strict_json_bytes(args.inventory.read_bytes(), "accepted inventory").get(
-            "accepted_authority"
-        ),
-        dict,
-    )
-    if args.mode == "receipt" or accepted_default:
+    requested_inventory = (
+        args.inventory if args.inventory.is_absolute() else args.repo_root / args.inventory
+    ).resolve()
+    canonical_inventory = (args.repo_root / inventory_mod.DEFAULT_INVENTORY).resolve()
+    head_has_accepted_authority = False
+    if args.ref is None and args.mode != "receipt" and requested_inventory == canonical_inventory:
+        try:
+            head_inventory = _git_json(
+                args.repo_root,
+                "HEAD",
+                inventory_mod.DEFAULT_INVENTORY,
+            )
+            head_has_accepted_authority = isinstance(
+                head_inventory.get("accepted_authority"),
+                dict,
+            )
+        except (OSError, ValueError):
+            pass
+    accepted_default = args.mode == "receipt" or args.ref is not None or head_has_accepted_authority
+    if accepted_default:
         result = build_accepted_result(
             mode=args.mode,
             repo_root=args.repo_root,
             inventory_path=args.inventory,
             as_of=args.as_of,
-            source_sha=args.ref or args.head_ref or args.base_ref,
+            source_sha=args.ref,
+            historical_base_sha=args.historical_base_sha,
+            historical_head_sha=args.historical_head_sha,
+            historical_merge_sha=args.historical_merge_sha,
+            historical_first_parent_sha=args.historical_first_parent_sha,
         )
         print(json.dumps(result, sort_keys=True) if args.json else result)
         return 0 if result["passing"] else 1

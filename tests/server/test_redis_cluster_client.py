@@ -14,7 +14,7 @@ from unittest.mock import MagicMock, patch, AsyncMock
 
 import pytest
 
-from aragora.server.redis_cluster import (
+from aragora.storage.redis_cluster import (
     ClusterConfig,
     ClusterMode,
     ClusterHealthMonitor,
@@ -753,7 +753,7 @@ class TestModuleLevelFunctions:
 
     def test_reset_cluster_client(self):
         """reset_cluster_client clears singleton."""
-        import aragora.server.redis_cluster as rc
+        import aragora.storage.redis_cluster as rc
 
         # Set up a mock client
         mock_client = MagicMock()
@@ -766,7 +766,7 @@ class TestModuleLevelFunctions:
 
     def test_is_cluster_available_no_client(self):
         """is_cluster_available returns False when no client."""
-        import aragora.server.redis_cluster as rc
+        import aragora.storage.redis_cluster as rc
 
         rc._cluster_client = None
         with patch.object(rc, "get_cluster_config", return_value=ClusterConfig(nodes=[])):
@@ -774,7 +774,7 @@ class TestModuleLevelFunctions:
 
     def test_get_redis_client_no_cluster(self):
         """get_redis_client returns None when no cluster client."""
-        import aragora.server.redis_cluster as rc
+        import aragora.storage.redis_cluster as rc
 
         rc._cluster_client = None
         with patch.object(rc, "get_cluster_config", return_value=ClusterConfig(nodes=[])):

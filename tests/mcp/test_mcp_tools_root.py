@@ -569,7 +569,7 @@ class TestGetDebateTool:
         mock_storage = MagicMock()
         mock_storage.get_debates_db = MagicMock(return_value=mock_db)
 
-        with patch.dict("sys.modules", {"aragora.server.storage": mock_storage}):
+        with patch.dict("sys.modules", {"aragora.storage.debate_storage": mock_storage}):
             import importlib
             from aragora.mcp import tools as mcp_tools
 
@@ -590,7 +590,7 @@ class TestGetDebateTool:
         mock_storage = MagicMock()
         mock_storage.get_debates_db = MagicMock(return_value=mock_db)
 
-        with patch.dict("sys.modules", {"aragora.server.storage": mock_storage}):
+        with patch.dict("sys.modules", {"aragora.storage.debate_storage": mock_storage}):
             import importlib
             from aragora.mcp import tools as mcp_tools
 
@@ -607,7 +607,7 @@ class TestGetDebateTool:
         mock_storage = MagicMock()
         mock_storage.get_debates_db = MagicMock(side_effect=Exception("Database error"))
 
-        with patch.dict("sys.modules", {"aragora.server.storage": mock_storage}):
+        with patch.dict("sys.modules", {"aragora.storage.debate_storage": mock_storage}):
             import importlib
             from aragora.mcp import tools as mcp_tools
 
@@ -624,7 +624,7 @@ class TestGetDebateTool:
         mock_storage = MagicMock()
         mock_storage.get_debates_db = MagicMock(return_value=None)
 
-        with patch.dict("sys.modules", {"aragora.server.storage": mock_storage}):
+        with patch.dict("sys.modules", {"aragora.storage.debate_storage": mock_storage}):
             import importlib
             from aragora.mcp import tools as mcp_tools
 

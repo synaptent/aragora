@@ -21,7 +21,7 @@ def extract_feature_status_from_docs() -> dict[str, list[dict]]:
 
     content = status_file.read_text()
 
-    features = {
+    features: dict[str, list[dict]] = {
         "stable": [],
         "integrated": [],
         "partial": [],
@@ -121,7 +121,7 @@ def search_codebase_for_feature(feature_name: str) -> list[dict]:
 
 def analyze_import_graph() -> dict[str, Any]:
     """Analyze what modules import what - reveals actual dependencies."""
-    imports = {}
+    imports: dict[str, dict[str, list[str]]] = {}
 
     aragora_dir = PROJECT_ROOT / "aragora"
     for py_file in aragora_dir.rglob("*.py"):

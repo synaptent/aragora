@@ -19,12 +19,14 @@ import json
 import os
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any, Literal
 
 from aragora.epistemic.claim_verifier import ClaimResult, ClaimStatus
 from aragora.epistemic.coherence import CoherenceIssue, IncoherenceKind
 from aragora.epistemic.crux_receipt import CruxEntry, CruxReceipt
+
+UTC = timezone.utc
 
 _TRUTHY = frozenset({"1", "true", "yes", "on"})
 

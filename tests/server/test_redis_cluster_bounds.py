@@ -13,7 +13,7 @@ import os
 import pytest
 from unittest.mock import patch
 
-from aragora.server.redis_cluster import ClusterConfig, get_cluster_config
+from aragora.storage.redis_cluster import ClusterConfig, get_cluster_config
 
 
 class TestMaxConnectionsBounds:

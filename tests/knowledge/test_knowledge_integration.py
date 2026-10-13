@@ -35,6 +35,7 @@ from aragora.knowledge.mound.vector_abstraction import (
 )
 from aragora.knowledge.mound.vector_abstraction.memory import InMemoryVectorStore
 from aragora.knowledge.pipeline import KnowledgePipeline, PipelineConfig, ProcessingResult
+from aragora.knowledge.fact_store import InMemoryFactStore, ScopedFactStore
 from aragora.knowledge.types import ValidationStatus
 from aragora.knowledge.mound_core import ProvenanceType
 
@@ -113,11 +114,16 @@ def mock_embedding_service(sample_embeddings):
     return service
 
 
+def _scoped_store() -> ScopedFactStore:
+    return ScopedFactStore(InMemoryFactStore(), "org-test")
+
+
 @pytest.fixture
 def pipeline_config(temp_db_dir):
     """Create PipelineConfig for testing."""
     return PipelineConfig(
         workspace_id="test_pipeline",
+        org_id="org-test",
         use_weaviate=False,
         extract_facts=False,
         fact_db_path=temp_db_dir / "facts.db",
@@ -725,7 +731,7 @@ class TestKnowledgePipelineIntegration:
     @pytest.mark.asyncio
     async def test_pipeline_search(self, pipeline_config):
         """Test searching through pipeline."""
-        pipeline = KnowledgePipeline(config=pipeline_config)
+        pipeline = KnowledgePipeline(config=pipeline_config, fact_store=_scoped_store())
         await pipeline.start()
 
         try:
@@ -744,7 +750,7 @@ class TestKnowledgePipelineIntegration:
     @pytest.mark.asyncio
     async def test_pipeline_stats(self, pipeline_config):
         """Test getting pipeline statistics."""
-        pipeline = KnowledgePipeline(config=pipeline_config)
+        pipeline = KnowledgePipeline(config=pipeline_config, fact_store=_scoped_store())
         await pipeline.start()
 
         try:
@@ -840,7 +846,7 @@ class TestCrossSystemIntegration:
     async def test_pipeline_with_mound_sync(self, pipeline_config, temp_db_dir):
         """Test pipeline with Knowledge Mound synchronization."""
         # This tests that the pipeline can work alongside mound
-        pipeline = KnowledgePipeline(config=pipeline_config)
+        pipeline = KnowledgePipeline(config=pipeline_config, fact_store=_scoped_store())
         await pipeline.start()
 
         try:

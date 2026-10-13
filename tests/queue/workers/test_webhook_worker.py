@@ -886,7 +886,7 @@ class TestWebhookDeliveryWorkerDelivery:
         mock_session = AsyncMock()
         mock_session.__aenter__.return_value = mock_client
 
-        with patch("aragora.server.http_client_pool.get_http_pool") as mock_pool:
+        with patch("aragora.observability.http_client_pool.get_http_pool") as mock_pool:
             mock_pool.return_value.get_session.return_value = mock_session
 
             result = await worker._deliver_webhook(
@@ -918,7 +918,7 @@ class TestWebhookDeliveryWorkerDelivery:
         mock_session = AsyncMock()
         mock_session.__aenter__.return_value = mock_client
 
-        with patch("aragora.server.http_client_pool.get_http_pool") as mock_pool:
+        with patch("aragora.observability.http_client_pool.get_http_pool") as mock_pool:
             mock_pool.return_value.get_session.return_value = mock_session
 
             result = await worker._deliver_webhook(
@@ -948,7 +948,7 @@ class TestWebhookDeliveryWorkerDelivery:
         mock_session = AsyncMock()
         mock_session.__aenter__.return_value = mock_client
 
-        with patch("aragora.server.http_client_pool.get_http_pool") as mock_pool:
+        with patch("aragora.observability.http_client_pool.get_http_pool") as mock_pool:
             mock_pool.return_value.get_session.return_value = mock_session
 
             result = await worker._deliver_webhook(
@@ -977,7 +977,7 @@ class TestWebhookDeliveryWorkerDelivery:
         mock_session = AsyncMock()
         mock_session.__aenter__.return_value = mock_client
 
-        with patch("aragora.server.http_client_pool.get_http_pool") as mock_pool:
+        with patch("aragora.observability.http_client_pool.get_http_pool") as mock_pool:
             mock_pool.return_value.get_session.return_value = mock_session
 
             result = await worker._deliver_webhook(
@@ -1174,7 +1174,7 @@ class TestWebhookWorkerIntegration:
         mock_session = AsyncMock()
         mock_session.__aenter__.return_value = mock_client
 
-        with patch("aragora.server.http_client_pool.get_http_pool") as mock_pool:
+        with patch("aragora.observability.http_client_pool.get_http_pool") as mock_pool:
             mock_pool.return_value.get_session.return_value = mock_session
 
             # Process the job
@@ -1212,7 +1212,7 @@ class TestWebhookWorkerIntegration:
         mock_session = AsyncMock()
         mock_session.__aenter__.return_value = mock_client
 
-        with patch("aragora.server.http_client_pool.get_http_pool") as mock_pool:
+        with patch("aragora.observability.http_client_pool.get_http_pool") as mock_pool:
             mock_pool.return_value.get_session.return_value = mock_session
 
             await worker._process_delivery(job)
@@ -1595,7 +1595,7 @@ class TestWebhookDeliveryWorkerDeliverExtended:
         mock_session = AsyncMock()
         mock_session.__aenter__.return_value = mock_client
 
-        with patch("aragora.server.http_client_pool.get_http_pool") as mock_pool:
+        with patch("aragora.observability.http_client_pool.get_http_pool") as mock_pool:
             mock_pool.return_value.get_session.return_value = mock_session
 
             result = await worker._deliver_webhook(
@@ -1624,7 +1624,7 @@ class TestWebhookDeliveryWorkerDeliverExtended:
         mock_session = AsyncMock()
         mock_session.__aenter__.return_value = mock_client
 
-        with patch("aragora.server.http_client_pool.get_http_pool") as mock_pool:
+        with patch("aragora.observability.http_client_pool.get_http_pool") as mock_pool:
             mock_pool.return_value.get_session.return_value = mock_session
 
             result = await worker._deliver_webhook(
@@ -1656,7 +1656,7 @@ class TestWebhookDeliveryWorkerDeliverExtended:
         mock_session = AsyncMock()
         mock_session.__aenter__.return_value = mock_client
 
-        with patch("aragora.server.http_client_pool.get_http_pool") as mock_pool:
+        with patch("aragora.observability.http_client_pool.get_http_pool") as mock_pool:
             mock_pool.return_value.get_session.return_value = mock_session
 
             result = await worker._deliver_webhook(
@@ -1693,7 +1693,7 @@ class TestWebhookDeliveryWorkerDeliverExtended:
         mock_session = AsyncMock()
         mock_session.__aenter__.return_value = mock_client
 
-        with patch("aragora.server.http_client_pool.get_http_pool") as mock_pool:
+        with patch("aragora.observability.http_client_pool.get_http_pool") as mock_pool:
             mock_pool.return_value.get_session.return_value = mock_session
 
             result = await worker._deliver_webhook(
@@ -1729,7 +1729,7 @@ class TestWebhookDeliveryWorkerDeliverExtended:
         mock_session = AsyncMock()
         mock_session.__aenter__.return_value = mock_client
 
-        with patch("aragora.server.http_client_pool.get_http_pool") as mock_pool:
+        with patch("aragora.observability.http_client_pool.get_http_pool") as mock_pool:
             mock_pool.return_value.get_session.return_value = mock_session
 
             await worker._deliver_webhook(
@@ -1766,7 +1766,7 @@ class TestWebhookDeliveryWorkerDeliverExtended:
             mock_session = AsyncMock()
             mock_session.__aenter__.return_value = mock_client
 
-            with patch("aragora.server.http_client_pool.get_http_pool") as mock_pool:
+            with patch("aragora.observability.http_client_pool.get_http_pool") as mock_pool:
                 mock_pool.return_value.get_session.return_value = mock_session
 
                 result = await worker._deliver_webhook(
@@ -1799,7 +1799,7 @@ class TestWebhookDeliveryWorkerDeliverExtended:
             mock_session = AsyncMock()
             mock_session.__aenter__.return_value = mock_client
 
-            with patch("aragora.server.http_client_pool.get_http_pool") as mock_pool:
+            with patch("aragora.observability.http_client_pool.get_http_pool") as mock_pool:
                 mock_pool.return_value.get_session.return_value = mock_session
 
                 result = await worker._deliver_webhook(
@@ -1831,7 +1831,7 @@ class TestWebhookDeliveryWorkerDeliverExtended:
         mock_session = AsyncMock()
         mock_session.__aenter__.return_value = mock_client
 
-        with patch("aragora.server.http_client_pool.get_http_pool") as mock_pool:
+        with patch("aragora.observability.http_client_pool.get_http_pool") as mock_pool:
             mock_pool.return_value.get_session.return_value = mock_session
 
             result = await worker._deliver_webhook(

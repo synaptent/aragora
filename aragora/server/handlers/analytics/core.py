@@ -18,13 +18,13 @@ Migrated as part of handler consolidation Tier 1.
 from __future__ import annotations
 
 # Re-export from renamed implementation files
-from .._analytics_impl import (
+from ._analytics_impl import (
     ANALYTICS_PERMISSION,
     AnalyticsHandler,
     _analytics_limiter,
 )
 
-from .._analytics_metrics_impl import (
+from ._analytics_metrics_impl import (
     ANALYTICS_METRICS_PERMISSION,
     AnalyticsMetricsHandler,
     VALID_GRANULARITIES,

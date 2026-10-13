@@ -15,7 +15,7 @@ from aragora.server.stream.broadcaster import (
     LoopRegistry,
 )
 from aragora.server.stream.state_manager import LoopInstance
-from aragora.server.stream.events import StreamEvent, StreamEventType
+from aragora.events.types import StreamEvent, StreamEventType
 
 
 # =============================================================================

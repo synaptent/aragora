@@ -18,7 +18,9 @@ COPY aragora/ ./aragora/
 COPY scripts/ci_install_project.sh ./scripts/ci_install_project.sh
 
 # Install Python dependencies
-RUN bash scripts/ci_install_project.sh --install-mode standard --install-scope user
+RUN bash scripts/ci_install_project.sh --install-mode standard --install-scope user \
+    --extras postgres,redis,monitoring \
+    && python -m pip install --user "psycopg2-binary>=2.9,<3.0"
 
 # Production stage
 FROM python:3.11-slim
@@ -36,6 +38,7 @@ RUN groupadd -r aragora && useradd -r -g aragora -d /app -s /sbin/nologin aragor
 # Copy Python packages from builder
 COPY --from=builder /root/.local /home/aragora/.local
 ENV PATH=/home/aragora/.local/bin:$PATH
+ENV PYTHONUSERBASE=/home/aragora/.local
 
 # Copy application code
 COPY aragora/ ./aragora/
@@ -52,6 +55,16 @@ ENV PYTHONUNBUFFERED=1
 ENV ARAGORA_BIND_HOST=0.0.0.0
 ENV ARAGORA_DATA_DIR=/app/data
 ENV ARAGORA_LOG_DIR=/app/logs
+
+# Build identity served by /health/build (aragora/server/build_info.py). Empty by
+# default, so a local build still reports the git fallback / "dev"; CI passes the
+# commit, build time and version. Declared late so a new SHA only rebuilds this layer.
+ARG ARAGORA_BUILD_SHA=""
+ARG ARAGORA_BUILD_TIME=""
+ARG ARAGORA_DEPLOY_VERSION=""
+ENV ARAGORA_BUILD_SHA=${ARAGORA_BUILD_SHA} \
+    ARAGORA_BUILD_TIME=${ARAGORA_BUILD_TIME} \
+    ARAGORA_DEPLOY_VERSION=${ARAGORA_DEPLOY_VERSION}
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \

@@ -4,8 +4,8 @@ Manages git worktree lifecycle to provide file-level isolation for
 concurrent agent work. Each agent gets its own worktree (working directory)
 so multiple agents can edit files simultaneously without conflicts.
 
-Wraps Gastown's HookRunner for worktree creation/removal and
-BranchCoordinator for safe merges.
+Wraps the git HookRunner (``aragora.worktree.hook_runner``) for worktree
+creation/removal and BranchCoordinator for safe merges.
 
 Usage:
     from aragora.nomic.worktree_manager import WorktreeManager
@@ -97,7 +97,7 @@ class WorktreeManager:
         """Lazily import and create HookRunner."""
         if self._hook_runner is None:
             try:
-                from aragora.extensions.gastown.hooks import HookRunner
+                from aragora.worktree.hook_runner import HookRunner
 
                 self._hook_runner = HookRunner()
             except ImportError:
@@ -127,7 +127,7 @@ class WorktreeManager:
     def _run_git(self, *args: str, cwd: Path | None = None) -> subprocess.CompletedProcess:
         """Run a git command."""
         cmd = ["git"] + list(args)
-        return subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
+        return subprocess.run(  # subprocess with fixed args, no shell
             cmd,
             cwd=cwd or self.repo_path,
             capture_output=True,

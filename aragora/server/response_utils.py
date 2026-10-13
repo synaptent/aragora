@@ -131,7 +131,7 @@ class ResponseHelpersMixin:
                 self.send_header(REQUEST_ID_HEADER, ctx.request_id)
             except (ImportError, AttributeError):
                 logger.debug("Failed to send request ID header", exc_info=True)
-            from aragora.server.middleware.tracing import (
+            from aragora.observability.middleware.tracing import (
                 PARENT_SPAN_HEADER,
                 SPAN_ID_HEADER,
                 TRACE_ID_HEADER,
@@ -156,7 +156,7 @@ class ResponseHelpersMixin:
         except (ImportError, AttributeError):
             logger.debug("Failed to send legacy request ID header", exc_info=True)
 
-        from aragora.server.middleware.tracing import (
+        from aragora.observability.middleware.tracing import (
             PARENT_SPAN_HEADER,
             SPAN_ID_HEADER,
             TRACE_ID_HEADER,

@@ -56,7 +56,10 @@ GAUNTLET_ENDPOINTS = {
             },
         },
     },
-    "/api/gauntlet/receipts/{receipt_id}": {
+    # Declared under /api/v1 directly so no deprecated unversioned alias is
+    # minted: dispatch strips the version prefix, so both forms reach the same
+    # handler and the alias only ever duplicated this operation.
+    "/api/v1/gauntlet/receipts/{receipt_id}": {
         "get": {
             "tags": ["Gauntlet"],
             "summary": "Get decision receipt",

@@ -117,10 +117,24 @@ from aragora.nomic.hierarchical_coordinator import (
 
 # Meta-planning (debate-driven goal prioritization)
 from aragora.nomic.meta_planner import (
+    MetaPlanningResult,
     MetaPlanner,
     MetaPlannerConfig,
     PlanningContext,
     PrioritizedGoal,
+)
+
+# Generic repository planning profiles and commit-addressed context packs
+from aragora.nomic.repository_profile import (
+    ContextEvidenceReference,
+    ContextPack,
+    EvaluationCriterion,
+    NomicProfileError,
+    NomicRepositoryProfile,
+    RepositoryRevision,
+    RepositoryStateError,
+    assert_clean_revision,
+    load_nomic_repository_profile,
 )
 
 # Self-correction (cross-cycle pattern analysis)
@@ -655,8 +669,19 @@ __all__ = [
     # Meta-planning
     "MetaPlanner",
     "MetaPlannerConfig",
+    "MetaPlanningResult",
     "PrioritizedGoal",
     "PlanningContext",
+    # Generic repository planning
+    "EvaluationCriterion",
+    "NomicRepositoryProfile",
+    "RepositoryRevision",
+    "ContextEvidenceReference",
+    "ContextPack",
+    "NomicProfileError",
+    "RepositoryStateError",
+    "assert_clean_revision",
+    "load_nomic_repository_profile",
     # Branch coordination
     "BranchCoordinator",
     "BranchCoordinatorConfig",

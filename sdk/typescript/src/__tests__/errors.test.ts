@@ -327,6 +327,15 @@ describe('TimeoutError', () => {
 });
 
 describe('ConnectionError', () => {
+  it.each([undefined, true, false])('honors retryable=%s without changing error metadata', (retryable) => {
+    const error = new ConnectionError('closed', 'WS_CLOSE_4003', undefined, { code: 4003 }, retryable);
+    expect(error.retryable).toBe(retryable ?? true);
+    expect(isRetryableError(error)).toBe(retryable ?? true);
+    expect(error.code).toBe('WS_CLOSE_4003');
+    expect(error.responseBody).toEqual({ code: 4003 });
+    expect(error.statusCode).toBeUndefined();
+  });
+
   it('should use default message', () => {
     const error = new ConnectionError();
     expect(error.message).toBe('Connection failed');

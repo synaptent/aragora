@@ -121,7 +121,7 @@ def _get_api_key(name: str) -> str | None:
 def _get_oracle_models() -> tuple[str, str, str]:
     """Return (openrouter_model, anthropic_model, openai_model) for deep phase."""
     try:
-        from aragora.server.handlers.playground import (
+        from aragora.server.handlers.demo.playground import (
             _ORACLE_MODEL_OPENROUTER,
             _ORACLE_MODEL_ANTHROPIC,
             _ORACLE_MODEL_OPENAI,
@@ -137,7 +137,7 @@ def _get_oracle_models() -> tuple[str, str, str]:
 def _get_tentacle_models() -> list[dict[str, str]]:
     """Return available tentacle model configs."""
     try:
-        from aragora.server.handlers.playground import _get_available_tentacle_models
+        from aragora.server.handlers.demo.playground import _get_available_tentacle_models
 
         return _get_available_tentacle_models()
     except ImportError:
@@ -152,7 +152,7 @@ def _build_oracle_prompt(
 ) -> str:
     """Build the full Oracle prompt with essay context."""
     try:
-        from aragora.server.handlers.playground import _build_oracle_prompt as _build
+        from aragora.server.handlers.demo.playground import _build_oracle_prompt as _build
 
         return _build(mode, question, session_id=session_id)
     except ImportError:
@@ -166,7 +166,7 @@ def _sanitize_oracle_input(question: str) -> str:
     available, falling back to a local re-implementation.
     """
     try:
-        from aragora.server.handlers.playground import _sanitize_oracle_input as _sanitize
+        from aragora.server.handlers.demo.playground import _sanitize_oracle_input as _sanitize
 
         return _sanitize(question)
     except ImportError:
@@ -193,7 +193,7 @@ def _filter_oracle_response(text: str) -> str:
     available, falling back to a local re-implementation.
     """
     try:
-        from aragora.server.handlers.playground import _filter_oracle_response as _filter
+        from aragora.server.handlers.demo.playground import _filter_oracle_response as _filter
 
         return _filter(text)
     except ImportError:
@@ -418,7 +418,7 @@ async def _call_provider_llm_stream(
     elif provider == "google":
         # Google doesn't support standard SSE — fall back to non-streaming
         try:
-            from aragora.server.handlers.playground import _call_provider_llm
+            from aragora.server.handlers.demo.playground import _call_provider_llm
 
             result = await asyncio.to_thread(
                 _call_provider_llm, provider, model, prompt, max_tokens, timeout
@@ -761,7 +761,7 @@ async def _stream_tentacles(
 
     # Try to import tentacle-specific prompt builder and roles
     try:
-        from aragora.server.handlers.playground import (
+        from aragora.server.handlers.demo.playground import (
             _build_tentacle_prompt,
             _TENTACLE_ROLE_PROMPTS,
         )

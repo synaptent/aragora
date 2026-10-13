@@ -81,24 +81,33 @@ main();
 ## Real-time Streaming
 
 ```typescript
-import { createClient } from '@aragora/sdk';
+import { ConnectionError, createClient } from '@aragora/sdk';
 
 const client = createClient({ baseUrl: 'http://localhost:8080' });
 
 // Stream debate events
 const stream = client.streamDebate('debate-123');
 
-for await (const event of stream) {
-  switch (event.type) {
-    case 'agent_message':
-      console.log(event.data);
-      break;
-    case 'consensus':
-      console.log('Consensus reached:', event.data);
-      break;
+try {
+  for await (const event of stream) {
+    console.log(event.type, event.data);
   }
+} catch (error) {
+  if (!(error instanceof ConnectionError)) throw error;
+  console.warn('Stream interrupted; debate completion is unknown', error.code);
 }
 ```
+
+Accepted events drain before a transport failure is thrown; disconnection is not
+`debate_end`. Close errors expose `WS_CLOSE_<number>` and numeric `responseBody.code`.
+A transport error waits up to 1,000 ms for close details; repeated errors do not
+extend that window. If close never arrives, the sanitized error has no close code
+and is non-retryable; parsing errors fail immediately and are also non-retryable.
+Handle these explicitly rather than assuming the failure is permanent. A genuine
+terminal event accepted before finalization still wins, and buffered events drain.
+`isRetryableError(error)` reports eligibility, not automatic retry or guaranteed
+replay. This iterator never resumes after closure. If reconnecting is appropriate,
+use bounded backoff and account for possible gaps or duplicates; do not restart blindly.
 
 ## Key APIs
 

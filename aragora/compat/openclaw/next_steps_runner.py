@@ -261,8 +261,8 @@ def scan_code_markers(repo_path: Path) -> tuple[list[NextStep], int]:
 def scan_github_issues(repo: str, limit: int = _MAX_ISSUES) -> list[NextStep]:
     """Scan open GitHub issues for actionable items."""
     try:
-        result = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
-            [  # noqa: S607 -- fixed command
+        result = subprocess.run(  # subprocess with fixed args, no shell
+            [  # fixed command
                 "gh",
                 "issue",
                 "list",
@@ -314,8 +314,8 @@ def scan_github_issues(repo: str, limit: int = _MAX_ISSUES) -> list[NextStep]:
 def scan_github_prs(repo: str, limit: int = 20) -> list[NextStep]:
     """Scan open PRs that need attention."""
     try:
-        result = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
-            [  # noqa: S607 -- fixed command
+        result = subprocess.run(  # subprocess with fixed args, no shell
+            [  # fixed command
                 "gh",
                 "pr",
                 "list",
@@ -385,7 +385,7 @@ def scan_test_failures(repo_path: Path) -> list[NextStep]:
 
     try:
         result = subprocess.run(
-            ["python", "-m", "pytest", "--collect-only", "-q", "--no-header"],  # noqa: S607 -- fixed command
+            ["python", "-m", "pytest", "--collect-only", "-q", "--no-header"],  # fixed command
             capture_output=True,
             text=True,
             timeout=30,
@@ -425,7 +425,7 @@ def scan_dependency_health(repo_path: Path) -> list[NextStep]:
     if requirements.exists() or pyproject.exists():
         try:
             result = subprocess.run(
-                ["pip", "list", "--outdated", "--format=json"],  # noqa: S607 -- fixed command
+                ["pip", "list", "--outdated", "--format=json"],  # fixed command
                 capture_output=True,
                 text=True,
                 timeout=30,
@@ -457,7 +457,7 @@ def scan_dependency_health(repo_path: Path) -> list[NextStep]:
     if package_json.exists():
         try:
             result = subprocess.run(
-                ["npm", "audit", "--json"],  # noqa: S607 -- fixed command
+                ["npm", "audit", "--json"],  # fixed command
                 capture_output=True,
                 text=True,
                 timeout=30,
@@ -652,7 +652,7 @@ class NextStepsRunner:
         if self.repo_path:
             try:
                 result = subprocess.run(
-                    ["git", "remote", "get-url", "origin"],  # noqa: S607 -- fixed command
+                    ["git", "remote", "get-url", "origin"],  # fixed command
                     capture_output=True,
                     text=True,
                     timeout=5,

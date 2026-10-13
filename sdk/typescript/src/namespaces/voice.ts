@@ -118,15 +118,6 @@ export class VoiceNamespace {
     return this.client.request('POST', '/api/v1/voice/synthesize', { body: request });
   }
 
-  /** Synthesize a debate to audio. */
-  async synthesizeDebate(
-    debateId: string,
-    options?: { voice?: string; format?: string }
-  ): Promise<SynthesizeResult> {
-    /** @route POST /api/v1/voice/debates/{debate_id}/synthesize */
-    return this.client.request('POST', `/api/v1/voice/debates/${encodeURIComponent(debateId)}/synthesize`, { body: options });
-  }
-
   // -- Twilio voice webhook endpoints ---------------------------------------
 
   /** Trigger the inbound call webhook handler. */

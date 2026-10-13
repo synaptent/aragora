@@ -42,16 +42,6 @@ from collections.abc import Callable
 
 from aragora.utils.request_ip import extract_client_ip as _extract_client_ip
 
-try:
-    warnings.warn(
-        "aragora.server.middleware.auth.extract_client_ip is deprecated; "
-        "import aragora.utils.request_ip.extract_client_ip instead.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-except DeprecationWarning:
-    pass
-
 if TYPE_CHECKING:
     from aragora.rbac.models import AuthorizationContext
     from aragora.server.handlers.base import HandlerResult

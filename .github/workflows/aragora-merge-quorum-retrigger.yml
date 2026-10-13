@@ -10,8 +10,10 @@ name: Aragora Merge Quorum Retrigger
 #   * It NEVER evaluates the quorum, posts comments, approves, or merges.
 #   * Its only privileged action is `gh run rerun` on the existing
 #     "Aragora Merge Quorum" workflow run for the PR's current head.
-#   * It does NOT check out or execute any PR code, so fork-PR comment events
-#     (which run from the BASE repo's workflow definition) cannot inject code.
+#   * It never checks out or executes any PR code — only the BASE repo's
+#     default-branch copy of the shared selection helper — so fork-PR comment
+#     events (which run from the BASE repo's workflow definition) cannot
+#     inject code.
 #
 # This file lives under .github/workflows/, so per REVIEW_AUTHORITY_PRINCIPLES.md
 # every change to it is a Tier 4 "merge-authority self-modification" and requires
@@ -35,6 +37,9 @@ concurrency:
 permissions:
   contents: read
   pull-requests: read
+  # Read-only: the draft-run partition reads the PR's ready_for_review
+  # transitions from the issue-events timeline.
+  issues: read
   actions: write
 
 jobs:
@@ -76,6 +81,21 @@ jobs:
             echo "Comment does not match evidence shape; skipping retrigger."
           fi
 
+      - name: Check out the shared selection helper (default branch)
+        if: >-
+          github.event_name == 'workflow_dispatch' ||
+          steps.shape.outputs.match == 'true'
+        uses: actions/checkout@v4
+        with:
+          # Always run the BASE repo's default-branch copy of the helper —
+          # never PR code (the enforcing evaluation job's same ref pin).
+          ref: ${{ github.event.repository.default_branch }}
+          # This checkout exists solely to fetch the helper; a non-cone
+          # sparse checkout materializes that single file instead of the
+          # full tree on every evidence comment.
+          sparse-checkout: scripts/quorum_evidence_retrigger_select.sh
+          sparse-checkout-cone-mode: false
+
       - name: Re-run merge-quorum for the PR's current head
         if: >-
           github.event_name == 'workflow_dispatch' ||
@@ -84,35 +104,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.issue.number || github.event.inputs.pr_number }}
-          WORKFLOW_NAME: "Aragora Merge Quorum"
         shell: bash
         run: |
           set -euo pipefail
-
-          head_sha="$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json headRefOid --jq .headRefOid)"
-          if [[ -z "$head_sha" ]]; then
-            echo "::warning::could not resolve head SHA for PR #${PR_NUMBER}; nothing to do."
-            exit 0
-          fi
-          echo "PR #${PR_NUMBER} current head: ${head_sha}"
-
-          # Most recent COMPLETED enforcing merge-quorum run for this exact head.
-          # gh run rerun only works on completed runs; an in-progress run will
-          # already evaluate the current head, so skipping it is correct.
-          # head_sha is bound through jq --arg (never interpolated into the program)
-          # so the selection is independent of upstream API formatting guarantees.
-          run_id="$(gh run list --repo "$GH_REPO" --workflow "$WORKFLOW_NAME" \
-            --limit 100 \
-            --json databaseId,headSha,status,createdAt \
-            | jq -r --arg head "$head_sha" \
-                '[.[] | select(.headSha==$head and .status=="completed")]
-                 | sort_by(.createdAt) | last | .databaseId // empty')"
-
-          if [[ -z "$run_id" || "$run_id" == "null" ]]; then
-            echo "No completed merge-quorum run for head ${head_sha}; nothing to re-run."
-            echo "(A pull_request-triggered run will evaluate this head on its own.)"
-            exit 0
-          fi
-
-          echo "Re-running merge-quorum run ${run_id} for head ${head_sha}"
-          gh run rerun "$run_id" --repo "$GH_REPO"
+          # Gate-deferral check + deterministic newest-survivor selection +
+          # burst dedup live in the shared helper so this surface and the
+          # evidence-retrigger job in aragora-merge-quorum.yml cannot drift
+          # apart (docs/specs/QUORUM_EVIDENCE_RETRIGGER.md, PR #9754).
+          bash scripts/quorum_evidence_retrigger_select.sh

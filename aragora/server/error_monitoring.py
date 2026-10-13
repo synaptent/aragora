@@ -226,7 +226,7 @@ def capture_message(
     """
     if not _sentry_available:
         logger.log(
-            logging.ERROR if level == "error" else logging.INFO, f"Uncaptured message: {message}"
+            logging.ERROR if level == "error" else logging.INFO, "Uncaptured message: %s", message
         )
         return None
 

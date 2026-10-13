@@ -32,7 +32,7 @@ from aragora.pipeline.decision_integrity import (
     coerce_debate_result,
 )
 from aragora.pipeline.execution_mode import ExecutionMode as SafetyMode
-from aragora.server.decision_integrity_utils import (
+from aragora.pipeline.decision_integrity_utils import (
     ensure_decision_plan_backbone_run,
     execute_decision_plan_with_backbone,
     sync_decision_plan_backbone_receipt,

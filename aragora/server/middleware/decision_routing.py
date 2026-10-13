@@ -563,7 +563,7 @@ class DecisionRoutingMiddleware:
                 )
 
             logger.info(
-                f"Routed request {context.request_id} via {context.channel} in {duration:.2f}s"
+                "Routed request %s via %s in %.2fs", context.request_id, context.channel, duration
             )
 
             return {

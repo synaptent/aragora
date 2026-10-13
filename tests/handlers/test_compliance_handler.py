@@ -119,13 +119,13 @@ def _patch_stores(monkeypatch):
         lambda: mock_coordinator,
     )
 
-    # Patch legal_hold mixin's helpers
+    # Patch the composed handler's legal-hold providers.
     monkeypatch.setattr(
-        "aragora.server.handlers.compliance.legal_hold.get_legal_hold_manager",
+        "aragora.server.handlers.compliance.handler.get_legal_hold_manager",
         lambda: mock_hold_manager,
     )
     monkeypatch.setattr(
-        "aragora.server.handlers.compliance.legal_hold.get_audit_store",
+        "aragora.server.handlers.compliance.handler.get_audit_store",
         lambda: mock_audit_store,
     )
 

@@ -1512,7 +1512,9 @@ class TestGetStoreFactory:
         mock_module = MagicMock()
         mock_module._get_store = MagicMock(return_value=mock_store)
 
-        with patch.dict(sys.modules, {"aragora.server.handlers.openclaw_gateway": mock_module}):
+        with patch.dict(
+            sys.modules, {"aragora.server.handlers.openclaw.openclaw_gateway": mock_module}
+        ):
             result = _get_store()
             assert result is mock_store
 

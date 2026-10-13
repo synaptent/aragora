@@ -28,6 +28,10 @@ from aragora.config import resolve_db_path
 
 logger = logging.getLogger(__name__)
 
+_SQLITE_INIT_RETRY_SECONDS = 30.0
+_SQLITE_INIT_RETRY_BASE_SECONDS = 0.05
+_SQLITE_INIT_RETRY_MAX_SECONDS = 0.5
+
 
 class WebhookStoreBackend(ABC):
     """Abstract base for webhook idempotency storage."""
@@ -181,7 +185,6 @@ class SQLiteWebhookStore(WebhookStoreBackend):
         conn = self._conn_var.get()
         if conn is None:
             conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
-            conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("PRAGMA synchronous=NORMAL")
             self._conn_var.set(conn)
             with self._connections_lock:
@@ -189,20 +192,46 @@ class SQLiteWebhookStore(WebhookStoreBackend):
         return conn
 
     def _init_schema(self) -> None:
-        """Initialize database schema."""
+        """Switch the database file to WAL and initialize the schema.
+
+        WAL is stored in the database file, so it is switched on once here,
+        before any per-context connection exists. Converting the journal mode
+        needs an exclusive lock, and when several connections attempt it at the
+        same time SQLite fails with "database is locked" immediately instead of
+        waiting for the busy timeout. Stores constructed concurrently on the
+        same file therefore retry until one of them has converted it.
+        """
+        deadline = time.monotonic() + _SQLITE_INIT_RETRY_SECONDS
+        delay = _SQLITE_INIT_RETRY_BASE_SECONDS
+        while True:
+            try:
+                self._init_schema_once()
+                return
+            except sqlite3.OperationalError as exc:
+                remaining = deadline - time.monotonic()
+                if "locked" not in str(exc).lower() or remaining <= 0:
+                    raise
+                logger.debug("SQLiteWebhookStore init hit a lock on %s; retrying", self.db_path)
+                time.sleep(min(delay, remaining))
+                delay = min(delay * 2, _SQLITE_INIT_RETRY_MAX_SECONDS)
+
+    def _init_schema_once(self) -> None:
         conn = sqlite3.connect(str(self.db_path))
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS webhook_events (
-                event_id TEXT PRIMARY KEY,
-                processed_at REAL NOT NULL,
-                result TEXT NOT NULL
+        try:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS webhook_events (
+                    event_id TEXT PRIMARY KEY,
+                    processed_at REAL NOT NULL,
+                    result TEXT NOT NULL
+                )
+            """)
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_webhook_processed_at ON webhook_events(processed_at)"
             )
-        """)
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_webhook_processed_at ON webhook_events(processed_at)"
-        )
-        conn.commit()
-        conn.close()
+            conn.commit()
+        finally:
+            conn.close()
 
     def is_processed(self, event_id: str) -> bool:
         """Check if event was already processed."""

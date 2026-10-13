@@ -190,7 +190,7 @@ class ChannelUserMixin:
         self,
         user_id: str,
         text: str,
-        blocks: list[dict[str, Any] | None] = None,
+        blocks: list[dict[str, Any]] | None = None,
         **kwargs: Any,
     ) -> SendMessageResponse:
         """
@@ -364,7 +364,7 @@ class ChannelUserMixin:
         channel_id: str,
         message_id: str,
         text: str,
-        blocks: list[dict[str, Any] | None] = None,
+        blocks: list[dict[str, Any]] | None = None,
         thread_name: str | None = None,
         **kwargs: Any,
     ) -> SendMessageResponse:
@@ -506,7 +506,7 @@ class ChannelUserMixin:
         logger.debug("%s receive_messages not implemented", self.platform_name)
         # Default implementation: empty async generator
         return
-        yield  # This makes it a generator  # noqa: B901
+        yield  # This makes it a generator
 
 
 __all__ = ["ChannelUserMixin"]

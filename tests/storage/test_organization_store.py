@@ -741,6 +741,139 @@ class TestExpiredInvitationCleanup:
 
 
 # =============================================================================
+# NULL Expiry Row Tests
+# =============================================================================
+
+
+def _insert_null_expiry_invitation(store, org_id, inv_id="null-exp-inv", token="null-exp-token"):
+    conn = sqlite3.connect(str(store.db_path))
+    conn.execute(
+        """
+        INSERT INTO org_invitations
+        (id, org_id, email, role, token, invited_by, status, created_at, expires_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)
+        """,
+        (
+            inv_id,
+            org_id,
+            "legacy@example.com",
+            "member",
+            token,
+            "user-001",
+            "pending",
+            datetime.now(timezone.utc).isoformat(),
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+
+class TestInvitationNullExpiry:
+    """Rows whose expires_at is NULL load without errors and are never pending."""
+
+    def test_sqlite_null_expiry_row_by_id(self, org_store, sample_org_data):
+        org = org_store.create_organization(**sample_org_data)
+        _insert_null_expiry_invitation(org_store, org.id)
+
+        inv = org_store.get_invitation_by_id("null-exp-inv")
+
+        assert inv is not None
+        assert inv.expires_at is None
+        assert inv.is_expired is True
+        assert inv.is_pending is False
+        assert inv.to_dict()["expires_at"] is None
+
+    def test_sqlite_null_expiry_row_by_token_and_lists(self, org_store, sample_org_data):
+        org = org_store.create_organization(**sample_org_data)
+        _insert_null_expiry_invitation(org_store, org.id)
+
+        by_token = org_store.get_invitation_by_token("null-exp-token")
+        by_email = org_store.get_invitation_by_email("legacy@example.com", org.id)
+        for_org = org_store.get_invitations_for_org(org.id)
+        pending = org_store.get_pending_invitations_by_email("legacy@example.com")
+
+        assert by_token is not None and by_token.expires_at is None
+        assert by_email is not None and by_email.is_pending is False
+        assert [inv.expires_at for inv in for_org] == [None]
+        assert [inv.is_pending for inv in pending] == [False]
+
+    def test_create_invitation_with_null_expiry_round_trips(self, org_store, sample_org_data):
+        org = org_store.create_organization(**sample_org_data)
+        invitation = OrganizationInvitation(
+            org_id=org.id,
+            email="noexpiry@example.com",
+            invited_by="user-001",
+            expires_at=None,
+        )
+
+        assert org_store.create_invitation(invitation) is True
+        stored = org_store.get_invitation_by_id(invitation.id)
+
+        assert stored is not None
+        assert stored.expires_at is None
+        assert stored.is_pending is False
+
+    def test_dated_invitation_row_keeps_expiry(self, org_store, sample_org_data):
+        org = org_store.create_organization(**sample_org_data)
+        invitation = OrganizationInvitation(
+            org_id=org.id, email="dated@example.com", invited_by="user-001"
+        )
+        org_store.create_invitation(invitation)
+
+        stored = org_store.get_invitation_by_id(invitation.id)
+
+        assert stored is not None
+        assert stored.expires_at == invitation.expires_at
+        assert stored.is_pending is True
+
+    def test_cleanup_leaves_null_expiry_rows(self, org_store, sample_org_data):
+        org = org_store.create_organization(**sample_org_data)
+        _insert_null_expiry_invitation(org_store, org.id)
+
+        assert org_store.cleanup_expired_invitations() == 0
+        assert org_store.get_invitation_by_id("null-exp-inv") is not None
+
+    def _postgres_row(self, store, *, expires_at, accepted_at=None):
+        created_at = datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc)
+        values = {
+            "id": "pg-inv",
+            "org_id": "org-pg",
+            "email": "pg@example.com",
+            "role": "member",
+            "token": "pg-token",
+            "invited_by": "user-001",
+            "status": "pending",
+            "created_at": created_at,
+            "expires_at": expires_at,
+            "accepted_by": None,
+            "accepted_at": accepted_at,
+        }
+        columns = [c.strip() for c in store._INVITATION_COLUMNS.split(",")]
+        return tuple(values[column] for column in columns)
+
+    def test_postgres_row_with_null_expiry(self, org_store):
+        row = self._postgres_row(org_store, expires_at=None)
+
+        inv = org_store._row_to_invitation(org_store._invitation_tuple_to_dict(row))
+
+        assert inv.created_at == datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc)
+        assert inv.expires_at is None
+        assert inv.accepted_at is None
+        assert inv.is_pending is False
+
+    def test_postgres_row_with_datetime_expiry(self, org_store):
+        expires_at = datetime.now(timezone.utc) + timedelta(days=3)
+        accepted_at = datetime(2026, 1, 2, 8, 30, tzinfo=timezone.utc)
+        row = self._postgres_row(org_store, expires_at=expires_at, accepted_at=accepted_at)
+
+        inv = org_store._row_to_invitation(org_store._invitation_tuple_to_dict(row))
+
+        assert inv.expires_at == expires_at
+        assert inv.accepted_at == accepted_at
+        assert inv.is_pending is True
+
+
+# =============================================================================
 # User-to-Org Operations Tests
 # =============================================================================
 

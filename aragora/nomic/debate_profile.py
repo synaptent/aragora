@@ -25,7 +25,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Literal, cast
 
-from aragora.debate.protocol import (
+from aragora.protocols.debate import (
     DebateProtocol,
     STRUCTURED_ROUND_PHASES,
     RoundPhase,

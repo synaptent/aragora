@@ -24,7 +24,7 @@ import os
 from dataclasses import dataclass
 from typing import Any
 
-from aragora.server.errors import ErrorCode
+from aragora.api_errors import ErrorCode
 
 _logger = logging.getLogger(__name__)
 
@@ -216,6 +216,15 @@ def error_response(
         payload = {"error": message}
 
     return json_response(payload, status=status, headers=headers)
+
+
+def not_implemented_response(message: str) -> HandlerResult:
+    """501 with the ``{"error": {"code": "not_implemented", "message": ...}}`` envelope.
+
+    Unlike ``error_response``, the message is kept in production: it names a missing
+    feature, not an internal detail.
+    """
+    return json_response({"error": {"code": "not_implemented", "message": message}}, status=501)
 
 
 def validation_error(
@@ -756,6 +765,7 @@ __all__ = [
     "redirect_response",
     "error_dict",
     # Standardized error helpers
+    "not_implemented_response",
     "validation_error",
     "not_found_error",
     "permission_denied_error",

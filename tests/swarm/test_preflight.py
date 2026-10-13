@@ -4,6 +4,7 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
+import subprocess
 from types import SimpleNamespace
 
 import pytest
@@ -80,12 +81,18 @@ def test_run_preflight_returns_structured_result(monkeypatch, tmp_path: Path) ->
     repo_root.mkdir()
     commands: list[list[str]] = []
     cleanup_commands: list[list[str]] = []
+    publication_events: list[str] = []
+    base_sha = "a" * 40
 
     async def fake_run_worker(**_: object) -> WorkerProcess:
         return _worker(branch=branch)
 
     def fake_run(cmd: list[str], *, cwd: Path, env: dict[str, str] | None = None) -> None:
         commands.append(list(cmd))
+        if cmd[:4] == ["gh", "api", "--method", "POST"]:
+            publication_events.append("seed")
+        if cmd[:3] == ["git", "push", "origin"]:
+            publication_events.append("push")
 
     def fake_subprocess_run(cmd: list[str], **_: object) -> SimpleNamespace:
         cleanup_commands.append(list(cmd))
@@ -94,7 +101,25 @@ def test_run_preflight_returns_structured_result(monkeypatch, tmp_path: Path) ->
     monkeypatch.setattr(mod, "_branch_name", lambda: branch)
     monkeypatch.setattr(mod, "_run_worker", fake_run_worker)
     monkeypatch.setattr(mod, "_run", fake_run)
+    monkeypatch.setattr(mod, "_resolve_ref_sha", lambda *_: base_sha)
     monkeypatch.setattr(mod.subprocess, "run", fake_subprocess_run)
+    lease = mod._BranchWriteLease(
+        store=object(),
+        lease_id="lease-preflight-1",
+        owner_session_id="session-preflight-1",
+        work_id=f"branch:{branch}",
+    )
+
+    def fake_claim(**_: object) -> mod._BranchWriteLease:
+        publication_events.append("claim")
+        return lease
+
+    def fake_release(actual: mod._BranchWriteLease) -> None:
+        assert actual is lease
+        publication_events.append("release")
+
+    monkeypatch.setattr(mod, "_claim_branch_write_lease", fake_claim)
+    monkeypatch.setattr(mod, "_release_branch_write_lease", fake_release)
 
     result = mod.run_preflight(
         repo_root=repo_root,
@@ -113,10 +138,21 @@ def test_run_preflight_returns_structured_result(monkeypatch, tmp_path: Path) ->
         str(expected_worktree),
         "origin/main",
     ]
-    assert commands[1] == ["git", "push", "origin", "HEAD"]
-    assert "--base" in commands[2]
-    assert commands[2][commands[2].index("--base") + 1] == "origin/main"
-    assert commands[3][:4] == ["gh", "pr", "close", "--repo"]
+    assert commands[1] == [
+        "gh",
+        "api",
+        "--method",
+        "POST",
+        "repos/synaptent/aragora/git/refs",
+        "-f",
+        f"ref=refs/heads/{branch}",
+        "-f",
+        f"sha={base_sha}",
+    ]
+    assert commands[2] == ["git", "push", "origin", "HEAD"]
+    assert "--base" in commands[3]
+    assert commands[3][commands[3].index("--base") + 1] == "origin/main"
+    assert commands[4][:4] == ["gh", "pr", "close", "--repo"]
     assert result.published is True
     assert result.pull_request_created is True
     assert result.pull_request_closed is True
@@ -127,8 +163,350 @@ def test_run_preflight_returns_structured_result(monkeypatch, tmp_path: Path) ->
     assert result.worker["worker_contract_checksum"] == checksum_contract_payload(
         result.worker["worker_contract"]
     )
-    assert cleanup_commands[0] == ["git", "worktree", "remove", "--force", str(expected_worktree)]
+    assert publication_events == ["claim", "seed", "push", "release"]
+    assert result.branch_lease_id == "lease-preflight-1"
+    assert result.branch_lease_work_id == f"branch:{branch}"
+    assert result.branch_lease_released is True
+    assert result.publication_base_sha == base_sha
+    assert result.remote_branch_seeded is True
+    assert result.cleanup_remote_branch_removed is True
+    assert cleanup_commands[0] == [
+        "git",
+        "worktree",
+        "remove",
+        "--force",
+        str(expected_worktree),
+    ]
     assert cleanup_commands[1] == ["git", "branch", "-D", branch]
+
+
+def test_run_preflight_new_branch_push_preserves_hook_and_scopes_to_base_delta(
+    monkeypatch, tmp_path: Path
+) -> None:
+    branch = "preflight/20260831-delta-scope"
+    repo_root = tmp_path / "repo"
+    origin = tmp_path / "origin.git"
+    hook_log = tmp_path / "pre-push-files.txt"
+
+    subprocess.run(["git", "init", "--bare", str(origin)], check=True, capture_output=True)
+    subprocess.run(["git", "init", "-b", "main", str(repo_root)], check=True, capture_output=True)
+    subprocess.run(
+        ["git", "-C", str(repo_root), "config", "user.email", "preflight@example.test"],
+        check=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(repo_root), "config", "user.name", "Preflight Test"], check=True
+    )
+    (repo_root / "README.md").write_text("base\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo_root), "add", "README.md"], check=True)
+    subprocess.run(
+        ["git", "-C", str(repo_root), "commit", "-m", "base"],
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(repo_root), "remote", "add", "origin", str(origin)], check=True
+    )
+    subprocess.run(
+        ["git", "-C", str(repo_root), "push", "origin", "main"],
+        check=True,
+        capture_output=True,
+    )
+    base_sha = subprocess.run(
+        ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+    hook = repo_root / ".git" / "hooks" / "pre-push"
+    hook.write_text(
+        "#!/bin/sh\n"
+        "read local_ref local_sha remote_ref remote_sha\n"
+        f"log={hook_log!s}\n"
+        'case "$remote_sha" in 0000000000000000000000000000000000000000) '
+        'echo ALL_ZERO > "$log"; exit 41 ;; esac\n'
+        'git diff --name-only "$remote_sha" "$local_sha" > "$log"\n'
+        'test "$(cat "$log")" = "scratch/preflight_worker_check.txt"\n',
+        encoding="utf-8",
+    )
+    hook.chmod(0o755)
+
+    async def fake_run_worker(**kwargs: object) -> WorkerProcess:
+        worktree_path = Path(str(kwargs["worktree_path"]))
+        scratch_file = worktree_path / "scratch" / "preflight_worker_check.txt"
+        scratch_file.parent.mkdir(parents=True, exist_ok=True)
+        scratch_file.write_text("worker delta\n", encoding="utf-8")
+        subprocess.run(
+            ["git", "-C", str(worktree_path), "add", "scratch/preflight_worker_check.txt"],
+            check=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(worktree_path), "commit", "-m", "worker delta"],
+            check=True,
+            capture_output=True,
+        )
+        commit_sha = subprocess.run(
+            ["git", "-C", str(worktree_path), "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        worker = _worker(branch=branch)
+        worker.worktree_path = str(worktree_path)
+        worker.commit_shas = [commit_sha]
+        return worker
+
+    def fake_seed(_: Path, actual_branch: str, actual_base_sha: str) -> None:
+        assert actual_branch == branch
+        assert actual_base_sha == base_sha
+        subprocess.run(
+            [
+                "git",
+                "--git-dir",
+                str(origin),
+                "update-ref",
+                f"refs/heads/{branch}",
+                actual_base_sha,
+            ],
+            check=True,
+        )
+
+    def fake_close(_: Path, actual_branch: str) -> None:
+        subprocess.run(
+            [
+                "git",
+                "--git-dir",
+                str(origin),
+                "update-ref",
+                "-d",
+                f"refs/heads/{actual_branch}",
+            ],
+            check=True,
+        )
+
+    lease = mod._BranchWriteLease(
+        store=object(),
+        lease_id="lease-delta-scope",
+        owner_session_id="session-delta-scope",
+        work_id=f"branch:{branch}",
+    )
+    monkeypatch.setattr(mod, "_branch_name", lambda: branch)
+    monkeypatch.setattr(mod, "_run_worker", fake_run_worker)
+    monkeypatch.setattr(mod, "_seed_remote_branch_at_base", fake_seed)
+    monkeypatch.setattr(mod, "_create_pr", lambda *_: None)
+    monkeypatch.setattr(mod, "_close_pr", fake_close)
+    monkeypatch.setattr(mod, "_claim_branch_write_lease", lambda **_: lease)
+    monkeypatch.setattr(mod, "_release_branch_write_lease", lambda _: None)
+
+    result = mod.run_preflight(
+        repo_root=repo_root,
+        agent="codex",
+        base_ref="main",
+        skip_publication=False,
+    )
+
+    assert result.passed is True
+    assert result.publication_base_sha == base_sha
+    assert result.remote_branch_seeded is True
+    assert result.cleanup_remote_branch_removed is True
+    assert hook_log.read_text(encoding="utf-8").splitlines() == [
+        "scratch/preflight_worker_check.txt"
+    ]
+
+
+def test_main_reports_structured_failure_and_exits_nonzero(monkeypatch, capsys) -> None:
+    fake_result = SimpleNamespace(
+        passed=False,
+        agent="codex",
+        base_ref="main",
+        branch="preflight/failed-push",
+        checks=[{"name": "git_push", "passed": False}],
+        worker={},
+        to_dict=lambda: {
+            "passed": False,
+            "checks": [{"name": "git_push", "passed": False}],
+        },
+    )
+    monkeypatch.setattr(mod, "run_preflight", lambda **_: fake_result)
+    monkeypatch.setattr(mod.sys, "argv", ["preflight", "--skip-publication"])
+
+    assert mod.main() == 2
+
+    out = capsys.readouterr().out
+    assert "preflight=blocked" in out
+    assert "failed_check=git_push" in out
+    assert "preflight=ok" not in out
+
+
+def test_contract_preflight_receipt_preserves_push_failure_and_releases_lease(
+    monkeypatch, tmp_path: Path
+) -> None:
+    branch = "preflight/20260830-push-failure"
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    contract_payload = _worker(branch=branch).worker_contract
+    contract_path = tmp_path / "worker_contract.json"
+    contract_path.write_text(json.dumps(contract_payload), encoding="utf-8")
+    publication_events: list[str] = []
+    base_sha = "b" * 40
+
+    async def fake_run_worker(**_: object) -> WorkerProcess:
+        return _worker(branch=branch)
+
+    def fake_subprocess_run(cmd: list[str], **_: object) -> SimpleNamespace:
+        if cmd[:4] == ["gh", "api", "--method", "POST"]:
+            publication_events.append("seed")
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        if cmd[:3] == ["git", "push", "origin"]:
+            publication_events.append("push")
+            return SimpleNamespace(
+                returncode=1,
+                stdout=(
+                    "BLOCKED: branch write lease metadata is missing\ntoken=should-not-survive"
+                ),
+                stderr="error: failed to push some refs to origin",
+            )
+        if cmd[:4] == ["gh", "api", "--method", "DELETE"]:
+            publication_events.append("delete")
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    lease = mod._BranchWriteLease(
+        store=object(),
+        lease_id="lease-preflight-failure",
+        owner_session_id="session-preflight-failure",
+        work_id=f"branch:{branch}",
+    )
+
+    def fake_claim(**_: object) -> mod._BranchWriteLease:
+        publication_events.append("claim")
+        return lease
+
+    def fake_release(actual: mod._BranchWriteLease) -> None:
+        assert actual is lease
+        publication_events.append("release")
+
+    monkeypatch.setattr(mod, "_branch_name", lambda: branch)
+    monkeypatch.setattr(mod, "_run_worker", fake_run_worker)
+    monkeypatch.setattr(mod, "_resolve_ref_sha", lambda *_: base_sha)
+    monkeypatch.setattr(mod.subprocess, "run", fake_subprocess_run)
+    monkeypatch.setattr(mod, "_claim_branch_write_lease", fake_claim)
+    monkeypatch.setattr(mod, "_release_branch_write_lease", fake_release)
+
+    receipt = mod.run_contract_preflight_receipt(
+        repo_root=repo_root,
+        agent="codex",
+        base_ref="main",
+        skip_publication=False,
+        contract_path=contract_path,
+        envelope=_envelope(),
+    )
+
+    assert publication_events == ["claim", "seed", "push", "delete", "release"]
+    assert receipt.passed is False
+    assert receipt.failure_terminal_class == TerminalClass.BLOCKED_NOT_DISPATCH_BOUNDED
+    assert receipt.artifacts["branch"] == branch
+    assert receipt.artifacts["commit_shas"] == ["deadbeef"]
+    assert receipt.artifacts["branch_lease_id"] == "lease-preflight-failure"
+    assert receipt.artifacts["branch_lease_work_id"] == f"branch:{branch}"
+    assert receipt.artifacts["branch_lease_released"] is True
+    assert receipt.artifacts["publication_base_sha"] == base_sha
+    assert receipt.artifacts["remote_branch_seeded"] is True
+    assert receipt.artifacts["cleanup_remote_branch_removed"] is True
+    push_check = next(check for check in receipt.checks if check["name"] == "git_push")
+    assert push_check["returncode"] == 1
+    assert "branch write lease metadata is missing" in push_check["stdout"]
+    assert "token=<REDACTED>" in push_check["stdout"]
+    assert "failed to push some refs" in push_check["stderr"]
+    assert "stdout:" in push_check["detail"]
+    assert "stderr:" in push_check["detail"]
+
+
+def test_branch_write_lease_uses_branch_identity_and_releases(monkeypatch, tmp_path: Path) -> None:
+    from aragora.nomic import dev_coordination
+
+    branch = "preflight/20260830-lease-contract"
+    captured: dict[str, object] = {}
+
+    class FakeStore:
+        def __init__(self, *, repo_root: Path) -> None:
+            captured["repo_root"] = repo_root
+
+        def claim_lease(self, **kwargs: object) -> SimpleNamespace:
+            captured["claim"] = kwargs
+            return SimpleNamespace(lease_id="lease-branch-contract")
+
+        def release_lease(self, lease_id: str) -> None:
+            captured["released"] = lease_id
+
+    monkeypatch.setenv("ARAGORA_SESSION_ID", "session-branch-contract")
+    monkeypatch.setattr(dev_coordination, "DevCoordinationStore", FakeStore)
+
+    claim = mod._claim_branch_write_lease(
+        repo_root=tmp_path,
+        branch=branch,
+        worktree_path=tmp_path / "worktree",
+        agent="codex",
+    )
+    mod._release_branch_write_lease(claim)
+
+    assert captured["repo_root"] == tmp_path
+    claim_kwargs = captured["claim"]
+    assert isinstance(claim_kwargs, dict)
+    assert claim_kwargs["task_id"] == f"branch:{branch}"
+    assert claim_kwargs["branch"] == branch
+    assert claim_kwargs["owner_session_id"] == "session-branch-contract"
+    assert claim_kwargs["allowed_globs"] == [f".aragora/branch-locks/{branch}"]
+    assert claim_kwargs["metadata"] == {
+        "claimed_via": "swarm_preflight",
+        "work_id": f"branch:{branch}",
+    }
+    assert captured["released"] == "lease-branch-contract"
+
+
+def test_branch_write_lease_wraps_expected_store_failure(monkeypatch, tmp_path: Path) -> None:
+    from aragora.nomic import dev_coordination
+
+    class FailingStore:
+        def __init__(self, *, repo_root: Path) -> None:
+            del repo_root
+
+        def claim_lease(self, **kwargs: object) -> SimpleNamespace:
+            del kwargs
+            raise RuntimeError("coordination store unavailable")
+
+    monkeypatch.setattr(dev_coordination, "DevCoordinationStore", FailingStore)
+
+    with pytest.raises(mod.PreflightOperationError) as exc_info:
+        mod._claim_branch_write_lease(
+            repo_root=tmp_path,
+            branch="preflight/store-failure",
+            worktree_path=tmp_path / "worktree",
+            agent="codex",
+        )
+
+    assert exc_info.value.stage == "branch_write_lease_claim"
+    assert "coordination store unavailable" in exc_info.value.detail
+
+
+def test_branch_write_lease_wraps_unknown_lease_release() -> None:
+    class MissingLeaseStore:
+        def release_lease(self, lease_id: str) -> None:
+            raise KeyError(f"Unknown lease_id: {lease_id}")
+
+    claim = mod._BranchWriteLease(
+        store=MissingLeaseStore(),
+        lease_id="missing-lease",
+        owner_session_id="session-missing-lease",
+        work_id="branch:preflight/missing-lease",
+    )
+
+    with pytest.raises(mod.PreflightOperationError) as exc_info:
+        mod._release_branch_write_lease(claim)
+
+    assert exc_info.value.stage == "branch_write_lease_release"
+    assert "Unknown lease_id" in exc_info.value.detail
 
 
 @pytest.mark.asyncio
@@ -155,6 +533,7 @@ async def test_run_preflight_succeeds_inside_running_event_loop(
     monkeypatch.setattr(mod, "_branch_name", lambda: branch)
     monkeypatch.setattr(mod, "_run_worker", fake_run_worker)
     monkeypatch.setattr(mod, "_run", fake_run)
+    monkeypatch.setattr(mod, "_resolve_ref_sha", lambda *_: "c" * 40)
     monkeypatch.setattr(mod.subprocess, "run", fake_subprocess_run)
 
     result = mod.run_preflight(
@@ -193,6 +572,7 @@ def test_run_preflight_fails_closed_on_contract_checksum_mismatch(
     monkeypatch.setattr(mod, "_branch_name", lambda: branch)
     monkeypatch.setattr(mod, "_run_worker", fake_run_worker)
     monkeypatch.setattr(mod, "_run", fake_run)
+    monkeypatch.setattr(mod, "_resolve_ref_sha", lambda *_: "c" * 40)
     monkeypatch.setattr(mod.subprocess, "run", fake_subprocess_run)
 
     with pytest.raises(RuntimeError, match="checksum"):

@@ -264,10 +264,21 @@ def check_api_keys(validate_live: bool = False) -> list[HealthCheck]:
                 )
             )
         else:
-            detail = "NO API KEY SET"
             if report.discovery_errors:
-                detail += f" ({'; '.join(report.discovery_errors)})"
-            checks.append(("LLM Provider", detail, False))
+                detail = f"credential discovery failed ({'; '.join(report.discovery_errors)})"
+                checks.append(("LLM Provider", detail, False))
+            elif validate_live:
+                checks.append(
+                    ("LLM Provider", "NO API KEY SET; live validation unavailable", False)
+                )
+            else:
+                checks.append(
+                    (
+                        "LLM Provider",
+                        "not configured (offline/demo mode available; required for live debates)",
+                        None,
+                    )
+                )
 
     return checks
 

@@ -1,0 +1,207 @@
+{
+ "schema": "adjudicator_eval_cases.v1",
+ "description": "Machine-readable distillations of real multi-model review rounds from synaptent/aragora (2026-07-02..05), for evaluating aragora/swarm/review_adjudicator.py (M0, #8748). Each case carries the verbatim reviewer bodies at an exact head SHA, the adjudicator's expected CURRENT verdict (pinned by tests/governance/test_adjudicator_eval_fixtures.py), and the human-settled ground truth per the #8748 SETTLE/BLOCK/ESCALATE taxonomy. Where expected and ground truth disagree, the delta is the eval target, not a test failure. Narrative + receipts: docs/artifacts/2026-07-reviewer-failure-taxonomy.md. Reviewer bodies were produced by scripts/collect_quorum_evidence.py at the recorded head; 'posted_to_thread' distinguishes publicly posted verdicts from prepared (prepare-only) ones whose findings are quoted in the linked evidence-round comments.",
+ "disposition_taxonomy": [
+  "settle",
+  "block",
+  "escalate"
+ ],
+ "verdict_values": [
+  "adjudicated_settle",
+  "adjudicated_block",
+  "adjudicated_escalate",
+  "not_applicable"
+ ],
+ "cases": [
+  {
+   "id": "pr8824_r1_diff_blind_grounding",
+   "failure_classes": [
+    "diff_blind_grounding"
+   ],
+   "control": false,
+   "pr": 8824,
+   "head_sha": "1bbf572fa90015b36a829935a3e08004d7df51d9",
+   "round": "evidence round 1",
+   "items": [
+    {
+     "family": "claude",
+     "verdict": "changes_requested",
+     "body": "## Claude independent model review\n\nReviewer: claude (anthropic) — independent adversarial model review via the Aragora Claude reviewer, grounded on the exact PR head.\nHead: 1bbf572 (1bbf572fa90015b36a829935a3e08004d7df51d9), committed 2026-07-03T21:11:48Z.\nPR: #8824.\nModel family: claude\n\nVerdict: CHANGES-REQUESTED\n\n- [P1] `README.md:~83` — The marquee evidence link `[Decision Integrity, Dogfooded](docs/artifacts/2026-07-decision-integrity-dogfooding.md)` is dead: neither the file nor the `docs/artifacts/` directory exists at this head, and this PR changes only `README.md` (does not add the doc). The PR's headline credibility claim resolves to a 404 relative link on the public README.\n- [P2] `README.md:9,21,73-77` — The diff removes every \"PyPI publish pending\" hedge and asserts `pip install aragora-verify` (tagline, quickstart-table row, code block) plus links `https://pypi.org/project/aragora-verify/`. But the package's own `aragora-verify/CHANGELOG.md` still reads `## [0.1.0] — unreleased`, and `.github/workflows/publish-aragora-verify.yml` is a manual `workflow_dispatch` gated on a one-time PyPI trusted-publisher config (\"until that exists, the publish step will fail\"). If that manual publish hasn't actually landed, every `pip install aragora-verify` instruction and the PyPI link 404. Network egress is blocked in this review env, so I can't confirm the release exists — block merge until the published version is verified live (and update the CHANGELOG heading off \"unreleased\").\n- [P2] `README.md:22` — The showcased one-liner `aragora demo && aragora verify aragora-demo-receipt.json` only produces the receipt on the no-key/offline path (`aragora/cli/demo.py:699`, always writes `aragora-demo-receipt.json`). When any of `OPENROUTER_API_KEY`/`ANTHROPIC_API_KEY`/`OPENAI_API_KEY` is set, `main()` takes `_run_real_demo` (`demo.py:964-965`), which saves a receipt only when `--receipt` is passed (`demo.py:795`). So in any key-holding environment (including maintainers/most installs) the chained `aragora verify` fails file-not-found — or silently verifies a stale receipt from a prior run. The \"no API keys\" caveat covers the literal no-key case but not the copy-pasted `&&` chain for key-present users.\n\nVerified-good (not findings): `--pubkey`/`--chain`/positional args exist in `aragora-verify` CLI; `pip install ./aragora-verify` build-from-source is valid; `aragora verify <path>` positional and `aragora demo` subcommands exist; no-key demo path does emit the default receipt filename.\n\ndogfood: yes\n",
+     "posted_to_thread": false
+    },
+    {
+     "family": "openai",
+     "verdict": "changes_requested",
+     "body": "## OpenAI independent model review\n\nReviewer: openai (openai) — independent adversarial model review via Codex CLI OpenAI harness, grounded on the exact PR head.\nHead: 1bbf572 (1bbf572fa90015b36a829935a3e08004d7df51d9), committed 2026-07-03T21:11:48Z.\nPR: #8824.\nModel family: openai\n\nVerdict: CHANGES-REQUESTED\n\n- [P3] `README.md:80` The new “Decision Integrity, Dogfooded” link points to `docs/artifacts/2026-07-decision-integrity-dogfooding.md`, but this PR changes only `README.md` and that target file is not present, so the README introduces a broken evidence/case-study link.\n\ndogfood: yes\n",
+     "posted_to_thread": false
+    }
+   ],
+   "expected_adjudicator_verdict": "adjudicated_block",
+   "expected_verdict_basis": "hard bar: an unrefuted [P1] is present; the scorer is never invoked",
+   "ground_truth": {
+    "findings_valid": false,
+    "disposition": "block",
+    "ideal_disposition_note": "Both dead-link findings were false: docs/artifacts/2026-07-decision-integrity-dogfooding.md existed on main since #8801 (blob 3c0458f1), machine-verified in-thread via git ls-tree, rg --files, and git check-ignore. BLOCK is still the correct fail-safe verdict at this snapshot — an unrefuted [P1] must never be machine-settled; the refutation evidence arrived in later rounds. An ideal adjudicator with tree access would refute-and-settle; that grounding fix is tracked as #8825.",
+    "resolution_mechanism": "evidence-post (machine refutation in-thread) + grounding-blind-spot filed as #8825",
+    "receipts": [
+     "https://github.com/synaptent/aragora/pull/8824#issuecomment-4879384313",
+     "https://github.com/synaptent/aragora/pull/8824#issuecomment-4879405120",
+     "https://github.com/synaptent/aragora/issues/8825"
+    ]
+   }
+  },
+  {
+   "id": "pr8824_r3_diff_blind_unanimous",
+   "failure_classes": [
+    "diff_blind_grounding"
+   ],
+   "control": false,
+   "pr": 8824,
+   "head_sha": "75893e9dc10bbfcad579427a55b422ab40c60f05",
+   "round": "evidence round 3",
+   "items": [
+    {
+     "family": "claude",
+     "verdict": "changes_requested",
+     "body": "## Claude independent model review\n\nReviewer: claude (anthropic) — independent adversarial model review via the Aragora Claude reviewer, grounded on the exact PR head.\nHead: 75893e9 (75893e9dc10bbfcad579427a55b422ab40c60f05), committed 2026-07-03T21:24:40Z.\nPR: #8824.\nModel family: claude\n\nVerdict: CHANGES-REQUESTED\n\n- [P2] `README.md` (new dogfooding paragraph, ~line 81): the link `[Decision Integrity, Dogfooded](docs/artifacts/2026-07-decision-integrity-dogfooding.md)` is dead — that file (and the entire `docs/artifacts/` dir) does not exist anywhere in the tree at 75893e9. Confirmed via `find` over the whole worktree. This is the PR's headline evidence, yet the artifact itself is missing from the diff (only `.gitignore` + `README.md` changed). Renders as a broken relative link on GitHub and PyPI. Ship the evidence doc in this PR (or drop the link).\n- [P2] `README.md` (line 9, quick-start table, and verify code block): text is flipped from \"PyPI publishing … pending\" to `pip install aragora-verify` + a live `https://pypi.org/project/aragora-verify/` link. Local `aragora-verify/pyproject.toml` is still `version = \"0.1.0\"`. I could not reach PyPI from this sandbox (WebFetch/network blocked), so this is unverified — but if 0.1.0 isn't actually published, the flagship install command and the linked page 404. Confirm the release is live on PyPI before merge; a broken `pip install` at the top of an integrity-product README is a credibility hit.\n- [P3] `.gitignore` (`!docs/artifacts/` / `!docs/artifacts/**`): the negation mechanics are correct (root `artifacts/` stays ignored; a directly-matched dir re-included before its `**` contents works), but it's inert and its justifying comment (\"committed proof/compliance artifacts under docs/ … even though they are tracked\") is unmet — there is no `docs/artifacts/` in this PR. Land it together with the artifact it's meant to un-hide, or the rule and its rationale are orphaned.\n\nNote (not blocking): the `aragora demo --offline` → `aragora-demo-receipt.json`, `aragora verify <receipt>`, and `aragora-verify <receipt> --pubkey <key.pem>` commands all check out against the actual CLI/console-script definitions — those additions are accurate.\n\ndogfood: yes\n",
+     "posted_to_thread": false
+    },
+    {
+     "family": "openai",
+     "verdict": "changes_requested",
+     "body": "## OpenAI independent model review\n\nReviewer: openai (openai) — independent adversarial model review via Codex CLI OpenAI harness, grounded on the exact PR head.\nHead: 75893e9 (75893e9dc10bbfcad579427a55b422ab40c60f05), committed 2026-07-03T21:24:40Z.\nPR: #8824.\nModel family: openai\n\nVerdict: CHANGES-REQUESTED\n\n- [P2] `README.md:80` adds a link to `docs/artifacts/2026-07-decision-integrity-dogfooding.md`, but this PR’s complete changed-file list does not include that artifact and the reviewed checkout has no tracked target at that path. This makes the new README link broken for readers and doc-link validators.\n\ndogfood: yes\n",
+     "posted_to_thread": false
+    }
+   ],
+   "expected_adjudicator_verdict": "not_applicable",
+   "expected_verdict_basis": "no supportive signal: unanimous rejection is not a stall; the adjudicator abstains and the base gate blocks",
+   "ground_truth": {
+    "findings_valid": false,
+    "disposition": "block",
+    "ideal_disposition_note": "Unanimous false positive: both families repeated the dead-link claim against the machine proof already posted in-thread. openai's own wording — \"this PR's complete changed-file list does not include that artifact\" — reveals the mechanism: reviewers reason over the diff, not the base tree. Resolved by switching the README link to an absolute URL to main; openai then PASSed at head 7e18207.",
+    "resolution_mechanism": "evidence-post + premise removal (absolute URL verifiable without tree access)",
+    "receipts": [
+     "https://github.com/synaptent/aragora/pull/8824#issuecomment-4879423633",
+     "https://github.com/synaptent/aragora/pull/8824#issuecomment-4879436485",
+     "https://github.com/synaptent/aragora/issues/8825"
+    ]
+   }
+  },
+  {
+   "id": "pr8802_r4_out_of_scope_finding",
+   "failure_classes": [
+    "out_of_scope_carousel"
+   ],
+   "control": false,
+   "pr": 8802,
+   "head_sha": "21a4ac4c04ace6634f9357c3ae4ec316a900755a",
+   "round": "evidence round 4",
+   "items": [
+    {
+     "family": "claude",
+     "verdict": "pass",
+     "body": "## Claude independent model review\n\nReviewer: claude (anthropic) — independent adversarial model review via the Aragora Claude reviewer, grounded on the exact PR head.\nHead: 21a4ac4 (21a4ac4c04ace6634f9357c3ae4ec316a900755a), committed 2026-07-02T23:43:40Z.\nPR: #8802.\nModel family: claude\n\nVerdict: PASS\n\n- [P3] `aragora-verify/src/aragora_verify/verifier.py` (new `key_id == provided_key_id` guard, ~L217–231): the binding couples signature validity to Aragora's *specific* `key_id` scheme (`\"ed25519-\"+sha256(raw)[:16]`, from `compute_key_id`). The ODR spec (`docs/specs/OPEN_DECISION_RECEIPT.md` §6) does **not** normatively define `key_id` derivation and defers signatures entirely to #8225 (`signatures: []` mandated in v0.1). A cryptographically-valid receipt from any other conformant emitter that labels its key differently (JWK thumbprint, operator string, etc.) would be falsely rejected as \"signer-label tampering\" by a tool marketed on PyPI as a *general* ODR verifier. Impact today is nil (only Aragora's signer produces signed receipts, and it always matches), so this is a forward-looking interop note, and the \"tampering\" framing overstates the threat — the auditor already anchors trust in the pubkey they supply, so a relabeled-but-valid signature forges nothing.\n\n- [P3] `aragora-verify/src/aragora_verify/verifier.py` diverges from the canonical in-repo twin `aragora/gauntlet/odr_verify.py:598,620–641`: the in-repo verifier keeps a distinct `key_id_mismatch` flag (checked *after* `verified_any`, with a precise message), whereas the standalone folds the mismatch into `failed_matching` (checked *first*). Result: on a multi-signature doc containing one matching-and-valid signature plus a second valid-but-relabeled duplicate, the in-repo verifier returns PASS while the standalone returns FAIL — the two Aragora verifiers give different verdicts on the same document, and the standalone's generic \"signature check failed\" message is less precise than the in-repo \"signer identity not bound.\" Contrived case, but the regression tests exercise the in-repo path while the CLI smoke tests exercise the standalone, so the divergence is untested.\n\ndogfood: yes\n",
+     "posted_to_thread": true
+    },
+    {
+     "family": "openai",
+     "verdict": "changes_requested",
+     "body": "## OpenAI independent model review\n\nReviewer: openai (openai) — independent adversarial model review via Codex CLI OpenAI harness, grounded on the exact PR head.\nHead: 21a4ac4 (21a4ac4c04ace6634f9357c3ae4ec316a900755a), committed 2026-07-02T23:43:40Z.\nPR: #8802.\nModel family: openai\n\nVerdict: CHANGES-REQUESTED\n\n- [P2] `docs/compliance/ODR_VERIFICATION_WALKTHROUGH.md:101` The walkthrough claims signer-label tampering protection, but this PR only hardens `aragora-verify`; the in-repo `aragora.gauntlet.odr_verify` path used by server/internal verification is not updated and can still diverge on multi-signature cases. That creates inconsistent audit results between the advertised offline verifier and Aragora’s own verifier.\n\ndogfood: yes\n",
+     "posted_to_thread": true
+    }
+   ],
+   "expected_adjudicator_verdict": "adjudicated_escalate",
+   "expected_verdict_basis": "grounded advisory dissent plus grounded support: two-sided disagreement escalates to a human",
+   "ground_truth": {
+    "findings_valid": true,
+    "disposition": "settle",
+    "ideal_disposition_note": "The finding is real but out of the PR's reachable scope: aragora/gauntlet/odr_verify.py was fenced to the #8765 lane, so #8802 could not touch it. Correctly re-filed as #8810 and the PR operator-settled with claude's counting PASS. Scope-awareness is a second eval dimension the current adjudicator lacks: a grounded finding on an unreachable file should settle-with-refile, not block or escalate.",
+    "resolution_mechanism": "re-filing (finding preserved as #8810) + operator advisory settlement",
+    "receipts": [
+     "https://github.com/synaptent/aragora/pull/8802#issuecomment-4871373189",
+     "https://github.com/synaptent/aragora/pull/8802#issuecomment-4871391696",
+     "https://github.com/synaptent/aragora/pull/8802#issuecomment-4871391778",
+     "https://github.com/synaptent/aragora/issues/8810"
+    ]
+   }
+  },
+  {
+   "id": "pr8802_r7_cross_family_contradiction",
+   "failure_classes": [
+    "cross_family_contradiction"
+   ],
+   "control": false,
+   "pr": 8802,
+   "head_sha": "787d1f55ad276e475219f1b4654df42d03776f43",
+   "round": "evidence round 7 (fresh head after main merge)",
+   "items": [
+    {
+     "family": "claude",
+     "verdict": "pass",
+     "body": "## Claude independent model review\n\nReviewer: claude (anthropic) — independent adversarial model review via the Aragora Claude reviewer, grounded on the exact PR head.\nHead: 787d1f5 (787d1f55ad276e475219f1b4654df42d03776f43), committed 2026-07-03T21:10:12Z.\nPR: #8802.\nModel family: claude\n\nVerdict: PASS\n\n- [P3] `aragora-verify/src/aragora_verify/cli.py:37-41` (and docstring `:5-9`) — regression introduced by this PR's new SKIP path. `verifier.py` now returns `signature=SKIP` for the *unsigned-receipt-with-`--pubkey`* case, which renders as `UNVERIFIED`. But `_render`'s hardcoded UNVERIFIED note still reads \"signatures are present but were NOT checked (no --pubkey)\". For `aragora-verify unsigned.odr.json --pubkey key.pem` this note is self-contradicting: no signatures are present and a pubkey *was* supplied — directly contradicted by the check line printed right below it (\"receipt carries no signatures; ... a public key was supplied\"). Verdict and exit code are correct; only the explanatory note (and the `cli.py` docstring's exit-3 description) are stale. Note the walkthrough doc §3 exit-code table *does* describe both cases correctly, so only the CLI text drifted.\n\n- [P3] `aragora-verify/src/aragora_verify/verifier.py` new `key_id_mismatch → FAIL \"signer-label tampering suspected\"` path vs. `schema.py:128-130` — the schema only requires `key_id` to be a non-empty string, but the signature check now hard-FAILs any cryptographically-valid signature whose `key_id` isn't exactly `compute_key_id(key)` (`ed25519-`+sha256[:16]). For Aragora-emitted receipts this is a non-issue (signer always uses that format), but a third-party/ODR receipt that is honestly signed with a different `key_id` convention now FAILs with a \"tampering suspected\" verdict even though nothing was altered — a false-positive/interop risk for a tool marketed as a general standalone verifier. Defensible per spec §6/#8225 (the format is normative) and matches the asserted `gauntlet.odr_verify` parity, but the two validation layers disagree on what `key_id` is allowed to be. (Parity with `aragora.gauntlet.odr_verify` is asserted by the comment/tests; that module isn't in this diff so I did not independently confirm it.)\n\ndogfood: yes\n",
+     "posted_to_thread": true
+    },
+    {
+     "family": "openai",
+     "verdict": "changes_requested",
+     "body": "## OpenAI independent model review\n\nReviewer: openai (openai) — independent adversarial model review via Codex CLI OpenAI harness, grounded on the exact PR head.\nHead: 787d1f5 (787d1f55ad276e475219f1b4654df42d03776f43), committed 2026-07-03T21:10:12Z.\nPR: #8802.\nModel family: openai\n\nVerdict: CHANGES-REQUESTED\n\n- [P2] `aragora-verify/src/aragora_verify/verifier.py:231` - `verified_any` wins before `key_id_mismatch`, so an attacker can append a relabeled duplicate signature because `signatures[]` is outside the signed digest. The verifier exits VERIFIED/`ok=true` as long as one correctly-bound signature is also present, leaving a forged signer label in a “verified” document. Fail or mark unverified when any evaluated signature verifies with the supplied key but has a mismatched `key_id`.\n\ndogfood: yes\n",
+     "posted_to_thread": false
+    }
+   ],
+   "expected_adjudicator_verdict": "adjudicated_escalate",
+   "expected_verdict_basis": "grounded dissent AND grounded support: a genuine two-sided crux",
+   "context_quotes": [
+    {
+     "source": "claude round-5 review at head 05d8ef98 (prepared body recorded by the evidence collector; requirement restated publicly in https://github.com/synaptent/aragora/pull/8802#issuecomment-4871658875 and https://github.com/synaptent/aragora/pull/8802#issuecomment-4879461357)",
+     "quote": "The in-repo reference verifier aragora/gauntlet/odr_verify.py:596-641 deliberately uses a *separate* key_id_mismatch flag checked **after** verified_any, precisely so that a receipt containing one valid+matching signature PASSes even if another entry carries a valid-but-relabeled signature. [...] Fix: mirror the sibling's separate key_id_mismatch flag with verified_any-wins ordering."
+    }
+   ],
+   "ground_truth": {
+    "findings_valid": null,
+    "disposition": "escalate",
+    "ideal_disposition_note": "The clean ESCALATE specimen: claude's round-5 [P2] REQUIRED the verified_any-wins precedence (to mirror the in-repo reference verifier); openai's round-7 [P2] objected to exactly that ordering as an attacker foothold. Two frontier families, opposite positions, one deliberate documented design decision — a human crux. Resolved by reference-implementation parity, pinned on #8810. The adjudicator's ESCALATE matches the human disposition exactly.",
+    "resolution_mechanism": "adjudication (human design decision, reference-implementation parity) + follow-up pinned on #8810",
+    "receipts": [
+     "https://github.com/synaptent/aragora/pull/8802#issuecomment-4871658875",
+     "https://github.com/synaptent/aragora/pull/8802#issuecomment-4879458963",
+     "https://github.com/synaptent/aragora/pull/8802#issuecomment-4879461357"
+    ]
+   }
+  },
+  {
+   "id": "pr8811_r1_convergent_real_finding",
+   "failure_classes": [],
+   "control": true,
+   "pr": 8811,
+   "head_sha": "4aeba63f14c37dd10520304492e6edc9a755ac6d",
+   "round": "evidence round 1",
+   "items": [
+    {
+     "family": "claude",
+     "verdict": "changes_requested",
+     "body": "## Claude independent model review\n\nReviewer: claude (anthropic) — independent adversarial model review via the Aragora Claude reviewer, grounded on the exact PR head.\nHead: 4aeba63 (4aeba63f14c37dd10520304492e6edc9a755ac6d), committed 2026-07-03T23:44:06Z.\nPR: #8811.\nModel family: claude\n\nVerdict: CHANGES-REQUESTED\n\n- **[P2]** `aragora/swarm/quorum_evidence.py:1983` (`_record_review_adjudication_if_applicable`, the `outcome.adjudication = adjudicate(outcome.items).to_receipt_dict()` call): the observe-only adjudicator is wired into every prepare/stall return path with no `try/except`. On the advisory-only-dissent stall path (dissent present, no `[P0]/[P1]`), `adjudicate()` reaches `from aragora_debate.evidence import EvidenceQualityAnalyzer` (`review_adjudicator.py:244`, outside the fail-closed loop). Since `aragora-debate` is not an `aragora` dependency, in any runtime without it installed + flag `ARAGORA_ENABLE_REVIEW_ADJUDICATOR=1`, `collect_evidence` raises `ModuleNotFoundError` instead of returning a `CollectOutcome` — a purely observational feature crashes the critical settlement flow. Wrap the `adjudicate(...)` call so any exception fails open (record no adjudication) rather than propagating.\n- **[P3]** `tests/governance/test_review_adjudicator_collect_observe.py`: no test covers the advisory-only-dissent path (flag on, no `[P0]/[P1]`) that actually invokes the scorer/`aragora_debate` import, so the fail-open behavior above is unpinned. Add a case that reaches `adjudicate`'s scorer path (e.g. `[P2]`-only dissent) and asserts collection still returns an outcome even when the analyzer import/scorer fails.\n\ndogfood: yes\n",
+     "posted_to_thread": false
+    },
+    {
+     "family": "openai",
+     "verdict": "changes_requested",
+     "body": "## OpenAI independent model review\n\nReviewer: openai (openai) — independent adversarial model review via Codex CLI OpenAI harness, grounded on the exact PR head.\nHead: 4aeba63 (4aeba63f14c37dd10520304492e6edc9a755ac6d), committed 2026-07-03T23:44:06Z.\nPR: #8811.\nModel family: openai\n\nVerdict: CHANGES-REQUESTED\n\n- [P2] `aragora/swarm/quorum_evidence.py:1979` `_record_review_adjudication_if_applicable()` lets observe-only adjudication exceptions propagate from `adjudicate(outcome.items)`. On advisory mixed stalls, `review_adjudicator.adjudicate()` imports `aragora_debate.evidence`, but `aragora-debate` is a separate/excluded package in the main distribution, so enabling `ARAGORA_ENABLE_REVIEW_ADJUDICATOR=1` can turn a prepare-only evidence collection into a hard CLI failure instead of emitting the normal outcome. Wrap this sidecar path fail-closed or make the dependency guaranteed.\n\ndogfood: yes\n",
+     "posted_to_thread": false
+    }
+   ],
+   "expected_adjudicator_verdict": "not_applicable",
+   "expected_verdict_basis": "no supportive signal: genuine unanimous rejection is not a stall; the adjudicator abstains and the base gate blocks",
+   "ground_truth": {
+    "findings_valid": true,
+    "disposition": "block",
+    "ideal_disposition_note": "Control group: both families independently converged on the same real [P2] — the observe-only adjudicator call in quorum_evidence.py had no try/except and could crash the settlement hot path. Fixed to claude's satisfaction in the next round. The gate working exactly as designed.",
+    "resolution_mechanism": "fix + re-review (converged to 2-0 PASS at head 15e87b1c)",
+    "receipts": [
+     "https://github.com/synaptent/aragora/pull/8811#issuecomment-4879898764",
+     "https://github.com/synaptent/aragora/pull/8811#issuecomment-4881139661",
+     "https://github.com/synaptent/aragora/pull/8811#issuecomment-4881139703"
+    ]
+   }
+  }
+ ]
+}

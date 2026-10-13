@@ -473,8 +473,13 @@ class TestGrokAgentModelMapping:
         """Should have default fallback model."""
         from aragora.agents.api_agents.grok import GrokAgent
 
-        assert GrokAgent.DEFAULT_FALLBACK_MODEL is not None
-        assert "grok" in GrokAgent.DEFAULT_FALLBACK_MODEL
+        assert GrokAgent.DEFAULT_FALLBACK_MODEL == "x-ai/grok-4.5"
+
+    def test_legacy_direct_ids_route_to_live_openrouter_model(self, mock_env_with_api_keys):
+        from aragora.agents.api_agents.grok import GrokAgent
+
+        for model in ("grok-4-latest", "grok-4", "grok-4.2", "grok-4-2"):
+            assert GrokAgent.OPENROUTER_MODEL_MAP[model] == "x-ai/grok-4.5"
 
     def test_model_map_values_are_openrouter_format(self, mock_env_with_api_keys):
         """Model map values should be in OpenRouter format."""

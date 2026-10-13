@@ -313,7 +313,7 @@ class TestHTTPExecution:
         mock_client.request = AsyncMock(return_value=mock_response)
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=self._make_mock_pool(mock_client),
         ):
             result = await step.execute(ctx)
@@ -348,7 +348,7 @@ class TestHTTPExecution:
         mock_client.request = AsyncMock(return_value=mock_response)
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=self._make_mock_pool(mock_client),
         ):
             result = await step.execute(ctx)
@@ -383,7 +383,7 @@ class TestHTTPExecution:
         mock_client.request = AsyncMock(return_value=mock_response)
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=self._make_mock_pool(mock_client),
         ):
             result = await step.execute(ctx)
@@ -411,7 +411,7 @@ class TestHTTPExecution:
         mock_client.request = AsyncMock(side_effect=asyncio.TimeoutError())
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=self._make_mock_pool(mock_client),
         ):
             result = await step.execute(ctx)
@@ -438,7 +438,7 @@ class TestHTTPExecution:
         mock_client.request = AsyncMock(side_effect=ConnectionError("Connection refused"))
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=self._make_mock_pool(mock_client),
         ):
             result = await step.execute(ctx)
@@ -470,7 +470,7 @@ class TestHTTPExecution:
         mock_client.request = AsyncMock(return_value=mock_response)
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=self._make_mock_pool(mock_client),
         ):
             result = await step.execute(ctx)
@@ -493,7 +493,7 @@ class TestHTTPExecution:
         ctx = self._make_context()
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             side_effect=RuntimeError("HTTPClientPool has been closed"),
         ):
             result = await step.execute(ctx)

@@ -38,7 +38,7 @@ class RedisCheckpointStore:
 
     Environment:
         Requires REDIS_URL environment variable or Redis configuration
-        in aragora.server.redis_config.
+        in aragora.utils.redis_config.
     """
 
     # Key prefixes for Redis
@@ -67,7 +67,7 @@ class RedisCheckpointStore:
         if not _compat_stub.REDIS_AVAILABLE:
             raise RuntimeError(
                 "Redis checkpoint store requires Redis configuration. "
-                "Ensure aragora.server.redis_config is available and REDIS_URL is set."
+                "Ensure aragora.utils.redis_config is available and REDIS_URL is set."
             )
 
         self._ttl_seconds = int(ttl_hours * 3600)

@@ -1,0 +1,70 @@
+{
+  "schema_version": "decision-quality-corpus/1.0",
+  "benchmark_id": "outcome-backed-decision-quality-v1",
+  "revision": "draft-science-forecasting-holdout-tranche-2",
+  "frozen_at": "2026-08-30T03:52:00Z",
+  "cases": [
+    {
+      "case_id": "science-holdout-osiris-rex-return-september-2023",
+      "domain": "science_forecasting",
+      "split": "holdout",
+      "title": "OSIRIS-REx sample-return operations through September 2023",
+      "decision_prompt": "A sample-return operations team is allocating its September 2023 recovery, curation, and communications capacity after NASA publishes the OSIRIS-REx return press kit. Choose whether to retain the full September recovery plan on the expectation that the Bennu sample capsule will land successfully by month-end, or rebaseline the primary operations plan beyond September.",
+      "forecast_question": "Using only information available at the cutoff, forecast the probability that \"Rebaseline beyond September\" is the outcome-aligned action at the stated horizon.",
+      "forecast_option_id": "rebaseline_beyond_september",
+      "options": [
+        {
+          "option_id": "rebaseline_beyond_september",
+          "label": "Rebaseline beyond September",
+          "description": "Move the primary recovery and curation plan beyond September and reduce commitments tied to a September landing."
+        },
+        {
+          "option_id": "retain_september_recovery_plan",
+          "label": "Retain the September recovery plan",
+          "description": "Keep recovery, curation, and communications capacity committed to a successful sample landing by the end of September."
+        }
+      ],
+      "information_cutoff": "2023-09-02T00:00:00Z",
+      "sources": [
+        {
+          "source_id": "nasa-osiris-rex-return-press-kit-2023-09",
+          "title": "OSIRIS-REx Asteroid Sample Return Mission Press Kit",
+          "url": "https://science.nasa.gov/wp-content/uploads/2023/09/osirisrexpresskit-2023.pdf",
+          "published_at": "2023-09-01T00:00:00Z",
+          "content_sha256": "8aa4fbd6c843ff6a2ade524791a3c15e51d4e6031b4b9e4e1bbf35ad25bbecae"
+        }
+      ]
+    },
+    {
+      "case_id": "science-holdout-artemis-i-launch-september-2022",
+      "domain": "science_forecasting",
+      "split": "holdout",
+      "title": "Artemis I launch operations through September 2022",
+      "decision_prompt": "NASA has completed the Artemis I flight-readiness review and declared the uncrewed mission go for an August 29 launch attempt. A launch-operations team must decide whether to keep September staffing, range, and mission-support capacity committed to a launch by month-end or rebaseline the primary plan beyond September.",
+      "forecast_question": "Using only information available at the cutoff, forecast the probability that \"Rebaseline beyond September\" is the outcome-aligned action at the stated horizon.",
+      "forecast_option_id": "rebaseline_launch_beyond_september",
+      "options": [
+        {
+          "option_id": "rebaseline_launch_beyond_september",
+          "label": "Rebaseline beyond September",
+          "description": "Move the primary launch-operations plan beyond September while preserving bounded readiness for earlier attempts."
+        },
+        {
+          "option_id": "retain_september_launch_plan",
+          "label": "Retain the September launch plan",
+          "description": "Keep staffing, range, and mission-support commitments centered on an Artemis I launch by the end of September."
+        }
+      ],
+      "information_cutoff": "2022-08-23T00:00:00Z",
+      "sources": [
+        {
+          "source_id": "nasa-artemis-i-flight-readiness-go-2022-08-22",
+          "title": "Artemis I Flight Readiness Concludes; NASA Go for August 29 Launch",
+          "url": "https://www.nasa.gov/blogs/missions/2022/08/22/artemis-i-flight-readiness-concludes-nasa-go-for-august-29-launch-briefing-set-for-8-p-m/",
+          "published_at": "2022-08-22T00:00:00Z",
+          "content_sha256": "878b32d5aeb61e0d23834163f90026f3675f9558aab8326f2c7929323701a106"
+        }
+      ]
+    }
+  ]
+}

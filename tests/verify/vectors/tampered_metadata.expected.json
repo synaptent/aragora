@@ -1,0 +1,17 @@
+{
+  "verifier": {
+    "verified": false,
+    "exit_code": 1,
+    "reasons": [
+      "signature"
+    ]
+  },
+  "aragora_verify": {
+    "ok": false,
+    "exit_code": 1,
+    "reasons": [
+      "signature"
+    ]
+  },
+  "description": "pass_clean with signatures[0].issuer relabelled after signing: signature FAIL, canonical_digest still PASS, because the v0.2 construction commits the entry's metadata."
+}

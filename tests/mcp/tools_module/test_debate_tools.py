@@ -155,7 +155,7 @@ class TestGetDebateTool:
         }
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
         ):
             result = await get_debate_tool(debate_id="d-001")
@@ -170,7 +170,7 @@ class TestGetDebateTool:
         mock_db.get.return_value = None
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
         ):
             result = await get_debate_tool(debate_id="nonexistent")
@@ -185,7 +185,7 @@ class TestGetDebateTool:
         mock_db.get.side_effect = RuntimeError("database offline")
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
         ):
             result = await get_debate_tool(debate_id="d-001")
@@ -196,7 +196,7 @@ class TestGetDebateTool:
     async def test_get_storage_unavailable(self):
         """Test get when storage is unavailable."""
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=None,
         ):
             result = await get_debate_tool(debate_id="d-001")
@@ -211,7 +211,7 @@ class TestSearchDebatesTool:
     async def test_search_no_storage(self):
         """Test search when storage unavailable."""
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=None,
         ):
             result = await search_debates_tool(query="test")
@@ -234,7 +234,7 @@ class TestSearchDebatesTool:
         mock_db.search.return_value = ([mock_debate], 1)
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
         ):
             result = await search_debates_tool(query="database")
@@ -257,7 +257,7 @@ class TestSearchDebatesTool:
         mock_db.search.return_value = ([mock_debate], 1)
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
         ):
             result = await search_debates_tool(query="", agent="gpt4")
@@ -288,7 +288,7 @@ class TestSearchDebatesTool:
         mock_db.search.return_value = ([mock_debate_consensus, mock_debate_no_consensus], 2)
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
         ):
             result = await search_debates_tool(query="", consensus_only=True)
@@ -300,7 +300,7 @@ class TestSearchDebatesTool:
     async def test_search_respects_limit(self):
         """Test search respects limit parameter."""
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=None,
         ):
             result = await search_debates_tool(query="test", limit=5)
@@ -322,7 +322,7 @@ class TestForkDebateTool:
     async def test_fork_no_storage(self):
         """Test fork when storage unavailable."""
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=None,
         ):
             result = await fork_debate_tool(debate_id="d-001")
@@ -336,7 +336,7 @@ class TestForkDebateTool:
         mock_db.get.return_value = None
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
         ):
             result = await fork_debate_tool(debate_id="nonexistent")
@@ -359,7 +359,7 @@ class TestForkDebateTool:
         mock_db.save_dict = MagicMock()
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
         ):
             result = await fork_debate_tool(
@@ -380,7 +380,7 @@ class TestForkDebateTool:
         mock_db.get.return_value = {"task": "Empty debate", "messages": []}
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
         ):
             result = await fork_debate_tool(debate_id="d-001")
@@ -402,7 +402,7 @@ class TestGetForksTool:
     async def test_get_forks_no_storage(self):
         """Test get forks when storage unavailable."""
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=None,
         ):
             result = await get_forks_tool(debate_id="d-001")
@@ -419,7 +419,7 @@ class TestGetForksTool:
         ]
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
         ):
             result = await get_forks_tool(debate_id="d-001")
@@ -441,7 +441,7 @@ class TestGetForksTool:
         mock_db.search.return_value = ([mock_debate], 1)
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
         ):
             result = await get_forks_tool(debate_id="d-001")

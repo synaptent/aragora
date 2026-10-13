@@ -14,6 +14,7 @@ import pytest
 
 from aragora.cli.commands.receipt import (
     _format_receipt_created_at,
+    cmd_receipt_export,
     cmd_receipt_list,
     cmd_receipt_show,
 )
@@ -54,7 +55,8 @@ def test_receipt_list_reads_durable_store_by_default(capsys: pytest.CaptureFixtu
             cmd_receipt_list(argparse.Namespace(limit=5, verdict=None, kind=None, org_id=None))
 
     output = capsys.readouterr().out
-    assert "rcpt-quickst.." in output
+    assert "rcpt-quickstart-123" in output
+    assert "rcpt-quickst.." not in output
     assert "decision" in output
     assert "PASS" in output
     assert "2" in output
@@ -80,7 +82,8 @@ def test_receipt_list_falls_back_to_legacy_when_durable_empty(
             cmd_receipt_list(argparse.Namespace(limit=5, verdict="fail", kind=None, org_id=None))
 
     output = capsys.readouterr().out
-    assert "gauntlet-leg.." in output
+    assert "gauntlet-legacy-123" in output
+    assert "gauntlet-leg.." not in output
     assert "other" in output
     assert "FAIL" in output
     assert "4" in output
@@ -140,7 +143,112 @@ def test_receipt_list_filters_by_kind(capsys: pytest.CaptureFixture[str]) -> Non
     output = capsys.readouterr().out
     assert "rcpt-inbox-123" in output
     assert "inbox" in output
-    assert "rcpt-decisio.." not in output
+    assert "rcpt-decision-456" not in output
+
+
+def test_receipt_list_prints_full_id_never_truncated(capsys: pytest.CaptureFixture[str]) -> None:
+    """Regression test for #9985: the table must print the full id, not a
+
+    12-char-plus-".." shortened form that cannot be fed back to `receipt show`
+    or `receipt export`.
+    """
+    long_id = "rcpt-" + "f" * 40
+    stored = _StoredReceiptStub(
+        receipt_id=long_id,
+        gauntlet_id=long_id,
+        verdict="PASS",
+        confidence=1.0,
+        created_at=1711300000.0,
+        data={"risk_summary": {"total": 0}},
+    )
+
+    with patch("aragora.cli.commands.receipt._load_storage_receipt_list", return_value=[stored]):
+        cmd_receipt_list(argparse.Namespace(limit=5, verdict=None, kind=None, org_id=None))
+
+    output = capsys.readouterr().out
+    assert long_id in output
+    assert ".." not in output
+
+
+def test_receipt_list_json_emits_full_ids(capsys: pytest.CaptureFixture[str]) -> None:
+    long_id = "rcpt-" + "a" * 40
+    stored = _StoredReceiptStub(
+        receipt_id=long_id,
+        gauntlet_id=long_id,
+        verdict="PASS",
+        confidence=0.9,
+        created_at=1711300000.0,
+        data={"risk_summary": {"total": 3}},
+    )
+
+    with patch("aragora.cli.commands.receipt._load_storage_receipt_list", return_value=[stored]):
+        cmd_receipt_list(
+            argparse.Namespace(limit=5, verdict=None, kind=None, org_id=None, json=True)
+        )
+
+    output = capsys.readouterr().out
+    payload = json.loads(output)
+    assert isinstance(payload, list)
+    assert len(payload) == 1
+    assert payload[0]["id"] == long_id
+    assert payload[0]["type"] == "decision"
+    assert payload[0]["verdict"] == "PASS"
+    assert payload[0]["findings"] == 3
+
+
+def test_receipt_list_id_round_trips_to_show_and_export(tmp_path) -> None:
+    """End-to-end regression test for #9985.
+
+    Creates a receipt in a real (temp-file) receipt store, runs `receipt list`
+    against it, and feeds the exact id `list` printed back into `receipt show
+    --format json` and `receipt export --format odr` — both must exit 0 (i.e.
+    not call sys.exit) rather than reporting "receipt not found".
+    """
+    from aragora.storage.receipt_store import ReceiptStore, set_receipt_store
+
+    long_id = "rcpt-" + "b" * 40
+    store = ReceiptStore(db_path=tmp_path / "receipts.db", file_receipt_dirs=[])
+    try:
+        set_receipt_store(store)
+        store.save(
+            {
+                "receipt_id": long_id,
+                "gauntlet_id": long_id,
+                "timestamp": "2026-03-24T12:00:00+00:00",
+                "verdict": "PASS",
+                "confidence": 0.9,
+                "risk_level": "LOW",
+                "risk_score": 0.1,
+                "checksum": "deadbeef",
+                "risk_summary": {"total": 0},
+            }
+        )
+
+        import io
+        from contextlib import redirect_stdout
+
+        list_out = io.StringIO()
+        with redirect_stdout(list_out):
+            cmd_receipt_list(argparse.Namespace(limit=5, verdict=None, kind=None, org_id=None))
+        list_output = list_out.getvalue()
+        assert long_id in list_output
+
+        # Extract the id exactly as printed (first column) and feed it back.
+        printed_id = next(line.split()[0] for line in list_output.splitlines() if long_id in line)
+        assert printed_id == long_id
+
+        show_out = io.StringIO()
+        with redirect_stdout(show_out):
+            cmd_receipt_show(argparse.Namespace(id=printed_id, format="json", org_id=None))
+        show_payload = json.loads(show_out.getvalue())
+        assert show_payload["receipt_id"] == long_id
+
+        export_out = io.StringIO()
+        with redirect_stdout(export_out):
+            cmd_receipt_export(argparse.Namespace(receipt=printed_id, format="odr", output=None))
+        assert export_out.getvalue().strip()
+    finally:
+        set_receipt_store(None)
 
 
 def test_receipt_created_at_formats_epoch_and_iso_consistently() -> None:

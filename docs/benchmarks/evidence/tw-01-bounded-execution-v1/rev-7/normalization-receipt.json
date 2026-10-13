@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-08-19T15:18:32Z",
+  "repository": "synaptent/aragora",
+  "corpus_id": "tw-01-bounded-execution-v1",
+  "corpus_revision": 7,
+  "evidence_scope": "bootstrap_only",
+  "fresh_execution_claimed": false,
+  "notes": [
+    "The tracked metrics slice contains historical outcomes used only to satisfy the corpus bootstrap and audit invariants.",
+    "The five deliverable_pr_created rows belong to the retained historical verified cohort and are not revision-7 execution proof.",
+    "The five blocked_validation_target_missing rows predate issue-body normalization and are the only recorded outcomes for the new in-progress cohort.",
+    "A real revision-7 recurrence must replace these bootstrap surfaces after the data-only revision merges."
+  ],
+  "metrics": {
+    "path": "docs/benchmarks/evidence/tw-01-bounded-execution-v1/rev-7/bootstrap-metrics.jsonl",
+    "sha256": "d06075b43ff671d4650af9f05443459c341026b1dfd5185724620aaa3f6429f5",
+    "row_count": 15,
+    "issue_numbers": [
+      5185,
+      5187,
+      5197,
+      5198,
+      5200,
+      5749,
+      5751,
+      5753,
+      5754,
+      5755
+    ],
+    "terminal_class_counts": {
+      "blocked_not_dispatch_bounded": 5,
+      "blocked_validation_target_missing": 5,
+      "deliverable_pr_created": 5
+    },
+    "source_path": ".aragora/overnight/boss_metrics.jsonl",
+    "source_sha256_at_extraction": "5062d5340f3a9506112307fd46d7a40505408e8e6106d1e86fa6308bddd26fe1",
+    "selection": "Rows whose issue_number is a revision-7 corpus member, preserving source order."
+  },
+  "normalized_issues": [
+    {
+      "issue_number": 5749,
+      "body_sha256": "b5c111fbb97653fcf412a9544633ef71bca85062008e5d359b44b96274f0760a",
+      "state": "OPEN",
+      "labels": [
+        "autonomous",
+        "triage:verified-real"
+      ],
+      "source_path": "aragora/swarm/supervisor_workers.py",
+      "new_test_path": "tests/swarm/test_supervisor_workers.py",
+      "new_test_path_absent_at_revision": true,
+      "sanitizer_outcome": "accepted",
+      "sanitizer_checks_failed": [],
+      "sanitizer_confidence": 0.98
+    },
+    {
+      "issue_number": 5751,
+      "body_sha256": "926013dd837e6a45803513578bcb26359609a3ea44b63d4d5921c9ff394ce39f",
+      "state": "OPEN",
+      "labels": [
+        "autonomous",
+        "triage:verified-real"
+      ],
+      "source_path": "aragora/swarm/claude_session_runner.py",
+      "new_test_path": "tests/swarm/test_claude_session_runner.py",
+      "new_test_path_absent_at_revision": true,
+      "sanitizer_outcome": "accepted",
+      "sanitizer_checks_failed": [],
+      "sanitizer_confidence": 0.98
+    },
+    {
+      "issue_number": 5753,
+      "body_sha256": "1f0a3daaf9e2c01ecc45cfe0325cc6e4fbe43128ba8ef78fdfda55f16babbef9",
+      "state": "OPEN",
+      "labels": [
+        "autonomous",
+        "triage:verified-real"
+      ],
+      "source_path": "aragora/pipeline/receipt_generator.py",
+      "new_test_path": "tests/pipeline/test_receipt_generator.py",
+      "new_test_path_absent_at_revision": true,
+      "sanitizer_outcome": "accepted",
+      "sanitizer_checks_failed": [],
+      "sanitizer_confidence": 0.98
+    },
+    {
+      "issue_number": 5754,
+      "body_sha256": "35dbb14c8c1aac42d6f16848d1c548e8cc346b17b1d6d633186b386b0489718a",
+      "state": "OPEN",
+      "labels": [
+        "autonomous",
+        "triage:verified-real"
+      ],
+      "source_path": "aragora/pipeline/verification_plan.py",
+      "new_test_path": "tests/pipeline/test_verification_plan.py",
+      "new_test_path_absent_at_revision": true,
+      "sanitizer_outcome": "accepted",
+      "sanitizer_checks_failed": [],
+      "sanitizer_confidence": 0.98
+    },
+    {
+      "issue_number": 5755,
+      "body_sha256": "6402f656174904cb1b0af5f798c95742666b4c856440572227241dae0a204cc8",
+      "state": "OPEN",
+      "labels": [
+        "autonomous",
+        "triage:verified-real"
+      ],
+      "source_path": "aragora/pipeline/backbone_errors.py",
+      "new_test_path": "tests/pipeline/test_backbone_errors.py",
+      "new_test_path_absent_at_revision": true,
+      "sanitizer_outcome": "accepted",
+      "sanitizer_checks_failed": [],
+      "sanitizer_confidence": 0.98
+    }
+  ]
+}

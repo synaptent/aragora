@@ -5,7 +5,7 @@ Provides a contextvars-based mechanism for tracking the current task_id
 during streaming operations. This allows concurrent generate() calls
 from the same agent to be distinguished in TOKEN_* events.
 
-Extracted from aragora.server.stream.arena_hooks to break the
+Extracted from aragora/server/stream/arena_hooks.py to break the
 debate -> server coupling.
 """
 

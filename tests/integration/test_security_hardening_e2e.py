@@ -377,7 +377,7 @@ class TestDecisionRouterIntegration:
             DecisionType,
         )
         from aragora.evidence.store import InMemoryEvidenceStore
-        from aragora.server.documents import DocumentStore
+        from aragora.documents.parsing import DocumentStore
 
         monkeypatch.setattr(
             "aragora.agents.get_agents_by_names",

@@ -88,6 +88,10 @@ from aragora.server.openapi.endpoints.self_improve_details import (
 )
 from aragora.server.openapi.endpoints.status import STATUS_ENDPOINTS
 from aragora.server.openapi.endpoints.agent_bridge import AGENT_BRIDGE_ENDPOINTS
+from aragora.server.openapi.endpoints.wired_registrations import (
+    WIRED_REGISTRATION_ENDPOINTS,
+    WIRED_REGISTRATION_NO_V1_ALIASES,
+)
 
 
 import logging
@@ -204,6 +208,14 @@ for path, methods in _decorator_eps.items():
     else:
         ALL_ENDPOINTS[path] = methods
 
+# Free-function registrars fill source gaps without replacing richer manual or
+# decorator contracts for operations that are already documented.
+for path, methods in WIRED_REGISTRATION_ENDPOINTS.items():
+    if path in ALL_ENDPOINTS:
+        ALL_ENDPOINTS[path] = {**methods, **ALL_ENDPOINTS[path]}
+    else:
+        ALL_ENDPOINTS[path] = methods
+
 __all__ = [
     "SYSTEM_ENDPOINTS",
     "AGENT_ENDPOINTS",
@@ -282,5 +294,7 @@ __all__ = [
     "SELF_IMPROVE_DETAILS_ENDPOINTS",
     "STATUS_ENDPOINTS",
     "AGENT_BRIDGE_ENDPOINTS",
+    "WIRED_REGISTRATION_ENDPOINTS",
+    "WIRED_REGISTRATION_NO_V1_ALIASES",
     "ALL_ENDPOINTS",
 ]

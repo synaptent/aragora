@@ -1,0 +1,19 @@
+# Dependencies and generated build/test output
+node_modules/
+.next/
+.swc/
+out/
+build/
+dist/
+coverage/
+playwright-report/
+test-results/
+.jscpd-report/
+junit.xml
+*.tsbuildinfo
+
+# Tool-generated files retain their generators' formatting
+package-lock.json
+eslint-suppressions.json
+next-env.d.ts
+src/types/api.generated.ts

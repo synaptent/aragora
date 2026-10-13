@@ -183,7 +183,7 @@ class QuotaPersistence:
 
         try:
             # Try to get async redis client
-            from aragora.server.redis_config import get_async_redis_client
+            from aragora.utils.redis_config import get_async_redis_client
 
             self._redis = await get_async_redis_client()
             if self._redis:

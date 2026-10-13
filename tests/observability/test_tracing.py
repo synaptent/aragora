@@ -260,7 +260,7 @@ class TestBuildTraceHeaders:
     def test_build_trace_headers_with_context(self):
         """Test build_trace_headers returns headers when trace context is set."""
         from aragora.observability.tracing import build_trace_headers
-        from aragora.server.middleware.tracing import set_trace_id, set_span_id
+        from aragora.observability.middleware.tracing import set_trace_id, set_span_id
 
         # Set trace context
         set_trace_id("a" * 32)
@@ -291,7 +291,7 @@ class TestBuildTraceHeaders:
     def test_build_trace_headers_without_context(self):
         """Test build_trace_headers returns empty dict when no context."""
         from aragora.observability.tracing import build_trace_headers
-        from aragora.server.middleware.tracing import set_trace_id, set_span_id
+        from aragora.observability.middleware.tracing import set_trace_id, set_span_id
 
         # Ensure no trace context
         set_trace_id(None)
@@ -305,7 +305,7 @@ class TestBuildTraceHeaders:
     def test_build_trace_headers_with_short_ids(self):
         """Test build_trace_headers pads short IDs correctly."""
         from aragora.observability.tracing import build_trace_headers
-        from aragora.server.middleware.tracing import set_trace_id, set_span_id
+        from aragora.observability.middleware.tracing import set_trace_id, set_span_id
 
         # Set short IDs
         set_trace_id("short")

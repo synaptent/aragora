@@ -629,8 +629,13 @@ class TestInitializeSubsystemsAsync:
 
     @pytest.mark.asyncio
     @patch("aragora.server.initialization.get_registry")
-    async def test_initializes_and_logs_async(self, mock_get_registry, temp_nomic_dir):
+    async def test_initializes_and_logs_async(self, mock_get_registry, temp_nomic_dir, monkeypatch):
         """Should initialize all subsystems async and log availability."""
+        # initialize_subsystems_async ends with demo auto-seeding, which reads
+        # the process environment. A leaked ARAGORA_DEMO_MODE would make it read
+        # elo_system, which the spec'd mock lacks, and try to seed real demo data.
+        monkeypatch.delenv("ARAGORA_DEMO_MODE", raising=False)
+        monkeypatch.delenv("ARAGORA_SKIP_SEED", raising=False)
         mock_registry = MagicMock(spec=SubsystemRegistry)
         mock_registry.initialize_all_async = AsyncMock(return_value=mock_registry)
         mock_get_registry.return_value = mock_registry

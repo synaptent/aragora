@@ -293,22 +293,21 @@ describe('Enterprise Namespace APIs', () => {
     it('should expose tenants namespace', () => {
       const client = createClient({ baseUrl: 'https://api.example.com' });
       expect(client.tenants).toBeDefined();
-      expect(typeof client.tenants.get).toBe('function');
+      expect(typeof client.tenants.list).toBe('function');
     });
 
-    it('should get current tenant via namespace', async () => {
+    it('should list tenants via namespace', async () => {
       const client = createClient({ baseUrl: 'https://api.example.com' });
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
         text: () => Promise.resolve(JSON.stringify({
-          id: 'tenant-123',
-          name: 'Acme Tenant'
+          tenants: [{ id: 'tenant-123', name: 'Acme Tenant' }]
         })),
       });
 
-      const tenant = await client.tenants.get();
-      expect(tenant.name).toBe('Acme Tenant');
+      const result = await client.tenants.list();
+      expect(result.tenants[0].name).toBe('Acme Tenant');
     });
   });
 

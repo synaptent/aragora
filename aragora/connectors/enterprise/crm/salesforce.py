@@ -28,7 +28,7 @@ from aragora.connectors.enterprise.base import (
     SyncState,
 )
 from aragora.reasoning.provenance import SourceType
-from aragora.server.http_client_pool import get_http_pool
+from aragora.observability.http_client_pool import get_http_pool
 
 logger = logging.getLogger(__name__)
 
@@ -423,7 +423,7 @@ class SalesforceConnector(EnterpriseConnector):
         refresh_token = await self.credentials.get_credential("SALESFORCE_REFRESH_TOKEN")
 
         # Try OAuth2 refresh first
-        if all([client_id, client_secret, refresh_token]):
+        if client_id and client_secret and refresh_token:
             return await self._refresh_oauth_token(client_id, client_secret, refresh_token)
 
         # Fall back to username/password flow
@@ -431,7 +431,7 @@ class SalesforceConnector(EnterpriseConnector):
         password = await self.credentials.get_credential("SALESFORCE_PASSWORD")
         security_token = await self.credentials.get_credential("SALESFORCE_SECURITY_TOKEN")
 
-        if all([client_id, client_secret, username, password]):
+        if client_id and client_secret and username and password:
             return await self._password_auth(
                 client_id, client_secret, username, password, security_token
             )
@@ -553,7 +553,7 @@ class SalesforceConnector(EnterpriseConnector):
         import urllib.parse
 
         encoded_query = urllib.parse.quote(soql)
-        endpoint = f"/query/?q={encoded_query}"
+        endpoint: str | None = f"/query/?q={encoded_query}"
 
         while endpoint:
             data = await self._api_request(endpoint)
@@ -571,7 +571,7 @@ class SalesforceConnector(EnterpriseConnector):
 
     async def _get_record_count(self, object_name: str, where_clause: str = "") -> int:
         """Get count of records for an object."""
-        soql = f"SELECT COUNT() FROM {object_name}"  # noqa: S608 -- internal query construction
+        soql = f"SELECT COUNT() FROM {object_name}"  # internal query construction
         if where_clause:
             soql += f" WHERE {where_clause}"
 
@@ -589,7 +589,7 @@ class SalesforceConnector(EnterpriseConnector):
         safe_fields = [f for f in fields if not f.startswith("__")]
         field_list = ", ".join(safe_fields)
 
-        soql = f"SELECT {field_list} FROM {object_name}"  # noqa: S608 -- internal query construction
+        soql = f"SELECT {field_list} FROM {object_name}"  # internal query construction
 
         # Build WHERE clause
         conditions = []
@@ -844,7 +844,7 @@ class SalesforceConnector(EnterpriseConnector):
             FROM Contact
             WHERE AccountId = '{account_id}'
             LIMIT {limit}
-        """  # noqa: S608 -- dynamic clause from internal state
+        """  # dynamic clause from internal state
 
         contacts = []
         async for record in self._query(soql):
@@ -863,7 +863,7 @@ class SalesforceConnector(EnterpriseConnector):
             SELECT Id, Name, StageName, Amount, CloseDate, Probability, IsWon
             FROM Opportunity
             WHERE AccountId = '{account_id}'
-        """  # noqa: S608 -- internal query construction
+        """  # internal query construction
 
         if not include_closed:
             soql += " AND IsClosed = false"

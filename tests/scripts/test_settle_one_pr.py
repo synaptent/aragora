@@ -553,7 +553,7 @@ def test_policy_exclusion_reasons_allows_docs_site_generated_secrets_deploy_docs
                     {"path": "docs-site/docs/deployment/secrets-management.md"},
                     {"path": "docs-site/docs/getting-started/environment.md"},
                     {"path": "docs-site/docs/operations/overview.md"},
-                    {"path": "docs/FOCUS.md"},
+                    {"path": "docs/strategy/FOCUS.md"},
                     {"path": "docs/status/B0_BENCHMARK_TRUTH_STATUS.md"},
                 ],
             }

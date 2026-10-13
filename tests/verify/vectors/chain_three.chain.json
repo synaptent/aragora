@@ -1,0 +1,512 @@
+[
+  {
+    "payload": {
+      "type": "aragora:decision",
+      "issued_at": "2026-01-15T12:10:00+00:00",
+      "issuer_id": "ed25519-56475aa75463474c",
+      "chain_scope": "acta-02",
+      "previousReceiptHash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "payload_digest": {
+        "hash": "sha256:b5a176fe125565ca9227394dc23e47dea84cc26e93b08f14687c74d3aa75670b",
+        "size": 2919,
+        "preview": "{\"attestation\":{\"disposition\":\"autonomous\"},\"claim\":{\"statement\":\"Merge synaptent/aragora PR 10110: ingest hardening step 1\",\"verdict\":\"PASS\"},\"confidence\":{\"calibration\":{\"provenance_ref\":{\"receipt_id\":\"odr-vector-chain-1\",\"type\":\"aragora.settlement_metad"
+      },
+      "odr": {
+        "odr_version": "0.2",
+        "profile": "https://aragora.ai/specs/open-decision-receipt/v0.2",
+        "receipt_id": "odr-vector-chain-1",
+        "issued_at": "2026-01-15T12:00:00+00:00",
+        "subject": {
+          "identifier": "odr-vector-chain-1-gauntlet",
+          "digest": {
+            "status": "present",
+            "alg": "sha-256",
+            "value": "6949bba46e25fe733c4ed4a82f67fd896b1c92fa69eb8e1d9442cb7abc912ad1"
+          },
+          "summary": "Merge synaptent/aragora PR 10110: ingest hardening step 1",
+          "repository": "synaptent/aragora",
+          "pr_number": 10110,
+          "head_sha": "7f9c2ba4e88f827d616045507605853ed73b8093",
+          "base_sha": "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+        },
+        "claim": {
+          "verdict": "PASS",
+          "statement": "Merge synaptent/aragora PR 10110: ingest hardening step 1"
+        },
+        "reasoning": {
+          "status": "present",
+          "summary": "Chain link recorded by the same emitter under the same key."
+        },
+        "quorum": {
+          "status": "present",
+          "method": "merge-quorum",
+          "reached": true,
+          "supporting_agents": [
+            "claude",
+            "codex",
+            "gemini"
+          ],
+          "participants": [
+            {
+              "agent": "claude",
+              "model_family": "claude",
+              "model_id": "claude-opus-5"
+            },
+            {
+              "agent": "codex",
+              "model_family": "openai",
+              "model_id": "gpt-4.1-codex"
+            },
+            {
+              "agent": "gemini",
+              "model_family": "gemini",
+              "model_id": "gemini-3.1-pro-preview"
+            }
+          ],
+          "independence": {
+            "disclosed": true,
+            "distinct_model_families": 3,
+            "model_families": [
+              "claude",
+              "gemini",
+              "openai"
+            ]
+          },
+          "dissent": {
+            "present": false,
+            "dissenting_agents": [],
+            "views": []
+          },
+          "verdicts": [
+            {
+              "issuer": "claude",
+              "role": "reviewer",
+              "verdict": "approve",
+              "model_family": "claude",
+              "model_id": "claude-opus-5",
+              "posted_at": "2026-01-15T12:00:00+00:00",
+              "grounded": true,
+              "counted": true,
+              "blocking": false
+            },
+            {
+              "issuer": "codex",
+              "role": "reviewer",
+              "verdict": "approve",
+              "model_family": "openai",
+              "model_id": "gpt-4.1-codex",
+              "posted_at": "2026-01-15T12:00:00+00:00",
+              "grounded": true,
+              "counted": true,
+              "blocking": false
+            },
+            {
+              "issuer": "gemini",
+              "role": "reviewer",
+              "verdict": "approve",
+              "model_family": "gemini",
+              "model_id": "gemini-3.1-pro-preview",
+              "posted_at": "2026-01-15T12:00:00+00:00",
+              "grounded": true,
+              "counted": true,
+              "blocking": false
+            }
+          ],
+          "rule": {
+            "required_signals": 2,
+            "requires_western_frontier": true,
+            "western_only_counted": false,
+            "counted_families": [
+              "claude",
+              "openai"
+            ]
+          }
+        },
+        "confidence": {
+          "status": "present",
+          "value": 0.86,
+          "scale": "unit_interval",
+          "calibration": {
+            "status": "present",
+            "provenance_ref": {
+              "type": "aragora.settlement_metadata",
+              "receipt_id": "odr-vector-chain-1"
+            }
+          }
+        },
+        "cruxes": {
+          "status": "absent",
+          "reason": "no crux set recorded for this decision (DecisionReceipt does not carry one; supply crux_set= from a CruxReceipt)"
+        },
+        "attestation": {
+          "disposition": "autonomous"
+        },
+        "routing": {
+          "status": "reserved"
+        },
+        "signatures": [
+          {
+            "alg": "Ed25519",
+            "key_id": "ed25519-56475aa75463474c",
+            "issuer": "aragora",
+            "role": "emitter",
+            "signed_at": "2026-01-15T12:05:00+00:00",
+            "signature": "+aexaF0pDayBhk7KfAXlIL/TN3/jwfNRjJZeEnABILrWuidXTAs81dkQsvZrN+Omy2cl72f9ajsd9obH4eedBA=="
+          }
+        ],
+        "source": {
+          "system": "aragora",
+          "schema": "aragora.gauntlet.DecisionReceipt",
+          "schema_version": "1.0",
+          "receipt_id": "odr-vector-chain-1",
+          "artifact_hash": "0f9e9fa2883f3693fb985df40c1f6ab3cbceaa8cff3842a43422fcaf390b3585"
+        }
+      }
+    },
+    "signature": {
+      "alg": "EdDSA",
+      "kid": "ed25519-56475aa75463474c",
+      "sig": "cb7cfe21c7eb3c99fc3f75e941de2a612079da2adb63e7fdceae49919c2a03ad3f66b22692765092556788722f28e0c30538063e488199bfee91c986d1e0a10d"
+    }
+  },
+  {
+    "payload": {
+      "type": "aragora:decision",
+      "issued_at": "2026-01-15T12:10:00+00:00",
+      "issuer_id": "ed25519-56475aa75463474c",
+      "chain_scope": "acta-02",
+      "previousReceiptHash": "69a031d59662cee73508225b9abaa4f7af4398303c375db555d6b6caa9bd9f81",
+      "payload_digest": {
+        "hash": "sha256:4a6818dea5ea8f14a4f52589cf3c22533f2da49ff5cc4ccab8face13b42e9307",
+        "size": 2919,
+        "preview": "{\"attestation\":{\"disposition\":\"autonomous\"},\"claim\":{\"statement\":\"Merge synaptent/aragora PR 10110: ingest hardening step 2\",\"verdict\":\"PASS\"},\"confidence\":{\"calibration\":{\"provenance_ref\":{\"receipt_id\":\"odr-vector-chain-2\",\"type\":\"aragora.settlement_metad"
+      },
+      "odr": {
+        "odr_version": "0.2",
+        "profile": "https://aragora.ai/specs/open-decision-receipt/v0.2",
+        "receipt_id": "odr-vector-chain-2",
+        "issued_at": "2026-01-15T12:00:00+00:00",
+        "subject": {
+          "identifier": "odr-vector-chain-2-gauntlet",
+          "digest": {
+            "status": "present",
+            "alg": "sha-256",
+            "value": "ff75eba872303d8d5acdb521a4ff6ddfc876ee315cc534ba74b260a591f6cebc"
+          },
+          "summary": "Merge synaptent/aragora PR 10110: ingest hardening step 2",
+          "repository": "synaptent/aragora",
+          "pr_number": 10110,
+          "head_sha": "7f9c2ba4e88f827d616045507605853ed73b8093",
+          "base_sha": "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+        },
+        "claim": {
+          "verdict": "PASS",
+          "statement": "Merge synaptent/aragora PR 10110: ingest hardening step 2"
+        },
+        "reasoning": {
+          "status": "present",
+          "summary": "Chain link recorded by the same emitter under the same key."
+        },
+        "quorum": {
+          "status": "present",
+          "method": "merge-quorum",
+          "reached": true,
+          "supporting_agents": [
+            "claude",
+            "codex",
+            "gemini"
+          ],
+          "participants": [
+            {
+              "agent": "claude",
+              "model_family": "claude",
+              "model_id": "claude-opus-5"
+            },
+            {
+              "agent": "codex",
+              "model_family": "openai",
+              "model_id": "gpt-4.1-codex"
+            },
+            {
+              "agent": "gemini",
+              "model_family": "gemini",
+              "model_id": "gemini-3.1-pro-preview"
+            }
+          ],
+          "independence": {
+            "disclosed": true,
+            "distinct_model_families": 3,
+            "model_families": [
+              "claude",
+              "gemini",
+              "openai"
+            ]
+          },
+          "dissent": {
+            "present": false,
+            "dissenting_agents": [],
+            "views": []
+          },
+          "verdicts": [
+            {
+              "issuer": "claude",
+              "role": "reviewer",
+              "verdict": "approve",
+              "model_family": "claude",
+              "model_id": "claude-opus-5",
+              "posted_at": "2026-01-15T12:00:00+00:00",
+              "grounded": true,
+              "counted": true,
+              "blocking": false
+            },
+            {
+              "issuer": "codex",
+              "role": "reviewer",
+              "verdict": "approve",
+              "model_family": "openai",
+              "model_id": "gpt-4.1-codex",
+              "posted_at": "2026-01-15T12:00:00+00:00",
+              "grounded": true,
+              "counted": true,
+              "blocking": false
+            },
+            {
+              "issuer": "gemini",
+              "role": "reviewer",
+              "verdict": "approve",
+              "model_family": "gemini",
+              "model_id": "gemini-3.1-pro-preview",
+              "posted_at": "2026-01-15T12:00:00+00:00",
+              "grounded": true,
+              "counted": true,
+              "blocking": false
+            }
+          ],
+          "rule": {
+            "required_signals": 2,
+            "requires_western_frontier": true,
+            "western_only_counted": false,
+            "counted_families": [
+              "claude",
+              "openai"
+            ]
+          }
+        },
+        "confidence": {
+          "status": "present",
+          "value": 0.86,
+          "scale": "unit_interval",
+          "calibration": {
+            "status": "present",
+            "provenance_ref": {
+              "type": "aragora.settlement_metadata",
+              "receipt_id": "odr-vector-chain-2"
+            }
+          }
+        },
+        "cruxes": {
+          "status": "absent",
+          "reason": "no crux set recorded for this decision (DecisionReceipt does not carry one; supply crux_set= from a CruxReceipt)"
+        },
+        "attestation": {
+          "disposition": "autonomous"
+        },
+        "routing": {
+          "status": "reserved"
+        },
+        "signatures": [
+          {
+            "alg": "Ed25519",
+            "key_id": "ed25519-56475aa75463474c",
+            "issuer": "aragora",
+            "role": "emitter",
+            "signed_at": "2026-01-15T12:05:00+00:00",
+            "signature": "6WXEGs8kCBXBF69BHL3Gy4cm+xRtBGcjAO08LnlzUS8DnAVyRx5dG9tzy4HyZUqBcsFIECJjyPikZI5PB14pAg=="
+          }
+        ],
+        "source": {
+          "system": "aragora",
+          "schema": "aragora.gauntlet.DecisionReceipt",
+          "schema_version": "1.0",
+          "receipt_id": "odr-vector-chain-2",
+          "artifact_hash": "280b0070edda80e36901c864cf6f904f785185da5ca48dd68497a91698791ef0"
+        }
+      }
+    },
+    "signature": {
+      "alg": "EdDSA",
+      "kid": "ed25519-56475aa75463474c",
+      "sig": "0d18d168ceb7e94863043f4f2a258d68566c2913568524f95d6954d660e4e311bebc9f8901abf179c3978f79ac4d6787aed5aa928660a530bd21c30c3f054d03"
+    }
+  },
+  {
+    "payload": {
+      "type": "aragora:decision",
+      "issued_at": "2026-01-15T12:10:00+00:00",
+      "issuer_id": "ed25519-56475aa75463474c",
+      "chain_scope": "acta-02",
+      "previousReceiptHash": "cc7f63457e4388d8aa507a65445d3fd1c050b230cd3769fd4cf23681d4e7cdeb",
+      "payload_digest": {
+        "hash": "sha256:dd543b1a6a4353d70c357b302a3b45aaaae3c4a0e3366b9749ced29df5120f60",
+        "size": 2919,
+        "preview": "{\"attestation\":{\"disposition\":\"autonomous\"},\"claim\":{\"statement\":\"Merge synaptent/aragora PR 10110: ingest hardening step 3\",\"verdict\":\"PASS\"},\"confidence\":{\"calibration\":{\"provenance_ref\":{\"receipt_id\":\"odr-vector-chain-3\",\"type\":\"aragora.settlement_metad"
+      },
+      "odr": {
+        "odr_version": "0.2",
+        "profile": "https://aragora.ai/specs/open-decision-receipt/v0.2",
+        "receipt_id": "odr-vector-chain-3",
+        "issued_at": "2026-01-15T12:00:00+00:00",
+        "subject": {
+          "identifier": "odr-vector-chain-3-gauntlet",
+          "digest": {
+            "status": "present",
+            "alg": "sha-256",
+            "value": "d5e08c2e52ae59e85364dd9f4fc23269b1d6a635f64e7113c73de3b6d9cb0102"
+          },
+          "summary": "Merge synaptent/aragora PR 10110: ingest hardening step 3",
+          "repository": "synaptent/aragora",
+          "pr_number": 10110,
+          "head_sha": "7f9c2ba4e88f827d616045507605853ed73b8093",
+          "base_sha": "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+        },
+        "claim": {
+          "verdict": "PASS",
+          "statement": "Merge synaptent/aragora PR 10110: ingest hardening step 3"
+        },
+        "reasoning": {
+          "status": "present",
+          "summary": "Chain link recorded by the same emitter under the same key."
+        },
+        "quorum": {
+          "status": "present",
+          "method": "merge-quorum",
+          "reached": true,
+          "supporting_agents": [
+            "claude",
+            "codex",
+            "gemini"
+          ],
+          "participants": [
+            {
+              "agent": "claude",
+              "model_family": "claude",
+              "model_id": "claude-opus-5"
+            },
+            {
+              "agent": "codex",
+              "model_family": "openai",
+              "model_id": "gpt-4.1-codex"
+            },
+            {
+              "agent": "gemini",
+              "model_family": "gemini",
+              "model_id": "gemini-3.1-pro-preview"
+            }
+          ],
+          "independence": {
+            "disclosed": true,
+            "distinct_model_families": 3,
+            "model_families": [
+              "claude",
+              "gemini",
+              "openai"
+            ]
+          },
+          "dissent": {
+            "present": false,
+            "dissenting_agents": [],
+            "views": []
+          },
+          "verdicts": [
+            {
+              "issuer": "claude",
+              "role": "reviewer",
+              "verdict": "approve",
+              "model_family": "claude",
+              "model_id": "claude-opus-5",
+              "posted_at": "2026-01-15T12:00:00+00:00",
+              "grounded": true,
+              "counted": true,
+              "blocking": false
+            },
+            {
+              "issuer": "codex",
+              "role": "reviewer",
+              "verdict": "approve",
+              "model_family": "openai",
+              "model_id": "gpt-4.1-codex",
+              "posted_at": "2026-01-15T12:00:00+00:00",
+              "grounded": true,
+              "counted": true,
+              "blocking": false
+            },
+            {
+              "issuer": "gemini",
+              "role": "reviewer",
+              "verdict": "approve",
+              "model_family": "gemini",
+              "model_id": "gemini-3.1-pro-preview",
+              "posted_at": "2026-01-15T12:00:00+00:00",
+              "grounded": true,
+              "counted": true,
+              "blocking": false
+            }
+          ],
+          "rule": {
+            "required_signals": 2,
+            "requires_western_frontier": true,
+            "western_only_counted": false,
+            "counted_families": [
+              "claude",
+              "openai"
+            ]
+          }
+        },
+        "confidence": {
+          "status": "present",
+          "value": 0.86,
+          "scale": "unit_interval",
+          "calibration": {
+            "status": "present",
+            "provenance_ref": {
+              "type": "aragora.settlement_metadata",
+              "receipt_id": "odr-vector-chain-3"
+            }
+          }
+        },
+        "cruxes": {
+          "status": "absent",
+          "reason": "no crux set recorded for this decision (DecisionReceipt does not carry one; supply crux_set= from a CruxReceipt)"
+        },
+        "attestation": {
+          "disposition": "autonomous"
+        },
+        "routing": {
+          "status": "reserved"
+        },
+        "signatures": [
+          {
+            "alg": "Ed25519",
+            "key_id": "ed25519-56475aa75463474c",
+            "issuer": "aragora",
+            "role": "emitter",
+            "signed_at": "2026-01-15T12:05:00+00:00",
+            "signature": "lDjC5y35i/F/KTgld9m9DHoeMJ3sA9F2oJWlRLCysxjbMc0FivKRHpsR1emj19sdwf3iEhnNzQrDTcZnpw7CAQ=="
+          }
+        ],
+        "source": {
+          "system": "aragora",
+          "schema": "aragora.gauntlet.DecisionReceipt",
+          "schema_version": "1.0",
+          "receipt_id": "odr-vector-chain-3",
+          "artifact_hash": "466651655132f4f8a1190c2626d15985d2c8db8c28ab567bd19fd545cdccc683"
+        }
+      }
+    },
+    "signature": {
+      "alg": "EdDSA",
+      "kid": "ed25519-56475aa75463474c",
+      "sig": "995fbd3f8d67b751e60697becddfe700fe30455eefe3375af4a84ba2756b732f408be992d2e278d0fd9081fc6dff7c2ddaad3be0af1c26a65f0639e3c724f208"
+    }
+  }
+]

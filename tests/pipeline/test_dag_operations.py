@@ -434,7 +434,7 @@ class TestDebateNode:
         mock_agent = MagicMock()
 
         monkeypatch.setattr("aragora.core.Environment", MagicMock)
-        monkeypatch.setattr("aragora.debate.protocol.DebateProtocol", MagicMock)
+        monkeypatch.setattr("aragora.protocols.debate.DebateProtocol", MagicMock)
         monkeypatch.setattr(
             "aragora.debate.orchestrator.Arena",
             MagicMock(return_value=mock_arena_instance),
@@ -462,7 +462,7 @@ class TestDebateNode:
         coord = DAGOperationsCoordinator(graph)
 
         monkeypatch.setattr("aragora.core.Environment", MagicMock)
-        monkeypatch.setattr("aragora.debate.protocol.DebateProtocol", MagicMock)
+        monkeypatch.setattr("aragora.protocols.debate.DebateProtocol", MagicMock)
         monkeypatch.setattr("aragora.debate.orchestrator.Arena", MagicMock)
         monkeypatch.setattr(
             "aragora.agents.create_agent",
@@ -503,7 +503,7 @@ class TestDebateNode:
         mock_arena_instance.run = AsyncMock(side_effect=RuntimeError("LLM timeout"))
 
         monkeypatch.setattr("aragora.core.Environment", MagicMock)
-        monkeypatch.setattr("aragora.debate.protocol.DebateProtocol", MagicMock)
+        monkeypatch.setattr("aragora.protocols.debate.DebateProtocol", MagicMock)
         monkeypatch.setattr(
             "aragora.debate.orchestrator.Arena",
             MagicMock(return_value=mock_arena_instance),
@@ -534,7 +534,7 @@ class TestDebateNode:
         mock_arena_instance.run = AsyncMock(return_value=mock_result)
 
         monkeypatch.setattr("aragora.core.Environment", MagicMock)
-        monkeypatch.setattr("aragora.debate.protocol.DebateProtocol", MagicMock)
+        monkeypatch.setattr("aragora.protocols.debate.DebateProtocol", MagicMock)
         monkeypatch.setattr(
             "aragora.debate.orchestrator.Arena",
             MagicMock(return_value=mock_arena_instance),
@@ -554,7 +554,7 @@ class TestDebateNode:
         coord = DAGOperationsCoordinator(graph)
 
         monkeypatch.setattr("aragora.core.Environment", MagicMock)
-        monkeypatch.setattr("aragora.debate.protocol.DebateProtocol", MagicMock)
+        monkeypatch.setattr("aragora.protocols.debate.DebateProtocol", MagicMock)
         monkeypatch.setattr("aragora.debate.orchestrator.Arena", MagicMock)
 
         # No agents created since agents list is empty/None
@@ -575,7 +575,7 @@ class TestDebateNode:
         mock_arena_instance.run = AsyncMock(return_value=mock_result)
 
         monkeypatch.setattr("aragora.core.Environment", MagicMock)
-        monkeypatch.setattr("aragora.debate.protocol.DebateProtocol", MagicMock)
+        monkeypatch.setattr("aragora.protocols.debate.DebateProtocol", MagicMock)
         monkeypatch.setattr(
             "aragora.debate.orchestrator.Arena",
             MagicMock(return_value=mock_arena_instance),

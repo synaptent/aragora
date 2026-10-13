@@ -275,7 +275,7 @@ class ConnectionPoolManager:
                 self.metrics.connections_active = len(getattr(pool, "_in_use_connections", []))
                 self.metrics.connections_idle = len(getattr(pool, "_available_connections", []))
 
-            logger.debug(f"Health check passed ({(time.time() - start) * 1000:.1f}ms)")
+            logger.debug("Health check passed (%.1fms)", (time.time() - start) * 1000)
 
         except (ConnectionError, TimeoutError, OSError) as e:
             self.metrics.health_check_failures += 1

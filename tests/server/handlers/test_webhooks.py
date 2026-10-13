@@ -29,7 +29,7 @@ from unittest.mock import MagicMock, patch, AsyncMock
 
 import pytest
 
-from aragora.server.handlers.webhooks import (
+from aragora.server.handlers.webhook_management import (
     WebhookHandler,
     generate_signature,
     verify_signature,
@@ -414,7 +414,10 @@ class TestRegisterWebhook:
         handler_inst.read_json_body_validated = MagicMock(return_value=(body, None))
 
     @pytest.mark.asyncio
-    @patch("aragora.server.handlers.webhooks.validate_webhook_url", return_value=(True, ""))
+    @patch(
+        "aragora.server.handlers.webhook_management.validate_webhook_url",
+        return_value=(True, ""),
+    )
     async def test_register_webhook_success(self, mock_validate, handler):
         self._mock_body(
             handler,
@@ -447,7 +450,10 @@ class TestRegisterWebhook:
         assert status == 400
 
     @pytest.mark.asyncio
-    @patch("aragora.server.handlers.webhooks.validate_webhook_url", return_value=(True, ""))
+    @patch(
+        "aragora.server.handlers.webhook_management.validate_webhook_url",
+        return_value=(True, ""),
+    )
     async def test_register_webhook_missing_events(self, mock_validate, handler):
         self._mock_body(handler, {"url": "https://example.com/hook"})
         result = await handler.handle_post("/api/v1/webhooks", {}, _make_mock_http_handler())
@@ -455,7 +461,10 @@ class TestRegisterWebhook:
         assert status == 400
 
     @pytest.mark.asyncio
-    @patch("aragora.server.handlers.webhooks.validate_webhook_url", return_value=(True, ""))
+    @patch(
+        "aragora.server.handlers.webhook_management.validate_webhook_url",
+        return_value=(True, ""),
+    )
     async def test_register_webhook_invalid_event_type(self, mock_validate, handler):
         self._mock_body(
             handler,
@@ -470,7 +479,10 @@ class TestRegisterWebhook:
         assert "Invalid event types" in body.get("error", body.get("message", ""))
 
     @pytest.mark.asyncio
-    @patch("aragora.server.handlers.webhooks.validate_webhook_url", return_value=(True, ""))
+    @patch(
+        "aragora.server.handlers.webhook_management.validate_webhook_url",
+        return_value=(True, ""),
+    )
     async def test_register_webhook_wildcard_event(self, mock_validate, handler):
         self._mock_body(
             handler,
@@ -485,7 +497,7 @@ class TestRegisterWebhook:
 
     @pytest.mark.asyncio
     @patch(
-        "aragora.server.handlers.webhooks.validate_webhook_url",
+        "aragora.server.handlers.webhook_management.validate_webhook_url",
         return_value=(False, "URL resolves to private IP"),
     )
     async def test_register_webhook_ssrf_rejected(self, mock_validate, handler):
@@ -587,7 +599,10 @@ class TestUpdateWebhook:
     def _mock_body(self, handler_inst, body: dict):
         handler_inst.read_json_body_validated = MagicMock(return_value=(body, None))
 
-    @patch("aragora.server.handlers.webhooks.validate_webhook_url", return_value=(True, ""))
+    @patch(
+        "aragora.server.handlers.webhook_management.validate_webhook_url",
+        return_value=(True, ""),
+    )
     def test_update_webhook_url(self, mock_validate, handler):
         self._mock_body(handler, {"url": "https://new.example.com/hook"})
         result = handler.handle_patch("/api/v1/webhooks/wh-001", {}, _make_mock_http_handler())
@@ -623,7 +638,7 @@ class TestUpdateWebhook:
         assert "Invalid event types" in body.get("error", body.get("message", ""))
 
     @patch(
-        "aragora.server.handlers.webhooks.validate_webhook_url",
+        "aragora.server.handlers.webhook_management.validate_webhook_url",
         return_value=(False, "URL resolves to private IP"),
     )
     def test_update_webhook_ssrf_url_rejected(self, mock_validate, handler):
@@ -767,7 +782,7 @@ class TestSLOEndpoints:
 
     @pytest.mark.asyncio
     @patch(
-        "aragora.server.handlers.webhooks.WebhookHandler._handle_slo_status",
+        "aragora.server.handlers.webhook_management.WebhookHandler._handle_slo_status",
     )
     async def test_slo_status_route_dispatches(self, mock_slo, handler):
         """Verify the route dispatches to the SLO status handler."""

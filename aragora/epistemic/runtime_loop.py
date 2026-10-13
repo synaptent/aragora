@@ -41,7 +41,7 @@ import logging
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from types import MappingProxyType
 from typing import Any
 
@@ -52,6 +52,8 @@ from aragora.epistemic.quarantine_policy import (
     apply_quarantine_policy,
 )
 from aragora.epistemic.repair import RepairSpec, propose_repair
+
+UTC = timezone.utc
 
 _FLAG = "ARAGORA_DIALECTICAL_RUNTIME_ENABLED"
 

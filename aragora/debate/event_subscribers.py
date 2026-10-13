@@ -113,8 +113,11 @@ class DebateEventSubscriber:
         # Log significant ELO changes
         if abs(delta) > 50:
             logger.info(
-                f"Significant ELO change: {agent_name} -> {new_elo} "
-                f"(Δ{delta:+.0f}) in debate {debate_id}"
+                "Significant ELO change: %s -> %s (Δ%+.0f) in debate %s",
+                agent_name,
+                new_elo,
+                delta,
+                debate_id,
             )
 
         # Update agent pool weights for future team selection
@@ -148,8 +151,10 @@ class DebateEventSubscriber:
         prediction_count = data.get("prediction_count", 0)
 
         logger.debug(
-            f"Calibration update: {agent_name} -> {calibration_score:.2f} "
-            f"(predictions: {prediction_count})"
+            "Calibration update: %s -> %.2f (predictions: %s)",
+            agent_name,
+            calibration_score,
+            prediction_count,
         )
 
         # Update agent pool with calibration data
@@ -182,7 +187,7 @@ class DebateEventSubscriber:
         if not agents_used or confidence < 0.5:
             return
 
-        logger.debug(f"Learning from consensus: {debate_id} confidence={confidence:.2f}")
+        logger.debug("Learning from consensus: %s confidence=%.2f", debate_id, confidence)
 
         try:
             from aragora.debate.selection_feedback import SelectionFeedbackLoop

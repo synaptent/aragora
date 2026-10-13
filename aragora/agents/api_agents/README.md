@@ -77,7 +77,7 @@ Agent (core.py)
     │   ├── DeepSeekAgent     # DeepSeek V3/R1
     │   ├── LlamaAgent        # Meta Llama 3.3/4
     │   ├── QwenAgent         # Alibaba Qwen 2.5/3
-    │   ├── KimiK2Agent       # Moonshot Kimi K2.6
+    │   ├── KimiK3Agent       # Moonshot Kimi K3
     │   ├── SonarAgent        # Perplexity Sonar
     │   ├── CommandRAgent     # Cohere Command R+
     │   ├── JambaAgent        # AI21 Jamba
@@ -109,15 +109,15 @@ Agent (core.py)
 | `LlamaAgent` | llama-3.3-70b | Meta's flagship open model |
 | `Llama4MaverickAgent` | llama-4-maverick | 400B MoE, 1M context |
 | `Llama4ScoutAgent` | llama-4-scout | 109B MoE, 10M context |
-| `QwenAgent` | qwen3-max | Alibaba's frontier model |
-| `QwenMaxAgent` | qwen3-max | Trillion-parameter frontier |
+| `QwenAgent` | qwen3.8-max | Alibaba's frontier model |
+| `QwenMaxAgent` | qwen3.8-max | 1M-context frontier model |
 | `MistralAgent` | mistral-large-2411 | Via OpenRouter |
 | `YiAgent` | yi-large | 01.AI flagship |
-| `KimiK2Agent` | kimi-k2.6 | Latest frontier Kimi model on OpenRouter |
+| `KimiK3Agent` | kimi-k3 | Latest frontier Kimi model on OpenRouter |
 | `KimiThinkingAgent` | kimi-k2-thinking | Reasoning model |
-| `SonarAgent` | sonar-reasoning | DeepSeek R1 + web search |
-| `CommandRAgent` | command-r-plus | RAG-optimized |
-| `JambaAgent` | jamba-1.6-large | SSM-Transformer hybrid |
+| `SonarAgent` | sonar-reasoning-pro | Advanced reasoning + web search |
+| `CommandRAgent` | command-a | Tool use and RAG |
+| `JambaAgent` | jamba-large-1.7 | SSM-Transformer hybrid |
 
 ### Local Inference
 
@@ -202,6 +202,7 @@ agent = AnthropicAPIAgent(enable_fallback=True)
 OPENROUTER_FALLBACK_MODELS = {
     "qwen/qwen3-235b-a22b": "deepseek/deepseek-v4-pro",
     "deepseek/deepseek-v4-pro": "openai/gpt-5.3-chat",
+    "moonshotai/kimi-k3": "anthropic/claude-opus-5",
     "moonshotai/kimi-k2.6": "anthropic/claude-opus-5",
     "meta-llama/llama-3.3-70b-instruct": "openai/gpt-4o-mini",
     # ... more mappings

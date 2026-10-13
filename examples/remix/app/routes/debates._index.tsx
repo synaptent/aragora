@@ -1,11 +1,12 @@
-import type { LoaderFunctionArgs, MetaFunction } from '@remix-run/node';
+import type { MetaFunction } from '@remix-run/node';
 import { json } from '@remix-run/node';
 import { Link, useLoaderData } from '@remix-run/react';
-import { getClient } from '~/aragora.server';
+import { getClient } from '../aragora.server';
+import { debateView } from '../debate-view';
 
 export const meta: MetaFunction = () => [{ title: 'Debates | Aragora' }];
 
-export async function loader({ request }: LoaderFunctionArgs) {
+export async function loader() {
   const client = getClient();
 
   try {
@@ -37,7 +38,7 @@ export default function DebatesIndex() {
         </div>
       ) : (
         <div className="grid">
-          {debates.map((debate: any) => (
+          {debates.map(debate => (
             <Link
               key={debate.debate_id}
               to={`/debates/${debate.debate_id}`}
@@ -57,7 +58,7 @@ export default function DebatesIndex() {
                   {debate.task?.length > 60 ? '...' : ''}
                 </h3>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-                  {debate.agents?.length || 0} agents | Round {debate.current_round || 0}/{debate.total_rounds || 9}
+                  {debate.agents?.length || 0} agents | {debateView(debate).roundsCompleted} {debateView(debate).roundsCompleted === 1 ? 'round' : 'rounds'} completed
                 </p>
               </div>
             </Link>

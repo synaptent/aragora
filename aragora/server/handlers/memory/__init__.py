@@ -1,4 +1,8 @@
-"""Memory handlers - memory management, analytics, learning, and insights."""
+"""Memory handlers - memory management, analytics, learning, and insights.
+
+Additional modules (import directly, without expanding eager package exports):
+checkpoints, consensus and memory_unified.
+"""
 
 from .coordinator import COORDINATOR_AVAILABLE, CoordinatorHandler
 from .insights import InsightsHandler

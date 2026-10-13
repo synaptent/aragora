@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from typing import Any
 
 from aragora.ideacloud.graph.node import IdeaNode
@@ -16,6 +17,16 @@ class BaseIdeaIngestor(ABC):
     """
 
     source_type: str = "unknown"
+    # Deferred side-effect (e.g. advancing incremental-sync state) staged by
+    # ingest(); the caller invokes commit_ingest() only AFTER the returned
+    # nodes are durably stored, so a crash in between cannot lose entries.
+    _pending_commit: Callable[[], None] | None = None
+
+    def commit_ingest(self) -> None:
+        """Run and clear any deferred post-ingest commit staged by ingest()."""
+        if self._pending_commit is not None:
+            commit, self._pending_commit = self._pending_commit, None
+            commit()
 
     @abstractmethod
     async def ingest(self, source: Any) -> list[IdeaNode]:

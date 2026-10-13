@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+import pytest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -44,6 +45,32 @@ def test_schema_documents_required_claim_contract() -> None:
         "propose_bounded_issue"
         in schema["$defs"]["failure"]["properties"]["allowed_action"]["enum"]
     )
+    truth_status = schema["$defs"]["truth_status"]
+    assert set(truth_status["properties"]["state"]["enum"]) == {
+        "live",
+        "unsupported",
+        "aspirational",
+    }
+
+
+def test_time_aware_manifests_declare_honest_truth_status() -> None:
+    for name in ("proof_first_claims.yaml", "outsider_verifiable_claims.yaml"):
+        manifest = _load_manifest(CLAIMS_DIR / name)
+        for claim in manifest["claims"]:
+            truth_status = claim["truth_status"]
+            assert truth_status["state"] in {"live", "unsupported", "aspirational"}
+            if truth_status["state"] == "live":
+                assert truth_status["last_verified_at"].endswith("Z")
+            else:
+                assert "last_verified_at" not in truth_status
+
+
+def test_all_manifests_remain_valid_under_backward_compatible_schema() -> None:
+    jsonschema = pytest.importorskip("jsonschema")
+    schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+    validator = jsonschema.Draft202012Validator(schema)
+    for path in sorted(CLAIMS_DIR.glob("*.yaml")):
+        validator.validate(_load_manifest(path))
 
 
 def test_initial_proof_first_manifest_has_three_grounded_claims() -> None:

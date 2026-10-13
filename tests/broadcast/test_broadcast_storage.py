@@ -209,6 +209,27 @@ class TestAudioFileStore:
         assert result_path.suffix == ".wav"
         assert result_path.read_bytes() == audio_bytes
 
+    def test_save_rejects_oversized_file(self, audio_store, sample_audio_file, monkeypatch, caplog):
+        """Oversized source files are rejected and the sizes are logged."""
+        monkeypatch.setattr("aragora.broadcast.storage.MAX_FILE_SIZE_BYTES", 4)
+
+        with caplog.at_level("ERROR", logger="aragora.broadcast.storage"):
+            result = audio_store.save("oversize-file", sample_audio_file, format="mp3")
+
+        assert result is None
+        size = sample_audio_file.stat().st_size
+        assert f"Audio file too large: {size:,} bytes > 4 bytes limit" in caplog.text
+
+    def test_save_bytes_rejects_oversized_data(self, audio_store, monkeypatch, caplog):
+        """Oversized byte payloads are rejected and the sizes are logged."""
+        monkeypatch.setattr("aragora.broadcast.storage.MAX_FILE_SIZE_BYTES", 1_000)
+
+        with caplog.at_level("ERROR", logger="aragora.broadcast.storage"):
+            result = audio_store.save_bytes("oversize-bytes", b"x" * 1_001, format="wav")
+
+        assert result is None
+        assert "Audio data too large: 1,001 bytes > 1,000 bytes limit" in caplog.text
+
     def test_get_path_returns_existing(self, audio_store, sample_audio_file):
         """get_path should return path for existing audio."""
         debate_id = "get-path-test"

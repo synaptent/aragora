@@ -23,6 +23,7 @@ import platform
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import cast
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent.parent
@@ -56,8 +57,8 @@ DECLARED_MODEL_PINS = {
     "mistral": "mistral-large-2512",
     "openrouter.deepseek": "deepseek/deepseek-v4-pro",
     "openrouter.llama": "meta-llama/llama-3.3-70b-instruct",
-    "openrouter.qwen": "qwen/qwen3-max",
-    "openrouter.kimi": "moonshotai/kimi-k2-0905",
+    "openrouter.qwen": "qwen/qwen3.8-max",
+    "openrouter.kimi": "moonshotai/kimi-k3",
     "built-in.demo": "demo",
 }
 
@@ -223,16 +224,19 @@ def main() -> None:
 
     out_path = HERE / "manifest.json"
     out_path.write_text(json.dumps(manifest, indent=2, sort_keys=True))
+    repo = cast(dict[str, object], manifest["repo"])
+    venv = cast(dict[str, object], manifest["venv"])
+    verdict = cast(dict[str, object], manifest["bench_readiness_verdict"])
     print(
         json.dumps(
             {
-                "git_sha": manifest["repo"]["git_sha"],
-                "clean_tree": manifest["repo"]["clean_working_tree"],
-                "packages_pinned": manifest["venv"]["packages_count"],
-                "pip_freeze_hash": manifest["venv"]["pip_freeze_hash"],
-                "tier1_ablation": manifest["bench_readiness_verdict"]["tier1_standalone_ablation"],
-                "tier2_e2e": manifest["bench_readiness_verdict"]["tier2_full_platform_e2e"],
-                "blockers": len(manifest["bench_readiness_verdict"]["blockers"]),
+                "git_sha": repo["git_sha"],
+                "clean_tree": repo["clean_working_tree"],
+                "packages_pinned": venv["packages_count"],
+                "pip_freeze_hash": venv["pip_freeze_hash"],
+                "tier1_ablation": verdict["tier1_standalone_ablation"],
+                "tier2_e2e": verdict["tier2_full_platform_e2e"],
+                "blockers": len(cast(list[object], verdict["blockers"])),
             },
             indent=2,
         )

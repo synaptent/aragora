@@ -32,7 +32,7 @@ from aragora.server.handlers import (
     MetricsHandler,
 )
 from aragora.server.handlers.base import clear_cache
-from aragora.server.storage import DebateStorage
+from aragora.storage.debate_storage import DebateStorage
 from aragora.ranking.elo import EloSystem
 from aragora.server.stream import SyncEventEmitter, StreamEvent, StreamEventType
 

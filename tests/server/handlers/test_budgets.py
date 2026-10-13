@@ -631,6 +631,30 @@ class TestCreateBudget:
             assert status == 400
             assert "amount_usd" in body.get("error", "").lower()
 
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("huge_amount", [10**400, -(10**400)])
+    async def test_create_budget_huge_integer_amount_returns_400(
+        self, budget_handler, mock_budget_manager, mock_user_context, huge_amount
+    ):
+        """Arbitrary-precision JSON ints must yield 400, not an OverflowError 500."""
+        handler = create_json_handler({"name": "Test", "amount_usd": huge_amount})
+
+        with (
+            patch("aragora.billing.jwt_auth.extract_user_from_request") as mock_extract,
+            patch.object(budget_handler, "_get_budget_manager", return_value=mock_budget_manager),
+            patch.object(budget_handler, "read_json_body") as mock_read_body,
+            patch("aragora.rbac.checker.get_permission_checker") as mock_checker,
+        ):
+            mock_extract.return_value = mock_user_context
+            mock_checker.return_value.check_permission.return_value = MagicMock(allowed=True)
+            mock_read_body.return_value = {"name": "Test", "amount_usd": huge_amount}
+
+            result = await budget_handler.handle("/api/v1/budgets", "POST", handler)
+            body, status = parse_response(result)
+
+            assert status == 400
+            assert "amount_usd" in body.get("error", "").lower()
+
 
 # ===========================================================================
 # Test: Get Budget
@@ -733,6 +757,33 @@ class TestUpdateBudget:
             assert status == 200
             assert body["name"] == "Updated Budget"
             assert body["amount_usd"] == 2000.0
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("huge_amount", [10**400, -(10**400)])
+    async def test_update_budget_huge_integer_amount_returns_400(
+        self, budget_handler, mock_budget_manager, mock_user_context, huge_amount
+    ):
+        """Arbitrary-precision JSON ints must yield 400, not an OverflowError 500."""
+        handler = create_json_handler(
+            {"amount_usd": huge_amount},
+            path="/api/v1/budgets/budget-123",
+        )
+
+        with (
+            patch("aragora.billing.jwt_auth.extract_user_from_request") as mock_extract,
+            patch.object(budget_handler, "_get_budget_manager", return_value=mock_budget_manager),
+            patch.object(budget_handler, "read_json_body") as mock_read_body,
+            patch("aragora.rbac.checker.get_permission_checker") as mock_checker,
+        ):
+            mock_extract.return_value = mock_user_context
+            mock_checker.return_value.check_permission.return_value = MagicMock(allowed=True)
+            mock_read_body.return_value = {"amount_usd": huge_amount}
+
+            result = await budget_handler.handle("/api/v1/budgets/budget-123", "PATCH", handler)
+            body, status = parse_response(result)
+
+            assert status == 400
+            assert "amount_usd" in body.get("error", "").lower()
 
 
 # ===========================================================================

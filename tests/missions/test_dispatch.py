@@ -13,7 +13,7 @@ from pathlib import Path
 
 from aragora.missions.dispatch import BossLoopDispatch, GateVerdict
 from aragora.missions.live_gate import LiveBossLoopGate
-from aragora.missions.state import Feature
+from aragora.missions.state import PARK_KIND_MISSING_BRANCH, Feature
 
 
 class FakeGate:
@@ -82,9 +82,29 @@ def test_missing_branch_metadata_parks_before_live_git_lookup():
     handoff = BossLoopDispatch(gate)(feature)
 
     assert not handoff.success
-    assert handoff.terminal
+    # #8758 design decision: a missing branch is "not ready yet", never "dead" —
+    # a retryable, reconciler-owned park, NOT a terminal block.
+    assert not handoff.terminal
+    assert handoff.parked
+    assert handoff.parked_kind == PARK_KIND_MISSING_BRANCH
     assert "metadata.branch" in handoff.blocked_reason
     assert gate.branch_calls == 0
+    assert gate.evidence_calls == 0
+    assert gate.merge_calls == []
+
+
+def test_nonempty_missing_branch_ref_reparks_before_evidence():
+    class MissingRefGate(FakeGate):
+        def head_of(self, branch: str) -> str:
+            raise RuntimeError(f"fatal: unknown revision or path {branch}")
+
+    gate = MissingRefGate()
+    handoff = BossLoopDispatch(gate)(_feat())
+
+    assert not handoff.success
+    assert handoff.parked
+    assert handoff.parked_kind == PARK_KIND_MISSING_BRANCH
+    assert "live git ref" in (handoff.blocked_reason or "")
     assert gate.evidence_calls == 0
     assert gate.merge_calls == []
 

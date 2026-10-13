@@ -2,15 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { getClientSideClient } from '@/lib/aragora';
-
-interface StreamEvent {
-  type: string;
-  agent?: string;
-  content?: string;
-  round?: number;
-  phase?: string;
-  timestamp: string;
-}
+import { connectDebateStream, type StreamEvent } from '@/lib/debate-stream';
 
 export default function DebateStream({ debateId }: { debateId: string }) {
   const [events, setEvents] = useState<StreamEvent[]>([]);
@@ -18,42 +10,12 @@ export default function DebateStream({ debateId }: { debateId: string }) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const client = getClientSideClient();
-    let cleanup: (() => void) | undefined;
-
-    async function connectStream() {
-      try {
-        const stream = await client.debates.stream(debateId);
-        setConnected(true);
-
-        stream.on('message', (event: any) => {
-          setEvents(prev => [...prev, {
-            ...event,
-            timestamp: new Date().toISOString(),
-          }]);
-        });
-
-        stream.on('error', (err: Error) => {
-          setError(err.message);
-          setConnected(false);
-        });
-
-        stream.on('close', () => {
-          setConnected(false);
-        });
-
-        cleanup = () => stream.close();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to connect');
-        setConnected(false);
-      }
-    }
-
-    connectStream();
-
-    return () => {
-      if (cleanup) cleanup();
-    };
+    const stream = getClientSideClient().createWebSocket();
+    return connectDebateStream(stream, debateId, {
+      onEvent: event => setEvents(prev => [...prev.slice(-199), event]),
+      onConnected: setConnected,
+      onError: setError,
+    });
   }, [debateId]);
 
   if (error) {

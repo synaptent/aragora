@@ -1,0 +1,17 @@
+{
+  "verifier": {
+    "verified": false,
+    "exit_code": 1,
+    "reasons": [
+      "signature"
+    ]
+  },
+  "aragora_verify": {
+    "ok": false,
+    "exit_code": 1,
+    "reasons": [
+      "signature"
+    ]
+  },
+  "description": "The same decision signed by a foreign key: no signature verifies with pubkey.pem."
+}

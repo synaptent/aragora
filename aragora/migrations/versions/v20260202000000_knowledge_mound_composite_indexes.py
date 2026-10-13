@@ -15,6 +15,7 @@ IF NOT EXISTS to safely run multiple times without errors.
 
 import logging
 
+from aragora.migrations.patterns import get_missing_columns
 from aragora.migrations.runner import Migration
 from aragora.storage.backends import DatabaseBackend, PostgreSQLBackend
 
@@ -65,6 +66,26 @@ def _index_exists(backend: DatabaseBackend, index_name: str) -> bool:
         return False
 
 
+def _create_index(
+    backend: DatabaseBackend, index_name: str, table: str, columns: list[str], sql: str
+) -> None:
+    """Run ``sql`` unless ``table`` lacks one of ``columns``.
+
+    The Knowledge Mound stores create these tables at runtime, and the SQLite
+    KnowledgeMoundMetaStore's knowledge_nodes has no staleness_score column.
+    """
+    missing = get_missing_columns(backend, table, columns)
+    if missing:
+        logger.warning(
+            "Skipping index %s: table %s has no column(s) %s",
+            index_name,
+            table,
+            ", ".join(missing),
+        )
+        return
+    backend.execute_write(sql)
+
+
 def up_fn(backend: DatabaseBackend) -> None:
     """Apply the migration - add composite indexes for Knowledge Mound."""
     # =========================================================================
@@ -76,9 +97,13 @@ def up_fn(backend: DatabaseBackend) -> None:
     # ORDER BY confidence DESC
     if _table_exists(backend, "knowledge_nodes"):
         logger.info("Adding composite index for workspace_id, node_type, confidence DESC")
-        backend.execute_write(
+        _create_index(
+            backend,
+            "idx_km_workspace_type_confidence",
+            "knowledge_nodes",
+            ["workspace_id", "node_type", "confidence"],
             "CREATE INDEX IF NOT EXISTS idx_km_workspace_type_confidence "
-            "ON knowledge_nodes(workspace_id, node_type, confidence DESC)"
+            "ON knowledge_nodes(workspace_id, node_type, confidence DESC)",
         )
 
         # =====================================================================
@@ -89,9 +114,13 @@ def up_fn(backend: DatabaseBackend) -> None:
         # WHERE workspace_id = ?
         # ORDER BY updated_at DESC
         logger.info("Adding composite index for updated_at DESC, workspace_id")
-        backend.execute_write(
+        _create_index(
+            backend,
+            "idx_km_updated_workspace",
+            "knowledge_nodes",
+            ["updated_at", "workspace_id"],
             "CREATE INDEX IF NOT EXISTS idx_km_updated_workspace "
-            "ON knowledge_nodes(updated_at DESC, workspace_id)"
+            "ON knowledge_nodes(updated_at DESC, workspace_id)",
         )
 
         # =====================================================================
@@ -102,9 +131,13 @@ def up_fn(backend: DatabaseBackend) -> None:
         # WHERE validation_status = 'unverified'
         # ORDER BY staleness_score DESC
         logger.info("Adding composite index for validation_status, staleness_score")
-        backend.execute_write(
+        _create_index(
+            backend,
+            "idx_km_validation_staleness",
+            "knowledge_nodes",
+            ["validation_status", "staleness_score"],
             "CREATE INDEX IF NOT EXISTS idx_km_validation_staleness "
-            "ON knowledge_nodes(validation_status, staleness_score DESC)"
+            "ON knowledge_nodes(validation_status, staleness_score DESC)",
         )
     else:
         logger.info("knowledge_nodes table does not exist, skipping node indexes")
@@ -118,9 +151,13 @@ def up_fn(backend: DatabaseBackend) -> None:
     # (also supports finding specific edges between nodes)
     if _table_exists(backend, "knowledge_relationships"):
         logger.info("Adding composite index for from_node_id, relationship_type, to_node_id")
-        backend.execute_write(
+        _create_index(
+            backend,
+            "idx_km_rel_path",
+            "knowledge_relationships",
+            ["from_node_id", "relationship_type", "to_node_id"],
             "CREATE INDEX IF NOT EXISTS idx_km_rel_path "
-            "ON knowledge_relationships(from_node_id, relationship_type, to_node_id)"
+            "ON knowledge_relationships(from_node_id, relationship_type, to_node_id)",
         )
     else:
         logger.info("knowledge_relationships table does not exist, skipping relationship index")
@@ -148,4 +185,8 @@ migration = Migration(
     name="Knowledge Mound composite indexes for query optimization",
     up_fn=up_fn,
     down_fn=down_fn,
+    # Recorded by databases that applied the revision before the column guards.
+    # The guards only skip indexes naming a column the table lacks, which
+    # failed to apply.
+    previous_checksums=("4fff064b3fc0e4a8280fe9739e2cf094ba03d112b4c61bcc6899cd084c074671",),
 )

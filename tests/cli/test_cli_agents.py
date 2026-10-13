@@ -1441,7 +1441,7 @@ class TestCLIAgentModelMapping:
     def test_grok_model_mapping(self):
         """Should map Grok models correctly."""
         agent = GrokCLIAgent(name="test", model="grok-3")
-        assert agent.OPENROUTER_MODEL_MAP.get("grok-3") == "x-ai/grok-4"
+        assert agent.OPENROUTER_MODEL_MAP.get("grok-3") == "x-ai/grok-4.5"
 
     def test_deepseek_model_mapping(self):
         """Should map Deepseek models correctly."""

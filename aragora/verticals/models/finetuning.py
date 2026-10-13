@@ -258,7 +258,10 @@ class VerticalFineTuningPipeline:
             # Print trainable parameters
             trainable, total = self._model.get_nb_trainable_parameters()
             logger.info(
-                f"Trainable parameters: {trainable:,} / {total:,} ({100 * trainable / total:.2f}%)"
+                "Trainable parameters: %s / %s (%.2f%%)",
+                format(trainable, ","),
+                format(total, ","),
+                100 * trainable / total,
             )
 
         except ImportError as e:

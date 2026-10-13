@@ -1,0 +1,550 @@
+"""Dispatch tests for the documented single-item reads under flips, matches and reputation.
+
+The OpenAPI spec documents three single-item GETs that no dispatch branch
+served:
+
+- ``GET /api/flips/{flip_id}``: AgentsHandler.can_handle claimed every
+  ``/api/flips/`` path, but handle() only answered ``recent`` and ``summary``.
+- ``GET /api/matches/{match_id}``: no handler claimed the path.
+- ``GET /api/reputation/{agent_id}``: no handler claimed the path.
+
+Each is now served from its existing store and returns that store's own
+shape: ``FlipEvent.to_dict()`` from the ``detected_flips`` table, the
+``get_recent_matches`` row shape from the ELO ``matches`` table (keyed by the
+unique ``debate_id``), and the CritiqueStore reputation body that
+``/api/agent/{name}/reputation`` builds.
+
+Dispatch runs through the real ``_try_modular_handler`` + ``RouteIndex``
+machinery, not only can_handle probes.
+"""
+
+from __future__ import annotations
+
+import io
+import json
+from collections.abc import Iterator
+from pathlib import Path
+from typing import Any
+from unittest.mock import MagicMock, patch
+from urllib.parse import quote, urlparse
+
+import pytest
+
+from aragora.insights.flip_detector import FlipDetector, FlipEvent
+from aragora.persistence.db_config import DatabaseType, get_db_path
+from aragora.ranking.elo import EloSystem
+from aragora.server.handler_registry import HandlerRegistryMixin
+from aragora.server.handler_registry.core import RouteIndex
+from aragora.server.handlers.agents.agents import AgentsHandler
+from aragora.server.handlers.agents.matches_stats import MatchesStatsHandler
+from aragora.server.handlers.debates.critique import CritiqueHandler
+
+
+@pytest.fixture(autouse=True)
+def _reset_limiters(monkeypatch: pytest.MonkeyPatch):
+    from aragora.server.handlers.agents import agents as agents_mod
+    from aragora.server.handlers.debates import critique as critique_mod
+
+    monkeypatch.setattr(
+        agents_mod, "_agent_limiter", agents_mod.RateLimiter(requests_per_minute=60)
+    )
+    critique_mod._critique_limiter._buckets.clear()
+    try:
+        from aragora.server.handlers.admin.cache import clear_cache
+
+        clear_cache()
+    except ImportError:
+        pass
+    yield
+    critique_mod._critique_limiter._buckets.clear()
+
+
+def _make_dispatch_instance(handlers: dict[str, Any]) -> tuple[Any, RouteIndex]:
+    """Build a mixin instance plus a REAL RouteIndex over the given handlers."""
+
+    class _TestMixin(HandlerRegistryMixin):
+        _handlers_initialized = True
+
+    instance: Any = _TestMixin()
+    instance.command = "GET"
+    instance.headers = {}
+    instance.wfile = io.BytesIO()
+    instance.send_response = MagicMock()
+    instance.send_header = MagicMock()
+    instance.end_headers = MagicMock()
+    instance._add_cors_headers = MagicMock()
+    instance._add_security_headers = MagicMock()
+    instance._add_trace_headers = MagicMock()
+    instance._auth_context = None
+    instance.client_address = ("127.0.0.1", 12345)
+
+    registry = []
+    for attr_name, handler in handlers.items():
+        setattr(instance, attr_name, handler)
+        registry.append((attr_name, handler.__class__))
+
+    index = RouteIndex()
+    index.build(instance, registry)
+    return instance, index
+
+
+def _dispatch(instance: Any, index: RouteIndex, path: str) -> tuple[bool, int | None, Any]:
+    """Run _try_modular_handler with the real machinery; return (handled, status, body)."""
+    instance.wfile = io.BytesIO()
+    instance.send_response.reset_mock()
+    with (
+        patch("aragora.server.handler_registry.HANDLERS_AVAILABLE", True),
+        patch("aragora.server.handler_registry.get_route_index", return_value=index),
+        patch(
+            "aragora.server.middleware.rate_limit.should_apply_default_rate_limit",
+            return_value=False,
+        ),
+    ):
+        handled = instance._try_modular_handler(path, {})
+    status = None
+    if instance.send_response.call_args is not None:
+        status = instance.send_response.call_args[0][0]
+    raw = instance.wfile.getvalue()
+    body = json.loads(raw) if raw else None
+    return handled, status, body
+
+
+def _get_target(instance: Any, index: RouteIndex, target: str) -> tuple[bool, int | None, Any]:
+    """Dispatch a raw request-target the way the request lifecycle does: ``urlparse(...).path``."""
+    return _dispatch(instance, index, urlparse(target).path)
+
+
+# ---------------------------------------------------------------------------
+# GET /api/flips/{flip_id}
+# ---------------------------------------------------------------------------
+
+
+def _flip(flip_id: str = "flip-abc123") -> FlipEvent:
+    return FlipEvent(
+        id=flip_id,
+        agent_name="claude",
+        original_claim="Rate limits belong at the gateway",
+        new_claim="Rate limits belong in each service",
+        original_confidence=0.8,
+        new_confidence=0.7,
+        original_debate_id="debate-1",
+        new_debate_id="debate-2",
+        original_position_id="pos-1",
+        new_position_id="pos-2",
+        similarity_score=0.9,
+        flip_type="contradiction",
+        domain="architecture",
+        detected_at="2026-10-04T10:00:00",
+    )
+
+
+@pytest.fixture
+def flip_store(tmp_path: Path) -> tuple[Path, FlipEvent]:
+    detector = FlipDetector(str(get_db_path(DatabaseType.POSITIONS, tmp_path)))
+    flip = _flip()
+    detector._store_flips_batch([flip])
+    return tmp_path, flip
+
+
+class TestFlipDetectorGetFlip:
+    def test_returns_stored_flip_by_primary_key(self, flip_store) -> None:
+        nomic_dir, flip = flip_store
+        detector = FlipDetector(str(get_db_path(DatabaseType.POSITIONS, nomic_dir)))
+        found = detector.get_flip(flip.id)
+        assert found is not None
+        assert found == flip
+
+    def test_unknown_flip_is_none(self, flip_store) -> None:
+        nomic_dir, _ = flip_store
+        detector = FlipDetector(str(get_db_path(DatabaseType.POSITIONS, nomic_dir)))
+        assert detector.get_flip("flip-missing") is None
+
+    def test_recent_flips_keep_the_same_rows(self, flip_store) -> None:
+        nomic_dir, flip = flip_store
+        detector = FlipDetector(str(get_db_path(DatabaseType.POSITIONS, nomic_dir)))
+        assert detector.get_recent_flips(limit=5) == [flip]
+
+
+class TestFlipDetailDispatch:
+    @pytest.mark.parametrize("prefix", ["/api/flips/", "/api/v1/flips/"])
+    def test_serves_flip_to_dict(self, flip_store, prefix: str) -> None:
+        nomic_dir, flip = flip_store
+        instance, index = _make_dispatch_instance(
+            {"_agents_handler": AgentsHandler(server_context={"nomic_dir": nomic_dir})}
+        )
+        handled, status, body = _dispatch(instance, index, prefix + flip.id)
+        assert handled is True
+        assert status == 200
+        assert body == flip.to_dict()
+
+    def test_unknown_flip_is_404(self, flip_store) -> None:
+        nomic_dir, _ = flip_store
+        instance, index = _make_dispatch_instance(
+            {"_agents_handler": AgentsHandler(server_context={"nomic_dir": nomic_dir})}
+        )
+        handled, status, _ = _dispatch(instance, index, "/api/v1/flips/flip-missing")
+        assert handled is True
+        assert status == 404
+
+    def test_no_flip_store_is_503(self) -> None:
+        instance, index = _make_dispatch_instance(
+            {"_agents_handler": AgentsHandler(server_context={})}
+        )
+        handled, status, _ = _dispatch(instance, index, "/api/v1/flips/flip-abc123")
+        assert handled is True
+        assert status == 503
+
+    def test_invalid_flip_id_is_400(self, flip_store) -> None:
+        nomic_dir, _ = flip_store
+        instance, index = _make_dispatch_instance(
+            {"_agents_handler": AgentsHandler(server_context={"nomic_dir": nomic_dir})}
+        )
+        handled, status, _ = _dispatch(instance, index, "/api/v1/flips/bad.id")
+        assert handled is True
+        assert status == 400
+
+    def test_recent_and_summary_keep_their_branches(self, flip_store) -> None:
+        nomic_dir, flip = flip_store
+        instance, index = _make_dispatch_instance(
+            {"_agents_handler": AgentsHandler(server_context={"nomic_dir": nomic_dir})}
+        )
+        _, status, body = _dispatch(instance, index, "/api/v1/flips/recent")
+        assert status == 200
+        assert body["flips"] == [flip.to_dict()]
+        _, status, body = _dispatch(instance, index, "/api/v1/flips/summary")
+        assert status == 200
+        assert body["total_flips"] == 1
+
+    def test_nested_flip_path_stays_unserved(self, flip_store) -> None:
+        nomic_dir, flip = flip_store
+        instance, index = _make_dispatch_instance(
+            {"_agents_handler": AgentsHandler(server_context={"nomic_dir": nomic_dir})}
+        )
+        handled, _, _ = _dispatch(instance, index, f"/api/v1/flips/{flip.id}/extra")
+        assert handled is False
+
+
+# ---------------------------------------------------------------------------
+# GET /api/matches/{match_id}
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def elo(tmp_path: Path) -> EloSystem:
+    system = EloSystem(db_path=tmp_path / "elo.db")
+    system.record_match(
+        debate_id="debate-abc",
+        participants=["claude", "gemini"],
+        scores={"claude": 1.0, "gemini": 0.0},
+        domain="architecture",
+    )
+    return system
+
+
+MatchDispatch = tuple[Any, RouteIndex]
+
+
+@pytest.fixture
+def match_dispatch(elo: EloSystem) -> MatchDispatch:
+    ctx = {"elo_system": elo}
+    return _make_dispatch_instance(
+        {
+            "_agents_handler": AgentsHandler(server_context=ctx),
+            "_matches_stats_handler": MatchesStatsHandler(ctx),
+        }
+    )
+
+
+@pytest.fixture
+def get_match_spy(elo: EloSystem, monkeypatch: pytest.MonkeyPatch) -> MagicMock:
+    spy = MagicMock(wraps=elo.get_match)
+    monkeypatch.setattr(elo, "get_match", spy)
+    return spy
+
+
+def _record_generated(
+    elo: EloSystem, participants: list[str], *, task: str | None = None, domain: str | None = None
+) -> str:
+    """Record a match without a debate_id so the real generator builds its ID."""
+    before = {m["debate_id"] for m in elo.get_recent_matches(limit=100)}
+    elo.record_match(
+        participants=participants,
+        scores={name: float(i == 0) for i, name in enumerate(participants)},
+        task=task,
+        domain=domain,
+    )
+    [match_id] = {m["debate_id"] for m in elo.get_recent_matches(limit=100)} - before
+    return match_id
+
+
+class TestEloGetMatch:
+    def test_returns_recent_matches_row_shape(self, elo: EloSystem) -> None:
+        match = elo.get_match("debate-abc")
+        assert match is not None
+        assert match == elo.get_recent_matches(limit=1)[0]
+        assert match["debate_id"] == "debate-abc"
+        assert match["participants"] == ["claude", "gemini"]
+
+    def test_unknown_match_is_none(self, elo: EloSystem) -> None:
+        assert elo.get_match("debate-missing") is None
+
+
+class TestMatchDetailDispatch:
+    @pytest.mark.parametrize("prefix", ["/api/matches/", "/api/v1/matches/"])
+    def test_serves_match_row(self, elo: EloSystem, prefix: str) -> None:
+        instance, index = _make_dispatch_instance(
+            {"_agents_handler": AgentsHandler(server_context={"elo_system": elo})}
+        )
+        handled, status, body = _dispatch(instance, index, prefix + "debate-abc")
+        assert handled is True
+        assert status == 200
+        assert body == json.loads(json.dumps(elo.get_match("debate-abc")))
+
+    @pytest.mark.parametrize("prefix", ["/api/matches/", "/api/v1/matches/"])
+    def test_serves_match_id_generated_from_dotted_agent_names(
+        self, elo: EloSystem, prefix: str
+    ) -> None:
+        elo.record_match(
+            participants=["gemini-3.1-pro-preview", "claude"],
+            scores={"gemini-3.1-pro-preview": 1.0, "claude": 0.0},
+            domain="general",
+        )
+        [match_id] = [
+            m["debate_id"]
+            for m in elo.get_recent_matches(limit=10)
+            if m["debate_id"] != "debate-abc"
+        ]
+        assert match_id.startswith("general-gemini-3.1-pro-preview-vs-claude-")
+        instance, index = _make_dispatch_instance(
+            {"_agents_handler": AgentsHandler(server_context={"elo_system": elo})}
+        )
+        handled, status, body = _dispatch(instance, index, prefix + match_id)
+        assert handled is True
+        assert status == 200
+        assert body == json.loads(json.dumps(elo.get_match(match_id)))
+
+    def test_unknown_match_is_404(self, elo: EloSystem) -> None:
+        instance, index = _make_dispatch_instance(
+            {"_agents_handler": AgentsHandler(server_context={"elo_system": elo})}
+        )
+        handled, status, _ = _dispatch(instance, index, "/api/v1/matches/debate-missing")
+        assert handled is True
+        assert status == 404
+
+    def test_no_elo_system_is_503(self) -> None:
+        instance, index = _make_dispatch_instance(
+            {"_agents_handler": AgentsHandler(server_context={})}
+        )
+        handled, status, _ = _dispatch(instance, index, "/api/v1/matches/debate-abc")
+        assert handled is True
+        assert status == 503
+
+    @pytest.mark.parametrize("prefix", ["/api/matches/", "/api/v1/matches/"])
+    @pytest.mark.parametrize(
+        "task",
+        [
+            "Design a rate limiter",
+            "rate/limiter",
+            "Diseño de caché ✓",
+            "100% uptime",
+            "50%2F50 split",
+            "Why? #1; a+b&c=d",
+            "Line one\nLine two\tend",
+        ],
+    )
+    def test_serves_free_text_generated_match_id_exactly(
+        self, elo: EloSystem, match_dispatch: MatchDispatch, prefix: str, task: str
+    ) -> None:
+        match_id = _record_generated(elo, ["claude", "codex"], task=task)
+        assert match_id.startswith(f"{task}-claude-vs-codex-")
+        target = prefix + quote(match_id, safe="") + "?view=full"
+        handled, status, body = _get_target(*match_dispatch, target)
+        assert (handled, status) == (True, 200)
+        assert body == json.loads(json.dumps(elo.get_match(match_id)))
+        assert body["debate_id"] == match_id
+
+    def test_serves_157_character_generated_match_id(
+        self, elo: EloSystem, match_dispatch: MatchDispatch
+    ) -> None:
+        participants = [f"agent-{n}-" + "x" * 24 for n in range(4)]
+        match_id = _record_generated(elo, participants, domain="general")
+        assert len(match_id) == 157
+        target = "/api/v1/matches/" + quote(match_id, safe="")
+        handled, status, body = _get_target(*match_dispatch, target)
+        assert (handled, status) == (True, 200)
+        assert body["debate_id"] == match_id
+
+    @pytest.mark.parametrize(
+        ("raw_segment", "key"),
+        [
+            ("debate-ab%25", "debate-ab%"),
+            ("debate_abc", "debate_abc"),
+            ("DEBATE-ABC", "DEBATE-ABC"),
+            ("debate-abc%27%20OR%20%271%27%3D%271", "debate-abc' OR '1'='1"),
+            ("..%2F..%2Fetc%2Fpasswd", "../../etc/passwd"),
+            ("debate-abc%252F", "debate-abc%2F"),
+            ("%73tats", "stats"),
+            ("%72ecent", "recent"),
+        ],
+    )
+    def test_lookup_is_one_exact_key_with_no_pattern_or_path_meaning(
+        self, match_dispatch: MatchDispatch, get_match_spy: MagicMock, raw_segment: str, key: str
+    ) -> None:
+        handled, status, _ = _get_target(*match_dispatch, "/api/v1/matches/" + raw_segment)
+        assert (handled, status) == (True, 404)
+        get_match_spy.assert_called_once_with(key)
+
+    @pytest.mark.parametrize(
+        "raw_segment",
+        ["%zz", "debate-abc%", "debate-abc%2", "%FF", "%C3", "%ED%A0%80", "%00", "debate-abc%00"],
+    )
+    def test_undecodable_or_nul_match_id_is_400_without_lookup(
+        self, match_dispatch: MatchDispatch, get_match_spy: MagicMock, raw_segment: str
+    ) -> None:
+        handled, status, _ = _get_target(*match_dispatch, "/api/v1/matches/" + raw_segment)
+        assert (handled, status) == (True, 400)
+        get_match_spy.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "target",
+        [
+            "/api/v1/matches/debate-abc/extra",
+            "/api/v1/matches/debate-abc/",
+            "/api/matches/rate/limiter-claude-vs-codex-0a1b2c3d",
+        ],
+    )
+    def test_raw_extra_segments_stay_unclaimed(
+        self, match_dispatch: MatchDispatch, get_match_spy: MagicMock, target: str
+    ) -> None:
+        handled, _, _ = _get_target(*match_dispatch, target)
+        assert handled is False
+        get_match_spy.assert_not_called()
+
+    @pytest.mark.parametrize(
+        ("denial", "expected"),
+        [
+            pytest.param("unauthenticated", 401, marks=pytest.mark.no_auto_auth),
+            pytest.param("no_permission", 403, marks=pytest.mark.no_auto_auth),
+            ("rate_limited", 429),
+        ],
+    )
+    def test_denials_return_before_any_lookup(
+        self,
+        match_dispatch: MatchDispatch,
+        get_match_spy: MagicMock,
+        monkeypatch: pytest.MonkeyPatch,
+        denial: str,
+        expected: int,
+    ) -> None:
+        from aragora.rbac.models import AuthorizationContext
+        from aragora.server.handlers import secure
+        from aragora.server.handlers.agents import agents as agents_mod
+
+        async def _no_grants(request: Any, require_auth: bool = False) -> AuthorizationContext:
+            return AuthorizationContext(user_id="u-1", org_id=None, roles=set(), permissions=set())
+
+        if denial == "no_permission":
+            monkeypatch.setattr(secure, "get_auth_context", _no_grants)
+        elif denial == "rate_limited":
+            monkeypatch.setattr(agents_mod._agent_limiter, "is_allowed", lambda _ip: False)
+        handled, status, _ = _get_target(*match_dispatch, "/api/v1/matches/rate%2Flimiter")
+        assert (handled, status) == (True, expected)
+        get_match_spy.assert_not_called()
+
+    def test_stats_and_recent_keep_their_owners(self, elo: EloSystem) -> None:
+        ctx = {"elo_system": elo}
+        instance, index = _make_dispatch_instance(
+            {
+                "_agents_handler": AgentsHandler(server_context=ctx),
+                "_matches_stats_handler": MatchesStatsHandler(ctx),
+            }
+        )
+        _, status, body = _dispatch(instance, index, "/api/v1/matches/stats")
+        assert status == 200
+        assert "total_matches" in body
+        _, status, body = _dispatch(instance, index, "/api/v1/matches/recent")
+        assert status == 200
+        assert [m["debate_id"] for m in body["matches"]] == ["debate-abc"]
+
+    def test_agents_handler_does_not_claim_stats(self) -> None:
+        handler = AgentsHandler(server_context={})
+        assert handler.can_handle("/api/v1/matches/debate-abc")
+        assert not handler.can_handle("/api/v1/matches/stats")
+        assert not handler.can_handle("/api/v1/matches/debate-abc/extra")
+
+
+# ---------------------------------------------------------------------------
+# GET /api/reputation/{agent_id}
+# ---------------------------------------------------------------------------
+
+
+class _Reputation:
+    agent_name = "claude"
+    reputation_score = 0.92
+    vote_weight = 1.5
+    proposal_acceptance_rate = 0.78
+    critique_value = 0.88
+    debates_participated = 150
+    updated_at = "2026-10-04T10:00:00"
+
+
+@pytest.fixture
+def critique_store() -> Iterator[MagicMock]:
+    store = MagicMock()
+    store.get_reputation.side_effect = lambda agent: _Reputation() if agent == "claude" else None
+    store.get_all_reputations.return_value = [_Reputation()]
+    with (
+        patch("aragora.server.handlers.debates.critique.CRITIQUE_STORE_AVAILABLE", True),
+        patch(
+            "aragora.server.handlers.debates.critique.get_critique_store",
+            return_value=store,
+        ),
+    ):
+        yield store
+
+
+class TestReputationByAgentDispatch:
+    @pytest.mark.parametrize("prefix", ["/api/reputation/", "/api/v1/reputation/"])
+    def test_serves_agent_reputation_body(self, critique_store, tmp_path, prefix: str) -> None:
+        handler = CritiqueHandler(ctx={"nomic_dir": tmp_path})
+        instance, index = _make_dispatch_instance({"_critique_handler": handler})
+        handled, status, body = _dispatch(instance, index, prefix + "claude")
+        assert handled is True
+        assert status == 200
+        direct = handler.handle("/api/v1/agent/claude/reputation", {}, instance)
+        assert direct is not None
+        assert body == json.loads(direct.body)
+        assert body["reputation"]["score"] == 0.92
+        critique_store.get_reputation.assert_called_with("claude")
+
+    def test_unknown_agent_uses_store_not_found_body(self, critique_store, tmp_path) -> None:
+        instance, index = _make_dispatch_instance(
+            {"_critique_handler": CritiqueHandler(ctx={"nomic_dir": tmp_path})}
+        )
+        handled, status, body = _dispatch(instance, index, "/api/v1/reputation/nobody")
+        assert handled is True
+        assert status == 200
+        assert body == {"agent": "nobody", "reputation": None, "message": "Agent not found"}
+
+    def test_invalid_agent_name_is_400(self, critique_store, tmp_path) -> None:
+        instance, index = _make_dispatch_instance(
+            {"_critique_handler": CritiqueHandler(ctx={"nomic_dir": tmp_path})}
+        )
+        handled, status, _ = _dispatch(instance, index, "/api/v1/reputation/a..b")
+        assert handled is True
+        assert status == 400
+
+    def test_exact_reputation_routes_keep_their_branches(self, critique_store, tmp_path) -> None:
+        instance, index = _make_dispatch_instance(
+            {"_critique_handler": CritiqueHandler(ctx={"nomic_dir": tmp_path})}
+        )
+        _, status, body = _dispatch(instance, index, "/api/v1/reputation/all")
+        assert status == 200
+        assert body["count"] == 1
+        critique_store.get_reputation.assert_not_called()
+
+    def test_nested_reputation_path_stays_unclaimed(self) -> None:
+        handler = CritiqueHandler()
+        assert handler.can_handle("/api/v1/reputation/claude")
+        assert not handler.can_handle("/api/v1/reputation/claude/extra")
+        assert not handler.can_handle("/api/v1/reputation/")

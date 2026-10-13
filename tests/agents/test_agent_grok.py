@@ -118,10 +118,11 @@ class TestGrokGenerate:
 
         mock_session = MagicMock()
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_session.__aexit__ = AsyncMock(return_value=False)
         mock_session.post = MagicMock(
             return_value=MagicMock(
-                __aenter__=AsyncMock(return_value=mock_response), __aexit__=AsyncMock()
+                __aenter__=AsyncMock(return_value=mock_response),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
 
@@ -145,10 +146,11 @@ class TestGrokGenerate:
 
         mock_session = MagicMock()
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_session.__aexit__ = AsyncMock(return_value=False)
         mock_session.post = MagicMock(
             return_value=MagicMock(
-                __aenter__=AsyncMock(return_value=mock_grok_response), __aexit__=AsyncMock()
+                __aenter__=AsyncMock(return_value=mock_grok_response),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
 
@@ -191,10 +193,11 @@ class TestGrokStreaming:
 
         mock_session = MagicMock()
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_session.__aexit__ = AsyncMock(return_value=False)
         mock_session.post = MagicMock(
             return_value=MagicMock(
-                __aenter__=AsyncMock(return_value=mock_response), __aexit__=AsyncMock()
+                __aenter__=AsyncMock(return_value=mock_response),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
 

@@ -100,6 +100,27 @@ def test_cli_agent_is_usable_with_fallback_provider_credentials(monkeypatch):
     assert not mod.agent_type_has_configured_provider("gemini-cli", report)
 
 
+def test_kimi_runtime_requires_openrouter_but_legacy_accepts_moonshot(monkeypatch):
+    for spec in mod.PROVIDER_CREDENTIAL_SPECS:
+        for env_var in spec.env_vars:
+            monkeypatch.delenv(env_var, raising=False)
+    monkeypatch.setenv("KIMI_API_KEY", "test-moonshot-key")
+
+    report = mod.discover_provider_credentials(hydrate=False, load_dotenv=False)
+
+    assert mod.agent_type_has_configured_provider("kimi-legacy", report)
+    assert not mod.agent_type_has_configured_provider("kimi", report)
+    assert not mod.agent_type_has_configured_provider("kimi-thinking", report)
+
+    monkeypatch.delenv("KIMI_API_KEY")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-openrouter-key")
+    report = mod.discover_provider_credentials(hydrate=False, load_dotenv=False)
+
+    assert mod.agent_type_has_configured_provider("kimi", report)
+    assert mod.agent_type_has_configured_provider("kimi-thinking", report)
+    assert not mod.agent_type_has_configured_provider("kimi-legacy", report)
+
+
 def test_bootstrap_error_is_actionable(monkeypatch):
     for spec in mod.PROVIDER_CREDENTIAL_SPECS:
         for env_var in spec.env_vars:

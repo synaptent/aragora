@@ -42,6 +42,9 @@ class TestAliasesMatchFrontier:
     def test_gemini_3_1_pro_matches_direct(self) -> None:
         assert model_pins.GEMINI_3_1_PRO == model_pins.GEMINI_31_PRO_DIRECT
 
+    def test_grok_openrouter_pin_uses_live_soaked_frontier(self) -> None:
+        assert model_pins.GROK_4_VIA_OPENROUTER == "x-ai/grok-4.5"
+
 
 class TestAliasesInAll:
     def test_all_includes_three_aliases(self) -> None:

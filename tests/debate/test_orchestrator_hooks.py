@@ -283,7 +283,7 @@ class TestCreateDebateBead:
         with (
             patch.dict(sys.modules, {"aragora.nomic.beads": mock_beads_module}),
             patch(
-                "aragora.stores.get_canonical_workspace_stores",
+                "aragora.debate.orchestrator_hooks.get_workspace_stores",
                 return_value=mock_canonical,
             ),
         ):
@@ -774,7 +774,9 @@ class TestRecoverPendingDebates:
         mock_registry.recover_all = AsyncMock(return_value={})
         mock_hook_queue_module.HookQueueRegistry.return_value = mock_registry
 
-        with patch("aragora.stores.get_canonical_workspace_stores", return_value=mock_stores):
+        with patch(
+            "aragora.debate.orchestrator_hooks.get_workspace_stores", return_value=mock_stores
+        ):
             with patch.dict(
                 sys.modules,
                 {
@@ -811,7 +813,9 @@ class TestRecoverPendingDebates:
         )
         mock_hook_queue_module.HookQueueRegistry.return_value = mock_registry
 
-        with patch("aragora.stores.get_canonical_workspace_stores", return_value=mock_stores):
+        with patch(
+            "aragora.debate.orchestrator_hooks.get_workspace_stores", return_value=mock_stores
+        ):
             with patch.dict(
                 sys.modules,
                 {
@@ -850,7 +854,9 @@ class TestRecoverPendingDebates:
         )
         mock_hook_queue_module.HookQueueRegistry.return_value = mock_registry
 
-        with patch("aragora.stores.get_canonical_workspace_stores", return_value=mock_stores):
+        with patch(
+            "aragora.debate.orchestrator_hooks.get_workspace_stores", return_value=mock_stores
+        ):
             with patch.dict(
                 sys.modules,
                 {
@@ -886,7 +892,9 @@ class TestRecoverPendingDebates:
         )
         mock_hook_queue_module.HookQueueRegistry.return_value = mock_registry
 
-        with patch("aragora.stores.get_canonical_workspace_stores", return_value=mock_stores):
+        with patch(
+            "aragora.debate.orchestrator_hooks.get_workspace_stores", return_value=mock_stores
+        ):
             with patch.dict(
                 sys.modules,
                 {

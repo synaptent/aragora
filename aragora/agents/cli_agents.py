@@ -264,10 +264,10 @@ class CLIAgent(CritiqueMixin, Agent):
         "gemini-1.5-pro": "google/gemini-pro-1.5",
         # Grok models
         "grok-4-1-fast": "x-ai/grok-4.1-fast",
-        "grok-4-latest": "x-ai/grok-4",
-        "grok-4": "x-ai/grok-4",
-        "grok-3": "x-ai/grok-4",
-        "grok-2": "x-ai/grok-4",
+        "grok-4-latest": "x-ai/grok-4.5",
+        "grok-4": "x-ai/grok-4.5",
+        "grok-3": "x-ai/grok-4.5",
+        "grok-2": "x-ai/grok-4.5",
         # Deepseek models
         "deepseek-coder": "deepseek/deepseek-v4-pro",
         "deepseek-v3": "deepseek/deepseek-v4-pro",

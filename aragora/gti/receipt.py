@@ -48,10 +48,12 @@ def validate_belief_provenance(beliefs: list[BeliefProvenance], now_iso: str) ->
             continue
 
         ttl = b.freshness_ttl_seconds
+        # isfinite only sees floats: ints are always finite, and math.isfinite
+        # raises OverflowError on ints too large to convert to float.
         if (
             isinstance(ttl, bool)
             or not isinstance(ttl, (int, float))
-            or not math.isfinite(ttl)
+            or (isinstance(ttl, float) and not math.isfinite(ttl))
             or ttl <= 0
         ):
             problems.append(f"{b.belief_id}: invalid freshness_ttl_seconds")

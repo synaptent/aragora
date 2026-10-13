@@ -385,7 +385,7 @@ class AuthHandler(SecureHandler):
         if path == "/api/auth/setup-organization" and method == "POST":
             data = self.read_json_body(handler) or {}
             user_id, err = self._require_user_id(handler)
-            if err:
+            if err or user_id is None:
                 return err
             return await handle_setup_organization(data, user_id=user_id)
 
@@ -402,7 +402,7 @@ class AuthHandler(SecureHandler):
         if path == "/api/auth/accept-invite" and method == "POST":
             data = self.read_json_body(handler) or {}
             user_id, err = self._require_user_id(handler)
-            if err:
+            if err or user_id is None:
                 return err
             return await handle_accept_invite(data, user_id=user_id)
 
@@ -719,11 +719,8 @@ class AuthHandler(SecureHandler):
 
         # Pool status
         try:
-            from aragora.storage.pool_manager import (
-                get_shared_pool,
-                is_pool_initialized,
-                get_pool_event_loop,
-            )
+            from aragora.storage.pool_manager import get_shared_pool, is_pool_initialized
+            from aragora.utils.async_utils import get_pool_event_loop
 
             pool = get_shared_pool() if is_pool_initialized() else None
             main_loop = get_pool_event_loop()

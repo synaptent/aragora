@@ -152,7 +152,7 @@ def _run_gh(args: Sequence[str], *, capture: bool = True) -> tuple[int, str, str
     """
 
     try:
-        proc = subprocess.run(  # noqa: S603 — args are code-controlled lists
+        proc = subprocess.run(  # args are code-controlled lists
             ["gh", *args],
             capture_output=capture,
             text=True,

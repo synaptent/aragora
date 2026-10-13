@@ -23,11 +23,9 @@ Usage:
     ServiceRegistry.reset()
 """
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from aragora.utils.cache import register_cache_registration_hook
-
-from .registry import (
+from aragora.runtime.service_registry import (
     RegistryStats,
     ServiceDescriptor,
     ServiceNotFoundError,
@@ -37,12 +35,20 @@ from .registry import (
     has_service,
     register_service,
 )
+from aragora.utils.cache import register_cache_registration_hook
+
+if TYPE_CHECKING:
+    from aragora.embeddings.service_markers import (
+        EmbeddingCacheService,
+        EmbeddingProviderService,
+    )
 
 # =============================================================================
 # Marker Types for Cache Services
 # =============================================================================
 # These marker types allow registering different cache instances with the
-# ServiceRegistry while maintaining type safety.
+# ServiceRegistry while maintaining type safety. The embedding markers live in
+# aragora.embeddings.service_markers.
 
 
 class MethodCacheService:
@@ -57,22 +63,23 @@ class QueryCacheService:
     pass
 
 
-class EmbeddingCacheService:
-    """Marker type for the embedding cache (memory/embeddings.py)."""
-
-    pass
-
-
 class HandlerCacheService:
     """Marker type for the HTTP handler cache (server/handlers/base.py)."""
 
     pass
 
 
-class EmbeddingProviderService:
-    """Marker type for the embedding provider reference (memory/streams.py)."""
+_EMBEDDING_MARKERS = frozenset({"EmbeddingCacheService", "EmbeddingProviderService"})
 
-    pass
+
+# Importing aragora.embeddings loads aragora.memory.embeddings, so the embedding
+# markers resolve on first access instead of on every aragora.services import.
+def __getattr__(name: str) -> Any:
+    if name in _EMBEDDING_MARKERS:
+        from aragora.embeddings import service_markers
+
+        return getattr(service_markers, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def _register_foundation_caches(method_cache: Any, query_cache: Any) -> None:

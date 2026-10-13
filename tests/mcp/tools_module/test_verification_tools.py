@@ -28,7 +28,7 @@ class TestGetConsensusProofsTool:
         mock_db.get.return_value = mock_debate
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
         ):
             result = await get_consensus_proofs_tool(debate_id="debate-123")
@@ -51,7 +51,7 @@ class TestGetConsensusProofsTool:
         mock_db.get.return_value = mock_debate
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
         ):
             result = await get_consensus_proofs_tool(
@@ -78,7 +78,7 @@ class TestGetConsensusProofsTool:
         mock_db.get.return_value = mock_debate
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
         ):
             result = await get_consensus_proofs_tool(
@@ -103,7 +103,7 @@ class TestGetConsensusProofsTool:
         mock_db.get.return_value = None
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
         ):
             result = await get_consensus_proofs_tool(debate_id="nonexistent")
@@ -119,7 +119,7 @@ class TestGetConsensusProofsTool:
         mock_db.get.return_value = mock_debate
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
         ):
             result = await get_consensus_proofs_tool(debate_id="debate-123")
@@ -161,7 +161,7 @@ class TestVerifyConsensusTool:
 
         with (
             patch(
-                "aragora.server.storage.get_debates_db",
+                "aragora.storage.debate_storage.get_debates_db",
                 return_value=mock_db,
             ),
             patch(
@@ -184,7 +184,7 @@ class TestVerifyConsensusTool:
                 "aragora.verification.formal.FormalVerificationManager",
             ),
             patch(
-                "aragora.server.storage.get_debates_db",
+                "aragora.storage.debate_storage.get_debates_db",
                 return_value=None,
             ),
         ):
@@ -204,7 +204,7 @@ class TestVerifyConsensusTool:
                 "aragora.verification.formal.FormalVerificationManager",
             ),
             patch(
-                "aragora.server.storage.get_debates_db",
+                "aragora.storage.debate_storage.get_debates_db",
                 return_value=mock_db,
             ),
         ):
@@ -229,7 +229,7 @@ class TestVerifyConsensusTool:
                 "aragora.verification.formal.FormalVerificationManager",
             ),
             patch(
-                "aragora.server.storage.get_debates_db",
+                "aragora.storage.debate_storage.get_debates_db",
                 return_value=mock_db,
             ),
         ):
@@ -263,7 +263,7 @@ class TestVerifyConsensusTool:
 
         with (
             patch(
-                "aragora.server.storage.get_debates_db",
+                "aragora.storage.debate_storage.get_debates_db",
                 return_value=mock_db,
             ),
             patch(

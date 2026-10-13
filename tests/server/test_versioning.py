@@ -272,3 +272,10 @@ class TestGetPathVersion:
     def test_returns_none_for_invalid_version(self):
         """Should return None for invalid version."""
         assert get_path_version("/api/v99/debates") is None
+
+
+def test_api_release_version_is_the_package_version():
+    from aragora.__version__ import __version__
+
+    assert API_RELEASE_VERSION == __version__
+    assert API_RELEASE_VERSION != "2.0.3"

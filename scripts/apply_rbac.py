@@ -18,31 +18,41 @@ from typing import Optional
 
 # Files/paths that should remain public (no RBAC)
 # These are intentional bypasses documented for security review
+# Entries are relative to aragora/server/handlers/: entries ending in "/"
+# exclude that directory's whole subtree; every other entry names one exact file.
 EXCLUDED_PATHS = {
     # Health/monitoring endpoints - must be public for probes
     "admin/health/",
-    "health_utils.py",
-    "probes.py",
+    "admin/health_utils.py",
+    "agents/probes.py",
     # Authentication flows - must be accessible before auth
-    "signup_handlers.py",
-    "sso_handlers.py",
-    "oidc.py",
+    "auth/signup_handlers.py",
+    "auth/sso_handlers.py",
+    "_oauth/oidc.py",
     # OAuth callbacks - verified via state/signatures, not RBAC
-    "_oauth_impl.py",
-    "oauth_wizard.py",
+    "oauth/_oauth_impl.py",
+    "oauth/oauth_wizard.py",
     # Webhooks - verified via signatures/tokens, not RBAC
-    "webhooks.py",
-    "email_webhooks.py",
+    "webhook_management.py",
+    "features/email_webhooks.py",
     # Base classes and utilities (not actual endpoints)
     "base.py",
+    "_oauth/base.py",
+    "bots/base.py",
+    "social/slack/commands/base.py",
     "interface.py",
     "types.py",
-    "decorators.py",
-    "auth_mixins.py",
-    "lazy_stores.py",
-    "tts_helper.py",
+    "api_decorators.py",
+    "utils/auth_mixins.py",
+    "utils/database.py",
+    "utils/decorators.py",
+    "utils/lazy_stores.py",
+    "social/tts_helper.py",
     # Store implementations (internal, not endpoints)
-    "store.py",
+    "auth/store.py",
+    "decisions/explainability_store.py",
+    "features/marketplace/store.py",
+    "openclaw/store.py",
 }
 
 # Specific handlers to exclude (function names)
@@ -116,12 +126,29 @@ MODULE_PERMISSIONS = {
 }
 
 
+_HANDLER_PATH_MARKER = "server/handlers/"
+
+
+def _handler_relative_path(file_path: str) -> str | None:
+    """Normalize any spelling of a handler path to its handlers-root-relative form."""
+    path = file_path.replace("\\", "/")
+    index = path.find(_HANDLER_PATH_MARKER)
+    if index == -1:
+        return None
+    return path[index + len(_HANDLER_PATH_MARKER) :]
+
+
 def is_excluded(file_path: str, function_name: str) -> bool:
     """Check if a handler should be excluded from RBAC."""
     # Check excluded paths
-    for excluded in EXCLUDED_PATHS:
-        if excluded in file_path:
-            return True
+    relative = _handler_relative_path(file_path)
+    if relative is not None:
+        for excluded in EXCLUDED_PATHS:
+            if excluded.endswith("/"):
+                if relative.startswith(excluded):
+                    return True
+            elif relative == excluded:
+                return True
 
     # Check excluded handlers
     if function_name in EXCLUDED_HANDLERS:

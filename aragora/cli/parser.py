@@ -651,14 +651,12 @@ def _add_proof_units_parser(subparsers) -> None:
         "--multi-hop",
         dest="multi_hop",
         action="store_true",
-        default=False,
         help="Include transitively impacted units via dependency edges",
     )
     p.add_argument(
         "--json",
         dest="json",
         action="store_true",
-        default=False,
         help="Emit JSON output",
     )
     p.set_defaults(func=_lazy("aragora.cli.commands.dic19_proof_units", "cmd_proof_units"))
@@ -728,6 +726,17 @@ def _add_coherence_scan_parser(subparsers) -> None:
         help="Minimum confidence threshold for rot detection (default: 0.3)",
     )
     p.add_argument("--json", action="store_true", help="Emit JSON instead of text")
+    p.add_argument(
+        "--emit-followup",
+        dest="emit_followup",
+        action="store_true",
+        default=False,
+        help=(
+            "DIC-17: forward error-severity issues to the follow-up proposal bridge. "
+            "Requires ARAGORA_EPISTEMIC_FOLLOWUP_ENABLED=1. "
+            "Proposals are printed but never filed (no live queue effect)."
+        ),
+    )
     p.set_defaults(func=_lazy("aragora.cli.commands.dic26_coherence", "cmd_coherence_scan"))
 
 
@@ -784,6 +793,11 @@ def _add_decay_monitor_parser(subparsers) -> None:
         default=None,
         metavar="JSONL",
         help="Optional JSONL/JSON file of ClaimResult dicts (DIC-14 verifier output)",
+    )
+    p.add_argument(
+        "--transitive-impact",
+        action="store_true",
+        help="Include units impacted by failed, stale, or verifier-error claims",
     )
     p.add_argument("--json", action="store_true", help="Emit JSON instead of text")
     p.set_defaults(func=_lazy("aragora.cli.commands.dic20_decay_monitor", "cmd_decay_monitor"))
@@ -908,13 +922,11 @@ def _add_epistemic_check_parser(subparsers) -> None:
     p.add_argument(
         "--json",
         action="store_true",
-        default=False,
         help="Emit machine-readable JSON (schema_version, results, summary)",
     )
     p.add_argument(
         "--dry-run",
         action="store_true",
-        default=False,
         help=(
             "Skip command execution; return UNSUPPORTED for command-kind claims. "
             "This is already the DEFAULT behavior — the flag is accepted for "
@@ -2247,52 +2259,16 @@ def _add_review_queue_parser(subparsers) -> None:
     )
     act_parser.set_defaults(func=_lazy("aragora.cli.commands.review_queue", "cmd_review_queue"))
 
-    record_parser = queue_subparsers.add_parser(
-        "record-settlement",
-        help="Record an already-authorized PR settlement without mutating GitHub",
+    # Route through the shared registration helper (argparse-only import) so
+    # this surface and the standalone review-queue CLI cannot drift apart:
+    # an inline copy here repeatedly lost flags the helper registers (e.g.
+    # --post-github-status), leaving documented commands unexecutable.
+    from aragora.cli.commands.review_queue_parsers import add_record_settlement_parser
+
+    add_record_settlement_parser(queue_subparsers)
+    queue_subparsers.choices["record-settlement"].set_defaults(
+        func=_lazy("aragora.cli.commands.review_queue", "cmd_review_queue")
     )
-    record_parser.add_argument("pr", help="PR number or URL")
-    record_parser.add_argument(
-        "--repo",
-        default=None,
-        help="GitHub repo slug override (owner/name). Defaults to current repo context.",
-    )
-    record_parser.add_argument(
-        "--head-sha",
-        required=True,
-        help="Exact PR head SHA that was externally settled.",
-    )
-    record_parser.add_argument(
-        "--action",
-        required=True,
-        choices=("approve", "request_changes", "comment", "admin_squash_merge"),
-        help="Externally observed settlement action to record.",
-    )
-    record_parser.add_argument(
-        "--reason",
-        required=True,
-        help="One-line operator reason or authorization reference.",
-    )
-    record_parser.add_argument(
-        "--review-queue-root",
-        default=None,
-        help="Override the review-queue root used for settlement receipts.",
-    )
-    record_parser.add_argument(
-        "--apply-post-merge-lane-audit",
-        action="store_true",
-        help=(
-            "For admin_squash_merge records, apply merged-PR lane supersession "
-            "using the live merge commit guard. Default is dry-run/report only."
-        ),
-    )
-    record_parser.add_argument(
-        "--json",
-        dest="json_output",
-        action="store_true",
-        help="Output local receipt as JSON.",
-    )
-    record_parser.set_defaults(func=_lazy("aragora.cli.commands.review_queue", "cmd_review_queue"))
 
     evidence_lint_parser = queue_subparsers.add_parser(
         "evidence-lint",

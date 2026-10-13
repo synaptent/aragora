@@ -592,7 +592,7 @@ class SQLiteInvoiceStore(InvoiceStoreBackend):
                     WHERE {" AND ".join(where_parts)}
                     ORDER BY scheduled_payment_date ASC
                     LIMIT ?
-                    """,  # noqa: S608 -- dynamic clause from internal state
+                    """,  # dynamic clause from internal state
                     params + [limit],
                 )
                 return [
@@ -1023,7 +1023,7 @@ class PostgresInvoiceStore(InvoiceStoreBackend):
                 SELECT data_json FROM invoices
                 WHERE {" AND ".join(where_parts)}
                 ORDER BY scheduled_payment_date ASC
-                """,  # noqa: S608 -- dynamic clause from internal state
+                """,  # dynamic clause from internal state
                 *params,
             )
             results = []

@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 def _get_compliance_module():
     """Resolve compliance helpers via the shim so tests can patch them."""
-    from aragora.server.handlers import compliance_handler as compliance_module
+    from aragora.server.handlers.compliance import handler as compliance_module
 
     return compliance_module
 

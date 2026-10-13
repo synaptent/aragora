@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "aragora-verify"
-version = "0.1.2"
+version = "0.2.0"
 description = "Standalone offline verifier for Open Decision Receipts (ODR) -- check schema, JCS canonical digest, Ed25519 signature, and hash-chain linkage with no Aragora install or account."
 readme = "README.md"
 license = "MIT"

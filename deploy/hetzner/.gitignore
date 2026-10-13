@@ -1,0 +1,5 @@
+secrets.env
+backups/
+*.json
+# ODR signing private key (bring-up.sh); never commit it
+odr/

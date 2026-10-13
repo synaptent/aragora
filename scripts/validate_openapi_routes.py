@@ -5,7 +5,14 @@ This script ensures the OpenAPI specification stays in sync with actual
 handler implementations by comparing:
 1. Routes defined in handler ROUTES attributes
 2. Literal routes in server-wired aiohttp registration functions
-3. Routes in the OpenAPI spec paths
+3. Literal routes on APIRouters mounted in the opt-in FastAPI app factory
+4. Routes in the OpenAPI spec paths
+
+"Served" means reachable on the default ``aragora serve`` dispatcher plane
+(handler ROUTES / wired registrations / can_handle probes) OR on the mounted
+opt-in FastAPI plane (``ARAGORA_USE_FASTAPI``) — routers mounted in
+``aragora/server/fastapi/factory.py`` back shipped SDK operations, so their
+spec entries are not orphans.
 
 Usage:
     python scripts/validate_openapi_routes.py
@@ -31,13 +38,18 @@ import inspect
 import json
 import os
 import re
+import subprocess
 import sys
+import tempfile
 from collections.abc import Iterable, Iterator
 from pathlib import Path
 from typing import Any, cast
 
 # Ensure local checkout modules take precedence over any globally installed package.
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_SOURCE_REPO_ROOT = Path(__file__).resolve().parents[1]
+_BOUND_TREE_ROOT = os.environ.get("_ARAGORA_OPENAPI_ROUTE_TREE_ROOT")
+_BOUND_TREE_REF = os.environ.get("_ARAGORA_OPENAPI_ROUTE_RESOLVED_REF")
+_REPO_ROOT = Path(_BOUND_TREE_ROOT).resolve() if _BOUND_TREE_ROOT else _SOURCE_REPO_ROOT
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
@@ -58,6 +70,8 @@ _SERVER_ROUTE_REGISTRATION = (
 _LITERAL_ROUTER_METHODS = frozenset(
     {"add_get", "add_post", "add_put", "add_patch", "add_delete", "add_head", "add_options"}
 )
+_FASTAPI_FACTORY = _REPO_ROOT / "aragora" / "server" / "fastapi" / "factory.py"
+_FASTAPI_DECORATOR_METHODS = frozenset({"get", "post", "put", "patch", "delete", "head", "options"})
 
 # ---------------------------------------------------------------------------
 # Method-aware operation plane (VAL-CDG-011)
@@ -1119,6 +1133,176 @@ def get_wired_function_routes(
     }
 
 
+def _fastapi_route_module_imports(
+    factory_tree: ast.Module,
+    factory_path: Path,
+    repo_root: Path,
+) -> dict[str, Path]:
+    """Map local names of locally-imported modules in the factory to source paths.
+
+    Only imports that resolve to an existing local package directory are
+    recorded. A recognized package whose submodule source file is missing is
+    still recorded (pointing at the nonexistent path) so a mounted-but-
+    uninspectable module fails closed downstream instead of silently dropping
+    its serve evidence.
+    """
+    modules: dict[str, Path] = {}
+    for node in ast.walk(factory_tree):
+        if not isinstance(node, ast.ImportFrom):
+            continue
+        if node.level:
+            base_dir = factory_path.parent
+            for _ in range(node.level - 1):
+                base_dir = base_dir.parent
+            if node.module:
+                base_dir = base_dir.joinpath(*node.module.split("."))
+        elif node.module:
+            base_dir = repo_root.joinpath(*node.module.split("."))
+        else:
+            continue
+        for imported in node.names:
+            local_name = imported.asname or imported.name
+            candidates = (
+                base_dir / f"{imported.name}.py",
+                base_dir / imported.name / "__init__.py",
+            )
+            module_path = next((c for c in candidates if c.is_file()), None)
+            if module_path is not None:
+                modules[local_name] = module_path
+            elif base_dir.is_dir():
+                modules[local_name] = candidates[0]
+    return modules
+
+
+def _fastapi_router_prefix(
+    module_tree: ast.Module, router_name: str, module_path: Path
+) -> str | None:
+    """Return the mounted router's literal prefix.
+
+    Returns ``None`` when the prefix is present but not a literal string
+    (unverifiable — the whole module contributes nothing). Raises
+    ``RouteRegistrationScanError`` when the mounted name has no module-level
+    ``APIRouter(...)`` assignment at all: a recognized mount we cannot inspect
+    is a scan-integrity failure, not silent under-crediting.
+    """
+    assignment: ast.Call | None = None
+    for node in module_tree.body:
+        value: ast.expr | None = None
+        if isinstance(node, ast.Assign):
+            if any(isinstance(t, ast.Name) and t.id == router_name for t in node.targets):
+                value = node.value
+        elif isinstance(node, ast.AnnAssign):
+            if isinstance(node.target, ast.Name) and node.target.id == router_name:
+                value = node.value
+        if value is None or not isinstance(value, ast.Call):
+            continue
+        func = value.func
+        func_name = func.id if isinstance(func, ast.Name) else getattr(func, "attr", None)
+        if func_name == "APIRouter":
+            assignment = value
+    if assignment is None:
+        raise RouteRegistrationScanError(
+            f"mounted router {router_name!r} has no module-level APIRouter "
+            f"assignment in {module_path}"
+        )
+    for keyword in assignment.keywords:
+        if keyword.arg != "prefix":
+            continue
+        if isinstance(keyword.value, ast.Constant) and isinstance(keyword.value.value, str):
+            return keyword.value.value
+        return None
+    return ""
+
+
+def _iter_fastapi_decorator_paths(module_tree: ast.Module, router_name: str) -> Iterator[str]:
+    """Yield literal paths from ``@<router>.<method>("/path")`` decorators."""
+    for node in module_tree.body:
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for decorator in node.decorator_list:
+            if not isinstance(decorator, ast.Call):
+                continue
+            func = decorator.func
+            if not (
+                isinstance(func, ast.Attribute)
+                and func.attr in _FASTAPI_DECORATOR_METHODS
+                and isinstance(func.value, ast.Name)
+                and func.value.id == router_name
+            ):
+                continue
+            if not decorator.args:
+                continue
+            path_argument = decorator.args[0]
+            if isinstance(path_argument, ast.Constant) and isinstance(path_argument.value, str):
+                yield path_argument.value
+
+
+def get_fastapi_mounted_routes(
+    factory_path: Path | None = None,
+    repo_root: Path | None = None,
+) -> set[str]:
+    """Statically extract literal routes from APIRouters mounted in the FastAPI factory.
+
+    The opt-in FastAPI surface (``ARAGORA_USE_FASTAPI`` / standalone uvicorn)
+    mounts routers in ``aragora/server/fastapi/factory.py``. Every
+    ``<x>.include_router(<module>.<router>[, prefix=...])`` call whose module
+    was imported from a local package is mounted serve evidence: the module's
+    module-level ``<router> = APIRouter(prefix=...)`` definition plus its
+    literal ``@<router>.<method>("/path")`` decorators yield full paths
+    (include prefix + router prefix + decorator path), kept when they start
+    with ``/api/``. A recognized mount whose module source or router
+    definition cannot be inspected fails closed. Computed include/router
+    prefixes, computed decorator paths, and unrecognized mount forms remain
+    unverified and contribute nothing — the plane can under-credit but never
+    over-credit.
+    """
+    root = repo_root or _REPO_ROOT
+    path = factory_path or _FASTAPI_FACTORY
+    factory_tree = _parse_python_source(path)
+    modules = _fastapi_route_module_imports(factory_tree, path, root)
+
+    mounts: list[tuple[str, str, str]] = []
+    for call in ast.walk(factory_tree):
+        if not isinstance(call, ast.Call):
+            continue
+        func = call.func
+        if not (isinstance(func, ast.Attribute) and func.attr == "include_router"):
+            continue
+        if not call.args:
+            continue
+        target = call.args[0]
+        if not (
+            isinstance(target, ast.Attribute)
+            and isinstance(target.value, ast.Name)
+            and target.value.id in modules
+        ):
+            continue
+        include_prefix = ""
+        unverifiable = False
+        for keyword in call.keywords:
+            if keyword.arg != "prefix":
+                continue
+            if isinstance(keyword.value, ast.Constant) and isinstance(keyword.value.value, str):
+                include_prefix = keyword.value.value
+            else:
+                unverifiable = True
+        if unverifiable:
+            continue
+        mounts.append((target.value.id, target.attr, include_prefix))
+
+    routes: set[str] = set()
+    for module_name, router_attr, include_prefix in mounts:
+        module_tree = _parse_python_source(modules[module_name])
+        router_prefix = _fastapi_router_prefix(module_tree, router_attr, modules[module_name])
+        if router_prefix is None:
+            continue
+        for path_suffix in _iter_fastapi_decorator_paths(module_tree, router_attr):
+            route = f"{include_prefix}{router_prefix}{path_suffix}"
+            if route.startswith("/api/"):
+                routes.add(route)
+    return routes
+
+
 def get_handler_routes() -> set[str]:
     """Extract routes from class metadata and decorator metadata.
 
@@ -1397,6 +1581,15 @@ def path_normalization_binding() -> dict[str, Any]:
     across outputs for schema/version/digest equality.
     """
     authority = _REPO_ROOT / _PATH_NORMALIZE_AUTHORITY
+    if _BOUND_TREE_ROOT:
+        imported_authority = inspect.getsourcefile(normalize_sdk_path)
+        if not imported_authority:
+            raise MethodAwareError("cannot locate imported path-normalization authority")
+        imported_relative = _relative_source_path(imported_authority)
+        if imported_relative != _PATH_NORMALIZE_AUTHORITY:
+            raise MethodAwareError(
+                "imported path-normalization authority does not come from the bound route tree"
+            )
     try:
         authority_bytes = authority.read_bytes()
     except OSError as exc:
@@ -1411,14 +1604,137 @@ def path_normalization_binding() -> dict[str, Any]:
     }
 
 
-def _require_exact_ref(ref: str) -> str:
-    # 40 hex is a SHA-1 object name; 64 hex supports SHA-256 object-format repos.
-    if not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", ref or ""):
-        raise MethodAwareError(
-            f"--ref must be an exact 40- or 64-hex commit SHA, got {ref!r}; "
-            'run with --ref "$(git rev-parse HEAD)"'
+def _git(
+    source_repo_root: Path,
+    *args: str,
+) -> subprocess.CompletedProcess[str]:
+    git_env = {
+        "GIT_CONFIG_GLOBAL": os.devnull,
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_NO_REPLACE_OBJECTS": "1",
+        "HOME": os.environ.get("HOME", ""),
+        "LC_ALL": "C",
+        "PATH": os.environ.get("PATH", ""),
+        "TMPDIR": os.environ.get("TMPDIR", tempfile.gettempdir()),
+    }
+    try:
+        return subprocess.run(
+            [
+                "git",
+                "-c",
+                "core.fsmonitor=false",
+                "-c",
+                "core.hooksPath=/dev/null",
+                "-C",
+                str(source_repo_root),
+                *args,
+            ],
+            check=False,
+            capture_output=True,
+            env=git_env,
+            text=True,
         )
-    return ref
+    except OSError as exc:
+        raise MethodAwareError(f"cannot execute git: {exc}") from exc
+
+
+def _require_exact_ref(
+    ref: str | None,
+    *,
+    source_repo_root: Path = _SOURCE_REPO_ROOT,
+) -> str:
+    if not ref or "\x00" in ref or ref.startswith("-"):
+        raise MethodAwareError("--ref cannot resolve to a commit")
+
+    source_repo_root = source_repo_root.resolve()
+    result = _git(source_repo_root, "rev-parse", "--verify", f"{ref}^{{commit}}")
+    if result.returncode != 0:
+        detail = result.stderr.strip() or result.stdout.strip()
+        suffix = f": {detail}" if detail else ""
+        raise MethodAwareError(f"--ref {ref!r} cannot resolve to a commit{suffix}")
+
+    return _require_resolved_commit_id(result.stdout.strip().lower(), label=f"--ref {ref!r}")
+
+
+def _require_resolved_commit_id(value: str, *, label: str = "resolved ref") -> str:
+    if not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", value) or set(value) == {"0"}:
+        raise MethodAwareError(f"{label} is not a valid resolved commit object ID")
+    return value
+
+
+def _repo_relative_input(path: str | Path, *, source_repo_root: Path, label: str) -> Path:
+    candidate = Path(path)
+    if candidate.is_absolute():
+        try:
+            candidate = candidate.relative_to(source_repo_root)
+        except ValueError as exc:
+            raise MethodAwareError(f"{label} must be inside the source repository") from exc
+    if candidate.is_absolute() or ".." in candidate.parts:
+        raise MethodAwareError(f"{label} must be a repository-relative path")
+    return candidate
+
+
+def _create_detached_checkout(
+    *,
+    source_repo_root: Path,
+    resolved_ref: str,
+    target_root: Path,
+) -> None:
+    template_root = target_root.parent / "git-template"
+    template_root.mkdir()
+    clone = _git(
+        source_repo_root,
+        "clone",
+        "--no-checkout",
+        "--shared",
+        f"--template={template_root}",
+        str(source_repo_root),
+        str(target_root),
+    )
+    if clone.returncode != 0:
+        detail = clone.stderr.strip() or clone.stdout.strip()
+        raise MethodAwareError(
+            f"cannot create isolated checkout for resolved commit {resolved_ref}: {detail}"
+        )
+
+    checkout = _git(
+        target_root,
+        "checkout",
+        "--detach",
+        resolved_ref,
+    )
+    if checkout.returncode != 0:
+        detail = checkout.stderr.strip() or checkout.stdout.strip()
+        raise MethodAwareError(
+            f"cannot detach isolated checkout at resolved commit {resolved_ref}: {detail}"
+        )
+
+
+def _prove_bound_tree(ref: str) -> str:
+    resolved = _require_resolved_commit_id(ref)
+    head_result = _git(_REPO_ROOT, "rev-parse", "--verify", "HEAD^{commit}")
+    if head_result.returncode != 0:
+        detail = head_result.stderr.strip() or head_result.stdout.strip()
+        raise MethodAwareError(f"cannot resolve bound route tree HEAD: {detail}")
+    head = _require_resolved_commit_id(
+        head_result.stdout.strip().lower(),
+        label="bound route tree HEAD",
+    )
+    if resolved != head:
+        raise MethodAwareError(
+            f"bound route tree HEAD {head} does not equal resolved commit {resolved}"
+        )
+    status = _git(_REPO_ROOT, "status", "--porcelain", "--untracked-files=all")
+    if status.returncode != 0:
+        detail = status.stderr.strip() or status.stdout.strip()
+        raise MethodAwareError(f"cannot prove bound route tree cleanliness: {detail}")
+    if status.stdout:
+        raise MethodAwareError("bound route tree is dirty; refusing to bind operation evidence")
+    if _BOUND_TREE_REF != resolved:
+        raise MethodAwareError(
+            "bound route tree environment does not name its exact resolved commit"
+        )
+    return resolved
 
 
 def _clean_literal_path(raw: str) -> str | None:
@@ -1438,6 +1754,16 @@ def _clean_literal_path(raw: str) -> str | None:
 
 def _relative_source_path(path: Path | str) -> str:
     candidate = Path(path)
+    if _BOUND_TREE_ROOT:
+        resolved = (
+            candidate.resolve() if candidate.is_absolute() else (_REPO_ROOT / candidate).resolve()
+        )
+        try:
+            return str(resolved.relative_to(_REPO_ROOT))
+        except ValueError as exc:
+            raise MethodAwareError(
+                f"authority source path escapes the bound route tree: {candidate}"
+            ) from exc
     try:
         return str(candidate.relative_to(_REPO_ROOT))
     except ValueError:
@@ -1501,6 +1827,15 @@ def _active_handler_source_files() -> frozenset[str]:
     files: set[str] = set()
 
     def _add(source_file: str) -> None:
+        if _BOUND_TREE_ROOT:
+            resolved = Path(source_file).resolve()
+            try:
+                files.add(str(resolved.relative_to(_REPO_ROOT)))
+            except ValueError:
+                # Standard-library and dependency MRO methods are not handler
+                # source authority and cannot be scanned under the repository.
+                pass
+            return
         # Key the census on BOTH the raw and resolved spellings so the
         # membership check in get_handler_source_literal_operations (which
         # resolves the scanned file) agrees under symlinked checkouts.
@@ -1600,6 +1935,12 @@ def _iter_registry_handler_classes() -> Iterator[Any]:
         handler_registry = importlib.import_module("aragora.server.handler_registry")
     except ImportError as exc:  # pragma: no cover - environment failure
         raise MethodAwareError(f"cannot import handler_registry: {exc}") from exc
+
+    if _BOUND_TREE_ROOT:
+        registry_source = getattr(handler_registry, "__file__", None)
+        if not registry_source:
+            raise MethodAwareError("cannot locate imported handler_registry authority")
+        _relative_source_path(registry_source)
 
     registry = handler_registry.HANDLER_REGISTRY
     filter_by_tier = getattr(handler_registry, "filter_registry_by_tier", None)
@@ -2335,6 +2676,87 @@ def load_operation_projection(inventory_path: str | Path | None = None) -> dict[
     }
 
 
+def _run_method_aware_plane_at_commit(
+    *,
+    spec_path: str | Path,
+    resolved_ref: str,
+    internal_prefixes_path: str | Path,
+    inventory_path: str | Path | None = None,
+    source_repo_root: Path = _SOURCE_REPO_ROOT,
+) -> dict[str, Any]:
+    source_repo_root = source_repo_root.resolve()
+    resolved_ref = _require_resolved_commit_id(resolved_ref)
+    spec_relative = _repo_relative_input(
+        spec_path,
+        source_repo_root=source_repo_root,
+        label="--spec",
+    )
+    internal_prefixes_relative = _repo_relative_input(
+        internal_prefixes_path,
+        source_repo_root=source_repo_root,
+        label="--internal-prefixes",
+    )
+    inventory_relative = _repo_relative_input(
+        inventory_path or Path("scripts/baselines/contract_drift_inventory.json"),
+        source_repo_root=source_repo_root,
+        label="--inventory",
+    )
+
+    with tempfile.TemporaryDirectory(prefix="aragora-openapi-route-tree-") as temp_dir:
+        temporary_root = Path(temp_dir)
+        target_root = temporary_root / "tree"
+        _create_detached_checkout(
+            source_repo_root=source_repo_root,
+            resolved_ref=resolved_ref,
+            target_root=target_root,
+        )
+
+        command = [
+            sys.executable,
+            "-I",
+            "-B",
+            str(_SOURCE_REPO_ROOT / "scripts/validate_openapi_routes.py"),
+            "--ref",
+            resolved_ref,
+            "--spec",
+            str(spec_relative),
+            "--internal-prefixes",
+            str(internal_prefixes_relative),
+            "--inventory",
+            str(inventory_relative),
+            "--json",
+        ]
+        child_env = {
+            "PATH": os.environ.get("PATH", ""),
+            "_ARAGORA_OPENAPI_ROUTE_TREE_ROOT": str(target_root),
+            "_ARAGORA_OPENAPI_ROUTE_RESOLVED_REF": resolved_ref,
+        }
+        result = subprocess.run(
+            command,
+            cwd=target_root,
+            env=child_env,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            detail = result.stderr.strip() or result.stdout.strip()
+            raise MethodAwareError(
+                f"method-aware validation failed at resolved commit {resolved_ref}: {detail}"
+            )
+        try:
+            payload = json.loads(result.stdout)
+        except json.JSONDecodeError as exc:
+            raise MethodAwareError(
+                f"method-aware validation returned invalid JSON at {resolved_ref}"
+            ) from exc
+        if not isinstance(payload, dict) or payload.get("ref") != resolved_ref:
+            raise MethodAwareError(
+                f"method-aware validation did not bind output to resolved commit {resolved_ref}"
+            )
+        return cast(dict[str, Any], payload)
+
+
 def validate_method_aware_plane(
     spec_path: str,
     ref: str,
@@ -2342,7 +2764,19 @@ def validate_method_aware_plane(
     inventory_path: str | Path | None = None,
 ) -> dict[str, Any]:
     """Compute the complete VAL-CDG-011 method-aware operation plane."""
-    ref = _require_exact_ref(ref)
+    if not _BOUND_TREE_ROOT:
+        resolved_ref = _require_exact_ref(ref, source_repo_root=_SOURCE_REPO_ROOT)
+        return _run_method_aware_plane_at_commit(
+            spec_path=spec_path,
+            resolved_ref=resolved_ref,
+            internal_prefixes_path=(
+                internal_prefixes_path or "scripts/baselines/internal_route_prefixes.json"
+            ),
+            inventory_path=inventory_path,
+            source_repo_root=_SOURCE_REPO_ROOT,
+        )
+
+    ref = _prove_bound_tree(ref)
     internal_prefixes = load_internal_prefixes(internal_prefixes_path)
 
     wired_witnesses: list[dict[str, Any]] = []
@@ -2444,6 +2878,8 @@ def validate_method_aware_plane(
     for name, operations in collections.items():
         plane[name] = operations
         plane[f"{name}_count"] = len(operations)
+    if _BOUND_TREE_ROOT:
+        _prove_bound_tree(ref)
     return plane
 
 
@@ -2456,6 +2892,36 @@ def load_wired_routes_for_validation() -> set[str]:
     except RouteRegistrationScanError as exc:
         print(f"Error: {exc}. Refusing to validate partial route wiring.", file=sys.stderr)
         sys.exit(1)
+
+
+def load_fastapi_routes_for_validation() -> set[str]:
+    """Load literal mounted-FastAPI routes with exact API-version semantics."""
+    try:
+        return {
+            normalize_route(route, normalize_version=False)
+            for route in get_fastapi_mounted_routes()
+        }
+    except RouteRegistrationScanError as exc:
+        print(f"Error: {exc}. Refusing to validate partial FastAPI mounting.", file=sys.stderr)
+        sys.exit(1)
+
+
+def filter_fastapi_orphans(
+    candidates: set[str], fastapi_routes: set[str] | None = None
+) -> tuple[set[str], set[str]]:
+    """Split orphan candidates by literal evidence from mounted FastAPI routers."""
+    if fastapi_routes is None:
+        fastapi_routes = load_fastapi_routes_for_validation()
+
+    served = candidates & fastapi_routes
+    if served:
+        print(
+            f"Spec-orphan suppressions via mounted FastAPI routers ({len(served)}):",
+            file=sys.stderr,
+        )
+        for path in sorted(served):
+            print(f"  - {path}", file=sys.stderr)
+    return candidates - served, served
 
 
 def filter_wired_orphans(
@@ -2497,6 +2963,7 @@ def validate_coverage(
     handler_routes = get_handler_routes()
     openapi_routes = get_openapi_routes(spec_path)
     wired_routes = load_wired_routes_for_validation()
+    fastapi_routes = load_fastapi_routes_for_validation()
 
     # Normalize routes for comparison
     normalized_handler = {normalize_route(r) for r in handler_routes}
@@ -2519,6 +2986,12 @@ def validate_coverage(
         wired_routes = {
             r
             for r in wired_routes
+            if not is_internal_route(r, internal_prefixes)
+            and not is_internal_route(normalize_route(r), internal_prefixes)
+        }
+        fastapi_routes = {
+            r
+            for r in fastapi_routes
             if not is_internal_route(r, internal_prefixes)
             and not is_internal_route(normalize_route(r), internal_prefixes)
         }
@@ -2566,8 +3039,11 @@ def validate_coverage(
     orphan_candidates, served_wired_registration = filter_wired_orphans(
         orphan_candidates, wired_routes
     )
+    orphan_candidates, served_fastapi_mounted = filter_fastapi_orphans(
+        orphan_candidates, fastapi_routes
+    )
     orphaned_in_spec, served_can_handle = filter_served_orphans(orphan_candidates)
-    served_undeclared = served_wired_registration | served_can_handle
+    served_undeclared = served_wired_registration | served_fastapi_mounted | served_can_handle
 
     baseline_missing: set[str] = set()
     baseline_orphaned: set[str] = set()
@@ -2596,6 +3072,9 @@ def validate_coverage(
         "served_undeclared_count": len(served_undeclared),
         "served_wired_registration": sorted(served_wired_registration),
         "served_wired_registration_count": len(served_wired_registration),
+        "served_fastapi_mounted": sorted(served_fastapi_mounted),
+        "served_fastapi_mounted_count": len(served_fastapi_mounted),
+        "fastapi_mounted_routes_count": len(fastapi_routes),
         "new_orphaned_in_spec": new_orphaned_in_spec,
         "new_orphaned_in_spec_count": len(new_orphaned_in_spec),
         "dynamic_routes_skipped": len(known_dynamic_patterns),
@@ -2612,6 +3091,7 @@ def validate_coverage(
         print("=" * 60)
         print(f"Handler metadata routes: {results['handler_routes_count']}")
         print(f"Wired function routes:   {results['wired_function_routes_count']}")
+        print(f"FastAPI mounted routes:  {results['fastapi_mounted_routes_count']}")
         print(f"Effective handler routes: {results['effective_handler_routes_count']}")
         print(f"OpenAPI routes:          {results['openapi_routes_count']}")
         print(f"Coverage:                {results['coverage_percentage']}%")
@@ -2663,9 +3143,14 @@ def main():
         "--ref",
         default=None,
         help=(
-            "Exact 40-hex commit SHA to bind operation evidence to; enables the "
-            "method-aware VAL-CDG-011 operation plane"
+            "Git ref resolved exactly once as <ref>^{commit}; enables the "
+            "method-aware VAL-CDG-011 operation plane bound to that immutable tree"
         ),
+    )
+    parser.add_argument(
+        "--inventory",
+        default="scripts/baselines/contract_drift_inventory.json",
+        help=argparse.SUPPRESS,
     )
     parser.add_argument(
         "--fail-on-missing",
@@ -2699,11 +3184,36 @@ def main():
     args = parser.parse_args()
     if args.ref is not None:
         try:
-            plane = validate_method_aware_plane(
-                args.spec,
-                args.ref,
-                internal_prefixes_path=args.internal_prefixes,
-            )
+            if _BOUND_TREE_ROOT:
+                spec_relative = _repo_relative_input(
+                    args.spec,
+                    source_repo_root=_REPO_ROOT,
+                    label="--spec",
+                )
+                internal_prefixes_relative = _repo_relative_input(
+                    args.internal_prefixes,
+                    source_repo_root=_REPO_ROOT,
+                    label="--internal-prefixes",
+                )
+                inventory_relative = _repo_relative_input(
+                    args.inventory,
+                    source_repo_root=_REPO_ROOT,
+                    label="--inventory",
+                )
+                plane = validate_method_aware_plane(
+                    str(_REPO_ROOT / spec_relative),
+                    args.ref,
+                    internal_prefixes_path=str(_REPO_ROOT / internal_prefixes_relative),
+                    inventory_path=_REPO_ROOT / inventory_relative,
+                )
+            else:
+                resolved_ref = _require_exact_ref(args.ref)
+                plane = _run_method_aware_plane_at_commit(
+                    spec_path=args.spec,
+                    resolved_ref=resolved_ref,
+                    internal_prefixes_path=args.internal_prefixes,
+                    inventory_path=args.inventory,
+                )
         except MethodAwareError as exc:
             print(f"Error: {exc}", file=sys.stderr)
             sys.exit(1)

@@ -20,7 +20,7 @@ load_dotenv()
 load_dotenv("/etc/aragora/.env")
 
 
-def check_env_var(name: str, prefix: str = None, required: bool = True) -> tuple[bool, str]:
+def check_env_var(name: str, prefix: str | None = None, required: bool = True) -> tuple[bool, str]:
     """Check if environment variable is set and valid."""
     value = os.environ.get(name, "")
 

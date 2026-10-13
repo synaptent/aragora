@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import contextlib
 import json
 import sys
 import time
@@ -39,6 +40,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+import aragora.utils.redis_config as redis_config
 from aragora.server.handlers.admin.health.kubernetes import (
     liveness_probe,
     readiness_probe_fast,
@@ -121,13 +123,6 @@ def _make_handler_registry_module(exact_routes: dict | None = None):
     return mod
 
 
-def _make_redis_cache_module(pool: Any = MagicMock()):
-    """Create a fake aragora.cache.redis_cache module."""
-    mod = types.ModuleType("aragora.cache.redis_cache")
-    mod.get_redis_pool = lambda: pool
-    return mod
-
-
 def _make_postgres_pool_module(pool: Any = MagicMock()):
     """Create a fake aragora.storage.postgres_pool module."""
     mod = types.ModuleType("aragora.storage.postgres_pool")
@@ -135,9 +130,9 @@ def _make_postgres_pool_module(pool: Any = MagicMock()):
     return mod
 
 
-def _make_leader_module(distributed_required: bool = False):
-    """Create a fake aragora.control_plane.leader module."""
-    mod = types.ModuleType("aragora.control_plane.leader")
+def _make_distributed_module(distributed_required: bool = False):
+    """Create a fake aragora.config.distributed module."""
+    mod = types.ModuleType("aragora.config.distributed")
     mod.is_distributed_state_required = lambda: distributed_required
     return mod
 
@@ -227,13 +222,30 @@ def _remove_handler_registry():
     return patch.dict(sys.modules, {"aragora.server.handler_registry.core": None})
 
 
-def _remove_redis_cache():
-    return patch.dict(sys.modules, {"aragora.cache.redis_cache": None})
+def _block_redis_config_import():
+    """Make ``import aragora.utils.redis_config`` raise ImportError."""
+    return patch.dict(sys.modules, {"aragora.utils.redis_config": None})
 
 
-def _patch_redis_cache(pool=MagicMock()):
-    mod = _make_redis_cache_module(pool)
-    return patch.dict(sys.modules, {"aragora.cache.redis_cache": mod})
+@contextlib.contextmanager
+def _real_redis_pool_state(pool: Any):
+    """Set the real shared pool global to ``pool`` for the duration.
+
+    Fails if the code under test builds the pool or changes the Redis
+    availability latch.
+    """
+    latch = object()
+    with (
+        patch.object(redis_config, "_redis_pool", pool),
+        patch.object(redis_config, "_redis_available", latch),
+        patch.object(
+            redis_config,
+            "get_redis_pool",
+            side_effect=AssertionError("readiness_probe_fast called get_redis_pool"),
+        ),
+    ):
+        yield
+        assert redis_config._redis_available is latch
 
 
 def _remove_postgres_pool():
@@ -245,13 +257,13 @@ def _patch_postgres_pool(pool=MagicMock()):
     return patch.dict(sys.modules, {"aragora.storage.postgres_pool": mod})
 
 
-def _remove_leader():
-    return patch.dict(sys.modules, {"aragora.control_plane.leader": None})
+def _remove_distributed():
+    return patch.dict(sys.modules, {"aragora.config.distributed": None})
 
 
-def _patch_leader(distributed_required=False):
-    mod = _make_leader_module(distributed_required)
-    return patch.dict(sys.modules, {"aragora.control_plane.leader": mod})
+def _patch_distributed(distributed_required=False):
+    mod = _make_distributed_module(distributed_required)
+    return patch.dict(sys.modules, {"aragora.config.distributed": mod})
 
 
 def _remove_startup():
@@ -688,35 +700,38 @@ class TestReadinessProbeFastElo:
 
 
 class TestReadinessProbeFastRedis:
-    """Test readiness_probe_fast() Redis pool check."""
+    """Test readiness_probe_fast() Redis pool check.
 
-    def _run(self, handler):
-        with _remove_degraded(), _remove_unified_server(), _remove_handler_registry():
+    Only ARAGORA_REDIS_URL configures the shared pool, so REDIS_URL alone is
+    reported as "not_configured".
+    """
+
+    def _run(self, handler, pool: Any = None):
+        with (
+            _remove_degraded(),
+            _remove_unified_server(),
+            _remove_handler_registry(),
+            _real_redis_pool_state(pool),
+        ):
             return readiness_probe_fast(handler)
 
-    def test_redis_pool_exists_when_env_set(self, monkeypatch):
-        monkeypatch.setenv("REDIS_URL", "redis://localhost:6379")
-        handler = _make_mock_handler()
-        with (
-            _remove_degraded(),
-            _remove_unified_server(),
-            _remove_handler_registry(),
-            _patch_redis_cache(pool=MagicMock()),
-        ):
-            result = readiness_probe_fast(handler)
+    def test_redis_pool_exists_when_aragora_url_set(self, monkeypatch):
+        monkeypatch.setenv("ARAGORA_REDIS_URL", "redis://localhost:6379")
+        result = self._run(_make_mock_handler(), pool=MagicMock())
         assert _body(result)["checks"]["redis_pool"] is True
+        assert _status(result) == 200
 
-    def test_redis_pool_none_when_env_set(self, monkeypatch):
-        monkeypatch.setenv("REDIS_URL", "redis://localhost:6379")
-        handler = _make_mock_handler()
-        with (
-            _remove_degraded(),
-            _remove_unified_server(),
-            _remove_handler_registry(),
-            _patch_redis_cache(pool=None),
-        ):
-            result = readiness_probe_fast(handler)
+    def test_redis_pool_not_built_when_aragora_url_set(self, monkeypatch):
+        monkeypatch.setenv("ARAGORA_REDIS_URL", "redis://localhost:6379")
+        result = self._run(_make_mock_handler(), pool=None)
         assert _body(result)["checks"]["redis_pool"] is False
+        assert _status(result) == 200
+
+    def test_redis_url_alone_is_not_configured(self, monkeypatch):
+        monkeypatch.setenv("REDIS_URL", "redis://localhost:6379")
+        result = self._run(_make_mock_handler(), pool=None)
+        assert _body(result)["checks"]["redis_pool"] == "not_configured"
+        assert _status(result) == 200
 
     def test_redis_import_error_when_env_set(self, monkeypatch):
         monkeypatch.setenv("ARAGORA_REDIS_URL", "redis://localhost:6379")
@@ -725,29 +740,19 @@ class TestReadinessProbeFastRedis:
             _remove_degraded(),
             _remove_unified_server(),
             _remove_handler_registry(),
-            _remove_redis_cache(),
+            _block_redis_config_import(),
         ):
             result = readiness_probe_fast(handler)
         assert _body(result)["checks"]["redis_pool"] == "not_configured"
 
-    def test_redis_runtime_error_when_env_set(self, monkeypatch):
-        monkeypatch.setenv("REDIS_URL", "redis://localhost:6379")
-        handler = _make_mock_handler()
-        # Create a module whose get_redis_pool raises RuntimeError
-        mod = types.ModuleType("aragora.cache.redis_cache")
-        mod.get_redis_pool = MagicMock(side_effect=RuntimeError("Pool error"))
-        with (
-            _remove_degraded(),
-            _remove_unified_server(),
-            _remove_handler_registry(),
-            patch.dict(sys.modules, {"aragora.cache.redis_cache": mod}),
-        ):
-            result = readiness_probe_fast(handler)
+    def test_redis_accessor_missing_when_env_set(self, monkeypatch):
+        monkeypatch.setenv("ARAGORA_REDIS_URL", "redis://localhost:6379")
+        monkeypatch.delattr(redis_config, "redis_pool_initialized")
+        result = self._run(_make_mock_handler(), pool=MagicMock())
         assert _body(result)["checks"]["redis_pool"] == "not_configured"
 
     def test_redis_not_configured_without_env(self):
-        handler = _make_mock_handler()
-        result = self._run(handler)
+        result = self._run(_make_mock_handler(), pool=MagicMock())
         assert _body(result)["checks"]["redis_pool"] == "not_configured"
 
 
@@ -849,7 +854,7 @@ class TestReadinessDepsCached:
         pkg._HEALTH_CACHE_TIMESTAMPS["readiness"] = time.time() - 60
 
         handler = _make_mock_handler()
-        with _remove_degraded(), _remove_leader(), _remove_startup():
+        with _remove_degraded(), _remove_distributed(), _remove_startup():
             result = readiness_dependencies(handler)
         assert _status(result) == 200
 
@@ -886,7 +891,7 @@ class TestReadinessDepsDegraded:
 
     def test_degraded_import_error_skips(self):
         handler = _make_mock_handler()
-        with _remove_degraded(), _remove_leader(), _remove_startup():
+        with _remove_degraded(), _remove_distributed(), _remove_startup():
             result = readiness_dependencies(handler)
         assert _status(result) == 200
 
@@ -895,7 +900,7 @@ class TestReadinessDepsStorage:
     """Test readiness_dependencies() storage check."""
 
     def _run(self, handler):
-        with _remove_degraded(), _remove_leader(), _remove_startup():
+        with _remove_degraded(), _remove_distributed(), _remove_startup():
             return readiness_dependencies(handler)
 
     def test_storage_ok(self):
@@ -935,7 +940,7 @@ class TestReadinessDepsElo:
     """Test readiness_dependencies() ELO system check."""
 
     def _run(self, handler):
-        with _remove_degraded(), _remove_leader(), _remove_startup():
+        with _remove_degraded(), _remove_distributed(), _remove_startup():
             return readiness_dependencies(handler)
 
     def test_elo_ok(self):
@@ -979,7 +984,7 @@ class TestReadinessDepsRedis:
 
         with (
             _remove_degraded(),
-            _patch_leader(distributed_required=True),
+            _patch_distributed(distributed_required=True),
             _patch_startup(redis_result=(True, "Connected")),
             patch(
                 "aragora.server.handlers.admin.health.kubernetes.asyncio.get_running_loop",
@@ -1002,7 +1007,7 @@ class TestReadinessDepsRedis:
 
         with (
             _remove_degraded(),
-            _patch_leader(distributed_required=True),
+            _patch_distributed(distributed_required=True),
             _patch_startup(redis_result=(False, "Connection refused")),
             patch(
                 "aragora.server.handlers.admin.health.kubernetes.asyncio.get_running_loop",
@@ -1024,7 +1029,7 @@ class TestReadinessDepsRedis:
 
         with (
             _remove_degraded(),
-            _patch_leader(distributed_required=False),
+            _patch_distributed(distributed_required=False),
             _patch_startup(),
         ):
             result = readiness_dependencies(handler)
@@ -1037,7 +1042,7 @@ class TestReadinessDepsRedis:
         handler = _make_mock_handler()
         with (
             _remove_degraded(),
-            _patch_leader(distributed_required=False),
+            _patch_distributed(distributed_required=False),
             _patch_startup(),
         ):
             result = readiness_dependencies(handler)
@@ -1046,7 +1051,7 @@ class TestReadinessDepsRedis:
 
     def test_redis_import_error_skips(self):
         handler = _make_mock_handler()
-        with _remove_degraded(), _remove_leader(), _remove_startup():
+        with _remove_degraded(), _remove_distributed(), _remove_startup():
             result = readiness_dependencies(handler)
         body = _body(result)
         assert body["checks"]["redis"]["status"] == "check_skipped"
@@ -1057,7 +1062,7 @@ class TestReadinessDepsRedis:
 
         with (
             _remove_degraded(),
-            _patch_leader(distributed_required=True),
+            _patch_distributed(distributed_required=True),
             _patch_startup(),
             patch(
                 "aragora.server.handlers.admin.health.kubernetes.asyncio.get_running_loop",
@@ -1079,7 +1084,7 @@ class TestReadinessDepsRedis:
 
         with (
             _remove_degraded(),
-            _patch_leader(distributed_required=True),
+            _patch_distributed(distributed_required=True),
             _patch_startup(),
             patch(
                 "aragora.server.handlers.admin.health.kubernetes.asyncio.get_running_loop",
@@ -1103,7 +1108,7 @@ class TestReadinessDepsRedis:
 
         with (
             _remove_degraded(),
-            _patch_leader(distributed_required=True),
+            _patch_distributed(distributed_required=True),
             _patch_startup(),
             patch(
                 "aragora.server.handlers.admin.health.kubernetes.asyncio.get_running_loop",
@@ -1125,7 +1130,7 @@ class TestReadinessDepsRedis:
 
         with (
             _remove_degraded(),
-            _patch_leader(distributed_required=False),
+            _patch_distributed(distributed_required=False),
             _patch_startup(),
         ):
             result = readiness_dependencies(handler)
@@ -1142,7 +1147,7 @@ class TestReadinessDepsRedis:
 
         with (
             _remove_degraded(),
-            _patch_leader(distributed_required=True),
+            _patch_distributed(distributed_required=True),
             _patch_startup(redis_result=(True, "Connected via thread")),
             patch(
                 "aragora.server.handlers.admin.health.kubernetes.asyncio.get_running_loop",
@@ -1170,7 +1175,7 @@ class TestReadinessDepsRedis:
 
         with (
             _remove_degraded(),
-            _patch_leader(distributed_required=True),
+            _patch_distributed(distributed_required=True),
             _patch_startup(),
             patch(
                 "aragora.server.handlers.admin.health.kubernetes.asyncio.get_running_loop",
@@ -1194,7 +1199,7 @@ class TestReadinessDepsRedis:
 
         with (
             _remove_degraded(),
-            _patch_leader(distributed_required=True),
+            _patch_distributed(distributed_required=True),
             _patch_startup(),
             patch(
                 "aragora.server.handlers.admin.health.kubernetes.asyncio.get_running_loop",
@@ -1221,7 +1226,7 @@ class TestReadinessDepsPostgres:
 
         with (
             _remove_degraded(),
-            _remove_leader(),
+            _remove_distributed(),
             _patch_startup(db_result=(True, "Connected")),
             patch(
                 "aragora.server.handlers.admin.health.kubernetes.asyncio.get_running_loop",
@@ -1244,7 +1249,7 @@ class TestReadinessDepsPostgres:
 
         with (
             _remove_degraded(),
-            _remove_leader(),
+            _remove_distributed(),
             _patch_startup(db_result=(False, "Connection refused")),
             patch(
                 "aragora.server.handlers.admin.health.kubernetes.asyncio.get_running_loop",
@@ -1264,7 +1269,7 @@ class TestReadinessDepsPostgres:
         handler = _make_mock_handler()
         monkeypatch.setenv("DATABASE_URL", "postgresql://localhost/test")
 
-        with _remove_degraded(), _remove_leader(), _patch_startup():
+        with _remove_degraded(), _remove_distributed(), _patch_startup():
             result = readiness_dependencies(handler)
         body = _body(result)
         assert body["checks"]["postgresql"]["configured"] is True
@@ -1272,14 +1277,14 @@ class TestReadinessDepsPostgres:
 
     def test_postgres_not_configured(self):
         handler = _make_mock_handler()
-        with _remove_degraded(), _remove_leader(), _patch_startup():
+        with _remove_degraded(), _remove_distributed(), _patch_startup():
             result = readiness_dependencies(handler)
         body = _body(result)
         assert body["checks"]["postgresql"]["configured"] is False
 
     def test_postgres_import_error_skips(self):
         handler = _make_mock_handler()
-        with _remove_degraded(), _remove_leader(), _remove_startup():
+        with _remove_degraded(), _remove_distributed(), _remove_startup():
             result = readiness_dependencies(handler)
         body = _body(result)
         assert body["checks"]["postgresql"]["status"] == "check_skipped"
@@ -1291,7 +1296,7 @@ class TestReadinessDepsPostgres:
 
         with (
             _remove_degraded(),
-            _remove_leader(),
+            _remove_distributed(),
             _patch_startup(),
             patch(
                 "aragora.server.handlers.admin.health.kubernetes.asyncio.get_running_loop",
@@ -1314,7 +1319,7 @@ class TestReadinessDepsPostgres:
 
         with (
             _remove_degraded(),
-            _remove_leader(),
+            _remove_distributed(),
             _patch_startup(),
             patch(
                 "aragora.server.handlers.admin.health.kubernetes.asyncio.get_running_loop",
@@ -1338,7 +1343,7 @@ class TestReadinessDepsPostgres:
 
         with (
             _remove_degraded(),
-            _remove_leader(),
+            _remove_distributed(),
             _patch_startup(),
             patch(
                 "aragora.server.handlers.admin.health.kubernetes.asyncio.get_running_loop",
@@ -1364,7 +1369,7 @@ class TestReadinessDepsPostgres:
 
         with (
             _remove_degraded(),
-            _remove_leader(),
+            _remove_distributed(),
             _patch_startup(),
             patch(
                 "aragora.server.handlers.admin.health.kubernetes.asyncio.get_running_loop",
@@ -1398,7 +1403,7 @@ class TestReadinessDepsPostgres:
 
             with (
                 _remove_degraded(),
-                _remove_leader(),
+                _remove_distributed(),
                 _patch_startup(db_result=(True, "Connected")),
                 patch(
                     "aragora.server.handlers.admin.health.kubernetes.asyncio.get_running_loop",
@@ -1427,7 +1432,7 @@ class TestReadinessDepsPostgres:
             monkeypatch.setenv("DATABASE_URL", "postgresql://localhost/test")
             monkeypatch.setenv("ARAGORA_REQUIRE_DATABASE", val)
 
-            with _remove_degraded(), _remove_leader(), _patch_startup():
+            with _remove_degraded(), _remove_distributed(), _patch_startup():
                 result = readiness_dependencies(handler)
             body = _body(result)
             assert body["checks"]["postgresql"]["configured"] is True, (
@@ -1442,7 +1447,7 @@ class TestReadinessDepsPostgres:
 
         with (
             _remove_degraded(),
-            _remove_leader(),
+            _remove_distributed(),
             _patch_startup(),
             patch(
                 "aragora.server.handlers.admin.health.kubernetes.asyncio.get_running_loop",
@@ -1466,7 +1471,7 @@ class TestReadinessDepsPostgres:
 
         with (
             _remove_degraded(),
-            _remove_leader(),
+            _remove_distributed(),
             _patch_startup(),
             patch(
                 "aragora.server.handlers.admin.health.kubernetes.asyncio.get_running_loop",
@@ -1489,7 +1494,7 @@ class TestReadinessDepsApiKeys:
     def _run_deps(self, handler=None):
         if handler is None:
             handler = _make_mock_handler()
-        with _remove_degraded(), _remove_leader(), _remove_startup():
+        with _remove_degraded(), _remove_distributed(), _remove_startup():
             return readiness_dependencies(handler)
 
     def test_no_api_keys_configured(self):
@@ -1563,7 +1568,7 @@ class TestReadinessDeps:
     def _run_healthy(self, handler=None):
         if handler is None:
             handler = _make_mock_handler()
-        with _remove_degraded(), _remove_leader(), _remove_startup():
+        with _remove_degraded(), _remove_distributed(), _remove_startup():
             return readiness_dependencies(handler)
 
     def test_returns_200_when_healthy(self):

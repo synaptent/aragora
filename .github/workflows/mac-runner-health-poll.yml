@@ -5,11 +5,23 @@ name: Mac Runner Health Poll
 #   (a) any host's latest log line shows TIME_WAIT > threshold, or
 #   (b) any host's log hasn't been appended to in >48h (indicates the
 #       launchd job itself is stuck — the condition we CAN'T detect
-#       from the host's own alerting path).
+#       from the host's own alerting path), or
+#   (c) any host has less than DISK_MIN_FREE_GB of free space.
+#
+# The disk check exists because on 2026-07-27 mac-studio-m3ultra was found
+# 100% full (132 MiB free of 926 GiB) after an unrotated third-party log grew
+# to 474 GB. Every CI job on that host had been failing with ENOSPC since
+# ~2026-07-09 — and this poll ran green every week throughout, because it only
+# looked at TIME_WAIT and log freshness. The runner also could not upload its
+# own job logs, so the failures surfaced as red jobs with no retrievable log.
 #
 # Survives the failure mode from issue #6474: the host's outbound TCP
 # was broken, so a host-initiated alert would not have reached GH.
 # This workflow runs on GH-hosted ubuntu and SSHes IN to the Macs.
+#
+# This job fails loudly if it cannot poll (missing SSH key), and only reports
+# "healthy" when the poll actually ran and returned no drift. It must never be
+# possible for this workflow to be green without having checked anything.
 
 on:
   schedule:
@@ -28,6 +40,11 @@ concurrency:
 env:
   THRESHOLD: "5000"
   STALE_HOURS: "48"
+  # Absolute headroom, not a percentage: npm/pip/node need bytes, and the
+  # fleet's Macs all have ~926 GB disks. Observed healthy free space on
+  # 2026-07-27 was 441 GB (mac-studio) and 232 GB (macbook-intel), so 50 GB is
+  # quiet in steady state while still leaving lead time at a weekly cadence.
+  DISK_MIN_FREE_GB: "50"
 
 jobs:
   poll:
@@ -48,17 +65,22 @@ jobs:
         run: |
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          if [ -n "${MAC_RUNNER_SSH_KEY:-}" ]; then
-            echo "$MAC_RUNNER_SSH_KEY" > ~/.ssh/mac_runner
-            chmod 600 ~/.ssh/mac_runner
-            echo "KEY_READY=1" >> "$GITHUB_ENV"
-          else
-            echo "::warning::MAC_RUNNER_SSH_KEY secret not set; poll will be skipped"
+          if [ -z "${MAC_RUNNER_SSH_KEY:-}" ]; then
+            # Hard failure, not a warning. This previously warned and exited 0,
+            # so every scheduled run since the workflow landed reported success
+            # while polling nothing -- the secret has never been set. That green
+            # tick was read as "Macs are healthy" for months, including the
+            # ~3 weeks mac-studio-m3ultra spent with a full disk failing every
+            # CI job on it. A monitor that cannot run must be loudly broken.
+            echo "::error::MAC_RUNNER_SSH_KEY secret is not set, so no Mac runner can be polled. Add the secret (private key authorized on all hosts in HOSTS_JSON) or disable this workflow. Do not leave it green and inert."
+            exit 1
           fi
+          echo "$MAC_RUNNER_SSH_KEY" > ~/.ssh/mac_runner
+          chmod 600 ~/.ssh/mac_runner
+          echo "KEY_READY=1" >> "$GITHUB_ENV"
 
       - name: Poll each Mac
         id: poll
-        if: env.KEY_READY == '1'
         env:
           HOSTS_JSON: |
             [
@@ -92,6 +114,29 @@ jobs:
               alerts+=("$name: SSH unreachable")
               continue
             fi
+
+            # Disk check runs before the health-log checks below, so a host with
+            # a missing or stale log still gets its free space reported. On APFS
+            # "/" is the read-only system snapshot, but it shares the container's
+            # free space with /System/Volumes/Data, so a single df is accurate.
+            DISK_FREE_KB=$(ssh -n -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+                               -i ~/.ssh/mac_runner \
+                               armand@"$host" \
+                               'df -Pk / | tail -1 | tr -s " " | cut -d" " -f4' \
+                               2>/dev/null || echo "")
+
+            case "$DISK_FREE_KB" in
+              ''|*[!0-9]*)
+                alerts+=("$name: could not read free disk space")
+                ;;
+              *)
+                DISK_FREE_GB=$(( DISK_FREE_KB / 1048576 ))
+                echo "  disk: ${DISK_FREE_GB} GB free"
+                if [ "$DISK_FREE_GB" -lt "$DISK_MIN_FREE_GB" ]; then
+                  alerts+=("$name: only ${DISK_FREE_GB} GB free < ${DISK_MIN_FREE_GB} GB minimum")
+                fi
+                ;;
+            esac
 
             if [ "$LAST_LINE" = "no-log" ]; then
               alerts+=("$name: health log missing")
@@ -156,6 +201,7 @@ jobs:
           - **TIME_WAIT > threshold**: reboot the affected host. See docs/runners/FLEET.md "Past incidents" section for the #6474 playbook.
           - **Health log missing or stale**: SSH in and verify the \`com.aragora.runner-health\` launchd job is loaded: \`launchctl list | grep runner-health\`.
           - **SSH unreachable**: host may be off, on a different network, or have SSH disabled.
+          - **Low free disk**: find the consumer with \`du -xh -d1 ~ | sort -rh | head\`, then drill down. A full disk fails CI jobs with \`ENOSPC\` **and** stops the runner uploading its own job logs, so those jobs go red with a \`BlobNotFound\` 404 and no visible error. Recover the missing output from \`~/actions-runner/_diag/pages/\` on the host. Truncate oversized logs in place (\`: > file.log\`) rather than deleting — launchd holds them open in append mode, so unlink/rename reclaims nothing.
 
           [Run log]($SERVER_URL/$REPO/actions/runs/$RUN_ID)
           BODY_END
@@ -174,5 +220,5 @@ jobs:
           fi
 
       - name: Report clean
-        if: steps.poll.outputs.drift != '1' && env.KEY_READY == '1'
-        run: echo "::notice::All Mac runners healthy — TIME_WAIT within threshold, logs fresh."
+        if: steps.poll.outputs.drift == '0'
+        run: echo "::notice::All Mac runners healthy — TIME_WAIT within threshold, logs fresh, disk above minimum."

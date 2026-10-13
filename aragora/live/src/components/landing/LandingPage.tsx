@@ -26,7 +26,8 @@ export interface LandingPageProps {
 export function LandingPage({ apiBase, wsUrl, onEnterDashboard }: LandingPageProps = {}) {
   const { theme } = useTheme();
   const { config: backendConfig } = useBackend();
-  const livePreviewApiBase = apiBase || backendConfig.api || BACKENDS.production.api;
+  // An empty configured api means same-origin: local dev serves /api through the Next rewrite.
+  const livePreviewApiBase = apiBase || (backendConfig.api ?? BACKENDS.production.api);
   const livePreviewWsUrl = wsUrl || backendConfig.ws || BACKENDS.production.ws;
 
   return (

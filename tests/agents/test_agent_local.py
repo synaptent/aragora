@@ -75,10 +75,11 @@ class TestOllamaAvailability:
 
         mock_session = MagicMock()
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_session.__aexit__ = AsyncMock(return_value=False)
         mock_session.get = MagicMock(
             return_value=MagicMock(
-                __aenter__=AsyncMock(return_value=mock_response), __aexit__=AsyncMock()
+                __aenter__=AsyncMock(return_value=mock_response),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
 
@@ -95,10 +96,11 @@ class TestOllamaAvailability:
 
         mock_session = MagicMock()
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_session.__aexit__ = AsyncMock(return_value=False)
         mock_session.get = MagicMock(
             return_value=MagicMock(
-                __aenter__=AsyncMock(return_value=mock_response), __aexit__=AsyncMock()
+                __aenter__=AsyncMock(return_value=mock_response),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
 
@@ -132,10 +134,11 @@ class TestOllamaModelDiscovery:
 
         mock_session = MagicMock()
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_session.__aexit__ = AsyncMock(return_value=False)
         mock_session.get = MagicMock(
             return_value=MagicMock(
-                __aenter__=AsyncMock(return_value=mock_response), __aexit__=AsyncMock()
+                __aenter__=AsyncMock(return_value=mock_response),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
 
@@ -153,10 +156,11 @@ class TestOllamaModelDiscovery:
 
         mock_session = MagicMock()
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_session.__aexit__ = AsyncMock(return_value=False)
         mock_session.get = MagicMock(
             return_value=MagicMock(
-                __aenter__=AsyncMock(return_value=mock_response), __aexit__=AsyncMock()
+                __aenter__=AsyncMock(return_value=mock_response),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
 
@@ -183,10 +187,11 @@ class TestOllamaGenerate:
 
         mock_session = MagicMock()
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_session.__aexit__ = AsyncMock(return_value=False)
         mock_session.post = MagicMock(
             return_value=MagicMock(
-                __aenter__=AsyncMock(return_value=mock_response), __aexit__=AsyncMock()
+                __aenter__=AsyncMock(return_value=mock_response),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
 
@@ -203,7 +208,7 @@ class TestOllamaGenerate:
 
         mock_session = MagicMock()
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_session.__aexit__ = AsyncMock(return_value=False)
         mock_session.post = MagicMock(
             side_effect=aiohttp.ClientConnectorError(MagicMock(), OSError("Connection refused"))
         )
@@ -308,10 +313,11 @@ class TestLMStudioAvailability:
 
         mock_session = MagicMock()
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_session.__aexit__ = AsyncMock(return_value=False)
         mock_session.get = MagicMock(
             return_value=MagicMock(
-                __aenter__=AsyncMock(return_value=mock_response), __aexit__=AsyncMock()
+                __aenter__=AsyncMock(return_value=mock_response),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
 
@@ -345,10 +351,11 @@ class TestLMStudioModelDiscovery:
 
         mock_session = MagicMock()
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_session.__aexit__ = AsyncMock(return_value=False)
         mock_session.get = MagicMock(
             return_value=MagicMock(
-                __aenter__=AsyncMock(return_value=mock_response), __aexit__=AsyncMock()
+                __aenter__=AsyncMock(return_value=mock_response),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
 
@@ -396,10 +403,11 @@ class TestLMStudioGenerate:
 
         mock_session = MagicMock()
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_session.__aexit__ = AsyncMock(return_value=False)
         mock_session.post = MagicMock(
             return_value=MagicMock(
-                __aenter__=AsyncMock(return_value=mock_response), __aexit__=AsyncMock()
+                __aenter__=AsyncMock(return_value=mock_response),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
 
@@ -423,12 +431,13 @@ class TestLMStudioGenerate:
             nonlocal captured_payload
             captured_payload = kwargs.get("json", {})
             return MagicMock(
-                __aenter__=AsyncMock(return_value=mock_response), __aexit__=AsyncMock()
+                __aenter__=AsyncMock(return_value=mock_response),
+                __aexit__=AsyncMock(return_value=False),
             )
 
         mock_session = MagicMock()
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_session.__aexit__ = AsyncMock(return_value=False)
         mock_session.post = capture_post
 
         with patch("aiohttp.ClientSession", return_value=mock_session):

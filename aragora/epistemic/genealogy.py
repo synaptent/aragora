@@ -22,8 +22,10 @@ import json
 import os
 from copy import deepcopy
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any, Literal, Protocol, get_args, runtime_checkable
+
+UTC = timezone.utc
 
 EntryKind = Literal["decision_receipt", "decay_signal", "crux_receipt", "repair_proposal"]
 

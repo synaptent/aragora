@@ -59,6 +59,8 @@ class Fact:
         created_at: When fact was first recorded
         updated_at: When fact was last modified
         superseded_by: ID of fact that supersedes this one
+        org_id: Owning organization; None means unassigned (quarantined
+            from every org-scoped caller). Deliberately left out of to_dict().
     """
 
     id: str
@@ -74,6 +76,7 @@ class Fact:
     created_at: datetime = field(default_factory=datetime.now)
     updated_at: datetime = field(default_factory=datetime.now)
     superseded_by: str | None = None
+    org_id: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert fact to dictionary for serialization."""
@@ -201,6 +204,7 @@ class FactFilters:
     created_before: datetime | None = None
     limit: int = 100
     offset: int = 0
+    org_id: str | None = None
 
 
 @dataclass

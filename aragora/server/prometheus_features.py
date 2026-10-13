@@ -10,14 +10,14 @@ Provides metrics for:
 import time
 from contextlib import contextmanager
 
-from aragora.server.prometheus import (
+from aragora.observability.prometheus import (
     PROMETHEUS_AVAILABLE,
     _simple_metrics,
 )
 
 # Import metric definitions when prometheus is available
 if PROMETHEUS_AVAILABLE:
-    from aragora.server.prometheus import (
+    from aragora.observability.prometheus import (
         CHECKPOINT_BRIDGE_SAVES,
         CHECKPOINT_BRIDGE_RESTORES,
         CHECKPOINT_BRIDGE_MOLECULE_RECOVERIES,

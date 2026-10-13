@@ -832,7 +832,7 @@ class TestAuditLogSingleton:
 
         # Should start fresh
         with patch.dict(os.environ, {"ARAGORA_AUDIT_STORE_BACKEND": "sqlite"}, clear=False):
-            with patch("aragora.audit.log.require_distributed_store"):
+            with patch("aragora.observability.audit_log.require_distributed_store"):
                 log1 = get_audit_log(db_path=temp_audit_db)
                 log2 = get_audit_log()
 

@@ -71,7 +71,7 @@ class WorkspaceConfig:
     cleanup_on_exit: bool = True
     base_path: str = field(
         default_factory=lambda: os.path.join(tempfile.gettempdir(), "aragora-workspaces")
-    )  # noqa: S108
+    )
 
 
 @dataclass

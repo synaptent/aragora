@@ -22,6 +22,11 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
+from aragora.training.evaluation_protocols import (
+    create_specialist_evaluator,
+    elo_rating_for_verdict,
+    win_rate_from_vulnerability,
+)
 from aragora.training.model_registry import ModelMetadata, ModelRegistry
 
 if TYPE_CHECKING:
@@ -676,7 +681,7 @@ class SpecialistTrainingPipeline:
         self._registry.update_status(model_id, TrainingStatus.EXPORTING_DATA)
 
         # Import here to avoid circular imports
-        from aragora.server.storage import DebateStorage
+        from aragora.storage.debate_storage import DebateStorage
         from aragora.training.debate_exporter import DebateTrainingExporter, DebateTrainingConfig
 
         config = model.training_config
@@ -870,9 +875,6 @@ class SpecialistTrainingPipeline:
         config = model.training_config
         if config and config.run_gauntlet:
             try:
-                from aragora.gauntlet.runner import GauntletRunner
-                from aragora.gauntlet.config import GauntletConfig
-
                 # Create evaluation prompt based on vertical
                 vertical_prompts = {
                     "legal": "Review this contract clause for potential risks and liabilities.",
@@ -889,12 +891,7 @@ class SpecialistTrainingPipeline:
                 )
 
                 # Run gauntlet evaluation
-                gauntlet = GauntletRunner(
-                    config=GauntletConfig(
-                        agents=["claude", "gpt-4"],
-                        run_scenario_matrix=False,  # Skip scenarios for faster eval
-                    )
-                )
+                gauntlet = create_specialist_evaluator(vertical=config.vertical.value)
 
                 eval_result = await gauntlet.run(
                     input_content=eval_prompt,
@@ -906,19 +903,9 @@ class SpecialistTrainingPipeline:
                 robustness_score: float = getattr(eval_result, "robustness_score", 0.0)
                 vertical_accuracy = robustness_score
 
-                # Estimate ELO based on gauntlet performance
-                # Base ELO of 1000, adjusted by verdict
-                base_elo = 1000
-                if eval_result.verdict == "PASS":
-                    elo_rating = base_elo + 200
-                elif eval_result.verdict == "FAIL":
-                    elo_rating = base_elo - 100
-                else:  # CONDITIONAL or unknown
-                    elo_rating = base_elo + 50
-
-                # Win rate based on vulnerability rate (inverse)
+                elo_rating = elo_rating_for_verdict(eval_result.verdict)
                 vulnerability_rate: float = getattr(eval_result, "vulnerability_rate", 0.0) or 0.0
-                win_rate = 1.0 - vulnerability_rate
+                win_rate = win_rate_from_vulnerability(vulnerability_rate)
 
                 self._registry.update_status(
                     model_id,
@@ -929,8 +916,11 @@ class SpecialistTrainingPipeline:
                 )
 
                 logger.info(
-                    f"Gauntlet evaluation complete for {model_id}: "
-                    f"ELO={elo_rating}, accuracy={vertical_accuracy:.2f}, win_rate={win_rate:.2f}"
+                    "Gauntlet evaluation complete for %s: ELO=%s, accuracy=%.2f, win_rate=%.2f",
+                    model_id,
+                    elo_rating,
+                    vertical_accuracy,
+                    win_rate,
                 )
 
             except (RuntimeError, ValueError, OSError, TypeError) as e:

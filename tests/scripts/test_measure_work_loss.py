@@ -151,7 +151,7 @@ class TestComputeWorkLoss:
         assert result["lost_units"] == 1
 
     def test_explicit_publication_state_respected(self) -> None:
-        outbox = [
+        outbox: list[dict] = [
             {
                 "idempotency_key": "k1",
                 "branch": "codex/x",
@@ -271,6 +271,8 @@ class TestMainJson:
                 str(ls_remote),
                 "--prs-file",
                 str(prs_file),
+                "--since",
+                "2026-06-03T12:00:00Z",
                 "--json",
             ]
         )
@@ -333,7 +335,7 @@ class TestRenderWasteBlock:
 
 class TestMalformedItems:
     def test_non_string_branch_and_key_do_not_crash(self) -> None:
-        outbox = [
+        outbox: list[dict] = [
             {"branch": {"weird": "dict"}, "idempotency_key": ["also", "weird"]},
             {"branch": 42, "expires_at": "2026-01-01T00:00:00Z"},
             {"local_evidence": {"branch": {"nested": "dict"}}, "_file": "x.json"},

@@ -89,8 +89,8 @@ class DependencyGraph:
         Returns list of step IDs forming the cycle, or None if no cycle.
         """
         WHITE, GRAY, BLACK = 0, 1, 2
-        color = {step_id: WHITE for step_id in self.steps}
-        parent: dict[str, str | None] = {step_id: None for step_id in self.steps}
+        color = dict.fromkeys(self.steps, WHITE)
+        parent: dict[str, str | None] = dict.fromkeys(self.steps)
 
         def dfs(node: str) -> list[str] | None:
             color[node] = GRAY

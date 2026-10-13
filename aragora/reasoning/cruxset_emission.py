@@ -25,7 +25,12 @@ import logging
 import os
 from typing import TYPE_CHECKING, Any
 
-from aragora.reasoning.cruxset import CruxSet, build_cruxset_from_analysis
+from aragora.reasoning.cruxset import (
+    MAX_CRUX_COUNTERFACTUAL_CHARS,
+    CruxSet,
+    build_cruxset_from_analysis,
+    clip_counterfactual,
+)
 
 if TYPE_CHECKING:
     from aragora.reasoning.belief import BeliefNetwork
@@ -33,6 +38,10 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 CRUXSET_EMISSION_ENV_VAR = "ARAGORA_CRUXSET_EMISSION_ENABLED"
+
+# Below this, a clipped condition is an ellipsis with no readable content left,
+# so the note reads better carrying the outcome alone.
+_MIN_CONDITION_CHARS = 16
 
 
 def cruxset_emission_enabled() -> bool:
@@ -64,6 +73,7 @@ def maybe_emit_cruxset(
     provenance: dict[str, Any] | None = None,
     top_k: int = 5,
     min_score: float = 0.1,
+    counterfactuals_by_claim_id: dict[str, str] | None = None,
 ) -> CruxSet | None:
     """Build a CruxSet for the given debate context if emission is enabled.
 
@@ -82,6 +92,11 @@ def maybe_emit_cruxset(
     detector invocation are logged at warning level and swallowed
     rather than re-raised — the function is a soft enrichment layer
     and must not cause debate failures.
+
+    ``counterfactuals_by_claim_id`` is the DIC-15 hook: a mapping from
+    ``claim_id`` to the richer counterfactual string produced by the
+    crux-finder validation pass. When supplied, each matching
+    ``Crux.counterfactual`` field is overridden with this richer text.
     """
     if not cruxset_emission_enabled():
         return None
@@ -117,14 +132,66 @@ def maybe_emit_cruxset(
             receipt_id=receipt_id,
             provenance=provenance,
             max_cruxes=top_k,
+            counterfactuals_by_claim_id=counterfactuals_by_claim_id,
         )
-    except (ValueError, KeyError) as exc:
+    except (ValueError, KeyError, TypeError) as exc:
+        # TypeError covers a caller-supplied provenance value that the checksum's
+        # json.dumps cannot serialise: no bundle can be built, so fail closed.
         logger.warning(
             "cruxset emission could not build CruxSet for question=%r: %s",
             question[:80],
             exc,
         )
         return None
+
+
+def _compose_counterfactual(condition: str, outcome_change: str) -> str:
+    """Join the finder's two fragments so the outcome survives the builder's clip.
+
+    ``condition`` embeds the unbounded agent-authored statement while
+    ``outcome_change`` carries the uncertainty delta. Clipping the joined string
+    would drop the delta entirely for a long statement, so the condition yields
+    first and the builder's clip stays the unconditional backstop.
+    """
+    if not condition:
+        return outcome_change
+    if not outcome_change:
+        return condition
+    separator = "; "
+    budget = MAX_CRUX_COUNTERFACTUAL_CHARS - len(outcome_change) - len(separator)
+    if budget < _MIN_CONDITION_CHARS:
+        return outcome_change
+    return f"{clip_counterfactual(condition, budget)}{separator}{outcome_change}"
+
+
+def _counterfactuals_by_claim_id(counterfactuals: list[Any]) -> dict[str, str] | None:
+    """Map claim_id to the finder's condition/outcome text for the DIC-15 hook.
+
+    Entries that are blank after stripping, and values of a type that cannot be
+    safely coerced, are dropped rather than mapped to ``""``, so the builder
+    falls back to its default resolution_impact text.
+    ``provenance["counterfactuals"]`` deliberately keeps the unclipped entries as
+    the full-fidelity audit record while ``Crux.counterfactual`` is the short note.
+    """
+    if not counterfactuals:
+        return None
+    by_claim: dict[str, str] = {}
+    for cf in counterfactuals:
+        if not isinstance(cf, dict):
+            continue
+        raw_cid = cf.get("claim_id")
+        # Not stripped: build_cruxset_from_analysis keys the map with the raw
+        # claim_id, and a key normalised on only one side would never match.
+        cid = raw_cid if isinstance(raw_cid, str) else ""
+        if not cid:
+            continue
+        text = _compose_counterfactual(
+            clip_counterfactual(cf.get("condition")),
+            clip_counterfactual(cf.get("outcome_change")),
+        )
+        if text:
+            by_claim[cid] = text
+    return by_claim
 
 
 def maybe_emit_cruxset_from_finder_result(
@@ -174,6 +241,7 @@ def maybe_emit_cruxset_from_finder_result(
         analysis_payload = analysis.to_dict()
         cruxes = list(analysis.cruxes)
         counterfactuals = list(result.counterfactuals or [])
+        cf_by_claim = _counterfactuals_by_claim_id(counterfactuals)
         provenance: dict[str, Any] = {
             "debate_id": result.debate_id,
             "mode": "crux_finder",
@@ -181,7 +249,7 @@ def maybe_emit_cruxset_from_finder_result(
             "rounds": result.rounds,
             "agents": list(result.agents),
         }
-    except Exception as exc:  # noqa: BLE001 - malformed finder output must fail closed
+    except (ValueError, TypeError, AttributeError, KeyError) as exc:
         logger.warning("maybe_emit_cruxset_from_finder_result: malformed CruxFinderResult: %s", exc)
         return None
 
@@ -198,6 +266,7 @@ def maybe_emit_cruxset_from_finder_result(
         receipt_id=receipt_id,
         provenance=provenance,
         top_k=max(len(cruxes), 1),
+        counterfactuals_by_claim_id=cf_by_claim,
     )
 
 

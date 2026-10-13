@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from aragora.server.stream.events import (
+from aragora.events.types import (
     StreamEventType,
     StreamEvent,
     AudienceMessage,

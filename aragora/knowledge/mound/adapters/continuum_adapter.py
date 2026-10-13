@@ -76,7 +76,7 @@ class ContinuumSearchResult:
 
     entry: ContinuumMemoryEntry
     relevance_score: float = 0.0
-    matched_keywords: list[str] = None
+    matched_keywords: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if self.matched_keywords is None:

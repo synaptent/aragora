@@ -388,27 +388,6 @@ describe('Agents Namespace', () => {
       expect(result.accuracy_rate).toBe(0.85);
       expect(result.by_domain?.software.accuracy).toBe(0.9);
     });
-
-    it('should trigger agent calibration', async () => {
-      const mockResult = {
-        agent: 'claude',
-        score: 0.91,
-        brier_score: 0.09,
-        samples: 100,
-      };
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve(JSON.stringify(mockResult)),
-      });
-
-      const result = await client.agents.calibrate('claude', {
-        domains: ['software'],
-        sampleSize: 100,
-      });
-
-      expect(result.score).toBe(0.91);
-    });
   });
 
   // ===========================================================================
@@ -973,28 +952,6 @@ describe('Agents Namespace', () => {
       expect(result.success).toBe(true);
     });
 
-    it('should enable an agent', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve(JSON.stringify({ success: true, agent: 'claude', enabled: true })),
-      });
-
-      const result = await client.agents.enable('claude');
-
-      expect(result.enabled).toBe(true);
-    });
-
-    it('should disable an agent', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve(JSON.stringify({ success: true, agent: 'claude', enabled: false })),
-      });
-
-      const result = await client.agents.disable('claude', 'Maintenance');
-
-      expect(result.enabled).toBe(false);
-    });
-
     it('should send agent heartbeat', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -1007,54 +964,6 @@ describe('Agents Namespace', () => {
       const result = await client.agents.heartbeat('my-agent', 'healthy');
 
       expect(result.acknowledged).toBe(true);
-    });
-  });
-
-  // ===========================================================================
-  // Quota Management
-  // ===========================================================================
-
-  describe('Quota Management', () => {
-    it('should get agent quota', async () => {
-      const mockQuota = {
-        agent: 'claude',
-        debates_limit: 100,
-        debates_used: 45,
-        tokens_limit: 1000000,
-        tokens_used: 450000,
-        reset_at: '2024-02-01T00:00:00Z',
-      };
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve(JSON.stringify(mockQuota)),
-      });
-
-      const result = await client.agents.getQuota('claude');
-
-      expect(result.debates_limit).toBe(100);
-      expect(result.debates_used).toBe(45);
-    });
-
-    it('should set agent quota', async () => {
-      const mockUpdatedQuota = {
-        agent: 'claude',
-        debates_limit: 200,
-        tokens_limit: 2000000,
-        updated_at: '2024-01-01T00:00:00Z',
-      };
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve(JSON.stringify(mockUpdatedQuota)),
-      });
-
-      const result = await client.agents.setQuota('claude', {
-        debatesLimit: 200,
-        tokensLimit: 2000000,
-      });
-
-      expect(result.debates_limit).toBe(200);
     });
   });
 
@@ -1168,24 +1077,6 @@ describe('Agents Namespace', () => {
       const result = await client.agents.getIntrospection('claude');
 
       expect(result).toHaveProperty('self_awareness');
-    });
-
-    it('should get agent stats', async () => {
-      const mockStats = {
-        total_agents: 15,
-        active_agents: 12,
-        average_elo: 1450,
-        total_debates: 5000,
-      };
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve(JSON.stringify(mockStats)),
-      });
-
-      const result = await client.agents.getStats();
-
-      expect(result).toHaveProperty('total_agents');
     });
 
     it('should get leaderboard view', async () => {

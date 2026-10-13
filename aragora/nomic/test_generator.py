@@ -315,7 +315,7 @@ class TestGenerator:
             "None": None,
             "Any": "any_value",
         }
-        return type_map.get(type_str, None)
+        return type_map.get(type_str)
 
     def _get_edge_cases(self, type_str: str) -> list[tuple[Any, str]]:
         """Get edge case values for a type."""

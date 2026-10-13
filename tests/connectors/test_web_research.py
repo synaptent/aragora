@@ -17,7 +17,7 @@ from aragora.connectors.web import WebConnector
 from aragora.connectors.base import Evidence
 from aragora.evidence.collector import EvidenceCollector
 from aragora.reasoning.provenance import SourceType
-from aragora.core import Environment
+from aragora.core import DebateResult, Environment
 from aragora.debate.orchestrator import Arena, DebateProtocol
 from aragora.core import Agent
 
@@ -174,11 +174,9 @@ async def test_arena_research_phase():
     mock_research = AsyncMock(return_value=research_context)
     arena.context_initializer._perform_research = mock_research
 
-    # Run debate (it will fail but we just want to test research phase)
-    try:
-        await arena.run()
-    except Exception:
-        pass  # Expected to fail without proper setup
+    # The debate completes with mock agents; research runs during context setup
+    result = await arena.run()
+    assert isinstance(result, DebateResult)
 
     # Check that research was called
     mock_research.assert_called_once_with(env.task)
@@ -200,10 +198,8 @@ async def test_research_enabled_by_default():
     mock_research = AsyncMock(return_value="Mock research context")
     arena.context_initializer._perform_research = mock_research
 
-    try:
-        await arena.run()
-    except Exception:
-        pass
+    result = await arena.run()
+    assert isinstance(result, DebateResult)
 
     # Research should be called since it's enabled by default
     mock_research.assert_called_once()
@@ -219,10 +215,8 @@ async def test_research_can_be_disabled():
     arena = Arena(env, agents, protocol)
 
     with patch.object(arena, "_perform_research", new_callable=AsyncMock) as mock_research:
-        try:
-            await arena.run()
-        except Exception:
-            pass
+        result = await arena.run()
+        assert isinstance(result, DebateResult)
 
         # Research should not be called when disabled
         mock_research.assert_not_called()

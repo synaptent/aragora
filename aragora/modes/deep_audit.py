@@ -170,7 +170,7 @@ class DeepAuditOrchestrator:
         """
         logger.info("=" * 60)
         logger.info("DEEP AUDIT MODE")
-        logger.info(f"Task: {task[:80]}...")
+        logger.info("Task: %s...", task[:80])
         logger.info("Rounds: %s", self.config.rounds)
         logger.info("Agents: %s", ", ".join(a.name for a in self.agents))
         logger.info("=" * 60)

@@ -16,7 +16,7 @@ from collections.abc import Callable
 if TYPE_CHECKING:
     from aragora.core import Vote
     from aragora.debate.context import DebateContext
-    from aragora.debate.protocol import DebateProtocol
+    from aragora.protocols.debate import DebateProtocol
 
 logger = logging.getLogger(__name__)
 

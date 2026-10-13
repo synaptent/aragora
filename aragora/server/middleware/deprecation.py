@@ -205,7 +205,7 @@ class V1UsageTracker:
 
         # Record Prometheus metrics
         try:
-            from aragora.server.prometheus import record_v1_api_request
+            from aragora.observability.prometheus import record_v1_api_request
 
             record_v1_api_request(path, method.upper())
         except ImportError:

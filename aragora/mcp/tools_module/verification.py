@@ -46,7 +46,7 @@ async def get_consensus_proofs_tool(
     # Try to get proofs from debate data
     if not proofs and debate_id:
         try:
-            from aragora.server.storage import get_debates_db
+            from aragora.storage.debate_storage import get_debates_db
 
             db = get_debates_db()
             if db:
@@ -91,7 +91,7 @@ async def verify_consensus_tool(
         manager = FormalVerificationManager()
 
         # Get debate data
-        from aragora.server.storage import get_debates_db
+        from aragora.storage.debate_storage import get_debates_db
 
         db = get_debates_db()
         if not db:

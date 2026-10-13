@@ -1,0 +1,132 @@
+{
+  "schema_version": "decision-quality-corpus/1.0",
+  "benchmark_id": "outcome-backed-decision-quality-v1",
+  "revision": "draft-science-forecasting-tranche-2",
+  "frozen_at": "2026-08-30T03:52:00Z",
+  "cases": [
+    {
+      "case_id": "science-dev-dart-orbit-change",
+      "domain": "science_forecasting",
+      "split": "development",
+      "title": "DART post-impact orbit-measurement campaign",
+      "decision_prompt": "A planetary-defense observation team has telescope time reserved around NASA's September 2022 DART impact. Choose the action that best preserves the ability to determine whether the kinetic impact achieved a measurable deflection of Dimorphos.",
+      "forecast_question": "Using only information available at the cutoff, forecast the probability that \"Retain the post-impact campaign\" is the outcome-aligned action at the stated horizon.",
+      "forecast_option_id": "retain_measurement_campaign",
+      "options": [
+        {
+          "option_id": "release_measurement_slots",
+          "label": "Release the observing slots",
+          "description": "Return the reserved telescope capacity before impact and do not maintain a coordinated post-impact measurement campaign."
+        },
+        {
+          "option_id": "retain_measurement_campaign",
+          "label": "Retain the post-impact campaign",
+          "description": "Keep coordinated telescope capacity through October to measure the post-impact orbital period."
+        }
+      ],
+      "information_cutoff": "2022-08-26T00:00:00Z",
+      "sources": [
+        {
+          "source_id": "nasa-dart-fact-sheet-2022-08-25",
+          "title": "NASA Planetary Defense: Double Asteroid Redirection Test fact sheet",
+          "url": "https://www.nasa.gov/wp-content/uploads/2023/08/pd-dart-fact-sheet.pdf",
+          "published_at": "2022-08-25T19:59:45Z",
+          "content_sha256": "a43dcce04cddc836a504a96138f8133220afc4b5d130e6fb3ddce7da0df6a731"
+        }
+      ]
+    },
+    {
+      "case_id": "science-dev-atlantic-2023-storm-count",
+      "domain": "science_forecasting",
+      "split": "development",
+      "title": "Atlantic hurricane-season surge capacity",
+      "decision_prompt": "An emergency-science operations team is allocating seasonal analysis and response capacity after NOAA's May 2023 Atlantic outlook. Choose the action that best fits whether the final named-storm count will exceed the 1991-2020 average of 14.",
+      "forecast_question": "Using only information available at the cutoff, forecast the probability that \"Retain high-activity contingency capacity\" is the outcome-aligned action at the stated horizon.",
+      "forecast_option_id": "retain_high_activity_contingency",
+      "options": [
+        {
+          "option_id": "plan_for_at_most_average_count",
+          "label": "Plan for an at-most-average count",
+          "description": "Size the seasonal allocation on the assumption that no more than 14 named storms will form."
+        },
+        {
+          "option_id": "retain_high_activity_contingency",
+          "label": "Retain high-activity contingency capacity",
+          "description": "Keep surge analysis and response capacity available for a named-storm count above the recent climatological average."
+        }
+      ],
+      "information_cutoff": "2023-05-26T00:00:00Z",
+      "sources": [
+        {
+          "source_id": "noaa-2023-hurricane-outlook-2023-05-25",
+          "title": "NOAA 2023 Hurricane Season Outlook Interagency Congressional Briefing",
+          "url": "https://www.noaa.gov/sites/default/files/2023-05/2023HurricaneSeasonOutlookBriefing.pdf",
+          "published_at": "2023-05-25T20:37:21Z",
+          "content_sha256": "5bb6aebbc42ad25cde7941529c1cba588456a7a00e2175acd62f3cdf7f47faeb"
+        }
+      ]
+    },
+    {
+      "case_id": "science-dev-psyche-2022-launch",
+      "domain": "science_forecasting",
+      "split": "development",
+      "title": "Psyche 2022 launch-operations plan",
+      "decision_prompt": "A deep-space science operations group is allocating staffing in March 2022 for the Psyche mission's planned late-2022 departure. Choose the action that best fits whether Psyche will launch before the end of 2022.",
+      "forecast_question": "Using only information available at the cutoff, forecast the probability that \"Retain 2022 launch readiness\" is the outcome-aligned action at the stated horizon.",
+      "forecast_option_id": "retain_2022_launch_readiness",
+      "options": [
+        {
+          "option_id": "rebaseline_after_2022",
+          "label": "Rebaseline beyond 2022",
+          "description": "Move the primary mission-operations allocation beyond 2022 while preserving bounded contingency support."
+        },
+        {
+          "option_id": "retain_2022_launch_readiness",
+          "label": "Retain 2022 launch readiness",
+          "description": "Keep the mission-operations allocation committed to a launch before the end of 2022."
+        }
+      ],
+      "information_cutoff": "2022-03-06T00:00:00Z",
+      "sources": [
+        {
+          "source_id": "nasa-psyche-flight-rule-design-2022-03-05",
+          "title": "Flight Rule Design, Implementation, Verification, and Validation for the Psyche Mission",
+          "url": "https://ntrs.nasa.gov/api/citations/20230007023",
+          "published_at": "2022-03-05T00:00:00Z",
+          "content_sha256": "ffe2d076ff51afd010f5c0f875db18fb3279b70342f913a7068368caebdbcec6"
+        }
+      ]
+    },
+    {
+      "case_id": "science-dev-starliner-cft-july-2023",
+      "domain": "science_forecasting",
+      "split": "development",
+      "title": "Starliner July 2023 crew-test operations plan",
+      "decision_prompt": "An ISS science-operations team must allocate integration staffing after NASA reports a July 21 target for Boeing's first Starliner crewed flight test while technical issues remain open. Choose the action that best fits whether the flight will launch by the end of July 2023.",
+      "forecast_question": "Using only information available at the cutoff, forecast the probability that \"Retain July integration readiness\" is the outcome-aligned action at the stated horizon.",
+      "forecast_option_id": "retain_july_integration_readiness",
+      "options": [
+        {
+          "option_id": "rebaseline_after_july",
+          "label": "Rebaseline beyond July",
+          "description": "Move the primary integration staffing allocation beyond July while retaining bounded contingency coverage."
+        },
+        {
+          "option_id": "retain_july_integration_readiness",
+          "label": "Retain July integration readiness",
+          "description": "Keep the July launch and ISS integration staffing allocation intact."
+        }
+      ],
+      "information_cutoff": "2023-06-01T00:00:00Z",
+      "sources": [
+        {
+          "source_id": "nasa-commercial-programs-briefing-2023-05-31",
+          "title": "NASA Advisory Committee Commercial Programs briefing",
+          "url": "https://www.nasa.gov/wp-content/uploads/2023/10/csd-nac-briefing-may-2023-tagged.pdf",
+          "published_at": "2023-05-31T14:18:56Z",
+          "content_sha256": "95c51c157d3050cdfbd4d2b8b4551286e18f8661e82ee6207673fc17f5028713"
+        }
+      ]
+    }
+  ]
+}

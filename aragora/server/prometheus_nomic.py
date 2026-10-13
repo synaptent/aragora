@@ -16,14 +16,14 @@ logger = logging.getLogger(__name__)
 P = ParamSpec("P")
 R = TypeVar("R")
 
-from aragora.server.prometheus import (
+from aragora.observability.prometheus import (
     PROMETHEUS_AVAILABLE,
     _simple_metrics,
 )
 
 # Import metric definitions when prometheus is available
 if PROMETHEUS_AVAILABLE:
-    from aragora.server.prometheus import (
+    from aragora.observability.prometheus import (
         NOMIC_AGENT_PHASE_DURATION,
         NOMIC_CYCLE_DURATION,
         NOMIC_CYCLE_TOTAL,

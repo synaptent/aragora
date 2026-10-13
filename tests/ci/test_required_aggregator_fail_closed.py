@@ -111,6 +111,17 @@ AGGREGATORS: tuple[Aggregator, ...] = (
 # GitHub only ever reports these four in `needs.<job>.result`, but a required gate
 # should also refuse anything it does not recognize rather than defaulting to green.
 NON_SUCCESS_WORKER_RESULTS = ("failure", "cancelled", "timed_out", "action_required", "stale")
+MALFORMED_SCOPE_FLAGS = (
+    "",
+    " ",
+    "\t",
+    "TRUE",
+    "False",
+    " true",
+    "false ",
+    "yes",
+    "unexpected",
+)
 
 _EXPRESSION = re.compile(r"\$\{\{\s*(?P<body>[^}]+?)\s*\}\}")
 _RESULT_REF = re.compile(r"^needs\.(?P<job>[A-Za-z0-9_-]+)\.result$")
@@ -237,6 +248,46 @@ def test_out_of_scope_skip_is_green(spec: Aggregator) -> None:
     assert proc.returncode == 0, (
         f"{spec.workflow}::{spec.job} rejected a legitimate scope skip "
         f"(exit {proc.returncode}).\n{proc.stdout}\n{proc.stderr}"
+    )
+
+
+@pytest.mark.parametrize("spec", AGGREGATORS, ids=_ids(AGGREGATORS))
+@pytest.mark.parametrize("scope_flag", MALFORMED_SCOPE_FLAGS, ids=repr)
+def test_successful_classifier_with_malformed_scope_fails_closed(
+    spec: Aggregator, scope_flag: str
+) -> None:
+    """A successful classifier must still publish an exact boolean verdict.
+
+    Missing output is represented by the empty string in GitHub expressions. The
+    other cases cover whitespace, mixed case, and arbitrary values that must not be
+    mistaken for an explicit out-of-scope decision merely because they are not
+    equal to ``"true"``.
+    """
+    proc = _run_aggregator(
+        spec,
+        worker_result="skipped",
+        classifier_result="success",
+        scope_flag=scope_flag,
+    )
+    assert proc.returncode != 0, (
+        f"{spec.workflow}::{spec.job} reported SUCCESS after its classifier succeeded "
+        f"but published malformed scope output {scope_flag!r}.\n{proc.stdout}"
+    )
+
+
+@pytest.mark.parametrize("spec", AGGREGATORS, ids=_ids(AGGREGATORS))
+@pytest.mark.parametrize("worker_result", ("success", *NON_SUCCESS_WORKER_RESULTS))
+def test_out_of_scope_requires_worker_to_be_skipped(spec: Aggregator, worker_result: str) -> None:
+    """Exact false is green only when the worker was actually skipped."""
+    proc = _run_aggregator(
+        spec,
+        worker_result=worker_result,
+        classifier_result="success",
+        scope_flag="false",
+    )
+    assert proc.returncode != 0, (
+        f"{spec.workflow}::{spec.job} reported SUCCESS for exact out-of-scope output "
+        f"while its worker concluded '{worker_result}'.\n{proc.stdout}"
     )
 
 

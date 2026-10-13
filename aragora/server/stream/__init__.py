@@ -308,7 +308,7 @@ _EXPORTS = {
     "_debate_executor_lock": ("aragora.server.stream.state_manager", "_debate_executor_lock"),
     "_DEBATE_TTL_SECONDS": ("aragora.server.stream.servers", "_DEBATE_TTL_SECONDS"),
     "TRUSTED_PROXIES": ("aragora.server.stream.servers", "TRUSTED_PROXIES"),
-    "_safe_error_message": ("aragora.server.errors", "safe_error_message"),
+    "_safe_error_message": ("aragora.api_errors", "safe_error_message"),
     "_debate_executor": ("aragora.server.stream.state_manager", "_debate_executor"),
     "_get_active_debates": ("aragora.server.stream.state_manager", "get_active_debates"),
 }

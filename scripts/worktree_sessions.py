@@ -228,7 +228,7 @@ def cmd_merge(args: argparse.Namespace) -> int:
         if dry_run:
             print("Merge would succeed (no conflicts).")
         else:
-            print(f"Merged successfully. Commit: {result.commit_sha[:12]}")
+            print(f"Merged successfully. Commit: {(result.commit_sha or 'unknown')[:12]}")
     else:
         print(f"Merge failed: {result.error}")
         if result.conflicts:
@@ -304,7 +304,7 @@ def cmd_merge_all(args: argparse.Namespace) -> int:
 
         result = asyncio.run(coordinator.safe_merge(branch))
         if result.success:
-            print(f"  Merged: {result.commit_sha[:12]}")
+            print(f"  Merged: {(result.commit_sha or 'unknown')[:12]}")
             merged += 1
         else:
             print(f"  FAILED: {result.error}")

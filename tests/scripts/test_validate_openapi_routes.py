@@ -5,13 +5,290 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import shutil
+import subprocess
 import sys
 import types
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
 
 import scripts.validate_openapi_routes as validate_openapi_routes
+
+
+def _git(repo: Path, *args: str, input_bytes: bytes | None = None) -> str:
+    result = subprocess.run(
+        ["git", "-C", str(repo), *args],
+        input=input_bytes,
+        capture_output=True,
+        check=True,
+    )
+    return result.stdout.decode("utf-8").strip()
+
+
+@dataclass(frozen=True)
+class ExactRefRepo:
+    repo: Path
+    handler_registry: Path
+    spec: Path
+    ref_a: str
+    ref_b: str
+
+
+@pytest.fixture
+def git_repo(tmp_path: Path) -> Path:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    return repo
+
+
+@pytest.fixture
+def exact_ref_repo(git_repo: Path) -> ExactRefRepo:
+    repo = git_repo
+    source_root = Path(validate_openapi_routes.__file__).resolve().parents[1]
+
+    for relative in (
+        "scripts/sdk_path_normalize.py",
+        "scripts/baselines/contract_drift_inventory.json",
+    ):
+        destination = repo / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source_root / relative, destination)
+
+    (repo / "scripts/baselines/internal_route_prefixes.json").write_text(
+        '{"prefixes":["/api/v1/internal/"]}\n',
+        encoding="utf-8",
+    )
+    for relative in (
+        "aragora/__init__.py",
+        "aragora/server/__init__.py",
+        "aragora/server/stream/__init__.py",
+    ):
+        destination = repo / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text("", encoding="utf-8")
+    registration = repo / "aragora/server/stream/servers_route_registration.py"
+    registration.write_text("# no literal wired registrations\n", encoding="utf-8")
+
+    handler_registry = repo / "aragora/server/handler_registry.py"
+    handler_registry.write_text(
+        """
+class ExactRefHandler:
+    GET_ROUTES = ["/api/v1/ref-a"]
+
+HANDLER_REGISTRY = [("_exact_ref", ExactRefHandler)]
+
+def get_active_tiers():
+    return {"core"}
+
+def filter_registry_by_tier(registry, active_tiers=None):
+    return list(registry)
+""".lstrip(),
+        encoding="utf-8",
+    )
+    spec = repo / "docs/api/openapi.json"
+    spec.parent.mkdir(parents=True)
+    spec.write_text(
+        json.dumps({"paths": {"/api/v1/ref-a": {"get": {}}}}) + "\n",
+        encoding="utf-8",
+    )
+
+    _git(repo, "config", "user.name", "Exact Ref Test")
+    _git(repo, "config", "user.email", "exact-ref@example.invalid")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "fixture ref a")
+    ref_a = _git(repo, "rev-parse", "HEAD")
+
+    handler_registry.write_text(
+        handler_registry.read_text(encoding="utf-8").replace("/api/v1/ref-a", "/api/v1/ref-b"),
+        encoding="utf-8",
+    )
+    spec.write_text(
+        json.dumps({"paths": {"/api/v1/ref-b": {"post": {}}}}) + "\n",
+        encoding="utf-8",
+    )
+    registration.write_text(
+        'router.add_post("/api/v1/ref-b-wired", handler)\n',
+        encoding="utf-8",
+    )
+    (repo / "scripts/sdk_path_normalize.py").write_text(
+        'def normalize_sdk_path(path): return "/api/ref-b-normalized"\n',
+        encoding="utf-8",
+    )
+    (repo / "scripts/baselines/internal_route_prefixes.json").write_text(
+        '{"prefixes":["/api/"]}\n',
+        encoding="utf-8",
+    )
+    (repo / "scripts/baselines/contract_drift_inventory.json").write_text(
+        '{"ref_b":"not valid projection authority"}\n',
+        encoding="utf-8",
+    )
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "fixture ref b")
+    ref_b = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "branch", "moving-ref", ref_a)
+
+    return ExactRefRepo(
+        repo=repo,
+        handler_registry=handler_registry,
+        spec=spec,
+        ref_a=ref_a,
+        ref_b=ref_b,
+    )
+
+
+def _run_exact_ref_fixture(fixture: ExactRefRepo, resolved_ref: str) -> dict:
+    return validate_openapi_routes._run_method_aware_plane_at_commit(
+        spec_path="docs/api/openapi.json",
+        resolved_ref=resolved_ref,
+        internal_prefixes_path="scripts/baselines/internal_route_prefixes.json",
+        source_repo_root=fixture.repo,
+    )
+
+
+def test_zero_sha_ref_fails_closed(git_repo: Path):
+    with pytest.raises(validate_openapi_routes.MethodAwareError, match="cannot resolve"):
+        validate_openapi_routes._require_exact_ref(
+            "0" * 40,
+            source_repo_root=git_repo,
+        )
+
+
+def test_nonexistent_and_noncommit_refs_fail_closed(git_repo: Path):
+    repo = git_repo
+    with pytest.raises(validate_openapi_routes.MethodAwareError, match="cannot resolve"):
+        validate_openapi_routes._require_exact_ref(
+            "refs/heads/does-not-exist",
+            source_repo_root=repo,
+        )
+
+    blob = _git(repo, "hash-object", "-w", "--stdin", input_bytes=b"not a commit\n")
+    _git(repo, "tag", "blob-ref", blob)
+    with pytest.raises(validate_openapi_routes.MethodAwareError, match="commit"):
+        validate_openapi_routes._require_exact_ref("blob-ref", source_repo_root=repo)
+
+
+def test_valid_non_head_ref_reads_only_that_commit(exact_ref_repo: ExactRefRepo):
+    ref_a = exact_ref_repo.ref_a
+    assert _git(exact_ref_repo.repo, "rev-parse", "HEAD") == exact_ref_repo.ref_b
+
+    plane = _run_exact_ref_fixture(exact_ref_repo, ref_a)
+
+    assert plane["ref"] == ref_a
+    assert {entry["operation_id"] for entry in plane["declared_and_served"]} == {"GET /api/ref-a"}
+    assert all(entry["source_sha"] == ref_a for entry in plane["served_operations"])
+    assert all(entry["source_sha"] == ref_a for entry in plane["spec_operations"])
+    assert "POST /api/ref-b" not in {entry["operation_id"] for entry in plane["spec_operations"]}
+
+
+def test_dirty_caller_state_cannot_change_same_sha_output(exact_ref_repo: ExactRefRepo):
+    ref_a = exact_ref_repo.ref_a
+    clean = _run_exact_ref_fixture(exact_ref_repo, ref_a)
+
+    exact_ref_repo.handler_registry.write_text(
+        """
+class DirtyHandler:
+    DELETE_ROUTES = ["/api/v1/dirty-only"]
+HANDLER_REGISTRY = [("_dirty", DirtyHandler)]
+def get_active_tiers():
+    return {"core"}
+def filter_registry_by_tier(registry, active_tiers=None):
+    return list(registry)
+""".lstrip(),
+        encoding="utf-8",
+    )
+    exact_ref_repo.spec.write_text(
+        json.dumps({"paths": {"/api/v1/dirty-only": {"delete": {}}}}) + "\n",
+        encoding="utf-8",
+    )
+    repo = exact_ref_repo.repo
+    (repo / "aragora/server/stream/servers_route_registration.py").write_text(
+        'router.add_delete("/api/v1/dirty-wired", handler)\n',
+        encoding="utf-8",
+    )
+    (repo / "scripts/sdk_path_normalize.py").write_text(
+        'def normalize_sdk_path(path): return "/api/dirty-normalized"\n',
+        encoding="utf-8",
+    )
+    (repo / "scripts/baselines/internal_route_prefixes.json").write_text(
+        '{"prefixes":["/api/"]}\n',
+        encoding="utf-8",
+    )
+    (repo / "scripts/baselines/contract_drift_inventory.json").write_text(
+        '{"dirty":"ambient inventory must not be read"}\n',
+        encoding="utf-8",
+    )
+    (repo / "untracked-dirty.txt").write_text(
+        "ambient caller state\n",
+        encoding="utf-8",
+    )
+
+    dirty = _run_exact_ref_fixture(exact_ref_repo, ref_a)
+
+    assert dirty == clean
+    assert all("/dirty-only" not in entry["operation_id"] for entry in dirty["served_operations"])
+
+
+def test_moving_symbolic_ref_is_resolved_once(
+    exact_ref_repo: ExactRefRepo,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    repo = exact_ref_repo.repo
+    with monkeypatch.context() as isolated_env:
+        isolated_env.setenv("GIT_DIR", str(repo / "ambient-wrong.git"))
+        resolved = validate_openapi_routes._require_exact_ref(
+            "moving-ref",
+            source_repo_root=repo,
+        )
+    assert resolved == exact_ref_repo.ref_a
+
+    _git(repo, "branch", "-f", "moving-ref", exact_ref_repo.ref_b)
+    plane = _run_exact_ref_fixture(exact_ref_repo, resolved)
+
+    assert plane["ref"] == exact_ref_repo.ref_a
+    assert {entry["operation_id"] for entry in plane["declared_and_served"]} == {"GET /api/ref-a"}
+
+
+def test_direct_method_aware_entrypoint_delegates_to_exact_tree(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    resolved = "a" * 40
+    expected = {"ref": resolved}
+    captured: dict[str, object] = {}
+
+    def fake_resolve(ref, *, source_repo_root):
+        captured["ref"] = ref
+        captured["source_repo_root"] = source_repo_root
+        return resolved
+
+    def fake_run(**kwargs):
+        captured.update(kwargs)
+        return expected
+
+    monkeypatch.setattr(validate_openapi_routes, "_require_exact_ref", fake_resolve)
+    monkeypatch.setattr(
+        validate_openapi_routes,
+        "_run_method_aware_plane_at_commit",
+        fake_run,
+    )
+
+    result = validate_openapi_routes.validate_method_aware_plane(
+        "docs/api/openapi.json",
+        "moving-ref",
+        internal_prefixes_path="scripts/baselines/internal_route_prefixes.json",
+    )
+
+    assert result is expected
+    assert captured == {
+        "ref": "moving-ref",
+        "source_repo_root": validate_openapi_routes._SOURCE_REPO_ROOT,
+        "spec_path": "docs/api/openapi.json",
+        "resolved_ref": resolved,
+        "internal_prefixes_path": "scripts/baselines/internal_route_prefixes.json",
+        "inventory_path": None,
+    }
 
 
 def _fake_registry(entries):
@@ -586,6 +863,348 @@ def test_is_internal_route_matches_exact_family_not_sibling_names():
     assert validate_openapi_routes.is_internal_route("/api/v1/sme", prefixes)
     assert not validate_openapi_routes.is_internal_route("/api/v1/smear", prefixes)
     assert not validate_openapi_routes.is_internal_route("/api/v1/smear/x", prefixes)
+
+
+# ---------------------------------------------------------------------------
+# Mounted-FastAPI-router evidence plane (additive; ledger 397 point 3)
+# ---------------------------------------------------------------------------
+
+
+def _write_fastapi_tree(
+    tmp_path: Path,
+    factory_source: str,
+    route_modules: dict[str, str],
+) -> Path:
+    """Lay out a synthetic aragora/server/fastapi tree and return factory path."""
+    fastapi_dir = tmp_path / "aragora" / "server" / "fastapi"
+    routes_dir = fastapi_dir / "routes"
+    routes_dir.mkdir(parents=True)
+    (routes_dir / "__init__.py").write_text("", encoding="utf-8")
+    factory = fastapi_dir / "factory.py"
+    factory.write_text(factory_source, encoding="utf-8")
+    for name, source in route_modules.items():
+        (routes_dir / f"{name}.py").write_text(source, encoding="utf-8")
+    return factory
+
+
+def test_get_fastapi_mounted_routes_extracts_mounted_router_paths(tmp_path: Path):
+    factory = _write_fastapi_tree(
+        tmp_path,
+        """
+from .routes import shop, ghost
+
+def create_app():
+    app = object()
+    app.include_router(shop.router)
+    return app
+""".lstrip(),
+        {
+            "shop": """
+from fastapi import APIRouter
+
+router = APIRouter(prefix="/api/v2/shop", tags=["Shop"])
+
+@router.get("/items")
+async def list_items():
+    return []
+
+@router.post("/items")
+async def create_item():
+    return {}
+
+@router.get("/items/{item_id}")
+async def get_item(item_id: str):
+    return {}
+""".lstrip(),
+            # Imported in the factory but never mounted: contributes nothing.
+            "ghost": """
+from fastapi import APIRouter
+
+router = APIRouter(prefix="/api/v2/ghost")
+
+@router.get("/status")
+async def ghost_status():
+    return {}
+""".lstrip(),
+        },
+    )
+
+    routes = validate_openapi_routes.get_fastapi_mounted_routes(factory, tmp_path)
+
+    assert routes == {
+        "/api/v2/shop/items",
+        "/api/v2/shop/items/{item_id}",
+    }
+
+
+def test_get_fastapi_mounted_routes_combines_include_router_prefix(tmp_path: Path):
+    factory = _write_fastapi_tree(
+        tmp_path,
+        """
+from .routes import things
+
+def create_app(app):
+    app.include_router(things.router, prefix="/api/v2")
+""".lstrip(),
+        {
+            "things": """
+from fastapi import APIRouter
+
+router = APIRouter()
+
+@router.get("/things")
+async def list_things():
+    return []
+""".lstrip(),
+        },
+    )
+
+    routes = validate_openapi_routes.get_fastapi_mounted_routes(factory, tmp_path)
+
+    assert routes == {"/api/v2/things"}
+
+
+def test_get_fastapi_mounted_routes_skips_non_literal_paths(tmp_path: Path):
+    factory = _write_fastapi_tree(
+        tmp_path,
+        """
+from .routes import mixed, computed_prefix
+
+PREFIX = "/api/v2"
+
+def create_app(app):
+    app.include_router(mixed.router)
+    app.include_router(computed_prefix.router, prefix=PREFIX)
+""".lstrip(),
+        {
+            "mixed": """
+from fastapi import APIRouter
+
+router = APIRouter(prefix="/api/v2/mixed")
+_computed = "/computed"
+
+@router.get("/literal")
+async def literal():
+    return {}
+
+@router.get(_computed)
+async def computed():
+    return {}
+""".lstrip(),
+            # Mount uses a computed prefix: unverifiable, contributes nothing.
+            "computed_prefix": """
+from fastapi import APIRouter
+
+router = APIRouter()
+
+@router.get("/whatever")
+async def whatever():
+    return {}
+""".lstrip(),
+        },
+    )
+
+    routes = validate_openapi_routes.get_fastapi_mounted_routes(factory, tmp_path)
+
+    assert routes == {"/api/v2/mixed/literal"}
+
+
+def test_get_fastapi_mounted_routes_fails_closed_on_unparseable_factory(tmp_path: Path):
+    factory = tmp_path / "aragora" / "server" / "fastapi" / "factory.py"
+    factory.parent.mkdir(parents=True)
+    factory.write_text("def broken(:\n", encoding="utf-8")
+
+    with pytest.raises(validate_openapi_routes.RouteRegistrationScanError):
+        validate_openapi_routes.get_fastapi_mounted_routes(factory, tmp_path)
+
+
+def test_get_fastapi_mounted_routes_fails_closed_on_missing_mounted_module(tmp_path: Path):
+    factory = _write_fastapi_tree(
+        tmp_path,
+        """
+from .routes import shop
+
+def create_app(app):
+    app.include_router(shop.router)
+""".lstrip(),
+        {
+            "shop": """
+from fastapi import APIRouter
+
+router = APIRouter(prefix="/api/v2/shop")
+
+@router.get("/items")
+async def list_items():
+    return []
+""".lstrip(),
+        },
+    )
+    (tmp_path / "aragora" / "server" / "fastapi" / "routes" / "shop.py").unlink()
+
+    with pytest.raises(validate_openapi_routes.RouteRegistrationScanError):
+        validate_openapi_routes.get_fastapi_mounted_routes(factory, tmp_path)
+
+
+def test_get_fastapi_mounted_routes_fails_closed_on_missing_router_definition(tmp_path: Path):
+    factory = _write_fastapi_tree(
+        tmp_path,
+        """
+from .routes import broken
+
+def create_app(app):
+    app.include_router(broken.router)
+""".lstrip(),
+        {
+            # Mounted, but no module-level `router = APIRouter(...)` to inspect.
+            "broken": """
+def make_router():
+    from fastapi import APIRouter
+
+    router = APIRouter(prefix="/api/v2/broken")
+    return router
+""".lstrip(),
+        },
+    )
+
+    with pytest.raises(validate_openapi_routes.RouteRegistrationScanError):
+        validate_openapi_routes.get_fastapi_mounted_routes(factory, tmp_path)
+
+
+def test_validate_coverage_credits_fastapi_mounted_routes(monkeypatch, tmp_path: Path):
+    """Positive + negative: a mounted path is served, an unmounted one stays orphaned."""
+    monkeypatch.setattr(validate_openapi_routes, "get_handler_routes", lambda: set())
+    monkeypatch.setattr(
+        validate_openapi_routes,
+        "get_openapi_routes",
+        lambda _spec: {"/api/v2/shop/items", "/api/v2/zz-truly-unmounted"},
+    )
+    monkeypatch.setattr(validate_openapi_routes, "get_wired_function_routes", lambda: set())
+    monkeypatch.setattr(
+        validate_openapi_routes,
+        "get_fastapi_mounted_routes",
+        lambda: {"/api/v2/shop/items"},
+    )
+    fake_registry = types.SimpleNamespace(HANDLER_REGISTRY=[])
+    monkeypatch.setitem(sys.modules, "aragora.server.handler_registry", fake_registry)
+
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text('{"missing_in_spec": [], "orphaned_in_spec": []}\n', encoding="utf-8")
+
+    results = validate_openapi_routes.validate_coverage(
+        "ignored.json",
+        baseline_path=str(baseline),
+        include_internal=True,
+    )
+
+    assert results["orphaned_in_spec"] == ["/api/v2/zz-truly-unmounted"]
+    assert results["served_fastapi_mounted"] == ["/api/v2/shop/items"]
+    assert "/api/v2/shop/items" in results["served_undeclared"]
+
+
+def test_validate_coverage_fastapi_plane_does_not_feed_missing_in_spec(monkeypatch, tmp_path: Path):
+    """The FastAPI plane is serve evidence only: a mounted route absent from the
+    spec must NOT become missing_in_spec (the mounted surface is opt-in, so it
+    carries no declaration obligation), and the existing planes' missing_in_spec
+    arithmetic stays untouched."""
+    monkeypatch.setattr(validate_openapi_routes, "get_handler_routes", lambda: set())
+    monkeypatch.setattr(
+        validate_openapi_routes,
+        "get_openapi_routes",
+        lambda _spec: {"/api/v2/shop/items"},
+    )
+    monkeypatch.setattr(validate_openapi_routes, "get_wired_function_routes", lambda: set())
+    monkeypatch.setattr(
+        validate_openapi_routes,
+        "get_fastapi_mounted_routes",
+        lambda: {"/api/v2/shop/items", "/api/v2/shop/absent-from-spec"},
+    )
+    fake_registry = types.SimpleNamespace(HANDLER_REGISTRY=[])
+    monkeypatch.setitem(sys.modules, "aragora.server.handler_registry", fake_registry)
+
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text('{"missing_in_spec": [], "orphaned_in_spec": []}\n', encoding="utf-8")
+
+    results = validate_openapi_routes.validate_coverage(
+        "ignored.json",
+        baseline_path=str(baseline),
+        include_internal=True,
+    )
+
+    assert results["missing_in_spec"] == []
+    assert results["orphaned_in_spec"] == []
+    assert results["served_fastapi_mounted"] == ["/api/v2/shop/items"]
+
+
+def test_validate_coverage_excludes_internal_fastapi_routes(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(validate_openapi_routes, "get_handler_routes", lambda: set())
+    monkeypatch.setattr(
+        validate_openapi_routes,
+        "get_openapi_routes",
+        lambda _spec: {"/api/v1/control-plane/private"},
+    )
+    monkeypatch.setattr(validate_openapi_routes, "get_wired_function_routes", lambda: set())
+    monkeypatch.setattr(
+        validate_openapi_routes,
+        "get_fastapi_mounted_routes",
+        lambda: {"/api/v1/control-plane/private"},
+    )
+    fake_registry = types.SimpleNamespace(HANDLER_REGISTRY=[])
+    monkeypatch.setitem(sys.modules, "aragora.server.handler_registry", fake_registry)
+
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text('{"missing_in_spec": [], "orphaned_in_spec": []}\n', encoding="utf-8")
+
+    results = validate_openapi_routes.validate_coverage(
+        "ignored.json",
+        baseline_path=str(baseline),
+    )
+
+    # Internal families are excluded from BOTH the candidates and the plane, so
+    # nothing is orphaned and nothing is credited to the FastAPI plane.
+    assert results["orphaned_in_spec"] == []
+    assert results["served_fastapi_mounted"] == []
+
+
+def test_filter_fastapi_orphans_logs_suppressions(monkeypatch, capsys):
+    monkeypatch.setattr(
+        validate_openapi_routes,
+        "load_fastapi_routes_for_validation",
+        lambda: {"/api/v2/shop/items"},
+    )
+
+    orphaned, served = validate_openapi_routes.filter_fastapi_orphans(
+        {"/api/v2/shop/items", "/api/v2/dark"}
+    )
+
+    assert served == {"/api/v2/shop/items"}
+    assert orphaned == {"/api/v2/dark"}
+    err = capsys.readouterr().err
+    assert "mounted FastAPI routers" in err
+    assert "/api/v2/shop/items" in err
+
+
+def test_real_factory_mounts_v2_marketplace_and_orchestration_paths():
+    """The real factory mounts the v2 marketplace/orchestration routers whose
+    spec entries were re-added by PR #9724 (ledger 397 point 1)."""
+    routes = validate_openapi_routes.get_fastapi_mounted_routes()
+
+    assert {
+        "/api/v2/marketplace/categories",
+        "/api/v2/marketplace/status",
+        "/api/v2/marketplace/templates",
+        "/api/v2/marketplace/templates/import",
+        "/api/v2/orchestration/deliberate",
+        "/api/v2/orchestration/deliberate/sync",
+        "/api/v2/orchestration/templates",
+    } <= routes
+
+
+def test_real_factory_does_not_credit_unmounted_swarm_status_router():
+    """swarm_status.py defines an APIRouter but is not imported/mounted by the
+    factory, so its paths must never enter the evidence plane."""
+    routes = validate_openapi_routes.get_fastapi_mounted_routes()
+
+    assert not any(route.startswith("/api/v1/swarm") for route in routes)
 
 
 # ---------------------------------------------------------------------------

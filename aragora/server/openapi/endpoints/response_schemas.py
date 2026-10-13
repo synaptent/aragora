@@ -13,6 +13,7 @@ from typing import Any
 from aragora.server.openapi.helpers import (
     AUTH_REQUIREMENTS,
     STANDARD_ERRORS,
+    STANDARD_RESPONSE_HEADERS,
     _ok_response,
 )
 
@@ -693,7 +694,6 @@ _RECEIPT_ENDPOINTS = {
                     },
                 },
                 "404": STANDARD_ERRORS["404"],
-                "500": STANDARD_ERRORS["500"],
             },
         }
     },
@@ -846,25 +846,54 @@ _RECEIPT_ENDPOINTS = {
             "tags": ["Receipts", "Export"],
             "summary": "Export receipt",
             "operationId": "exportReceipt",
-            "description": "Export a receipt in the requested format.",
-            "security": AUTH_REQUIREMENTS["required"]["security"],
+            "description": (
+                "Export a receipt in the requested format. format=odr is public; "
+                "every other format requires receipts:read."
+            ),
+            # Anonymous for format=odr, bearer for every protected format; the
+            # shared "optional" constant declares only the anonymous half.
+            "security": [{}, {"bearerAuth": []}],
             "parameters": [
                 {
                     "name": "receipt_id",
                     "in": "path",
                     "required": True,
                     "schema": {"type": "string"},
-                }
+                },
+                {
+                    "name": "format",
+                    "in": "query",
+                    "description": "Export format; odr returns the Open Decision Receipt.",
+                    "schema": {"type": "string"},
+                },
+                {
+                    "name": "odr_version",
+                    "in": "query",
+                    "description": "ODR profile version for format=odr: 0.1 or 0.2.",
+                    "schema": {"type": "string"},
+                },
             ],
             "responses": {
-                "200": _ok_response(
-                    "Exported receipt",
-                    {
-                        "receipt_id": {"type": "string"},
-                        "format": {"type": "string"},
-                        "data": {"type": "string"},
+                "200": {
+                    **_ok_response(
+                        "Exported receipt",
+                        {
+                            "receipt_id": {"type": "string"},
+                            "format": {"type": "string"},
+                            "data": {"type": "string"},
+                        },
+                    ),
+                    "headers": {
+                        **STANDARD_RESPONSE_HEADERS,
+                        "X-ODR-Digest": {
+                            "description": (
+                                "JCS content digest of the exported ODR document: "
+                                "64 lowercase hex characters. Sent for format=odr."
+                            ),
+                            "schema": {"type": "string"},
+                        },
                     },
-                ),
+                },
                 "401": STANDARD_ERRORS["401"],
                 "404": STANDARD_ERRORS["404"],
                 "500": STANDARD_ERRORS["500"],

@@ -92,6 +92,12 @@ class TestQueryParamValidation:
         valid, error = validate_query_params({"since": ["0"]})
         assert valid is True
 
+    def test_odr_version_param_is_allowed_for_receipt_export(self):
+        """The ODR export profile selector must reach the handler, which validates it."""
+        for value in ("0.1", "0.2", "0.3"):
+            valid, error = validate_query_params({"odr_version": [value]})
+            assert valid is True, error
+
     def test_multiple_values_all_validated(self):
         """All values in a multi-value param should be validated."""
         # Mixed valid and invalid

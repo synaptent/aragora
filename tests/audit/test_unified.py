@@ -351,7 +351,7 @@ class TestGlobalFunctions:
 
     def test_get_unified_audit_logger_singleton(self):
         """Test that get_unified_audit_logger returns singleton."""
-        import aragora.audit.unified as unified_module
+        import aragora.observability.unified_audit as unified_module
 
         # Reset singleton
         unified_module._unified_logger = None
@@ -366,7 +366,7 @@ class TestGlobalFunctions:
 
     def test_configure_replaces_singleton(self):
         """Test that configure creates new singleton."""
-        import aragora.audit.unified as unified_module
+        import aragora.observability.unified_audit as unified_module
 
         # Reset singleton
         unified_module._unified_logger = None
@@ -384,7 +384,7 @@ class TestGlobalFunctions:
 
     def test_audit_log_function(self):
         """Test audit_log convenience function."""
-        import aragora.audit.unified as unified_module
+        import aragora.observability.unified_audit as unified_module
 
         # Reset singleton
         unified_module._unified_logger = None
@@ -412,7 +412,7 @@ class TestGlobalFunctions:
 
     def test_audit_login_function(self):
         """Test audit_login convenience function."""
-        import aragora.audit.unified as unified_module
+        import aragora.observability.unified_audit as unified_module
 
         unified_module._unified_logger = None
 

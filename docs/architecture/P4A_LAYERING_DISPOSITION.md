@@ -336,11 +336,11 @@ Reclassify/relocate (or invert via registry) the application-layer subscribers
 and workers mislocated in infra `events` and `queue`:
 - **2a events subscribers**: relocate `events.cross_subscribers` + `events.subscribers` (+ `security_events`, `security_dispatcher`, `arena_bridge`) to an application home, OR invert via the EventBus registry. Clears `events -> {agents, debate, knowledge, memory, nomic, ranking, reasoning, workflow}` and the subscriber-side `events -> server` imports (`server.stream.state_manager`, `server.stream.emitter`, remaining `server.prometheus_cross_pollination`/`server.handlers.webhooks.get_webhook_store`).
 - **2b queue workers**: relocate `queue.worker` + `queue/workers/*` to an application home, OR invert via a job-handler registry. Clears `queue -> {agents, debate, gauntlet, integrations, memory, nomic, ranking}` and the worker-side `queue -> server` imports (`server.stream.gauntlet_emitter`, `server.debate_origin`).
-- **2c events dispatcher webhook signing** (Tier-3-flagged): extract the HMAC `generate_signature` helper out of `server/handlers/webhooks.py` (a Tier-3 path) down to foundation/security so `events.dispatcher`/`async_dispatcher` stop importing `server.handlers.webhooks`. Coordinate file boundaries with `p4b-handlers-*` (section 6).
+- **2c events dispatcher webhook signing** (Tier-3-flagged): extract the HMAC `generate_signature` helper out of `server/handlers/webhook_management.py` (a Tier-3 path) down to foundation/security so `events.dispatcher`/`async_dispatcher` stop importing `server.handlers.webhooks`. Coordinate file boundaries with `p4b-handlers-*` (section 6).
 
 Tier: 2a/2b Tier 1-2 (events/, queue/ are infra). 2c touches
 `aragora/server/handlers/` -> Tier 3 (operator settlement), or fold into the
-P4b handlers batch that owns `webhooks.py`.
+P4b handlers batch that owns `webhook_management.py`.
 
 ### Batch 3 - observability + billing connectors / integrations / knowledge
 
@@ -410,11 +410,12 @@ File-boundary rule (utilities vs handlers = different files):
   non-`handlers/` files; moving them down is Tier 1-2.
 - **P4b owns the `server/handlers/*` decomposition** (Tier-3 batches). The only
   overlap is the HMAC `generate_signature` helper in
-  `server/handlers/webhooks.py` (Batch 2c) and the `get_webhook_store` /
+  `server/handlers/webhook_management.py` (Batch 2c) and the `get_webhook_store` /
   `server.stream.gauntlet_emitter` / `server.debate_origin` server surfaces that
   events/queue subscribers reach into. Coordinate so the handler file is edited by
   exactly one thread: extract the foundation-level helper (signature) in the P4a
-  events thread OR fold it into the P4b batch that owns `webhooks.py`, never both.
+  events thread OR fold it into the P4b batch that owns `webhook_management.py`,
+  never both.
 
 VAL-P4B-004's conditional `tests/architecture/test_layering_baseline.py` clause
 is vacuous today (the file does not exist on `origin/main`); if a P4b/P0 PR adds

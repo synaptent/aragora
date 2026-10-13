@@ -30,7 +30,9 @@ def test_repository_manifest_matches_current_tree() -> None:
     assert result.policy_consumers == (
         "aragora/agents/api_agents/openai.py",
         "aragora/agents/transports/claude_vibeproxy.py",
+        "aragora/swarm/quorum_evidence.py",
         "scripts/consult_claude.py",
+        "scripts/prepare_claude_code_vibeproxy_review.py",
         "scripts/vibeproxy_burnin_recorder.py",
     )
     assert [
@@ -65,6 +67,33 @@ def _template(root: Path) -> dict[str, Any]:
 
 def _empty_manifest(root: Path) -> Path:
     return _write_manifest(root, {"schema_version": 1, "transport_policy_consumers": [], "sites": []})  # fmt: skip
+
+
+@pytest.mark.parametrize(
+    "relative",
+    ["aragora/swarm/quorum_evidence.py", "scripts/prepare_claude_code_vibeproxy_review.py"],
+)
+def test_review_policy_consumer_requires_explicit_registration(
+    tmp_path: Path, relative: str
+) -> None:
+    _write_source(
+        tmp_path,
+        relative,
+        "from aragora.agents.transports.vibeproxy import ModelTransportPolicy\n"
+        "policy = ModelTransportPolicy.from_env()\n",
+    )
+    payload = _template(tmp_path)
+    assert payload["transport_policy_consumers"] == [relative]
+    assert payload["sites"] == []
+    assert checker.check_allowlist(tmp_path, _write_manifest(tmp_path, payload)).ok
+
+    payload["transport_policy_consumers"] = []
+    missing = checker.check_allowlist(tmp_path, _write_manifest(tmp_path, payload))
+    assert not missing.ok
+    assert missing.policy_consumers == (relative,)
+    assert len(missing.policy_errors) == 1
+    assert "transport policy consumers differ" in missing.policy_errors[0]
+    assert missing.manifest_errors == ()
 
 
 def test_discovery_groups_by_stable_symbol_anchor(tmp_path: Path) -> None:

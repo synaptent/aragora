@@ -33,6 +33,15 @@ def test_offline_preflight_records_no_paid_calls_and_h2_policy() -> None:
     assert "gemini" in payload["direct_providers"]
 
 
+def test_offline_preflight_uses_qwen38_max_runtime_model() -> None:
+    payload = build_preflight_payload(offline=True)
+    slots = {slot["slot_id"]: slot for slot in payload["slots"]}
+
+    qwen_attempt = slots["openrouter-qwen"]["attempt_order"][0]
+    assert qwen_attempt["requested_model"] == "qwen/qwen3.8-max"
+    assert qwen_attempt["transport_model"] == "qwen/qwen3.8-max"
+
+
 def test_cli_offline_json_prints_manifest(capsys) -> None:
     rc = main(["--offline", "--json"])
 

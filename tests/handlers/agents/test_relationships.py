@@ -509,9 +509,36 @@ class TestHandlePairwise:
 class TestInputValidation:
     """Tests for input validation on agent names."""
 
-    def test_invalid_agent_name_with_dots_returns_400(self, handler, mock_http_handler):
-        """Agent name containing dots fails validation."""
-        result = handler.handle("/api/v1/agents/bad.name/relationships", {}, mock_http_handler)
+    @pytest.mark.parametrize(
+        "agent,other",
+        [("gpt-4.1", "v1.2.3"), ("v1.2.3", "gpt-4.1")],
+    )
+    def test_dotted_pairwise_operands_are_preserved(self, handler, agent, other):
+        result = handler.handle(f"/api/v1/agents/{agent}/relationships/{other}", {}, None)
+        assert _status(result) == 200
+        body = _body(result)
+        assert body["agent_a"] == agent
+        assert body["agent_b"] == other
+
+    @pytest.mark.parametrize("agent", ["test..admin", "a..b", "a...b", "v1..2"])
+    @pytest.mark.parametrize("first_operand", [True, False])
+    def test_consecutive_dots_rejected_in_either_operand(self, handler, agent, first_operand):
+        first, second = (agent, "gpt-4.1") if first_operand else ("gpt-4.1", agent)
+        result = handler.handle(f"/api/v1/agents/{first}/relationships/{second}", {}, None)
+        assert _status(result) == 400
+
+    def test_dotted_agent_name_is_valid(self, handler, mock_http_handler):
+        """Dotted model-version names are valid agent names (#9994)."""
+        result = handler.handle(
+            "/api/v1/agents/claude-fable-5.1/relationships", {}, mock_http_handler
+        )
+        assert _status(result) == 200
+
+    def test_leading_dot_agent_name_returns_400(self, handler, mock_http_handler):
+        """A dot-led token can never be an agent name (guards '.' and '..')."""
+        result = handler.handle("/api/v1/agents/.bad/relationships", {}, mock_http_handler)
+        assert _status(result) == 400
+        result = handler.handle("/api/v1/agents/../relationships", {}, mock_http_handler)
         assert _status(result) == 400
 
     def test_agent_name_with_special_chars(self, handler, mock_http_handler):

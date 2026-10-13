@@ -393,7 +393,7 @@ def inject_trace_context() -> None:
     Call this to sync trace IDs from spans into structured logs.
     """
     try:
-        from aragora.debate.tracing import get_debate_id, get_tracer
+        from aragora.observability.debate_tracing import get_debate_id, get_tracer
 
         tracer = get_tracer()
         span = tracer.get_current_span()

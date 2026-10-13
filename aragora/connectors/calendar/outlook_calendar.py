@@ -304,6 +304,8 @@ class OutlookCalendarConnector(EnterpriseConnector):
                 raise ValueError("No refresh token available. Re-authenticate required.")
 
             await self._refresh_access_token()
+            if self._access_token is None:
+                raise ValueError("Token refresh did not return an access token")
             return self._access_token
 
     async def _refresh_access_token(self) -> None:
@@ -481,15 +483,18 @@ class OutlookCalendarConnector(EnterpriseConnector):
 
                 return response.json() if response.content else {}
 
-        if not self._circuit_breaker.can_proceed():
+        breaker = self._circuit_breaker
+        if breaker is not None and not breaker.can_proceed():
             raise ValueError("Circuit breaker is open - API temporarily unavailable")
         try:
             result = await _make_request()
-            self._circuit_breaker.record_success()
+            if breaker is not None:
+                breaker.record_success()
             return result
         except (httpx.RequestError, asyncio.TimeoutError, ValueError, OSError) as e:
             logger.warning("API request failed, recording circuit breaker failure: %s", e)
-            self._circuit_breaker.record_failure()
+            if breaker is not None:
+                breaker.record_failure()
             raise RuntimeError(
                 f"Outlook Calendar API request failed for {method} {endpoint}"
             ) from e
@@ -735,13 +740,15 @@ class OutlookCalendarConnector(EnterpriseConnector):
         Returns:
             Dict mapping email to list of busy slots
         """
-        if not email_addresses:
+        if email_addresses:
+            schedules: list[str | None] = list(email_addresses)
+        else:
             # Get current user's email
             user_info = await self._api_request("GET", "")
-            email_addresses = [user_info.get("mail") or user_info.get("userPrincipalName")]
+            schedules = [user_info.get("mail") or user_info.get("userPrincipalName")]
 
         request_body = {
-            "schedules": email_addresses,
+            "schedules": schedules,
             "startTime": {
                 "dateTime": time_min.isoformat(),
                 "timeZone": "UTC",
@@ -796,12 +803,12 @@ class OutlookCalendarConnector(EnterpriseConnector):
         Returns:
             Dict mapping calendar ID to list of busy slots
         """
-        if not calendar_ids:
-            calendar_ids = self.calendar_ids or [None]  # None = default calendar
+        # None selects the user's default calendar.
+        target_ids: list[str | None] = list(calendar_ids or self.calendar_ids or []) or [None]
 
         result: dict[str, list[OutlookFreeBusySlot]] = {}
 
-        for cal_id in calendar_ids:
+        for cal_id in target_ids:
             try:
                 events = await self.get_events(
                     calendar_id=cal_id,
@@ -878,11 +885,10 @@ class OutlookCalendarConnector(EnterpriseConnector):
         now = datetime.now(timezone.utc)
         time_max = now + timedelta(hours=hours)
 
-        if not calendar_ids:
-            calendar_ids = self.calendar_ids or [None]
+        target_ids: list[str | None] = list(calendar_ids or self.calendar_ids or []) or [None]
 
         all_events = []
-        for cal_id in calendar_ids:
+        for cal_id in target_ids:
             try:
                 events = await self.get_events(
                     calendar_id=cal_id,
@@ -915,11 +921,10 @@ class OutlookCalendarConnector(EnterpriseConnector):
         Returns:
             List of conflicting events
         """
-        if not calendar_ids:
-            calendar_ids = self.calendar_ids or [None]
+        target_ids: list[str | None] = list(calendar_ids or self.calendar_ids or []) or [None]
 
         conflicts = []
-        for cal_id in calendar_ids:
+        for cal_id in target_ids:
             events = await self.get_events(
                 calendar_id=cal_id,
                 time_min=proposed_start,
@@ -986,8 +991,7 @@ class OutlookCalendarConnector(EnterpriseConnector):
 
         start_time = time.time()
         # Get upcoming events from all calendars
-        calendar_ids = self.calendar_ids or [None]
-        events = await self.get_upcoming_events(hours=168, calendar_ids=calendar_ids)  # 1 week
+        events = await self.get_upcoming_events(hours=168, calendar_ids=self.calendar_ids)  # 1 week
         duration_ms = (time.time() - start_time) * 1000
         return SyncResult(
             connector_id=self.connector_id,
@@ -1005,7 +1009,7 @@ class OutlookCalendarConnector(EnterpriseConnector):
         batch_size: int = 100,
     ) -> AsyncIterator[SyncItem]:
         """Yield calendar events as SyncItems for incremental sync."""
-        calendar_ids = self.calendar_ids or [None]
+        calendar_ids: list[str | None] = list(self.calendar_ids or []) or [None]
         if state.last_sync_at:
             time_min = state.last_sync_at
         else:

@@ -194,7 +194,7 @@ class TestImpl:
     @pytest.fixture(autouse=True)
     def _ensure_impl_module_loaded(self):
         """Import _oauth_impl so it exists in sys.modules."""
-        import aragora.server.handlers._oauth_impl  # noqa: F401
+        import aragora.server.handlers.oauth._oauth_impl  # noqa: F401
 
     def test_returns_module(self):
         result = _impl()
@@ -202,7 +202,7 @@ class TestImpl:
 
     def test_returns_oauth_impl_module(self):
         result = _impl()
-        assert result.__name__ == "aragora.server.handlers._oauth_impl"
+        assert result.__name__ == "aragora.server.handlers.oauth._oauth_impl"
 
     def test_module_has_expected_attributes(self):
         """_oauth_impl should re-export key names like _oauth_limiter."""
@@ -211,7 +211,7 @@ class TestImpl:
 
     def test_returns_same_object_from_sys_modules(self):
         result = _impl()
-        assert result is sys.modules["aragora.server.handlers._oauth_impl"]
+        assert result is sys.modules["aragora.server.handlers.oauth._oauth_impl"]
 
 
 # ===========================================================================
@@ -974,11 +974,11 @@ class TestImplModuleConstant:
     def test_value(self):
         from aragora.server.handlers._oauth.utils import _IMPL_MODULE
 
-        assert _IMPL_MODULE == "aragora.server.handlers._oauth_impl"
+        assert _IMPL_MODULE == "aragora.server.handlers.oauth._oauth_impl"
 
     def test_module_exists_in_sys_modules_after_import(self):
         """The _oauth_impl module is available in sys.modules after importing it."""
-        import aragora.server.handlers._oauth_impl  # noqa: F401
+        import aragora.server.handlers.oauth._oauth_impl  # noqa: F401
         from aragora.server.handlers._oauth.utils import _IMPL_MODULE
 
         assert _IMPL_MODULE in sys.modules

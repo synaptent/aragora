@@ -1,0 +1,20 @@
+{
+  "verifier": {
+    "verified": true,
+    "exit_code": 0,
+    "reasons": []
+  },
+  "aragora_verify": {
+    "ok": true,
+    "exit_code": 0,
+    "reasons": []
+  },
+  "aragora_verify_strict_expiry": {
+    "ok": false,
+    "exit_code": 1,
+    "reasons": [
+      "signature_expiry"
+    ]
+  },
+  "description": "A valid signature whose expires_at has passed: a warning by default, a failure under --strict-expiry."
+}

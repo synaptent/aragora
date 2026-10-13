@@ -1,0 +1,43 @@
+{
+  "below_threshold_classes": [],
+  "generated_at": "2026-09-29T13:36:50Z",
+  "initial_issue_drafts": [],
+  "issue_drafts": [],
+  "issue_linkage_results": [],
+  "ledger_path": "~/.aragora/rescue_events.jsonl",
+  "observation_limits": {
+    "non_authoritative_fields": [
+      "summary",
+      "repeated_classes",
+      "one_off_classes",
+      "below_threshold_classes",
+      "initial_issue_drafts",
+      "issue_drafts",
+      "issue_linkage_results"
+    ],
+    "reason": "The rescue event ledger could not be read, so no rescue class was observed.",
+    "value_semantics": "Listed fields are placeholders for an unread source rather than measurements. Empty counts do not establish that no rescues occurred."
+  },
+  "observation_status": {
+    "raw_inputs": "unavailable",
+    "rescue_history": "unavailable"
+  },
+  "ok": false,
+  "one_off_classes": [],
+  "productization_map_path": "docs/benchmarks/rescue_productization.json",
+  "repeated_classes": [],
+  "repo": "synaptent/aragora",
+  "source": {
+    "error": {
+      "code": "rescue_ledger_missing",
+      "detail": "rescue event ledger does not exist: ~/.aragora/rescue_events.jsonl",
+      "path": "~/.aragora/rescue_events.jsonl"
+    },
+    "event_count": null,
+    "sha256": null,
+    "status": "unavailable",
+    "summary_event_limit": 500,
+    "summary_truncated": null
+  },
+  "summary": {}
+}

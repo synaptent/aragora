@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -15,6 +19,34 @@ from aragora.epistemic.runtime_loop import (
     dialectical_runtime_enabled,
     run_dialectical_loop,
 )
+
+
+def test_epistemic_imports_without_python311_utc_alias():
+    # A fresh interpreter avoids package imports cached by test collection.
+    probe = """
+import datetime
+import importlib
+
+if hasattr(datetime, "UTC"):
+    del datetime.UTC
+for name in ("runtime_loop", "repair", "gardening", "genealogy", "genealogy_report"):
+    module = importlib.import_module("aragora.epistemic." + name)
+    assert module.UTC is datetime.timezone.utc, name
+from aragora.epistemic.runtime_loop import dialectical_runtime_enabled
+assert not dialectical_runtime_enabled()
+"""
+    env = dict(os.environ, ARAGORA_USE_SECRETS_MANAGER="false", AWS_EC2_METADATA_DISABLED="true")
+    env.pop("ARAGORA_DIALECTICAL_RUNTIME_ENABLED", None)
+    result = subprocess.run(
+        [sys.executable, "-c", probe],
+        cwd=Path(__file__).resolve().parents[2],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 # ---------------------------------------------------------------------------

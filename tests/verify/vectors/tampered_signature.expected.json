@@ -1,0 +1,17 @@
+{
+  "verifier": {
+    "verified": false,
+    "exit_code": 1,
+    "reasons": [
+      "signature"
+    ]
+  },
+  "aragora_verify": {
+    "ok": false,
+    "exit_code": 1,
+    "reasons": [
+      "signature"
+    ]
+  },
+  "description": "pass_clean with one flipped signature byte: signature FAIL (INVALID)."
+}

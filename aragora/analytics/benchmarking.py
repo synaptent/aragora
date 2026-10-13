@@ -97,7 +97,7 @@ def _laplace_noise(epsilon: float, sensitivity: float = 1.0) -> float:
         return 0.0
     scale = sensitivity / epsilon
     # Laplace distribution via inverse CDF
-    u = random.random() - 0.5  # noqa: S311 -- non-security noise generation
+    u = random.random() - 0.5
     return -scale * math.copysign(1, u) * math.log1p(-2 * abs(u))
 
 

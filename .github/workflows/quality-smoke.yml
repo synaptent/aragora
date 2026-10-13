@@ -162,20 +162,31 @@ jobs:
             echo "::error::Change classification concluded '$CLASSIFIER_RESULT'; its scope verdict cannot be trusted. Failing closed."
             exit 1
           fi
-          if [[ "$IN_SCOPE" == "true" && "$IS_DRAFT" != "true" ]]; then
-            if [[ "$WORKER_RESULT" != "success" ]]; then
-              echo "::error::Quality pipeline smoke concluded '$WORKER_RESULT' (expected 'success'). Failing closed."
+          case "$IN_SCOPE" in
+            true)
+              if [[ "$IS_DRAFT" == "true" ]]; then
+                if [[ "$WORKER_RESULT" != "skipped" ]]; then
+                  echo "::error::Quality pipeline smoke was deferred for a draft but concluded '$WORKER_RESULT'. Failing closed."
+                  exit 1
+                fi
+                echo "Quality pipeline smoke deferred — draft PR."
+              else
+                if [[ "$WORKER_RESULT" != "success" ]]; then
+                  echo "::error::Quality pipeline smoke concluded '$WORKER_RESULT' (expected 'success'). Failing closed."
+                  exit 1
+                fi
+                echo "Quality pipeline smoke passed."
+              fi
+              ;;
+            false)
+              if [[ "$WORKER_RESULT" != "skipped" ]]; then
+                echo "::error::Quality pipeline smoke was out of scope but concluded '$WORKER_RESULT'. Failing closed."
+                exit 1
+              fi
+              echo "Quality pipeline smoke not required — no relevant changes."
+              ;;
+            *)
+              echo "::error::Change classification produced invalid IN_SCOPE value '$IN_SCOPE' (expected exactly 'true' or 'false'). Failing closed."
               exit 1
-            fi
-            echo "Quality pipeline smoke passed."
-            exit 0
-          fi
-          if [[ "$WORKER_RESULT" != "skipped" ]]; then
-            echo "::error::Quality pipeline smoke was not required but concluded '$WORKER_RESULT'. Failing closed."
-            exit 1
-          fi
-          if [[ "$IS_DRAFT" == "true" ]]; then
-            echo "Quality pipeline smoke deferred — draft PR."
-          else
-            echo "Quality pipeline smoke not required — no relevant changes."
-          fi
+              ;;
+          esac

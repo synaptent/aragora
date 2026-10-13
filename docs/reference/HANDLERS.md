@@ -28,8 +28,9 @@ handlers/
 ├── decision.py         # Unified decision router
 ├── deliberations.py    # Vetted decisionmaking dashboard endpoints (deliberations API)
 ├── gauntlet.py         # Gauntlet stress-test API
+├── webhook_management.py # Outbound webhook management
 ├── workflows.py        # Workflow execution endpoints
-└── webhooks.py         # Outbound webhook management
+└── webhooks/           # Webhook integrations + compatibility exports
 ```
 
 ---
@@ -333,7 +334,7 @@ POST /api/formal/prove          - Generate formal proof
 | `reviews.py` | `/api/reviews/*` | Debate reviews |
 | `tournaments.py` | `/api/tournaments/*` | Tournament management |
 | `training.py` | `/api/training/*` | Training data export |
-| `webhooks.py` | `/api/webhooks/*` | Webhook management |
+| `webhook_management.py` | `/api/webhooks/*` | Webhook management |
 | `connectors.py` | `/api/connectors/*` | Data connector management |
 | `control_plane.py` | `/api/control-plane/*` | Enterprise control plane |
 | `routing.py` | `/api/routing/*` | Agent routing & team selection |

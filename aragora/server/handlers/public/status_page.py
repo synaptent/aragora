@@ -476,7 +476,7 @@ class StatusPageHandler(BaseHandler):
         """Check Redis health."""
         start = time.perf_counter()
         try:
-            from aragora.server.redis_config import get_redis_client, is_redis_available
+            from aragora.utils.redis_config import get_redis_client, is_redis_available
 
             if is_redis_available():
                 client = get_redis_client()

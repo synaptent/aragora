@@ -245,7 +245,7 @@ class TestReplayBufferIntegration:
 
 def _make_event_class():
     """Return a factory that creates minimal StreamEvent objects for testing."""
-    from aragora.server.stream.events import StreamEvent, StreamEventType
+    from aragora.events.types import StreamEvent, StreamEventType
 
     def factory(loop_id: str, seq: int = 1) -> StreamEvent:
         return StreamEvent(

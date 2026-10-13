@@ -114,7 +114,7 @@ histogram_quantile(
 Run mixed-ensemble threshold sweeps with:
 
 ```bash
-python scripts/tune_execution_gate.py --output docs/status/EXECUTION_GATE_TUNING_2026-03-05.md
+python scripts/tune_execution_gate.py --output docs/status/generated/execution_gate_tuning/EXECUTION_GATE_TUNING_<YYYY-MM-DD>.md
 ```
 
 This produces a dated calibration report with:
@@ -122,7 +122,7 @@ This produces a dated calibration report with:
 - policy sweep ranking
 - recommended threshold set
 
-Latest run in this repo: `docs/status/EXECUTION_GATE_TUNING_2026-03-05.md`
+Latest recorded run: `EXECUTION_GATE_TUNING_2026-03-05.md` (2026-03-05, archived dated snapshot).
 
 ## Regression Guard
 

@@ -48,14 +48,28 @@ class TwitterLikesIngestor(BaseIdeaIngestor):
     source_type = "twitter_like"
 
     async def ingest(self, source: str | Path) -> list[IdeaNode]:
-        """Parse like.js and return IdeaNodes.
+        """Parse like.js — or fetch live via ``api:`` — into IdeaNodes.
 
         Args:
-            source: Path to the like.js file from Twitter data export.
+            source: Path to the like.js file from Twitter data export, or an
+                ``api:`` string (optionally ``api:<max_items>``) to fetch new
+                likes from the X API v2 (OAuth2 user context).
 
         Returns:
             List of IdeaNode objects, one per like.
         """
+        from aragora.ideacloud.ingestion.x_api import fetch_live_entries, is_api_source
+
+        if is_api_source(source):
+            entries, self._pending_commit = await fetch_live_entries(self.source_type, str(source))
+            api_nodes = [
+                node
+                for entry in entries
+                if (node := _like_entry_to_node({"like": entry}, source_type=self.source_type))
+            ]
+            logger.info("Ingested %d likes from X API", len(api_nodes))
+            return api_nodes
+
         path = Path(source)
         if not path.exists():
             raise FileNotFoundError(f"Likes file not found: {path}")

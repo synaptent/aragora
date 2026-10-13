@@ -16,9 +16,92 @@ import json
 import re
 import sys
 from collections import defaultdict
+from collections.abc import Iterator
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Optional
+
+
+# Handler files whose functions are data/storage utilities rather than HTTP
+# endpoints; name-detected functions in them are not audited as handlers.
+# Entries are relative to aragora/server/handlers/: entries ending in "/"
+# exclude that directory's whole subtree; every other entry names one exact file.
+STORAGE_EXCLUDED_PATHS = frozenset(
+    {
+        "_oauth/utils.py",
+        "admin/health/database_utils.py",
+        "admin/health/diagnostics.py",
+        "admin/health/probes.py",
+        "admin/health/stores.py",
+        "agents/probes.py",
+        "auth/store.py",
+        "codebase/security/storage.py",
+        "debates/diagnostics.py",
+        "email/categorization.py",
+        "email/storage.py",
+        "features/marketplace/store.py",
+        "gauntlet/storage.py",
+        "openclaw/store.py",
+        "shared_inbox/storage.py",
+        "utils/params.py",
+    }
+)
+
+# Handler files that establish authentication (login, signup, SSO, OAuth);
+# their endpoints run pre-auth, so the audit classifies them as protection
+# type "auth_flow" instead of unprotected. Same path semantics as above.
+AUTH_FLOW_PATHS = frozenset(
+    {
+        "_oauth/oidc.py",
+        "auth/login.py",
+        "auth/password.py",
+        "auth/signup_handlers.py",
+        "auth/sso_handlers.py",
+        "bots/slack/oauth.py",
+        "bots/teams/oauth.py",
+        "email/oauth.py",
+    }
+)
+
+# Exclusion rules anchor on this literal marker: a path without it normalizes to
+# None in _handler_relative_path and matches no rule, so auditing a handlers tree
+# copied to a path lacking the marker disables every exclusion. The fail direction
+# is safe (files are audited rather than silently skipped); find_handlers warns
+# on stderr when its root is spelled without the marker.
+_HANDLER_PATH_MARKER = "server/handlers/"
+
+
+def _handler_relative_path(file_path: str) -> str | None:
+    """Normalize any spelling of a handler path to its handlers-root-relative form."""
+    path = file_path.replace("\\", "/")
+    index = path.find(_HANDLER_PATH_MARKER)
+    if index == -1:
+        return None
+    return path[index + len(_HANDLER_PATH_MARKER) :]
+
+
+def _matches_exclusion_rules(file_path: str, rules: frozenset[str]) -> bool:
+    """Match a handler path against exact-file / directory-prefix exclusion rules."""
+    relative = _handler_relative_path(file_path)
+    if relative is None:
+        return False
+    for rule in rules:
+        if rule.endswith("/"):
+            if relative.startswith(rule):
+                return True
+        elif relative == rule:
+            return True
+    return False
+
+
+def is_storage_path(file_path: str) -> bool:
+    """Check if a handler file holds storage/data utilities rather than endpoints."""
+    return _matches_exclusion_rules(file_path, STORAGE_EXCLUDED_PATHS)
+
+
+def is_auth_flow_path(file_path: str) -> bool:
+    """Check if a handler file implements pre-auth authentication flows."""
+    return _matches_exclusion_rules(file_path, AUTH_FLOW_PATHS)
 
 
 @dataclass
@@ -37,9 +120,27 @@ class HandlerInfo:
     protection_type: str | None = None  # 'decorator', 'admin_secure', 'manual_check'
 
 
+def iter_handler_files(handler_dir: Path) -> Iterator[Path]:
+    """Yield the Python files under ``handler_dir`` that the audit enumerates."""
+    for py_file in handler_dir.rglob("*.py"):
+        if py_file.name.startswith("_"):
+            continue
+        yield py_file
+
+
 def find_handlers(handler_dir: Path) -> list[HandlerInfo]:
     """Find all handler functions and their RBAC decorators."""
     handlers = []
+
+    # The trailing slash lets the root itself (".../server/handlers") satisfy the
+    # same literal-substring rule _handler_relative_path applies to each file.
+    if _HANDLER_PATH_MARKER not in handler_dir.as_posix() + "/":
+        print(
+            f"WARNING: {handler_dir} does not contain '{_HANDLER_PATH_MARKER}'; "
+            "storage/auth-flow exclusions are disabled and every enumerated file "
+            "will be audited.",
+            file=sys.stderr,
+        )
 
     # Decorator patterns
     func_pattern = re.compile(r"^(?:async\s+)?def\s+(\w+)\s*\(")
@@ -78,10 +179,7 @@ def find_handlers(handler_dir: Path) -> list[HandlerInfo]:
     # Pattern for SecureHandler inheritance
     secure_handler_pattern = re.compile(r"class\s+\w+\s*\([^)]*SecureHandler[^)]*\)\s*:")
 
-    for py_file in handler_dir.rglob("*.py"):
-        if py_file.name.startswith("_"):
-            continue
-
+    for py_file in iter_handler_files(handler_dir):
         try:
             content = py_file.read_text()
             lines = content.split("\n")
@@ -91,35 +189,8 @@ def find_handlers(handler_dir: Path) -> list[HandlerInfo]:
             file_path = str(py_file)
             # Exclude files that are clearly not HTTP handlers
             # Also exclude auth flow endpoints (they establish auth, can't require it)
-            is_storage_file = any(
-                p in file_path
-                for p in (
-                    "/store.py",
-                    "/stores.py",
-                    "/params.py",
-                    "/utils.py",
-                    "/probes.py",
-                    "/diagnostics.py",
-                    "/database_utils.py",
-                    "/storage.py",
-                    "/categorization.py",  # Data access utilities
-                )
-            )
-            is_auth_flow_file = any(
-                p in file_path
-                for p in (
-                    "/oidc.py",
-                    "/sso_handlers.py",
-                    "/saml.py",
-                    "/oauth.py",
-                    "/login.py",
-                    "/auth_flow.py",
-                    "/callback.py",
-                    "/oauth_providers/",
-                    "/signup_handlers.py",
-                    "/password.py",
-                )
-            )
+            is_storage_file = is_storage_path(file_path)
+            is_auth_flow_file = is_auth_flow_path(file_path)
 
             i = 0
             while i < len(lines):
@@ -315,7 +386,7 @@ def generate_report(handlers: list[HandlerInfo], output_format: str = "text") ->
     coverage = (protected / total * 100) if total > 0 else 0
 
     # Count by protection type
-    by_type = defaultdict(int)
+    by_type: defaultdict[str, int] = defaultdict(int)
     for h in handlers:
         if h.protection_type:
             by_type[h.protection_type] += 1

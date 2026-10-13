@@ -786,7 +786,7 @@ class TestWebhookSending:
         )
         queue._batches[batch.batch_id] = batch
 
-        with patch("aragora.server.http_client_pool.get_http_pool", return_value=mock_pool):
+        with patch("aragora.observability.http_client_pool.get_http_pool", return_value=mock_pool):
             with patch("socket.getaddrinfo") as mock_getaddr:
                 mock_getaddr.return_value = [(2, 1, 6, "", ("93.184.216.34", 443))]
                 await queue._send_webhook(batch)

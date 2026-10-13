@@ -11,18 +11,29 @@ name: Contract Drift Boundary
 #     --signer-workflow <owner>/<repo>/.github/workflows/contract-drift-boundary.yml
 #     --source-digest <end_sha> --format json
 #
-# Dispatch this workflow AT the boundary capsule tag
-# (cdg-<boundary>-<end_sha>) so the certificate's source digest equals the
-# boundary end SHA the checker binds with --source-digest. No other trigger
-# surface, no other jobs, and no repository mutations are authorized.
+# Dispatch this workflow AT the capsule tag. Boundary tags use
+# cdg-<boundary>-<end_sha> and require the tag target to equal end_sha.
+# Historical successor tags use backfill-v2-<merge_sha>, but target the exact
+# merged implementation SHA that contains this signer workflow. Their separate
+# source_digest input binds the Sigstore certificate to that implementation
+# SHA, while the tag suffix and capsule payload bind the historical merge SHA.
+# No other trigger surface, jobs, or repository mutations are authorized.
 
 on:
   workflow_dispatch:
     inputs:
       tag:
         description: >-
-          Boundary capsule tag (cdg-<boundary>-<end_sha>). Must equal the tag
-          ref this run is dispatched on.
+          Boundary capsule tag (cdg-<boundary>-<end_sha>) or historical
+          successor tag (backfill-v2-<merge_sha>). Must equal the tag ref this
+          run is dispatched on.
+        required: true
+        type: string
+      source_digest:
+        description: >-
+          Exact commit SHA supplying the signer workflow and attested source.
+          Equals the tag suffix for boundary capsules and the implementation
+          SHA for a historical successor capsule.
         required: true
         type: string
 
@@ -37,14 +48,21 @@ jobs:
     timeout-minutes: 15
     env:
       TAG: ${{ inputs.tag }}
+      SOURCE_DIGEST: ${{ inputs.source_digest }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Download and authenticate the capsule assets at the boundary tag
         run: |
           set -euo pipefail
-          [[ "$TAG" =~ ^cdg-(corrective_bootstrap|route_truth|core_sdk|extended_sdk|final_seal)-[0-9a-f]{40}$ ]]
+          [[ "$TAG" =~ ^(cdg-(corrective_bootstrap|route_truth|core_sdk|extended_sdk|final_seal)|backfill-v2)-[0-9a-f]{40}$ ]]
+          [[ "$SOURCE_DIGEST" =~ ^[0-9a-f]{40}$ ]]
           test "refs/tags/$TAG" = "$GITHUB_REF"
-          test "${TAG##*-}" = "$GITHUB_SHA"
+          test "$SOURCE_DIGEST" = "$GITHUB_SHA"
+          if [[ "$TAG" == backfill-v2-* ]]; then
+            test "${TAG##*-}" != "$GITHUB_SHA"
+          else
+            test "${TAG##*-}" = "$GITHUB_SHA"
+          fi
           mkdir assets
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir assets
           test "$(find assets -mindepth 1 | wc -l)" -eq 3

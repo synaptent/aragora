@@ -175,6 +175,12 @@ class TestAgentCredentialMap:
         assert "OPENROUTER_API_KEY" in AGENT_CREDENTIAL_MAP["deepseek"]
         assert "DEEPSEEK_API_KEY" in AGENT_CREDENTIAL_MAP["deepseek"]
 
+    def test_kimi_runtime_and_legacy_credentials_are_distinct(self):
+        assert AGENT_CREDENTIAL_MAP["kimi"] == ["OPENROUTER_API_KEY"]
+        assert AGENT_CREDENTIAL_MAP["kimi-k3"] == ["OPENROUTER_API_KEY"]
+        assert AGENT_CREDENTIAL_MAP["kimi-thinking"] == ["OPENROUTER_API_KEY"]
+        assert AGENT_CREDENTIAL_MAP["kimi-legacy"] == ["KIMI_API_KEY"]
+
 
 class TestGetAvailableAgentTypes:
     """Tests for get_available_agent_types function."""

@@ -1,0 +1,83 @@
+[
+ {
+  "id": 4879384313,
+  "user": {
+   "login": "an0mium"
+  },
+  "created_at": "2026-07-03T21:19:27Z",
+  "html_url": "https://github.com/synaptent/aragora/pull/8824#issuecomment-4879384313",
+  "body": "Evidence round 1 addressed at bb954d30 — both reviewers reported the dogfooding link dead, and both were wrong about the tree (docs/artifacts/2026-07-decision-integrity-dogfooding.md is on main since #8801, blob 3c0458f1) but right about the landmine: the repo's 'artifacts/' gitignore rule shadowed the tracked file from every ignore-respecting tool, including reviewer grounding. Fixed at the root with a '!docs/artifacts/' negation so committed proof artifacts are visible to grep harnesses, doc-link validators, and reviewers alike."
+ },
+ {
+  "id": 4879405120,
+  "user": {
+   "login": "an0mium"
+  },
+  "created_at": "2026-07-03T21:25:05Z",
+  "html_url": "https://github.com/synaptent/aragora/pull/8824#issuecomment-4879405120",
+  "body": "Evidence round 2 addressed at 75893e9d: **[P2 openai]** demo one-liner now forces `--offline` (with keys present the real-demo path doesn't write aragora-demo-receipt.json — correct catch; the Try-it-now section already used the flag). **[P2 claude — dead link]** repeated claim, disproven at the branch tree with machine evidence: `git ls-tree HEAD -- docs/artifacts/` → blob 3c0458f1 present; `rg --files docs/artifacts/` now lists the file (negation effective); `git check-ignore` → not ignored; the file merged to main in #8801. Belt-and-braces `!docs/artifacts/**` child negation added. If the dead-link claim recurs against this evidence, it parks as demonstrated-false-positive dissent for operator adjudication."
+ },
+ {
+  "id": 4879423633,
+  "user": {
+   "login": "an0mium"
+  },
+  "created_at": "2026-07-03T21:30:07Z",
+  "html_url": "https://github.com/synaptent/aragora/pull/8824#issuecomment-4879423633",
+  "body": "Evidence round 3 disposition at 7e182074: both reviewers repeated the dead-link claim against the machine proof in this thread — openai's own wording ('this PR's complete changed-file list') reveals the mechanism: reviewer grounding reasons over the diff only and cannot see the base tree where the file has existed since #8801. Filed as #8825 (reviewer grounding blind spot). The link itself is now an absolute URL to main — objectively better for this README's off-GitHub renderings (PyPI long-description, mirrors) where relative links break, and verifiable without tree access. One final gate follows; if the claim survives an absolute URL, this parks for operator adjudication with the full three-round false-positive record."
+ },
+ {
+  "id": 4879436485,
+  "user": {
+   "login": "an0mium"
+  },
+  "created_at": "2026-07-03T21:33:43Z",
+  "html_url": "https://github.com/synaptent/aragora/pull/8824#issuecomment-4879436485",
+  "body": "## OpenAI independent model review\n\nReviewer: openai (openai) — independent adversarial model review via Codex CLI OpenAI harness, grounded on the exact PR head.\nHead: 7e18207 (7e18207425ab9433ae9b24286139d0dca5155778), committed 2026-07-03T21:29:44Z.\nPR: #8824.\nModel family: openai\n\nVerdict: PASS\n\nNo findings.\n\ndogfood: yes"
+ },
+ {
+  "id": 4880358717,
+  "user": {
+   "login": "an0mium"
+  },
+  "created_at": "2026-07-04T02:39:56Z",
+  "html_url": "https://github.com/synaptent/aragora/pull/8824#issuecomment-4880358717",
+  "body": "Queue-drain park note for exact head `3599f8e3848c129ea4cd60db232edbddd20a92e9`.\n\nNot merging or collecting evidence in this cycle. Live state is open/non-draft and `mergeable=MERGEABLE`, but `mergeStateStatus=BLOCKED`. Current blocker rows: `Aragora Merge Quorum / aragora-merge-quorum = FAILURE` (job 85079246826), plus cancelled doc/advisory rows `Build Documentation (PR Check) / build`, `Docs Consistency / Docs Consistency`, and `Portability Lint / portability`. Owner selector reports only stale terminal lane `codex-fable-pr8824-evidence-20260703T2303Z` with no unread steering; I did not override it for repair/evidence work.\n\nRoot-cause fix for stale terminal-owner sentinel handling is #8830; do not duplicate that work here. Unblock condition: #8830 lands or the stale-owner sentinel path is otherwise fixed, then #8824 reaches a stable exact head with green `aragora-merge-quorum` and no unresolved CHANGES-REQUESTED/[P0]/[P1]/[P2]. Branch preserved."
+ },
+ {
+  "id": 4880437727,
+  "user": {
+   "login": "an0mium"
+  },
+  "created_at": "2026-07-04T03:06:05Z",
+  "html_url": "https://github.com/synaptent/aragora/pull/8824#issuecomment-4880437727",
+  "body": "Evidence round 5 [P1] addressed at 56fc92a5 — claude's finding was wrong about availability but right about the record: PyPI is live (verified again just now: https://pypi.org/pypi/aragora-verify/json → 0.1.0, uploaded 2026-06-29) while aragora-verify/CHANGELOG.md still said 'unreleased'. CHANGELOG reconciled with reality: 0.1.0 marked released 2026-06-29 (with correction note), and a 0.1.1 unreleased entry added for the key_id signer-binding + unsigned-with-key fixes now on main (publish pending). The README claim and the package's authoritative record now agree."
+ },
+ {
+  "id": 4880455264,
+  "user": {
+   "login": "an0mium"
+  },
+  "created_at": "2026-07-04T03:13:06Z",
+  "html_url": "https://github.com/synaptent/aragora/pull/8824#issuecomment-4880455264",
+  "body": "Evidence round 6 addressed at 6e9e1bb2 — both findings were two views of one fact (this branch predated #8802's merge): **[P2 openai]** the branch now contains the 0.1.1 verifier source with the key_id binding (merged main; the CHANGELOG no longer describes an absent fix — test_tampered_key_id_fails_signature is in-tree at this head). **[P2 claude]** README gains an explicit version note: 0.1.1's signer-label protection is in-repo with PyPI publish pending; until then the source build is preferred and 0.1.0's scope is stated plainly. Every claim in README/CHANGELOG/walkthrough is now simultaneously true at this head."
+ },
+ {
+  "id": 4880468498,
+  "user": {
+   "login": "an0mium"
+  },
+  "created_at": "2026-07-04T03:18:42Z",
+  "html_url": "https://github.com/synaptent/aragora/pull/8824#issuecomment-4880468498",
+  "body": "## Claude independent model review\n\nReviewer: claude (anthropic) — independent adversarial model review via the Aragora Claude reviewer, grounded on the exact PR head.\nHead: 6e9e1bb (6e9e1bb2de6d1cfaa3cb293ffdb42f6ad700ffd1), committed 2026-07-04T03:12:03Z.\nPR: #8824.\nModel family: claude\n\nVerdict: PASS\n\n- [P3] `aragora-verify/CHANGELOG.md` (0.1.0 entry): the note says \"corrected 2026-07-04\" — a **future date** (the commit and today are 2026-07-03). Self-inconsistent timestamp inside an integrity/evidence-focused doc; use the actual date.\n- [P3] `README.md` (version note) vs `aragora-verify/pyproject.toml`: README now tells users to \"prefer the source build … for full signer-label protection,\" but `pyproject.toml` version is still `0.1.0`. A source build (`pip install ./aragora-verify`) that contains the 0.1.1 `key_id`-binding fix still reports `0.1.0` — indistinguishable from the vulnerable published 0.1.0 via package metadata. Consider bumping the in-repo version (e.g. `0.1.1.dev0`) so the fixed build is programmatically identifiable.\n- [P3] `README.md` (line 9 + verify section): top-line `pip install aragora-verify`, the `aragora-verify receipt.odr.json` quickstart, and the PyPI badge/link all now assume 0.1.0 is live on PyPI. The CHANGELOG asserts it (published 2026-06-29, verified installable 2026-07-02), but network access was blocked in this review, so I could not independently confirm the PyPI page/badge resolve — worth a final check before merge, since a false \"published\" claim would break the first command users run.\n\ndogfood: yes"
+ },
+ {
+  "id": 4880488892,
+  "user": {
+   "login": "an0mium"
+  },
+  "created_at": "2026-07-04T03:27:32Z",
+  "html_url": "https://github.com/synaptent/aragora/pull/8824#issuecomment-4880488892",
+  "body": "Queue-drain park note for exact head `6e9e1bb2de6d1cfaa3cb293ffdb42f6ad700ffd1`.\n\nNot merging in this cycle. Live required checks are green, but the local merge-packet generated after the Fable consult is not satisfied: Tier 1, `status=needs_model_review_quorum`, `verdict=collect_model_quorum_before_merge`, `admin_squash_allowed=false`, counted current-head reviewers `[claude]`, reason `model quorum incomplete: 1/2 signal(s)`. `settle_one_pr.py --pr 8824 --json` reports `status=ready_for_minimum_evidence` with blockers `[]`, but live `mergeStateStatus=UNSTABLE`, so I did not collect/post countable evidence under §Conductor's settlement-stability rule. Required checks observed green: lint, typecheck, sdk-parity, Generate & Validate, TypeScript SDK Type Check, aragora-merge-quorum.\n\nNext allowed action: wait for a settlement-stable live merge state or operator-approved handling of the non-required-rollup UNSTABLE state, then collect exactly one current-head countable evidence signal if the packet still needs it. Branch preserved."
+ }
+]

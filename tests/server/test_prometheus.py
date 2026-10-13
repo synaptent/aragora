@@ -8,7 +8,7 @@ implementation used when prometheus_client is not available.
 import pytest
 from unittest.mock import patch, MagicMock
 
-from aragora.server.prometheus import (
+from aragora.observability.prometheus import (
     # Public API
     get_metrics_output,
     is_prometheus_available,

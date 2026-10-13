@@ -11,6 +11,8 @@ Requirements:
 from __future__ import annotations
 
 import logging
+import uuid as uuid_lib
+import warnings
 from typing import Any, cast
 from collections.abc import Sequence
 
@@ -25,10 +27,14 @@ logger = logging.getLogger(__name__)
 
 # Check for weaviate library
 try:
-    import weaviate
-    from weaviate.classes.config import Configure, DataType, Property
-    from weaviate.classes.data import DataObject  # noqa: F401
-    from weaviate.classes.query import Filter, MetadataQuery
+    # weaviate's package __init__ calls a bare warnings.simplefilter("default")
+    # (and its transitive imports register more filters), globally rewriting the
+    # ambient warning policy; the scoped guard confines that to this import.
+    with warnings.catch_warnings():
+        import weaviate
+        from weaviate.classes.config import Configure, DataType, Property
+        from weaviate.classes.data import DataObject  # noqa: F401
+        from weaviate.classes.query import Filter, MetadataQuery
 
     WEAVIATE_AVAILABLE = True
 except ImportError:
@@ -55,6 +61,10 @@ class WeaviateVectorStore(BaseVectorStore):
         store = WeaviateVectorStore(config)
         await store.connect()
     """
+
+    # Initialized by BaseVectorStore.__init__; annotated here because the
+    # changed-file mypy hook runs with --follow-imports=skip and cannot see it.
+    _connected: bool
 
     def __init__(self, config: VectorStoreConfig):
         """Initialize Weaviate store."""
@@ -238,13 +248,19 @@ class WeaviateVectorStore(BaseVectorStore):
         items: Sequence[dict[str, Any]],
         namespace: str | None = None,
     ) -> list[str]:
-        """Batch upsert multiple vectors."""
+        """Batch upsert multiple vectors.
+
+        Items without an ``id`` (missing or ``None``) get a client-generated
+        UUID4, which is sent to Weaviate and returned in its position.
+        """
         collection = self._get_collection()
-        ids = []
+        ids: list[str] = []
 
         with collection.batch.dynamic() as batch:
             for item in items:
                 item_id = item.get("id")
+                if item_id is None:
+                    item_id = str(uuid_lib.uuid4())
                 properties = {
                     "content": item["content"],
                     "namespace": namespace or "",

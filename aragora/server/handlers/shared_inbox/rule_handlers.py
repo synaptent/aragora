@@ -52,7 +52,7 @@ logger = logging.getLogger(__name__)
 
 def _get_store() -> Any:
     """Get store with test patch support."""
-    module = sys.modules.get("aragora.server.handlers._shared_inbox_handler")
+    module = sys.modules.get("aragora.server.handlers.shared_inbox._shared_inbox_handler")
     if module is not None:
         patched = getattr(module, "_get_store", None)
         if patched is not None and patched is not _get_store:
@@ -62,7 +62,7 @@ def _get_store() -> Any:
 
 def _get_rules_store() -> Any:
     """Get rules store with test patch support."""
-    module = sys.modules.get("aragora.server.handlers._shared_inbox_handler")
+    module = sys.modules.get("aragora.server.handlers.shared_inbox._shared_inbox_handler")
     if module is not None:
         patched = getattr(module, "_get_rules_store", None)
         if patched is not None and patched is not _get_rules_store:
@@ -72,7 +72,7 @@ def _get_rules_store() -> Any:
 
 def _get_email_store() -> Any:
     """Get email store with test patch support."""
-    module = sys.modules.get("aragora.server.handlers._shared_inbox_handler")
+    module = sys.modules.get("aragora.server.handlers.shared_inbox._shared_inbox_handler")
     if module is not None:
         patched = getattr(module, "_get_email_store", None)
         if patched is not None and patched is not _get_email_store:

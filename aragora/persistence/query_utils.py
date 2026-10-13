@@ -121,7 +121,7 @@ def batch_select(
 
     for chunk in chunked(ids, batch_size):
         placeholders = ", ".join("?" * len(chunk))
-        query = f"SELECT {cols} FROM {table} WHERE {id_column} IN ({placeholders})"  # nosec B608  # noqa: S608
+        query = f"SELECT {cols} FROM {table} WHERE {id_column} IN ({placeholders})"  # nosec B608
 
         try:
             cursor = conn.execute(query, chunk)
@@ -165,7 +165,7 @@ def batch_exists(
 
     for chunk in chunked(ids, batch_size):
         placeholders = ", ".join("?" * len(chunk))
-        query = f"SELECT {id_column} FROM {table} WHERE {id_column} IN ({placeholders})"  # nosec B608  # noqa: S608
+        query = f"SELECT {id_column} FROM {table} WHERE {id_column} IN ({placeholders})"  # nosec B608
 
         try:
             cursor = conn.execute(query, chunk)
@@ -215,12 +215,12 @@ def timed_query(
         if elapsed_ms > threshold_ms:
             # Truncate query for logging
             short_query = query[:200] + "..." if len(query) > 200 else query
-            logger.warning(f"Slow query ({elapsed_ms:.1f}ms): {operation_name}: {short_query}")
+            logger.warning("Slow query (%.1fms): %s: %s", elapsed_ms, operation_name, short_query)
 
         return cursor
     except sqlite3.Error:
         elapsed_ms = (time.monotonic() - start) * 1000
-        logger.error(f"Query failed after {elapsed_ms:.1f}ms: {operation_name}")
+        logger.error("Query failed after %.1fms: %s", elapsed_ms, operation_name)
         raise
 
 
@@ -237,7 +237,7 @@ def get_table_stats(conn: sqlite3.Connection, table: str) -> dict[str, Any]:
     if not table.replace("_", "").isalnum():
         raise ValueError(f"Invalid table name: {table}")
 
-    cursor = conn.execute(f"SELECT COUNT(*) FROM {table}")  # nosec B608  # noqa: S608
+    cursor = conn.execute(f"SELECT COUNT(*) FROM {table}")  # nosec B608
     row = cursor.fetchone()
 
     return {

@@ -32,7 +32,7 @@ if __name__ == "__main__":
 
     uvicorn.run(
         "aragora.server.app:app",
-        host="0.0.0.0",  # noqa: S104 - dev server binds all interfaces
+        host="0.0.0.0",  # dev server binds all interfaces
         port=8081,
         reload=True,
     )

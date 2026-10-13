@@ -1,0 +1,165 @@
+{
+  "receipt_id": "2ecd2231-f415-4d89-abff-726166909606",
+  "gauntlet_id": "9bced87d-b430-4e1f-8c60-0ded1cf4f5d5",
+  "timestamp": "2026-08-29T21:48:57.671654+00:00",
+  "input_summary": "You are planning improvements for the Aragora project.\n\nOBJECTIVE: Rank these externally sourced research candidates by expected impact on the decision-integrity roadmap; reject any that do not survive scrutiny\n\nAVAILABLE TRACKS (domains you can work on):\nsme, developer, self_hosted, qa, core, security\n\nTrack descriptions:\n- SME: Small business features, dashboard, user workspace\n- Developer: SDKs, API, documentation\n- Self-Hosted: Docker, deployment, backup/restore\n- QA: Tests, CI/CD, code qual",
+  "input_hash": "27e728799d06d57fed38012b58d08694bb75a78fc19a9270bf0a841063517657",
+  "risk_summary": {
+    "critical": 2,
+    "high": 0,
+    "medium": 0,
+    "low": 2,
+    "total": 4
+  },
+  "attacks_attempted": 0,
+  "attacks_successful": 0,
+  "probes_run": 1,
+  "vulnerabilities_found": 0,
+  "vulnerability_details": [],
+  "verdict": "FAIL",
+  "confidence": 0.0,
+  "robustness_score": 0.0,
+  "verdict_reasoning": "No consensus reached",
+  "dissenting_views": [],
+  "consensus_proof": {
+    "reached": false,
+    "confidence": 0.0,
+    "supporting_agents": [
+      "claude",
+      "codex"
+    ],
+    "dissenting_agents": [],
+    "method": "majority",
+    "evidence_hash": "",
+    "tainted_proposals": [],
+    "trust_score": 1.0
+  },
+  "provenance_chain": [
+    {
+      "timestamp": "2026-08-29T16:39:09.248739",
+      "event_type": "message",
+      "agent": "claude",
+      "description": "[proposer] claude got confused and needs to recalibrate.",
+      "evidence_hash": "045310da7e89afa0"
+    },
+    {
+      "timestamp": "2026-08-29T16:44:31.590161",
+      "event_type": "message",
+      "agent": "codex",
+      "description": "[proposer] [Error generating proposal: Agent codex timed out ",
+      "evidence_hash": "0d7b4a3106ea691f"
+    },
+    {
+      "timestamp": "2026-08-29T16:45:06.503555",
+      "event_type": "message",
+      "agent": "codex",
+      "description": "[critic] Critique from codex (severity: 3.0):\nIssues:\n  - I",
+      "evidence_hash": "48f34d4793b4e257"
+    },
+    {
+      "timestamp": "2026-08-29T16:45:22.992652",
+      "event_type": "message",
+      "agent": "claude",
+      "description": "[proposer] Oops! claude experienced a minor cognitive hiccup.",
+      "evidence_hash": "fe6d6f9b47afbc07"
+    },
+    {
+      "timestamp": "2026-08-29T16:47:32.912298",
+      "event_type": "message",
+      "agent": "codex",
+      "description": "[critic] Critique from codex (severity: 3.0):\nIssues:\n  - 1",
+      "evidence_hash": "d47ba8f0be6058bb"
+    },
+    {
+      "timestamp": "2026-08-29T16:47:37.359476",
+      "event_type": "message",
+      "agent": "claude",
+      "description": "[proposer] A wild bug appeared! claude is handling it.",
+      "evidence_hash": "4bba7045fbbf0603"
+    },
+    {
+      "timestamp": "2026-08-29T21:48:57.671654+00:00",
+      "event_type": "verdict",
+      "agent": null,
+      "description": "Consensus: not reached (0.0% confidence)",
+      "evidence_hash": ""
+    }
+  ],
+  "agent_responses": [
+    {
+      "agent": "claude",
+      "response": "claude got confused and needs to recalibrate.",
+      "role": "proposer",
+      "round": 0,
+      "provider": "",
+      "provider_display": "",
+      "model": "",
+      "llm_label": ""
+    },
+    {
+      "agent": "codex",
+      "response": "[Error generating proposal: Agent codex timed out after 240.0s]",
+      "role": "proposer",
+      "round": 0,
+      "provider": "",
+      "provider_display": "",
+      "model": "",
+      "llm_label": ""
+    },
+    {
+      "agent": "codex",
+      "response": "Critique from codex (severity: 3.0):\nIssues:\n  - It does not distinguish research-validation work from implementation work, especially where Core changes require approval.\nSuggestions:\n  - It does not evaluate or rank any of the 14 candidates.\n  - It rejects no candidates and provides no scrutiny of evidence, feasibility, or roadmap fit.\n  - It omits every required field: track, actionable description, rationale, and expected impact.\n  - It gives no dependency ordering or connection to decision integrity.\n  - \u201cClaude got confused\u201d is unsupported meta-commentary, not analysis.\nReasoning: 1. **ISSUES**\n\n- The proposal is non-responsive: it offers no improvement goals.\n- It does not evaluate or rank any of the 14 candidates.\n- It rejects no candidates and provides no scrutiny of evidence, feasibility, or roadmap fit.\n- It omits every required field: track, actionable description, rationale, and expected impact.\n- It gives no dependency ordering or connection to decision integrity.\n- \u201cClaude got confused\u201d is unsupported meta-commentary, not analysis.\n- It ignores relevant concerns",
+      "role": "critic",
+      "round": 1,
+      "provider": "",
+      "provider_display": "",
+      "model": "",
+      "llm_label": ""
+    },
+    {
+      "agent": "claude",
+      "response": "Oops! claude experienced a minor cognitive hiccup.",
+      "role": "proposer",
+      "round": 1,
+      "provider": "",
+      "provider_display": "",
+      "model": "",
+      "llm_label": ""
+    },
+    {
+      "agent": "codex",
+      "response": "Critique from codex (severity: 3.0):\nIssues:\n  - 10/10 \u2014 critical**\nSuggestions:\n  - It does not evaluate, rank, or explicitly reject any of the 14 candidates.\n  - It omits every required field: track, actionable description, rationale, and expected impact.\n  - It provides no evidence scrutiny, including validation of secondary X posts against primary sources.\n  - It ignores dependencies and the requirement to prioritize decision integrity.\n  - It does not distinguish research/benchmark work from implementation, especially Core changes requiring approval.\nReasoning: 1. **ISSUES**\n\n- The proposal is entirely non-responsive; it supplies no improvement goals.\n- It does not evaluate, rank, or explicitly reject any of the 14 candidates.\n- It omits every required field: track, actionable description, rationale, and expected impact.\n- It provides no evidence scrutiny, including validation of secondary X posts against primary sources.\n- It ignores dependencies and the requirement to prioritize decision integrity.\n- It does not distinguish research/benchmark work fr",
+      "role": "critic",
+      "round": 2,
+      "provider": "",
+      "provider_display": "",
+      "model": "",
+      "llm_label": ""
+    },
+    {
+      "agent": "claude",
+      "response": "A wild bug appeared! claude is handling it.",
+      "role": "proposer",
+      "round": 2,
+      "provider": "",
+      "provider_display": "",
+      "model": "",
+      "llm_label": ""
+    }
+  ],
+  "cost_summary": null,
+  "settlement_metadata": null,
+  "settlement_status": null,
+  "explainability": null,
+  "thinking_traces": null,
+  "schema_version": "1.1",
+  "artifact_hash": "fc171e7d820dd1ba4970edf8f9a57b5f284105d2edf22fd6e0e1b135610f62d1",
+  "config_used": {
+    "rounds": 1,
+    "participants": [
+      "claude",
+      "codex"
+    ],
+    "duration_seconds": 600.1108977794647
+  }
+}

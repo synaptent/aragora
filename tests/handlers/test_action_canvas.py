@@ -22,6 +22,23 @@ def handler():
     return ActionCanvasHandler(ctx={})
 
 
+@pytest.fixture(autouse=True)
+def _isolated_action_canvas_store(tmp_path, monkeypatch):
+    """Back the global action-canvas store with a per-test database.
+
+    The default store is ``action_canvas.db`` in the shared data directory.
+    xdist workers that create that file concurrently race on the WAL-mode
+    switch and fail with ``sqlite3.OperationalError: database is locked``.
+    """
+    from aragora.canvas import action_store
+    from aragora.storage.schema import DatabaseManager
+
+    store = action_store.ActionCanvasStore(tmp_path / "action_canvas.db")
+    monkeypatch.setattr(action_store, "_action_canvas_store", store)
+    yield store
+    DatabaseManager.close_instances([str(store.db_path)])
+
+
 @pytest.fixture
 def mock_request():
     """Create a mock HTTP handler object."""
@@ -336,6 +353,14 @@ class TestUpdateNode:
                     "u1",
                 )
                 assert result is not None
+
+
+class TestStoreIsolation:
+    """Unmocked store access stays private to the running test."""
+
+    def test_unmocked_store_uses_per_test_database(self, handler, tmp_path):
+        store = handler._get_store()
+        assert store.db_path.parent == tmp_path
 
 
 class TestDeleteNode:

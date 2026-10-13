@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 def _mod() -> Any:
     """Lazy import of workspace_module to avoid circular imports and respect patches."""
-    import aragora.server.handlers.workspace_module as m
+    import aragora.server.handlers.workspace.workspace_module as m
 
     return m
 

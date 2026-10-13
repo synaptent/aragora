@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -51,6 +52,12 @@ class FailureAction(str, Enum):
     REPORT_ONLY = "report_only"
     RERUN_WORKFLOW = "rerun_workflow"
     PROPOSE_BOUNDED_ISSUE = "propose_bounded_issue"
+
+
+class ClaimTruthState(str, Enum):
+    LIVE = "live"
+    UNSUPPORTED = "unsupported"
+    ASPIRATIONAL = "aspirational"
 
 
 # ---------------------------------------------------------------------------
@@ -178,6 +185,45 @@ class ClaimReceipt:
         return out
 
 
+@dataclass
+class ClaimTruthStatus:
+    """Declared truth posture used by the report-only freshness layer."""
+
+    state: ClaimTruthState
+    last_verified_at: str | None = None
+    note: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.state == ClaimTruthState.LIVE and self.last_verified_at is None:
+            raise ValueError("live truth_status requires last_verified_at")
+        if self.last_verified_at is not None:
+            normalized = self.last_verified_at.removesuffix("Z") + (
+                "+00:00" if self.last_verified_at.endswith("Z") else ""
+            )
+            try:
+                parsed = datetime.fromisoformat(normalized)
+            except ValueError as exc:
+                raise ValueError("last_verified_at must be an RFC 3339 timestamp") from exc
+            if parsed.tzinfo is None:
+                raise ValueError("last_verified_at must include a timezone")
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> ClaimTruthStatus:
+        return cls(
+            state=ClaimTruthState(d["state"]),
+            last_verified_at=d.get("last_verified_at"),
+            note=d.get("note"),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        out: dict[str, Any] = {"state": self.state.value}
+        if self.last_verified_at is not None:
+            out["last_verified_at"] = self.last_verified_at
+        if self.note is not None:
+            out["note"] = self.note
+        return out
+
+
 # ---------------------------------------------------------------------------
 # Primary model
 # ---------------------------------------------------------------------------
@@ -197,6 +243,7 @@ class ExecutableClaim:
     verification: ClaimVerification
     failure: ClaimFailurePolicy
     receipts: list[ClaimReceipt]
+    truth_status: ClaimTruthStatus | None = None
 
     def __post_init__(self) -> None:
         if not self.claim_id or not self.claim_id[0].isalnum():
@@ -223,10 +270,15 @@ class ExecutableClaim:
             verification=ClaimVerification.from_dict(d["verification"]),
             failure=ClaimFailurePolicy.from_dict(d["failure"]),
             receipts=[ClaimReceipt.from_dict(r) for r in d["receipts"]],
+            truth_status=(
+                ClaimTruthStatus.from_dict(d["truth_status"])
+                if d.get("truth_status") is not None
+                else None
+            ),
         )
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        out: dict[str, Any] = {
             "claim_id": self.claim_id,
             "statement": self.statement,
             "owner": self.owner,
@@ -238,6 +290,9 @@ class ExecutableClaim:
             "failure": self.failure.to_dict(),
             "receipts": [r.to_dict() for r in self.receipts],
         }
+        if self.truth_status is not None:
+            out["truth_status"] = self.truth_status.to_dict()
+        return out
 
 
 # ---------------------------------------------------------------------------

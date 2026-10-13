@@ -13,6 +13,7 @@ Checks:
 import sys
 import re
 from pathlib import Path
+from typing import Any
 
 try:
     import yaml
@@ -39,7 +40,7 @@ REQUIRED_ENV_VARS = [
 ]
 
 
-def load_config(path: Path) -> dict:
+def load_config(path: Path) -> tuple[Any, str]:
     text = path.read_text()
     if yaml:
         return yaml.safe_load(text), text
@@ -48,7 +49,7 @@ def load_config(path: Path) -> dict:
 
 
 def validate_yaml_syntax(path: Path) -> list[str]:
-    errors = []
+    errors: list[str] = []
     if not yaml:
         return errors
     try:
@@ -59,8 +60,8 @@ def validate_yaml_syntax(path: Path) -> list[str]:
 
 
 def validate_receivers(config: dict | None, raw: str) -> list[str]:
-    errors = []
-    warnings = []
+    errors: list[str] = []
+    warnings: list[str] = []
 
     if config:
         receivers = {r["name"] for r in config.get("receivers", [])}
@@ -99,7 +100,7 @@ def validate_receivers(config: dict | None, raw: str) -> list[str]:
 
 
 def validate_env_vars(raw: str) -> list[str]:
-    warnings = []
+    warnings: list[str] = []
     # Find all ${VAR} placeholders
     placeholders = set(re.findall(r"\$\{(\w+)\}", raw))
 
@@ -111,7 +112,7 @@ def validate_env_vars(raw: str) -> list[str]:
 
 
 def validate_inhibition_rules(config: dict | None) -> list[str]:
-    errors = []
+    errors: list[str] = []
     if not config:
         return errors
 

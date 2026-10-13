@@ -34,8 +34,8 @@ class AutopilotRequest:
 
 def resolve_repo_root(path: Path) -> Path:
     """Resolve a repository root from any path inside the repo."""
-    proc = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
-        ["git", "-C", str(path), "rev-parse", "--show-toplevel"],  # noqa: S607 -- fixed command
+    proc = subprocess.run(  # subprocess with fixed args, no shell
+        ["git", "-C", str(path), "rev-parse", "--show-toplevel"],  # fixed command
         capture_output=True,
         text=True,
         check=False,
@@ -167,7 +167,7 @@ def run_autopilot(
         request=request,
         python_executable=python_executable,
     )
-    return subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
+    return subprocess.run(  # subprocess with fixed args, no shell
         cmd,
         cwd=repo_root,
         capture_output=True,

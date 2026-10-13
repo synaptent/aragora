@@ -662,7 +662,7 @@ class StreamAPIHandlersMixin:
         """GET /metrics - Prometheus-format metrics."""
 
         try:
-            from aragora.server.prometheus import CONTENT_TYPE_LATEST, get_prometheus_metrics
+            from aragora.observability.prometheus import CONTENT_TYPE_LATEST, get_prometheus_metrics
 
             metrics_text = get_prometheus_metrics()
             return web.Response(

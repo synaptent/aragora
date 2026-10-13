@@ -41,6 +41,14 @@ from aragora.storage.backends import (
 
 logger = logging.getLogger(__name__)
 
+DATABASE_ERRORS: tuple[type[Exception], ...] = (sqlite3.Error,)
+try:
+    from psycopg2 import Error as PostgreSQLError
+except ImportError:
+    pass
+else:
+    DATABASE_ERRORS += (PostgreSQLError,)
+
 # Advisory lock ID for migration coordination (hash of 'aragora_migration')
 MIGRATION_LOCK_ID = 2089872453
 
@@ -63,6 +71,8 @@ class Migration:
         up_fn: Python function to apply migration (alternative to up_sql)
         down_fn: Python function to rollback migration (alternative to down_sql)
         checksum: Optional pre-computed checksum (computed automatically if not provided)
+        previous_checksums: Checksums of earlier revisions that databases may have
+            recorded; verification accepts them (see MIGRATION_GUIDE.md)
     """
 
     version: int
@@ -72,6 +82,7 @@ class Migration:
     up_fn: Callable[[DatabaseBackend], None] | None = None
     down_fn: Callable[[DatabaseBackend], None] | None = None
     checksum: str | None = field(default=None, repr=False)
+    previous_checksums: tuple[str, ...] = field(default=(), repr=False)
 
     def __post_init__(self) -> None:
         if not self.up_sql and not self.up_fn:
@@ -228,7 +239,8 @@ class MigrationRunner:
         """Add checksum and rollback_sql columns if they don't exist (schema upgrade)."""
         # Check for checksum column
         try:
-            self._backend.fetch_one(f"SELECT checksum FROM {self.MIGRATIONS_TABLE} LIMIT 1")  # noqa: S608 -- table name interpolation, parameterized
+            # table name interpolation, parameterized
+            self._backend.fetch_one(f"SELECT checksum FROM {self.MIGRATIONS_TABLE} LIMIT 1")
         except (sqlite3.Error, OSError, RuntimeError, ValueError) as e:
             # Column doesn't exist, add it
             logger.debug("checksum column check failed (will add): %s: %s", type(e).__name__, e)
@@ -242,7 +254,8 @@ class MigrationRunner:
 
         # Check for rollback_sql column
         try:
-            self._backend.fetch_one(f"SELECT rollback_sql FROM {self.MIGRATIONS_TABLE} LIMIT 1")  # noqa: S608 -- table name interpolation, parameterized
+            # table name interpolation, parameterized
+            self._backend.fetch_one(f"SELECT rollback_sql FROM {self.MIGRATIONS_TABLE} LIMIT 1")
         except (sqlite3.Error, OSError, RuntimeError, ValueError) as e:
             # Column doesn't exist, add it
             logger.debug("rollback_sql column check failed (will add): %s: %s", type(e).__name__, e)
@@ -257,9 +270,14 @@ class MigrationRunner:
     def _init_rollback_history_table(self) -> None:
         """Create the rollback history table if it doesn't exist."""
         version_type = "BIGINT" if isinstance(self._backend, PostgreSQLBackend) else "INTEGER"
+        id_type = (
+            "SERIAL PRIMARY KEY"
+            if isinstance(self._backend, PostgreSQLBackend)
+            else "INTEGER PRIMARY KEY AUTOINCREMENT"
+        )
         sql = f"""
             CREATE TABLE IF NOT EXISTS {self.ROLLBACK_HISTORY_TABLE} (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id {id_type},
                 version {version_type} NOT NULL,
                 name TEXT NOT NULL,
                 rolled_back_at TIMESTAMP NOT NULL,
@@ -269,7 +287,7 @@ class MigrationRunner:
         """
         try:
             self._backend.execute_write(sql)
-        except (sqlite3.Error, OSError, RuntimeError, ValueError) as e:
+        except DATABASE_ERRORS + (OSError, RuntimeError, ValueError) as e:
             # Non-fatal: rollback history is optional audit functionality
             logger.debug("Could not create rollback history table: %s", e)
 
@@ -287,7 +305,8 @@ class MigrationRunner:
         """
         try:
             self._backend.execute_write(
-                f"INSERT INTO {self.ROLLBACK_HISTORY_TABLE} "  # noqa: S608 -- table name interpolation, parameterized
+                # table name interpolation, parameterized
+                f"INSERT INTO {self.ROLLBACK_HISTORY_TABLE} "
                 "(version, name, rolled_back_at, rolled_back_by, reason) "
                 "VALUES (?, ?, ?, ?, ?)",
                 (
@@ -298,7 +317,7 @@ class MigrationRunner:
                     reason,
                 ),
             )
-        except (sqlite3.Error, OSError, RuntimeError, ValueError) as e:
+        except DATABASE_ERRORS + (OSError, RuntimeError, ValueError) as e:
             # Non-fatal: don't let history tracking failures block rollback
             logger.warning("Failed to record rollback history for v%s: %s", migration.version, e)
 
@@ -384,7 +403,8 @@ class MigrationRunner:
 
     def get_applied_versions(self) -> set[int]:
         """Get set of applied migration versions."""
-        rows = self._backend.fetch_all(f"SELECT version FROM {self.MIGRATIONS_TABLE}")  # noqa: S608 -- table name interpolation, parameterized
+        # table name interpolation, parameterized
+        rows = self._backend.fetch_all(f"SELECT version FROM {self.MIGRATIONS_TABLE}")
         return {row[0] for row in rows}
 
     def get_pending_migrations(self) -> list[Migration]:
@@ -406,10 +426,16 @@ class MigrationRunner:
             if migration.version in applied_versions:
                 current_checksum = migration.compute_checksum()
                 row = self._backend.fetch_one(
-                    f"SELECT checksum FROM {self.MIGRATIONS_TABLE} WHERE version = ?",  # noqa: S608 -- table name interpolation, parameterized
+                    # table name interpolation, parameterized
+                    f"SELECT checksum FROM {self.MIGRATIONS_TABLE} WHERE version = ?",
                     (migration.version,),
                 )
-                if row and row[0] and row[0] != current_checksum:
+                if (
+                    row
+                    and row[0]
+                    and row[0] != current_checksum
+                    and row[0] not in migration.previous_checksums
+                ):
                     mismatches.append((migration.version, row[0], current_checksum))
 
         return mismatches
@@ -428,7 +454,8 @@ class MigrationRunner:
             Rollback SQL if stored, None otherwise.
         """
         row = self._backend.fetch_one(
-            f"SELECT rollback_sql FROM {self.MIGRATIONS_TABLE} WHERE version = ?",  # noqa: S608 -- table name interpolation, parameterized
+            # table name interpolation, parameterized
+            f"SELECT rollback_sql FROM {self.MIGRATIONS_TABLE} WHERE version = ?",
             (version,),
         )
         return row[0] if row else None
@@ -513,7 +540,8 @@ class MigrationRunner:
 
                     # Record migration with full metadata
                     self._backend.execute_write(
-                        f"INSERT INTO {self.MIGRATIONS_TABLE} "  # noqa: S608 -- table name interpolation, parameterized
+                        # table name interpolation, parameterized
+                        f"INSERT INTO {self.MIGRATIONS_TABLE} "
                         "(version, name, applied_by, checksum, rollback_sql) "
                         "VALUES (?, ?, ?, ?, ?)",
                         (migration.version, migration.name, applied_by, checksum, rollback_sql),
@@ -521,7 +549,7 @@ class MigrationRunner:
                     applied.append(migration)
                     logger.info("Applied migration %s", migration.version)
 
-                except (RuntimeError, OSError, ValueError) as e:
+                except DATABASE_ERRORS + (RuntimeError, OSError, ValueError) as e:
                     logger.error("Failed to apply migration %s: %s", migration.version, e)
                     raise
         finally:
@@ -634,7 +662,8 @@ class MigrationRunner:
 
                     # Remove migration record
                     self._backend.execute_write(
-                        f"DELETE FROM {self.MIGRATIONS_TABLE} WHERE version = ?",  # noqa: S608 -- table name interpolation, parameterized
+                        # table name interpolation, parameterized
+                        f"DELETE FROM {self.MIGRATIONS_TABLE} WHERE version = ?",
                         (migration.version,),
                     )
                     # Record in rollback history
@@ -642,7 +671,7 @@ class MigrationRunner:
                     rolled_back.append(migration)
                     logger.info("Rolled back migration %s", migration.version)
 
-                except (RuntimeError, OSError, ValueError) as e:
+                except DATABASE_ERRORS + (RuntimeError, OSError, ValueError) as e:
                     logger.error("Failed to rollback migration %s: %s", migration.version, e)
                     raise
         finally:
@@ -824,7 +853,8 @@ class MigrationRunner:
         """
         try:
             rows = self._backend.fetch_all(
-                f"SELECT id, version, name, rolled_back_at, rolled_back_by, reason "  # noqa: S608 -- internal query construction
+                # internal query construction
+                f"SELECT id, version, name, rolled_back_at, rolled_back_by, reason "
                 f"FROM {self.ROLLBACK_HISTORY_TABLE} ORDER BY id DESC"
             )
             return [

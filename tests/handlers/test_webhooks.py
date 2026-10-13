@@ -21,7 +21,7 @@ class TestWebhookSignature:
 
     def test_generate_signature(self):
         """Test HMAC-SHA256 signature generation."""
-        from aragora.server.handlers.webhooks import generate_signature
+        from aragora.server.handlers.webhook_management import generate_signature
 
         payload = '{"event": "test", "data": {}}'
         secret = "test_secret_key"
@@ -33,7 +33,7 @@ class TestWebhookSignature:
 
     def test_generate_signature_deterministic(self):
         """Test signature is deterministic."""
-        from aragora.server.handlers.webhooks import generate_signature
+        from aragora.server.handlers.webhook_management import generate_signature
 
         payload = '{"event": "test"}'
         secret = "secret"
@@ -45,7 +45,7 @@ class TestWebhookSignature:
 
     def test_generate_signature_different_secrets(self):
         """Test different secrets produce different signatures."""
-        from aragora.server.handlers.webhooks import generate_signature
+        from aragora.server.handlers.webhook_management import generate_signature
 
         payload = '{"event": "test"}'
 
@@ -56,7 +56,7 @@ class TestWebhookSignature:
 
     def test_verify_signature_valid(self):
         """Test valid signature verification."""
-        from aragora.server.handlers.webhooks import (
+        from aragora.server.handlers.webhook_management import (
             generate_signature,
             verify_signature,
         )
@@ -69,7 +69,7 @@ class TestWebhookSignature:
 
     def test_verify_signature_invalid(self):
         """Test invalid signature verification."""
-        from aragora.server.handlers.webhooks import verify_signature
+        from aragora.server.handlers.webhook_management import verify_signature
 
         payload = '{"event": "test"}'
         secret = "my_secret"
@@ -79,7 +79,7 @@ class TestWebhookSignature:
 
     def test_verify_signature_wrong_secret(self):
         """Test signature with wrong secret fails."""
-        from aragora.server.handlers.webhooks import (
+        from aragora.server.handlers.webhook_management import (
             generate_signature,
             verify_signature,
         )
@@ -101,7 +101,7 @@ class TestWebhookHandler:
     @pytest.fixture
     def handler(self, mock_context):
         """Create WebhookHandler instance."""
-        from aragora.server.handlers.webhooks import WebhookHandler
+        from aragora.server.handlers.webhook_management import WebhookHandler
 
         return WebhookHandler(mock_context)
 
@@ -112,7 +112,7 @@ class TestWebhookHandler:
 
     def test_can_handle_webhooks_path(self):
         """Test can_handle for webhook paths."""
-        from aragora.server.handlers.webhooks import WebhookHandler
+        from aragora.server.handlers.webhook_management import WebhookHandler
 
         assert WebhookHandler.can_handle("/api/v1/webhooks") is True
         assert WebhookHandler.can_handle("/api/v1/webhooks/123") is True
@@ -126,7 +126,7 @@ class TestWebhookHandlerListEvents:
     @pytest.fixture
     def handler(self):
         """Create WebhookHandler instance."""
-        from aragora.server.handlers.webhooks import WebhookHandler
+        from aragora.server.handlers.webhook_management import WebhookHandler
 
         return WebhookHandler({})
 
@@ -157,7 +157,7 @@ class TestWebhookHandlerListWebhooks:
     @pytest.fixture
     def handler(self, mock_store):
         """Create WebhookHandler with mock store."""
-        from aragora.server.handlers.webhooks import WebhookHandler
+        from aragora.server.handlers.webhook_management import WebhookHandler
 
         ctx = {"webhook_store": mock_store}
         return WebhookHandler(ctx)
@@ -226,7 +226,7 @@ class TestWebhookHandlerGetWebhook:
     @pytest.fixture
     def handler(self, mock_store):
         """Create WebhookHandler with mock store."""
-        from aragora.server.handlers.webhooks import WebhookHandler
+        from aragora.server.handlers.webhook_management import WebhookHandler
 
         ctx = {"webhook_store": mock_store}
         return WebhookHandler(ctx)
@@ -310,7 +310,7 @@ class TestWebhookHandlerRegister:
     @pytest.fixture
     def handler(self, mock_store):
         """Create WebhookHandler with mock store."""
-        from aragora.server.handlers.webhooks import WebhookHandler
+        from aragora.server.handlers.webhook_management import WebhookHandler
 
         ctx = {"webhook_store": mock_store}
         h = WebhookHandler(ctx)
@@ -356,7 +356,7 @@ class TestWebhookHandlerRegister:
         handler.get_current_user = MagicMock(return_value=None)
 
         with patch(
-            "aragora.server.handlers.webhooks.validate_webhook_url",
+            "aragora.server.handlers.webhook_management.validate_webhook_url",
             return_value=(True, None),
         ):
             result = handler._handle_register_webhook(
@@ -383,7 +383,7 @@ class TestWebhookHandlerDelete:
     @pytest.fixture
     def handler(self, mock_store):
         """Create WebhookHandler with mock store."""
-        from aragora.server.handlers.webhooks import WebhookHandler
+        from aragora.server.handlers.webhook_management import WebhookHandler
 
         ctx = {"webhook_store": mock_store}
         h = WebhookHandler(ctx)
@@ -450,7 +450,7 @@ class TestWebhookHandlerUpdate:
     @pytest.fixture
     def handler(self, mock_store):
         """Create WebhookHandler with mock store."""
-        from aragora.server.handlers.webhooks import WebhookHandler
+        from aragora.server.handlers.webhook_management import WebhookHandler
 
         ctx = {"webhook_store": mock_store}
         h = WebhookHandler(ctx)
@@ -488,7 +488,7 @@ class TestWebhookHandlerUpdate:
         mock_store.get.return_value = webhook
 
         with patch(
-            "aragora.server.handlers.webhooks.validate_webhook_url",
+            "aragora.server.handlers.webhook_management.validate_webhook_url",
             return_value=(True, None),
         ):
             result = handler._handle_update_webhook(
@@ -533,7 +533,7 @@ class TestWebhookHandlerTest:
     @pytest.fixture
     def handler(self, mock_store):
         """Create WebhookHandler with mock store."""
-        from aragora.server.handlers.webhooks import WebhookHandler
+        from aragora.server.handlers.webhook_management import WebhookHandler
 
         ctx = {"webhook_store": mock_store}
         h = WebhookHandler(ctx)
@@ -608,7 +608,7 @@ class TestWebhookHandlerSLO:
     @pytest.fixture
     def handler(self):
         """Create WebhookHandler instance."""
-        from aragora.server.handlers.webhooks import WebhookHandler
+        from aragora.server.handlers.webhook_management import WebhookHandler
 
         return WebhookHandler({})
 
@@ -656,7 +656,7 @@ class TestWebhookHandlerRouting:
     @pytest.fixture
     def handler(self):
         """Create WebhookHandler instance."""
-        from aragora.server.handlers.webhooks import WebhookHandler
+        from aragora.server.handlers.webhook_management import WebhookHandler
 
         h = WebhookHandler({})
         h.get_current_user = MagicMock(return_value=None)

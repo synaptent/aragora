@@ -559,7 +559,10 @@ class TestRegistration:
         from aragora.server.handlers._lazy_imports import HANDLER_MODULES
 
         assert "ReadinessCheckHandler" in HANDLER_MODULES
-        assert HANDLER_MODULES["ReadinessCheckHandler"] == "aragora.server.handlers.readiness_check"
+        assert (
+            HANDLER_MODULES["ReadinessCheckHandler"]
+            == "aragora.server.handlers.sme.readiness_check"
+        )
 
     def test_in_all_handler_names(self) -> None:
         from aragora.server.handlers._lazy_imports import ALL_HANDLER_NAMES

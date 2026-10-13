@@ -1075,7 +1075,7 @@ Preserve all existing functionality while fixing the issue."""
         try:
             validated_path = _validate_file_path(file_path, self.repo_path)
             cmd_parts = _validate_tool_command(self.config.lint_command)
-            result = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
+            result = subprocess.run(  # subprocess with fixed args, no shell
                 [*cmd_parts, validated_path],
                 shell=False,
                 cwd=self.repo_path,
@@ -1095,7 +1095,7 @@ Preserve all existing functionality while fixing the issue."""
         try:
             validated_path = _validate_file_path(file_path, self.repo_path)
             cmd_parts = _validate_tool_command(self.config.typecheck_command)
-            result = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
+            result = subprocess.run(  # subprocess with fixed args, no shell
                 [*cmd_parts, validated_path],
                 shell=False,
                 cwd=self.repo_path,
@@ -1120,7 +1120,7 @@ Preserve all existing functionality while fixing the issue."""
 
         try:
             cmd_parts = _validate_tool_command(self.config.test_command)
-            result = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
+            result = subprocess.run(  # subprocess with fixed args, no shell
                 [*cmd_parts, "-x", "-q"],
                 shell=False,
                 cwd=self.repo_path,
@@ -1139,7 +1139,7 @@ Preserve all existing functionality while fixing the issue."""
         """Run full test suite."""
         try:
             cmd_parts = _validate_tool_command(self.config.test_command)
-            result = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
+            result = subprocess.run(  # subprocess with fixed args, no shell
                 [*cmd_parts, "-x", "-q"],
                 shell=False,
                 cwd=self.repo_path,

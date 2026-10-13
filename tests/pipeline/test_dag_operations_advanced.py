@@ -74,7 +74,7 @@ class TestDebateAssignment:
         mock_agent = MagicMock()
 
         monkeypatch.setattr("aragora.core.Environment", MagicMock)
-        monkeypatch.setattr("aragora.debate.protocol.DebateProtocol", MagicMock)
+        monkeypatch.setattr("aragora.protocols.debate.DebateProtocol", MagicMock)
         monkeypatch.setattr("aragora.debate.orchestrator.Arena", mock_arena_cls)
         monkeypatch.setattr(
             "aragora.agents.create_agent",
@@ -109,7 +109,7 @@ class TestDebateAssignment:
         coord = DAGOperationsCoordinator(graph)
 
         monkeypatch.setattr("aragora.core.Environment", MagicMock)
-        monkeypatch.setattr("aragora.debate.protocol.DebateProtocol", MagicMock)
+        monkeypatch.setattr("aragora.protocols.debate.DebateProtocol", MagicMock)
         monkeypatch.setattr("aragora.debate.orchestrator.Arena", MagicMock)
         monkeypatch.setattr(
             "aragora.agents.create_agent",
@@ -157,7 +157,7 @@ class TestDebateAssignment:
         mock_arena_instance.run = AsyncMock(return_value=mock_result)
 
         monkeypatch.setattr("aragora.core.Environment", MagicMock)
-        monkeypatch.setattr("aragora.debate.protocol.DebateProtocol", MagicMock)
+        monkeypatch.setattr("aragora.protocols.debate.DebateProtocol", MagicMock)
         monkeypatch.setattr(
             "aragora.debate.orchestrator.Arena", MagicMock(return_value=mock_arena_instance)
         )
@@ -182,7 +182,7 @@ class TestDebateAssignment:
         mock_arena_instance.run = AsyncMock(return_value=mock_result)
 
         monkeypatch.setattr("aragora.core.Environment", MagicMock)
-        monkeypatch.setattr("aragora.debate.protocol.DebateProtocol", MagicMock)
+        monkeypatch.setattr("aragora.protocols.debate.DebateProtocol", MagicMock)
         monkeypatch.setattr(
             "aragora.debate.orchestrator.Arena", MagicMock(return_value=mock_arena_instance)
         )
@@ -233,7 +233,7 @@ class TestDebateAssignment:
         mock_arena_instance.run = AsyncMock(side_effect=RuntimeError("debate crashed"))
 
         monkeypatch.setattr("aragora.core.Environment", MagicMock)
-        monkeypatch.setattr("aragora.debate.protocol.DebateProtocol", MagicMock)
+        monkeypatch.setattr("aragora.protocols.debate.DebateProtocol", MagicMock)
         monkeypatch.setattr(
             "aragora.debate.orchestrator.Arena", MagicMock(return_value=mock_arena_instance)
         )

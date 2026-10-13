@@ -109,7 +109,11 @@ interface ReplaysClientInterface {
   request<T>(
     method: string,
     path: string,
-    options?: { params?: Record<string, unknown>; json?: Record<string, unknown> }
+    options?: {
+      params?: Record<string, unknown>;
+      json?: Record<string, unknown>;
+      responseType?: 'json' | 'text';
+    }
   ): Promise<T>;
 }
 
@@ -188,7 +192,7 @@ export class ReplaysAPI {
    * Get HTML visualization of the replay.
    */
   async getHtml(replayId: string): Promise<string> {
-    return this.client.request('GET', `/api/replays/${replayId}/html`);
+    return this.client.request('GET', `/api/replays/${replayId}/html`, { responseType: 'text' });
   }
 
   /**
@@ -207,63 +211,10 @@ export class ReplaysAPI {
   }
 
   /**
-   * List forks created from a replay.
-   */
-  async listForks(replayId: string): Promise<{ forks: ReplayFork[] }> {
-    return this.client.request('GET', `/api/replays/${replayId}/forks`);
-  }
-
-  /**
    * Delete a replay (admin only).
    */
   async delete(replayId: string): Promise<{ success: boolean }> {
     return this.client.request('DELETE', `/api/replays/${replayId}`);
-  }
-
-  /**
-   * Get the replay for a specific debate.
-   *
-   * @deprecated Not served: no handler dispatches
-   * GET /api/debates/{id}/replay — the request falls through to
-   * DebatesHandler's slug lookup and returns 404. Replays are keyed by replay
-   * ID, not debate ID: use {@link list} to find the replay and {@link get}
-   * (documented GET /api/replays/{id}) to fetch it.
-   */
-  async getFromDebate(debateId: string): Promise<Replay> {
-    return this.client.request('GET', `/api/debates/${debateId}/replay`);
-  }
-
-  /**
-   * Export a replay in a specific format.
-   */
-  async export(
-    replayId: string,
-    options?: {
-      format?: 'json' | 'markdown' | 'html';
-    }
-  ): Promise<{ data: string; format: string; download_url?: string }> {
-    return this.client.request('GET', `/api/replays/${replayId}/export`, { params: options });
-  }
-
-  /**
-   * Get replay summary with key moments.
-   */
-  async getSummary(replayId: string): Promise<{
-    replay_id: string;
-    task: string;
-    total_rounds: number;
-    total_events: number;
-    duration_ms: number;
-    result: string;
-    key_moments: Array<{
-      event_id: string;
-      type: string;
-      description: string;
-      timestamp: number;
-    }>;
-    agent_participation: Record<string, { proposals: number; critiques: number; votes: number }>;
-  }> {
-    return this.client.request('GET', `/api/replays/${replayId}/summary`);
   }
 
   /**

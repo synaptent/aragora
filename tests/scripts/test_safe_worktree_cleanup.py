@@ -197,6 +197,77 @@ def test_status_timeout_blocks_cleanup_as_dirty(
     assert mod._worktree_is_dirty(worktree) is True
 
 
+@pytest.mark.parametrize(
+    ("returncode", "stdout", "dirty"),
+    [(0, "", False), (0, "?? untracked.txt\n", True), (1, "", True), (128, "", True)],
+)
+def test_status_result_requires_successful_clean_inspection(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    returncode: int,
+    stdout: str,
+    dirty: bool,
+) -> None:
+    import safe_worktree_cleanup as mod
+
+    def fake_run(cmd, **kwargs):
+        assert cmd == ["git", "status", "--porcelain", "--untracked-files=all"]
+        assert kwargs["cwd"] == tmp_path
+        return subprocess.CompletedProcess(cmd, returncode, stdout, "fatal" if returncode else "")
+
+    monkeypatch.setattr(mod.subprocess, "run", fake_run)
+    assert mod._worktree_is_dirty(tmp_path) is dirty
+
+
+@pytest.mark.parametrize("error", [FileNotFoundError("git missing"), PermissionError("denied")])
+def test_status_launch_failure_blocks_cleanup_as_dirty(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, error: OSError
+) -> None:
+    import safe_worktree_cleanup as mod
+
+    def fake_run(*args, **kwargs):
+        raise error
+
+    monkeypatch.setattr(mod.subprocess, "run", fake_run)
+    assert mod._worktree_is_dirty(tmp_path) is True
+
+
+def test_corrupt_index_blocks_real_worktree_inspection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import safe_worktree_cleanup as mod
+
+    subprocess.run(["git", "init", "--quiet", str(tmp_path)], check=True)
+    (tmp_path / ".git" / "index").write_bytes(b"invalid index")
+    status = subprocess.run(["git", "status", "--short"], cwd=tmp_path, capture_output=True)
+    assert status.returncode != 0
+    assert mod._worktree_is_dirty(tmp_path) is True
+
+    monkeypatch.setattr(
+        mod,
+        "_get_worktree_entry",
+        lambda *_args: mod.autopilot.WorktreeEntry(tmp_path, "codex/test"),
+    )
+    monkeypatch.setattr(mod.autopilot, "_has_active_session", lambda _path: False)
+    monkeypatch.setattr(mod, "_unique_commits_ahead_of_main", lambda *_args: (0, False))
+    monkeypatch.setattr(mod, "_lookup_open_prs", lambda *_args: ([], False))
+    inspection = mod.inspect_worktree(tmp_path, tmp_path)
+    assert inspection.dirty is True
+    assert "dirty_worktree" in inspection.blockers
+    assert mod.cleanup_safety(inspection)["removable"] is False
+
+
+def test_status_detects_untracked_files_despite_local_git_config(tmp_path: Path) -> None:
+    import safe_worktree_cleanup as mod
+
+    subprocess.run(["git", "init", "--quiet", str(tmp_path)], check=True)
+    subprocess.run(
+        ["git", "config", "--local", "status.showUntrackedFiles", "no"], cwd=tmp_path, check=True
+    )
+    (tmp_path / "recoverable.txt").write_text("local work\n")
+    assert mod._worktree_is_dirty(tmp_path) is True
+
+
 def test_remove_purges_residual_path_after_failed_git_remove(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -604,6 +675,88 @@ def test_cmd_remove_reports_failed_git_remove_even_after_path_purge(
     assert payload["path_purged"] is True
     assert payload["removed"] is False
     assert payload["branch_deleted"] is False
+
+
+def test_cmd_remove_force_bypassing_blockers_exits_zero_when_removed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import safe_worktree_cleanup as mod
+
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    worktree = tmp_path / "ahead-wt"
+    worktree.mkdir()
+    (worktree / "leftover.txt").write_text("residue\n")
+
+    blockers = [
+        "branch_ahead_of_origin_main",
+        "patch_equivalence_lookup_failed",
+        "pr_lookup_failed",
+    ]
+    inspection = mod.WorktreeInspection(
+        path=str(worktree),
+        exists=True,
+        tracked_worktree=True,
+        branch="codex/test",
+        active_session=False,
+        lock_files=[],
+        dirty=False,
+        unique_commits_ahead=1,
+        ahead_lookup_failed=False,
+        patch_equivalent_to_origin_main=False,
+        patch_equivalence_lookup_failed=True,
+        open_prs=[],
+        pr_lookup_failed=True,
+        blockers=list(blockers),
+    )
+
+    def fake_run(*args, **kwargs):
+        return subprocess.CompletedProcess(args=args[0], returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(mod, "inspect_worktree", lambda *_args, **_kwargs: inspection)
+    monkeypatch.setattr(mod.autopilot, "_repo_root_from", lambda _path: repo_root)
+    monkeypatch.setattr(mod.subprocess, "run", fake_run)
+
+    args = argparse.Namespace(
+        repo=".",
+        path=str(worktree),
+        branch=None,
+        delete_branch=False,
+        purge_path=True,
+        force=True,
+        json=True,
+    )
+
+    rc = mod.cmd_remove(args)
+    payload = json.loads(capsys.readouterr().out)
+
+    assert rc == 0
+    assert payload["status"] == "removed"
+    assert payload["removed"] is True
+    assert payload["git_worktree_removed"] is True
+    assert payload["path_purged"] is True
+    assert payload["blockers"] == blockers
+    assert not worktree.exists()
+
+
+@pytest.mark.parametrize("command", ["remove", "inspect"])
+def test_subcommand_help_documents_exit_status(
+    command: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import safe_worktree_cleanup as mod
+
+    with pytest.raises(SystemExit) as excinfo:
+        mod.main([command, "--help"])
+    assert excinfo.value.code == 0
+    help_text = " ".join(capsys.readouterr().out.split())
+
+    assert "exit status:" in help_text
+    assert "0 " in help_text
+    assert "1 " in help_text
+    if command == "remove":
+        assert "--force" in help_text.split("exit status:", 1)[1]
+        for status in sorted(mod.REMOVE_FAILURE_STATUSES):
+            assert status in help_text
 
 
 def test_cmd_remove_returns_nonzero_for_tracked_residue_purge_incomplete(

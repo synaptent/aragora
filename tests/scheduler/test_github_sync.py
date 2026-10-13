@@ -66,7 +66,7 @@ class TestGitHubSecretsSyncBackend:
 
         with (
             patch(
-                "aragora.server.http_client_pool.get_http_pool",
+                "aragora.observability.http_client_pool.get_http_pool",
                 return_value=mock_pool,
             ),
             patch.object(
@@ -104,7 +104,7 @@ class TestGitHubSecretsSyncBackend:
         )
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=mock_pool,
         ):
             result = await backend.sync_secret("TEST_KEY", "value")
@@ -135,7 +135,7 @@ class TestGitHubSecretsSyncBackend:
         )
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=mock_pool,
         ):
             result = await backend.sync_secret("TEST_KEY", "value")
@@ -165,7 +165,7 @@ class TestGitHubSecretsSyncBackend:
         )
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=mock_pool,
         ):
             key_id, key = await backend.get_public_key()

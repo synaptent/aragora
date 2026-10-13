@@ -597,7 +597,7 @@ class PostgresDebateStorage(PostgresStore):
             return {}
 
         # Initialize result with None for all requested IDs
-        result: dict[str, dict | None] = {did: None for did in debate_ids}
+        result: dict[str, dict | None] = dict.fromkeys(debate_ids)
 
         async with self.connection() as conn:
             rows = await conn.fetch(

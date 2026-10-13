@@ -1139,12 +1139,16 @@ class TestHandleConfigEndpoint:
             assert _status(result) == 400
 
     def test_config_name_with_dots(self, handler):
-        """Rejects config names with dots."""
+        """Accepts dotted model-version names (#9994); rejects a leading dot and slashes."""
         with patch(
             "aragora.server.handlers.agents.config.get_config_loader",
             return_value=MagicMock(),
         ):
-            result = handler._handle_config_endpoint("/api/agents/configs/my.agent", {})
+            result = handler._handle_config_endpoint("/api/agents/configs/gemini-3.1-pro", {})
+            assert _status(result) == 200
+            result = handler._handle_config_endpoint("/api/agents/configs/.my-agent", {})
+            assert _status(result) == 400
+            result = handler._handle_config_endpoint("/api/agents/configs/..", {})
             assert _status(result) == 400
 
     def test_config_name_with_spaces(self, handler):

@@ -183,8 +183,12 @@ class TestHandlerInit:
         assert h._checkpoint_store is None
 
     def test_routes_defined(self, handler):
-        assert "/api/v1/km/checkpoints" in handler.routes
-        assert "/api/v1/km/checkpoints/compare" in handler.routes
+        # Uppercase ROUTES: the registry route index and BaseHandler.can_handle
+        # only read ROUTES; lowercase routes left this handler undispatchable.
+        # The bare /api/v1/km/checkpoints path stays owned (first-wins) by
+        # KnowledgeMoundHandler — only compare is claimed here.
+        assert "/api/v1/km/checkpoints/compare" in handler.ROUTES
+        assert "/api/v1/km/checkpoints" not in handler.ROUTES
 
     def test_dynamic_routes_defined(self, handler):
         assert "/api/v1/km/checkpoints/{name}" in handler.dynamic_routes

@@ -82,7 +82,10 @@ def test_cli_json_output_is_machine_readable(tmp_path: Path, capsys) -> None:
         "odr_digest",
         "checks",
         "warnings",
+        "dissent_trail",
+        "key_id",
     }
+    assert payload["dissent_trail"] == [] and payload["key_id"] is None
     assert payload["ok"] is True
     assert isinstance(payload["authenticity_unverified"], bool)
     assert payload["authenticity_unverified"] is False

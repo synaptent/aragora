@@ -41,7 +41,8 @@ def _register_embedding_provider(provider: "EmbeddingProvider") -> None:
     _embedding_provider_ref = provider
 
     try:
-        from aragora.services import EmbeddingProviderService, ServiceRegistry
+        from aragora.embeddings.service_markers import EmbeddingProviderService
+        from aragora.runtime.service_registry import ServiceRegistry
 
         registry = ServiceRegistry.get()
         registry.register(EmbeddingProviderService, provider)
@@ -56,7 +57,8 @@ def get_embedding_provider() -> Optional["EmbeddingProvider"]:
 
     # Try ServiceRegistry first
     try:
-        from aragora.services import EmbeddingProviderService, ServiceRegistry
+        from aragora.embeddings.service_markers import EmbeddingProviderService
+        from aragora.runtime.service_registry import ServiceRegistry
 
         registry = ServiceRegistry.get()
         if registry.has(EmbeddingProviderService):

@@ -12,6 +12,8 @@ if TYPE_CHECKING:
     from ..client import AragoraAsyncClient, AragoraClient
     from ..pagination import AsyncPaginator, SyncPaginator
 
+_List = list  # Preserve builtin list for type annotations
+
 
 class AgentsAPI:
     """
@@ -262,12 +264,8 @@ class AgentsAPI:
         return self._client.request("GET", "/api/agents/local/status")
 
     # =========================================================================
-    # Calibration, ELO & Quotas
+    # ELO
     # =========================================================================
-
-    def calibrate(self, name: str, options: dict[str, Any] | None = None) -> dict[str, Any]:
-        """Trigger calibration for an agent."""
-        return self._client.request("POST", f"/api/v1/agents/{name}/calibrate", json=options or {})
 
     def get_elo(self, name: str) -> dict[str, Any]:
         """Get agent's current ELO rating."""
@@ -279,14 +277,6 @@ class AgentsAPI:
         if reason:
             body["reason"] = reason
         return self._client.request("PUT", f"/api/v1/agents/{name}/elo", json=body)
-
-    def get_quota(self, name: str) -> dict[str, Any]:
-        """Get agent's usage quota."""
-        return self._client.request("GET", f"/api/v1/agents/{name}/quota")
-
-    def set_quota(self, name: str, limits: dict[str, Any]) -> dict[str, Any]:
-        """Set agent's usage quota limits."""
-        return self._client.request("PUT", f"/api/v1/agents/{name}/quota", json=limits)
 
     # =========================================================================
     # Agent Details
@@ -401,54 +391,13 @@ class AgentsAPI:
         return self._client.request("GET", f"/api/agents/{agent_id}/feedback/domains")
 
     # =========================================================================
-    # Agent Statistics
-    # =========================================================================
-
-    def get_stats(self) -> dict[str, Any]:
-        """
-        Get aggregate agent statistics.
-
-        Returns:
-            Dict with overall agent statistics (counts, averages, etc.)
-        """
-        return self._client.request("GET", "/api/v1/agents/stats")
-
-    # =========================================================================
     # Agent Lifecycle
     # =========================================================================
-
-    def enable(self, name: str) -> dict[str, Any]:
-        """
-        Enable an agent.
-
-        Args:
-            name: Agent name or identifier.
-
-        Returns:
-            Dict confirming the agent has been enabled.
-        """
-        return self._client.request("POST", f"/api/v1/agents/{name}/enable")
-
-    def disable(self, name: str, reason: str | None = None) -> dict[str, Any]:
-        """
-        Disable an agent.
-
-        Args:
-            name: Agent name or identifier.
-            reason: Optional reason for disabling.
-
-        Returns:
-            Dict confirming the agent has been disabled.
-        """
-        body: dict[str, Any] = {}
-        if reason:
-            body["reason"] = reason
-        return self._client.request("POST", f"/api/v1/agents/{name}/disable", json=body or None)
 
     def register(
         self,
         agent_id: str,
-        capabilities: list[str] | None = None,
+        capabilities: _List[str] | None = None,
         model: str | None = None,
         provider: str | None = None,
         metadata: dict[str, Any] | None = None,
@@ -696,14 +645,8 @@ class AsyncAgentsAPI:
         return await self._client.request("GET", "/api/agents/local/status")
 
     # =========================================================================
-    # Calibration, ELO & Quotas
+    # ELO
     # =========================================================================
-
-    async def calibrate(self, name: str, options: dict[str, Any] | None = None) -> dict[str, Any]:
-        """Trigger calibration for an agent."""
-        return await self._client.request(
-            "POST", f"/api/v1/agents/{name}/calibrate", json=options or {}
-        )
 
     async def get_elo(self, name: str) -> dict[str, Any]:
         """Get agent's current ELO rating."""
@@ -717,14 +660,6 @@ class AsyncAgentsAPI:
         if reason:
             body["reason"] = reason
         return await self._client.request("PUT", f"/api/v1/agents/{name}/elo", json=body)
-
-    async def get_quota(self, name: str) -> dict[str, Any]:
-        """Get agent's usage quota."""
-        return await self._client.request("GET", f"/api/v1/agents/{name}/quota")
-
-    async def set_quota(self, name: str, limits: dict[str, Any]) -> dict[str, Any]:
-        """Set agent's usage quota limits."""
-        return await self._client.request("PUT", f"/api/v1/agents/{name}/quota", json=limits)
 
     # =========================================================================
     # Agent Details
@@ -825,34 +760,13 @@ class AsyncAgentsAPI:
         return await self._client.request("GET", f"/api/agents/{agent_id}/feedback/domains")
 
     # =========================================================================
-    # Agent Statistics
-    # =========================================================================
-
-    async def get_stats(self) -> dict[str, Any]:
-        """Get aggregate agent statistics."""
-        return await self._client.request("GET", "/api/v1/agents/stats")
-
-    # =========================================================================
     # Agent Lifecycle
     # =========================================================================
-
-    async def enable(self, name: str) -> dict[str, Any]:
-        """Enable an agent."""
-        return await self._client.request("POST", f"/api/v1/agents/{name}/enable")
-
-    async def disable(self, name: str, reason: str | None = None) -> dict[str, Any]:
-        """Disable an agent with optional reason."""
-        body: dict[str, Any] = {}
-        if reason:
-            body["reason"] = reason
-        return await self._client.request(
-            "POST", f"/api/v1/agents/{name}/disable", json=body or None
-        )
 
     async def register(
         self,
         agent_id: str,
-        capabilities: list[str] | None = None,
+        capabilities: _List[str] | None = None,
         model: str | None = None,
         provider: str | None = None,
         metadata: dict[str, Any] | None = None,

@@ -924,7 +924,7 @@ class CodeReviewOrchestrator:
 
         try:
             from aragora.debate.orchestrator import Arena
-            from aragora.debate.protocol import DebateProtocol
+            from aragora.protocols.debate import DebateProtocol
             from aragora.core import Environment
 
             findings_text = "\n".join(

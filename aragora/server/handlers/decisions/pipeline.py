@@ -32,7 +32,7 @@ from aragora.pipeline.backbone_errors import (
 from aragora.pipeline.decision_plan.factory import normalize_execution_mode
 from aragora.pipeline.execution_mode import ExecutionMode as SafetyMode
 from aragora.resilience import get_circuit_breaker
-from aragora.server.decision_integrity_utils import (
+from aragora.pipeline.decision_integrity_utils import (
     ensure_decision_plan_backbone_run,
     execute_decision_plan_with_backbone,
     sync_decision_plan_backbone_receipt,

@@ -46,7 +46,7 @@ class DesignConfig:
     early_stopping: bool = True
     early_stop_threshold: float = 0.66
     min_rounds_before_early_stop: int = 1
-    protected_files: list[str] = None
+    protected_files: list[str] | None = None
     # Task decomposition settings
     enable_decomposition: bool = True
     decomposition_threshold: int = 6  # Complexity score (1-10) above which to decompose
@@ -63,7 +63,7 @@ class BeliefContext:
 
     contested_count: int = 0
     crux_count: int = 0
-    posteriors: dict[str, Any] = None
+    posteriors: dict[str, Any] | None = None
     convergence_achieved: bool = False
 
     def to_string(self) -> str:
@@ -492,14 +492,16 @@ class DesignPhase:
             learning_context,
         )
 
+        environment_factory, protocol_factory, arena_factory = self._require_factories()
+
         # Create environment
-        env = self._environment_factory(
+        env = environment_factory(
             task=design_prompt,
             context=f"Working directory: {self.aragora_path}\n\nProtected files (NEVER delete): {self.config.protected_files}",
         )
 
         # Create protocol
-        protocol = self._protocol_factory(
+        protocol = protocol_factory(
             rounds=self.config.rounds,
             consensus=self.config.consensus_mode,
             judge_selection=self.config.judge_selection,
@@ -515,7 +517,7 @@ class DesignPhase:
         agent_weights = await self._probe_agents()
 
         # Create arena
-        arena = self._arena_factory(
+        arena = arena_factory(
             env,
             self.agents,
             protocol,
@@ -600,8 +602,10 @@ class DesignPhase:
                 learning_context,
             )
 
+            environment_factory, protocol_factory, arena_factory = self._require_factories()
+
             # Create environment
-            env = self._environment_factory(
+            env = environment_factory(
                 task=design_prompt,
                 context=(
                     f"Working directory: {self.aragora_path}\n\n"
@@ -610,7 +614,7 @@ class DesignPhase:
             )
 
             # Create protocol
-            protocol = self._protocol_factory(
+            protocol = protocol_factory(
                 rounds=self.config.rounds,
                 consensus=self.config.consensus_mode,
                 judge_selection=self.config.judge_selection,
@@ -624,7 +628,7 @@ class DesignPhase:
             agent_weights = await self._probe_agents()
 
             # Create arena and run
-            arena = self._arena_factory(
+            arena = arena_factory(
                 env,
                 self.agents,
                 protocol,
@@ -733,13 +737,30 @@ class DesignPhase:
 
         return header + body + footer
 
+    def _require_factories(
+        self,
+    ) -> tuple[Callable[..., Any], Callable[..., Any], Callable[..., Any]]:
+        if (
+            self._environment_factory is None
+            or self._protocol_factory is None
+            or self._arena_factory is None
+        ):
+            raise RuntimeError(
+                "DesignPhase.execute requires arena_factory, environment_factory "
+                "and protocol_factory"
+            )
+        return self._environment_factory, self._protocol_factory, self._arena_factory
+
     async def _check_deep_audit(self, improvement: str) -> dict | None:
         """Check if deep audit is needed and run it."""
+        deep_audit = self._deep_audit
+        if deep_audit is None:
+            return None
         try:
-            should_audit, reason = self._deep_audit("check", improvement, phase="design")
+            should_audit, reason = deep_audit("check", improvement, phase="design")
             if should_audit:
                 self._log(f"  [deep-audit] {reason}")
-                return await self._deep_audit("run", improvement)
+                return await deep_audit("run", improvement)
         except (RuntimeError, ValueError, OSError) as e:
             self._log(f"  [deep-audit] Check failed: {e}")
         return None
@@ -872,9 +893,12 @@ Designs missing any of these will be automatically rejected."""
 
     async def _counterfactual_resolution(self, result: Any, arena: Any) -> Any:
         """Attempt counterfactual resolution for deadlock."""
+        integration = self.nomic_integration
+        if integration is None:
+            return result
         try:
             self._log("  [deadlock] No design consensus - attempting resolution...")
-            post_analysis = await self.nomic_integration.full_post_debate_analysis(
+            post_analysis = await integration.full_post_debate_analysis(
                 result=result,
                 arena=arena,
                 claims_kernel=None,

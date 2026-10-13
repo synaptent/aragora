@@ -256,6 +256,34 @@ def advisory_dissent_settle_enabled(env: dict[str, str] | None = None) -> bool:
     )
 
 
+# Hard "never post" control for prepare-only missions. When active — via the
+# ``never_post`` kwarg (threaded from the ``--never-post`` CLI flag) or via this
+# environment variable (which also covers the ``review-queue collect-evidence``
+# path without a CLI change) — no collector run posts, so a prepare-only mission
+# no longer depends on every worker remembering to omit ``--apply``. The control
+# acts at two levels:
+# - :func:`run_collect_cli`, behind both the script and ``review-queue
+#   collect-evidence``, refuses ``apply=True`` under the control (kwarg or this
+#   variable) with a loud error before any collection work. A CLI run that
+#   passes ``--apply`` while the variable is exported therefore exits 1 with no
+#   prepared artifact; it is not downgraded to a prepare-only run.
+# - :func:`decide_action` forces ``"prepare"`` at EVERY tier, including Tier 0-2
+#   with ``apply=True``. That downgrade is reached by direct library calls of
+#   :func:`collect_evidence` / :func:`apply_prepared_evidence` and by their
+#   pre-post recheck, not by either CLI entry point.
+# The control is monotonic: an explicit ``never_post=False`` cannot switch the
+# environment variable back off.
+_NEVER_POST_ENV = "ARAGORA_EVIDENCE_NEVER_POST"
+_NEVER_POST_TRUE = frozenset(("1", "true", "yes", "on"))
+
+
+def never_post_enabled(env: dict[str, str] | None = None) -> bool:
+    """Whether the hard never-post control is active via the environment.
+    Default OFF; see :data:`_NEVER_POST_ENV`."""
+    source = os.environ if env is None else env
+    return str(source.get(_NEVER_POST_ENV, "")).strip().lower() in _NEVER_POST_TRUE
+
+
 def _coerce_relaxed_flag(value: Any) -> bool:
     """Coerce a serialized gate-regime flag (``severity_gated`` / ``tiered_gate``) to
     bool, fail-closed. A real bool passes through; a string counts as relaxed ONLY for
@@ -453,6 +481,53 @@ DEFAULT_FAMILIES: tuple[str, ...] = ("claude", "openai")
 #: ``docs/REVIEW_AUTHORITY_PRINCIPLES.md``.
 GROUNDED_TRANSPORT_FAMILIES: frozenset[str] = frozenset(("claude", "openai", "grok", "gemini"))
 
+#: Harness-label markers naming the ONLY proxy transport eligible for the
+#: conditionally-countable path (Tier-4 Decisions, 2026-08-14/15). Deliberately
+#: excludes the family APIs and OpenRouter: their ungrounded reviews remain
+#: advisory-only everywhere.
+PROXY_TRANSPORT_HARNESS_MARKERS: frozenset[str] = frozenset(("vibeproxy",))
+
+#: Canonical machine-readable value of the ``Transport grounding:`` line,
+#: emitted verbatim by :func:`compose_evidence_comment` and matched EXACTLY on
+#: both sides of the gate, so a paraphrased variant never satisfies it.
+PROXY_GROUNDING_DISCLOSURE = (
+    "prompt-embedded (bounded full diff + full-file grounding at the reviewed head)"
+)
+_REVIEWER_HARNESS_LABEL = "Reviewer harness"
+_TRANSPORT_GROUNDING_LABEL = "Transport grounding"
+
+
+def _harness_is_proxy_transport(label: str) -> bool:
+    lower = str(label or "").lower()
+    return any(marker in lower for marker in PROXY_TRANSPORT_HARNESS_MARKERS)
+
+
+def _proxy_grounding_disclosed(body: str) -> bool:
+    """Whether ``body`` carries the machine-readable proxy-transport disclosure.
+
+    Requires BOTH collector-emitted lines: ``Reviewer harness:`` naming a proxy
+    transport and ``Transport grounding:`` exactly equal to
+    :data:`PROXY_GROUNDING_DISCLOSURE`. Quoted (``> ``-prefixed) copies never
+    match, so neutralized reviewer-emitted text cannot satisfy this check.
+    """
+    harness_is_proxy = False
+    grounding_disclosed = False
+    for line in body.splitlines():
+        stripped = line.strip()
+        label, sep, value = stripped.partition(":")
+        if not sep:
+            continue
+        normalized_label = label.strip().strip("*").lower()
+        normalized_value = value.strip().strip("*").strip()
+        if normalized_label == _REVIEWER_HARNESS_LABEL.lower():
+            harness_is_proxy = harness_is_proxy or _harness_is_proxy_transport(normalized_value)
+        elif normalized_label == _TRANSPORT_GROUNDING_LABEL.lower():
+            grounding_disclosed = grounding_disclosed or (
+                normalized_value == PROXY_GROUNDING_DISCLOSURE
+            )
+    return harness_is_proxy and grounding_disclosed
+
+
 # Tiers at or above this require exact-head operator settlement; never auto-post.
 SETTLEMENT_TIER_FLOOR = 3
 
@@ -523,6 +598,19 @@ _CODEX_DEFAULT_MODEL = _CODEX_DEFAULT_MODELS[0]
 _REVIEWER_TIMEOUT_ENV = "ARAGORA_COLLECT_EVIDENCE_REVIEWER_TIMEOUT_SECONDS"
 _CODEX_OPENAI_HARNESS = "Codex CLI OpenAI harness"
 _CODEX_APPROVAL_POLICY_CONFIG = 'approval_policy="never"'
+# Opt-in pinned review: read-only argv validated on Claude Code 2.1.288 (vendor-enforced limits).
+_CLAUDE_REVIEW_CHECKOUT_ENV = "ARAGORA_CLAUDE_REVIEW_CHECKOUT"
+_CLAUDE_REVIEW_EXPECTED_HEAD_ENV = "ARAGORA_CLAUDE_REVIEW_EXPECTED_HEAD"
+_EXPECTED_HEAD_HINT = f"--claude-review-expected-head / {_CLAUDE_REVIEW_EXPECTED_HEAD_ENV}"
+_RESTRICTED_CLAUDE_ARGV = (
+    "claude -p --safe-mode --restricted --tools Read,Grep,Glob --disallowedTools "
+    "Bash,Edit,Write,NotebookEdit,WebFetch,WebSearch,Task,Agent,Skill --permission-prompts none "
+    "--disable-slash-commands --strict-mcp-config --mcp-config {mcp} --output-format stream-json "
+    "--verbose --include-hook-events"
+).split()
+_RESTRICTED_FILE_TOOLS = frozenset({"Read", "Grep", "Glob"})
+# The CLI lists this session-control tool even under --tools; it touches no files.
+_RESTRICTED_ALLOWED_TOOLS = _RESTRICTED_FILE_TOOLS | {"EndConversation"}
 _REVIEWER_CLEANUP_TIMEOUT = 10
 # Reviewers each block up to their own (timeout-guarded, process-isolated) run,
 # so running them serially made wall-time the *sum* of every reviewer's timeout
@@ -550,12 +638,26 @@ def _reviewer_infra_retries() -> int:
         return _REVIEWER_INFRA_RETRIES_DEFAULT
 
 
+def _deadline_allows_reviewer_attempt(deadline: float | None) -> bool:
+    """Whether one worst-case reviewer attempt fits before ``deadline``.
+
+    The per-reviewer timeout is the attempt's dominant upper bound (CLI runs
+    are killed at it), so an attempt started with less remaining budget would
+    overrun the orchestration deadline instead of finishing.
+    """
+    if deadline is None:
+        return True
+    remaining = deadline - time.monotonic()
+    return remaining >= _timeout_seconds(_REVIEWER_TIMEOUT_ENV, _REVIEWER_TIMEOUT)
+
+
 def _run_reviewer_with_infra_retry(
     runner: Callable[[str, str], ReviewerResult],
     family: str,
     prompt: str,
     *,
     retries: int | None = None,
+    deadline: float | None = None,
 ) -> ReviewerResult:
     """Invoke ``runner(family, prompt)``, retrying ONLY transport failures.
 
@@ -563,12 +665,55 @@ def _run_reviewer_with_infra_retry(
     ``retries`` extra attempts. A result that returned a verdict (``ok is True``)
     — pass OR changes_requested — is returned immediately and never retried, so a
     genuine dissent can never be "retried away". Counting/settlement are unchanged.
+
+    One grok-specific exception (2026-08-15 fold Decision): a grok run that
+    COMPLETED (``ok=True``, non-empty text) but carries NO verdict line at all
+    is malformed output, not a review (observed live: #9693 round 1; the
+    2026-08-14 #9752 flip), and is re-run at most ONCE. A retry that parses to
+    a real verdict (PASS or CHANGES-REQUESTED alike) is scored normally; a
+    second malformed result returns the FIRST, keeping the pre-retry
+    non-countable outcome. A body with a verdict line (even a non-canonical
+    token like ``Verdict: FAIL``) or blocking findings never reaches this
+    branch — re-rolling substantive signal could convert dissent into PASS.
+
+    The malformed re-roll is doubly bounded so it can never convert an
+    otherwise-countable round into an orchestration timeout: it draws on the
+    same operator retry budget as infra retries (a consumed or zeroed
+    ``ARAGORA_COLLECT_EVIDENCE_INFRA_RETRIES`` disables it, capping the worst
+    case at 1 + retries attempts), and when the caller supplies a ``deadline``
+    (a ``time.monotonic()`` instant) it fires only if one worst-case attempt
+    still fits before it.
+
+    The normalization computed for the re-roll decision is attached to the
+    returned result (``normalized_text``) so compose reuses it instead of
+    normalizing the same body again — with the opt-in LLM normalizer this both
+    halves the calls and guarantees the decision and the composed body saw the
+    SAME normalization.
     """
     attempts_left = _reviewer_infra_retries() if retries is None else max(0, retries)
     result = runner(family, prompt)
     while not result.ok and attempts_left > 0:
         attempts_left -= 1
         result = runner(family, prompt)
+    if result.ok and result.text.strip() and canonical_family(family) == "grok":
+        # Mirror the composed-body parse (normalize first), then require the
+        # verdict-less, finding-less stream shape: a body the composer could
+        # anchor to ANY verdict line — canonical token or not — or that carries
+        # blocking/negative findings is substantive and never re-rolled.
+        normalized = normalize_reviewer_output(result.text, family=family)
+        result.normalized_text = normalized
+        if (
+            not _has_verdict_line(normalized)
+            and not has_blocking_or_negative_verdict(normalized)
+            and attempts_left > 0
+            and _deadline_allows_reviewer_attempt(deadline)
+        ):
+            retry_result = runner(family, prompt)
+            if retry_result.ok and retry_result.text.strip():
+                retry_normalized = normalize_reviewer_output(retry_result.text, family=family)
+                retry_result.normalized_text = retry_normalized
+                if _reviewer_verdict(retry_normalized) != "unknown":
+                    return retry_result
     return result
 
 
@@ -686,6 +831,12 @@ class ReviewerResult:
     #: Ungrounded reviews stay visible but carry no authority; see
     #: :meth:`EvidenceItem.__post_init__`.
     grounded: bool = True
+    #: Canonical normalization of ``text``, attached when the malformed-verdict
+    #: re-roll decision already computed it, so compose reuses that exact
+    #: normalization instead of normalizing the same body a second time (the
+    #: opt-in LLM normalizer must run at most once per body). ``None`` means no
+    #: normalization has been computed for this result.
+    normalized_text: str | None = None
 
 
 @dataclass
@@ -702,6 +853,10 @@ class EvidenceItem:
     #: facts. Mirrors :attr:`ReviewerResult.grounded`; see the demotion in
     #: ``__post_init__`` and the veto in :attr:`dissenting`.
     grounded: bool = True
+    #: Whether prompt-embedded grounding (complete bounded diff + the opt-in
+    #: full-file section) was active for the run that produced ``body``; see
+    #: :meth:`_countable_proxy`. Fails CLOSED on artifact round-trips.
+    prompt_grounded: bool = False
     # Captured ONCE at construction (not re-read per property access) so a
     # security-relevant gate decision stays deterministic within a single
     # settlement flow even if the process env mutates mid-run. Uses the same
@@ -728,10 +883,15 @@ class EvidenceItem:
         # too — openai #9641 round-3 [P3].) Demoted here, the single choke point
         # every construction path shares, so a prepared artifact cannot smuggle an
         # ungrounded review back into counting_families.
+        #
+        # Conditional carve-out (Tier-4 Decisions 2026-08-14/15): a VibeProxy-
+        # transported review keeps counting authority ONLY per
+        # ``_countable_proxy``. Either condition missing demotes as before.
         if (
             self.would_count
             and not self.grounded
             and canonical_family(self.family) in GROUNDED_TRANSPORT_FAMILIES
+            and not self._countable_proxy()
         ):
             self.would_count = False
             self.problems.append(
@@ -798,6 +958,16 @@ class EvidenceItem:
                 "negative decision in the same review — contradictory review never counts"
             )
 
+    def _countable_proxy(self) -> bool:
+        """Conditionally-countable proxy bar (Tier-4 Decisions 2026-08-14/15).
+
+        An ungrounded proxy review keeps FULL signal semantics — counting AND
+        dissent — only with run-level prompt grounding plus the exact
+        machine-readable disclosure. Body-visible on purpose: the review-queue
+        lint re-verifies it, so a hand-posted proxy body cannot count either.
+        """
+        return self.prompt_grounded and _proxy_grounding_disclosed(self.body)
+
     @property
     def supportive(self) -> bool:
         # Unchanged by the severity gate: advisory ≠ supportive. A downgraded
@@ -815,7 +985,14 @@ class EvidenceItem:
         # not gate a merge. Checked BEFORE truncation (which fails closed) because
         # a review that could never verify anything gains nothing from being
         # complete. See the __post_init__ contract for the live evidence.
-        if not self.grounded and canonical_family(self.family) in GROUNDED_TRANSPORT_FAMILIES:
+        # Symmetric carve-out: a conditionally-countable proxy review carries the
+        # full signal, including dissent — a review that can support a quorum must
+        # also be able to veto one, or the proxy path would be a pass-only ratchet.
+        if (
+            not self.grounded
+            and canonical_family(self.family) in GROUNDED_TRANSPORT_FAMILIES
+            and not self._countable_proxy()
+        ):
             return False
         # Advisory-only families never block (roster record: "gemini dissent is
         # NOT to be counted anywhere"): their CHANGES-REQUESTED posts and stays
@@ -861,6 +1038,8 @@ class CollectOutcome:
     timed_out_families: list[str] = field(default_factory=list)
     overall_timeout_seconds: float | None = None
     adjudication: dict[str, Any] | None = None
+    live_evidence_head_sha: str = ""
+    live_counting_families: list[str] = field(default_factory=list)
     # Captured ONCE at construction (not re-read from os.environ per property
     # access) so a security-relevant gate decision stays deterministic within a
     # single settlement flow even if the process env mutates mid-run.
@@ -873,6 +1052,25 @@ class CollectOutcome:
     @property
     def supportive_families(self) -> list[str]:
         return [item.family for item in self.items if item.supportive]
+
+    @property
+    def _head_bound_live_families(self) -> list[str]:
+        # A rehydrated artifact keeps its live families after the branch moves;
+        # they only count while they were read at this outcome's own head.
+        head = (self.head_sha or "").strip()
+        if head and self.live_evidence_head_sha.strip() == head:
+            return list(self.live_counting_families)
+        return []
+
+    @property
+    def combined_counting_families(self) -> list[str]:
+        """Distinct prepared plus same-head live comment families."""
+        return sorted({*self.counting_families, *self._head_bound_live_families})
+
+    @property
+    def combined_supportive_families(self) -> list[str]:
+        """Supportive prepared families plus canonical live countable families."""
+        return sorted({*self.supportive_families, *self._head_bound_live_families})
 
     @property
     def dissenting_families(self) -> list[str]:
@@ -889,7 +1087,7 @@ class CollectOutcome:
         unknown/None tier, fail-safe) need two distinct WESTERN families.
         """
         rule = tier_quorum_rule(self.tier, tiered_gate=self.tiered_gate)
-        return rule.is_satisfied_by(self.supportive_families)
+        return rule.is_satisfied_by(self.combined_supportive_families)
 
     @property
     def incomplete_quorum_reason(self) -> str:
@@ -900,7 +1098,7 @@ class CollectOutcome:
         rather than a misleading ``(n/2)`` distinct-family denominator.
         """
         rule = tier_quorum_rule(self.tier, tiered_gate=self.tiered_gate)
-        supportive = {str(f).strip().lower() for f in self.supportive_families}
+        supportive = {str(f).strip().lower() for f in self.combined_supportive_families}
         counted = rule.counted_families(supportive)
         if rule.requires_western_frontier and not (counted & WESTERN_FRONTIER_FAMILIES):
             return (
@@ -937,6 +1135,9 @@ class CollectOutcome:
             "action": self.action,
             "action_reason": self.action_reason,
             "counting_families": self.counting_families,
+            "live_evidence_head_sha": self.live_evidence_head_sha,
+            "live_counting_families": list(self.live_counting_families),
+            "combined_counting_families": self.combined_counting_families,
             "supportive_families": self.supportive_families,
             "dissenting_families": self.dissenting_families,
             "has_supportive_quorum": self.has_supportive_quorum,
@@ -951,6 +1152,7 @@ class CollectOutcome:
                     "family": item.family,
                     "would_count": item.would_count,
                     "grounded": item.grounded,
+                    "prompt_grounded": item.prompt_grounded,
                     "verdict": item.verdict,
                     "counted_reviewer_ids": item.counted_reviewer_ids,
                     "problems": item.problems,
@@ -1014,6 +1216,9 @@ class CollectPreflightTransportError(RuntimeError):
                 "GitHub transport blocked before reviewer execution; prepared evidence only"
             ),
             "counting_families": [],
+            "live_evidence_head_sha": "",
+            "live_counting_families": [],
+            "combined_counting_families": [],
             "supportive_families": [],
             "dissenting_families": [],
             "has_supportive_quorum": False,
@@ -1070,6 +1275,20 @@ def _coerce_grounded_flag(value: Any) -> bool:
     return False
 
 
+def _coerce_prompt_grounded_flag(value: Any) -> bool:
+    """Coerce a serialized ``prompt_grounded`` flag strictly, failing CLOSED.
+
+    Unlike ``_coerce_grounded_flag`` there is no legacy-artifact carve-out:
+    the field postdates the proxy path, so an absent/null/garbage value can
+    only DEMOTE, and strict token parsing keeps a stringly ``"false"`` False.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in ("1", "true", "yes", "on")
+    return False
+
+
 def _evidence_item_from_dict(raw: Any) -> EvidenceItem:
     if not isinstance(raw, dict):
         raise ValueError("prepared evidence item must be an object")
@@ -1087,6 +1306,7 @@ def _evidence_item_from_dict(raw: Any) -> EvidenceItem:
         problems=_string_list(raw.get("problems")),
         verdict=str(raw.get("verdict") or "unknown"),
         grounded=_coerce_grounded_flag(raw.get("grounded", _GROUNDED_MISSING)),
+        prompt_grounded=_coerce_prompt_grounded_flag(raw.get("prompt_grounded")),
         # Restore the prepare-time regime; default fail-CLOSED (strict — every
         # changes_requested blocks) when an older/forged artifact omits it, so a
         # missing field can never RELAX the gate. apply_prepared_evidence then
@@ -1157,6 +1377,8 @@ def collect_outcome_from_dict(data: dict[str, Any]) -> CollectOutcome:
         failures=[_reviewer_result_from_dict(failure) for failure in data.get("failures") or []],
         posted=_string_list(data.get("posted_families")),
         post_errors=_string_list(data.get("post_errors")),
+        live_evidence_head_sha=str(data.get("live_evidence_head_sha") or ""),
+        live_counting_families=_string_list(data.get("live_counting_families")),
         quorum_rerun=data.get("quorum_rerun")
         if isinstance(data.get("quorum_rerun"), dict)
         else None,
@@ -1172,14 +1394,21 @@ def load_prepared_outcome(path: Path) -> CollectOutcome:
     return collect_outcome_from_dict(json.loads(path.read_text(encoding="utf-8")))
 
 
-def decide_action(tier: int | None, apply: bool) -> tuple[str, str]:
+def decide_action(tier: int | None, apply: bool, *, never_post: bool = False) -> tuple[str, str]:
     """Return ``(action, reason)`` where action is ``"post"`` or ``"prepare"``.
 
     Tier 3+ (and unknown tier) always ``prepare`` — high-tier merge authority is
     only ever settled by an operator on the exact head, so this collector refuses
     to post there regardless of ``apply``. Tier 0-2 posts only when ``apply`` is
-    set; otherwise it is a dry run.
+    set; otherwise it is a dry run. The never-post control (``never_post=True``
+    or :data:`_NEVER_POST_ENV`) dominates everything: it forces ``prepare`` at
+    every tier, and the environment variable cannot be switched off per-call.
     """
+    if never_post or never_post_enabled():
+        return (
+            "prepare",
+            "never-post control active; preparing evidence only at every tier",
+        )
     if tier is None or tier < 0:
         return ("prepare", "tier unknown; preparing evidence only (fail-safe)")
     if tier >= SETTLEMENT_TIER_FLOOR:
@@ -1206,21 +1435,25 @@ def _neutralize_reviewer_text(text: str) -> str:
     out: list[str] = []
     for line in text.strip().splitlines():
         stripped = line.strip()
-        lower = stripped.lower()
         # Canonicalize the way the parser does (strip leading quote/list markers
         # and surrounding emphasis) so the neutralizer is a strict superset of
         # what the identity parser will accept as a heading or disclosure line.
         probe = stripped.lstrip(">").strip()
-        probe = re.sub(r"^([-*+]\s+|\d+[.)]\s+)+", "", probe)
+        probe = re.sub(r"`[^`]*`", " ", probe).strip()
+        probe = re.sub(r"^([-*+]\s*|\d+[.)]\s*)+", "", probe)
         probe = probe.strip("*_ ").strip()
         is_heading = probe.startswith("#")
         is_setext = bool(re.fullmatch(r"[=\-]{2,}", stripped))
-        # Over-quoting is harmless; a missed disclosure is not, so match the
-        # ``model family:`` label anywhere it could be parsed. The gate parser
-        # strips surrounding emphasis from the label, so tolerate whitespace and
-        # ``*``/``_`` between "family" and the colon (e.g. ``**Model family**:``).
-        has_family = bool(re.search(r"model\s+family[\s*_]*:", lower))
-        if is_heading or is_setext or has_family:
+        # Quote a disclosure label ONLY at the start of the canonicalized line,
+        # where a parser could read one: quoting a finding that merely CONTAINS
+        # ``reviewer:`` gets it dropped downstream, suppressing real dissent.
+        has_disclosure_label = bool(
+            re.match(
+                r"(?:model\s+family|reviewer\s+harness|transport\s+grounding|reviewer)[\s*_]*:",
+                probe.lower(),
+            )
+        )
+        if is_heading or is_setext or has_disclosure_label:
             out.append(f"> {line}")
         else:
             out.append(line)
@@ -1248,6 +1481,16 @@ def _reviewer_verdict(text: str) -> str:
                 return "changes_requested"
             return "unknown"
     return "unknown"
+
+
+def _has_verdict_line(text: str) -> bool:
+    """Whether any line lexes as a verdict label (same probe as above),
+    distinguishing a verdict-less stream from a verdict whose token merely
+    fails to parse — substantive signal that must never be re-rolled."""
+    return any(
+        line.strip().lstrip("*#>-`0123456789.)\t ").lower().startswith("verdict:")
+        for line in text.splitlines()
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1354,7 +1597,9 @@ def normalize_reviewer_output(text: str, *, family: str = "") -> str:
     return normalized if normalized is not None else cleaned
 
 
-def _normalize_preserving_truncation(text: str, *, family: str) -> str:
+def _normalize_preserving_truncation(
+    text: str, *, family: str, precomputed: str | None = None
+) -> str:
     """Normalize reviewer output without ever losing the truncation marker.
 
     The opt-in LLM normalizer can rewrite a truncated body into clean canonical
@@ -1362,8 +1607,14 @@ def _normalize_preserving_truncation(text: str, *, family: str) -> str:
     evade the truncated-PASS demotion in ``EvidenceItem.__post_init__``
     (openai #9249 r9 [P2]). Truncation is a fact about the transport, not the
     prose: if the input was truncated, the composed body always says so.
+
+    ``precomputed`` short-circuits the (possibly LLM-backed) normalization when
+    the caller already normalized exactly ``text``; the truncation-marker
+    restore below still applies to it.
     """
-    normalized = normalize_reviewer_output(text, family=family)
+    normalized = (
+        precomputed if precomputed is not None else normalize_reviewer_output(text, family=family)
+    )
     if _TRUNCATION_MARKER in text and _TRUNCATION_MARKER not in normalized:
         normalized = normalized.rstrip() + f"\n\n{_TRUNCATION_MARKER}"
     return normalized
@@ -1377,6 +1628,9 @@ def compose_evidence_comment(
     pr: int | str,
     reviewer_text: str,
     harness: str = "",
+    grounded: bool = True,
+    prompt_grounded: bool = False,
+    normalized_reviewer_text: str | None = None,
 ) -> str:
     """Compose an evidence comment the quorum parsers recognize and count.
 
@@ -1386,6 +1640,14 @@ def compose_evidence_comment(
     placed immediately under the heading so the comment is grounded on the exact
     head. ``reviewer_text`` is the genuine reviewer output; only lines that could
     hijack the identity parser are quoted (see :func:`_neutralize_reviewer_text`).
+    ``normalized_reviewer_text`` optionally carries a normalization of exactly
+    ``reviewer_text`` the collector already computed (for the malformed-verdict
+    re-roll decision), so the normalizer is not re-run here.
+
+    On the conditionally-countable proxy path (ungrounded proxy transport whose
+    run had prompt-embedded grounding) the machine-readable ``Reviewer harness:``
+    and ``Transport grounding:`` lines are emitted so the transport is auditable
+    in the public record and downstream counting can re-verify it.
     """
     fam = canonical_family(family)
     display = FAMILY_DISPLAY.get(fam, fam.title())
@@ -1400,14 +1662,28 @@ def compose_evidence_comment(
     # be hijacked even if the field ever carries caller-influenced text.
     safe_committed = re.sub(r"[^A-Za-z0-9:.+\- TZ]", "", head_committed_at)[:40]
     committed = f", committed {safe_committed}" if safe_committed else ""
+    # Emitted ONLY when every conditional-countability precondition held; its
+    # absence keeps every other proxy body advisory, here and at the lint.
+    transport_disclosure = ""
+    if not grounded and prompt_grounded and _harness_is_proxy_transport(harness_label):
+        transport_disclosure = (
+            f"{_REVIEWER_HARNESS_LABEL}: {harness_label}\n"
+            f"{_TRANSPORT_GROUNDING_LABEL}: {PROXY_GROUNDING_DISCLOSURE}\n"
+        )
+    body = _neutralize_reviewer_text(
+        _normalize_preserving_truncation(
+            reviewer_text, family=family, precomputed=normalized_reviewer_text
+        )
+    )
     return (
         f"## {display} independent model review\n\n"
         f"Reviewer: {fam} ({provider}) — independent adversarial model review via "
         f"{harness_label}, grounded on the exact PR head.\n"
         f"Head: {short} ({head_sha}){committed}.\n"
         f"PR: #{pr}.\n"
-        f"Model family: {fam}\n\n"
-        f"{_neutralize_reviewer_text(_normalize_preserving_truncation(reviewer_text, family=family))}\n\n"
+        f"Model family: {fam}\n"
+        f"{transport_disclosure}\n"
+        f"{body}\n\n"
         f"dogfood: yes\n"
     )
 
@@ -1498,13 +1774,31 @@ _FULL_FILE_MAX_CHARS = 20_000
 _FULL_FILE_SECTION_MAX_CHARS = 80_000
 
 
+class FullFileSection(str):
+    """Full-file grounding section carrying builder-asserted completeness.
+
+    ``complete`` is True only when every changed file's post-change contents
+    made it into the section whole (no fetch failure, clipping, or capped-out
+    file); grounding fails closed on any elision.
+    """
+
+    __slots__ = ("complete",)
+
+    complete: bool
+
+    def __new__(cls, text: str, *, complete: bool = False) -> "FullFileSection":
+        section = super().__new__(cls, text)
+        section.complete = complete
+        return section
+
+
 def _full_file_section(
     repo: str,
     head_sha: str,
     diff_text: str,
     *,
     file_fetcher: Callable[[str, str, str], str] | None = None,
-) -> str:
+) -> FullFileSection:
     """Bounded post-change contents of the changed files, largest diff first.
 
     Best-effort by design: grounding is an enhancement — any per-file fetch
@@ -1513,6 +1807,7 @@ def _full_file_section(
     """
     fetcher = file_fetcher or _fetch_file_at_ref
     sizes: dict[str, int] = {}
+    deleted: set[str] = set()
     current: str | None = None
     for line in diff_text.splitlines():
         if line.startswith("diff --git "):
@@ -1522,10 +1817,17 @@ def _full_file_section(
             if current is not None:
                 sizes.setdefault(current, 0)
         elif current is not None:
+            # A deletion has no post-change contents to ground on; fetching it
+            # would 404 and wrongly elide. Unforgeable from hunk content
+            # (content lines start with +/-/space, never a bare ``d``).
+            if line.startswith("deleted file mode"):
+                deleted.add(current)
             sizes[current] = sizes[current] + 1
-    ordered = sorted(sizes, key=lambda p: sizes[p], reverse=True)[:_FULL_FILE_MAX_FILES]
+    candidates = [path for path in sizes if path not in deleted]
+    ordered = sorted(candidates, key=lambda p: sizes[p], reverse=True)[:_FULL_FILE_MAX_FILES]
     if not ordered:
-        return ""
+        return FullFileSection("")
+    elided = len(candidates) > len(ordered)
     parts: list[str] = []
     for path in ordered:
         try:
@@ -1534,10 +1836,13 @@ def _full_file_section(
             # Grounding is best-effort by contract: the default fetcher raises
             # RuntimeError/ValueError; transport/decoding surface OSError,
             # SubprocessError, or UnicodeError. Anything else is a real bug.
+            elided = True
             parts.append(f"--- {path}: unavailable ({type(exc).__name__}) ---")
             continue
         if not content.strip():
-            # Deleted or empty at head: nothing to ground on.
+            # Genuinely empty at head OR the contents API's 1 MB gap returning
+            # "" — indistinguishable cheaply, so completeness fails closed.
+            elided = True
             continue
         lines = content.splitlines()
         clipped = lines[:_FULL_FILE_MAX_LINES]
@@ -1553,17 +1858,27 @@ def _full_file_section(
         if len(body_text) > _FULL_FILE_MAX_CHARS:
             body_text = body_text[:_FULL_FILE_MAX_CHARS].rstrip() + "\n[file clipped for length]"
             note = note or " (clipped for length)"
-        parts.append(f"--- {path}{note} ---\n" + body_text)
-        if sum(len(part) for part in parts) > _FULL_FILE_SECTION_MAX_CHARS:
+        if note:
+            elided = True
+        part = f"--- {path}{note} ---\n" + body_text
+        # Cap check BEFORE append (openai #9770 [P2]): appending first let the
+        # final ordered file overshoot _FULL_FILE_SECTION_MAX_CHARS with
+        # ``elided`` still false — an over-bound payload claiming complete
+        # (hence prompt-grounded) truth. Drop the overshooting part instead:
+        # the bound stays hard and completeness fails closed on the cut.
+        if sum(len(p) for p in parts) + len(part) > _FULL_FILE_SECTION_MAX_CHARS:
+            elided = True
             break
+        parts.append(part)
     if not any(part for part in parts if not part.endswith("---")):
-        return ""
-    return (
+        return FullFileSection("")
+    return FullFileSection(
         f"=== FULL CHANGED FILES (post-change contents at head {head_sha[:7]}; "
         f"bounded to {_FULL_FILE_MAX_FILES} files x {_FULL_FILE_MAX_LINES} lines — use these "
         "to VERIFY claims about imports/definitions before reporting them missing) ===\n"
         + "\n\n".join(parts)
-        + "\n"
+        + "\n",
+        complete=not elided,
     )
 
 
@@ -1597,6 +1912,25 @@ def _fetch_file_at_ref(repo: str, ref: str, path: str) -> str:
     return base64.b64decode((proc.stdout or "").strip()).decode("utf-8", errors="replace")
 
 
+class BuiltReviewPrompt(str):
+    """Review prompt carrying builder-asserted grounding provenance.
+
+    ``prompt_grounded`` records what the builder actually embedded (a complete
+    :class:`FullFileSection` AND a diff bounded without elision). Provenance is
+    never re-derived from prompt text: diff content is author-controlled, so
+    marker-scanning would let the reviewed change forge the precondition.
+    """
+
+    __slots__ = ("prompt_grounded",)
+
+    prompt_grounded: bool
+
+    def __new__(cls, text: str, *, prompt_grounded: bool = False) -> "BuiltReviewPrompt":
+        built = super().__new__(cls, text)
+        built.prompt_grounded = prompt_grounded
+        return built
+
+
 def build_review_prompt(
     *,
     repo: str,
@@ -1605,7 +1939,7 @@ def build_review_prompt(
     diff_text: str,
     name_status: str = "",
     full_files: str = "",
-) -> str:
+) -> BuiltReviewPrompt:
     """Adversarial review prompt grounded on the exact head.
 
     The complete changed-file list (from ``gh pr diff --name-status`` or, as a
@@ -1626,7 +1960,7 @@ def build_review_prompt(
             f"=== DIFF (head {short}; some hunks omitted for length - the CHANGED FILES "
             "list above is complete, so treat every listed path as present) ==="
         )
-    return (
+    return BuiltReviewPrompt(
         "You are an adversarial senior reviewer giving an independent model review. "
         f"Review ONLY the changes below for PR #{pr} in {repo} at head {short}. "
         "Look hard for correctness, security, and regression risks. "
@@ -1657,7 +1991,10 @@ def build_review_prompt(
         "Never tag an UNVERIFIED assumption [P1] or [P2]. Verification, not visibility, "
         "is what makes a finding blocking.\n\n"
         f"=== CHANGED FILES (complete list, {file_count} file(s)) ===\n{file_list}\n\n"
-        f"{body_header}\n{bounded}\n" + (f"\n{full_files}" if full_files else "")
+        f"{body_header}\n{bounded}\n" + (f"\n{full_files}" if full_files else ""),
+        prompt_grounded=bool(full_files)
+        and bool(getattr(full_files, "complete", False))
+        and not truncated,
     )
 
 
@@ -1736,13 +2073,16 @@ def _claude_empty_mcp_config_file() -> Iterator[Path]:
         path.unlink(missing_ok=True)
 
 
-def _claude_reviewer_command(mcp_config_path: Path) -> list[str]:
+def _claude_reviewer_command(mcp_config_path: Path, *, restricted: bool = False) -> list[str]:
     """Argv for the merge-gate claude reviewer with MCP servers disabled.
 
     The reviewer only reads a diff to emit a verdict, so it needs no MCP
     servers. Disabling them avoids claude's startup MCP handshake, which blocks
     until the full timeout when a local MCP server is wedged.
     """
+    if restricted:
+        mcp = str(mcp_config_path)
+        return [mcp if token == "{mcp}" else token for token in _RESTRICTED_CLAUDE_ARGV]
     return ["claude", "-p", "--strict-mcp-config", "--mcp-config", str(mcp_config_path)]
 
 
@@ -1770,6 +2110,15 @@ def _is_credential_wall(detail: str) -> bool:
     return any(pattern.search(detail) for pattern in _CREDENTIAL_WALL_PATTERNS)
 
 
+def _probe_disabled() -> bool:
+    """Whether ``ARAGORA_REVIEWER_PROBE_TIMEOUT_SECONDS`` parses to a finite non-positive number."""
+    try:
+        value = float(os.environ.get(_CLI_PROBE_TIMEOUT_ENV, "").strip())
+    except ValueError:
+        return False
+    return math.isfinite(value) and value <= 0
+
+
 def _cli_liveness_probe(family: str, argv: list[str]) -> str | None:
     """Best-effort check before a long Claude review.
 
@@ -1781,13 +2130,8 @@ def _cli_liveness_probe(family: str, argv: list[str]) -> str | None:
     ``ARAGORA_REVIEWER_PROBE_TIMEOUT_SECONDS`` parses to a non-positive number.
     Best-effort: a probe bug never blocks a genuine review.
     """
-    raw_timeout = os.environ.get(_CLI_PROBE_TIMEOUT_ENV, "").strip()
-    if raw_timeout:
-        try:
-            if math.isfinite(float(raw_timeout)) and float(raw_timeout) <= 0:
-                return None
-        except ValueError:
-            pass
+    if _probe_disabled():
+        return None
     probe_timeout = _timeout_seconds(_CLI_PROBE_TIMEOUT_ENV, _CLI_PROBE_TIMEOUT)
     try:
         proc = subprocess.run(
@@ -1820,9 +2164,148 @@ def _cli_liveness_probe(family: str, argv: list[str]) -> str | None:
     return None
 
 
+class _ProvenanceError(Exception):
+    """The pinned read-only context of a restricted Claude review is not proven."""
+
+
+def _claude_review_context() -> tuple[str, str] | None:
+    checkout = os.environ.get(_CLAUDE_REVIEW_CHECKOUT_ENV, "").strip()
+    head = os.environ.get(_CLAUDE_REVIEW_EXPECTED_HEAD_ENV, "").strip().lower()
+    return (checkout, head) if checkout or head else None
+
+
+def _provenance_unavailable(detail: str) -> ReviewerResult:
+    # Details can quote stream content (tool names, CLI output), so bound them like CLI failures.
+    fail = f"provenance unavailable: {_bounded_cli_failure_detail(detail)}"
+    return ReviewerResult("claude", "", False, fail, allow_transport_fallback=False, grounded=False)
+
+
+def _pinned_git(cwd: str, *args: str, check: bool = True) -> str:
+    argv = ["git", "--no-optional-locks", "-C", cwd, *args]
+    proc = subprocess.run(argv, capture_output=True, text=True, timeout=30, check=False)
+    if proc.returncode and check:
+        raise _ProvenanceError(f"git {args[0]} failed in {cwd}")
+    return "" if proc.returncode else proc.stdout.strip()
+
+
+def _pinned_checkout_state(checkout: str, expected_head: str) -> dict[str, str]:
+    """HEAD, ref and status of a clean checkout toplevel at ``expected_head``."""
+    if not checkout or not re.fullmatch(r"[0-9a-f]{40}", expected_head):
+        raise _ProvenanceError(f"set the checkout and a 40-hex {_EXPECTED_HEAD_HINT} together")
+    real = os.path.realpath(checkout)
+    if os.path.realpath(_pinned_git(real, "rev-parse", "--show-toplevel")) != real:
+        raise _ProvenanceError(f"{real} is not a checkout toplevel")
+    ref = _pinned_git(real, "symbolic-ref", "-q", "HEAD", check=False) or "HEAD"
+    state = {"head": _pinned_git(real, "rev-parse", "HEAD"), "ref": ref}
+    state["ref_object"] = _pinned_git(real, "rev-parse", ref)
+    state["status"] = _pinned_git(real, "status", "--porcelain", "--untracked-files=all")
+    if state["head"] != expected_head or state["status"]:
+        raise _ProvenanceError(f"checkout is not clean at expected head {expected_head[:12]}")
+    return state
+
+
+def _attest_restricted_stream(stdout: str, cwd: str, stage: str) -> str:
+    """Final text, only when the stream proves the restricted read-only session.
+
+    A review must also show at least one Read/Grep/Glob call; the probe needs none.
+    """
+    try:
+        events = [json.loads(line) for line in stdout.splitlines() if line.strip()]
+        kinds = [f"{event.get('type')}/{event.get('subtype')}" for event in events]
+    except (ValueError, AttributeError):
+        raise _ProvenanceError("unparseable or non-object stream event") from None
+    inits = [event for event, kind in zip(events, kinds) if kind == "system/init"]
+    if not inits:
+        raise _ProvenanceError("no system/init event")
+    model = os.environ.get("ANTHROPIC_MODEL", "").strip()
+    for init in inits:
+        tools = init.get("tools")
+        names = set(map(str, tools)) if isinstance(tools, list) else set()
+        if not names & _RESTRICTED_FILE_TOOLS or not names <= _RESTRICTED_ALLOWED_TOOLS:
+            raise _ProvenanceError(f"init tools outside Read/Grep/Glob: {tools!r}")
+        pinned = init.get("mcp_servers") == [] and os.path.realpath(str(init.get("cwd"))) == cwd
+        pinned = pinned and init.get("permissionMode") == "default"
+        if not pinned or not model or init.get("model") != model:
+            raise _ProvenanceError("init MCP servers, permissionMode, model or cwd not pinned")
+    if any("hook" in kind.lower() for kind in kinds):
+        raise _ProvenanceError("hook event in the stream")
+    used = {
+        str(block.get("name"))
+        for event in events
+        if event.get("type") == "assistant" and isinstance(event.get("message"), dict)
+        for block in event["message"].get("content") or []
+        if isinstance(block, dict) and block.get("type") == "tool_use"
+    }
+    if used - _RESTRICTED_ALLOWED_TOOLS:
+        raise _ProvenanceError(f"disallowed tool use: {sorted(used - _RESTRICTED_ALLOWED_TOOLS)}")
+    if stage == "review" and not used & _RESTRICTED_FILE_TOOLS:
+        raise _ProvenanceError("review stream shows no Read/Grep/Glob of the checkout")
+    final = ([event for event in events if event.get("type") == "result"] or [{}])[-1]
+    text = final.get("result")
+    if final.get("is_error") is not False or not isinstance(text, str) or not text.strip():
+        raise _ProvenanceError("no successful final result")
+    return text.strip()
+
+
+def _attested_claude_run(argv: list[str], stage: str, data: str, seconds: float, cwd: str) -> str:
+    proc = subprocess.run(
+        argv, input=data, capture_output=True, text=True, timeout=seconds, cwd=cwd, check=False
+    )
+    if proc.returncode:
+        detail = _bounded_cli_failure_detail(proc.stderr, proc.stdout, redact=data)
+        wall = f"{_CREDENTIAL_UNHEALTHY_PREFIX}(claude): " if _is_credential_wall(detail) else ""
+        raise _ProvenanceError(f"{wall}claude CLI {stage} exit {proc.returncode}: {detail}")
+    return _attest_restricted_stream(proc.stdout or "", cwd, stage)
+
+
+def _run_pinned_claude_cli(prompt: str, timeout: float, checkout: str, head: str) -> ReviewerResult:
+    """Review a clean checkout pinned at ``head`` through the validated read-only argv.
+
+    Fails closed (``provenance unavailable``, no fallback) unless the pre-check (clean at
+    ``head``, no PR change under ``.claude``, ``ANTHROPIC_MODEL`` set), the attested review
+    stream and the unchanged-checkout post-check hold. A probe that completes must attest
+    and exit 0; a probe timeout or a disabled probe only labels the harness.
+    """
+    try:
+        before = _pinned_checkout_state(checkout, head)
+        cwd = os.path.realpath(checkout)
+        if _pinned_git(cwd, "diff", "--name-only", "origin/main...HEAD", "--", ".claude"):
+            raise _ProvenanceError("the PR changes Claude configuration under .claude")
+        model = os.environ.get("ANTHROPIC_MODEL", "").strip()
+        if not model:
+            raise _ProvenanceError("ANTHROPIC_MODEL must name the pinned review model")
+        probe_timeout = _timeout_seconds(_CLI_PROBE_TIMEOUT_ENV, _CLI_PROBE_TIMEOUT)
+        note = " (probe skipped)" if _probe_disabled() else ""
+        with _claude_empty_mcp_config_file() as mcp_config_path:
+            argv = _claude_reviewer_command(mcp_config_path, restricted=True)
+            try:
+                if not note:
+                    _attested_claude_run(argv, "probe", _CLI_PROBE_PROMPT, probe_timeout, cwd)
+            except subprocess.TimeoutExpired:
+                note = f" (probe timed out after {probe_timeout:g}s)"
+            text = _attested_claude_run(argv, "review", prompt, timeout, cwd)
+        try:
+            after = _pinned_checkout_state(checkout, head)
+        except _ProvenanceError:
+            after = {}
+        if after != before:
+            raise _ProvenanceError("reviewer context mutated during the review")
+    except _ProvenanceError as exc:
+        return _provenance_unavailable(str(exc))
+    except subprocess.TimeoutExpired as exc:
+        return _provenance_unavailable(f"{exc.cmd[0]} timed out after {exc.timeout:g}s")
+    except (OSError, subprocess.SubprocessError) as exc:
+        return _provenance_unavailable(f"{type(exc).__name__}: {str(exc)[:200]}")
+    # The probe note precedes the model so the 120-char composed label never truncates it.
+    harness = f"Claude Code CLI restricted read-only (Read Grep Glob) at {head[:12]}{note}"
+    return ReviewerResult("claude", _cap_text(text), True, harness=f"{harness} model {model}")
+
+
 def _run_claude_cli(prompt: str, *, timeout: float | None = None) -> ReviewerResult:
     if timeout is None:
         timeout = _timeout_seconds(_CLAUDE_TIMEOUT_ENV, _CLAUDE_TIMEOUT)
+    if context := _claude_review_context():
+        return _run_pinned_claude_cli(prompt, timeout, *context)
     try:
         with _claude_empty_mcp_config_file() as mcp_config_path:
             argv = _claude_reviewer_command(mcp_config_path)
@@ -1903,6 +2386,12 @@ def _run_claude_reviewer(prompt: str) -> ReviewerResult:
     post as advisory evidence and never count for or against a quorum.
     """
     timeout = _timeout_seconds(_CLAUDE_TIMEOUT_ENV, _CLAUDE_TIMEOUT)
+
+    if _claude_review_context():
+        # A pinned review is the restricted CLI or nothing: no proxy or API stand-in.
+        if _claude_transport_mode_is_required():
+            return _provenance_unavailable("vibeproxy-required conflicts with a pinned CLI review")
+        return _run_claude_cli(prompt, timeout=timeout)
 
     if _claude_transport_mode_is_required():
         # ``vibeproxy-required`` means "the proxy or nothing": it must never reach the
@@ -2536,27 +3025,22 @@ def default_linter(
 
 
 def default_poster(repo: str, pr: int, body: str) -> None:
-    import os
-    import tempfile
-
-    path = ""
-    try:
-        with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as fh:
-            path = fh.name
-            fh.write(body)
-        proc = merge_quorum_io.run(
-            ["gh", "pr", "comment", str(pr), "--repo", repo, "--body-file", path],
-            env=merge_quorum_io.aragora_env(),
-            timeout=60,
-        )
-        if proc.returncode != 0:
-            raise RuntimeError(f"gh pr comment failed: {(proc.stderr or '').strip()[:200]}")
-    finally:
-        if path:
-            try:
-                os.unlink(path)
-            except OSError:
-                pass
+    proc = merge_quorum_io.run(
+        [
+            "gh",
+            "api",
+            "--method",
+            "POST",
+            f"repos/{repo}/issues/{pr}/comments",
+            "--input",
+            "-",
+        ],
+        env=merge_quorum_io.aragora_env(),
+        timeout=60,
+        input_text=json.dumps({"body": body}),
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(f"gh api comment post failed: {(proc.stderr or '').strip()[:200]}")
 
 
 def resolve_author(default: str = "local") -> str:
@@ -2685,7 +3169,9 @@ def _record_review_adjudication_if_applicable(outcome: CollectOutcome) -> None:
         return
     if outcome.action != "prepare":
         return
-    if not outcome.supportive_families or not outcome.dissenting_families:
+    if not outcome.supportive_families:
+        return
+    if not any(item.verdict == "changes_requested" for item in outcome.items):
         return
 
     try:
@@ -2708,6 +3194,7 @@ def collect_evidence(
     families: Sequence[str],
     author: str,
     apply: bool,
+    never_post: bool = False,
     context_fetcher: Callable[[str, int], dict[str, Any]] = merge_quorum_io.fetch_pr_context,
     tier_fetcher: Callable[[str, int], int | None] = merge_quorum_io.fetch_pr_tier,
     prompt_builder: Callable[[str, int, dict[str, Any]], str] = default_prompt_builder,
@@ -2727,9 +3214,15 @@ def collect_evidence(
     head_committed_at = str(ctx.get("head_committed_at") or "")
     if not head_sha:
         raise ValueError(f"could not resolve head SHA for PR #{pr} in {repo}")
+    pinned_head = os.environ.get(_CLAUDE_REVIEW_EXPECTED_HEAD_ENV, "").strip().lower()
+    if pinned_head and "claude" in {canonical_family(name) for name in families}:
+        if not re.fullmatch(r"[0-9a-f]{40}", pinned_head):
+            raise ValueError(f"{_EXPECTED_HEAD_HINT} must be a 40-hex commit SHA")
+        if pinned_head != head_sha.lower():
+            raise ValueError(f"PR #{pr} head {head_sha} is not the expected head {pinned_head}")
 
     tier = tier_fetcher(repo, pr)
-    action, action_reason = decide_action(tier, apply)
+    action, action_reason = decide_action(tier, apply, never_post=never_post)
 
     outcome = CollectOutcome(
         repo=repo,
@@ -2743,6 +3236,9 @@ def collect_evidence(
     )
 
     prompt = prompt_builder(repo, pr, ctx)
+    # A run-level fact captured once for every reviewer. Only builder-asserted
+    # provenance counts; a custom builder returning plain str fails closed.
+    prompt_grounded = bool(getattr(prompt, "prompt_grounded", False))
 
     # Resolve the ordered, de-duplicated family list up front so item/failure
     # ordering stays deterministic and matches the caller's requested order,
@@ -2821,6 +3317,9 @@ def collect_evidence(
             pr=pr,
             reviewer_text=result.text,
             harness=result.harness,
+            grounded=result.grounded,
+            prompt_grounded=prompt_grounded,
+            normalized_reviewer_text=result.normalized_text,
         )
         lint = linter(pr, head_sha, head_committed_at, author, body, env or {})
         outcome.items.append(
@@ -2831,6 +3330,7 @@ def collect_evidence(
                 # Carry the transport's grounding through from the reviewer run: the
                 # linter reads only text and cannot tell which transport produced it.
                 grounded=result.grounded,
+                prompt_grounded=prompt_grounded,
                 # Parse the COMPOSED body, not the raw reviewer text: composition
                 # normalizes messy output (thinking traces, preamble) into a
                 # canonical verdict line, and the prepared-apply relint path
@@ -2872,14 +3372,14 @@ def collect_evidence(
         try:
             recheck_head = str((context_fetcher(repo, pr) or {}).get("head_sha") or "").strip()
             recheck_tier = tier_fetcher(repo, pr)
-        except Exception as exc:
+        except (RuntimeError, OSError, ValueError, subprocess.SubprocessError) as exc:
             outcome.action = "prepare"
             outcome.action_reason = (
                 f"could not re-verify head/tier before posting ({str(exc)[:120]}); prepared only"
             )
             _record_review_adjudication_if_applicable(outcome)
             return outcome
-        recheck_action, recheck_reason = decide_action(recheck_tier, apply)
+        recheck_action, recheck_reason = decide_action(recheck_tier, apply, never_post=never_post)
         if recheck_head != head_sha or recheck_action != "post":
             outcome.action = "prepare"
             outcome.action_reason = (
@@ -3002,9 +3502,18 @@ def _reviewer_process_worker(
     family: str,
     prompt: str,
     result_queue: multiprocessing.Queue,
+    remaining_budget_seconds: float | None = None,
 ) -> None:
     _isolate_reviewer_worker_process_group()
-    result = _run_reviewer_with_infra_retry(reviewer_runner, family, prompt)
+    # The parent's absolute deadline cannot cross the process boundary
+    # (time.monotonic() has no defined cross-process reference point), so the
+    # remaining budget ships as a duration and is re-anchored here.
+    deadline = (
+        None
+        if remaining_budget_seconds is None
+        else time.monotonic() + max(0.0, remaining_budget_seconds)
+    )
+    result = _run_reviewer_with_infra_retry(reviewer_runner, family, prompt, deadline=deadline)
     try:
         result_queue.put(result)
     except (OSError, ValueError):
@@ -3072,11 +3581,13 @@ def _start_reviewer_worker(
     reviewer_runner: Callable[[str, str], ReviewerResult],
     family: str,
     prompt: str,
+    *,
+    remaining_budget_seconds: float | None = None,
 ) -> _ReviewerWorker:
     result_queue: multiprocessing.Queue = ctx.Queue(maxsize=1)
     process = ctx.Process(
         target=_reviewer_process_worker,
-        args=(reviewer_runner, family, prompt, result_queue),
+        args=(reviewer_runner, family, prompt, result_queue, remaining_budget_seconds),
         daemon=False,
     )
     process.start()
@@ -3167,7 +3678,15 @@ def _run_reviewers_with_overall_timeout(
         while pending and len(active) < _MAX_REVIEWER_WORKERS:
             family = pending.pop(0)
             try:
-                active.append(_start_reviewer_worker(ctx, reviewer_runner, family, prompt))
+                active.append(
+                    _start_reviewer_worker(
+                        ctx,
+                        reviewer_runner,
+                        family,
+                        prompt,
+                        remaining_budget_seconds=max(0.0, deadline - time.monotonic()),
+                    )
+                )
             except (OSError, RuntimeError, ValueError) as exc:
                 results[family] = ReviewerResult(
                     family, "", False, f"{type(exc).__name__}: {str(exc)[:200]}"
@@ -3224,6 +3743,7 @@ def _clone_prepared_items(
             problems=list(item.problems),
             verdict=item.verdict,
             grounded=item.grounded,
+            prompt_grounded=item.prompt_grounded,
             severity_gated=(
                 item.severity_gated
                 if live_severity_gated is None
@@ -3275,6 +3795,52 @@ def _validate_prepared_item_families(
         seen.add(family)
 
 
+_SETTLEMENT_CONTEXT_FIELDS = frozenset(
+    (
+        "has_real_required_failure",
+        "has_real_required_pending",
+        "is_draft",
+        "merge_state_status",
+        "mergeable",
+        "pr_state",
+    )
+)
+
+
+def _settlement_stability_problem(context: dict[str, Any]) -> str:
+    """Return the live-state reason that forbids countable evidence posting.
+
+    Dependency-injected legacy callers that disclose none of the settlement
+    fields preserve their historical behavior. The canonical context fetcher
+    always discloses all fields and therefore enforces the complete gate.
+    """
+    disclosed = _SETTLEMENT_CONTEXT_FIELDS.intersection(context)
+    if not disclosed:
+        return ""
+    missing = sorted(_SETTLEMENT_CONTEXT_FIELDS - context.keys())
+    if missing:
+        return f"settlement-stability context incomplete ({', '.join(missing)})"
+    if str(context.get("pr_state") or "").upper() != "OPEN":
+        return f"PR state is {str(context.get('pr_state') or 'unknown').upper()}"
+    if context.get("is_draft") is not False:
+        return "PR is draft or draft state is unknown"
+    if str(context.get("mergeable") or "").upper() != "MERGEABLE":
+        return f"mergeable is {str(context.get('mergeable') or 'unknown').upper()}"
+    merge_state = str(context.get("merge_state_status") or "").upper()
+    if merge_state not in {"BLOCKED", "CLEAN"}:
+        return f"mergeStateStatus is {merge_state or 'UNKNOWN'}"
+    if context.get("has_real_required_failure") is not False:
+        return "a non-quorum required check is failing or required-check state is unknown"
+    if context.get("has_real_required_pending") is not False:
+        return "a non-quorum required check is pending or required-check state is unknown"
+    if (
+        context.get("context_source") == "rest"
+        and context.get("required_checks_disclosed") is not True
+    ):
+        return "required-check set is unavailable through the REST fallback"
+    return ""
+
+
 def apply_prepared_evidence(
     *,
     repo: str,
@@ -3282,12 +3848,16 @@ def apply_prepared_evidence(
     prepared_json: Path,
     author: str,
     apply: bool,
+    never_post: bool = False,
     families: Sequence[str] | None = None,
     context_fetcher: Callable[[str, int], dict[str, Any]] = merge_quorum_io.fetch_pr_context,
     tier_fetcher: Callable[[str, int], int | None] = merge_quorum_io.fetch_pr_tier,
     linter: Callable[..., dict[str, Any]] = default_linter,
     poster: Callable[[str, int, str], None] = default_poster,
     quorum_reconciler: Callable[[str, int], dict[str, Any] | None] | None = None,
+    live_evidence_fetcher: Callable[[str, int, str, str], dict[str, Any]] = (
+        merge_quorum_io.fetch_live_evidence_state
+    ),
     env: dict[str, str] | None = None,
 ) -> CollectOutcome:
     """Post an exact-head prepared artifact without re-running reviewers.
@@ -3346,7 +3916,7 @@ def apply_prepared_evidence(
     live_severity_gated = severity_gated_dissent_enabled()
 
     tier = tier_fetcher(repo, pr)
-    action, action_reason = decide_action(tier, apply)
+    action, action_reason = decide_action(tier, apply, never_post=never_post)
     outcome = CollectOutcome(
         repo=repo,
         pr=pr,
@@ -3365,6 +3935,14 @@ def apply_prepared_evidence(
         outcome.action_reason = (
             f"prepared head {prepared.head_sha[:7]} does not match current head "
             f"{head_sha[:7]}; prepared evidence only"
+        )
+        return outcome
+
+    stability_problem = _settlement_stability_problem(ctx)
+    if stability_problem:
+        outcome.action = "prepare"
+        outcome.action_reason = (
+            f"head is not settlement-stable ({stability_problem}); prepared only"
         )
         return outcome
 
@@ -3390,9 +3968,11 @@ def apply_prepared_evidence(
                 counted_reviewer_ids=counted_reviewer_ids,
                 problems=problems,
                 verdict=_reviewer_verdict(item.body),
-                # Grounding is a property of the transport that produced the body, so
-                # a relint (which only re-parses text) must preserve it verbatim.
+                # Grounding (transport AND prompt-embedded) is a property of the run
+                # that produced the body, so a relint (which only re-parses text)
+                # must preserve both verbatim.
                 grounded=item.grounded,
+                prompt_grounded=item.prompt_grounded,
                 # Preserve the regime already reconciled by _clone_prepared_items
                 # (effective = prepared AND live). Re-running the linter must NOT
                 # let EvidenceItem.default_factory re-read the live env and undo
@@ -3414,38 +3994,113 @@ def apply_prepared_evidence(
         )
         _record_review_adjudication_if_applicable(outcome)
         return outcome
+    used_live_quorum = False
     if not outcome.has_supportive_quorum:
-        outcome.action = "prepare"
-        outcome.action_reason = outcome.incomplete_quorum_reason
-        _record_review_adjudication_if_applicable(outcome)
-        return outcome
+        try:
+            live_state = live_evidence_fetcher(repo, pr, head_sha, head_committed_at) or {}
+        except (RuntimeError, OSError, ValueError, subprocess.SubprocessError) as exc:
+            outcome.action = "prepare"
+            outcome.action_reason = (
+                f"{outcome.incomplete_quorum_reason}; live current-head evidence "
+                f"could not be verified ({str(exc)[:120]})"
+            )
+            _record_review_adjudication_if_applicable(outcome)
+            return outcome
 
+        live_head = str(live_state.get("head_sha") or "").strip()
+        raw_live_families = live_state.get("counting_families")
+        if live_head != head_sha or not isinstance(raw_live_families, list):
+            outcome.action = "prepare"
+            outcome.action_reason = (
+                "live evidence state does not match the current head or family schema; "
+                "prepared evidence only"
+            )
+            _record_review_adjudication_if_applicable(outcome)
+            return outcome
+        dissent_state = live_state.get("unresolved_dissent")
+        if dissent_state is not False:
+            outcome.action = "prepare"
+            if dissent_state is True:
+                outcome.action_reason = (
+                    "live current-head blocking dissent present; prepared evidence only"
+                )
+            else:
+                outcome.action_reason = (
+                    "live current-head dissent state could not be verified; prepared evidence only"
+                )
+            _record_review_adjudication_if_applicable(outcome)
+            return outcome
+
+        live_families: set[str] = set()
+        for raw_family in raw_live_families:
+            family = canonical_family(str(raw_family))
+            if family not in FAMILY_PROVIDERS:
+                outcome.action = "prepare"
+                outcome.action_reason = (
+                    f"live evidence reported unsupported reviewer family {family or 'empty'}; "
+                    "prepared evidence only"
+                )
+                _record_review_adjudication_if_applicable(outcome)
+                return outcome
+            live_families.add(family)
+        outcome.live_evidence_head_sha = live_head
+        outcome.live_counting_families = sorted(live_families)
+
+        if not outcome.has_supportive_quorum:
+            outcome.action = "prepare"
+            outcome.action_reason = outcome.incomplete_quorum_reason
+            _record_review_adjudication_if_applicable(outcome)
+            return outcome
+        if not (set(outcome.supportive_families) - live_families):
+            outcome.action = "prepare"
+            outcome.action_reason = (
+                "all supportive prepared families already count on the current head; "
+                "nothing new to post"
+            )
+            _record_review_adjudication_if_applicable(outcome)
+            return outcome
+        used_live_quorum = True
+
+    # Keep this as the last network-backed guard before posting. In the
+    # live-plus-prepared path, the comment and packet reads above may take long
+    # enough for the branch to move; evidence for the old head must then remain
+    # prepared-only.
     try:
-        recheck_head = str((context_fetcher(repo, pr) or {}).get("head_sha") or "").strip()
+        recheck_context = context_fetcher(repo, pr) or {}
+        recheck_head = str(recheck_context.get("head_sha") or "").strip()
         recheck_tier = tier_fetcher(repo, pr)
-    except Exception as exc:
+    except (RuntimeError, OSError, ValueError, subprocess.SubprocessError) as exc:
         outcome.action = "prepare"
         outcome.action_reason = (
             f"could not re-verify head/tier before posting ({str(exc)[:120]}); prepared only"
         )
         _record_review_adjudication_if_applicable(outcome)
         return outcome
-    recheck_action, recheck_reason = decide_action(recheck_tier, apply)
-    if recheck_head != head_sha or recheck_action != "post":
+    recheck_action, recheck_reason = decide_action(recheck_tier, apply, never_post=never_post)
+    recheck_stability_problem = _settlement_stability_problem(recheck_context)
+    if recheck_head != head_sha or recheck_action != "post" or recheck_stability_problem:
         outcome.action = "prepare"
         outcome.action_reason = (
             f"head/tier changed before posting "
             f"(head {head_sha[:7]}->{recheck_head[:7] or 'none'}, "
-            f"tier {tier}->{recheck_tier}); prepared only: {recheck_reason}"
+            f"tier {tier}->{recheck_tier}); prepared only: "
+            f"{recheck_stability_problem or recheck_reason}"
         )
         _record_review_adjudication_if_applicable(outcome)
         return outcome
 
-    outcome.action_reason = (
-        "prepared exact-head evidence artifact; posting without reviewer regeneration"
-    )
+    if used_live_quorum:
+        outcome.action_reason = (
+            "prepared exact-head evidence plus live current-head families satisfies quorum; "
+            "posting only missing families without reviewer regeneration"
+        )
+    else:
+        outcome.action_reason = (
+            "prepared exact-head evidence artifact; posting without reviewer regeneration"
+        )
+    live_families = set(outcome.live_counting_families)
     for item in outcome.items:
-        if not item.supportive:
+        if not item.supportive or item.family in live_families:
             continue
         try:
             poster(repo, pr, item.body)
@@ -3468,6 +4123,8 @@ def _render_outcome(outcome: CollectOutcome) -> str:
         f"  head: {outcome.head_sha[:10]}  tier: {outcome.tier}",
         f"  action: {outcome.action} ({outcome.action_reason})",
         f"  counting families: {', '.join(outcome.counting_families) or 'none'}",
+        f"  live counting families: {', '.join(outcome.live_counting_families) or 'none'}",
+        f"  combined counting families: {', '.join(outcome.combined_counting_families) or 'none'}",
         f"  supportive families: {', '.join(outcome.supportive_families) or 'none'}",
         f"  dissenting families: {', '.join(outcome.dissenting_families) or 'none'}",
     ]
@@ -3537,6 +4194,15 @@ def _reviewer_timeout_env_overrides(
     }
 
 
+# Exit code for a run that completed cleanly — every produced item is countable
+# supportive evidence; no reviewer failures, post errors, or orchestration
+# timeout — but the tier's supportive-quorum bar was not met (the expected shape
+# of a deliberate single-family or partial-family round). Distinct from 1 so
+# callers can tell a clean shortfall from a real failure without parsing JSON;
+# the JSON outcome remains the authority on what actually happened.
+EXIT_CLEAN_NO_SUPPORTIVE_QUORUM = 2
+
+
 def run_collect_cli(
     *,
     repo: str,
@@ -3545,28 +4211,53 @@ def run_collect_cli(
     author: str | None,
     apply: bool,
     json_output: bool,
+    never_post: bool = False,
     prepared_json: Path | None = None,
     reviewer_timeout_seconds: float | None = None,
     overall_timeout_seconds: float | None = None,
     printer: Callable[[str], None] = print,
+    claude_review_checkout: str | None = None,
+    claude_review_expected_head: str | None = None,
 ) -> int:
     """Shared entry point for the script and ``review-queue collect-evidence``.
 
-    Returns 0 when >=2 reviewers produced counting evidence, else 1. Note that a
-    non-zero exit does not imply nothing was posted: with ``--apply`` on a
-    low-tier PR a single genuine reviewer can post one counting comment and still
-    return 1 (quorum is enforced as N-of-M elsewhere). Inspect ``posted_families``
-    in the JSON output rather than treating exit-code 1 as "nothing posted".
+    Returns 0 when the tier's supportive quorum bar was met with no
+    orchestration timeout; ``EXIT_CLEAN_NO_SUPPORTIVE_QUORUM`` (2) when the run
+    was clean — every produced item is countable supportive evidence, with no
+    reviewer failures, post errors, or timeout — but the bar was not met; 1
+    otherwise (failures, dissent, timeout, errors, or nothing produced). Note
+    that a non-zero exit does not imply nothing was posted: with ``--apply`` on
+    a low-tier PR a single genuine reviewer can post one counting comment and
+    still exit 2 (quorum is enforced as N-of-M elsewhere). Inspect
+    ``posted_families`` in the JSON output rather than treating a non-zero exit
+    as "nothing posted".
+
+    ``never_post`` (or :data:`_NEVER_POST_ENV`) is the hard prepare-only
+    control: it forces ``action=prepare`` / ``posted_families=[]`` at every
+    tier and conflicts loudly with ``apply`` (exit 1 before any collection
+    work, for the kwarg and the environment variable alike) instead of
+    silently overriding it.
     """
     fams = tuple(families) if families else DEFAULT_FAMILIES
     resolved_author = author or resolve_author()
     try:
+        if apply and (never_post or never_post_enabled()):
+            raise ValueError(
+                f"--never-post (or {_NEVER_POST_ENV}=1) conflicts with --apply: the "
+                "never-post control forbids posting at any tier; drop --apply or "
+                "clear the control"
+            )
         overall_timeout_seconds = _positive_timeout_seconds(
             overall_timeout_seconds, "overall_timeout_seconds"
         )
         env_overrides = _reviewer_timeout_env_overrides(
             reviewer_timeout_seconds, overall_timeout_seconds
         )
+        if bool(claude_review_checkout) != bool(claude_review_expected_head):
+            raise ValueError("claude review checkout and expected head must be given together")
+        if claude_review_checkout and claude_review_expected_head:
+            env_overrides[_CLAUDE_REVIEW_CHECKOUT_ENV] = claude_review_checkout
+            env_overrides[_CLAUDE_REVIEW_EXPECTED_HEAD_ENV] = claude_review_expected_head
         with _scoped_env(env_overrides):
             if prepared_json is None:
                 outcome = collect_evidence(
@@ -3575,6 +4266,7 @@ def run_collect_cli(
                     families=fams,
                     author=resolved_author,
                     apply=apply,
+                    never_post=never_post,
                     env=merge_quorum_io.aragora_env(),
                     quorum_reconciler=default_quorum_reconciler if apply else None,
                     overall_timeout_seconds=overall_timeout_seconds,
@@ -3586,6 +4278,7 @@ def run_collect_cli(
                     prepared_json=prepared_json,
                     author=resolved_author,
                     apply=apply,
+                    never_post=never_post,
                     families=fams,
                     env=merge_quorum_io.aragora_env(),
                     quorum_reconciler=default_quorum_reconciler if apply else None,
@@ -3607,4 +4300,13 @@ def run_collect_cli(
         printer(json.dumps(outcome.to_dict(), indent=2))
     else:
         printer(_render_outcome(outcome))
-    return 0 if outcome.has_supportive_quorum and not outcome.orchestration_timeout else 1
+    if outcome.has_supportive_quorum and not outcome.orchestration_timeout:
+        return 0
+    clean_shortfall = (
+        not outcome.orchestration_timeout
+        and not outcome.failures
+        and not outcome.post_errors
+        and bool(outcome.items)
+        and all(item.supportive for item in outcome.items)
+    )
+    return EXIT_CLEAN_NO_SUPPORTIVE_QUORUM if clean_shortfall else 1

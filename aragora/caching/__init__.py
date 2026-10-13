@@ -23,6 +23,32 @@ Usage:
     @cached(ttl_seconds=600)
     def get_user_action(user_id: int, action: str, metadata: dict) -> dict:
         ...
+
+Two intentionally-distinct CacheStats APIs:
+    This package exposes more than one ``CacheStats`` dataclass and they are not
+    interchangeable:
+
+    - ``aragora.caching.CacheStats`` is the decorator-layer class from
+      ``aragora.caching.decorators``: fields ``hits``, ``misses``, ``size``,
+      ``maxsize``, ``evictions``, with ``hit_rate`` as a computed property
+      returning a 0-100 percentage. ``get_global_cache_stats()`` returns these.
+    - ``aragora.caching.registry.CacheStats`` is the registry/backend class:
+      fields ``size``, ``maxsize``, ``ttl_seconds``, ``hits``, ``misses``,
+      ``hit_rate`` and an optional ``extra`` mapping, where ``hit_rate`` is a
+      plain field copied from the backend's own ``stats`` mapping (a 0.0-1.0
+      fraction, not a percentage) and there is no ``evictions``.
+      ``get_all_cache_stats()`` returns these, even though this package
+      re-exports it right beside the decorator ``CacheStats``.
+    - ``aragora.caching.adaptive.CacheStats`` is a third, separate class for
+      adaptive-TTL caches.
+
+    Because the package-level ``CacheStats`` name is bound to the decorator
+    class, ``isinstance(value, CacheStats)`` applied to ``get_all_cache_stats()``
+    results is always False. Import the class you mean from its own module and
+    check against that instead of the package-level name. The three classes are
+    pinned as distinct by
+    ``tests/caching/test_consolidation_shims.py::test_distinct_cachestats_apis_preserved``;
+    they must not be merged or renamed.
 """
 
 from aragora.caching.adaptive import AccessPattern, AdaptiveTTLCache, CacheOptimizer

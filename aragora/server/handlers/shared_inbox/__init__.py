@@ -9,6 +9,9 @@ This package contains modular components for shared inbox management:
 - handler.py: HTTP handlers and SharedInboxHandler class
 
 All public APIs are re-exported from this package for backward compatibility.
+
+Additional modules (import directly, without expanding eager package exports):
+_shared_inbox_handler.
 """
 
 from __future__ import annotations

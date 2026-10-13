@@ -81,7 +81,7 @@ async def get_agent_history_tool(
 
     # Get performance stats from storage
     try:
-        from aragora.server.storage import get_debates_db
+        from aragora.storage.debate_storage import get_debates_db
 
         db = get_debates_db()
         if db and hasattr(db, "get_agent_stats"):

@@ -709,7 +709,9 @@ class TestWebProvenanceTracker:
 
             mock_pool, _ = _mock_http_pool_response(status_code=200, text=content)
 
-            with patch("aragora.server.http_client_pool.get_http_pool", return_value=mock_pool):
+            with patch(
+                "aragora.observability.http_client_pool.get_http_pool", return_value=mock_pool
+            ):
                 check = await tracker.check_staleness(source_info)
                 assert check.status == StalenessStatus.FRESH
 
@@ -727,7 +729,9 @@ class TestWebProvenanceTracker:
 
             mock_pool, _ = _mock_http_pool_response(status_code=200, text="different content")
 
-            with patch("aragora.server.http_client_pool.get_http_pool", return_value=mock_pool):
+            with patch(
+                "aragora.observability.http_client_pool.get_http_pool", return_value=mock_pool
+            ):
                 check = await tracker.check_staleness(source_info)
                 assert check.status == StalenessStatus.STALE
                 assert "changed" in check.reason.lower()
@@ -746,7 +750,9 @@ class TestWebProvenanceTracker:
 
             mock_pool, _ = _mock_http_pool_response(status_code=404)
 
-            with patch("aragora.server.http_client_pool.get_http_pool", return_value=mock_pool):
+            with patch(
+                "aragora.observability.http_client_pool.get_http_pool", return_value=mock_pool
+            ):
                 check = await tracker.check_staleness(source_info)
                 assert check.status == StalenessStatus.ERROR
                 assert "404" in check.reason
@@ -764,7 +770,7 @@ class TestWebProvenanceTracker:
             )
 
             with patch(
-                "aragora.server.http_client_pool.get_http_pool",
+                "aragora.observability.http_client_pool.get_http_pool",
                 side_effect=ImportError("http pool not available"),
             ):
                 check = await tracker.check_staleness(source_info)
@@ -786,7 +792,9 @@ class TestWebProvenanceTracker:
             mock_pool, session_ctx = _mock_http_pool_response()
             session_ctx.__aenter__.side_effect = OSError("Network error")
 
-            with patch("aragora.server.http_client_pool.get_http_pool", return_value=mock_pool):
+            with patch(
+                "aragora.observability.http_client_pool.get_http_pool", return_value=mock_pool
+            ):
                 check = await tracker.check_staleness(source_info)
                 assert check.status == StalenessStatus.ERROR
                 assert "Network error" in check.reason

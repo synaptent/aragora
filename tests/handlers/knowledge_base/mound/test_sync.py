@@ -37,6 +37,7 @@ from aragora.server.handlers.knowledge_base.mound.sync import (
 # ---------------------------------------------------------------------------
 
 _RUN_ASYNC_PATCH = "aragora.server.handlers.knowledge_base.mound.sync._run_async"
+_SYNC_CLOSED = pytest.mark.xfail(strict=True, reason="fact sync closed until mound is org-scoped")
 
 
 def _body(result) -> dict:
@@ -689,6 +690,7 @@ class TestSyncConsensus:
 # ============================================================================
 
 
+@_SYNC_CLOSED
 class TestSyncFacts:
     """Test _handle_sync_facts - sync from FactStore endpoint."""
 
@@ -947,7 +949,6 @@ class TestSyncEdgeCases:
         for method in [
             handler._handle_sync_continuum,
             handler._handle_sync_consensus,
-            handler._handle_sync_facts,
         ]:
             with patch(_RUN_ASYNC_PATCH, side_effect=lambda coro: coro):
                 result = method(mock_http)
@@ -960,7 +961,6 @@ class TestSyncEdgeCases:
         for method_name, mock_method in [
             ("_handle_sync_continuum", mock_mound.sync_continuum_incremental),
             ("_handle_sync_consensus", mock_mound.sync_consensus_incremental),
-            ("_handle_sync_facts", mock_mound.sync_facts_incremental),
         ]:
             mock_method.reset_mock()
             with patch(_RUN_ASYNC_PATCH, side_effect=lambda coro: coro):
@@ -976,7 +976,6 @@ class TestSyncEdgeCases:
         for method in [
             handler_no_mound._handle_sync_continuum,
             handler_no_mound._handle_sync_consensus,
-            handler_no_mound._handle_sync_facts,
         ]:
             result = method(mock_http)
             assert _status(result) == 503
@@ -987,7 +986,6 @@ class TestSyncEdgeCases:
         for method in [
             handler._handle_sync_continuum,
             handler._handle_sync_consensus,
-            handler._handle_sync_facts,
         ]:
             result = method(mock_http)
             assert _status(result) == 400
@@ -1012,6 +1010,7 @@ class TestSyncEdgeCases:
         assert "workspace_id" in body
         assert "message" in body
 
+    @_SYNC_CLOSED
     def test_facts_sync_response_has_expected_keys(self, handler, mock_mound):
         """Facts sync response has synced, workspace_id, message keys."""
         mock_http = _make_http_handler({})
@@ -1040,6 +1039,7 @@ class TestSyncEdgeCases:
         body = _body(result)
         assert body["workspace_id"] == "../../etc/passwd"
 
+    @_SYNC_CLOSED
     def test_sync_facts_xss_in_workspace(self, handler, mock_mound):
         """XSS in workspace_id is stored as-is (rendering layer handles escaping)."""
         mock_http = _make_http_handler({"workspace_id": "<script>alert('xss')</script>"})
@@ -1130,6 +1130,7 @@ class TestSyncEdgeCases:
         body = _body(result)
         assert "knowledge mound" in body["error"].lower()
 
+    @_SYNC_CLOSED
     def test_facts_503_error_message(self, handler_no_mound):
         """503 error message for facts explicitly mentions Knowledge Mound."""
         mock_http = _make_http_handler({})
@@ -1198,6 +1199,7 @@ class TestFallbackAttributeError:
         body = _body(result)
         assert body["synced"] == 0
 
+    @_SYNC_CLOSED
     def test_facts_fallback_attribute_error_in_retry(self, handler, mock_mound):
         """AttributeError inside facts fallback returns graceful message."""
         call_count = [0]
@@ -1249,6 +1251,7 @@ class TestHandleErrorsDecorator:
             result = handler._handle_sync_consensus(mock_http)
         assert _status(result) == 400
 
+    @_SYNC_CLOSED
     def test_facts_type_error_returns_400(self, handler, mock_mound):
         """TypeError escapes to @handle_errors -> mapped to 400 for facts."""
         mock_http = _make_http_handler({})
@@ -1270,6 +1273,7 @@ class TestHandleErrorsDecorator:
             result = handler._handle_sync_consensus(mock_http)
         assert _status(result) == 404
 
+    @_SYNC_CLOSED
     def test_facts_key_error_returns_404(self, handler, mock_mound):
         """KeyError escapes to @handle_errors -> mapped to 404."""
         mock_http = _make_http_handler({})
@@ -1291,6 +1295,7 @@ class TestHandleErrorsDecorator:
             result = handler._handle_sync_consensus(mock_http)
         assert _status(result) == 400
 
+    @_SYNC_CLOSED
     def test_facts_value_error_returns_400(self, handler, mock_mound):
         """ValueError escapes to @handle_errors -> mapped to 400."""
         mock_http = _make_http_handler({})
@@ -1312,6 +1317,7 @@ class TestHandleErrorsDecorator:
             result = handler._handle_sync_consensus(mock_http)
         assert _status(result) == 500
 
+    @_SYNC_CLOSED
     def test_facts_connection_error_returns_500(self, handler, mock_mound):
         """ConnectionError (subclass of OSError) caught by handler -> 500."""
         mock_http = _make_http_handler({})

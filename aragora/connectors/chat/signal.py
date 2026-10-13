@@ -114,7 +114,7 @@ class SignalConnector(ChatPlatformConnector):
         self,
         channel_id: str,
         text: str,
-        blocks: list[dict[str, Any] | None] = None,
+        blocks: list[dict[str, Any]] | None = None,
         thread_id: str | None = None,
         **kwargs: Any,
     ) -> SendMessageResponse:
@@ -202,7 +202,7 @@ class SignalConnector(ChatPlatformConnector):
         channel_id: str,
         message_id: str,
         text: str,
-        blocks: list[dict[str, Any] | None] = None,
+        blocks: list[dict[str, Any]] | None = None,
         **kwargs: Any,
     ) -> SendMessageResponse:
         """Update an existing message - NOT SUPPORTED by Signal.
@@ -665,7 +665,7 @@ class SignalConnector(ChatPlatformConnector):
         self,
         command: BotCommand,
         text: str,
-        blocks: list[dict[str, Any] | None] = None,
+        blocks: list[dict[str, Any]] | None = None,
         ephemeral: bool = False,
         **kwargs: Any,
     ) -> SendMessageResponse:
@@ -691,7 +691,7 @@ class SignalConnector(ChatPlatformConnector):
         self,
         interaction: UserInteraction,
         text: str,
-        blocks: list[dict[str, Any] | None] = None,
+        blocks: list[dict[str, Any]] | None = None,
         replace_original: bool = False,
         **kwargs: Any,
     ) -> SendMessageResponse:
@@ -717,7 +717,7 @@ class SignalConnector(ChatPlatformConnector):
         self,
         title: str | None = None,
         body: str | None = None,
-        fields: list[tuple[str, str] | None] = None,
+        fields: list[tuple[str, str]] | None = None,
         actions: list[Any] | None = None,
         **kwargs: Any,
     ) -> list[dict[str, Any]]:

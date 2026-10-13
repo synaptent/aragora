@@ -26,9 +26,24 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
-from .orchestrator import Handoff
+from .handoff import Handoff
 from .reconcile import write_operator_receipt
-from .state import Feature
+from .state import PARK_KIND_MATERIALIZATION, PARK_KIND_MISSING_BRANCH, Feature
+
+# git rev-parse --verify failure signatures: the ref genuinely does not
+# resolve (vs a transient runner failure such as a timeout or lock).
+_UNKNOWN_REV_MARKERS = (
+    "unknown revision",
+    "bad revision",
+    "needed a single revision",
+    "not a valid ref",
+)
+
+
+def _is_unknown_revision(exc: BaseException) -> bool:
+    msg = str(exc).lower()
+    return any(marker in msg for marker in _UNKNOWN_REV_MARKERS)
+
 
 logger = logging.getLogger(__name__)
 
@@ -87,14 +102,24 @@ class BossLoopDispatch:
 
     def __call__(self, feature: Feature) -> Handoff:
         if _missing_live_branch(feature):
+            # Retryable park, NOT terminal (#8758 design decision): a missing
+            # branch means "not ready yet", never "dead" — the reconciler
+            # releases the park once a live branch appears (intake bridge /
+            # worker materialization / operator). Because this check runs on
+            # every dispatch, it is also the fail-closed claim-time
+            # re-verification: a parked feature promoted on stale state
+            # re-parks here instead of reaching the merge gate branchless.
             return Handoff(
                 success=False,
-                terminal=True,
+                parked=True,
+                parked_kind=PARK_KIND_MISSING_BRANCH,
                 blocked_reason=(
                     "auto-drain requires feature metadata.branch before live dispatch; "
-                    "seed/intake features must be converted into branch-backed work first"
+                    "parked (retryable) until intake/worker materializes a branch"
                 ),
-                discovered=[f"feature {feature.id} has no metadata.branch; parked for intake"],
+                discovered=[
+                    f"feature {feature.id} has no metadata.branch; parked non-terminally for intake"
+                ],
             )
 
         branch = self.gate.branch_for(feature)
@@ -104,7 +129,35 @@ class BossLoopDispatch:
             logger.info("feature %s already merged (idempotent success)", feature.id)
             return Handoff(success=True, discovered=["branch already merged on a prior attempt"])
 
-        head = self.gate.head_of(branch)
+        try:
+            head = self.gate.head_of(branch)
+        except RuntimeError as exc:
+            # The runner raises RuntimeError for EVERY nonzero exit and for
+            # timeouts (#8766 claude P2): only a genuine unknown-revision
+            # failure means the recorded ref is dead. Anything else is a
+            # transient git failure and parks as MATERIALIZATION — the paced,
+            # retry-bounded flavor — so one git outage cannot masquerade as a
+            # dead branch and burn the missing-branch budget.
+            if not _is_unknown_revision(exc):
+                return Handoff(
+                    success=False,
+                    parked=True,
+                    parked_kind=PARK_KIND_MATERIALIZATION,
+                    blocked_reason=(
+                        f"transient git failure resolving metadata.branch {branch!r}; "
+                        f"parked (retryable) for a paced retry: {exc}"
+                    ),
+                    discovered=[
+                        f"feature {feature.id}: transient git failure on head_of; paced retry"
+                    ],
+                )
+            return _park_missing_live_branch(
+                feature,
+                (
+                    f"auto-drain requires live git ref for metadata.branch {branch!r}; "
+                    f"parked (retryable) until intake/worker materializes a branch: {exc}"
+                ),
+            )
 
         # Foreign-commit guard (#8616): never collect evidence on a contaminated
         # head — park for re-derive instead of merging someone else's work.
@@ -252,3 +305,13 @@ def _only_missing_path_allowlist(foreign: list[str]) -> bool:
 def _missing_live_branch(feature: Feature) -> bool:
     branch = feature.metadata.get("branch")
     return not (isinstance(branch, str) and branch.strip())
+
+
+def _park_missing_live_branch(feature: Feature, reason: str) -> Handoff:
+    return Handoff(
+        success=False,
+        parked=True,
+        parked_kind=PARK_KIND_MISSING_BRANCH,
+        blocked_reason=reason,
+        discovered=[f"feature {feature.id} has no live metadata.branch ref; parked non-terminally"],
+    )

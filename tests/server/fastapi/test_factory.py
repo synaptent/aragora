@@ -16,7 +16,9 @@ from aragora.storage.connection_factory import DatabaseConfig, StorageBackendTyp
 def _patched_startup_dependencies():
     with ExitStack() as stack:
         mocked = {}
-        mocked["storage"] = stack.enter_context(patch("aragora.server.storage.DebateStorage"))
+        mocked["storage"] = stack.enter_context(
+            patch("aragora.storage.debate_storage.DebateStorage")
+        )
         mocked["get_user_store"] = stack.enter_context(
             patch("aragora.storage.user_store.get_user_store", return_value=MagicMock())
         )

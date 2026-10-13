@@ -20,6 +20,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch, MagicMock, PropertyMock, AsyncMock
 
+from aragora.security.encryption import EncryptedData, EncryptionAlgorithm
 from aragora.storage.webhook_config_store import (
     WebhookConfig,
     WebhookConfigStoreBackend,
@@ -35,6 +36,15 @@ from aragora.storage.webhook_config_store import (
     _encrypt_secret,
     _decrypt_secret,
 )
+
+# Same serialization as EncryptionService.encrypt(...).to_base64().
+ENCRYPTED_SECRET = EncryptedData(
+    ciphertext=bytes(range(48)),
+    nonce=bytes(12),
+    key_id="master",
+    key_version=1,
+    algorithm=EncryptionAlgorithm.AES_256_GCM,
+).to_base64()
 
 
 # =============================================================================
@@ -177,8 +187,7 @@ class TestEncryptionHelpers:
         """Test encrypt raises EncryptionError when service unavailable but required."""
         with pytest.raises(EncryptionError) as exc_info:
             _encrypt_secret("my-secret")
-        # When service is None, calling encrypt() raises AttributeError which becomes EncryptionError
-        assert "NoneType" in exc_info.value.reason or "encrypt" in exc_info.value.reason
+        assert exc_info.value.reason == "encryption service not available"
 
     @patch("aragora.storage.webhook_config_store.CRYPTO_AVAILABLE", True)
     @patch("aragora.storage.webhook_config_store.is_encryption_required", return_value=False)
@@ -234,8 +243,8 @@ class TestEncryptionHelpers:
 
     @patch("aragora.storage.webhook_config_store.CRYPTO_AVAILABLE", True)
     def test_decrypt_non_prefixed_secret(self):
-        """Test decrypt returns secrets not starting with AAAA as-is."""
-        long_secret = "B" * 60  # Long but doesn't start with AAAA
+        """Test decrypt returns long values that are not ciphertext as-is."""
+        long_secret = "B" * 60  # Valid base64, but not an EncryptedData payload
         result = _decrypt_secret(long_secret)
         assert result == long_secret
 
@@ -244,32 +253,32 @@ class TestEncryptionHelpers:
         """Test successful decryption through the service."""
         mock_service = MagicMock()
         mock_service.decrypt_string.return_value = "decrypted-secret"
-        encrypted = "AAAA" + "x" * 60  # Looks like encrypted data
         with patch(
             "aragora.storage.webhook_config_store.get_encryption_service", return_value=mock_service
         ):
-            result = _decrypt_secret(encrypted)
+            result = _decrypt_secret(ENCRYPTED_SECRET)
             assert result == "decrypted-secret"
+            mock_service.decrypt_string.assert_called_once_with(ENCRYPTED_SECRET)
 
     @patch("aragora.storage.webhook_config_store.CRYPTO_AVAILABLE", True)
     def test_decrypt_failure_returns_original(self):
         """Test decrypt returns original on failure (graceful degradation)."""
         mock_service = MagicMock()
         mock_service.decrypt_string.side_effect = ValueError("bad ciphertext")
-        encrypted = "AAAA" + "x" * 60
         with patch(
             "aragora.storage.webhook_config_store.get_encryption_service", return_value=mock_service
         ):
-            result = _decrypt_secret(encrypted)
-            assert result == encrypted
+            result = _decrypt_secret(ENCRYPTED_SECRET)
+            assert result == ENCRYPTED_SECRET
+            mock_service.decrypt_string.assert_called_once_with(ENCRYPTED_SECRET)
 
     @patch("aragora.storage.webhook_config_store.CRYPTO_AVAILABLE", True)
     @patch("aragora.storage.webhook_config_store.get_encryption_service", return_value=None)
     def test_decrypt_no_service_returns_original(self, mock_svc):
         """Test decrypt returns original when service unavailable."""
-        encrypted = "AAAA" + "x" * 60
-        result = _decrypt_secret(encrypted)
-        assert result == encrypted
+        result = _decrypt_secret(ENCRYPTED_SECRET)
+        assert result == ENCRYPTED_SECRET
+        mock_svc.assert_called_once_with()
 
 
 # =============================================================================

@@ -22,7 +22,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from aragora.server.errors import safe_error_message as _safe_error_message
+from aragora.api_errors import safe_error_message as _safe_error_message
 
 from aragora.server.validation import validate_debate_id
 

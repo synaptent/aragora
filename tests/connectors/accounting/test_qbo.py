@@ -735,7 +735,7 @@ class TestQuickBooksConnectorOAuth:
 
         mock_pool = MagicMock()
         mock_pool.get_session.return_value.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_pool.get_session.return_value.__aexit__ = AsyncMock()
+        mock_pool.get_session.return_value.__aexit__ = AsyncMock(return_value=False)
 
         with patch("aragora.connectors.accounting.qbo.get_http_pool", return_value=mock_pool):
             creds = await connector.refresh_tokens()
@@ -1504,7 +1504,7 @@ class TestQuickBooksConnectorRetry:
 
         mock_pool = MagicMock()
         mock_pool.get_session.return_value.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_pool.get_session.return_value.__aexit__ = AsyncMock()
+        mock_pool.get_session.return_value.__aexit__ = AsyncMock(return_value=False)
 
         with patch("aragora.connectors.accounting.qbo.get_http_pool", return_value=mock_pool):
             with patch("asyncio.sleep", new=AsyncMock()):
@@ -1526,7 +1526,7 @@ class TestQuickBooksConnectorRetry:
 
         mock_pool = MagicMock()
         mock_pool.get_session.return_value.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_pool.get_session.return_value.__aexit__ = AsyncMock()
+        mock_pool.get_session.return_value.__aexit__ = AsyncMock(return_value=False)
 
         with patch("aragora.connectors.accounting.qbo.get_http_pool", return_value=mock_pool):
             with patch("asyncio.sleep", new=AsyncMock()):
@@ -2660,7 +2660,7 @@ class TestRetryResilienceExtended:
 
         mock_pool = MagicMock()
         mock_pool.get_session.return_value.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_pool.get_session.return_value.__aexit__ = AsyncMock()
+        mock_pool.get_session.return_value.__aexit__ = AsyncMock(return_value=False)
 
         with patch("aragora.connectors.accounting.qbo.get_http_pool", return_value=mock_pool):
             with patch("asyncio.sleep", new=AsyncMock()):

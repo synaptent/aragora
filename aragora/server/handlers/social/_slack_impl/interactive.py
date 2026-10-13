@@ -112,7 +112,7 @@ class InteractiveMixin(MessagingMixin):
 
             # Record vote in debate system
             try:
-                from aragora.server.storage import get_debates_db
+                from aragora.storage.debate_storage import get_debates_db
 
                 db = get_debates_db()
                 if db and hasattr(db, "record_vote"):
@@ -164,7 +164,7 @@ class InteractiveMixin(MessagingMixin):
         # Fetch debate details
         debate_data = None
         try:
-            from aragora.server.storage import get_debates_db
+            from aragora.storage.debate_storage import get_debates_db
 
             db = get_debates_db()
             if db:

@@ -8,7 +8,7 @@
 #      - OPENAI_API_KEY
 #   2. Ensure GITHUB_TOKEN has permission to comment on PRs (default for most repos)
 #
-# For full setup instructions, see: docs/GITHUB_ACTION_SETUP.md
+# For full setup instructions, see: docs/guides/GITHUB_ACTION_SETUP.md
 #
 # NOTE: this example predates emit-receipt (#8669); see receipt.yml for the
 # receipt-emitting variant.
@@ -38,7 +38,7 @@ jobs:
     steps:
       - name: Run Aragora Review
         id: review
-        uses: synaptent/aragora@main
+        uses: synaptent/aragora@486a10d835be5da00df488b5bef6c1e708da8f10
         with:
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}

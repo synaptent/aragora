@@ -1,0 +1,17 @@
+{
+  "verifier": {
+    "verified": false,
+    "exit_code": 1,
+    "reasons": [
+      "acta_binding"
+    ]
+  },
+  "aragora_verify": {
+    "ok": false,
+    "exit_code": 1,
+    "reasons": [
+      "acta_binding"
+    ]
+  },
+  "description": "The same projection with only payload_digest.hash moved and re-signed: acta_binding FAIL."
+}

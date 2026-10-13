@@ -43,8 +43,8 @@ AGENTS_WITH_CODING_HARNESS = {"claude", "codex"}
 KILOCODE_PROVIDER_MAPPING = {
     "gemini": "google/gemini-3.1-pro",  # Gemini via OpenRouter
     "gemini-cli": "google/gemini-3.1-pro",
-    "grok": "openrouter/x-ai/grok-4",  # Grok via OpenRouter
-    "grok-cli": "openrouter/x-ai/grok-4",
+    "grok": "openrouter/x-ai/grok-4.5",  # Grok via OpenRouter
+    "grok-cli": "openrouter/x-ai/grok-4.5",
     "deepseek": "openrouter/deepseek/deepseek-v4-pro",  # DeepSeek via OpenRouter
     "qwen": "openrouter/qwen/qwen-2.5-coder-32b-instruct",  # Qwen via OpenRouter
 }

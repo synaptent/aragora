@@ -443,21 +443,21 @@ class TestSlackErrorHandling:
 
     @pytest.mark.asyncio
     async def test_handles_missing_permissions(self, mock_credentials):
-        """Should handle missing permission errors gracefully."""
+        """A missing_scope API error propagates out of _get_channels."""
         from aragora.connectors.enterprise.collaboration.slack import SlackConnector
 
         connector = SlackConnector()
         connector.credentials = mock_credentials
 
         with patch.object(connector, "_api_request", new_callable=AsyncMock) as mock_api:
-            mock_api.side_effect = Exception("missing_scope: channels:read")
+            # Slack reports a missing scope as ok=false, which _api_request
+            # raises as RuntimeError("Slack API error: <error>")
+            mock_api.side_effect = RuntimeError("Slack API error: missing_scope")
 
-            try:
-                channels = await connector._get_channels()
-                assert channels == [] or channels is None
-            except Exception:
-                # Exception is acceptable for permission errors
-                pass
+            with pytest.raises(RuntimeError, match="missing_scope"):
+                await connector._get_channels()
+
+            mock_api.assert_awaited_once()
 
 
 class TestSlackWebhookHandling:

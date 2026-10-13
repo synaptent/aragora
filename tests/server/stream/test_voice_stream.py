@@ -24,7 +24,7 @@ from aragora.connectors.exceptions import (
     ConnectorRateLimitError,
 )
 from aragora.connectors.whisper import TranscriptionResult, TranscriptionSegment
-from aragora.server.stream.events import StreamEvent, StreamEventType
+from aragora.events.types import StreamEvent, StreamEventType
 
 
 # ===========================================================================

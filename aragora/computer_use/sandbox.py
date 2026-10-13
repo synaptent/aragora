@@ -197,7 +197,7 @@ class DockerSandboxProvider(SandboxProvider):
 
             if config.read_only_root:
                 cmd.append("--read-only")
-                cmd.extend(["--tmpfs", "/tmp:rw,exec,size=100m"])  # noqa: S108 - container-internal tmpfs mount
+                cmd.extend(["--tmpfs", "/tmp:rw,exec,size=100m"])  # container-internal tmpfs mount
                 cmd.extend(["--tmpfs", "/run:rw,size=50m"])
 
             cmd.extend(config.docker_extra_args)

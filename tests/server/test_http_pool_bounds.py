@@ -2,7 +2,7 @@
 
 import pytest
 
-from aragora.server.http_client_pool import HTTPPoolConfig
+from aragora.observability.http_client_pool import HTTPPoolConfig
 from aragora.server.rate_limit_redis import RedisConfig
 
 

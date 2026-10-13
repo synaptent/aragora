@@ -346,8 +346,11 @@ class QueryPlanAnalyzer:
 
         if self.mode == "warn":
             logger.warning(
-                f"Query plan issue: {issue.issue} on {issue.table or 'unknown'} "
-                f"({issue.duration_ms:.1f}ms) - {issue.suggestion}"
+                "Query plan issue: %s on %s (%.1fms) - %s",
+                issue.issue,
+                issue.table or "unknown",
+                issue.duration_ms,
+                issue.suggestion,
             )
 
     def get_issues(self) -> list[QueryPlanIssue]:

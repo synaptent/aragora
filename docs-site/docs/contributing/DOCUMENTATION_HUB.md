@@ -28,7 +28,7 @@ Quick navigation for the Aragora platform documentation.
 | Goal | Document |
 |------|----------|
 | Deployment guide | [DEPLOYMENT.md](../deployment/overview) |
-| Docker setup | [deployment/DOCKER.md](../deployment/docker) |
+| Docker setup | [DEPLOYMENT.md](../deployment/overview) |
 | Production readiness | [PRODUCTION_READINESS.md](../operations/production-readiness) |
 | CI/CD security | [CI_CD_SECURITY.md](../security/ci-cd) |
 

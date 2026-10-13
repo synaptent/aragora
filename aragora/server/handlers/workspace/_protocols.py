@@ -3,7 +3,7 @@ Protocol stubs describing the cross-mixin host contract for workspace handlers.
 
 Each of the workspace handler modules (``crud``, ``policies``, ``members``,
 ``invites``, ``settings``) defines a ``*Mixin`` class that is combined into
-the concrete :class:`aragora.server.handlers.workspace_module.WorkspaceHandler`
+the concrete :class:`aragora.server.handlers.workspace.workspace_module.WorkspaceHandler`
 together with :class:`aragora.server.handlers.secure.SecureHandler`.  At
 runtime the ``self`` of any of those mixins is the fully assembled handler,
 which is why it is safe to call accessors like ``self._get_audit_log()``
@@ -48,7 +48,7 @@ class WorkspaceMixinHost(Protocol):
     """Cross-mixin contract for workspace handler mixin classes.
 
     The concrete handler
-    (:class:`aragora.server.handlers.workspace_module.WorkspaceHandler`)
+    (:class:`aragora.server.handlers.workspace.workspace_module.WorkspaceHandler`)
     satisfies this protocol through a combination of methods defined on it
     directly and methods inherited from
     :class:`aragora.server.handlers.secure.SecureHandler` (via

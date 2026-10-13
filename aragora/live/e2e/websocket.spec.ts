@@ -1,3 +1,4 @@
+import type { WebSocket as PlaywrightWebSocket } from '@playwright/test';
 import { test, expect } from './fixtures';
 
 /**
@@ -247,12 +248,23 @@ test.describe('WebSocket Connectivity', () => {
     });
 
     test('should clean up connections on page unload', async ({ page, aragoraPage }) => {
-      let activeConnections = 0;
+      // Since Playwright 1.63 (Chromium 153), sockets discarded together with their document by a full
+      // navigation are never reported as closed, so each socket is tagged with the document that opened
+      // it and only the current document's open sockets are counted after navigating away.
+      let documentGeneration = 0;
+      let leavingPage = false;
+      const openSockets = new Map<PlaywrightWebSocket, number>();
 
+      page.on('framenavigated', (frame) => {
+        if (leavingPage && frame === page.mainFrame()) {
+          leavingPage = false;
+          documentGeneration++;
+        }
+      });
       page.on('websocket', (ws) => {
-        activeConnections++;
+        openSockets.set(ws, documentGeneration);
         ws.on('close', () => {
-          activeConnections--;
+          openSockets.delete(ws);
         });
       });
 
@@ -260,14 +272,19 @@ test.describe('WebSocket Connectivity', () => {
       await aragoraPage.dismissAllOverlays();
       await page.waitForTimeout(2000);
 
-      const connectionsBeforeNav = activeConnections;
+      const connectionsBeforeNav = openSockets.size;
 
       // Navigate away
+      leavingPage = true;
       await page.goto('/');
       await aragoraPage.dismissAllOverlays();
       await page.waitForTimeout(2000);
 
       // Connections should be cleaned up or reused
+      expect(documentGeneration).toBe(1);
+      const activeConnections = [...openSockets.values()].filter(
+        (generation) => generation === documentGeneration,
+      ).length;
       expect(activeConnections).toBeLessThanOrEqual(connectionsBeforeNav);
     });
   });

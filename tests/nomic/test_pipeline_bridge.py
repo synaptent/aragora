@@ -378,7 +378,7 @@ class TestExecuteViaPipeline:
             patch.object(bridge, "build_decision_plan", return_value=plan) as mock_build,
             patch("aragora.pipeline.executor.PlanExecutor") as mock_executor_cls,
             patch(
-                "aragora.server.decision_integrity_utils.execute_decision_plan_with_backbone",
+                "aragora.pipeline.decision_integrity_utils.execute_decision_plan_with_backbone",
                 new=AsyncMock(return_value=(launch, outcome)),
             ) as mock_execute,
         ):
@@ -434,7 +434,7 @@ class TestExecuteViaPipeline:
             patch.object(bridge, "build_decision_plan", return_value=plan),
             patch("aragora.pipeline.executor.PlanExecutor") as mock_executor_cls,
             patch(
-                "aragora.server.decision_integrity_utils.execute_decision_plan_with_backbone",
+                "aragora.pipeline.decision_integrity_utils.execute_decision_plan_with_backbone",
                 new=AsyncMock(return_value=({"run_id": "run-nomic-2"}, outcome)),
             ),
         ):

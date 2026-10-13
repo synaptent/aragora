@@ -1,0 +1,103 @@
+{
+  "evidence_scope": {
+    "fresh_revision_execution": false,
+    "kind": "historical_bootstrap",
+    "normalization_receipt": "docs/benchmarks/evidence/tw-01-bounded-execution-v1/rev-7/normalization-receipt.json",
+    "note": "Proxy successes belong to the retained historical verified cohort. The five in-progress outcomes predate normalization; no revision-7 execution success is claimed."
+  },
+  "corpus": {
+    "corpus_id": "tw-01-bounded-execution-v1",
+    "issue_count": 10,
+    "manifest_sha256": "92c5df0190008beeac174319c621a9042fe9d5637d43ee6111d1b757a8079a35",
+    "membership_issue_numbers": [
+      5185,
+      5187,
+      5197,
+      5198,
+      5200,
+      5749,
+      5751,
+      5753,
+      5754,
+      5755
+    ],
+    "membership_sha256": "608552ce2f5b614347e1a2fcb158e217054b6dcdaa5790a08974b3ad66e6f548",
+    "path": "docs/benchmarks/corpus.json",
+    "recorded_on": "2026-08-19",
+    "revision": 7,
+    "success_contract": "mergeable_pr_or_merged_pr"
+  },
+  "coverage": {
+    "attempted_issue_count": 10,
+    "is_complete": true,
+    "missing_issue_count": 0,
+    "missing_issue_numbers": [],
+    "status": "complete"
+  },
+  "deltas": {
+    "merged_only_rate": 0.0,
+    "no_rescue_truth_success_rate": 0.0,
+    "proxy_no_rescue_success_rate": 0.0,
+    "truth_success_rate": 0.0,
+    "unique_issues_attempted": 0.0
+  },
+  "failure_class_distribution": {
+    "blocked_not_dispatch_bounded": 5,
+    "blocked_validation_target_missing": 5
+  },
+  "generated_at": "2026-08-19T15:19:55Z",
+  "metrics_file": "docs/benchmarks/evidence/tw-01-bounded-execution-v1/rev-7/bootstrap-metrics.jsonl",
+  "previous_artifact": {
+    "generated_at": "2026-08-19T14:53:21Z",
+    "path": "docs/status/generated/benchmark_scorecards/tw-01-bounded-execution-v1/rev-7/scorecard-20260819T145321Z.json"
+  },
+  "proxy_metrics": {
+    "corpus": {
+      "corpus_id": "tw-01-bounded-execution-v1",
+      "issue_count": 10,
+      "path": "docs/benchmarks/corpus.json",
+      "recorded_on": "2026-08-19",
+      "revision": 7,
+      "success_contract": "mergeable_pr_or_merged_pr"
+    },
+    "coverage": {
+      "attempted_issue_count": 10,
+      "is_complete": true,
+      "missing_issue_count": 0,
+      "missing_issue_numbers": [],
+      "status": "complete"
+    },
+    "failure_classes": {
+      "blocked_not_dispatch_bounded": 5,
+      "blocked_validation_target_missing": 5
+    },
+    "mean_elapsed_seconds": 328.2,
+    "median_elapsed_seconds": 216.3,
+    "neutral_classes": {},
+    "no_rescue_success_rate": 0.5,
+    "status": "active",
+    "success_classes": {
+      "deliverable_pr_created": 5
+    },
+    "terminal_class_distribution": {
+      "blocked_not_dispatch_bounded": 5,
+      "blocked_validation_target_missing": 5,
+      "deliverable_pr_created": 5
+    },
+    "tick_success_rate": 0.333,
+    "total_ticks": 15,
+    "unique_issues_attempted": 10,
+    "unique_issues_failed": 5,
+    "unique_issues_neutral": 0,
+    "unique_issues_succeeded": 5
+  },
+  "rescue_counts_by_type": {},
+  "truth_artifact_generated_at": "2026-08-19T15:19:45Z",
+  "truth_artifact_path": "docs/status/generated/benchmark_truth_artifacts/tw-01-bounded-execution-v1/rev-7/truth-20260819T151945Z.json",
+  "truth_metrics": {
+    "merged_only_rate": 0.5,
+    "no_rescue_truth_success_rate": 0.5,
+    "truth_success_rate": 0.5,
+    "truth_success_rate_verified": 1.0
+  }
+}

@@ -11,11 +11,11 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from aragora_verify import compute_key_id, odr_content_digest
 
 
-def valid_odr() -> dict[str, Any]:
-    """A schema-conformant ODR v0.1 document (unsigned)."""
+def valid_odr(odr_version: str = "0.1") -> dict[str, Any]:
+    """A schema-conformant ODR document, v0.1 unless explicitly requested."""
     return {
-        "odr_version": "0.1",
-        "profile": "https://aragora.ai/specs/open-decision-receipt/v0.1",
+        "odr_version": odr_version,
+        "profile": f"https://aragora.ai/specs/open-decision-receipt/v{odr_version}",
         "receipt_id": "rcpt-0001",
         "issued_at": "2026-06-14T00:00:00Z",
         "subject": {

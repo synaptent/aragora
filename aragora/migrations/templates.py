@@ -545,7 +545,7 @@ migration = Migration(
     up_fn=up_fn,
     down_fn=down_fn,
 )
-'''  # noqa: S608 -- template generates migration file, no user input
+'''  # template generates migration file, no user input
 
 
 def generate_constraint_migration(

@@ -1,0 +1,376 @@
+"""ACTA-02 projections in the standalone verifier: module parity, checks, CLI.
+
+``aragora_verify.acta`` is a verbatim copy of
+``aragora/gauntlet/odr_acta_projection.py`` so a stranger can verify a
+projection with nothing but this package and ``cryptography``.
+"""
+
+from __future__ import annotations
+
+import base64
+import copy
+import hashlib
+import json
+from pathlib import Path
+from typing import Any
+
+import pytest
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+from _fixtures import valid_odr
+from aragora_verify import compute_key_id, odr_content_digest
+from aragora_verify.acta import (
+    ACTA_CHAIN_SCOPE,
+    ACTA_PAYLOAD_TYPE,
+    ACTA_SIGNATURE_ALG,
+    GENESIS_PREVIOUS_RECEIPT_HASH,
+    acta_envelope_hash,
+    ed25519_key_id,
+    project_to_acta,
+    verify_acta_projection,
+)
+from aragora_verify.cli import main
+from aragora_verify.jcs import jcs_canonicalize, odr_signature_message
+from aragora_verify.verifier import verify
+
+_COPY = Path(__file__).resolve().parents[1] / "src" / "aragora_verify" / "acta.py"
+_IN_TREE = Path(__file__).resolve().parents[2] / "aragora" / "gauntlet" / "odr_acta_projection.py"
+
+_PUBKEY_PEM = "pubkey.pem"
+
+
+def _key() -> Ed25519PrivateKey:
+    return Ed25519PrivateKey.from_private_bytes(bytes(range(32)))
+
+
+def _signed_v02_odr(private_key: Ed25519PrivateKey) -> dict[str, Any]:
+    """A v0.2 ODR document signed with the §6 v0.2 construction."""
+    doc = valid_odr("0.2")
+    doc["profile"] = "https://aragora.ai/specs/open-decision-receipt/v0.2"
+    entry = {
+        "alg": "Ed25519",
+        "key_id": compute_key_id(private_key.public_key()),
+        "issuer": "aragora",
+        "role": "emitter",
+        "signed_at": "2026-06-14T00:00:01Z",
+    }
+    message = odr_signature_message(odr_content_digest(doc), doc["odr_version"], entry)
+    signed = copy.deepcopy(doc)
+    signed["signatures"] = [
+        {**entry, "signature": base64.b64encode(private_key.sign(message)).decode("ascii")}
+    ]
+    return signed
+
+
+@pytest.fixture
+def private_key() -> Ed25519PrivateKey:
+    return _key()
+
+
+@pytest.fixture
+def odr(private_key: Ed25519PrivateKey) -> dict[str, Any]:
+    return _signed_v02_odr(private_key)
+
+
+@pytest.fixture
+def pubkey_file(tmp_path: Path, private_key: Ed25519PrivateKey) -> Path:
+    from cryptography.hazmat.primitives import serialization
+
+    path = tmp_path / _PUBKEY_PEM
+    path.write_bytes(
+        private_key.public_key().public_bytes(
+            serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo
+        )
+    )
+    return path
+
+
+@pytest.fixture
+def projection(tmp_path: Path, odr: dict[str, Any], private_key: Ed25519PrivateKey):
+    """Write an ODR document and its genesis projection; return both paths."""
+    kid = compute_key_id(private_key.public_key())
+    envelope = project_to_acta(odr, private_key=private_key, kid=kid)
+    odr_path = tmp_path / "receipt.odr.json"
+    acta_path = tmp_path / "receipt.acta.json"
+    odr_path.write_bytes(jcs_canonicalize(odr))
+    acta_path.write_bytes(jcs_canonicalize(envelope))
+    return odr_path, acta_path
+
+
+# ---------------------------------------------------------------------------
+# The two copies must not drift
+# ---------------------------------------------------------------------------
+
+
+def test_bundled_acta_module_exists() -> None:
+    assert _COPY.is_file(), _COPY
+
+
+def test_bundled_acta_module_is_byte_identical_to_the_in_tree_copy() -> None:
+    if not _IN_TREE.is_file():
+        pytest.skip(f"in-tree module not present at {_IN_TREE} (standalone checkout)")
+    assert _COPY.read_bytes() == _IN_TREE.read_bytes(), (
+        f"{_COPY} and {_IN_TREE} have drifted; the ACTA projection module is "
+        "duplicated verbatim so the standalone verifier needs no aragora install"
+    )
+
+
+def test_bundled_acta_module_does_not_import_aragora() -> None:
+    source = _COPY.read_text(encoding="utf-8")
+    assert "import aragora" not in source
+    assert "from aragora" not in source
+
+
+# ---------------------------------------------------------------------------
+# Projection and verification
+# ---------------------------------------------------------------------------
+
+
+def test_projection_binds_the_whole_signed_document(odr, private_key):
+    kid = compute_key_id(private_key.public_key())
+    envelope = project_to_acta(odr, private_key=private_key, kid=kid)
+
+    canonical = jcs_canonicalize(odr)
+    payload = envelope["payload"]
+    assert set(envelope) == {"payload", "signature"}
+    assert payload["type"] == ACTA_PAYLOAD_TYPE
+    assert payload["chain_scope"] == ACTA_CHAIN_SCOPE
+    assert payload["issuer_id"] == kid == envelope["signature"]["kid"]
+    assert envelope["signature"]["alg"] == ACTA_SIGNATURE_ALG
+    assert payload["payload_digest"]["hash"] == "sha256:" + hashlib.sha256(canonical).hexdigest()
+    assert payload["payload_digest"]["size"] == len(canonical)
+    assert payload["odr"] == odr
+    assert payload["previousReceiptHash"] == GENESIS_PREVIOUS_RECEIPT_HASH
+    private_key.public_key().verify(
+        bytes.fromhex(envelope["signature"]["sig"]), jcs_canonicalize(payload)
+    )
+
+
+def test_verify_accepts_a_projection_and_a_lone_non_genesis_link(odr, private_key):
+    kid = compute_key_id(private_key.public_key())
+    first = project_to_acta(odr, private_key=private_key, kid=kid)
+    second = project_to_acta(
+        odr, private_key=private_key, kid=kid, previous_receipt_hash=acta_envelope_hash(first)
+    )
+
+    assert verify_acta_projection(first, private_key.public_key()).ok is True
+    assert verify_acta_projection(second, private_key.public_key()).ok is True
+    assert verify_acta_projection(second, private_key.public_key(), previous_envelope=first).ok
+
+
+def test_verify_rejects_a_broken_binding(odr, private_key):
+    kid = compute_key_id(private_key.public_key())
+    envelope = project_to_acta(odr, private_key=private_key, kid=kid)
+    envelope["payload"]["odr"]["claim"]["verdict"] = "FAIL"
+
+    result = verify_acta_projection(envelope, private_key.public_key())
+
+    assert result.ok is False
+    assert any("acta_binding" in reason for reason in result.reasons)
+    assert result.to_dict()["ok"] is False
+
+
+def test_verify_rejects_an_empty_preview(odr, private_key):
+    kid = compute_key_id(private_key.public_key())
+    envelope = project_to_acta(odr, private_key=private_key, kid=kid)
+    envelope["payload"]["payload_digest"]["preview"] = ""
+
+    result = verify_acta_projection(envelope, private_key.public_key())
+
+    assert result.ok is False
+    assert any("preview" in reason for reason in result.reasons)
+
+
+def test_receipt_match_compares_canonical_bytes_not_python_equality(private_key):
+    kid = compute_key_id(private_key.public_key())
+    as_bool = _signed_v02_odr(private_key)
+    as_bool["quorum"]["independence"]["distinct_model_families"] = True
+    as_int = copy.deepcopy(as_bool)
+    as_int["quorum"]["independence"]["distinct_model_families"] = 1
+    envelope = project_to_acta(as_bool, private_key=private_key, kid=kid)
+
+    result = verify(as_int, public_key=private_key.public_key(), acta=envelope)
+
+    assert as_bool == as_int, "Python equality cannot tell JSON true from 1"
+    assert jcs_canonicalize(as_bool) != jcs_canonicalize(as_int)
+    match = next(check for check in result.checks if check.name == "acta_receipt_match")
+    assert match.status == "fail"
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+
+def test_cli_verifies_the_pair(projection, pubkey_file, capsys):
+    odr_path, acta_path = projection
+
+    exit_code = main([str(odr_path), "--acta", str(acta_path), "--pubkey", str(pubkey_file)])
+
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "acta_binding" in out
+    assert "=> VERIFIED" in out
+
+
+def test_cli_auto_detects_an_envelope_passed_alone(projection, pubkey_file, capsys):
+    _, acta_path = projection
+
+    exit_code = main([str(acta_path), "--pubkey", str(pubkey_file)])
+
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "acta_signature" in out
+
+
+def test_cli_reports_projection_checks_in_json(projection, pubkey_file, capsys):
+    odr_path, acta_path = projection
+
+    exit_code = main(
+        [str(odr_path), "--acta", str(acta_path), "--pubkey", str(pubkey_file), "--json"]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    names = [check["name"] for check in payload["checks"]]
+    assert {"acta_envelope", "acta_binding", "acta_signature", "acta_chain"} <= set(names)
+    assert payload["ok"] is True
+
+
+def test_cli_fails_a_broken_binding(projection, pubkey_file, tmp_path, capsys):
+    odr_path, acta_path = projection
+    envelope = json.loads(acta_path.read_text())
+    envelope["payload"]["odr"]["claim"]["verdict"] = "FAIL"
+    broken = tmp_path / "broken.acta.json"
+    broken.write_text(json.dumps(envelope))
+
+    exit_code = main([str(odr_path), "--acta", str(broken), "--pubkey", str(pubkey_file)])
+
+    out = capsys.readouterr().out
+    assert exit_code == 1
+    assert "acta_binding" in out
+    assert "FAIL" in out
+
+
+def test_cli_fails_when_the_projection_carries_a_different_receipt(
+    projection, pubkey_file, tmp_path, capsys
+):
+    odr_path, acta_path = projection
+    other = json.loads(odr_path.read_text())
+    other["receipt_id"] = "rcpt-0002"
+    other_path = tmp_path / "other.odr.json"
+    other_path.write_text(json.dumps(other))
+
+    exit_code = main([str(other_path), "--acta", str(acta_path), "--pubkey", str(pubkey_file)])
+
+    assert exit_code == 1
+    assert "acta_receipt" in capsys.readouterr().out
+
+
+def test_cli_reports_a_missing_projection_file_as_usage(projection, pubkey_file, tmp_path, capsys):
+    odr_path, _ = projection
+
+    exit_code = main(
+        [str(odr_path), "--acta", str(tmp_path / "nope.acta.json"), "--pubkey", str(pubkey_file)]
+    )
+
+    assert exit_code == 2
+    assert "not found" in capsys.readouterr().err
+
+
+def test_cli_without_a_public_key_reports_unverified(tmp_path, private_key, capsys):
+    """An envelope always carries a signature, so leaving it unchecked is not VERIFIED."""
+    unsigned = valid_odr("0.2")
+    unsigned["profile"] = "https://aragora.ai/specs/open-decision-receipt/v0.2"
+    envelope = project_to_acta(
+        unsigned, private_key=private_key, kid=compute_key_id(private_key.public_key())
+    )
+    odr_path = tmp_path / "unsigned.odr.json"
+    odr_path.write_bytes(jcs_canonicalize(unsigned))
+    acta_path = tmp_path / "unsigned.acta.json"
+    acta_path.write_bytes(jcs_canonicalize(envelope))
+
+    assert main([str(odr_path)]) == 0, "an unsigned receipt on its own stays a warning"
+    capsys.readouterr()
+
+    exit_code = main([str(odr_path), "--acta", str(acta_path)])
+
+    out = capsys.readouterr().out
+    assert exit_code == 3
+    assert "UNVERIFIED" in out
+    assert "acta_signature" in out
+
+
+def test_cli_help_lists_the_flag(capsys):
+    with pytest.raises(SystemExit) as exc:
+        main(["--help"])
+
+    assert exc.value.code == 0
+    assert "--acta" in capsys.readouterr().out
+
+
+def test_bundled_key_id_matches_the_packages_compute_key_id(private_key) -> None:
+    public_key = private_key.public_key()
+
+    assert ed25519_key_id(public_key) == compute_key_id(public_key)
+
+
+def test_cli_fails_an_envelope_relabelled_with_another_kid(
+    projection, pubkey_file, tmp_path, capsys
+) -> None:
+    odr_path, acta_path = projection
+    private_key = _key()
+    envelope = json.loads(acta_path.read_text())
+    other_kid = compute_key_id(Ed25519PrivateKey.generate().public_key())
+    envelope["payload"]["issuer_id"] = other_kid
+    envelope["signature"]["kid"] = other_kid
+    envelope["signature"]["sig"] = private_key.sign(jcs_canonicalize(envelope["payload"])).hex()
+    relabelled = tmp_path / "relabelled.acta.json"
+    relabelled.write_bytes(jcs_canonicalize(envelope))
+
+    code = main([str(odr_path), "--acta", str(relabelled), "--pubkey", str(pubkey_file)])
+
+    assert code == 1
+    out = capsys.readouterr().out
+    assert "signer-label tampering" in out
+
+
+def test_cli_rejects_an_envelope_given_as_both_receipt_and_acta(
+    projection, pubkey_file, tmp_path, capsys
+) -> None:
+    """Never print a verdict for the named file without checking it."""
+    _, acta_path = projection
+    forged = json.loads(acta_path.read_text())
+    forged["signature"]["sig"] = "0" * 128
+    forged_path = tmp_path / "forged.acta.json"
+    forged_path.write_bytes(jcs_canonicalize(forged))
+
+    code = main([str(forged_path), "--acta", str(acta_path), "--pubkey", str(pubkey_file)])
+
+    captured = capsys.readouterr()
+    assert code == 2
+    assert "VERIFIED" not in captured.out
+    assert "itself an ACTA-02 projection" in captured.err
+
+
+def test_bundled_copy_rejects_an_impossible_issued_at(odr, private_key) -> None:
+    """The reviewer's repro: an RFC 3339-shaped but non-existent instant."""
+    kid = compute_key_id(private_key.public_key())
+    envelope = project_to_acta(odr, private_key=private_key, kid=kid)
+    envelope["payload"]["issued_at"] = "2026-99-99T99:99:99Z"
+    envelope["signature"]["sig"] = private_key.sign(jcs_canonicalize(envelope["payload"])).hex()
+
+    result = verify_acta_projection(envelope, private_key.public_key())
+
+    assert result.ok is False
+    assert any("issued_at" in reason for reason in result.reasons)
+
+
+def test_bundled_result_flags_an_unauthenticated_verdict(odr, private_key) -> None:
+    kid = compute_key_id(private_key.public_key())
+    envelope = project_to_acta(odr, private_key=private_key, kid=kid)
+
+    result = verify_acta_projection(envelope, None)
+
+    assert result.ok is True
+    assert result.authenticity_unverified is True

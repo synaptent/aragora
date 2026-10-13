@@ -169,18 +169,19 @@ def test_tampered_key_id_fails_even_with_valid_signature() -> None:
     assert "key_id" in check.detail
 
 
-def test_non_numeric_model_families_still_verifies_signed() -> None:
-    # The distinct_model_families warn-only carve-out (see
-    # test_odr_verify_schema.py) must hold on the signed path too: the schema
-    # deviation may not change what bytes were signed or how they verify.
+def test_non_numeric_model_families_fails_before_the_signature_check() -> None:
+    # The schema types distinct_model_families as an integer, so a malformed
+    # value is rejected structurally and verification never reaches signatures:
+    # a valid signature over a malformed body is still not a verified receipt.
     priv = Ed25519PrivateKey.generate()
     doc = _valid_odr()
     doc["quorum"]["independence"]["distinct_model_families"] = "n/a"
     signed = _sign(doc, priv)
     result = verify_odr_document(signed, public_key=load_public_key(_pem(priv.public_key())))
-    assert result.ok is True
-    assert _check(result, "signature").status == PASS
-    assert any("not numeric" in w for w in result.warnings)
+    assert result.ok is False
+    assert [c.name for c in result.checks] == ["schema_conformance"]
+    detail = _check(result, "schema_conformance").detail
+    assert "quorum.independence.distinct_model_families" in detail
 
 
 def test_raw_key_with_leading_whitespace_byte_loads() -> None:

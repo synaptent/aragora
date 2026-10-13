@@ -772,8 +772,11 @@ class TenantRouter:
         )
 
         logger.debug(
-            f"Routed tenant {resolved_tenant_id} to {endpoint.url} "
-            f"(fallback={used_fallback}, time={decision_time_ms:.2f}ms)"
+            "Routed tenant %s to %s (fallback=%s, time=%.2fms)",
+            resolved_tenant_id,
+            endpoint.url,
+            used_fallback,
+            decision_time_ms,
         )
 
         return decision
@@ -906,8 +909,8 @@ class TenantRouter:
         elif strategy == LoadBalancingStrategy.WEIGHTED_RANDOM:
             total_weight = sum(e.weight for e in endpoints)
             if total_weight == 0:
-                return random.choice(endpoints)  # noqa: S311 -- load balancing
-            r = random.randint(1, total_weight)  # noqa: S311 -- load balancing
+                return random.choice(endpoints)
+            r = random.randint(1, total_weight)
             cumulative = 0
             for endpoint in endpoints:
                 cumulative += endpoint.weight

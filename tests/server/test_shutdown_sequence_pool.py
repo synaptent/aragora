@@ -34,14 +34,14 @@ class TestHTTPClientPoolShutdown:
         mock_pool.aclose = AsyncMock()
 
         async def close_http_client_pool():
-            from aragora.server.http_client_pool import HTTPClientPool
+            from aragora.observability.http_client_pool import HTTPClientPool
 
             pool = HTTPClientPool.get_instance()
             if pool and not pool._closed:
                 await pool.aclose()
 
         with patch(
-            "aragora.server.http_client_pool.HTTPClientPool.get_instance",
+            "aragora.observability.http_client_pool.HTTPClientPool.get_instance",
             return_value=mock_pool,
         ):
             sequence = ShutdownSequence()
@@ -85,7 +85,7 @@ class TestHTTPClientPoolShutdown:
         mock_pool.aclose = AsyncMock(side_effect=RuntimeError("Pool close error"))
 
         async def close_http_client_pool():
-            from aragora.server.http_client_pool import HTTPClientPool
+            from aragora.observability.http_client_pool import HTTPClientPool
 
             pool = HTTPClientPool.get_instance()
             if pool and not pool._closed:
@@ -95,7 +95,7 @@ class TestHTTPClientPoolShutdown:
             await asyncio.sleep(0.01)
 
         with patch(
-            "aragora.server.http_client_pool.HTTPClientPool.get_instance",
+            "aragora.observability.http_client_pool.HTTPClientPool.get_instance",
             return_value=mock_pool,
         ):
             sequence = ShutdownSequence()
@@ -162,7 +162,7 @@ class TestHTTPClientPoolShutdown:
 
         async def close_http_client_pool():
             try:
-                from aragora.server.http_client_pool import HTTPClientPool
+                from aragora.observability.http_client_pool import HTTPClientPool
 
                 pool = HTTPClientPool.get_instance()
                 if pool and not pool._closed:
@@ -172,7 +172,7 @@ class TestHTTPClientPoolShutdown:
                 pass
 
         with patch(
-            "aragora.server.http_client_pool.HTTPClientPool.get_instance",
+            "aragora.observability.http_client_pool.HTTPClientPool.get_instance",
             return_value=mock_pool,
         ):
             sequence = ShutdownSequence()

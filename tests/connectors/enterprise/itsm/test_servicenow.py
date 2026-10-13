@@ -1138,10 +1138,11 @@ class TestServiceNowErrorHandling:
 
     @pytest.mark.asyncio
     async def test_search_handles_api_errors(self, servicenow_connector):
-        """Test search gracefully handles API errors.
+        """Test search logs and propagates API errors (fail-closed).
 
-        Note: The implementation only catches specific exception types:
-        OSError, RuntimeError, ValueError, TypeError, KeyError.
+        Since #4781 search re-raises the caught exception types (OSError,
+        RuntimeError, ValueError, TypeError, KeyError) after logging, so
+        callers can distinguish a failure from an empty result set.
         """
         with patch.object(
             servicenow_connector,
@@ -1149,16 +1150,16 @@ class TestServiceNowErrorHandling:
             new_callable=AsyncMock,
             side_effect=OSError("API Error"),
         ):
-            results = await servicenow_connector.search("test query")
-            # Should return empty list, not raise
-            assert results == []
+            with pytest.raises(OSError, match="API Error"):
+                await servicenow_connector.search("test query")
 
     @pytest.mark.asyncio
     async def test_fetch_handles_api_errors(self, servicenow_connector):
-        """Test fetch gracefully handles API errors.
+        """Test fetch logs and propagates API errors (fail-closed).
 
-        Note: The implementation only catches specific exception types:
-        OSError, RuntimeError, ValueError, TypeError, KeyError.
+        Since #4781 fetch re-raises the caught exception types (OSError,
+        RuntimeError, ValueError, TypeError, KeyError) after logging;
+        ``None`` is reserved for legitimate "not found" responses.
         """
         with patch.object(
             servicenow_connector,
@@ -1166,8 +1167,8 @@ class TestServiceNowErrorHandling:
             new_callable=AsyncMock,
             side_effect=RuntimeError("Connection refused"),
         ):
-            result = await servicenow_connector.fetch("snow-incident-INC0001")
-            assert result is None
+            with pytest.raises(RuntimeError, match="Connection refused"):
+                await servicenow_connector.fetch("snow-incident-INC0001")
 
     @pytest.mark.asyncio
     async def test_comment_retrieval_error_handling(self, servicenow_connector):

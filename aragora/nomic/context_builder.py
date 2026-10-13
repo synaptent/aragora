@@ -27,12 +27,31 @@ Usage:
 
 from __future__ import annotations
 
+import hashlib
+import io
+import json
 import logging
 import os
+import shutil
+import stat
+import subprocess
+import tempfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+from aragora.nomic.repository_profile import (
+    ContextEvidenceReference,
+    ContextPack,
+    NomicRepositoryProfile,
+    RepositoryRevision,
+    RepositoryStateError,
+    assert_clean_revision,
+    http_permalink,
+    load_nomic_repository_profile,
+    portable_evidence_uri,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -163,8 +182,10 @@ class NomicContextBuilder:
             self._full_corpus = full_corpus
         self._index: CodebaseIndex | None = None
         self._rlm_context: Any | None = None
+        self._pending_pack_verification: (
+            tuple[str, tuple[ContextEvidenceReference, ...], dict[str, bytes]] | None
+        ) = None
         self._context_dir = self._aragora_path / ".nomic" / "context"
-        self._context_dir.mkdir(parents=True, exist_ok=True)
 
     @property
     def index(self) -> CodebaseIndex | None:
@@ -188,7 +209,43 @@ class NomicContextBuilder:
         if use_manifest is None:
             use_manifest = "1"
 
-        if use_manifest.strip().lower() in {"1", "true", "yes", "on"}:
+        tracked_paths: list[Path] | None = None
+        try:
+            probe = subprocess.run(
+                ["git", "-C", str(self._aragora_path), "rev-parse", "--show-toplevel"],
+                capture_output=True,
+                check=False,
+            )
+            git_root = (
+                Path(os.fsdecode(probe.stdout.strip())).resolve()
+                if probe.returncode == 0 and probe.stdout.strip()
+                else None
+            )
+            if git_root == self._aragora_path.resolve():
+                tracked = subprocess.run(
+                    [
+                        "git",
+                        "-C",
+                        str(self._aragora_path),
+                        "ls-files",
+                        "-z",
+                        "--cached",
+                    ],
+                    capture_output=True,
+                    check=False,
+                )
+                if tracked.returncode == 0:
+                    candidates = [
+                        self._aragora_path / raw.decode("utf-8", errors="surrogateescape")
+                        for raw in tracked.stdout.split(b"\0")
+                        if raw
+                    ]
+                    if candidates:
+                        tracked_paths = candidates
+        except (FileNotFoundError, OSError, subprocess.SubprocessError) as exc:
+            logger.debug("Git tracked-file enumeration unavailable; using legacy fallback: %s", exc)
+
+        if tracked_paths is None and use_manifest.strip().lower() in {"1", "true", "yes", "on"}:
             manifest_index = self._load_manifest_index(manifest_path)
             if manifest_index is not None:
                 self._index = manifest_index
@@ -198,19 +255,26 @@ class NomicContextBuilder:
         files: list[IndexedFile] = []
         total_bytes = 0
 
-        for path in sorted(self._aragora_path.rglob("*")):
+        paths = (
+            tracked_paths if tracked_paths is not None else sorted(self._aragora_path.rglob("*"))
+        )
+
+        for path in paths:
             if not path.is_file():
                 continue
             if path.suffix not in SOURCE_EXTENSIONS:
                 continue
+            relative_path = path.relative_to(self._aragora_path)
             if any(skip in path.parts for skip in SKIP_DIRS):
                 continue
-            if not self._include_tests and "test" in path.parts:
+            if not self._include_tests and any(
+                part in {"test", "tests"} for part in relative_path.parts
+            ):
                 continue
             if path.stat().st_size > MAX_FILE_SIZE:
                 continue
 
-            rel_path = str(path.relative_to(self._aragora_path))
+            rel_path = str(relative_path)
             size = path.stat().st_size
 
             # Count lines efficiently
@@ -267,6 +331,7 @@ class NomicContextBuilder:
 
         manifest_path = self._context_dir / "codebase_manifest.tsv"
         try:
+            self._context_dir.mkdir(parents=True, exist_ok=True)
             with manifest_path.open("w", encoding="utf-8") as handle:
                 handle.write(
                     f"# Aragora codebase manifest\n"
@@ -283,6 +348,649 @@ class NomicContextBuilder:
         except OSError as exc:
             logger.warning("Failed to write manifest: %s", exc)
             return None
+
+    async def build_context_pack(
+        self,
+        objective: str = "",
+        *,
+        profile: NomicRepositoryProfile | None = None,
+        config_path: Path | None = None,
+    ) -> ContextPack:
+        """Build and atomically publish a clean, commit-addressed planning context pack."""
+        root = self._aragora_path.resolve()
+        if self._max_context_bytes <= 0:
+            raise RepositoryStateError("context pack byte budget must be a positive integer")
+        runtime_root = root / ".nomic" / "context" / "packs"
+        self._assert_pack_destination_safe(root, runtime_root)
+        revision = assert_clean_revision(root)
+        normalized_objective = objective.strip()
+        resolved_profile = profile or load_nomic_repository_profile(root, config_path)
+        resolved_profile.validate_files(root, revision)
+
+        evidence, contents = self._collect_commit_evidence(resolved_profile, revision)
+        self._index = self._index_from_evidence(root, evidence)
+        manifest = self._render_pack_manifest(revision, resolved_profile, evidence)
+        corpus, corpus_truncated = self._render_pack_corpus(evidence, contents)
+        rlm_summary = await self._build_pack_rlm_summary(corpus, resolved_profile)
+        context = self._render_pack_context(
+            normalized_objective,
+            resolved_profile,
+            revision,
+            evidence,
+            contents,
+            rlm_summary,
+            corpus_truncated,
+        )
+
+        artifacts: dict[str, bytes] = {
+            "context.md": context.encode(),
+            "manifest.tsv": manifest.encode(),
+        }
+        if self._full_corpus:
+            artifacts["corpus.txt"] = corpus.encode()
+        digests = {name: hashlib.sha256(data).hexdigest() for name, data in artifacts.items()}
+        pack_id = self._compute_pack_id(
+            normalized_objective,
+            resolved_profile,
+            revision,
+            digests,
+            include_tests=self._include_tests,
+        )
+        destination = root / ".nomic" / "context" / "packs" / revision.commit_sha / pack_id
+        self._assert_pack_destination_safe(root, destination)
+        relative_destination = destination.relative_to(root).as_posix()
+        artifact_names = [*artifacts, "context-pack.json"]
+        self._assert_artifact_paths_ignored(
+            root,
+            [f"{relative_destination}/{name}" for name in artifact_names],
+        )
+        pack = ContextPack(
+            pack_id=pack_id,
+            objective=normalized_objective,
+            repository=resolved_profile,
+            revision=revision,
+            profile_hash=resolved_profile.profile_hash,
+            evidence=tuple(evidence),
+            artifact_digests=digests,
+            pack_path=destination,
+            corpus_included=self._full_corpus,
+            corpus_truncated=corpus_truncated,
+            context_byte_budget=self._max_context_bytes,
+            include_tests=self._include_tests,
+            rlm_summary=rlm_summary,
+        )
+        metadata = (json.dumps(pack.to_dict(), sort_keys=True, indent=2) + "\n").encode()
+
+        if destination.exists():
+            self.verify_context_pack(pack)
+            return pack
+
+        parent = destination.parent
+        parent.mkdir(parents=True, exist_ok=True)
+        self._assert_pack_destination_safe(root, destination)
+        temporary = Path(tempfile.mkdtemp(prefix=f".{pack_id}.", dir=parent))
+        try:
+            for name, data in artifacts.items():
+                (temporary / name).write_bytes(data)
+            (temporary / "context-pack.json").write_bytes(metadata)
+            self._before_pack_publish()
+            assert_clean_revision(root, revision)
+            self._assert_pack_destination_safe(root, destination)
+            try:
+                os.replace(temporary, destination)
+            except OSError:
+                self._assert_pack_destination_safe(root, destination)
+                if not destination.exists():
+                    raise
+            self._pending_pack_verification = (pack.pack_id, tuple(evidence), contents)
+            try:
+                self.verify_context_pack(pack)
+            finally:
+                self._pending_pack_verification = None
+        finally:
+            self._cleanup_temporary_pack(root, parent, temporary)
+        return pack
+
+    @staticmethod
+    def _assert_pack_destination_safe(repo_root: Path, destination: Path) -> None:
+        """Reject symlinked, non-directory, or repository-escaping pack paths."""
+        root = repo_root.resolve()
+        try:
+            relative = destination.relative_to(root)
+        except ValueError as exc:
+            raise RepositoryStateError("context pack destination escapes repository root") from exc
+        if not relative.parts or relative.parts[0] != ".nomic":
+            raise RepositoryStateError("context pack destination must be beneath .nomic")
+
+        current = root
+        for part in relative.parts:
+            current /= part
+            try:
+                mode = current.lstat().st_mode
+            except FileNotFoundError:
+                continue
+            except (OSError, RuntimeError) as exc:
+                raise RepositoryStateError(
+                    f"context pack destination cannot be inspected: {current}"
+                ) from exc
+            if stat.S_ISLNK(mode):
+                raise RepositoryStateError(
+                    f"context pack destination contains a symlink: {current}"
+                )
+            if not stat.S_ISDIR(mode):
+                raise RepositoryStateError(
+                    f"context pack destination contains a non-directory component: {current}"
+                )
+
+        try:
+            destination.resolve(strict=False).relative_to(root)
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise RepositoryStateError("context pack destination escapes repository root") from exc
+
+    @classmethod
+    def _cleanup_temporary_pack(cls, repo_root: Path, parent: Path, temporary: Path) -> None:
+        """Remove only a real temporary directory beneath the validated pack parent."""
+        if not os.path.lexists(temporary):
+            return
+        cls._assert_pack_destination_safe(repo_root, temporary)
+        try:
+            resolved_parent = parent.resolve(strict=True)
+            resolved_temporary = temporary.resolve(strict=True)
+        except (OSError, RuntimeError) as exc:
+            raise RepositoryStateError("temporary context pack path cannot be resolved") from exc
+        if resolved_temporary.parent != resolved_parent or not temporary.is_dir():
+            raise RepositoryStateError("temporary context pack path is not safe to remove")
+        shutil.rmtree(temporary)
+
+    @staticmethod
+    def _assert_artifact_paths_ignored(repo_root: Path, paths: list[str]) -> None:
+        """Fail unless every concrete runtime artifact is untracked and ignored."""
+        for path in paths:
+            tracked = subprocess.run(
+                ["git", "-C", str(repo_root), "ls-files", "--error-unmatch", "--", path],
+                capture_output=True,
+                check=False,
+            )
+            if tracked.returncode == 0:
+                raise RepositoryStateError(f"runtime artifact path is tracked by Git: {path}")
+            ignored = subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(repo_root),
+                    "check-ignore",
+                    "--quiet",
+                    "--no-index",
+                    "--",
+                    path,
+                ],
+                capture_output=True,
+                check=False,
+            )
+            if ignored.returncode != 0:
+                raise RepositoryStateError(
+                    f"repository must ignore .nomic runtime artifact path {path!r}; add '.nomic/' "
+                    "to .gitignore or a local Git exclude"
+                )
+
+    def verify_context_pack(self, pack: ContextPack) -> None:
+        """Verify metadata, content address, manifest, and bound artifact digests."""
+        expected_path = (
+            self._aragora_path.resolve()
+            / ".nomic"
+            / "context"
+            / "packs"
+            / pack.revision.commit_sha
+            / pack.pack_id
+        )
+        if pack.pack_path.resolve() != expected_path:
+            raise RepositoryStateError("context pack path does not match its content address")
+        if pack.profile_hash != pack.repository.profile_hash:
+            raise RepositoryStateError("context pack profile hash does not match its profile")
+        if not isinstance(pack.context_byte_budget, int) or pack.context_byte_budget <= 0:
+            raise RepositoryStateError("context pack byte budget must be a positive integer")
+        if not isinstance(pack.include_tests, bool):
+            raise RepositoryStateError("context pack test-inclusion policy must be boolean")
+        required_artifacts = {"context.md", "manifest.tsv"}
+        if pack.corpus_included:
+            required_artifacts.add("corpus.txt")
+        if set(pack.artifact_digests) != required_artifacts:
+            raise RepositoryStateError("context pack artifact inventory is invalid")
+
+        metadata_path = pack.pack_path / "context-pack.json"
+        if not metadata_path.is_file():
+            raise RepositoryStateError(f"context pack metadata is missing: {pack.reference}")
+        expected_entries = required_artifacts | {"context-pack.json"}
+        try:
+            actual_entries = list(pack.pack_path.iterdir())
+        except OSError as exc:
+            raise RepositoryStateError(
+                f"context pack directory cannot be inspected: {pack.reference}"
+            ) from exc
+        if {entry.name for entry in actual_entries} != expected_entries or any(
+            not entry.is_file() or entry.is_symlink() for entry in actual_entries
+        ):
+            raise RepositoryStateError("context pack directory contains unexpected artifacts")
+        try:
+            stored = json.loads(metadata_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise RepositoryStateError(f"invalid context pack metadata: {pack.reference}") from exc
+        if stored != pack.to_dict():
+            raise RepositoryStateError(f"context pack metadata mismatch: {pack.reference}")
+        pending = self._pending_pack_verification
+        if pending is not None and pending[0] == pack.pack_id:
+            expected_evidence = list(pending[1])
+            contents = pending[2]
+        else:
+            expected_evidence, contents = self._collect_commit_evidence(
+                pack.repository,
+                pack.revision,
+                include_tests=pack.include_tests,
+            )
+        if tuple(expected_evidence) != pack.evidence:
+            raise RepositoryStateError(
+                "context pack evidence does not match the claimed Git revision"
+            )
+        self._index = self._index_from_evidence(self._aragora_path.resolve(), expected_evidence)
+        expected_corpus, corpus_truncated = self._render_pack_corpus(
+            expected_evidence,
+            contents,
+            max_context_bytes=pack.context_byte_budget,
+        )
+        if corpus_truncated != pack.corpus_truncated:
+            raise RepositoryStateError("context pack corpus truncation metadata is invalid")
+        expected_rlm_summary = self._render_pack_rlm_summary(
+            expected_corpus,
+            pack.repository,
+        )
+        if pack.rlm_summary != expected_rlm_summary:
+            raise RepositoryStateError(
+                "context pack RLM summary does not match verified Git evidence"
+            )
+        expected_manifest = self._render_pack_manifest(
+            pack.revision,
+            pack.repository,
+            expected_evidence,
+        ).encode()
+        manifest_path = pack.pack_path / "manifest.tsv"
+        if not manifest_path.is_file() or manifest_path.read_bytes() != expected_manifest:
+            raise RepositoryStateError("context pack manifest does not match its evidence metadata")
+        for name, expected in pack.artifact_digests.items():
+            path = pack.pack_path / name
+            if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != expected:
+                raise RepositoryStateError(f"context pack artifact verification failed: {name}")
+        expected_context = self._render_pack_context(
+            pack.objective,
+            pack.repository,
+            pack.revision,
+            expected_evidence,
+            contents,
+            expected_rlm_summary,
+            corpus_truncated,
+            context_byte_budget=pack.context_byte_budget,
+            full_corpus=pack.corpus_included,
+        ).encode()
+        if (pack.pack_path / "context.md").read_bytes() != expected_context:
+            raise RepositoryStateError("context pack context does not match verified Git evidence")
+        if pack.corpus_included and (pack.pack_path / "corpus.txt").read_bytes() != (
+            expected_corpus.encode()
+        ):
+            raise RepositoryStateError("context pack corpus does not match verified Git evidence")
+        expected_pack_id = self._compute_pack_id(
+            pack.objective,
+            pack.repository,
+            pack.revision,
+            pack.artifact_digests,
+            include_tests=pack.include_tests,
+        )
+        if expected_pack_id != pack.pack_id:
+            raise RepositoryStateError("context pack identifier does not match bound artifacts")
+
+    @staticmethod
+    def _compute_pack_id(
+        objective: str,
+        profile: NomicRepositoryProfile,
+        revision: RepositoryRevision,
+        artifact_digests: Any,
+        *,
+        include_tests: bool,
+    ) -> str:
+        """Compute the portable content address shared by build and verification."""
+        digests = dict(sorted(dict(artifact_digests).items()))
+        pack_basis = {
+            "objective": objective,
+            "repository_id": profile.repository_id,
+            "revision": revision.to_dict(),
+            "profile_hash": profile.profile_hash,
+            "include_tests": include_tests,
+            "manifest_digest": digests["manifest.tsv"],
+            "artifact_digests": digests,
+        }
+        return hashlib.sha256(
+            json.dumps(pack_basis, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+
+    def _collect_commit_evidence(
+        self,
+        profile: NomicRepositoryProfile,
+        revision: RepositoryRevision,
+        *,
+        include_tests: bool | None = None,
+    ) -> tuple[list[ContextEvidenceReference], dict[str, bytes]]:
+        resolved_include_tests = self._include_tests if include_tests is None else include_tests
+        result = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(self._aragora_path),
+                "ls-tree",
+                "-r",
+                "-z",
+                "-l",
+                "--full-tree",
+                revision.commit_sha,
+            ],
+            capture_output=True,
+            check=True,
+        )
+        configured = set(profile.roadmap_paths) | set(profile.context_entry_files)
+        rows: list[tuple[str, str, int]] = []
+        for raw in result.stdout.split(b"\0"):
+            if not raw or b"\t" not in raw:
+                continue
+            metadata, raw_path = raw.split(b"\t", 1)
+            _mode, object_type, blob_id, raw_size = metadata.decode().split()
+            path = raw_path.decode("utf-8", errors="surrogateescape")
+            if object_type != "blob" or raw_size == "-":
+                continue
+            size = int(raw_size)
+            if path in configured and size > MAX_FILE_SIZE:
+                raise RepositoryStateError(
+                    "configured Nomic evidence file exceeds the "
+                    f"{MAX_FILE_SIZE}-byte limit: {path} ({size} bytes)"
+                )
+            parts = tuple(part for part in path.replace("\\", "/").split("/") if part)
+            include = path in configured or (
+                Path(path).suffix in SOURCE_EXTENSIONS
+                and not any(part in SKIP_DIRS for part in parts)
+                and (resolved_include_tests or not any(part in {"test", "tests"} for part in parts))
+                and size <= MAX_FILE_SIZE
+            )
+            if include:
+                rows.append((path, blob_id, size))
+
+        evidence: list[ContextEvidenceReference] = []
+        sorted_rows = sorted(rows)
+        contents = self._read_commit_blobs(sorted_rows)
+        for path, blob_id, size in sorted_rows:
+            data = contents[path]
+            lines = data.count(b"\n") + int(bool(data) and not data.endswith(b"\n"))
+            role = (
+                "roadmap"
+                if path in profile.roadmap_paths
+                else "context_entry"
+                if path in profile.context_entry_files
+                else "source"
+            )
+            evidence_id = (
+                "ev-"
+                + hashlib.sha256(f"{revision.commit_sha}:{path}:{blob_id}".encode()).hexdigest()[
+                    :20
+                ]
+            )
+            evidence.append(
+                ContextEvidenceReference(
+                    evidence_id=evidence_id,
+                    path=path,
+                    blob_id=blob_id,
+                    sha256=hashlib.sha256(data).hexdigest(),
+                    size_bytes=size,
+                    line_count=lines,
+                    role=role,
+                    uri=portable_evidence_uri(
+                        profile.repository_id, revision.commit_sha, path, lines
+                    ),
+                    http_permalink=http_permalink(
+                        profile.remote_url, revision.commit_sha, path, lines
+                    ),
+                )
+            )
+        return evidence, contents
+
+    def _read_commit_blobs(self, rows: list[tuple[str, str, int]]) -> dict[str, bytes]:
+        """Read a validated set of Git blobs through one batch object stream."""
+        if not rows:
+            return {}
+        result = subprocess.run(
+            ["git", "-C", str(self._aragora_path), "cat-file", "--batch"],
+            input=b"".join(blob_id.encode("ascii") + b"\n" for _, blob_id, _ in rows),
+            capture_output=True,
+            check=True,
+        )
+        stream = io.BytesIO(result.stdout)
+        contents: dict[str, bytes] = {}
+        for path, expected_blob_id, expected_size in rows:
+            fields = stream.readline().rstrip(b"\n").split()
+            if len(fields) != 3:
+                raise RepositoryStateError(f"invalid Git batch response for evidence file: {path}")
+            try:
+                actual_blob_id = fields[0].decode("ascii")
+                object_type = fields[1].decode("ascii")
+                actual_size = int(fields[2])
+            except (UnicodeDecodeError, ValueError) as exc:
+                raise RepositoryStateError(
+                    f"invalid Git batch metadata for evidence file: {path}"
+                ) from exc
+            if (
+                actual_blob_id != expected_blob_id
+                or object_type != "blob"
+                or actual_size != expected_size
+            ):
+                raise RepositoryStateError(
+                    f"Git batch metadata does not match evidence manifest: {path}"
+                )
+            data = stream.read(expected_size)
+            if len(data) != expected_size or stream.read(1) != b"\n":
+                raise RepositoryStateError(
+                    f"truncated Git batch response for evidence file: {path}"
+                )
+            contents[path] = data
+        if stream.read():
+            raise RepositoryStateError("Git batch response contains unexpected trailing data")
+        return contents
+
+    @staticmethod
+    def _index_from_evidence(root: Path, evidence: list[ContextEvidenceReference]) -> CodebaseIndex:
+        files = [
+            IndexedFile(
+                relative_path=item.path,
+                size_bytes=item.size_bytes,
+                line_count=item.line_count,
+                extension=Path(item.path).suffix,
+                module_path=item.path.replace("/", ".")
+                .removesuffix(".py")
+                .removesuffix(".__init__")
+                if item.path.endswith(".py")
+                else "",
+            )
+            for item in evidence
+        ]
+        return CodebaseIndex(
+            root_path=root,
+            files=files,
+            total_bytes=sum(item.size_bytes for item in evidence),
+            total_files=len(files),
+            total_lines=sum(item.line_count for item in evidence),
+        )
+
+    def _render_pack_manifest(
+        self,
+        revision: RepositoryRevision,
+        profile: NomicRepositoryProfile,
+        evidence: list[ContextEvidenceReference],
+    ) -> str:
+        rows = [
+            f"# commit={revision.commit_sha}",
+            f"# profile_hash={profile.profile_hash}",
+            "evidence_id\tpath\tblob_id\tsha256\tbytes\tlines\trole\turi\thttp_permalink",
+        ]
+        for item in evidence:
+            if any(delimiter in item.path for delimiter in ("\t", "\n", "\r")):
+                escaped_path = json.dumps(item.path, ensure_ascii=True)
+                raise RepositoryStateError(
+                    "tracked evidence path contains an unsupported manifest delimiter: "
+                    f"{escaped_path}"
+                )
+            rows.append(
+                "\t".join(
+                    [
+                        item.evidence_id,
+                        item.path,
+                        item.blob_id,
+                        item.sha256,
+                        str(item.size_bytes),
+                        str(item.line_count),
+                        item.role,
+                        item.uri,
+                        item.http_permalink or "",
+                    ]
+                )
+            )
+        return "\n".join(rows) + "\n"
+
+    def _render_pack_corpus(
+        self,
+        evidence: list[ContextEvidenceReference],
+        contents: dict[str, bytes],
+        *,
+        max_context_bytes: int | None = None,
+    ) -> tuple[str, bool]:
+        budget = self._max_context_bytes if max_context_bytes is None else max_context_bytes
+        sections: list[str] = []
+        used = 0
+        truncated = False
+        for item in sorted(evidence, key=lambda ref: (ref.role == "source", ref.path)):
+            text = contents[item.path].decode("utf-8", errors="replace")
+            section = f"\n--- {item.evidence_id} {item.path} ---\n{text}"
+            remaining = budget - used
+            if remaining <= 0:
+                truncated = True
+                break
+            encoded = section.encode()
+            if len(encoded) > remaining:
+                section = encoded[:remaining].decode("utf-8", errors="ignore")
+                truncated = True
+            sections.append(section)
+            used += len(section.encode())
+            if truncated:
+                break
+        return "".join(sections).lstrip(), truncated
+
+    async def _build_pack_rlm_summary(self, corpus: str, profile: NomicRepositoryProfile) -> str:
+        """Build the independently verifiable map for RLM traversal of the corpus."""
+        return self._render_pack_rlm_summary(corpus, profile)
+
+    def _render_pack_rlm_summary(
+        self,
+        corpus: str,
+        profile: NomicRepositoryProfile,
+    ) -> str:
+        """Render the deterministic RLM map from commit-derived evidence."""
+        if self._index is None:
+            return ""
+        grouped: dict[str, list[IndexedFile]] = {}
+        for item in self._index.files:
+            parts = item.relative_path.split("/", 1)
+            group = parts[0] if len(parts) > 1 else "root"
+            grouped.setdefault(group, []).append(item)
+        lines = [
+            "The corpus is queryable by evidence marker (`--- ev-… path ---`) and path.",
+            f"Corpus bytes available to the RLM: {len(corpus.encode())}",
+            "Priority layers: " + ", ".join([*profile.roadmap_paths, *profile.context_entry_files])
+            if profile.roadmap_paths or profile.context_entry_files
+            else "Priority layers: none configured",
+        ]
+        for group in sorted(grouped):
+            files = grouped[group]
+            lines.append(
+                f"- {group}/: {len(files)} files, "
+                f"{sum(item.line_count for item in files)} lines, "
+                f"{sum(item.size_bytes for item in files)} bytes"
+            )
+        return "\n".join(lines)
+
+    def _render_pack_context(
+        self,
+        objective: str,
+        profile: NomicRepositoryProfile,
+        revision: RepositoryRevision,
+        evidence: list[ContextEvidenceReference],
+        contents: dict[str, bytes],
+        rlm_summary: str,
+        corpus_truncated: bool,
+        *,
+        context_byte_budget: int | None = None,
+        full_corpus: bool | None = None,
+    ) -> str:
+        budget = self._max_context_bytes if context_byte_budget is None else context_byte_budget
+        corpus_enabled = self._full_corpus if full_corpus is None else full_corpus
+        by_path = {item.path: item for item in evidence}
+        configured_paths = set(profile.roadmap_paths) | set(profile.context_entry_files)
+        configured_covered = len(configured_paths & set(by_path))
+        sections = [
+            f"# {profile.repository_name} Repository Planning Context",
+            f"Objective: {objective}",
+            f"Repository: {profile.repository_id}",
+            f"Commit: {revision.commit_sha}",
+            f"Tree: {revision.tree_sha}",
+            f"Profile: {profile.profile_hash}",
+            "",
+            "## Evaluation Criteria",
+        ]
+        sections.extend(
+            f"- `{item.id}`: {item.description}" for item in profile.evaluation_criteria
+        )
+        for title, configured in (
+            ("Roadmap", profile.roadmap_paths),
+            ("Context Entry Files", profile.context_entry_files),
+        ):
+            sections.extend(["", f"## {title}"])
+            for path in configured:
+                reference = by_path[path]
+                text = contents[path].decode("utf-8", errors="replace")
+                sections.extend(
+                    [
+                        f"### {path} [{reference.evidence_id}]",
+                        reference.uri,
+                        text[:50000] + ("\n... (truncated)" if len(text) > 50000 else ""),
+                    ]
+                )
+        sections.extend(["", "## Tracked-file Evidence Index"])
+        sections.extend(
+            f"- [{item.evidence_id}] {item.path} ({item.line_count} lines, {item.role}) {item.uri}"
+            for item in evidence
+        )
+        sections.extend(
+            [
+                "",
+                "## RLM Corpus Map",
+                rlm_summary
+                or "No generated summary; use the evidence index and corpus map directly.",
+                "",
+                "## Budgets and Coverage",
+                f"- Included evidence files: {len(evidence)}",
+                f"- Configured evidence coverage: {configured_covered}/{len(configured_paths)}"
+                if configured_paths
+                else "- Configured evidence coverage: no configured files",
+                f"- Context byte budget: {budget}",
+                f"- Full corpus enabled: {str(corpus_enabled).lower()}",
+                f"- Corpus truncated: {str(corpus_truncated).lower()}",
+            ]
+        )
+        return "\n".join(sections).rstrip() + "\n"
+
+    def _before_pack_publish(self) -> None:
+        """Test seam executed immediately before the final clean-revision check."""
 
     def _load_manifest_index(self, manifest_path: Path) -> CodebaseIndex | None:
         """Load an index from a previously written manifest."""
@@ -439,11 +1147,22 @@ class NomicContextBuilder:
         This provides a navigable map of the codebase that agents can
         reference during structured debate rounds. For TRUE RLM agents,
         this also registers the context for REPL queries.
+
+        Returns an empty string when the index contains no files (empty or
+        nonexistent root), so callers can truthiness-check the result
+        instead of receiving a header-only map.
         """
         if self._index is None:
             await self.build_index()
         if self._index is None:
             raise RuntimeError("Index not built - call build_index() first")
+
+        if self._index.total_files == 0:
+            logger.debug(
+                "Skipping debate context: no files indexed under %s",
+                self._index.root_path,
+            )
+            return ""
 
         sections = []
         sections.append(

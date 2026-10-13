@@ -10,7 +10,7 @@ import sqlite3
 import tempfile
 import os
 
-from aragora.server.storage import _validate_sql_identifier
+from aragora.storage.debate_storage import _validate_sql_identifier
 
 
 class TestSqlIdentifierValidation:
@@ -181,25 +181,25 @@ class TestLikeEscaping:
 
     def test_escape_percent(self):
         """Percent signs in LIKE should be escaped."""
-        from aragora.server.storage import _escape_like_pattern
+        from aragora.storage.debate_storage import _escape_like_pattern
 
         assert _escape_like_pattern("100%") == "100\\%"
 
     def test_escape_underscore(self):
         """Underscores in LIKE should be escaped."""
-        from aragora.server.storage import _escape_like_pattern
+        from aragora.storage.debate_storage import _escape_like_pattern
 
         assert _escape_like_pattern("user_name") == "user\\_name"
 
     def test_escape_backslash(self):
         """Backslashes in LIKE should be escaped."""
-        from aragora.server.storage import _escape_like_pattern
+        from aragora.storage.debate_storage import _escape_like_pattern
 
         assert _escape_like_pattern("path\\file") == "path\\\\file"
 
     def test_escape_combined(self):
         """Multiple special chars should all be escaped."""
-        from aragora.server.storage import _escape_like_pattern
+        from aragora.storage.debate_storage import _escape_like_pattern
 
         assert _escape_like_pattern("100%_test\\end") == "100\\%\\_test\\\\end"
 

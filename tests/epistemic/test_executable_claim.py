@@ -11,6 +11,8 @@ from aragora.epistemic.executable_claim import (
     ClaimFailurePolicy,
     ClaimManifest,
     ClaimReceipt,
+    ClaimTruthState,
+    ClaimTruthStatus,
     ClaimVerification,
     ExecutableClaim,
     FailureAction,
@@ -115,6 +117,36 @@ def test_claim_round_trip() -> None:
     assert claim.confidence == ClaimConfidence.HIGH
     assert claim.freshness_sla_hours == 24
     assert claim.to_dict()["confidence"] == "high"
+
+
+def test_claim_truth_status_is_optional_and_round_trips() -> None:
+    claim = ExecutableClaim.from_dict(
+        {
+            **_minimal(),
+            "truth_status": {
+                "state": "live",
+                "last_verified_at": "2026-07-11T06:30:00Z",
+                "note": "Checked locally.",
+            },
+        }
+    )
+    assert claim.truth_status == ClaimTruthStatus(
+        state=ClaimTruthState.LIVE,
+        last_verified_at="2026-07-11T06:30:00Z",
+        note="Checked locally.",
+    )
+    assert claim.to_dict()["truth_status"]["state"] == "live"
+    assert "truth_status" not in ExecutableClaim.from_dict(_minimal()).to_dict()
+
+
+def test_live_truth_status_requires_timezone_aware_verification_time() -> None:
+    with pytest.raises(ValueError, match="requires last_verified_at"):
+        ClaimTruthStatus(state=ClaimTruthState.LIVE)
+    with pytest.raises(ValueError, match="include a timezone"):
+        ClaimTruthStatus(
+            state=ClaimTruthState.LIVE,
+            last_verified_at="2026-07-11T06:30:00",
+        )
 
 
 def test_claim_validation_errors() -> None:

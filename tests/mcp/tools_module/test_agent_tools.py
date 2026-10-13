@@ -102,7 +102,7 @@ class TestGetAgentHistoryTool:
                 side_effect=Exception("No ELO"),
             ),
             patch(
-                "aragora.server.storage.get_debates_db",
+                "aragora.storage.debate_storage.get_debates_db",
                 return_value=mock_db,
             ),
         ):
@@ -134,7 +134,7 @@ class TestGetAgentHistoryTool:
                 side_effect=Exception("No ELO"),
             ),
             patch(
-                "aragora.server.storage.get_debates_db",
+                "aragora.storage.debate_storage.get_debates_db",
                 return_value=mock_db,
             ),
         ):
@@ -157,7 +157,7 @@ class TestGetAgentHistoryTool:
                 side_effect=Exception("No ELO"),
             ),
             patch(
-                "aragora.server.storage.get_debates_db",
+                "aragora.storage.debate_storage.get_debates_db",
                 return_value=None,
             ),
         ):

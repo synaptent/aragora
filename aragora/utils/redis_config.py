@@ -76,6 +76,9 @@ def _float_env(name: str, default: float) -> float:
 def get_redis_url() -> str | None:
     """Get the Redis URL from environment.
 
+    Only ``ARAGORA_REDIS_URL`` configures the shared pool; ``REDIS_URL`` is not
+    read here.
+
     Returns:
         Redis URL if configured, None otherwise
     """
@@ -174,6 +177,20 @@ def get_redis_pool() -> Any | None:
             _redis_pool = None
             _redis_available = False
             return None
+
+
+def redis_pool_initialized() -> bool:
+    """Report whether the shared Redis pool has already been built.
+
+    Read-only: never triggers pool initialization, never opens a socket, and
+    never latches ``_redis_available``. Intended for fast health probes that
+    must stay off the network (see ``readiness_probe_fast``).
+
+    ``True`` means the pool was built (its first ping succeeded) in this
+    process, not that Redis is reachable now; ``False`` before first use is
+    expected.
+    """
+    return _redis_pool is not None
 
 
 def is_redis_available() -> bool:

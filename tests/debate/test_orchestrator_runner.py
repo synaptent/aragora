@@ -827,7 +827,7 @@ class TestRecordDebateMetrics:
 
     def test_decrements_active_debates(self, mock_arena, execution_state, mock_span):
         """Test that ACTIVE_DEBATES counter is decremented."""
-        with patch("aragora.server.metrics.ACTIVE_DEBATES") as mock_counter:
+        with patch("aragora.observability.server_metrics.ACTIVE_DEBATES") as mock_counter:
             record_debate_metrics(mock_arena, execution_state, mock_span)
 
             mock_counter.dec.assert_called_once()
@@ -837,9 +837,9 @@ class TestRecordDebateMetrics:
         execution_state.debate_start_time = time.perf_counter() - 10.0
 
         with (
-            patch("aragora.server.metrics.ACTIVE_DEBATES"),
+            patch("aragora.observability.server_metrics.ACTIVE_DEBATES"),
             patch("aragora.debate.orchestrator_runner.add_span_attributes") as mock_add_attrs,
-            patch("aragora.server.metrics.track_debate_outcome"),
+            patch("aragora.observability.server_metrics.track_debate_outcome"),
         ):
             record_debate_metrics(mock_arena, execution_state, mock_span)
 
@@ -854,9 +854,9 @@ class TestRecordDebateMetrics:
         execution_state.ctx.result.messages = [MagicMock(), MagicMock(), MagicMock()]
 
         with (
-            patch("aragora.server.metrics.ACTIVE_DEBATES"),
+            patch("aragora.observability.server_metrics.ACTIVE_DEBATES"),
             patch("aragora.debate.orchestrator_runner.add_span_attributes") as mock_add_attrs,
-            patch("aragora.server.metrics.track_debate_outcome"),
+            patch("aragora.observability.server_metrics.track_debate_outcome"),
         ):
             record_debate_metrics(mock_arena, execution_state, mock_span)
 
@@ -877,9 +877,9 @@ class TestRecordDebateMetrics:
         execution_state.ctx.result.confidence = 0.8
 
         with (
-            patch("aragora.server.metrics.ACTIVE_DEBATES"),
+            patch("aragora.observability.server_metrics.ACTIVE_DEBATES"),
             patch("aragora.debate.orchestrator_runner.add_span_attributes"),
-            patch("aragora.server.metrics.track_debate_outcome") as mock_track,
+            patch("aragora.observability.server_metrics.track_debate_outcome") as mock_track,
         ):
             record_debate_metrics(mock_arena, execution_state, mock_span)
 
@@ -893,9 +893,9 @@ class TestRecordDebateMetrics:
     def test_tracks_circuit_breaker_metrics(self, mock_arena, execution_state, mock_span):
         """Test that circuit breaker metrics are tracked."""
         with (
-            patch("aragora.server.metrics.ACTIVE_DEBATES"),
+            patch("aragora.observability.server_metrics.ACTIVE_DEBATES"),
             patch("aragora.debate.orchestrator_runner.add_span_attributes"),
-            patch("aragora.server.metrics.track_debate_outcome"),
+            patch("aragora.observability.server_metrics.track_debate_outcome"),
         ):
             record_debate_metrics(mock_arena, execution_state, mock_span)
 
@@ -906,9 +906,9 @@ class TestRecordDebateMetrics:
         execution_state.ctx.result = None
 
         with (
-            patch("aragora.server.metrics.ACTIVE_DEBATES"),
+            patch("aragora.observability.server_metrics.ACTIVE_DEBATES"),
             patch("aragora.debate.orchestrator_runner.add_span_attributes") as mock_add_attrs,
-            patch("aragora.server.metrics.track_debate_outcome"),
+            patch("aragora.observability.server_metrics.track_debate_outcome"),
         ):
             # Should not raise
             record_debate_metrics(mock_arena, execution_state, mock_span)
@@ -974,7 +974,7 @@ class TestHandleDebateCompletion:
                 new_callable=AsyncMock,
             ) as mock_record_tokens,
             patch(
-                "aragora.services.usage_metering.get_usage_meter",
+                "aragora.billing.usage_metering.get_usage_meter",
                 return_value=usage_meter,
             ),
             patch(
@@ -1062,6 +1062,60 @@ class TestHandleDebateCompletion:
             await _record_debate_telemetry(mock_arena, execution_state)
 
         assert execution_state.ctx.result.metadata == {}
+
+    @pytest.mark.asyncio
+    async def test_record_debate_telemetry_records_debate_without_per_agent_cost(
+        self, mock_arena, execution_state
+    ):
+        """A result without per_agent_cost still records the debate and agent activity."""
+        result = execution_state.ctx.result
+        result.metadata = {}
+        del result.per_agent_cost
+        mock_arena.org_id = ""
+        mock_arena.agents = mock_arena.agents[:1]
+        mock_arena.agents[0].metrics = SimpleNamespace(total_input_tokens=10, total_output_tokens=5)
+        analytics = SimpleNamespace(record_debate=AsyncMock(), record_agent_activity=AsyncMock())
+
+        with (
+            patch(
+                "aragora.analytics.debate_analytics.get_debate_analytics",
+                return_value=analytics,
+            ),
+            patch(
+                "aragora.billing.usage.calculate_token_cost",
+                return_value=Decimal("0.01"),
+            ),
+        ):
+            await _record_debate_telemetry(mock_arena, execution_state)
+
+        analytics.record_debate.assert_awaited_once()
+        analytics.record_agent_activity.assert_awaited_once()
+        assert analytics.record_agent_activity.await_args.kwargs["cost"] == Decimal("0.01")
+
+    @pytest.mark.asyncio
+    async def test_record_debate_telemetry_keeps_debate_when_agent_activity_fails(
+        self, mock_arena, execution_state
+    ):
+        """A failure while collecting agent activity loses only that activity."""
+        execution_state.ctx.result.metadata = {}
+        mock_arena.org_id = ""
+        analytics = SimpleNamespace(record_debate=AsyncMock(), record_agent_activity=AsyncMock())
+
+        with (
+            patch(
+                "aragora.analytics.debate_analytics.get_debate_analytics",
+                return_value=analytics,
+            ),
+            patch(
+                "aragora.debate.orchestrator_runner.get_complexity_governor",
+                side_effect=RuntimeError("governor unavailable"),
+            ),
+        ):
+            await _record_debate_telemetry(mock_arena, execution_state)
+
+        analytics.record_debate.assert_awaited_once()
+        assert analytics.record_debate.await_args.kwargs["debate_id"] == execution_state.debate_id
+        analytics.record_agent_activity.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_run_cross_verification_attaches_metadata(self, mock_agents):
@@ -1381,7 +1435,7 @@ class TestHandleDebateCompletion:
                     }
                 ),
             ) as mock_record,
-            patch("aragora.services.usage_metering.get_usage_meter", return_value=meter),
+            patch("aragora.billing.usage_metering.get_usage_meter", return_value=meter),
             patch(
                 "aragora.analytics.debate_analytics.get_debate_analytics",
                 side_effect=ImportError,
@@ -1479,7 +1533,7 @@ class TestHandleDebateCompletion:
                 "aragora.billing.usage_metering_integration.record_debate_tokens",
                 new=AsyncMock(return_value={}),
             ),
-            patch("aragora.services.usage_metering.get_usage_meter", return_value=meter),
+            patch("aragora.billing.usage_metering.get_usage_meter", return_value=meter),
             patch(
                 "aragora.analytics.debate_analytics.get_debate_analytics", return_value=analytics
             ),
@@ -1689,9 +1743,9 @@ class TestErrorHandlingAndRecovery:
         execution_state.ctx.result.confidence = 0.3
 
         with (
-            patch("aragora.server.metrics.ACTIVE_DEBATES"),
+            patch("aragora.observability.server_metrics.ACTIVE_DEBATES"),
             patch("aragora.debate.orchestrator_runner.add_span_attributes"),
-            patch("aragora.server.metrics.track_debate_outcome") as mock_track,
+            patch("aragora.observability.server_metrics.track_debate_outcome") as mock_track,
         ):
             record_debate_metrics(mock_arena, execution_state, mock_span)
 

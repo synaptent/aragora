@@ -220,7 +220,7 @@ def build_truth_map(
             )
         )
 
-    counts: dict[ClaimStatus, int] = {s: 0 for s in ClaimStatus}
+    counts: dict[ClaimStatus, int] = dict.fromkeys(ClaimStatus, 0)
     for row in rows:
         try:
             counts[ClaimStatus(row.status)] += 1

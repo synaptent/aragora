@@ -294,6 +294,8 @@ def test_cmd_mission_status_prints_progress(
         features=[
             Feature(id="done", description="done", milestone="m", status=Status.COMPLETED),
             Feature(id="blocked", description="blocked", milestone="m", status=Status.BLOCKED),
+            Feature(id="parked", description="parked", milestone="m", status=Status.PARKED),
+            Feature(id="terminal", description="terminal", milestone="m", status=Status.TERMINAL),
         ],
     ).save(state_path)
     parser = build_parser()
@@ -303,8 +305,10 @@ def test_cmd_mission_status_prints_progress(
 
     out = capsys.readouterr().out
     assert "mission-test" in out
-    assert "1/2 completed" in out
+    assert "1/4 completed" in out
     assert "1 blocked" in out
+    assert "1 parked" in out
+    assert "1 terminal" in out
 
 
 def test_cmd_mission_seed_refuses_when_native_mission_flag_is_off(
@@ -348,7 +352,13 @@ def test_cmd_mission_run_report_mode_does_not_mutate_state(
 def test_cmd_mission_auto_drain_parks_seeded_intake_without_branch_metadata(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # With the intake→decomposition bridge disabled (#8758 kill-switch), a
+    # seeded intake still parks gracefully instead of hitting live git — and
+    # per the #8758 design decision the park is RETRYABLE (Status.PARKED,
+    # reconciler-owned), never terminal. The default (bridge ON) path is
+    # covered by tests/missions/test_intake.py.
     monkeypatch.setenv("ARAGORA_ENABLE_NATIVE_MISSION", "1")
+    monkeypatch.setenv("ARAGORA_DISABLE_MISSION_INTAKE_BRIDGE", "1")
     monkeypatch.setattr("aragora.cli.commands.mission._load_artifacts", lambda *a, **k: [])
     parser = build_parser()
     state_path = tmp_path / "state.json"
@@ -381,8 +391,9 @@ def test_cmd_mission_auto_drain_parks_seeded_intake_without_branch_metadata(
     assert cmd_mission(run) == 1
 
     feature = MissionState.load(state_path).features[0]
-    assert feature.status == Status.BLOCKED
+    assert feature.status == Status.PARKED  # retryable, reconciler-owned — not dead
     assert "metadata.branch" in feature.notes
+    assert "metadata.branch" in feature.metadata["parked_reason"]
     assert "Mission run: 0/1 completed" in capsys.readouterr().out
 
 

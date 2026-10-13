@@ -181,6 +181,44 @@ class TestMigrationDataclass:
         assert m.down_fn is fn
 
 
+class TestPreviousChecksums:
+    """verify_checksums accepts checksums that earlier revisions recorded."""
+
+    @staticmethod
+    def _record_applied(runner, backend, migration, stored_checksum):
+        runner.register(migration)
+        backend.execute_write(
+            "INSERT INTO _aragora_migrations (version, name, checksum) VALUES (?, ?, ?)",
+            (migration.version, migration.name, stored_checksum),
+        )
+
+    def test_previous_checksum_verifies(self, runner, backend):
+        from aragora.migrations.runner import Migration
+
+        m = Migration(version=1, name="t", up_sql="SELECT 1", previous_checksums=("old",))
+        self._record_applied(runner, backend, m, "old")
+
+        assert runner.verify_checksums() == []
+
+    def test_other_checksums_still_mismatch(self, runner, backend):
+        from aragora.migrations.runner import Migration
+
+        m = Migration(version=1, name="t", up_sql="SELECT 1", previous_checksums=("old",))
+        self._record_applied(runner, backend, m, "edited")
+
+        assert runner.verify_checksums() == [(1, "edited", m.compute_checksum())]
+
+    def test_upgrade_records_the_current_checksum(self, runner, backend):
+        from aragora.migrations.runner import Migration
+
+        m = Migration(version=1, name="t", up_sql="SELECT 1", previous_checksums=("old",))
+        runner.register(m)
+        runner.upgrade()
+
+        row = backend.fetch_one("SELECT checksum FROM _aragora_migrations WHERE version = 1")
+        assert row == (m.compute_checksum(),)
+
+
 # ---------------------------------------------------------------------------
 # MigrationRunner core lifecycle
 # ---------------------------------------------------------------------------

@@ -292,17 +292,20 @@ def test_public_tick_reconciles_default_sibling_ledger(tmp_path):
     assert final.get("f2").status == Status.COMPLETED
 
 
-def test_corrupt_sibling_ledger_blocks_open_work(tmp_path):
+def test_corrupt_sibling_ledger_blocks_all_open_work(tmp_path):
     p = tmp_path / "state.json"
     lp = tmp_path / "ledger.json"
-    _mission(2).save(p)
+    state = _mission(4)
+    state.get("f2").status = Status.IN_PROGRESS
+    state.get("f3").status = Status.AWAITING_CLAIM
+    state.get("f4").status = Status.PARKED
+    state.save(p)
     lp.write_text("{not valid json", encoding="utf-8")
 
     assert MissionOrchestrator(p).tick(lambda feat: Handoff(success=True)) is False
 
     final = MissionState.load(p)
-    assert final.get("f1").status == Status.BLOCKED
-    assert final.get("f2").status == Status.BLOCKED
+    assert all(feature.status == Status.BLOCKED for feature in final.features)
     assert "ledger reconcile failed closed" in final.get("f1").notes
 
 
@@ -331,9 +334,14 @@ def test_reclaim_orphaned_in_progress():
     assert "dead-worker" in m.get("f1").worker_session_ids
 
 
-def test_invalid_status_rejected():
-    with pytest.raises(ValueError, match="invalid status"):
-        Feature(id="x", description="", milestone="m1", status="bogus")
+def test_unknown_status_quarantines_to_blocked():
+    """#8766 claude P3 (forward-compat): a state file written by a NEWER
+    writer may carry statuses this reader does not know. The load must not
+    hard-fail the whole mission; the single feature quarantines to BLOCKED
+    (operator-recoverable) with the original status preserved in notes."""
+    feat = Feature(id="x", description="", milestone="m1", status="bogus")
+    assert feat.status == Status.BLOCKED
+    assert "unknown status 'bogus'" in feat.notes
 
 
 def test_run_drains_queue(tmp_path):

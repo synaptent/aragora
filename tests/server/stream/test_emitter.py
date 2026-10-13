@@ -26,7 +26,7 @@ from aragora.server.stream.emitter import (
     normalize_intensity,
     set_global_emitter,
 )
-from aragora.server.stream.events import (
+from aragora.events.types import (
     AudienceMessage,
     StreamEvent,
     StreamEventType,

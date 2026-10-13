@@ -8,10 +8,11 @@ matching ``aragora.caching`` submodules. In particular, replace ``cached`` with
 under ``aragora.caching.ttl`` (TTL primitives), ``aragora.caching.registry``
 (cache registry APIs), or ``aragora.caching.redis`` (Redis-backed caches).
 
-Note: the top-level ``aragora.caching`` names ``cached`` / ``CacheStats`` /
-``clear_all_caches`` are the decorator-layer API and are *not* drop-in
-replacements for the same names re-exported here (which preserve the historical
-``aragora.cache`` behaviour). Import from the submodules above to migrate safely.
+Note: the top-level ``aragora.caching`` names ``cached`` / ``async_cached`` /
+``CacheStats`` / ``clear_all_caches`` are the decorator-layer API and are *not*
+drop-in replacements for the same names re-exported here (which preserve the
+historical ``aragora.cache`` behaviour). Import from the submodules above to
+migrate safely.
 """
 
 from __future__ import annotations
@@ -51,8 +52,9 @@ warnings.warn(
     "aragora.caching.ttl.clear_all_caches, aragora.caching.registry.get_cache and "
     "aragora.caching.registry.CacheStats, or aragora.caching.redis.RedisTTLCache "
     "and aragora.caching.redis.HybridTTLCache. The aragora.caching top-level "
-    "cached, CacheStats, and clear_all_caches names are the decorator-layer API "
-    "and are not drop-in replacements for these legacy names.",
+    "cached, async_cached, CacheStats, and clear_all_caches names are the "
+    "decorator-layer API and are not drop-in replacements for these legacy "
+    "names.",
     DeprecationWarning,
     stacklevel=2,
 )

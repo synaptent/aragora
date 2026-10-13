@@ -178,7 +178,7 @@ def summarize_plan(recommendations: Iterable[UnstickRecommendation]) -> dict[str
     Returns a dict with ``total``, ``by_action`` (counts), and
     ``by_action_issue_numbers`` (sorted issue lists per action).
     """
-    by_action: dict[str, int] = {a: 0 for a in _VALID_ACTIONS}
+    by_action: dict[str, int] = dict.fromkeys(_VALID_ACTIONS, 0)
     by_action_issue_numbers: dict[str, list[int]] = {a: [] for a in _VALID_ACTIONS}
     total = 0
     for rec in recommendations or []:

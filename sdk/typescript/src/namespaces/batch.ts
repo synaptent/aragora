@@ -140,10 +140,6 @@ interface BatchClientInterface {
  * });
  * console.log(`Batch ${response.batch_id} submitted`);
  *
- * // Check batch status
- * const status = await client.batch.getStatus(response.batch_id);
- * console.log(`${status.completed_items}/${status.total_items} completed`);
- *
  * // List all batches
  * const batches = await client.batch.list({ limit: 10 });
  * for (const batch of batches.batches) {
@@ -165,13 +161,6 @@ export class BatchAPI {
     return this.client.request('POST', '/api/v1/batch', {
       json: request as unknown as Record<string, unknown>,
     });
-  }
-
-  /**
-   * Get status of a batch request.
-   */
-  async getStatus(batchId: string): Promise<BatchStatusResponse> {
-    return this.client.request('GET', `/api/v1/batch/${batchId}`);
   }
 
   /**

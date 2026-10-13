@@ -322,7 +322,7 @@ def _render_readme_scale(ctx: RenderContext) -> str:
         f"> ({ctx.exact('adapter_files')} files) · 360+ RBAC permissions · "
         f"Python + TypeScript SDKs · v{ctx.version}.**\n"
         "> (Practical real-time debate uses 2–6 agents; the value is *heterogeneity*, not raw\n"
-        "> count — see docs/HONEST_ASSESSMENT.md.)"
+        "> count — see docs/strategy/HONEST_ASSESSMENT.md.)"
     )
 
 
