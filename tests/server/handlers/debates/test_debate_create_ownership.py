@@ -607,3 +607,86 @@ class TestPublicViewerRouteDispatch:
 
         assert match is not None
         assert match[0] == "_debates_handler"
+
+
+NOT_FOUND = {"error": "Debate not found", "code": "not_found"}
+ANON = SimpleNamespace(user_id=None, org_id=None, role=None, is_authenticated=False)
+USER_B = _user(ORG_B, "user-b")
+
+
+class TestReadUsesStoredOrg:
+    """Create paths record the org only in the ``org_id`` column, so reads must use it."""
+
+    @pytest.fixture(autouse=True)
+    def _forget_started_debates(self):
+        """_clear_active_debates empties only the proxy dict, not the state manager."""
+        from aragora.server.debate_utils import _active_debates
+
+        before = set(_active_debates)
+        yield
+        for debate_id in set(_active_debates) - before:
+            _active_debates.pop(debate_id, None)
+
+    @pytest.fixture
+    def read(self, monkeypatch, storage, tmp_path):
+        from aragora.server.handlers.debates import DebatesHandler
+
+        debates = DebatesHandler(ctx={"storage": storage, "nomic_dir": tmp_path})
+        request = MagicMock(command="GET", headers={"Host": "x"}, client_address=("10.0.0.12", 1))
+
+        def _read(user: Any, path: str):
+            monkeypatch.setattr(
+                "aragora.billing.jwt_auth.extract_user_from_request",
+                lambda request, user_store=None: user,
+            )
+            return debates.handle(path, {}, request)
+
+        return _read
+
+    @staticmethod
+    def _save(storage: DebateStorage, debate_id: str, org_id: str | None, **extra: Any) -> str:
+        data = {"id": debate_id, "task": f"Read check {debate_id}", "agents": ["a"], **extra}
+        storage.save_dict(data, org_id=org_id)
+        return debate_id
+
+    def test_created_debate_is_hidden_from_other_orgs(self, read, storage):
+        debate_id = TestVisibilityAfterCreate()._create(storage, ORG_A)
+
+        for path in (f"/api/v1/debates/{debate_id}", f"/api/v1/debates/slug/{debate_id}"):
+            other = read(USER_B, path)
+            assert (other.status_code, _body(other)) == (404, NOT_FOUND), path
+            assert read(_user(ORG_A), path).status_code == 200, path
+
+    def test_callers_without_the_org_are_refused_whatever_the_artifact_says(self, read, storage):
+        self._save(storage, "deb-claim", ORG_A, visibility="public", source="landing")
+        path = "/api/v1/debates/deb-claim"
+
+        anon, no_org = read(ANON, path), read(_user(None, "user-x"), path)
+
+        assert (anon.status_code, _body(anon)["code"]) == (401, "auth_required")
+        assert (no_org.status_code, _body(no_org)["code"]) == (403, "org_required")
+        assert read(USER_B, path).status_code == 404
+
+    @pytest.mark.parametrize("user", [ANON, USER_B])
+    def test_public_and_unowned_debates_read_as_before(self, read, storage, user):
+        assert storage.set_public(self._save(storage, "deb-public", ORG_A), True)
+        self._save(storage, "deb-legacy", None)
+
+        assert read(user, "/api/v1/debates/deb-public").status_code == 200
+        assert read(user, "/api/v1/debates/deb-legacy").status_code == 200
+
+    def test_running_debate_is_read_only_by_its_creator_org(self, read, storage):
+        from aragora.server.debate_utils import _active_debates
+
+        controller = _real_controller(storage)
+        controller._get_executor = Mock(return_value=Mock())  # type: ignore[method-assign]
+        debate_id = controller.start_debate(DebateRequest(question="Q?", org_id=ORG_A)).debate_id
+        _active_debates["deb-running-x"] = {"id": "deb-running-x", "task": "No org", "agents": "a"}
+        path = f"/api/v1/debates/{debate_id}"
+
+        owner, other = read(_user(ORG_A), path), read(USER_B, path)
+
+        assert (owner.status_code, _body(owner)["in_progress"]) == (200, True)
+        assert (other.status_code, _body(other)) == (404, NOT_FOUND)
+        assert read(ANON, path).status_code == 401
+        assert read(USER_B, "/api/v1/debates/deb-running-x").status_code == 200

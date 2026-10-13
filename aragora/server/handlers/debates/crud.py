@@ -28,6 +28,7 @@ from aragora.server.validation.schema import (
     DEBATE_UPDATE_SCHEMA,
     validate_against_schema,
 )
+from aragora.tenancy.record_scope import record_not_found, record_visible, require_org_scope
 
 from ..base import (
     HandlerResult,
@@ -60,6 +61,36 @@ def _epoch_to_iso(epoch: float) -> str:
     if not epoch:
         return ""
     return datetime.fromtimestamp(epoch, tz=timezone.utc).isoformat()
+
+
+def _stored_debate_org(storage: Any, ref: str) -> str | None:
+    """The org owning a private stored debate; None when public, unowned or unknown."""
+    read_access = getattr(storage, "get_read_access", None)
+    access = read_access(ref) if callable(read_access) else None
+    private = isinstance(access, tuple) and len(access) == 3 and not access[2]
+    return access[1] if private and isinstance(access[1], str) and access[1] else None
+
+
+def _running_debate_org(debate_id: str) -> str | None:
+    """The org the create path recorded on a running debate, if any."""
+    try:
+        from aragora.server.state import get_state_manager
+
+        metadata = getattr(get_state_manager().get_debate(debate_id), "metadata", None)
+    except (ImportError, RuntimeError):
+        return None
+    org_id = metadata.get("org_id") if isinstance(metadata, dict) else None
+    return org_id if isinstance(org_id, str) and org_id else None
+
+
+def _org_read_denial(handler: Any, org_id: str | None) -> HandlerResult | None:
+    """401/403/404 unless the caller acts for ``org_id``; None (unowned) is not checked."""
+    if not org_id:
+        return None
+    scope, denial = require_org_scope(handler)
+    if denial is None and not record_visible(org_id, scope):
+        return record_not_found("Debate")
+    return denial
 
 
 class _DebatesHandlerProtocol(Protocol):
@@ -293,6 +324,10 @@ class CrudOperationsMixin:
         storage = self.get_storage()
         debate = storage.get_debate(slug)
         if debate:
+            denied = _org_read_denial(handler, _stored_debate_org(storage, slug))
+            if denied:
+                return denied
+
             # Public playground debates are accessible without authentication
             visibility = debate.get("visibility", "private")
             source = debate.get("source", "")
@@ -359,6 +394,10 @@ class CrudOperationsMixin:
                     type(active_raw).__name__,
                 )
                 return error_response(f"Debate not found: {slug}", 404)
+
+            denied = _org_read_denial(handler, _running_debate_org(slug))
+            if denied:
+                return denied
 
             active = active_raw
             active_result = active.get("result") if isinstance(active, dict) else None

@@ -669,6 +669,14 @@ class DebateStorage(SQLiteStore):
             row = cursor.fetchone()
         return bool(row and row[0])
 
+    def get_read_access(self, debate_id: str) -> tuple[str, str | None, bool] | None:
+        """Return ``(id, org_id, is_public)`` for a stored debate id, else None."""
+        with self.connection() as conn:
+            row = conn.execute(
+                "SELECT id, org_id, is_public FROM debates WHERE id = ?", (debate_id,)
+            ).fetchone()
+        return (row[0], row[1] or None, bool(row[2])) if row else None
+
     def set_public(self, debate_id: str, is_public: bool, org_id: str | None = None) -> bool:
         """
         Set debate public/private status.
