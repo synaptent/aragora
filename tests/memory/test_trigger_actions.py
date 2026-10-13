@@ -158,7 +158,7 @@ class TestContradictionAction:
     async def test_enqueues_improvement_suggestion(self):
         mock_queue = MagicMock()
         with patch(
-            "aragora.nomic.improvement_queue.get_improvement_queue",
+            "aragora.learning.improvement_queue.get_improvement_queue",
             return_value=mock_queue,
         ):
             await _create_debate_topic(
@@ -175,7 +175,7 @@ class TestContradictionAction:
     async def test_dispatches_event(self):
         with (
             patch(
-                "aragora.nomic.improvement_queue.get_improvement_queue",
+                "aragora.learning.improvement_queue.get_improvement_queue",
                 side_effect=ImportError,
             ),
             patch(
@@ -193,7 +193,7 @@ class TestContradictionAction:
         with patch.dict(
             "sys.modules",
             {
-                "aragora.nomic.improvement_queue": None,
+                "aragora.learning.improvement_queue": None,
                 "aragora.events.dispatcher": None,
             },
         ):
@@ -278,7 +278,7 @@ class TestTriggerEngineIntegration:
 
         with (
             patch(
-                "aragora.nomic.improvement_queue.get_improvement_queue",
+                "aragora.learning.improvement_queue.get_improvement_queue",
                 return_value=mock_queue,
             ),
             patch("aragora.events.dispatcher.dispatch_event"),
