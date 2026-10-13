@@ -775,7 +775,7 @@ class TestGlobalCoordinator:
     @pytest.fixture(autouse=True)
     def _reset_coordinator_singleton(self):
         """Reset coordinator singleton before/after each test."""
-        import aragora.coordination.cross_workspace as cw
+        import aragora.tenancy.cross_workspace as cw
 
         cw._coordinator = None
         yield

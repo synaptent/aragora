@@ -965,7 +965,7 @@ class AdapterFactory:
                     event_callback=self._event_callback,
                 )
             elif spec.name == "supermemory":
-                from aragora.connectors.supermemory import SupermemoryConfig, SupermemoryClient
+                from aragora.memory.supermemory import SupermemoryConfig, SupermemoryClient
 
                 supermemory_config = SupermemoryConfig.from_env()
                 if supermemory_config is None:
@@ -1090,7 +1090,7 @@ class AdapterFactory:
                 elif spec.name == "outcome":
                     return adapter_class(mound=deps.get("mound"))
                 elif spec.name == "supermemory":
-                    from aragora.connectors.supermemory import SupermemoryConfig, SupermemoryClient
+                    from aragora.memory.supermemory import SupermemoryConfig, SupermemoryClient
 
                     supermemory_config = SupermemoryConfig.from_env()
                     if supermemory_config is None:
