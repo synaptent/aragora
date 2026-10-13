@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import hashlib
 import html as html_mod
-import importlib
 import io
 import json
 import textwrap
@@ -31,6 +30,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from aragora.core_types import Verdict
+from aragora.models.receipts import operations
 
 if TYPE_CHECKING:
     from aragora.core_types import DebateResult
@@ -361,7 +361,9 @@ def _build_text_fallback_pdf(
 
 def _load_weasyprint() -> Any:
     """Load WeasyPrint lazily so tests can patch only this import seam."""
-    return importlib.import_module("weasyprint")
+    import weasyprint
+
+    return weasyprint
 
 
 @dataclass
@@ -1233,9 +1235,8 @@ class DecisionReceipt:
             is_valid = signed.verify()
             signed_json = signed.to_json()
         """
-        from aragora.gauntlet.signing import HMACSigner, ReceiptSigner
-
-        signer = ReceiptSigner(backend or HMACSigner.from_env())
+        signing = operations.signing_backend()
+        signer = signing.ReceiptSigner(backend or signing.HMACSigner.from_env())
         signed = signer.sign(self.to_dict())
 
         return SignedDecisionReceipt(
@@ -1617,20 +1618,14 @@ class SignedDecisionReceipt:
         Returns:
             True if signature is valid, False otherwise
         """
-        from aragora.gauntlet.signing import (
-            HMACSigner,
-            ReceiptSigner,
-            SignatureMetadata,
-            SignedReceipt,
-        )
-
-        signer = ReceiptSigner(backend or HMACSigner.from_env())
+        signing = operations.signing_backend()
+        signer = signing.ReceiptSigner(backend or signing.HMACSigner.from_env())
 
         # Reconstruct the SignedReceipt for verification
-        signed = SignedReceipt(
+        signed = signing.SignedReceipt(
             receipt_data=self.receipt.to_dict(),
             signature=self.signature,
-            signature_metadata=SignatureMetadata(
+            signature_metadata=signing.SignatureMetadata(
                 algorithm=self.signature_algorithm,
                 timestamp=self.signed_at,
                 key_id=self.signature_key_id,

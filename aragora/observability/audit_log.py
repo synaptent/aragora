@@ -55,7 +55,7 @@ logger = logging.getLogger(__name__)
 
 # Check for PostgreSQL availability
 try:
-    import psycopg2  # noqa: F401
+    import psycopg2
 
     POSTGRESQL_AVAILABLE = True
 except ImportError:

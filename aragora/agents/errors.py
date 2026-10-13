@@ -20,7 +20,7 @@ from aragora.utils.error_sanitizer import (
     sanitize_error,
 )
 
-from aragora.agents.errors.classifier import (  # noqa: F401
+from aragora.agents.errors.classifier import (
     ALL_FALLBACK_PATTERNS,
     AUTH_ERROR_PATTERNS,
     CLI_ERROR_PATTERNS,
@@ -38,7 +38,7 @@ from aragora.agents.errors.classifier import (  # noqa: F401
     RecoveryAction,
     classify_cli_error,
 )
-from aragora.agents.errors.decorators import (  # noqa: F401
+from aragora.agents.errors.decorators import (
     _calculate_retry_delay_with_jitter,
     _handle_agent_error,
     _handle_connection_error,
@@ -52,7 +52,7 @@ from aragora.agents.errors.decorators import (  # noqa: F401
     handle_stream_errors,
     with_error_handling,
 )
-from aragora.agents.errors.exceptions import (  # noqa: F401
+from aragora.agents.errors.exceptions import (
     AgentAPIError,
     AgentCircuitOpenError,
     AgentConnectionError,
@@ -67,7 +67,7 @@ from aragora.agents.errors.exceptions import (  # noqa: F401
     CLISubprocessError,
     CLITimeoutError,
 )
-from aragora.agents.errors.handlers import (  # noqa: F401
+from aragora.agents.errors.handlers import (
     AgentErrorHandler,
     _build_error_action,
     handle_agent_operation,

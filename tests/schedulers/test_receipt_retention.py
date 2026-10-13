@@ -210,6 +210,17 @@ class TestReceiptRetentionScheduler:
         )
 
     @pytest.mark.asyncio
+    async def test_cleanup_result_reports_effective_retention_days(self, mock_store):
+        """The result carries the override when set, else the store's retention days."""
+        default_result = await ReceiptRetentionScheduler(mock_store).cleanup_now()
+        override_result = await ReceiptRetentionScheduler(
+            mock_store, retention_days=365
+        ).cleanup_now()
+
+        assert default_result.retention_days == 2555
+        assert override_result.retention_days == 365
+
+    @pytest.mark.asyncio
     async def test_cleanup_now_error(self, mock_store):
         """Test cleanup handling errors."""
         mock_store.cleanup_expired.side_effect = RuntimeError("Database error")

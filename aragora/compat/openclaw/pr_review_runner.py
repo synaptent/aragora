@@ -717,7 +717,7 @@ class PRReviewRunner:
 
         # Try direct import first (faster, in-process)
         try:
-            from aragora.cli.review import (
+            from aragora.review.diff_review import (
                 extract_review_findings,
                 run_review_debate,
             )

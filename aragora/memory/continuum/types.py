@@ -12,7 +12,7 @@ from typing import TypedDict
 from aragora.memory.tier_manager import (
     DEFAULT_TIER_CONFIGS,
     MemoryTier,
-    TierConfig,  # noqa: F401 - re-exported for backwards compatibility
+    TierConfig,  # re-exported for backwards compatibility
 )
 
 # Schema version for ContinuumMemory

@@ -210,7 +210,7 @@ class ReplicaAwarePool:
                 return
 
             try:
-                import asyncpg  # noqa: F401 - type hint only
+                import asyncpg  # type hint only
             except ImportError:
                 logger.warning(
                     "asyncpg not installed, PostgreSQL pool will not be available. "

@@ -573,7 +573,7 @@ def _run_pipeline_dry_run(ideas: list[str]) -> None:
             PipelineConfig,
         )
 
-        _config = PipelineConfig(dry_run=True)  # noqa: F841 — reserved for async run()
+        _config = PipelineConfig(dry_run=True)  # reserved for async run()
         pipeline = IdeaToExecutionPipeline()
         result = pipeline.from_ideas(ideas)
 
@@ -631,7 +631,7 @@ def _run_pipeline_execute(
         _config = PipelineConfig(
             dry_run=False,
             enable_receipts=True,
-        )  # noqa: F841 — reserved for async run()
+        )  # reserved for async run()
         pipeline = IdeaToExecutionPipeline()
 
         print("-" * 60)

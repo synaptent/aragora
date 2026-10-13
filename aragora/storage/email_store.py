@@ -1180,7 +1180,7 @@ class EmailStore(SQLiteStore):
             priority = row[1]
             total = row[2]
             correct = row[3] or 0
-            _incorrect = row[4] or 0  # noqa: F841
+            _incorrect = row[4] or 0
 
             if tier not in stats["by_tier"]:
                 stats["by_tier"][tier] = {"total": 0, "correct": 0}

@@ -23,7 +23,7 @@ Status legend:
 | Workspace + rig management | partial | `aragora/extensions/gastown/workspace.py`, `aragora/workspace/manager.py` | Two parallel managers; needs unification |
 | Convoy lifecycle | partial | `aragora/extensions/gastown/convoy.py`, `aragora/workspace/convoy.py`, `aragora/nomic/convoys.py` | Three implementations |
 | Beads (atomic work units) | partial | `aragora/workspace/bead.py`, `aragora/nomic/beads.py` | Two stores + schema mismatch; canonical store now persists by default |
-| Hooks + worktree persistence | partial | `aragora/extensions/gastown/hooks.py`, `aragora/nomic/hook_queue.py` | Hooks + GUPP queue exist, need wiring |
+| Hooks + worktree persistence | partial | `aragora/worktree/hook_runner.py`, `aragora/nomic/hook_queue.py` | Hooks + GUPP queue exist, need wiring |
 | Mayor/Witness roles | partial | `aragora/nomic/agent_roles.py`, `aragora/nomic/mayor_coordinator.py`, `aragora/nomic/witness_behavior.py` | Core logic exists, needs runtime integration |
 | CLI workflows | partial | `aragora/cli/gt.py` | CLI uses nomic convoys/beads |
 | Dashboard endpoints | partial | `aragora/server/handlers/gastown_dashboard.py` | Mostly stubs |

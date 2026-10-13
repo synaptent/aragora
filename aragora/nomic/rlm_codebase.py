@@ -13,7 +13,7 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
-from aragora.connectors.repository_crawler import CrawlConfig, RepositoryCrawler
+from aragora.analysis.codebase.repository_crawler import CrawlConfig, RepositoryCrawler
 from aragora.rlm import AbstractionLevel, RLMConfig, RLMContext, RLMMode, get_rlm
 from aragora.rlm.types import AbstractionNode
 
