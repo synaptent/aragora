@@ -5,11 +5,15 @@ from __future__ import annotations
 import json
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from aragora.pipeline.decision_plan import ApprovalMode, DecisionPlan
 from aragora.pipeline.plan_store import PlanStore
 from aragora.server.handlers.decisions.pipeline import DecisionPipelineHandler
 
 PIPELINE = "aragora.server.handlers.decisions.pipeline"
+
+pytestmark = pytest.mark.usefixtures("org_scoped_request_user")
 
 
 def test_created_plan_is_listed_for_the_callers_org(tmp_path, monkeypatch):
