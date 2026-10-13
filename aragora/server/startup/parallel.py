@@ -322,7 +322,7 @@ class ParallelInitializer:
         # Also implicitly require Redis when distributed state is needed
         if not require_redis:
             try:
-                from aragora.control_plane.leader import is_distributed_state_required
+                from aragora.config.distributed import is_distributed_state_required
 
                 if is_distributed_state_required():
                     require_redis = True
