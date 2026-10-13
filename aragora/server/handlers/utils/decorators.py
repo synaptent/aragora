@@ -80,6 +80,7 @@ _EXCEPTION_STATUS_MAP = {
     "AuthenticationError": 401,
     "TokenExpiredError": 401,
     "AuthorizationError": 403,
+    "OrgScopeRequiredError": 403,
     "PermissionDeniedError": 403,
     "RoleRequiredError": 403,
     "MFARequiredError": 403,
@@ -118,6 +119,7 @@ _EXCEPTION_ERROR_CODE_MAP = {
     "PermissionError": ErrorCode.FORBIDDEN.value,
     "TimeoutError": ErrorCode.TIMEOUT.value,
     "ConnectionError": ErrorCode.EXTERNAL_SERVICE_ERROR.value,
+    "OrgScopeRequiredError": "knowledge_fact_access_closed",
 }
 
 _STATUS_ERROR_CODE_MAP = {

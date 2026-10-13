@@ -905,7 +905,7 @@ SECRETS: list[SecretDefinition] = [
 ]
 
 SECRETS_BY_ENV_VAR = {s.env_var: s for s in SECRETS}
-SECRETS_BY_PROVIDER = {}
+SECRETS_BY_PROVIDER: dict[str, list[SecretDefinition]] = {}
 for s in SECRETS:
     if s.provider:
         if s.provider not in SECRETS_BY_PROVIDER:
@@ -1665,10 +1665,10 @@ class SecretsManager:
 
         if "github" in include:
             try:
-                backend = GitHubSecretsBackend()
-                if backend.is_available():
-                    self.backends["github"] = backend
-                    logger.info(f"  {GREEN}✓{RESET} GitHub Secrets ({backend.repo})")
+                github_backend = GitHubSecretsBackend()
+                if github_backend.is_available():
+                    self.backends["github"] = github_backend
+                    logger.info(f"  {GREEN}✓{RESET} GitHub Secrets ({github_backend.repo})")
                 else:
                     logger.warning(f"  {YELLOW}○{RESET} GitHub: gh CLI not authenticated")
             except Exception as e:

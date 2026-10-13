@@ -235,7 +235,8 @@ class OnboardingRepository:
 
         with self._get_connection() as conn:
             cursor = conn.execute(
-                f"UPDATE onboarding_flows SET {', '.join(set_parts)} WHERE id = ?",  # noqa: S608 -- dynamic clause from internal state
+                # dynamic clause from internal state
+                f"UPDATE onboarding_flows SET {', '.join(set_parts)} WHERE id = ?",
                 values,
             )
             conn.commit()
@@ -304,7 +305,8 @@ class OnboardingRepository:
         with self._get_connection() as conn:
             # Total flows
             total = conn.execute(
-                f"SELECT COUNT(*) FROM onboarding_flows {where_clause}",  # noqa: S608 -- dynamic clause from internal state
+                # dynamic clause from internal state
+                f"SELECT COUNT(*) FROM onboarding_flows {where_clause}",
                 params,
             ).fetchone()[0]
 
@@ -316,7 +318,8 @@ class OnboardingRepository:
                 completed_where = "WHERE completed_at IS NOT NULL"
 
             completed = conn.execute(
-                f"SELECT COUNT(*) FROM onboarding_flows {completed_where}",  # noqa: S608 -- internal query construction
+                # internal query construction
+                f"SELECT COUNT(*) FROM onboarding_flows {completed_where}",
                 params,
             ).fetchone()[0]
 
@@ -327,7 +330,7 @@ class OnboardingRepository:
                 SELECT current_step, COUNT(*) as count
                 FROM onboarding_flows {where_clause}
                 GROUP BY current_step
-                """,  # noqa: S608 -- dynamic clause from internal state
+                """,  # dynamic clause from internal state
                 params,
             ).fetchall()
             for row in rows:

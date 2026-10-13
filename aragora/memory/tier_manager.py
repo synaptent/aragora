@@ -585,7 +585,7 @@ def get_tier_manager() -> TierManager:
 
     Uses ServiceRegistry for centralized singleton management.
     """
-    from aragora.services import ServiceRegistry
+    from aragora.runtime.service_registry import ServiceRegistry
 
     registry = ServiceRegistry.get()
     if not registry.has(TierManager):
@@ -598,6 +598,6 @@ def reset_tier_manager() -> None:
 
     Removes TierManager from the ServiceRegistry.
     """
-    from aragora.services import ServiceRegistry
+    from aragora.runtime.service_registry import ServiceRegistry
 
     ServiceRegistry.get().unregister(TierManager)

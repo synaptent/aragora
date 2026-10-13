@@ -21,11 +21,15 @@ Advances: issue #6065 (AGT-04), sub-deliverable 1 — synthetic market schema.
 
 from __future__ import annotations
 
+import logging
+import math
 import os
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -42,6 +46,18 @@ def _flag_enabled() -> bool:
 def _require_enabled() -> None:
     if not _flag_enabled():
         raise RuntimeError(f"Prediction markets are disabled. Set {_ENV_FLAG}=1 to enable.")
+
+
+def _parse_datetime(value: object) -> datetime | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed
 
 
 # ---------------------------------------------------------------------------
@@ -166,7 +182,16 @@ class InMemoryStakeableClaimStore:
         value: bool,
         evidence: str = "",
     ) -> StakeableClaim:
-        """Mark a claim as resolved YES/NO with optional evidence text."""
+        """Mark a claim as resolved YES/NO with optional evidence text.
+
+        Only OPEN claims may transition to a terminal state: the
+        ``_get_open`` check followed immediately by the status write below
+        is the compare-and-swap guard against double settlement (this
+        in-memory store is single-threaded, so check-then-set is atomic
+        with respect to other store calls).  If the sweeper already voided
+        the claim, this raises ``ValueError`` and the EXPIRED state is
+        never resurrected.
+        """
         _require_enabled()
         claim = self._get_open(claim_id)
         claim.resolution_status = (
@@ -176,24 +201,77 @@ class InMemoryStakeableClaimStore:
         claim.resolution_evidence = evidence
         return claim
 
-    def expire_stale(self, before_dt: datetime | None = None) -> list[str]:
-        """Mark OPEN claims whose expiry precedes *before_dt* as EXPIRED.
+    def expire_stale(
+        self,
+        before_dt: datetime | None = None,
+        grace: timedelta | float | int = timedelta(hours=24),
+    ) -> list[str]:
+        """Mark OPEN claims whose ``expiry + grace`` precedes *before_dt* as EXPIRED.
+
+        Finality is processing-time bounded (adjudicated design, PR #8519):
+        a claim is voided only once its expiry *plus* a per-claim grace
+        window has passed.  The grace window exists because GitHub webhook
+        deliveries can lag or be redelivered hours after the underlying
+        event occurred — an in-window event delivered late must still be
+        able to resolve the claim before the sweeper voids it.
+
+        Args:
+            before_dt: Processing-time cutoff (defaults to now, UTC).
+            grace: Grace window applied per claim — a ``timedelta`` or a
+                number of seconds.  Defaults to 24 hours.
+
+        Only OPEN claims transition to EXPIRED; already-settled claims are
+        skipped, so a resolve-then-sweep race no-ops here.
+
+        A claim whose ``expiry + grace`` lies beyond ``datetime.max`` (for
+        example a ``9999-12-31T23:59:59+00:00`` "never" sentinel) has no
+        representable deadline and is treated as not yet past the cutoff, so
+        it stays OPEN and does not stop the sweep of later claims.
+
+        Raises:
+            ValueError: if *grace* is negative, or is a number that is not
+                finite or does not fit in a ``timedelta``.
 
         Returns the list of expired claim IDs.
         """
         _require_enabled()
+        if not isinstance(grace, timedelta):
+            try:
+                seconds = float(grace)
+                if not math.isfinite(seconds):
+                    raise ValueError(f"grace must be finite, got {grace!r}")
+                grace = timedelta(seconds=seconds)
+            except OverflowError:
+                raise ValueError(f"grace is out of range, got {grace!r}") from None
+        if grace < timedelta(0):
+            raise ValueError(f"grace must be non-negative, got {grace!r}")
         cutoff = before_dt or datetime.now(tz=UTC)
+        if cutoff.tzinfo is None:
+            cutoff = cutoff.replace(tzinfo=UTC)
         expired_ids: list[str] = []
         for claim in self._claims.values():
             if claim.resolution_status != ResolutionStatus.OPEN:
                 continue
-            try:
-                exp_dt = datetime.fromisoformat(claim.expiry)
-            except ValueError:
+            exp_dt = _parse_datetime(claim.expiry)
+            if exp_dt is None:
+                # Quarantine, never a silent skip (#8777): a malformed expiry
+                # can neither qualify events (resolver fails closed on it) nor
+                # ever sweep, so skipping leaves a permanent zombie claim.
+                claim.resolution_status = ResolutionStatus.EXPIRED
+                expired_ids.append(claim.claim_id)
+                logger.warning(
+                    "prediction.expire_stale: claim %s has malformed expiry %r; "
+                    "quarantined as EXPIRED (#8777)",
+                    claim.claim_id,
+                    claim.expiry,
+                )
                 continue
-            if exp_dt.tzinfo is None:
-                exp_dt = exp_dt.replace(tzinfo=UTC)
-            if exp_dt < cutoff:
+            try:
+                deadline = exp_dt + grace
+            except OverflowError:
+                # The true deadline is past datetime.max, so no cutoff can reach it.
+                continue
+            if deadline < cutoff:
                 claim.resolution_status = ResolutionStatus.EXPIRED
                 expired_ids.append(claim.claim_id)
         return expired_ids

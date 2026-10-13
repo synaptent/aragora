@@ -343,6 +343,10 @@ async def _route_via_decision_router(
     from aragora.core import get_decision_router
     from aragora.core.decision_router import DecisionRouter
     from aragora.core.decision_types import DecisionType, InputSource
+    from aragora.server.decision_routes import register_decision_routes
+
+    # Standalone bot processes never run server startup, so install the router hooks here.
+    register_decision_routes()
 
     platform_to_source: dict[Platform, InputSource] = {
         Platform.DISCORD: InputSource.DISCORD,

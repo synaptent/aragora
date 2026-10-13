@@ -52,7 +52,7 @@ from aragora.debate.molecules import (
 
 if TYPE_CHECKING:
     from aragora.core import Agent
-    from aragora.debate.protocol import DebateProtocol
+    from aragora.protocols.debate import DebateProtocol
 
 logger = logging.getLogger(__name__)
 

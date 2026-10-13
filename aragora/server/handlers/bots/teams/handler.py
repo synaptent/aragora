@@ -28,6 +28,7 @@ from aragora.server.handlers.bots.base import BotHandlerMixin
 from aragora.server.handlers.secure import SecureHandler
 from aragora.server.handlers.utils.auth_mixins import SecureEndpointMixin
 from aragora.server.handlers.utils.rate_limit import rate_limit
+from aragora.server.handlers.utils.responses import not_implemented_response
 
 # Import from teams_utils for shared state and utilities
 from aragora.server.handlers.bots.teams_utils import (
@@ -63,8 +64,8 @@ try:
         UserAuthContext as _UserAuthCtx,
         extract_user_from_request as _extract_user,
     )
-    from aragora.rbac.checker import check_permission as _check_perm  # noqa: F401
-    from aragora.rbac.models import AuthorizationContext as _AuthCtx  # noqa: F401
+    from aragora.rbac.checker import check_permission as _check_perm
+    from aragora.rbac.models import AuthorizationContext as _AuthCtx
 
     check_permission = _check_perm
     extract_user_from_request = _extract_user
@@ -868,8 +869,20 @@ class TeamsHandler(SecureEndpointMixin, BotHandlerMixin, SecureHandler):  # type
         """Route Teams requests with RBAC for status endpoint."""
         if path == "/api/v1/bots/teams/status":
             return await self.handle_status_request(handler)
+        if path == "/api/v1/teams" and getattr(handler, "command", "GET") == "GET":
+            return await self._authorized_not_implemented(
+                handler, "Listing teams is not implemented"
+            )
 
         return None
+
+    async def _authorized_not_implemented(self, handler: Any, message: str) -> HandlerResult:
+        """Answer 501 for a route without an implementation, after the bots.read check."""
+
+        async def answer(auth_context: Any = None) -> HandlerResult:
+            return not_implemented_response(message)
+
+        return await self.handle_with_auth(handler, self.bots_read_permission, answer)
 
     @handle_errors("teams creation")
     @rate_limit(requests_per_minute=60, limiter_name="teams_messages")
@@ -879,6 +892,15 @@ class TeamsHandler(SecureEndpointMixin, BotHandlerMixin, SecureHandler):  # type
         """Handle POST requests."""
         if path == "/api/v1/bots/teams/messages":
             return await self._handle_messages(handler)
+        # No create or send key is registered for these yet; they answer under bots.read.
+        if path == "/api/v1/teams":
+            return await self._authorized_not_implemented(
+                handler, "Creating teams is not implemented"
+            )
+        if path == "/api/v1/teams/debates/send":
+            return await self._authorized_not_implemented(
+                handler, "Sending debates to Teams is not implemented"
+            )
 
         return None
 

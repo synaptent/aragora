@@ -593,7 +593,12 @@ decrypted_record = service.decrypt_fields(
 Rotate encryption keys without downtime:
 
 ```python
+from aragora.ops.security_edge_adapters import register_security_migration_adapters
 from aragora.security.migration import rotate_encryption_key
+
+# Route key_rotation events to the unified audit log. The server and the
+# `aragora security` CLI do this at startup; standalone scripts must call it.
+register_security_migration_adapters()
 
 # Rotate key and re-encrypt all stores
 result = rotate_encryption_key(

@@ -975,6 +975,83 @@ class TestOrganizationInvitation:
         assert inv.role == "admin"
 
 
+class TestOrganizationInvitationNullExpiry:
+    """A missing expiry (legacy NULL expires_at row) fails closed."""
+
+    def test_new_invitation_defaults_to_seven_day_expiry(self):
+        before = datetime.now(timezone.utc)
+        inv = OrganizationInvitation()
+        after = datetime.now(timezone.utc)
+
+        assert inv.expires_at is not None
+        assert before + timedelta(days=7) <= inv.expires_at <= after + timedelta(days=7)
+
+    def test_null_expiry_is_expired(self):
+        inv = OrganizationInvitation(expires_at=None)
+
+        assert inv.is_expired is True
+
+    def test_null_expiry_is_not_pending(self):
+        inv = OrganizationInvitation(expires_at=None)
+
+        assert inv.status == "pending"
+        assert inv.is_pending is False
+
+    def test_null_expiry_cannot_be_accepted(self):
+        inv = OrganizationInvitation(expires_at=None)
+
+        assert inv.accept() is False
+        assert inv.status == "pending"
+        assert inv.accepted_at is None
+
+    def test_null_expiry_can_still_be_revoked(self):
+        inv = OrganizationInvitation(expires_at=None)
+
+        assert inv.revoke() is True
+        assert inv.status == "revoked"
+
+    def test_to_dict_serializes_null_expiry_as_none(self):
+        inv = OrganizationInvitation(id="inv-null", expires_at=None)
+
+        data = inv.to_dict()
+
+        assert data["expires_at"] is None
+        assert data["is_expired"] is True
+        assert data["is_pending"] is False
+
+    def test_from_dict_preserves_explicit_null_expiry(self):
+        inv = OrganizationInvitation.from_dict({"id": "inv-null", "expires_at": None})
+
+        assert inv.expires_at is None
+        assert inv.is_pending is False
+
+    def test_from_dict_without_expiry_key_keeps_seven_day_default(self):
+        before = datetime.now(timezone.utc)
+        inv = OrganizationInvitation.from_dict({"id": "inv-default"})
+
+        assert inv.expires_at is not None
+        assert inv.expires_at >= before + timedelta(days=7)
+        assert inv.is_pending is True
+
+    def test_null_expiry_round_trip(self):
+        original = OrganizationInvitation(id="inv-rt-null", email="a@example.com", expires_at=None)
+
+        restored = OrganizationInvitation.from_dict(original.to_dict(include_token=True))
+
+        assert restored.expires_at is None
+        assert restored.is_expired is True
+
+    def test_dated_invitation_expiry_is_unchanged(self):
+        future = datetime.now(timezone.utc) + timedelta(minutes=5)
+        past = datetime.now(timezone.utc) - timedelta(seconds=1)
+
+        assert OrganizationInvitation(expires_at=future).is_pending is True
+        assert OrganizationInvitation(expires_at=past).is_expired is True
+        assert OrganizationInvitation(expires_at=future).to_dict()["expires_at"] == (
+            future.isoformat()
+        )
+
+
 # =============================================================================
 # Utility Function Tests
 # =============================================================================

@@ -37,12 +37,10 @@ from dataclasses import dataclass
 from typing import Any
 from collections.abc import Callable
 
+from aragora.config.distributed import is_distributed_state_required
 from aragora.config.env_helpers import env_int, env_bool
 from aragora.exceptions import REDIS_CONNECTION_ERRORS
-from aragora.control_plane.leader import (
-    DistributedStateError,
-    is_distributed_state_required,
-)
+from aragora.control_plane.leader import DistributedStateError
 
 logger = logging.getLogger(__name__)
 

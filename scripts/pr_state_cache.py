@@ -220,8 +220,10 @@ def normalize_pr(row: dict[str, Any]) -> dict[str, Any] | None:
         number = int(row["number"])
     except (KeyError, TypeError, ValueError):
         return None
-    head = row.get("head") if isinstance(row.get("head"), dict) else {}
-    base = row.get("base") if isinstance(row.get("base"), dict) else {}
+    raw_head = row.get("head")
+    raw_base = row.get("base")
+    head = raw_head if isinstance(raw_head, dict) else {}
+    base = raw_base if isinstance(raw_base, dict) else {}
     labels = [
         str(label.get("name"))
         for label in (row.get("labels") or [])
@@ -314,8 +316,10 @@ def run_poll(
     annotations: list[str] = []
     requests_used = 0
     prev = previous if isinstance(previous, dict) else {}
-    prev_endpoints = prev.get("endpoints") if isinstance(prev.get("endpoints"), dict) else {}
-    prev_prs = prev.get("prs") if isinstance(prev.get("prs"), dict) else {}
+    raw_prev_endpoints = prev.get("endpoints")
+    raw_prev_prs = prev.get("prs")
+    prev_endpoints = raw_prev_endpoints if isinstance(raw_prev_endpoints, dict) else {}
+    prev_prs = raw_prev_prs if isinstance(raw_prev_prs, dict) else {}
 
     def summary(cache: dict[str, Any] | None, exit_code: int) -> dict[str, Any]:
         return {
@@ -499,8 +503,10 @@ def run_verify(repo: str, pr: int, run_gh: GhRunner) -> tuple[dict[str, Any], in
             raise ValueError("non-object payload")
     except (json.JSONDecodeError, ValueError):
         return {"pr": pr, "error": "unparseable gh api body"}, EXIT_FAILURES
-    head = payload.get("head") if isinstance(payload.get("head"), dict) else {}
-    base = payload.get("base") if isinstance(payload.get("base"), dict) else {}
+    raw_head = payload.get("head")
+    raw_base = payload.get("base")
+    head = raw_head if isinstance(raw_head, dict) else {}
+    base = raw_base if isinstance(raw_base, dict) else {}
     return {
         "pr": pr,
         "number": payload.get("number"),

@@ -168,7 +168,7 @@ class GauntletRunner:
         def report_progress(phase: str, percent: float) -> None:
             if on_progress:
                 on_progress(phase, percent)
-            logger.info(f"[gauntlet] {phase}: {percent:.0%}")
+            logger.info("[gauntlet] %s: %.0f%%", phase, percent * 100)
 
         try:
             # Phase 1: Red Team Attacks

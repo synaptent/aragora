@@ -2,10 +2,10 @@
 
 Canonical documentation lives in `docs/` and is mirrored into `docs-site/`.
 
-This index intentionally links to actively maintained docs with validated paths.
-For the full goal-oriented landing page, start at **[docs/README.md](README.md)**
-— that page is the canonical documentation landing; this index is the flat
-reference list.
+This is a sub-index of **[docs/README.md](README.md)**, the single
+documentation index. It keeps a short flat list of the most-used pages, and
+every page linked here is also linked from docs/README.md. Start there for the
+full index of top-level pages and curated directories.
 
 ## Public Utility Path
 
@@ -15,14 +15,14 @@ then wire it into CI.
 1. [Quickstart](quickstart.md) — a working debate in under a minute
 2. [Receipt Lineage Reconciliation](specs/RECEIPT_LINEAGE_RECONCILIATION.md) — what a receipt is: the native record vs. the portable ODR
 3. [Independent Verifier Guide](specs/INDEPENDENT_VERIFIER_GUIDE.md) — verify a receipt with `aragora-verify` (exit codes: `0 verified / 1 failed / 2 usage / 3 signatures-present-unchecked`), no Aragora install required
-4. [GitHub Action Setup](GITHUB_ACTION_SETUP.md) — add multi-model CI review + receipts to your pull requests
+4. [GitHub Action Setup](guides/GITHUB_ACTION_SETUP.md) — add multi-model CI review + receipts to your pull requests
 
 ## Getting Started
 
 - [Getting Started](guides/GETTING_STARTED.md)
-- [Cold Reviewer Guide](COLD_REVIEWER_GUIDE.md)
+- [Cold Reviewer Guide](guides/COLD_REVIEWER_GUIDE.md)
 - [SDK Guide (Python)](SDK_GUIDE.md)
-- [CLI Reference (generated)](reference/CLI_REFERENCE.md)
+- [CLI Reference](CLI_REFERENCE.md)
 
 ## Receipts & Verification
 
@@ -50,7 +50,7 @@ then wire it into CI.
 ## Operations
 
 - [Production Deployment](deployment/PRODUCTION_DEPLOYMENT.md)
-- [Deployment Guide](deployment/DEPLOYMENT.md)
+- [Deployment Guide](DEPLOYMENT.md)
 - [Security Deployment](deployment/SECURITY_DEPLOYMENT.md)
 - [Runbook](deployment/RUNBOOK.md)
 - [Incident Response](deployment/INCIDENT_RESPONSE.md)

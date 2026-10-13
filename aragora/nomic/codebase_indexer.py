@@ -110,7 +110,7 @@ class CodebaseIndexer:
         """Get current git HEAD hash for cache invalidation."""
         try:
             result = subprocess.run(
-                ["git", "rev-parse", "HEAD"],  # noqa: S607 -- fixed command
+                ["git", "rev-parse", "HEAD"],  # fixed command
                 capture_output=True,
                 text=True,
                 cwd=self.repo_path,

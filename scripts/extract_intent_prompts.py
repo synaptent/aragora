@@ -313,7 +313,7 @@ def extract_user_text(message: dict) -> str | None:
 
 def deduplicate(prompts: list[dict], threshold: float = 0.7) -> list[dict]:
     """Remove near-duplicate prompts."""
-    seen = []
+    seen: list[str] = []
     unique = []
     for p in prompts:
         text = p["text"][:300].lower()

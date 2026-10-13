@@ -1033,7 +1033,7 @@ class TestDebateExecution:
                 "sys.modules",
                 {
                     "aragora.core": mock_core,
-                    "aragora.debate.protocol": mock_protocol,
+                    "aragora.protocols.debate": mock_protocol,
                     "aragora.debate.orchestrator": mock_orchestrator,
                 },
             ),
@@ -1073,7 +1073,7 @@ class TestDebateExecution:
                 "sys.modules",
                 {
                     "aragora.core": mock_core,
-                    "aragora.debate.protocol": mock_protocol,
+                    "aragora.protocols.debate": mock_protocol,
                     "aragora.debate.orchestrator": mock_orchestrator,
                 },
             ),

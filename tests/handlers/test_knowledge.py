@@ -96,7 +96,7 @@ def mock_fact():
             self.workspace_id = "default"
             self.confidence = 0.9
             self.topics = ["test"]
-            self.sources = []
+            self.sources: list[Any] = []
             self.created_at = datetime.now()
             self.updated_at = datetime.now()
 
@@ -316,18 +316,15 @@ class TestCreateFact:
     @pytest.mark.no_auto_auth
     def test_create_fact_requires_auth(self, knowledge_handler, mock_post_handler):
         """Test that creating a fact requires authentication."""
-        from aragora.rbac.decorators import PermissionDeniedError
-
         handler = mock_post_handler({"statement": "Test fact"})
 
-        # Without auth context, @require_permission decorator raises PermissionDeniedError
+        # With auth enabled and no auth context, the request is unauthenticated: 401
         with patch("aragora.server.auth.auth_config") as mock_auth:
             mock_auth.enabled = True
-            with pytest.raises(PermissionDeniedError) as exc_info:
-                knowledge_handler.handle("/api/v1/knowledge/facts", {}, handler)
+            result = knowledge_handler.handle("/api/v1/knowledge/facts", {}, handler)
 
-        # Verify it's an auth-related denial
-        assert "No AuthorizationContext found" in str(exc_info.value)
+        assert result.status_code == 401
+        assert json.loads(result.body) == {"error": "Authentication required"}
 
     def test_create_fact_with_auth(self, knowledge_handler, mock_post_handler):
         """Test creating a fact with valid auth."""
@@ -367,18 +364,15 @@ class TestUpdateFact:
     @pytest.mark.no_auto_auth
     def test_update_fact_requires_auth(self, knowledge_handler, mock_put_handler):
         """Test that updating a fact requires authentication."""
-        from aragora.rbac.decorators import PermissionDeniedError
-
         handler = mock_put_handler({"statement": "Updated fact"})
 
-        # Without auth context, @require_permission decorator raises PermissionDeniedError
+        # With auth enabled and no auth context, the request is unauthenticated: 401
         with patch("aragora.server.auth.auth_config") as mock_auth:
             mock_auth.enabled = True
-            with pytest.raises(PermissionDeniedError) as exc_info:
-                knowledge_handler.handle("/api/v1/knowledge/facts/fact-1", {}, handler)
+            result = knowledge_handler.handle("/api/v1/knowledge/facts/fact-1", {}, handler)
 
-        # Verify it's an auth-related denial
-        assert "No AuthorizationContext found" in str(exc_info.value)
+        assert result.status_code == 401
+        assert json.loads(result.body) == {"error": "Authentication required"}
 
 
 # =============================================================================
@@ -392,16 +386,15 @@ class TestDeleteFact:
     @pytest.mark.no_auto_auth
     def test_delete_fact_requires_auth(self, knowledge_handler, mock_delete_handler):
         """Test that deleting a fact requires authentication."""
-        from aragora.rbac.decorators import PermissionDeniedError
-
-        # Without auth context, @require_permission decorator raises PermissionDeniedError
+        # With auth enabled and no auth context, the request is unauthenticated: 401
         with patch("aragora.server.auth.auth_config") as mock_auth:
             mock_auth.enabled = True
-            with pytest.raises(PermissionDeniedError) as exc_info:
-                knowledge_handler.handle("/api/v1/knowledge/facts/fact-1", {}, mock_delete_handler)
+            result = knowledge_handler.handle(
+                "/api/v1/knowledge/facts/fact-1", {}, mock_delete_handler
+            )
 
-        # Verify it's an auth-related denial
-        assert "No AuthorizationContext found" in str(exc_info.value)
+        assert result.status_code == 401
+        assert json.loads(result.body) == {"error": "Authentication required"}
 
 
 # =============================================================================

@@ -109,7 +109,7 @@ def should_sample_trace_id() -> bool:
 
     Uses sampling to avoid high-cardinality label explosion.
     """
-    return random.random() < TRACE_METRIC_SAMPLE_RATE  # noqa: S311 -- probabilistic sampling
+    return random.random() < TRACE_METRIC_SAMPLE_RATE
 
 
 @contextmanager

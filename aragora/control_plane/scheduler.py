@@ -25,10 +25,8 @@ from aragora.server.prometheus_control_plane import (
     record_control_plane_task_completed,
     record_control_plane_task_retry,
 )
-from aragora.control_plane.leader import (
-    is_distributed_state_required,
-    DistributedStateError,
-)
+from aragora.config.distributed import is_distributed_state_required
+from aragora.control_plane.leader import DistributedStateError
 
 # Observability
 from aragora.observability import (
@@ -54,10 +52,12 @@ CostLimitExceededError: Any = None
 # Policy imports (optional - graceful fallback if not available)
 try:
     from aragora.control_plane.policy import (
-        PolicyViolationError,
-        EnforcementLevel,
+        PolicyViolationError as _PolicyViolationError,
+        EnforcementLevel as _EnforcementLevel,
     )
 
+    PolicyViolationError = _PolicyViolationError
+    EnforcementLevel = _EnforcementLevel
     HAS_POLICY = True
 except ImportError:
     HAS_POLICY = False
@@ -65,9 +65,10 @@ except ImportError:
 # Cost enforcement imports (optional - graceful fallback if not available)
 try:
     from aragora.control_plane.cost_enforcement import (
-        CostLimitExceededError,
+        CostLimitExceededError as _CostLimitExceededError,
     )
 
+    CostLimitExceededError = _CostLimitExceededError
     HAS_COST_ENFORCEMENT = True
 except ImportError:
     HAS_COST_ENFORCEMENT = False
@@ -331,7 +332,7 @@ class TaskScheduler:
         self._claim_timeout_ms = claim_timeout_ms
         self._policy_manager = policy_manager
         self._cost_enforcer = cost_enforcer
-        self._redis: Any | None = None
+        self._redis: Any = None
         self._local_tasks: dict[str, Task] = {}
         self._local_queue: list[Task] = []
         # Local indexes for in-memory fallback

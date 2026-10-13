@@ -618,7 +618,7 @@ class EloSystem(KMAdapterMixin):
                        calibration_correct, calibration_total, calibration_brier_sum,
                        updated_at
                 FROM ratings WHERE agent_name IN ({placeholders})
-                """,  # noqa: S608 -- parameterized query
+                """,  # parameterized query
                 uncached,
             )
             rows = cursor.fetchall()
@@ -826,6 +826,10 @@ class EloSystem(KMAdapterMixin):
     def get_recent_matches(self, limit: int = 10) -> list[dict[str, Any]]:
         """Get recent match results with ELO changes."""
         return self._leaderboard_engine.get_recent_matches(limit)
+
+    def get_match(self, debate_id: str) -> dict[str, Any] | None:
+        """Get one match result by debate ID, or None if it was never recorded."""
+        return self._leaderboard_engine.get_match(debate_id)
 
     def get_head_to_head(self, agent_a: str, agent_b: str) -> dict[str, Any]:
         """Get head-to-head statistics between two agents."""

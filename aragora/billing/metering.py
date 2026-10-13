@@ -473,10 +473,11 @@ class UsageMeter:
         for event in events_to_flush:
             if self.config.detailed_logging:
                 logger.info(
-                    f"billing_event tenant={event.tenant_id} "
-                    f"type={event.event_type.value} "
-                    f"quantity={event.quantity} "
-                    f"cost=${event.total_cost:.4f}"
+                    "billing_event tenant=%s type=%s quantity=%s cost=$%.4f",
+                    event.tenant_id,
+                    event.event_type.value,
+                    event.quantity,
+                    event.total_cost,
                 )
 
     def _get_tenant_id(self) -> str | None:

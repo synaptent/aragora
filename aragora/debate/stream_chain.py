@@ -310,8 +310,9 @@ class StreamChain:
 
         source_output = "".join(accumulated)
         logger.debug(
-            f"StreamChain: Source complete ({len(source_output)} chars) "
-            f"in {time.time() - start_time:.2f}s"
+            "StreamChain: Source complete (%s chars) in %.2fs",
+            len(source_output),
+            time.time() - start_time,
         )
 
         # Phase 2: Stream from target using source output
@@ -332,9 +333,10 @@ class StreamChain:
 
         total_time = time.time() - start_time
         logger.debug(
-            f"StreamChain: Complete in {total_time:.2f}s "
-            f"(source: {target_start - start_time:.2f}s, "
-            f"target: {time.time() - target_start:.2f}s)"
+            "StreamChain: Complete in %.2fs (source: %.2fs, target: %.2fs)",
+            total_time,
+            target_start - start_time,
+            time.time() - target_start,
         )
 
     def reset_agent(self, agent_name: str) -> None:

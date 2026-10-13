@@ -184,8 +184,9 @@ async def run_security_scan_with_debate(
             }
 
             logger.info(
-                f"Security debate completed: consensus={debate_result.consensus_reached}, "
-                f"confidence={debate_result.confidence:.2f}"
+                "Security debate completed: consensus=%s, confidence=%.2f",
+                debate_result.consensus_reached,
+                debate_result.confidence,
             )
 
         except ImportError as e:

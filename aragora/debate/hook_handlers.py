@@ -522,7 +522,7 @@ class HookHandlerRegistry:
 
                 def handle_consensus_check(
                     ctx: Any = None,
-                    votes: list[Any] = None,
+                    votes: list[Any] | None = None,
                     **kwargs: Any,
                 ) -> None:
                     try:
@@ -547,7 +547,7 @@ class HookHandlerRegistry:
                 def handle_flip_check(
                     ctx: Any = None,
                     round_num: int = 0,
-                    positions: dict[str, str] = None,
+                    positions: dict[str, str] | None = None,
                     **kwargs: Any,
                 ) -> None:
                     try:

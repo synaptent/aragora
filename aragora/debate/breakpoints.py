@@ -170,7 +170,7 @@ class HumanNotifier:
         logger.info("Debate: %s", snapshot.debate_id)
         logger.info("Task: %s...", snapshot.task[:100])
         logger.info("Round: %s/%s", snapshot.current_round, snapshot.total_rounds)
-        logger.info(f"Confidence: {snapshot.confidence:.0%}")
+        logger.info("Confidence: %.0f%%", snapshot.confidence * 100)
 
         if snapshot.key_disagreements:
             logger.info("Key disagreements:")

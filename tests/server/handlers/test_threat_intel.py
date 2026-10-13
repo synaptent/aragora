@@ -125,7 +125,9 @@ def mock_service():
     service = MagicMock()
     service.config = MockThreatConfig()
     service.check_url = AsyncMock(return_value=MockThreatResult())
-    service.check_urls_batch = AsyncMock(return_value=[MockThreatResult(), MockThreatResult()])
+    service.check_urls_batch = AsyncMock(
+        return_value={"https://a.com": MockThreatResult(), "https://b.com": MockThreatResult()}
+    )
     service.check_ip = AsyncMock(return_value=MockThreatResult())
     service.check_file_hash = AsyncMock(return_value=MockHashResult())
     service.check_email_content = AsyncMock(

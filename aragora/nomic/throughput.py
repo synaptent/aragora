@@ -113,7 +113,7 @@ class ThroughputLedger:
                     continue
                 try:
                     record = LedgerRecord.from_json(line)
-                    record.when  # noqa: B018 - validate timestamp eagerly
+                    record.when  # validate timestamp eagerly
                 except (json.JSONDecodeError, KeyError, ValueError, TypeError):
                     skipped += 1
                     logger.warning("skipping corrupt ledger line %d in %s", line_number, self.path)
@@ -196,7 +196,7 @@ def _merge_to_classified(record: LedgerRecord) -> ClassifiedWork:
     file_counts = data.get("file_counts", {})
     if not isinstance(file_counts, Mapping):
         raise ValueError("merge record file_counts must be a mapping")
-    counts = {cls: 0 for cls in WorkClass}
+    counts = dict.fromkeys(WorkClass, 0)
     for value, count in file_counts.items():
         if not isinstance(count, int):
             raise ValueError(f"merge record file count must be int: {value!r}")

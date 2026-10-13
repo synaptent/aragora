@@ -151,7 +151,7 @@ class SlackIntegration:
         # Check circuit breaker before attempting
         if self._circuit_breaker is not None and not self._circuit_breaker.can_proceed():
             remaining = self._circuit_breaker.cooldown_remaining()
-            logger.warning(f"Slack circuit breaker open, retry in {remaining:.1f}s")
+            logger.warning("Slack circuit breaker open, retry in %.1fs", remaining)
             return False
 
         import asyncio

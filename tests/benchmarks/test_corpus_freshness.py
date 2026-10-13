@@ -1,6 +1,6 @@
 """Benchmark corpus freshness invariants (revision 3+).
 
-The rev-3 honesty pass (see ``docs/benchmarks/corpus_honesty_audit_2026-04-17.md``)
+The rev-3 honesty pass (see ``docs/archive/benchmarks/corpus_honesty_audit_2026-04-17.md``)
 changed how this test measures the corpus:
 
 - ``verified`` entries must be CLOSED by a PR recorded on GitHub's

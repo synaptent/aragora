@@ -138,7 +138,7 @@ to get a verifiable unsigned ODR on a PR.
 | receipt emission script | `scripts/emit_pr_receipt.py` | dry-run quorum → `DecisionReceipt` → ODR export → verify → upload; called only by the root Action's "Emit decision receipt" step |
 | review-counts parser | `scripts/extract_review_counts.py` | parses reviewer output posted to PR; called only by the root Action |
 | collect-quorum-evidence | `scripts/collect_quorum_evidence.py` | groups reviewers by family for `quorum.independence.distinct_model_families`; called by the root Action and by M8 dogfood |
-| Action docs | `docs/GITHUB_ACTION_SETUP.md`, `docs/guides/github-actions-review.md` | the root-vs-nested disambiguation lives here |
+| Action docs | `docs/guides/GITHUB_ACTION_SETUP.md`, `docs/guides/github-actions-review.md` | the root-vs-nested disambiguation lives here |
 | CLAUDE.md cross-link | `CLAUDE.md` §"Quick Reference" — `Gauntlet` row + `Backup` row | the canonical front-door quickly locates the wedge |
 
 **Owed contract:**

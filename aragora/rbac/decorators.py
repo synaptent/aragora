@@ -55,7 +55,7 @@ def _default_audit_on_denied(decision: AuthorizationDecision) -> None:
     a permission check fails. It logs the denial to the audit system.
     """
     try:
-        from aragora.audit.unified import audit_access
+        from aragora.observability.unified_audit import audit_access
 
         audit_access(
             user_id=decision.context.user_id if decision.context else "unknown",

@@ -304,8 +304,11 @@ def test_markdown_deterministic_except_generated_at(fake, capsys, monkeypatch):
 
 
 def test_row2_warns_on_multiple_distinct_pins(fake, capsys, root):
-    (root / "docs/GITHUB_ACTION_SETUP.md").write_text("uses: synaptent/aragora@" + "c" * 40 + "\n")
-    fake.on("git ls-files", out="README.md\ndocs/GITHUB_ACTION_SETUP.md\n")
+    (root / "docs/guides").mkdir(parents=True, exist_ok=True)
+    (root / "docs/guides/GITHUB_ACTION_SETUP.md").write_text(
+        "uses: synaptent/aragora@" + "c" * 40 + "\n"
+    )
+    fake.on("git ls-files", out="README.md\ndocs/guides/GITHUB_ACTION_SETUP.md\n")
     _, r = rows(capsys, "--offline")
     assert r[2]["pin_count"] == 2 and "2" in r[2]["warning"] and len(r[2]["distinct_shas"]) == 2
 

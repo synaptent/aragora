@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from aragora.core import Agent
     from aragora.core_types import AgentStance
     from aragora.debate.prompt_builder import PromptBuilder
-    from aragora.debate.protocol import DebateProtocol
+    from aragora.protocols.debate import DebateProtocol
     from aragora.debate.role_matcher import RoleMatcher
     from aragora.debate.roles import (
         RoleAssignment,

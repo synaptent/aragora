@@ -6,7 +6,7 @@ Get from zero to a working adversarial debate in under a minute.
 the numbered steps below and run the guided command directly -- no API keys
 required. This is the same offline chain the [Independent Verifier
 Guide](specs/INDEPENDENT_VERIFIER_GUIDE.md) and
-[GitHub Action Setup](GITHUB_ACTION_SETUP.md) both build on:
+[GitHub Action Setup](guides/GITHUB_ACTION_SETUP.md) both build on:
 
 ```bash
 aragora quickstart --demo --no-browser --output r.json
@@ -171,9 +171,9 @@ full per-audience breakdown.
 |-------|-------------------|
 | [Receipt Lineage Reconciliation](specs/RECEIPT_LINEAGE_RECONCILIATION.md) | What a Decision Receipt is: the native record vs. the portable ODR |
 | [Independent Verifier Guide](specs/INDEPENDENT_VERIFIER_GUIDE.md) | Verify a receipt offline with `aragora-verify`, no Aragora install required |
-| [GitHub Action Setup](GITHUB_ACTION_SETUP.md) | Add multi-model CI review + receipts to your pull requests |
-| [CLI Reference](reference/CLI_REFERENCE.md) | All CLI commands and flags |
+| [GitHub Action Setup](guides/GITHUB_ACTION_SETUP.md) | Add multi-model CI review + receipts to your pull requests |
+| [CLI Reference](CLI_REFERENCE.md) | All CLI commands and flags |
 | [SDK Guide](SDK_GUIDE.md) | Python & TypeScript SDK reference |
 | [API Reference](api/API_REFERENCE.md) | REST API endpoints |
-| [Self-Hosting](deployment/DEPLOYMENT.md) | Production deployment |
+| [Self-Hosting](DEPLOYMENT.md) | Production deployment |
 | [Documentation Landing](README.md) | Deeper architectural overview |

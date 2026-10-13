@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -88,6 +89,7 @@ class MockInvoice:
         self.customer_name = kwargs.get("customer_name", "Test Corp")
         self.total = kwargs.get("total", Decimal("1000.00"))
         self.status = kwargs.get("status", "draft")
+        self.invoice_date = kwargs.get("invoice_date", datetime(2026, 1, 15))
 
     def to_dict(self):
         return {
@@ -309,6 +311,7 @@ class TestCreateInvoice:
         }
         result = await handle_create_invoice(data)
         assert _status(result) == 200
+        # ARAutomation.generate_invoice has no tax_rate argument.
         mock_ar.generate_invoice.assert_awaited_once_with(
             customer_id="CUST-001",
             customer_name="Test Corp",
@@ -316,7 +319,6 @@ class TestCreateInvoice:
             line_items=[{"description": "Widget", "amount": 100}],
             payment_terms="Net 60",
             memo="Test memo",
-            tax_rate=0.1,
         )
 
     @pytest.mark.asyncio
@@ -331,7 +333,7 @@ class TestCreateInvoice:
         call_kwargs = mock_ar.generate_invoice.call_args.kwargs
         assert call_kwargs["payment_terms"] == "Net 30"
         assert call_kwargs["memo"] == ""
-        assert call_kwargs["tax_rate"] == 0
+        assert "tax_rate" not in call_kwargs
 
     @pytest.mark.asyncio
     async def test_create_invoice_service_type_error(self, mock_ar):
@@ -472,9 +474,11 @@ class TestListInvoices:
             }
         )
         assert _status(result) == 200
+        # Dates are filtered by the handler; the service takes no date arguments.
         call_kwargs = mock_ar.list_invoices.call_args.kwargs
-        assert call_kwargs["start_date"] is not None
-        assert call_kwargs["end_date"] is not None
+        assert "start_date" not in call_kwargs
+        assert "end_date" not in call_kwargs
+        assert _body(result)["data"]["total"] == 2
 
     @pytest.mark.asyncio
     async def test_list_invoices_invalid_start_date(self):
@@ -504,25 +508,22 @@ class TestListInvoices:
         assert body["data"]["offset"] == 5
 
     @pytest.mark.asyncio
-    async def test_list_invoices_limit_clamped_to_max(self, mock_ar):
+    async def test_list_invoices_limit_above_max_rejected(self, mock_ar):
         result = await handle_list_invoices({"limit": 5000})
-        assert _status(result) == 200
-        body = _body(result)
-        assert body["data"]["limit"] == 1000
+        assert _status(result) == 400
+        assert "limit" in _body(result)["error"]
 
     @pytest.mark.asyncio
-    async def test_list_invoices_limit_clamped_to_min(self, mock_ar):
+    async def test_list_invoices_limit_below_min_rejected(self, mock_ar):
         result = await handle_list_invoices({"limit": 0})
-        assert _status(result) == 200
-        body = _body(result)
-        assert body["data"]["limit"] == 1
+        assert _status(result) == 400
+        assert "limit" in _body(result)["error"]
 
     @pytest.mark.asyncio
-    async def test_list_invoices_negative_offset_clamped(self, mock_ar):
+    async def test_list_invoices_negative_offset_rejected(self, mock_ar):
         result = await handle_list_invoices({"offset": -10})
-        assert _status(result) == 200
-        body = _body(result)
-        assert body["data"]["offset"] == 0
+        assert _status(result) == 400
+        assert "offset" in _body(result)["error"]
 
     @pytest.mark.asyncio
     async def test_list_invoices_circuit_open(self):
@@ -1012,15 +1013,15 @@ class TestAddCustomer:
         assert _status(result) == 200
         call_kwargs = mock_ar.add_customer.call_args.kwargs
         assert call_kwargs["email"] == "test@corp.com"
-        assert call_kwargs["payment_terms"] == "Net 60"
+        assert "payment_terms" not in call_kwargs  # ARAutomation.add_customer has no such argument
 
     @pytest.mark.asyncio
-    async def test_add_customer_default_payment_terms(self, mock_ar):
+    async def test_add_customer_passes_only_service_arguments(self, mock_ar):
         data = {"customer_id": "CUST-001", "name": "Test Corp"}
         result = await handle_add_customer(data)
         assert _status(result) == 200
         call_kwargs = mock_ar.add_customer.call_args.kwargs
-        assert call_kwargs["payment_terms"] == "Net 30"
+        assert call_kwargs == {"customer_id": "CUST-001", "name": "Test Corp", "email": None}
 
     @pytest.mark.asyncio
     async def test_add_customer_missing_customer_id(self):
@@ -1257,8 +1258,7 @@ class TestARAutomationHandlerClass:
         )
 
     def test_total_route_count(self):
-        total = len(ARAutomationHandler._ROUTE_MAP) + len(ARAutomationHandler.DYNAMIC_ROUTES)
-        assert total == 10  # 5 static + 5 dynamic
+        assert len(ARAutomationHandler._ROUTE_MAP) == 10  # 5 static + 5 dynamic
 
 
 # ============================================================================

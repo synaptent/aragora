@@ -525,7 +525,7 @@ class DebateStore:
                     AND created_at <= ?
                 GROUP BY {date_format}
                 ORDER BY period
-                """,  # noqa: S608 -- internal query construction
+                """,  # internal query construction
                 (org_id, start_time.isoformat(), end_time.isoformat()),
             ).fetchall()
 

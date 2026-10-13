@@ -24,6 +24,11 @@ from packaging.requirements import Requirement
 import pytest
 import yaml
 
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib
+
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS_DIR = PROJECT_ROOT / ".github" / "workflows"
 ACTIONS_DIR = PROJECT_ROOT / ".github" / "actions"
@@ -207,6 +212,18 @@ class TestSharedCiInstaller:
             Requirement(dep) for dep in deps if Requirement(dep).name == "anthropic"
         )
         assert str(anthropic_dep.specifier) == "<1.0,>=0.111"
+
+    def test_control_plane_test_uv_matches_declared_test_extra(self):
+        project = tomllib.loads((PROJECT_ROOT / "pyproject.toml").read_text())
+        test_deps = project["project"]["optional-dependencies"]["test"]
+        declared = [Requirement(dep) for dep in test_deps if Requirement(dep).name == "uv"]
+        script = (PROJECT_ROOT / "scripts" / "ci_install_project.sh").read_text()
+        ci_deps = _shell_array_values(script, "LEGACY_CONTROL_PLANE_TEST_EXTRA_DEPS")
+        installed = [Requirement(dep) for dep in ci_deps if Requirement(dep).name == "uv"]
+
+        assert len(declared) == 1, "test extra must declare exactly one uv requirement"
+        assert len(installed) == 1, "legacy CI test installer must install uv"
+        assert installed[0] == declared[0]
 
 
 class TestAragoraReviewGateWorkflow:

@@ -682,8 +682,10 @@ class DiscountManager:
         conn.commit()
 
         logger.info(
-            f"Applied discount code {code} for org {org_id}: "
-            f"${result.discount_amount_cents / 100:.2f} off"
+            "Applied discount code %s for org %s: $%.2f off",
+            code,
+            org_id,
+            result.discount_amount_cents / 100,
         )
         return result
 
@@ -773,9 +775,10 @@ class DiscountManager:
         conn.commit()
 
         logger.debug(
-            f"Updated volume discount for org {org_id}: "
-            f"${volume.cumulative_spend_cents / 100:.2f} spent, "
-            f"{volume.current_discount_percent}% discount"
+            "Updated volume discount for org %s: $%.2f spent, %s%% discount",
+            org_id,
+            volume.cumulative_spend_cents / 100,
+            volume.current_discount_percent,
         )
         return volume
 

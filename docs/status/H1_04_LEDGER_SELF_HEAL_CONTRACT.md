@@ -12,7 +12,7 @@ This document pins the contract between the H1-04 deliverable and the existing A
 
 | Acceptance criterion (from #6230) | Satisfying surface | Evidence |
 |---|---|---|
-| canonical ledger of probes / contracts / receipts / outcomes | [`aragora/swarm/shift_ledger.py`](../../aragora/swarm/shift_ledger.py) `ShiftLedger` class + entry types (`shift_start`, `shift_stop`, `cycle_tick`, `service_restart`, `auth_failure`, `publication_failure`, `rate_limit`, `permission_mismatch`, `runtime_failure`, `service_failure`) | 385-line JSONL append-only ledger at `.aragora/proof_first_shift/shift_ledger.jsonl` |
+| canonical ledger of probes / contracts / receipts / outcomes | [`aragora/evaluation/shift_ledger.py`](../../aragora/evaluation/shift_ledger.py) `ShiftLedger` class + entry types (`shift_start`, `shift_stop`, `cycle_tick`, `service_restart`, `auth_failure`, `publication_failure`, `rate_limit`, `permission_mismatch`, `runtime_failure`, `service_failure`) | 385-line JSONL append-only ledger at `.aragora/proof_first_shift/shift_ledger.jsonl` |
 | automatic quarantine for stale auth | `shift_ledger.py` `FAILURE_THRESHOLDS["auth_failure"] = 2`; `SessionCircuitBreaker` pins session on 401/403 | Lines 22-29 in shift_ledger.py; `aragora/routing/session_circuit_breaker.py` |
 | automatic quarantine for permission mismatch | `FAILURE_THRESHOLDS["permission_mismatch"] = 2` | Line 26 in shift_ledger.py; `permission_mismatch` entry counting in `should_stop_shift()` |
 | automatic quarantine for rate limits | `FAILURE_THRESHOLDS["rate_limit"] = 2`; OpenRouter fallback on 429 | Line 25 in shift_ledger.py; `aragora/agents/fallback.py` |

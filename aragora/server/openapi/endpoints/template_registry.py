@@ -128,7 +128,7 @@ def validate_listing(data: dict[str, Any]) -> list[str]:
                 (_JS_TYPE_MAP.get(st, ()),)
                 if not isinstance(_JS_TYPE_MAP.get(st, ()), tuple)
                 else (_JS_TYPE_MAP.get(st, ()),)
-            )  # noqa: E501
+            )
         )
         # Flatten the tuple of python types
         flat: list[type] = []

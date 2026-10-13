@@ -413,10 +413,11 @@ class VoiceStreamHandler:
             )
 
             logger.info(
-                f"[Voice] Session {session_id} ended: "
-                f"{session.total_bytes_received} bytes, "
-                f"{session.transcription_count} transcriptions, "
-                f"{session.elapsed_seconds():.1f}s"
+                "[Voice] Session %s ended: %s bytes, %s transcriptions, %.1fs",
+                session_id,
+                session.total_bytes_received,
+                session.transcription_count,
+                session.elapsed_seconds(),
             )
 
     async def _handle_text_message(

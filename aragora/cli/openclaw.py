@@ -770,7 +770,8 @@ Examples:
         "serve",
         help="Run standalone OpenClaw governance gateway",
     )
-    serve_parser.add_argument("--host", default="0.0.0.0", help="Bind address (default: 0.0.0.0)")  # noqa: S104 - server must bind all interfaces by default
+    # server must bind all interfaces by default
+    serve_parser.add_argument("--host", default="0.0.0.0", help="Bind address (default: 0.0.0.0)")
     serve_parser.add_argument(
         "--port",
         "-p",

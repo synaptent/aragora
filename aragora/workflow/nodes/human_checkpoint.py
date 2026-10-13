@@ -577,11 +577,8 @@ class HumanCheckpointStep(BaseStep):
             from aragora.approvals.chat import send_chat_approval_request
 
             metadata = context.metadata if isinstance(context.metadata, dict) else {}
-            plan_meta = (
-                metadata.get("plan_metadata")
-                if isinstance(metadata.get("plan_metadata"), dict)
-                else {}
-            )
+            raw_plan_meta = metadata.get("plan_metadata")
+            plan_meta: dict[str, Any] = raw_plan_meta if isinstance(raw_plan_meta, dict) else {}
 
             targets = (
                 config.get("chat_targets")

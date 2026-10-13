@@ -502,7 +502,9 @@ class AgentSelector:
         success_rate = agent_stats.get("success_rate", 100)
         if success_rate < 70:
             adjustment *= 0.8  # 20% penalty
-            logger.debug(f"Agent {agent_name} penalized for low success rate: {success_rate:.1f}%")
+            logger.debug(
+                "Agent %s penalized for low success rate: %.1f%%", agent_name, success_rate
+            )
         elif success_rate < 85:
             adjustment *= 0.9  # 10% penalty for moderate issues
 
@@ -510,7 +512,9 @@ class AgentSelector:
         timeout_rate = agent_stats.get("timeout_rate", 0)
         if timeout_rate > 20:
             adjustment *= 0.7  # 30% penalty
-            logger.debug(f"Agent {agent_name} penalized for high timeout rate: {timeout_rate:.1f}%")
+            logger.debug(
+                "Agent %s penalized for high timeout rate: %.1f%%", agent_name, timeout_rate
+            )
         elif timeout_rate > 10:
             adjustment *= 0.85  # 15% penalty
 
@@ -518,7 +522,9 @@ class AgentSelector:
         failure_rate = agent_stats.get("failure_rate", 0)
         if failure_rate > 30:
             adjustment *= 0.75  # 25% penalty
-            logger.debug(f"Agent {agent_name} penalized for high failure rate: {failure_rate:.1f}%")
+            logger.debug(
+                "Agent %s penalized for high failure rate: %.1f%%", agent_name, failure_rate
+            )
 
         return base_score * adjustment
 

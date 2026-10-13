@@ -1,5 +1,7 @@
 """Tests for Wikipedia connector."""
 
+from datetime import datetime, timedelta, timezone
+
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 
@@ -247,7 +249,7 @@ class TestWikipediaConnector:
         recent_response = {
             "title": "Recent Topic",
             "extract": "Content",
-            "timestamp": "2026-01-10T00:00:00Z",  # Recent
+            "timestamp": (datetime.now(timezone.utc) - timedelta(days=3)).isoformat(),
         }
         result = connector._parse_summary_response(recent_response)
         assert result.freshness > 0.5

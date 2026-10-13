@@ -1513,7 +1513,7 @@ def _proof_covers_worktree_paths(
     proof: dict[str, Any] | None,
     paths: list[tuple[str, str]],
 ) -> bool:
-    if not _proof_has_upstream_preservation(proof):
+    if proof is None or not _proof_has_upstream_preservation(proof):
         return False
     proven_paths = {str(path) for path in proof.get("worktree_paths") or []}
     return all(path in proven_paths for _, path in paths)
@@ -1563,16 +1563,34 @@ def _safe_worktree_absent_noop_proof(
         and "missing_path" in blockers
         and classification == "absent_noop"
     )
+    clean_inactive = (
+        payload.get("exists") is True
+        and payload.get("tracked_worktree") is True
+        and payload.get("dirty") is False
+        and payload.get("active_session") is False
+        and bool(str(payload.get("branch") or "").strip())
+    )
     if absent_noop:
         return {
             "path": path,
             "absent_noop": True,
+            "clean_inactive": False,
+            "source": "safe_worktree_cleanup.inspect",
+            "classification": classification,
+        }
+    if clean_inactive:
+        return {
+            "path": path,
+            "absent_noop": False,
+            "clean_inactive": True,
+            "branch": str(payload["branch"]).strip(),
             "source": "safe_worktree_cleanup.inspect",
             "classification": classification,
         }
     return {
         "path": path,
         "absent_noop": False,
+        "clean_inactive": False,
         "reason": "worktree_not_absent_noop",
         "exists": payload.get("exists"),
         "classification": classification,
@@ -1675,6 +1693,32 @@ def _remote_branch_head(
     head = line[0].split()[0] if line[0].split() else ""
     if not _SHA_RE.fullmatch(head):
         return {"status": "lookup_failed", "reason": "unexpected ls-remote output"}
+    return {"status": "exists", "head_sha": head}
+
+
+def _local_branch_head(
+    branch: str,
+    *,
+    repo_root: Path,
+    runner: CommandRunner,
+) -> dict[str, Any]:
+    """Return the local branch tip without resolving or changing the worktree."""
+
+    try:
+        proc = runner(
+            ["git", "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"],
+            repo_root,
+            _PRESERVATION_GIT_TIMEOUT_SECONDS,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return {"status": "lookup_failed", "reason": str(exc)}
+    if proc.returncode == 1 and not (proc.stdout or "").strip():
+        return {"status": "missing"}
+    if proc.returncode != 0:
+        return {"status": "lookup_failed", "reason": proc.stderr.strip()}
+    head = (proc.stdout or "").strip()
+    if not _SHA_RE.fullmatch(head):
+        return {"status": "lookup_failed", "reason": "unexpected rev-parse output"}
     return {"status": "exists", "head_sha": head}
 
 
@@ -1819,13 +1863,13 @@ def build_worktree_reference_preservation_proof(
 ) -> dict[str, Any] | None:
     """Prove a bare worktree reference is not evidence of local-only work.
 
-    Fail closed unless the recorded worktree is absent/noop by
-    ``safe_worktree_cleanup.py inspect`` and either the desired head is
-    preserved upstream by an exact remote branch or merged PR commit
-    list. A terminal no-record lane with a remote branch anchor remains
-    visible in the returned proof, but it is not proven preservation and
-    cannot discount a possible local worktree tip. Dirty/local-work
-    markers are never discounted.
+    Fail closed unless ``safe_worktree_cleanup.py inspect`` reports each
+    recorded worktree absent/noop or clean, inactive, and on the recorded
+    branch, and the corresponding commit is preserved upstream. For a
+    terminal no-record lane, the remote branch is sufficient only when the
+    local branch is absent or has the exact same tip. A present clean
+    worktree additionally requires exact local/remote branch equality.
+    Divergence, lookup failure, or dirty/local-work markers remain blocking.
     """
 
     paths = _worktree_reference_paths(lane, ledger_entry)
@@ -1849,7 +1893,10 @@ def build_worktree_reference_preservation_proof(
         _safe_worktree_absent_noop_proof(path, repo_root=repo_root, runner=runner)
         for _, path in paths
     ]
-    if not all(item.get("absent_noop") is True for item in inspections):
+    if not all(
+        item.get("absent_noop") is True or item.get("clean_inactive") is True
+        for item in inspections
+    ):
         return {
             "available": False,
             "reason": "worktree_not_absent_noop",
@@ -1868,6 +1915,15 @@ def build_worktree_reference_preservation_proof(
             "worktree_paths": [path for _, path in paths],
             "worktree_inspections": inspections,
         }
+    clean_worktrees = [item for item in inspections if item.get("clean_inactive") is True]
+    if any(item.get("branch") != branch for item in clean_worktrees):
+        return {
+            "available": False,
+            "reason": "worktree_branch_mismatch",
+            "branch": branch,
+            "worktree_paths": [path for _, path in paths],
+            "worktree_inspections": inspections,
+        }
     if not desired_head:
         remote = _remote_branch_head(branch, repo_root=repo_root, runner=runner)
         lane_status = str((ledger_entry or {}).get("status") or lane.get("status") or "")
@@ -1876,6 +1932,44 @@ def build_worktree_reference_preservation_proof(
             and lane_status.strip().lower() in TERMINAL_LANE_STATUSES
         ):
             remote_head = remote.get("head_sha")
+            local = _local_branch_head(branch, repo_root=repo_root, runner=runner)
+            if local.get("status") == "lookup_failed":
+                return {
+                    "available": False,
+                    "reason": "local_branch_lookup_failed",
+                    "branch": branch,
+                    "remote": remote,
+                    "local": local,
+                    "worktree_paths": [path for _, path in paths],
+                    "worktree_inspections": inspections,
+                }
+            if local.get("status") == "exists" and local.get("head_sha") != remote_head:
+                return {
+                    "available": False,
+                    "reason": "local_remote_branch_head_mismatch",
+                    "branch": branch,
+                    "remote": remote,
+                    "local": local,
+                    "worktree_paths": [path for _, path in paths],
+                    "worktree_inspections": inspections,
+                }
+            if clean_worktrees and local.get("status") != "exists":
+                return {
+                    "available": False,
+                    "reason": "local_branch_missing_for_present_worktree",
+                    "branch": branch,
+                    "remote": remote,
+                    "local": local,
+                    "worktree_paths": [path for _, path in paths],
+                    "worktree_inspections": inspections,
+                }
+            method = (
+                "remote_branch_matches_clean_worktree_no_record"
+                if clean_worktrees
+                else "remote_branch_matches_local_branch_no_record"
+                if local.get("status") == "exists"
+                else "remote_branch_only_no_local_record"
+            )
             return {
                 "available": True,
                 "branch": branch,
@@ -1884,11 +1978,14 @@ def build_worktree_reference_preservation_proof(
                 "lane_status": lane_status.strip().lower(),
                 "worktree_paths": [path for _, path in paths],
                 "worktree_inspections": inspections,
+                "local_branch": local,
                 "upstream_preservation": {
-                    "proven": False,
-                    "method": "remote_branch_anchor_no_local_record",
+                    "proven": True,
+                    "method": method,
                     "remote_head_sha": remote_head,
-                    "scope": "remote branch anchors the terminal lane but does not prove an unknown local tip",
+                    "scope": (
+                        "registered worktree is absent and no divergent local branch tip exists"
+                    ),
                 },
             }
         return {
@@ -1906,6 +2003,19 @@ def build_worktree_reference_preservation_proof(
 
     remote = _remote_branch_head(branch, repo_root=repo_root, runner=runner)
     if remote.get("status") == "exists":
+        if clean_worktrees:
+            local = _local_branch_head(branch, repo_root=repo_root, runner=runner)
+            if local.get("status") != "exists" or local.get("head_sha") != remote.get("head_sha"):
+                return {
+                    "available": False,
+                    "reason": "clean_worktree_branch_not_preserved",
+                    "branch": branch,
+                    "desired_head_sha": desired_head,
+                    "remote": remote,
+                    "local": local,
+                    "worktree_paths": [path for _, path in paths],
+                    "worktree_inspections": inspections,
+                }
         if remote.get("head_sha") == desired_head:
             return {
                 "available": True,
@@ -1933,6 +2043,18 @@ def build_worktree_reference_preservation_proof(
         return {
             "available": False,
             "reason": "remote_branch_lookup_failed",
+            "branch": branch,
+            "desired_head_sha": desired_head,
+            "remote": remote,
+            "worktree_paths": [path for _, path in paths],
+            "worktree_inspections": inspections,
+        }
+
+    if clean_worktrees:
+        # A merged historical head does not preserve a present worktree's current tip.
+        return {
+            "available": False,
+            "reason": "remote_branch_missing_for_present_worktree",
             "branch": branch,
             "desired_head_sha": desired_head,
             "remote": remote,
@@ -2138,16 +2260,10 @@ def assess_owner_liveness(
                 method = (
                     (local_work_preservation or {}).get("upstream_preservation", {}).get("method")
                 )
-                if method == "remote_branch_anchor_no_local_record":
-                    conditions.append(
-                        "recorded worktree reference is absent/noop; no local-work claim "
-                        "or desired head was recorded; terminal lane branch still exists remotely"
-                    )
-                else:
-                    conditions.append(
-                        "recorded worktree reference is absent/noop and preserved upstream"
-                        + (f" via {method}" if method else "")
-                    )
+                conditions.append(
+                    "recorded worktree reference is absent/noop and preserved upstream"
+                    + (f" via {method}" if method else "")
+                )
             else:
                 conditions.append("no worktree or local-work claim on the owner record")
             advisory = {

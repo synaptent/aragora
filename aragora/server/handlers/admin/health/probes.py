@@ -194,7 +194,7 @@ class ProbesMixin:
     ) -> tuple[bool, dict[str, Any]]:
         """Check Redis connectivity for readiness probe."""
         try:
-            from aragora.control_plane.leader import is_distributed_state_required
+            from aragora.config.distributed import is_distributed_state_required
             from aragora.server.startup import validate_redis_connectivity
 
             distributed_required = is_distributed_state_required()
@@ -232,7 +232,7 @@ class ProbesMixin:
             logger.warning("Redis connectivity failed: %s: %s", type(e).__name__, e)
             checks["redis"] = {"error": "Redis connectivity failed", "error_type": "connectivity"}
             try:
-                from aragora.control_plane.leader import is_distributed_state_required
+                from aragora.config.distributed import is_distributed_state_required
 
                 if is_distributed_state_required():
                     ready = False
@@ -242,7 +242,7 @@ class ProbesMixin:
             logger.warning("Redis check timed out: %s: %s", type(e).__name__, e)
             checks["redis"] = {"error": "timeout", "error_type": "timeout"}
             try:
-                from aragora.control_plane.leader import is_distributed_state_required
+                from aragora.config.distributed import is_distributed_state_required
 
                 if is_distributed_state_required():
                     ready = False
@@ -257,7 +257,7 @@ class ProbesMixin:
             logger.warning("Redis readiness check failed: %s: %s", type(e).__name__, e)
             checks["redis"] = {"error": "Redis check failed"}
             try:
-                from aragora.control_plane.leader import is_distributed_state_required
+                from aragora.config.distributed import is_distributed_state_required
 
                 if is_distributed_state_required():
                     ready = False

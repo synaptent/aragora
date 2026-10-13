@@ -1,0 +1,82 @@
+name: Connector Tests
+
+# Runs tests/connectors/ on pull requests that touch connector code or tests,
+# so connector contract drift is caught before it reaches main. Outside this
+# workflow the connector suite only runs in test.yml's nightly-optional job
+# (schedule, push to main, workflow_dispatch); the PR shards in test.yml pass
+# --ignore=tests/connectors. This job is not a required check.
+#
+# Setup mirrors test.yml's nightly-optional "Optional Deps (Full)" job (runner
+# label, pinned actions, Python 3.11, scripts/ci_install_project.sh --extras
+# test, pytest marker expression and timeout). It needs no Postgres or Redis
+# service: the connector tests mock their backends. Tests for connectors whose
+# optional client libraries (for example aiomysql) are not installed skip.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [main]
+    paths:
+      - 'aragora/connectors/**'
+      - 'tests/connectors/**'
+      - '.github/workflows/connectors-tests.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  connectors:
+    # Draft gate from docs/CI_LANES.md: draft PRs skip this heavy job; it runs
+    # when the PR is opened ready or flipped to ready_for_review.
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    name: Connector Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify checkout integrity
+        shell: bash
+        run: |
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::pyproject.toml missing after checkout; attempting recovery"
+            git sparse-checkout disable || true
+            git fetch --no-tags origin "${GITHUB_SHA:-HEAD}"
+            git reset --hard FETCH_HEAD
+            git clean -ffd || true
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::Standard recovery failed; attempting archive restore"
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+            git archive "${GITHUB_SHA:-HEAD}" | tar -x || git archive HEAD | tar -x
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::error::Repository checkout is incomplete (pyproject.toml missing)"
+            echo "PWD=$(pwd)"
+            ls -la
+            exit 1
+          fi
+
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
+        with:
+          python-version: "3.11"
+          cache: 'pip'
+          cache-dependency-path: pyproject.toml
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          bash scripts/ci_install_project.sh --extras test
+          python -m pip install pytest-timeout
+
+      - name: Run connector tests
+        run: |
+          pytest tests/connectors/ -m "not load and not e2e" --timeout=180 -v --tb=short
+        env:
+          PYTHONPATH: .:aragora-debate/src

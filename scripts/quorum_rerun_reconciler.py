@@ -2,7 +2,7 @@
 """Re-run stale-but-satisfiable ``aragora-merge-quorum`` check runs.
 
 Phase 1 item A1 of ``docs/governance/BOSS_LOOP_MERGE_GATE_RESILIENCE.md`` and
-Sprint 3 goal 3(i) in ``docs/FOCUS.md``: the merge-quorum workflow does not
+Sprint 3 goal 3(i) in ``docs/strategy/FOCUS.md``: the merge-quorum workflow does not
 re-trigger when review evidence arrives after the last push, so a PR can sit
 stale-FAILURE for hours (observed 2.5h on #7727) even though the live
 merge-packet is satisfiable. This reconciler detects that state and re-runs

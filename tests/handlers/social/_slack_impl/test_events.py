@@ -728,7 +728,7 @@ class TestHandleMessageEventCommands:
             {"task": "Climate change discussion", "consensus_reached": False},
         ]
 
-        with patch("aragora.server.storage.get_debates_db", return_value=mock_db):
+        with patch("aragora.storage.debate_storage.get_debates_db", return_value=mock_db):
             ev = {"channel_type": "im", "text": "recent", "user": "U1", "channel": "D1"}
             result = slack_handler._handle_message_event(ev)
             assert _body(result)["ok"] is True
@@ -738,21 +738,21 @@ class TestHandleMessageEventCommands:
         mock_db = MagicMock()
         mock_db.list.return_value = []
 
-        with patch("aragora.server.storage.get_debates_db", return_value=mock_db):
+        with patch("aragora.storage.debate_storage.get_debates_db", return_value=mock_db):
             ev = {"channel_type": "im", "text": "recent", "user": "U1", "channel": "D1"}
             result = slack_handler._handle_message_event(ev)
             assert _body(result)["ok"] is True
 
     def test_recent_command_no_db(self, slack_handler):
         """'recent' command when database is unavailable."""
-        with patch("aragora.server.storage.get_debates_db", return_value=None):
+        with patch("aragora.storage.debate_storage.get_debates_db", return_value=None):
             ev = {"channel_type": "im", "text": "recent", "user": "U1", "channel": "D1"}
             result = slack_handler._handle_message_event(ev)
             assert _body(result)["ok"] is True
 
     def test_recent_command_import_error(self, slack_handler):
         """'recent' command when storage module import fails."""
-        with patch.dict("sys.modules", {"aragora.server.storage": None}):
+        with patch.dict("sys.modules", {"aragora.storage.debate_storage": None}):
             ev = {"channel_type": "im", "text": "recent", "user": "U1", "channel": "D1"}
             result = slack_handler._handle_message_event(ev)
             assert _body(result)["ok"] is True

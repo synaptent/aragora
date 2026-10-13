@@ -1802,7 +1802,7 @@ class TestGetUsageMeter:
 
     def test_returns_usage_meter_instance(self):
         """Test that get_usage_meter returns a UsageMeter."""
-        from aragora.services import usage_metering
+        from aragora.billing import usage_metering
         from aragora.services.usage_metering import UsageMeter
 
         original = usage_metering._usage_meter
@@ -1815,7 +1815,7 @@ class TestGetUsageMeter:
 
     def test_returns_same_instance(self):
         """Test singleton behavior returns the same instance."""
-        from aragora.services import usage_metering
+        from aragora.billing import usage_metering
 
         original = usage_metering._usage_meter
         usage_metering._usage_meter = None

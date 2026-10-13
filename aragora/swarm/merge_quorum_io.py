@@ -24,6 +24,7 @@ from aragora.swarm.merge_quorum_reconcile import (
     EvidenceComment,
     PacketClassification,
     QuorumRun,
+    counted_reviewer_signal_families,
     parse_ci_packet_classification,
 )
 
@@ -665,8 +666,15 @@ def fetch_pr_tier(repo: str, pr: int) -> int | None:
     return packet.tier if packet is not None else None
 
 
-def fetch_merge_packet_classification(repo: str, pr: int) -> PacketClassification | None:
-    """Best-effort current local merge-packet classification for one PR."""
+def fetch_merge_packet_entry(
+    repo: str,
+    pr: int,
+    *,
+    require_tier: bool = False,
+    required_fields: tuple[str, ...] = (),
+    fail_on_ambiguous: bool = False,
+) -> dict[str, Any] | None:
+    """Return the requested PR's current local merge-packet entry."""
     try:
         proc = run(
             [
@@ -709,42 +717,58 @@ def fetch_merge_packet_classification(repo: str, pr: int) -> PacketClassificatio
         except (TypeError, ValueError):
             return None
 
-    def _packet(entry: dict[str, Any]) -> PacketClassification | None:
-        tier = _coerce(entry.get("tier"))
-        pr_value = _coerce(entry.get("pr_number"))
-        if pr_value is None:
-            pr_value = pr
-        if pr_value != pr or entry.get("tier") is None:
-            return None
-        return PacketClassification(
-            source="local",
-            pr_number=pr_value,
-            head_sha=str(entry.get("head_sha") or ""),
-            tier=tier,
-            status=str(entry.get("status") or ""),
-            verdict=str(entry.get("verdict") or ""),
-            requires_human_risk_settlement=bool(entry.get("requires_human_risk_settlement")),
-        )
-
     # Prefer the row whose pr_number matches the requested PR. The normal
     # single-PR --json shape always discloses pr_number, so a multi-PR envelope
-    # can never resolve the wrong PR's tier (which would mis-gate posting).
-    for entry in entries:
-        if not isinstance(entry, dict):
-            continue
-        packet = _packet(entry)
-        if packet is not None and _coerce(entry.get("pr_number")) == pr:
-            return packet
-    # Fall back to the first disclosed tier only when NO row carries a pr_number
+    # can never resolve the wrong PR (which would mis-gate posting).
+    def _eligible(entry: Any) -> bool:
+        return (
+            isinstance(entry, dict)
+            and (not require_tier or entry.get("tier") is not None)
+            and all(field in entry and entry.get(field) is not None for field in required_fields)
+        )
+
+    def _select(candidates: list[dict[str, Any]]) -> dict[str, Any] | None:
+        if fail_on_ambiguous and len(candidates) != 1:
+            return None
+        return candidates[0] if candidates else None
+
+    matching = [
+        entry for entry in entries if _eligible(entry) and _coerce(entry.get("pr_number")) == pr
+    ]
+    if matching:
+        return _select(matching)
+    # Fall back to the first entry only when NO row carries a pr_number
     # (forward-compat shapes such as a bare list or single entry).
     if not any(isinstance(e, dict) and e.get("pr_number") is not None for e in entries):
-        for entry in entries:
-            if not isinstance(entry, dict):
-                continue
-            packet = _packet(entry)
-            if packet is not None:
-                return packet
+        return _select([entry for entry in entries if _eligible(entry)])
     return None
+
+
+def fetch_merge_packet_classification(repo: str, pr: int) -> PacketClassification | None:
+    """Best-effort current local merge-packet classification for one PR."""
+    entry = fetch_merge_packet_entry(repo, pr, require_tier=True)
+    if entry is None:
+        return None
+    raw_tier = entry.get("tier")
+    if raw_tier is None:
+        return None
+    try:
+        tier = int(raw_tier)
+        raw_pr = entry.get("pr_number")
+        pr_value = pr if raw_pr is None else int(raw_pr)
+    except (TypeError, ValueError):
+        return None
+    if pr_value != pr:
+        return None
+    return PacketClassification(
+        source="local",
+        pr_number=pr_value,
+        head_sha=str(entry.get("head_sha") or ""),
+        tier=tier,
+        status=str(entry.get("status") or ""),
+        verdict=str(entry.get("verdict") or ""),
+        requires_human_risk_settlement=bool(entry.get("requires_human_risk_settlement")),
+    )
 
 
 def fetch_quorum_run_packet_classification(
@@ -838,6 +862,42 @@ def fetch_evidence_comments(
             )
         )
     return results
+
+
+def fetch_live_evidence_state(
+    repo: str, pr: int, head_sha: str, head_committed_at: str
+) -> dict[str, Any]:
+    """Return same-head countable comment families plus blocking-dissent state.
+
+    Comment families come from the canonical ``evidence-lint`` path and count
+    only genuine model-review signals: a dogfood-only counted identity is
+    excluded, because the live gate derives its western-frontier leg from
+    reviewer signals alone and the caller adds these families to its quorum
+    check. That makes this at most as permissive as the gate. The merge packet
+    supplies the current head and unresolved-dissent verdict, so callers fail
+    closed if comments and packet do not describe the same PR head.
+    """
+    comments = fetch_evidence_comments(repo, pr, head_sha, head_committed_at)
+    entry = fetch_merge_packet_entry(
+        repo,
+        pr,
+        required_fields=("head_sha", "unresolved_dissent"),
+        fail_on_ambiguous=True,
+    )
+    if entry is None:
+        raise RuntimeError(
+            f"merge packet has no unique complete head/dissent entry for {repo}#{pr}"
+        )
+    packet_head = str(entry.get("head_sha") or "").strip()
+    if not packet_head:
+        raise RuntimeError(f"merge packet missing head SHA for {repo}#{pr}")
+    return {
+        "head_sha": packet_head,
+        "counting_families": sorted(counted_reviewer_signal_families(comments)),
+        # Keep the explicit packet value. The selector rejects missing/unknown
+        # values, and callers still require literal False before posting.
+        "unresolved_dissent": entry.get("unresolved_dissent"),
+    }
 
 
 def _evidence_lint_args(

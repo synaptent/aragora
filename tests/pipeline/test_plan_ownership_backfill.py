@@ -356,3 +356,34 @@ def test_backfill_is_deferred_while_the_user_store_is_unavailable(
     PlanStore(db_path=legacy_db, org_membership_resolver=_resolver(users["store"]))
     assert _rows(legacy_db, "plans")["plan-b"]["org_id"] == users["org_b"]
     assert _schema_version(legacy_db) == 1
+
+
+def test_backfill_is_deferred_while_the_store_places_no_recorded_user_in_an_org(
+    legacy_db: str, users: dict, tmp_path: Path
+) -> None:
+    empty_store = UserStore(tmp_path / "empty_users.db")
+    PlanStore(db_path=legacy_db, org_membership_resolver=_resolver(empty_store))
+
+    assert _schema_version(legacy_db) is None
+    for table in OWNED_TABLES:
+        owners = {(r["org_id"], r["ownership_source"]) for r in _rows(legacy_db, table).values()}
+        assert owners == {(None, None)}, table
+
+    PlanStore(db_path=legacy_db, org_membership_resolver=_resolver(users["store"]))
+    assert _rows(legacy_db, "plans")["plan-b"]["org_id"] == users["org_b"]
+    assert _rows(legacy_db, "plan_executions")["exec-ghost"]["ownership_source"] == "unknown"
+    assert _schema_version(legacy_db) == 1
+
+
+def test_rows_without_a_recorded_user_do_not_defer_the_backfill(tmp_path: Path) -> None:
+    db_path = str(tmp_path / "unattributed.db")
+    conn = sqlite3.connect(db_path)
+    conn.executescript(LEGACY_SCHEMA)
+    _run(conn, "run-nouser", None)
+    conn.commit()
+    conn.close()
+
+    PlanStore(db_path=db_path, org_membership_resolver=lambda _user: frozenset())
+
+    assert _schema_version(db_path) == 1
+    assert _rows(db_path, "backbone_runs")["run-nouser"]["ownership_source"] == "unknown"

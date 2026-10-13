@@ -187,7 +187,8 @@ class OrganizationOperationsMixin:
 
         async with self._pool.acquire() as conn:
             result = await conn.execute(
-                f"UPDATE organizations SET {', '.join(updates)} WHERE id = ${param_idx}",  # noqa: S608 -- dynamic clause from internal state
+                # dynamic clause from internal state
+                f"UPDATE organizations SET {', '.join(updates)} WHERE id = ${param_idx}",
                 *params,
             )
             return result != "UPDATE 0"

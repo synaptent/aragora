@@ -49,7 +49,7 @@ class FakeAgent:
 @pytest.fixture(autouse=True)
 def _reset_global_tracer():
     """Reset the global tracer between tests to avoid cross-contamination."""
-    import aragora.debate.tracing as _mod
+    import aragora.observability.debate_tracing as _mod
 
     original = _mod._tracer
     _mod._tracer = None
@@ -72,7 +72,7 @@ def tracer(recorder):
 @pytest.fixture(autouse=True)
 def _reset_debate_context():
     """Reset debate context between tests."""
-    import aragora.debate.tracing as _mod
+    import aragora.observability.debate_tracing as _mod
 
     token = _mod._debate_context.set({})
     yield
@@ -487,7 +487,7 @@ class TestTracer:
 
     def test_log_spans_enabled(self, recorder):
         t = Tracer(recorder=recorder, log_spans=True)
-        with patch("aragora.debate.tracing.logger") as mock_logger:
+        with patch("aragora.observability.debate_tracing.logger") as mock_logger:
             with t.span("logged"):
                 pass
             # Should have attempted to log (via structured or plain logger)
@@ -495,8 +495,8 @@ class TestTracer:
 
     def test_log_span_ok_status(self, recorder):
         t = Tracer(recorder=recorder, log_spans=True)
-        with patch("aragora.debate.tracing._structured_logger", None):
-            with patch("aragora.debate.tracing.logger") as mock_logger:
+        with patch("aragora.observability.debate_tracing._structured_logger", None):
+            with patch("aragora.observability.debate_tracing.logger") as mock_logger:
                 with t.span("ok_logged"):
                     pass
                 mock_logger.log.assert_called_once()
@@ -508,8 +508,8 @@ class TestTracer:
 
     def test_log_span_error_status(self, recorder):
         t = Tracer(recorder=recorder, log_spans=True)
-        with patch("aragora.debate.tracing._structured_logger", None):
-            with patch("aragora.debate.tracing.logger") as mock_logger:
+        with patch("aragora.observability.debate_tracing._structured_logger", None):
+            with patch("aragora.observability.debate_tracing.logger") as mock_logger:
                 with pytest.raises(ValueError):
                     with t.span("err_logged"):
                         raise ValueError("x")
@@ -522,7 +522,7 @@ class TestTracer:
     def test_log_span_with_structured_logger(self, recorder):
         mock_sl = MagicMock()
         t = Tracer(recorder=recorder, log_spans=True)
-        with patch("aragora.debate.tracing._structured_logger", mock_sl):
+        with patch("aragora.observability.debate_tracing._structured_logger", mock_sl):
             with t.span("structured_ok"):
                 pass
             mock_sl.debug.assert_called_once()
@@ -530,7 +530,7 @@ class TestTracer:
     def test_log_span_error_with_structured_logger(self, recorder):
         mock_sl = MagicMock()
         t = Tracer(recorder=recorder, log_spans=True)
-        with patch("aragora.debate.tracing._structured_logger", mock_sl):
+        with patch("aragora.observability.debate_tracing._structured_logger", mock_sl):
             with pytest.raises(RuntimeError):
                 with t.span("structured_err"):
                     raise RuntimeError("oops")
@@ -588,12 +588,12 @@ class TestDebateContext:
 
     def test_set_debate_context_calls_set_context_if_available(self):
         mock_set = MagicMock()
-        with patch("aragora.debate.tracing.set_context", mock_set):
+        with patch("aragora.observability.debate_tracing.set_context", mock_set):
             set_debate_context("d-789", extra_key="val")
         mock_set.assert_called_once_with(debate_id="d-789", extra_key="val")
 
     def test_set_debate_context_skips_set_context_when_none(self):
-        with patch("aragora.debate.tracing.set_context", None):
+        with patch("aragora.observability.debate_tracing.set_context", None):
             # Should not raise
             set_debate_context("d-000")
         assert get_debate_id() == "d-000"

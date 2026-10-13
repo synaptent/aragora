@@ -415,7 +415,7 @@ except Exception as e:
             temp_path = f.name
 
         try:
-            result = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
+            result = subprocess.run(  # subprocess with fixed args, no shell
                 [sys.executable, temp_path],
                 capture_output=True,
                 timeout=timeout,
@@ -745,7 +745,7 @@ class ProofExecutor:
             KeyError,
             AttributeError,
         ) as e:
-            logging.getLogger(__name__).exception(f"Proof execution failed for {proof.id}")
+            logging.getLogger(__name__).exception("Proof execution failed for %s", proof.id)
             result = VerificationResult(
                 proof_id=proof.id,
                 claim_id=proof.claim_id,

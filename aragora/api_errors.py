@@ -178,7 +178,10 @@ class AragoraAPIError(AragoraError):
         """Log the error with context."""
         logger.log(
             level,
-            f"[{self.context.error_id}] {self.code.value}: {self.message}",
+            "[%s] %s: %s",
+            self.context.error_id,
+            self.code.value,
+            self.message,
             extra={
                 "error_id": self.context.error_id,
                 "error_code": self.code.value,
@@ -515,7 +518,10 @@ def log_error(
     error_id = str(uuid.uuid4())[:8]
     logger.log(
         level,
-        f"[{error_id}] {type(error).__name__}: {error}",
+        "[%s] %s: %s",
+        error_id,
+        type(error).__name__,
+        error,
         extra={"error_id": error_id, "context": context or {}},
         exc_info=True,
     )

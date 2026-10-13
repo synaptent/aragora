@@ -467,7 +467,7 @@ class TestDebateFactoryCreateArena:
         with (
             patch.object(factory_module, "create_agent", return_value=mock_agent),
             patch("aragora.core.Environment"),
-            patch("aragora.debate.protocol.DebateProtocol"),
+            patch("aragora.protocols.debate.DebateProtocol"),
             patch("aragora.debate.orchestrator.Arena", return_value=mock_arena) as arena_cls,
         ):
             factory = DebateFactory(

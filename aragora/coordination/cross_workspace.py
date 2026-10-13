@@ -877,7 +877,7 @@ class CrossWorkspaceCoordinator:
             "total_consents": len(self._consents),
             "valid_consents": sum(1 for c in self._consents.values() if c.is_valid()),
             "pending_requests": len(self._pending_requests),
-            "registered_handlers": list(h.value for h in self._handlers.keys()),
+            "registered_handlers": [h.value for h in self._handlers.keys()],
         }
 
 

@@ -379,7 +379,7 @@ class CalibrationTracker(SQLiteStore):
                 conn.commit()
         except (OSError, sqlite3.Error) as e:
             # Log but don't fail - the table might already exist or be created elsewhere
-            logging.getLogger(__name__).warning(f"Failed to ensure temperature_params table: {e}")
+            logging.getLogger(__name__).warning("Failed to ensure temperature_params table: %s", e)
 
     def _ensure_predictions_schema(self) -> None:
         """Ensure predictions table has required columns for calibration tracking.
@@ -411,7 +411,7 @@ class CalibrationTracker(SQLiteStore):
                 safe_add_column(conn, "predictions", "position_id", "TEXT", "NULL")
                 safe_add_column(conn, "predictions", "created_at", "TEXT", "CURRENT_TIMESTAMP")
         except (OSError, sqlite3.Error) as e:
-            logging.getLogger(__name__).warning(f"Failed to ensure predictions schema: {e}")
+            logging.getLogger(__name__).warning("Failed to ensure predictions schema: %s", e)
 
     def record_prediction(
         self,

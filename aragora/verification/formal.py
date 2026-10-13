@@ -334,7 +334,7 @@ class LeanBackend:
         if has_lean and self._lean_version is None:
             try:
                 result = subprocess.run(
-                    ["lean", "--version"],  # noqa: S607 -- fixed command
+                    ["lean", "--version"],  # fixed command
                     capture_output=True,
                     text=True,
                     timeout=5,
@@ -411,7 +411,8 @@ class LeanBackend:
                 result = await translator.translate(claim, context)
                 if result.success and result.lean_code:
                     logger.debug(
-                        f"DeepSeek-Prover translation succeeded (confidence: {result.confidence:.2f})"
+                        "DeepSeek-Prover translation succeeded (confidence: %.2f)",
+                        result.confidence,
                     )
                     return result.lean_code
                 elif self._translation_model == TranslationModel.DEEPSEEK_PROVER:

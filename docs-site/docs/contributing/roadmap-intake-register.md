@@ -57,16 +57,16 @@ When an agent or human is asked to "make this plan permanent / durable":
 
 ## Register — X bookmark triage intake (2026-08-26 session)
 
-Source brief: [`docs/research/2026-08-26-x-bookmarks-triage.md`](../research/2026-08-26-x-bookmarks-triage.md).
+Source brief: `2026-08-26-x-bookmarks-triage.md` (archived dated research brief; the deep-dive briefs below are archived with it).
 All `research-intake` issues filed 2026-08-29 (#9860–#9871); none carry `boss-ready`. Ranking receipt (verdict FAIL/no-consensus, preserved honestly): [`docs/research/receipts/2026-08-29-x-intake-ranking-receipt.json`](../research/receipts/2026-08-29-x-intake-ranking-receipt.json).
 
 | Item | Source | Status | Destination | Tracking |
 |---|---|---|---|---|
 | **X intake pipeline** (live bookmarks + likes ingestion via OAuth2 user-context on the existing ideacloud ingestors; recurring digest job; debate-ranked triage) | X bookmark triage session | Shipped in PR | PR [#9859](https://github.com/synaptent/aragora/pull/9859) | [#9860](https://github.com/synaptent/aragora/issues/9860) |
 | **MetaPlanner `candidate_goals`** (first-class externally supplied candidate list for debate ranking; removes the 5-item `recent_issues` cap) | X bookmark triage session | Shipped in PR | PR [#9859](https://github.com/synaptent/aragora/pull/9859) | — |
-| **Anthropic multiagent-patterns evidence** (THESIS.md citation + reviewer-independence field in receipt profile) | bookmark: J4X_Security Aug 16 | Adopted | [`2026-08-26-anthropic-multiagent-patterns-brief.md`](../research/2026-08-26-anthropic-multiagent-patterns-brief.md) | [#9862](https://github.com/synaptent/aragora/issues/9862) |
-| **Trained confidence model pattern (Simile)** for ODR-5 calibrated confidence | bookmark: simile_ai Aug 25 | Adopted | [`2026-08-26-simile-confidence-model-brief.md`](../research/2026-08-26-simile-confidence-model-brief.md) → feeds [#8229](https://github.com/synaptent/aragora/issues/8229) | via ODR-5 #8229 |
-| **YC QM comparison** (Chief-of-Staff-stage competitor; receipt-story gap) | bookmark: ycombinator Jul 31 | Adopted | [`2026-08-26-yc-qm-brief.md`](../research/2026-08-26-yc-qm-brief.md) + `COMPARISON_MATRIX.md` row | this session |
+| **Anthropic multiagent-patterns evidence** (THESIS.md citation + reviewer-independence field in receipt profile) | bookmark: J4X_Security Aug 16 | Adopted | `2026-08-26-anthropic-multiagent-patterns-brief.md` | [#9862](https://github.com/synaptent/aragora/issues/9862) |
+| **Trained confidence model pattern (Simile)** for ODR-5 calibrated confidence | bookmark: simile_ai Aug 25 | Adopted | `2026-08-26-simile-confidence-model-brief.md` → feeds [#8229](https://github.com/synaptent/aragora/issues/8229) | via ODR-5 #8229 |
+| **YC QM comparison** (Chief-of-Staff-stage competitor; receipt-story gap) | bookmark: ycombinator Jul 31 | Adopted | `2026-08-26-yc-qm-brief.md` + `COMPARISON_MATRIX.md` row | this session |
 | **Prime Agent harness attestation** (receipts attesting self-modifying-harness changes; verifiers-v1 vs benchmark-truth) | bookmark: PrimeIntellect Aug 5 / Jul 12 | Adopted — investigation | issue body | [#9871](https://github.com/synaptent/aragora/issues/9871) |
 | **buzz identity model** (agent+human cryptographic identity vs ODR-2 signing identity) | bookmark: jack Jul 22 | Adopted — investigation | issue body | [#9863](https://github.com/synaptent/aragora/issues/9863) |
 | **Not Diamond routing comparison** (vs #8233 decision-stakes routing / Pareto router) | bookmark: tomas_hk Aug 4 | Adopted — investigation | issue body → feeds [#8233](https://github.com/synaptent/aragora/issues/8233) | [#9864](https://github.com/synaptent/aragora/issues/9864) |

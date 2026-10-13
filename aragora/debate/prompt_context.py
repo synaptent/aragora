@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from aragora.insights.flip_detector import FlipDetector
     from aragora.debate.audience_manager import AudienceManager
     from aragora.debate.prompt_builder import PromptBuilder
-    from aragora.debate.protocol import DebateProtocol
+    from aragora.protocols.debate import DebateProtocol
     from aragora.spectate.stream import SpectatorStream
 
 logger = logging.getLogger(__name__)

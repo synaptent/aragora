@@ -281,7 +281,7 @@ def _reset_leader_singleton():
 
     Prevents state leaking between tests when running in the full suite.
     """
-    import aragora.control_plane.leader as _leader_mod
+    import aragora.resilience.leader as _leader_mod
 
     original = _leader_mod._regional_leader_election
     _leader_mod._regional_leader_election = None

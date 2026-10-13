@@ -54,7 +54,7 @@ Python standard library plus `cryptography` (see the
 full exit-code contract and disambiguation from the in-tree `aragora verify`).
 
 **PyPI install (floor-pinned, recommended):** `aragora-verify` 0.2.0 is the
-floor for receipts from Aragora 2.11.0 and later, because their default output
+floor for receipts produced by release 2.11.0 and later, because their default output
 is ODR v0.2 and 0.1.x rejects v0.2 documents at `schema_conformance`. 0.2.0 still
 verifies every v0.1 document, keeps the `key_id`-equality check that 0.1.1 added
 against signer-label tampering, and requires `cryptography>=48.0.1`:

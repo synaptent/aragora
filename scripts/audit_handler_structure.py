@@ -19,6 +19,7 @@ import json
 import sys
 from collections import defaultdict
 from pathlib import Path
+from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 HANDLERS_DIR = PROJECT_ROOT / "aragora" / "server" / "handlers"
@@ -118,7 +119,7 @@ def get_existing_subdirs() -> dict[str, int]:
     return subdirs
 
 
-def build_audit_report() -> dict[str, any]:
+def build_audit_report() -> dict[str, Any]:
     """Build comprehensive handler structure audit report."""
     structure = get_handler_structure()
     suggestions = suggest_consolidations(structure["top_level"])

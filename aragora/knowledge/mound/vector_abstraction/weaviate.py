@@ -11,6 +11,7 @@ Requirements:
 from __future__ import annotations
 
 import logging
+import uuid as uuid_lib
 import warnings
 from typing import Any, cast
 from collections.abc import Sequence
@@ -247,13 +248,19 @@ class WeaviateVectorStore(BaseVectorStore):
         items: Sequence[dict[str, Any]],
         namespace: str | None = None,
     ) -> list[str]:
-        """Batch upsert multiple vectors."""
+        """Batch upsert multiple vectors.
+
+        Items without an ``id`` (missing or ``None``) get a client-generated
+        UUID4, which is sent to Weaviate and returned in its position.
+        """
         collection = self._get_collection()
-        ids = []
+        ids: list[str] = []
 
         with collection.batch.dynamic() as batch:
             for item in items:
                 item_id = item.get("id")
+                if item_id is None:
+                    item_id = str(uuid_lib.uuid4())
                 properties = {
                     "content": item["content"],
                     "namespace": namespace or "",
@@ -266,9 +273,7 @@ class WeaviateVectorStore(BaseVectorStore):
                 )
                 ids.append(item_id)
 
-        # Items without an explicit "id" append None here; preserved as-is, the
-        # cast only records the declared contract.
-        return cast("list[str]", ids)
+        return ids
 
     async def delete(
         self,

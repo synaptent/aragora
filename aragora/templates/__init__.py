@@ -16,7 +16,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
-    from aragora.debate.protocol import DebateProtocol
+    from aragora.protocols.debate import DebateProtocol
 
 
 class TemplateType(Enum):
@@ -1257,7 +1257,7 @@ def template_to_protocol(
     Returns:
         Configured DebateProtocol matching the template structure
     """
-    from aragora.debate.protocol import DebateProtocol
+    from aragora.protocols.debate import DebateProtocol
 
     overrides = overrides or {}
 

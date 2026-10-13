@@ -408,7 +408,7 @@ class ComputerUseStorage:
             WHERE {where_clause}
             ORDER BY created_at DESC
             LIMIT ? OFFSET ?
-        """  # noqa: S608 -- dynamic clause from internal state
+        """  # dynamic clause from internal state
         params.extend([limit, offset])
         rows = self._backend.execute_read(sql, tuple(params))
         return [self._row_to_task(row) for row in rows]
@@ -431,7 +431,8 @@ class ComputerUseStorage:
 
         where_clause = " AND ".join(conditions) if conditions else "1=1"
 
-        sql = f"SELECT COUNT(*) FROM computer_use_tasks WHERE {where_clause}"  # noqa: S608 -- dynamic clause from internal state
+        # dynamic clause from internal state
+        sql = f"SELECT COUNT(*) FROM computer_use_tasks WHERE {where_clause}"
         result = self._backend.fetch_one(sql, tuple(params))
         return result[0] if result else 0
 
@@ -473,7 +474,8 @@ class ComputerUseStorage:
             params.append(utc_now().isoformat())
 
         params.append(task_id)
-        sql = f"UPDATE computer_use_tasks SET {', '.join(updates)} WHERE task_id = ?"  # noqa: S608 -- dynamic clause from internal state
+        # dynamic clause from internal state
+        sql = f"UPDATE computer_use_tasks SET {', '.join(updates)} WHERE task_id = ?"
         self._backend.execute_write(sql, tuple(params))
 
         # Check if row was affected by re-fetching
@@ -616,7 +618,7 @@ class ComputerUseStorage:
             FROM computer_use_policies
             WHERE {where_clause}
             ORDER BY created_at DESC
-        """  # noqa: S608 -- dynamic clause from internal state
+        """  # dynamic clause from internal state
         rows = self._backend.execute_read(sql, tuple(params))
         return [self._row_to_policy(row) for row in rows]
 
@@ -675,7 +677,7 @@ class ComputerUseStorage:
             SELECT steps_json
             FROM computer_use_tasks
             WHERE {where_clause}
-        """  # noqa: S608 -- dynamic clause from internal state
+        """  # dynamic clause from internal state
         rows = self._backend.execute_read(sql, tuple(params))
 
         stats: dict[str, dict[str, int]] = {

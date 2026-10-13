@@ -235,7 +235,7 @@ class DiverseTeamSelector(TeamSelectorProtocol):
         diversity_pref = requirements.diversity_preference
 
         while len(team) < requirements.max_agents and remaining:
-            if len(team) < requirements.min_agents or random.random() > diversity_pref:  # noqa: S311 -- non-security agent selection
+            if len(team) < requirements.min_agents or random.random() > diversity_pref:
                 # Greedy: pick highest scored
                 agent, _ = remaining[0]
                 team.append(agent)
@@ -461,7 +461,7 @@ class RandomTeamSelector(TeamSelectorProtocol):
         for _ in range(count):
             if not available:
                 break
-            roll = random.random()  # noqa: S311 -- non-security agent selection
+            roll = random.random()
             cumulative = 0.0
             for i, (agent, prob) in enumerate(available):
                 cumulative += prob

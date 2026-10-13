@@ -433,10 +433,11 @@ class KMEloBridge:
                 self._sync_history = self._sync_history[-self._max_history :]
 
         logger.info(
-            f"KM → ELO sync complete: agents={result.agents_analyzed}, "
-            f"patterns={result.patterns_detected}, "
-            f"applied={result.adjustments_applied}, "
-            f"elo_change={result.total_elo_change:+.1f}"
+            "KM → ELO sync complete: agents=%s, patterns=%s, applied=%s, elo_change=%+.1f",
+            result.agents_analyzed,
+            result.patterns_detected,
+            result.adjustments_applied,
+            result.total_elo_change,
         )
 
         return result

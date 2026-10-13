@@ -20,9 +20,9 @@ from ..base import (
     get_clamped_int_param,
     handle_errors,
     json_response,
-    ttl_cache,
 )
 from ..openapi_decorator import api_endpoint
+from .facts import caller_org_or_error
 
 if TYPE_CHECKING:
     from aragora.knowledge import DatasetQueryEngine, FactStore, SimpleQueryEngine
@@ -30,12 +30,9 @@ if TYPE_CHECKING:
 try:
     from aragora.knowledge.mound.retrieval import KnowledgeMoundRetriever
 except ImportError:  # pragma: no cover - optional KM subsystem
-    KnowledgeMoundRetriever = None  # type: ignore[assignment]
+    KnowledgeMoundRetriever = None  # type: ignore[assignment,misc]
 
 logger = logging.getLogger(__name__)
-
-# Cache TTLs
-CACHE_TTL_STATS = 300  # 5 minutes for statistics
 
 
 class SearchHandlerProtocol(Protocol):
@@ -44,6 +41,7 @@ class SearchHandlerProtocol(Protocol):
     def _get_fact_store(self) -> FactStore: ...
     def _get_query_engine(self) -> DatasetQueryEngine | SimpleQueryEngine: ...
     def _get_knowledge_mound(self) -> Any | None: ...
+    def require_auth_or_error(self, handler: Any) -> tuple[Any, HandlerResult | None]: ...
 
 
 def _extract_search_query(query_params: dict[str, Any]) -> str:
@@ -51,7 +49,7 @@ def _extract_search_query(query_params: dict[str, Any]) -> str:
     query = get_bounded_string_param(query_params, "q", "", max_length=500)
     if query:
         return query
-    return get_bounded_string_param(query_params, "query", "", max_length=500)
+    return get_bounded_string_param(query_params, "query", "", max_length=500)  # type: ignore[return-value]
 
 
 def _normalize_search_result(result: Any) -> dict[str, Any]:
@@ -137,6 +135,14 @@ def _normalize_search_result(result: Any) -> dict[str, Any]:
     return normalized
 
 
+def _retrieved_items(retrieved: Any) -> list[Any]:
+    """The items of a Knowledge Mound retrieval: a result's ``items`` list, or a bare list."""
+    if retrieved is None:
+        return []
+    items = retrieved if isinstance(retrieved, (list, tuple)) else getattr(retrieved, "items", None)
+    return list(items) if isinstance(items, (list, tuple)) else []
+
+
 def _filter_normalized_results(
     results: list[dict[str, Any]],
     *,
@@ -217,8 +223,14 @@ class SearchOperationsMixin:
     )
     @handle_errors("search chunks")
     @require_permission("knowledge:read")
-    def _handle_search(self: SearchHandlerProtocol, query_params: dict) -> HandlerResult:
-        """Handle GET /api/knowledge/search - Search chunks."""
+    def _handle_search(
+        self: SearchHandlerProtocol, query_params: dict, handler: Any = None
+    ) -> HandlerResult:
+        """Handle GET /api/knowledge/search - Search chunks.
+
+        ``handler`` is unused here; ``@require_permission`` reads the request's
+        authorization context from it.
+        """
 
         query = _extract_search_query(query_params)
         if not query:
@@ -262,10 +274,9 @@ class SearchOperationsMixin:
                     logger.error("Knowledge Mound search failed: %s", e)
                     return error_response("Search operation failed", 500)
 
-                normalized = []
-                if retrieved is not None:
-                    items = getattr(retrieved, "items", retrieved)
-                    normalized = [_normalize_search_result(item) for item in items]
+                normalized = [
+                    _normalize_search_result(item) for item in _retrieved_items(retrieved)
+                ]
                 normalized = _filter_normalized_results(
                     normalized,
                     min_confidence=min_confidence,
@@ -287,7 +298,7 @@ class SearchOperationsMixin:
         if not hasattr(engine, "search"):
             raise TypeError("Query engine does not support search")
         try:
-            results = _run_async(engine.search(query, workspace_id, limit))
+            results = _run_async(engine.search(query, workspace_id, limit))  # type: ignore[arg-type]
         except (KeyError, ValueError, OSError, TypeError, RuntimeError) as e:
             logger.error("Search failed: %s", e)
             return error_response("Search operation failed", 500)
@@ -343,12 +354,20 @@ class SearchOperationsMixin:
             "403": {"description": "Forbidden"},
         },
     )
-    @ttl_cache(ttl_seconds=CACHE_TTL_STATS, key_prefix="knowledge_stats", skip_first=True)
     @handle_errors("get stats")
-    def _handle_stats(self: SearchHandlerProtocol, workspace_id: str | None) -> HandlerResult:
-        """Handle GET /api/knowledge/stats - Get statistics."""
+    def _handle_stats(
+        self: SearchHandlerProtocol, workspace_id: str | None, handler: Any = None
+    ) -> HandlerResult:
+        """Handle GET /api/knowledge/stats - Statistics of the caller's organization's facts.
+
+        Deliberately uncached: a shared response cache would be keyed without
+        the caller's organization.
+        """
+        org_id, err = caller_org_or_error(self, handler)
+        if err:
+            return err
         store = self._get_fact_store()
-        stats = store.get_statistics(workspace_id)
+        stats = store.get_statistics(workspace_id, org_id=org_id)
 
         return json_response(
             {

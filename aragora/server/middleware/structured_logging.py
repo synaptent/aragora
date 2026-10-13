@@ -654,7 +654,11 @@ class RequestLoggingMiddleware:
 
         self.logger.log(
             level,
-            f"{ctx['method']} {ctx['path']} -> {status_code} ({elapsed_ms:.1f}ms)",
+            "%s %s -> %s (%.1fms)",
+            ctx["method"],
+            ctx["path"],
+            status_code,
+            elapsed_ms,
             extra=extra,
         )
 

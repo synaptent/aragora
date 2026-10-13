@@ -183,7 +183,7 @@ class WorkspacePipelineBridge:
 
         self._initialised = True
         try:
-            from aragora.workspace.bead import BeadManager  # noqa: F811
+            from aragora.workspace.bead import BeadManager
 
             self._bead_manager = BeadManager()
             return True

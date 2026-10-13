@@ -92,6 +92,7 @@ DEFAULT_OWNER_PERMISSIONS: dict[ResourceType, list[str]] = {
         "connectors.update",
         "connectors.delete",
         "connectors.test",
+        "connectors.configure",
     ],
     ResourceType.WEBHOOK: [
         "webhooks.read",

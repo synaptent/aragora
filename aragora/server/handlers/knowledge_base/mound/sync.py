@@ -204,61 +204,14 @@ class SyncOperationsMixin:
     @handle_errors("sync facts")
     @require_permission("knowledge:read")
     def _handle_sync_facts(self: SyncHandlerProtocol, handler: Any) -> HandlerResult:
-        """Handle POST /api/knowledge/mound/sync/facts - Sync from FactStore."""
+        """Handle POST /api/knowledge/mound/sync/facts - closed.
 
-        try:
-            content_length = int(handler.headers.get("Content-Length", 0))
-            if content_length > 0:
-                body = handler.rfile.read(content_length)
-                data = json.loads(body.decode("utf-8"))
-            else:
-                data = {}
-        except (json.JSONDecodeError, ValueError) as e:
-            logger.warning("Handler error: %s", e)
-            return error_response("Invalid request body", 400)
-
-        workspace_id = data.get("workspace_id", "default")
-        since = data.get("since")
-        limit = data.get("limit", 100)
-
-        mound = self._get_mound()
-        if not mound:
-            return error_response("Knowledge Mound not available", 503)
-
-        try:
-            # Use the handler-compatible incremental sync method
-            result = _run_async(
-                mound.sync_facts_incremental(workspace_id=workspace_id, since=since, limit=limit)
-            )
-        except AttributeError:
-            # Fallback: Connect facts store and try direct sync
-            try:
-                from aragora.knowledge.fact_store import FactStore
-
-                facts = FactStore()
-                _run_async(mound.connect_memory_stores(facts=facts))
-                result = _run_async(
-                    mound.sync_facts_incremental(
-                        workspace_id=workspace_id, since=since, limit=limit
-                    )
-                )
-            except (ImportError, AttributeError, RuntimeError) as inner_e:
-                logger.debug("FactStore fallback failed: %s", inner_e)
-                return json_response(
-                    {
-                        "synced": 0,
-                        "message": "FactStore not available or not connected",
-                        "workspace_id": workspace_id,
-                    }
-                )
-        except (AttributeError, RuntimeError, OSError) as e:
-            logger.error("Failed to sync from facts: %s", e)
-            return error_response("Failed to sync from facts", 500)
-
-        return json_response(
-            {
-                "synced": result.nodes_synced if hasattr(result, "nodes_synced") else 0,
-                "workspace_id": workspace_id,
-                "message": "Sync from FactStore completed",
-            }
+        Facts belong to organizations and the Knowledge Mound is not
+        organization-scoped, so a sync could only copy every organization's
+        facts into a shared mound.
+        """
+        return error_response(
+            "Fact sync needs an organization-scoped Knowledge Mound",
+            403,
+            code="knowledge_fact_access_closed",
         )

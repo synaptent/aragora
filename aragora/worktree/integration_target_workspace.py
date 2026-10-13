@@ -46,7 +46,7 @@ class FleetIntegrationTargetWorkspace:
         cwd: Path | None = None,
         check: bool = True,
     ) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(  # noqa: S603 -- fixed git command arguments
+        return subprocess.run(  # fixed git command arguments
             ["git", *args],
             cwd=cwd or self.repo_root,
             capture_output=True,

@@ -219,7 +219,7 @@ class GlacialTierMixin:
                   {keyword_clause}
                 ORDER BY score DESC
                 LIMIT ?
-                """,  # noqa: S608 -- dynamic clause from internal state
+                """,  # dynamic clause from internal state
                 (min_importance, *keyword_params, limit),
             )
 

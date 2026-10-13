@@ -70,7 +70,7 @@ async def record_debate_tokens(
             "debate_recorded": True
         }
     """
-    from aragora.services.usage_metering import get_usage_meter
+    from aragora.billing.usage_metering import get_usage_meter
 
     meter = get_usage_meter()
 
@@ -195,7 +195,7 @@ async def record_agent_tokens(
             "total_cost": "0.0125"
         }
     """
-    from aragora.services.usage_metering import get_usage_meter
+    from aragora.billing.usage_metering import get_usage_meter
 
     meter = get_usage_meter()
 
@@ -256,7 +256,7 @@ async def record_api_call(
     Returns:
         Dict with recorded call info
     """
-    from aragora.services.usage_metering import get_usage_meter
+    from aragora.billing.usage_metering import get_usage_meter
 
     meter = get_usage_meter()
 
@@ -313,7 +313,7 @@ class MeteredUsageTracker:
     def _get_meter(self):
         """Lazy-load the usage meter."""
         if self._meter is None:
-            from aragora.services.usage_metering import get_usage_meter
+            from aragora.billing.usage_metering import get_usage_meter
 
             self._meter = get_usage_meter()
         return self._meter

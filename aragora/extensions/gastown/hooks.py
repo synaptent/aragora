@@ -249,7 +249,7 @@ class HookRunner:
         hook_path.parent.mkdir(parents=True, exist_ok=True)
         hook_path.write_text(content)
         # Make executable
-        os.chmod(hook_path, 0o755)  # noqa: S103  # nosec B103 - Git hooks must be executable
+        os.chmod(hook_path, 0o755)  # nosec B103 - Git hooks must be executable
 
     async def _execute_hook(
         self,

@@ -1,52 +1,27 @@
 # Technical Debt Tracking
 
-Last Updated: 2026-01-25
+Last Updated: 2026-02-13
 
 ## Large File Refactoring Queue
 
-### HIGH Priority (6,527 lines combined)
+### HIGH Priority -- COMPLETED
 
-#### 1. `aragora/observability/metrics.py` (3,536 lines)
-**Issue:** 130 repetitive recording functions, 115+ global variables, bloated `_init_metrics()` function.
+#### ~~1. `aragora/observability/metrics.py` (was 3,536 lines)~~
+**Status:** DONE. Decomposed into 39 domain-specific modules under `metrics/`. Largest is
+`metrics/__init__.py` at 1,110 lines (facade), `metrics/core.py` at 185 lines.
 
-**Recommendation:**
-- Split into feature-area modules: `metrics/request.py`, `metrics/debate.py`, `metrics/knowledge.py`
-- Use factory pattern for metric definitions
-- Keep only facade/public API in `__init__.py`
+#### ~~2. `aragora/observability/metrics/core.py` (was 2,991 lines)~~
+**Status:** DONE. Consolidated into the modular metrics package.
 
-**Estimated Effort:** 4-6 hours
+### MEDIUM Priority -- COMPLETED
 
-#### 2. `aragora/observability/metrics/core.py` (2,991 lines)
-**Issue:** 121 near-identical recording functions, duplicate patterns with metrics.py.
+#### ~~3. `aragora/events/cross_subscribers.py` (was 2,572 lines)~~
+**Status:** DONE. Decomposed into `manager.py` (427 lines), `dispatch.py` (327 lines),
+`admin.py` (313 lines), plus 4 handler modules in `handlers/`. No file exceeds 650 lines.
 
-**Recommendation:**
-- Consolidate with metrics.py or clearly define responsibility boundary
-- Extract recording function templates into a shared factory
-- Consider code generation for repetitive patterns
-
-**Estimated Effort:** 3-4 hours
-
-### MEDIUM Priority (5,121 lines combined)
-
-#### 3. `aragora/events/cross_subscribers.py` (2,572 lines)
-**Issue:** Single monolithic `CrossSubscriberManager` class handling multiple event types.
-
-**Recommendation:**
-- Extract subscriber types: `MemorySubscriber`, `ELOSubscriber`, `KnowledgeSubscriber`
-- Use composition: manager delegates to specialized handlers
-- Each handler manages own circuit breaker and metrics
-
-**Estimated Effort:** 3-4 hours
-
-#### 4. `aragora/server/handlers/admin/health.py` (2,549 lines)
-**Issue:** `HealthHandler` class with 21 methods covering diverse health checks.
-
-**Recommendation:**
-- Split into focused handlers: `LivenessHandler`, `ReadinessHandler`, `StorageHealthHandler`
-- Use composition for unified health endpoint
-- Improves testing granularity
-
-**Estimated Effort:** 2-3 hours
+#### ~~4. `aragora/server/handlers/admin/health.py` (was 2,549 lines)~~
+**Status:** DONE. Extracted `LivenessHandler` (65 lines), `ReadinessHandler` (83 lines),
+`StorageHealthHandler` (112 lines). Original `HealthHandler` preserved as facade.
 
 ### Keep As-Is (Justified Design)
 
@@ -54,7 +29,7 @@ Last Updated: 2026-01-25
 |------|-----|--------|
 | `control_plane/policy.py` | 2,565 | Well-organized domain model, 12 classes with clear purpose |
 | `storage/user_store/sqlite_store.py` | 2,439 | Intentional facade pattern over 7 repositories |
-| `debate/orchestrator.py` | 2,180 | Core Arena engine, already partially extracted to phases/ |
+| `debate/orchestrator.py` | 1,021 | Core Arena engine, decomposed from 2,180 to 1,021 lines |
 | `server/startup.py` | 2,397 | Server initialization complexity justified |
 | `server/handlers/social/slack/handler.py` | 2,384 | Slack API handlers, complex by nature |
 | `connectors/chat/slack/` | 2,309 | Slack connector, complex by nature |
@@ -101,6 +76,6 @@ The following deprecated modules are **properly maintained** as backwards-compat
 | `aragora.modes.gauntlet` | `aragora.gauntlet` | Shim active, emits DeprecationWarning |
 | `aragora.crawlers` | `aragora.connectors.repository_crawler` | Shim active, emits DeprecationWarning |
 | `aragora.connectors.email.gmail_sync` | New Gmail implementation | Shim active |
-| `aragora-client` (PyPI) | `aragora-sdk` (PyPI) | Legacy async-only client (deprecated) for backwards compatibility |
+| `aragora-py/` (aragora-client) | `aragora-sdk` (PyPI) | Removed (Feb 2026). Use `aragora-sdk` in `sdk/python/` |
 
 **Action:** No removal needed until major version bump. Monitor usage via DeprecationWarning logs.

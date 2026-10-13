@@ -5,7 +5,7 @@
 #
 # Add this file to your repository at: .github/workflows/aragora-review.yml
 #
-# For full setup instructions, see: docs/GITHUB_ACTION_SETUP.md
+# For full setup instructions, see: docs/guides/GITHUB_ACTION_SETUP.md
 # (section "Emitting a Verifiable Decision Receipt")
 
 name: Aragora AI Code Review

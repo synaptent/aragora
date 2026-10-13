@@ -92,7 +92,7 @@ settlement, merge-quorum, or steering meta-tooling work unless it either
 (a) directly unblocks B0 truth, external receipt proof, or the non-operator
 demo/product-proof path, **or** (b) explicitly closes or supersedes an
 existing open PR in the same surface. This rule is enforced operationally
-by the Sprint 2 anti-goals in [FOCUS.md](../FOCUS.md); it is recorded here
+by the Sprint 2 anti-goals in [FOCUS.md](../strategy/FOCUS.md); it is recorded here
 because it outlives any single sprint window. Post-saturation process work
 is the dominant form of substrate-overbuild — every new PR in
 `aragora/cli/commands/review_queue.py`, `scripts/settle_*.py`,

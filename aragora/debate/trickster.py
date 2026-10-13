@@ -274,8 +274,9 @@ class EvidencePoweredTrickster:
 
         if alert.severity < self.config.hollow_detection_threshold:
             logger.debug(
-                f"trickster_pass round={round_num} "
-                f"reason=below_threshold severity={alert.severity:.2f}"
+                "trickster_pass round=%s reason=below_threshold severity=%.2f",
+                round_num,
+                alert.severity,
             )
             return None
 
@@ -659,8 +660,10 @@ class EvidencePoweredTrickster:
         self._state.total_interventions += 1
 
         logger.info(
-            f"novelty_challenge_created round={round_num} "
-            f"targets={low_novelty_agents} min_novelty={min_novelty:.2f}"
+            "novelty_challenge_created round=%s targets=%s min_novelty=%.2f",
+            round_num,
+            low_novelty_agents,
+            min_novelty,
         )
 
         if self.on_intervention:

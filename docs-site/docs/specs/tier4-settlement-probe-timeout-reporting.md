@@ -10,7 +10,7 @@ settlement-helper reliability change.
 
 This document and
 `tests/governance/test_tier4_settlement_probe_timeout_reporting.py` are
-the governance artifact required by `docs/FOCUS.md` for changes to
+the governance artifact required by `docs/strategy/FOCUS.md` for changes to
 `scripts/settle_tier4_pr.py`.
 
 ## Problem

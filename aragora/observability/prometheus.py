@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 from aragora.observability.prometheus_definitions import *  # noqa: F401, F403, E402
-from aragora.observability.prometheus_definitions import (  # noqa: F401, E402
+from aragora.observability.prometheus_definitions import (
     PROMETHEUS_AVAILABLE,
     CONTENT_TYPE_LATEST,
     SimpleMetrics,
@@ -34,7 +34,7 @@ from aragora.observability.prometheus_definitions import (  # noqa: F401, E402
 
 # Make generate_latest and REGISTRY available if prometheus is installed
 if PROMETHEUS_AVAILABLE:
-    from prometheus_client import (  # noqa: F401
+    from prometheus_client import (
         REGISTRY,
         generate_latest,
     )
@@ -73,7 +73,7 @@ def get_prometheus_metrics() -> str:
 # Recording Functions (delegated to prometheus_recording.py)
 # ============================================================================
 
-from aragora.observability.prometheus_recording import (  # noqa: F401, E402
+from aragora.observability.prometheus_recording import (
     record_debate_completed,
     record_tokens_used,
     record_cost_usd,
@@ -113,7 +113,7 @@ from aragora.observability.prometheus_recording import (  # noqa: F401, E402
 # Decorators (delegated to prometheus_decorators.py)
 # ============================================================================
 
-from aragora.observability.prometheus_decorators import (  # noqa: F401, E402
+from aragora.observability.prometheus_decorators import (
     timed_http_request,
     timed_agent_generation,
     timed_db_query,

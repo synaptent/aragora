@@ -18,6 +18,7 @@ import os
 import sys
 from collections.abc import Set as AbstractSet
 from typing import Any
+from http.client import HTTPResponse
 from urllib import error, parse, request
 
 
@@ -44,7 +45,7 @@ class GitHubClient:
         method: str,
         url: str,
         payload: dict[str, Any] | None = None,
-    ) -> tuple[Any, request.addinfourl]:
+    ) -> tuple[Any, HTTPResponse]:
         body: bytes | None = None
         if payload is not None:
             body = json.dumps(payload).encode("utf-8")
@@ -194,7 +195,10 @@ def compute_stale_runs(
         if status not in ACTIVE_RUN_STATUSES:
             continue
 
-        run_id = int(run.get("id") or run.get("databaseId"))
+        raw_run_id = run.get("id") or run.get("databaseId")
+        if raw_run_id is None:
+            raise ValueError(f"workflow run has no id: {run!r}")
+        run_id = int(raw_run_id)
         branch = str(run.get("head_branch", "") or run.get("headBranch", "")).strip()
         sha = str(run.get("head_sha", "") or run.get("headSha", "")).strip()
         if not branch:

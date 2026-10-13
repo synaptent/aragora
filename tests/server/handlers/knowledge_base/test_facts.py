@@ -33,28 +33,14 @@ def _bypass_require_permission(permission):
     return decorator
 
 
-# Also bypass ttl_cache and handle_errors to simplify testing
-def _bypass_ttl_cache(**kwargs):
-    """No-op decorator for testing."""
-
-    def decorator(func):
-        return func
-
-    return decorator
-
-
 # Patch decorators before importing the mixin, then stop to avoid
 # leaking into other test modules.
 _p1 = patch("aragora.rbac.decorators.require_permission", _bypass_require_permission)
 _p2 = patch(
     "aragora.server.handlers.knowledge_base.facts.require_permission", _bypass_require_permission
 )
-_p3 = patch("aragora.server.handlers.base.ttl_cache", _bypass_ttl_cache)
-_p4 = patch("aragora.server.handlers.knowledge_base.facts.ttl_cache", _bypass_ttl_cache)
 _p1.start()
 _p2.start()
-_p3.start()
-_p4.start()
 
 import pytest
 
@@ -62,8 +48,6 @@ from aragora.server.handlers.knowledge_base.facts import FactsOperationsMixin  #
 
 _p1.stop()
 _p2.stop()
-_p3.stop()
-_p4.stop()
 
 
 def parse_response(result):
@@ -1073,7 +1057,7 @@ class TestAddRelation:
         # prior test (e.g. setting side_effect on a MagicMock CLASS rather
         # than an instance).  A callable side_effect bypasses the
         # list-to-iterator conversion entirely.
-        def _get_fact_side_effect(fact_id):
+        def _get_fact_side_effect(fact_id, **_kwargs):
             if fact_id == "fact-001":
                 return sample_fact
             return None
@@ -1209,10 +1193,10 @@ class TestAddRelationBulk:
 
 
 class TestCaching:
-    """Tests for ttl_cache on list_facts."""
+    """list_facts is per organization, so no shared response cache wraps it."""
 
-    def test_list_facts_cache_key_includes_filters(self, sample_facts):
-        """Cache key should include query parameters (ttl_cache bypassed, so both calls hit store)."""
+    def test_list_facts_hits_the_store_every_time(self, sample_facts):
+        """Every call reads the store; there is no response cache."""
         # Create completely fresh mocks to avoid any state pollution
         fresh_store = MockFactStore()
         fresh_engine = MockQueryEngine()
@@ -1223,8 +1207,7 @@ class TestCaching:
         fresh_handler._handle_list_facts({"workspace_id": "ws-123"})
         fresh_handler._handle_list_facts({"workspace_id": "ws-456"})
 
-        # Both calls should hit the store (ttl_cache is bypassed, so no caching)
-        assert fresh_store.list_facts.call_count >= 2
+        assert fresh_store.list_facts.call_count == 2
 
 
 # =============================================================================

@@ -134,8 +134,8 @@ def classify_paths(
     returns a class; the path baseline is kept as the cross-check and any
     disagreement is recorded on the result.
     """
-    counts: dict[WorkClass, int] = {cls: 0 for cls in WorkClass}
-    weighted: dict[WorkClass, int] = {cls: 0 for cls in WorkClass}
+    counts: dict[WorkClass, int] = dict.fromkeys(WorkClass, 0)
+    weighted: dict[WorkClass, int] = dict.fromkeys(WorkClass, 0)
     for path in paths:
         cls = classify_path(path)
         counts[cls] += 1
@@ -220,7 +220,7 @@ def compute_mix(
     exclude_exempt: bool = True,
 ) -> MixReport:
     """Compute the class mix over already-windowed classified work."""
-    counts: dict[WorkClass, int] = {cls: 0 for cls in WorkClass}
+    counts: dict[WorkClass, int] = dict.fromkeys(WorkClass, 0)
     for work in classified:
         if exclude_exempt and work.exempt:
             continue

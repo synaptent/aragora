@@ -355,7 +355,10 @@ class LocalFineTuner:
 
         trainable, total = self._peft_model.get_nb_trainable_parameters()
         logger.info(
-            f"Trainable parameters: {trainable:,} / {total:,} ({100 * trainable / total:.2f}%)"
+            "Trainable parameters: %s / %s (%.2f%%)",
+            format(trainable, ","),
+            format(total, ","),
+            100 * trainable / total,
         )
 
     def _format_training_example(self, example: TrainingExample) -> str:

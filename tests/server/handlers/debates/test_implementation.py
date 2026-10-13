@@ -515,7 +515,7 @@ class TestCreateDecisionIntegrityPlanOnly:
         ):
             handler._create_decision_integrity(None, "debate-001")
 
-        mock_persist_plan.assert_called_once_with(mock_package.plan, "debate-001")
+        mock_persist_plan.assert_called_once_with(mock_package.plan, "debate-001", (None, None))
 
     def test_custom_payload_options(self, handler, mock_storage, mock_package):
         """Payload options are forwarded to build_decision_integrity_package."""
@@ -939,6 +939,131 @@ class TestWorkflowBackbone:
         assert status == 503
         assert body["error"] == FAIL_CLOSED_BACKBONE_MESSAGE
 
+    def test_execute_workflow_refused_execution_returns_plan_not_found(
+        self, handler, mock_storage, mock_package
+    ):
+        handler._body = {"execution_mode": "workflow_execute"}
+
+        from aragora.pipeline.decision_plan import ApprovalMode, DecisionPlan, PlanStatus
+        from aragora.pipeline.decision_plan.core import ApprovalRecord
+        from aragora.pipeline.execution_ownership import (
+            EXECUTION_SCHEDULER_NOT_MEMBER,
+            ExecutionNotAuthorizedError,
+        )
+        from aragora.tenancy.record_scope import not_found_body
+
+        plan = DecisionPlan(
+            debate_id="debate-001",
+            task="Should we use microservices?",
+            approval_mode=ApprovalMode.NEVER,
+            status=PlanStatus.APPROVED,
+            approval_record=ApprovalRecord(approved=True, approver_id="system"),
+        )
+
+        with (
+            patch("aragora.server.handlers.debates.implementation.run_async") as mock_run,
+            patch(
+                "aragora.server.handlers.debates.implementation._persist_receipt",
+                return_value=None,
+            ),
+            patch(
+                "aragora.pipeline.decision_plan.DecisionPlanFactory.from_debate_result",
+                return_value=plan,
+            ),
+            patch(
+                "aragora.server.handlers.debates.implementation.ensure_decision_plan_backbone_run",
+                return_value="run-workflow-refused",
+            ),
+            patch(
+                "aragora.server.handlers.debates.implementation.sync_decision_plan_backbone_receipt",
+                return_value=True,
+            ),
+            patch.dict("os.environ", {"ARAGORA_ENABLE_IMPLEMENTATION_EXECUTION": "1"}),
+        ):
+            mock_run.side_effect = [
+                mock_package,
+                ExecutionNotAuthorizedError(EXECUTION_SCHEDULER_NOT_MEMBER, "not a member"),
+            ]
+            result = handler._create_decision_integrity(None, "debate-001")
+
+        body, status = parse_result(result)
+        assert status == 404
+        assert body == not_found_body("Plan")
+
+    @pytest.mark.parametrize(
+        ("org_id", "expected_owner"),
+        [("org-a", ("org-a", "user-1")), (None, (None, None))],
+    )
+    def test_workflow_plan_is_stored_with_the_caller_as_owner(
+        self, handler, mock_storage, mock_package, org_id, expected_owner
+    ):
+        handler._body = {"execution_mode": "workflow"}
+        handler.get_current_user = lambda h: MagicMock(org_id=org_id, user_id="user-1")
+
+        from aragora.pipeline.decision_plan import ApprovalMode, DecisionPlan
+
+        plan = DecisionPlan(debate_id="debate-001", task="t", approval_mode=ApprovalMode.NEVER)
+        stored_owners = []
+
+        with (
+            patch("aragora.server.handlers.debates.implementation.run_async") as mock_run,
+            patch(
+                "aragora.server.handlers.debates.implementation._persist_receipt",
+                return_value=None,
+            ),
+            patch(
+                "aragora.pipeline.decision_plan.DecisionPlanFactory.from_debate_result",
+                return_value=plan,
+            ),
+            patch(
+                "aragora.server.handlers.debates.implementation.ensure_decision_plan_backbone_run",
+                return_value="run-workflow-owner",
+            ),
+            patch(
+                "aragora.server.handlers.debates.implementation.sync_decision_plan_backbone_receipt",
+                return_value=True,
+            ),
+            patch(
+                "aragora.pipeline.executor.store_plan",
+                side_effect=lambda p: stored_owners.append((p.org_id, p.created_by)),
+            ),
+        ):
+            mock_run.side_effect = [mock_package]
+            result = handler._create_decision_integrity(None, "debate-001")
+
+        assert parse_result(result)[1] == 200
+        assert stored_owners == [expected_owner]
+
+    @pytest.mark.parametrize("body", [{}, {"execution_engine": "computer_use"}])
+    def test_non_workflow_plan_is_stored_with_the_caller_as_owner(
+        self, handler, mock_storage, mock_package, body
+    ):
+        handler._body = body
+        handler.get_current_user = lambda h: MagicMock(org_id="org-a", user_id="user-1")
+
+        from aragora.pipeline.decision_plan import DecisionPlan
+
+        stored_owners = []
+        impl = "aragora.server.handlers.debates.implementation"
+        with (
+            patch(f"{impl}.run_async", return_value=mock_package),
+            patch(f"{impl}._persist_receipt", return_value=None),
+            patch(
+                "aragora.pipeline.decision_plan.DecisionPlanFactory.from_implement_plan",
+                side_effect=lambda *a, **k: DecisionPlan(debate_id="debate-001", task="t"),
+            ),
+            patch(f"{impl}.ensure_decision_plan_backbone_run", return_value="run-owner"),
+            patch(f"{impl}.sync_decision_plan_backbone_receipt", return_value=True),
+            patch(
+                "aragora.pipeline.executor.store_plan",
+                side_effect=lambda p: stored_owners.append((p.org_id, p.created_by)),
+            ),
+        ):
+            result = handler._create_decision_integrity(None, "debate-001")
+
+        assert parse_result(result)[1] == 200
+        assert stored_owners == [("org-a", "user-1")]
+
 
 # =============================================================================
 # Tests for execute mode
@@ -1125,6 +1250,7 @@ class TestExecuteMode:
     ):
         """Approved computer-use execution queues through the backbone wrapper."""
         handler._body = {"execution_mode": "execute", "execution_engine": "computer_use"}
+        handler.get_current_user = lambda h: MagicMock(org_id="org-a", user_id="user-1")
 
         from aragora.autonomous.loop_enhancement import ApprovalStatus
 
@@ -1200,6 +1326,8 @@ class TestExecuteMode:
         assert body["execution"]["progress"]["total_steps"] >= 0
         assert mock_executor_cls.called is True
         assert mock_execute.call_args.kwargs["safety_mode"] == ExecutionMode.INTERACTIVE
+        plan, kw = mock_execute.call_args.args[0], mock_execute.call_args.kwargs
+        assert (kw.get("org_id"), kw.get("created_by"), plan.org_id) == ("org-a", "user-1", "org-a")
 
     def test_execute_approved_computer_use_backbone_failure_returns_503(
         self, handler, mock_storage, mock_package, mock_approval_request

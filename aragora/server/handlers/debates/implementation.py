@@ -32,6 +32,10 @@ from aragora.pipeline.decision_integrity import (
     coerce_debate_result,
 )
 from aragora.pipeline.execution_mode import ExecutionMode as SafetyMode
+from aragora.pipeline.execution_ownership import (
+    ExecutionNotAuthorizedError,
+    resolve_execution_owner,
+)
 from aragora.pipeline.decision_integrity_utils import (
     ensure_decision_plan_backbone_run,
     execute_decision_plan_with_backbone,
@@ -43,6 +47,7 @@ from aragora.pipeline.execution_notifier import ExecutionNotifier
 from aragora.autonomous.loop_enhancement import ApprovalStatus
 from aragora.server.handlers.autonomous.approvals import get_approval_flow
 from aragora.rbac.checker import get_permission_checker
+from aragora.tenancy.record_scope import record_not_found
 
 from ..base import HandlerResult, error_response, handle_errors, json_response, require_storage
 from ..openapi_decorator import api_endpoint
@@ -88,8 +93,13 @@ def _persist_receipt(receipt: Any, debate_id: str) -> str | None:
         return None
 
 
-def _persist_plan(plan: Any, debate_id: str) -> None:
-    """Store an ImplementPlan in the pipeline plan store for tracking."""
+def _persist_plan(
+    plan: Any, debate_id: str, owner: tuple[str | None, str | None] = (None, None)
+) -> None:
+    """Store an ImplementPlan in the pipeline plan store for tracking.
+
+    ``owner`` is the ``(org_id, created_by)`` of the requesting user.
+    """
     try:
         from aragora.pipeline.executor import store_plan
         from aragora.pipeline.decision_plan import DecisionPlanFactory
@@ -99,6 +109,7 @@ def _persist_plan(plan: Any, debate_id: str) -> None:
     except (ImportError, KeyError, ValueError, OSError, AttributeError, TypeError) as exc:
         logger.debug("Plan persistence setup failed: %s", exc)
         return
+    decision_plan.org_id, decision_plan.created_by = owner
 
     try:
         ensure_decision_plan_backbone_run(
@@ -209,6 +220,8 @@ class _RequestConfig:
     workflow_mode: bool
     execute_workflow: bool
     repo_path: Path | None
+    # (org_id, created_by) of the requesting user
+    owner: tuple[str | None, str | None] = (None, None)
 
 
 def _parse_request(payload: dict[str, Any], ctx: dict[str, Any]) -> _RequestConfig:
@@ -412,6 +425,7 @@ class ImplementationOperationsMixin:
 
         payload = self.read_json_body(handler) or {}
         rc = _parse_request(payload, self.ctx)
+        rc.owner = resolve_execution_owner(self.get_current_user(handler))
 
         # Build the decision integrity package
         package, response_payload = self._build_integrity_package(debate, debate_id, rc, handler)
@@ -527,6 +541,7 @@ class ImplementationOperationsMixin:
                         package.plan,
                         debate_id=debate_id,
                     )
+                    computer_use_plan.org_id, computer_use_plan.created_by = rc.owner
                     run_id = ensure_decision_plan_backbone_run(
                         computer_use_plan,
                         auth_context=None,
@@ -547,7 +562,7 @@ class ImplementationOperationsMixin:
                 ) as exc:
                     logger.debug("Computer use plan persistence failed: %s", exc)
             else:
-                _persist_plan(package.plan, debate_id)
+                _persist_plan(package.plan, debate_id, rc.owner)
 
         return receipt_id, computer_use_plan
 
@@ -675,6 +690,7 @@ class ImplementationOperationsMixin:
             implement_plan=package.plan,
             implementation_profile=implementation_profile,
         )
+        plan.org_id, plan.created_by = resolve_execution_owner(user)
         run_id = ensure_decision_plan_backbone_run(
             plan,
             auth_context=user,
@@ -768,6 +784,9 @@ class ImplementationOperationsMixin:
                         exc,
                     )
                     return error_response(FAIL_CLOSED_BACKBONE_MESSAGE, 503)
+                except ExecutionNotAuthorizedError as exc:
+                    logger.warning("Execution refused for debate %s: %s", debate_id, exc.code)
+                    return record_not_found("Plan")
                 response_payload["workflow_execution"] = {
                     "status": "completed" if outcome.success else "failed",
                     "run_id": launch.get("run_id"),
@@ -934,6 +953,8 @@ class ImplementationOperationsMixin:
                     auth_context=getattr(self, "_auth_context", None),
                     execution_mode="computer_use",
                     safety_mode=SafetyMode.INTERACTIVE,
+                    org_id=rc.owner[0],
+                    created_by=rc.owner[1],
                 )
             )
             response_payload["execution"] = {

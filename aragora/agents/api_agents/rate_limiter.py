@@ -685,7 +685,7 @@ def get_openrouter_limiter() -> OpenRouterRateLimiter:
 
     Uses ServiceRegistry for centralized singleton management.
     """
-    from aragora.services import ServiceRegistry
+    from aragora.runtime.service_registry import ServiceRegistry
 
     with _openrouter_limiter_lock:
         registry = ServiceRegistry.get()
@@ -699,7 +699,7 @@ def set_openrouter_tier(tier: str) -> None:
 
     Valid tiers: free, basic, standard, premium, unlimited
     """
-    from aragora.services import ServiceRegistry
+    from aragora.runtime.service_registry import ServiceRegistry
 
     with _openrouter_limiter_lock:
         registry = ServiceRegistry.get()

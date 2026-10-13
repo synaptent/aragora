@@ -342,7 +342,7 @@ def _resolve_store_path() -> Path:
 
 def get_landing_review_store() -> LandingReviewStore:
     """Return the singleton landing review store, creating it if needed."""
-    global _store  # noqa: PLW0603
+    global _store
     resolved_path = _resolve_store_path()
     if _store is None or _store.db_path != resolved_path:
         if _store is not None:
@@ -353,7 +353,7 @@ def get_landing_review_store() -> LandingReviewStore:
 
 def reset_landing_review_store() -> None:
     """Reset the singleton landing review store. Used by tests."""
-    global _store  # noqa: PLW0603
+    global _store
     if _store is not None:
         _store.close()
     _store = None

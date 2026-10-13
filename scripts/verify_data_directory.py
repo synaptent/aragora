@@ -30,7 +30,7 @@ class Issue(NamedTuple):
 
 def find_stray_db_files(project_root: Path) -> list[Issue]:
     """Find .db files in project root that should be in data directory."""
-    issues = []
+    issues: list[Issue] = []
 
     # Expected data directories
     expected_dirs = {".nomic", ".data", ".aragora", "data", "tests"}
@@ -54,7 +54,7 @@ def find_stray_db_files(project_root: Path) -> list[Issue]:
 
 def check_hardcoded_paths(project_root: Path) -> list[Issue]:
     """Check for hardcoded database paths in Python files."""
-    issues = []
+    issues: list[Issue] = []
 
     # Patterns that indicate hardcoded paths (bare filenames as defaults)
     bare_db_pattern = re.compile(

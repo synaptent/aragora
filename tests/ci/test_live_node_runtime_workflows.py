@@ -74,7 +74,7 @@ def _workflow_triggers(workflow: dict[str, Any]) -> dict[str, Any]:
 
 
 def _setup_node_steps(job: dict[str, Any]) -> list[dict[str, Any]]:
-    return [step for step in job.get("steps", []) if step.get("uses") == "actions/setup-node@v4"]
+    return [step for step in job.get("steps", []) if step.get("uses") == "actions/setup-node@v7"]
 
 
 def _resolve_node_version(

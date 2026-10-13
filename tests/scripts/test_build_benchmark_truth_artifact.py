@@ -1529,7 +1529,10 @@ def test_recurrence_placeholder_rows_leave_rescue_and_elapsed_unobserved(
     monkeypatch,
 ) -> None:
     # Reproduce the rows the daily recurrence writes for closed and
-    # label-skipped corpus issues, via the real producer.
+    # label-skipped corpus issues, via the real producer. Other tests/scripts
+    # modules can drop scripts/ from sys.path after this module's import-time
+    # insert, so re-add it for this lazy import.
+    monkeypatch.syspath_prepend(_scripts_dir)
     import run_benchmark_corpus_recurrence as recurrence
     from aragora.swarm import boss_loop_outcome
 

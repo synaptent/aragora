@@ -162,7 +162,7 @@ def validate_workflow(definition: Any) -> ValidationResult:
                     adj_cycle[step.id].append(ns)
 
         WHITE, GRAY, BLACK = 0, 1, 2
-        color: dict[str, int] = {sid: WHITE for sid in step_ids}
+        color: dict[str, int] = dict.fromkeys(step_ids, WHITE)
 
         def _dfs(node: str) -> None:
             color[node] = GRAY

@@ -837,7 +837,7 @@ Over 100 alert rules in `aragora/monitoring/alerts/prometheus_rules.yml` coverin
 
 ## See Also
 
-- [DEPLOYMENT.md](./overview) - Kubernetes deployment
+- [DEPLOYMENT.md](./overview) - Deployment guide (Docker Compose, Kubernetes, TLS, backups)
 - [RATE_LIMITING.md](./rate-limiting) - Rate limiting configuration
 - [SECURITY.md](../security/overview) - Security configuration
 - [ENTERPRISE_FEATURES.md](../enterprise/features) - Enterprise capabilities

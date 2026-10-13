@@ -381,7 +381,7 @@ class Tournament:
         participants: list[str],
     ) -> dict[str, float]:
         """Calculate scores for each participant in a match."""
-        scores = {name: 0.0 for name in participants}
+        scores = dict.fromkeys(participants, 0.0)
 
         if not result:
             return scores

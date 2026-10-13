@@ -177,7 +177,7 @@ async def _generate_edge_tts(
         # Exponential backoff before retry (except on last attempt)
         if attempt < max_retries - 1:
             delay = base_delay * (2**attempt)
-            logger.debug(f"Retrying edge-tts in {delay:.1f}s...")
+            logger.debug("Retrying edge-tts in %.1fs...", delay)
             await asyncio.sleep(delay)
 
     # All retries exhausted

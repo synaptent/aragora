@@ -41,10 +41,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from aragora.control_plane.leader import (
-    is_distributed_state_required,
-    DistributedStateError,
-)
+from aragora.config.distributed import is_distributed_state_required
+from aragora.control_plane.leader import DistributedStateError
 from aragora.persistence.db_config import get_default_data_dir
 
 logger = logging.getLogger(__name__)

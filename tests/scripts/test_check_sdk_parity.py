@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -851,3 +852,123 @@ def test_representative_invocation_stderr_free_of_deprecation_warnings():
     assert proc.stdout.strip(), "checker produced no report on stdout"
     deprecation_lines = [line for line in proc.stderr.splitlines() if "DeprecationWarning" in line]
     assert deprecation_lines == [], "\n".join(deprecation_lines)
+
+
+# Runs check_sdk_parity.main() with the production argv in a fresh interpreter
+# and reports every DeprecationWarning that reaches the top level, plus which
+# listed modules the run imported. Mode "unlisted" empties
+# _LEGACY_WARNING_MODULES first, so each listed module's notice surfaces
+# wherever the handler cascade imports it.
+_DEPRECATION_PROBE = """
+import contextlib
+import io
+import json
+import sys
+import warnings
+
+project_root, mode, *argv = sys.argv[1:]
+sys.path.insert(0, project_root)
+import scripts.check_sdk_parity as checker
+
+listed = list(checker._LEGACY_WARNING_MODULES)
+if mode == "unlisted":
+    checker._LEGACY_WARNING_MODULES = ()
+sys.argv = [checker.__file__, *argv]
+with warnings.catch_warnings(record=True) as caught, contextlib.redirect_stdout(io.StringIO()):
+    rc = checker.main()
+    handler_count = len(checker.extract_handler_routes())
+print(
+    json.dumps(
+        {
+            "rc": rc,
+            "handler_count": handler_count,
+            "listed": listed,
+            "imported": [module for module in listed if module in sys.modules],
+            "deprecations": [
+                str(w.message) for w in caught if issubclass(w.category, DeprecationWarning)
+            ],
+        }
+    )
+)
+"""
+
+
+def _run_deprecation_probe(mode: str) -> dict[str, Any]:
+    baseline = PROJECT_ROOT / "scripts" / "baselines" / "check_sdk_parity.json"
+    budget = PROJECT_ROOT / "scripts" / "baselines" / "check_sdk_parity_budget.json"
+    env = {k: v for k, v in os.environ.items() if not k.startswith("AWS_")}
+    env.pop("PYTHONWARNINGS", None)
+    env["AWS_EC2_METADATA_DISABLED"] = "true"
+    env.setdefault("ARAGORA_SECRETS_STRICT", "false")
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-W",
+            "always::DeprecationWarning",
+            "-c",
+            _DEPRECATION_PROBE,
+            str(PROJECT_ROOT),
+            mode,
+            "--strict",
+            "--baseline",
+            str(baseline),
+            "--budget",
+            str(budget),
+        ],
+        capture_output=True,
+        text=True,
+        cwd=PROJECT_ROOT,
+        env=env,
+        timeout=600,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert "Traceback" not in proc.stderr, proc.stderr
+    report_lines = proc.stdout.strip().splitlines()
+    assert report_lines, f"probe printed no report\n{proc.stderr}"
+    report: dict[str, Any] = json.loads(report_lines[-1])
+    assert report["rc"] in (0, 1), proc.stderr
+    assert report["handler_count"] > 0, "handler cascade did not run; the probe proves nothing"
+    return report
+
+
+# Repo shim notices read "<module> is deprecated; ...". Matching the whole module
+# name keeps a submodule's notice (aragora.server.metrics.api) from vouching for
+# its parent package.
+_SHIM_NOTICE = re.compile(r"^(?P<module>aragora(?:\.\w+)+) is deprecated\b")
+
+# Shim notices measured reaching the top level during the run without being
+# listed. Any other shim notice fails the test, so a shim import that becomes
+# reachable from the cascade is listed or migrated instead of leaking.
+_KNOWN_UNLISTED_SHIM_NOTICES = frozenset({"aragora.server.prometheus"})
+
+
+def _shim_notice_modules(messages: list[str]) -> set[str]:
+    return {match.group("module") for message in messages if (match := _SHIM_NOTICE.match(message))}
+
+
+def test_legacy_warning_modules_match_live_import_cascade():
+    """Every listed module must still warn during a run, and no other shim notice may leak.
+
+    Default filters hide shim notices attributed to non-__main__ modules, so
+    the stderr test above passes whatever the list holds. Both runs here force
+    DeprecationWarning visible. A listed module whose notice no longer fires
+    with the list emptied is stale and should be removed from the list.
+    """
+    unlisted = _run_deprecation_probe("unlisted")
+    noticed = _shim_notice_modules(unlisted["deprecations"])
+    stale = [module for module in unlisted["listed"] if module not in noticed]
+    # An imported-but-silent entry was first imported under a scoped warnings
+    # ignore inside the cascade, so it does not reach stderr either.
+    assert stale == [], (
+        "these _LEGACY_WARNING_MODULES entries no longer warn during the checker run "
+        f"and should be removed: {stale} "
+        f"(still imported by the run: {[m for m in stale if m in unlisted['imported']]})"
+    )
+
+    committed = _run_deprecation_probe("committed")
+    leaked = sorted(_shim_notice_modules(committed["deprecations"]) - _KNOWN_UNLISTED_SHIM_NOTICES)
+    assert leaked == [], (
+        "these shim notices reach the top level during the checker run; list the module "
+        f"in _LEGACY_WARNING_MODULES or migrate its importer: {leaked}"
+    )

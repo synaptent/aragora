@@ -189,11 +189,16 @@ class NoveltyTracker:
                 # Debug: log high-similarity comparisons
                 if max_similarity > 0.8:
                     logger.debug(
-                        f"novelty_high_similarity agent={agent} "
-                        f"max_sim={max_similarity:.3f} "
-                        f"similar_to={most_similar_to} "
-                        f"proposal_len={len(proposal)} "
-                        f"prior_len={len(prior_text) if prior_text else 0}"
+                        "novelty_high_similarity agent=%s "
+                        "max_sim=%.3f "
+                        "similar_to=%s "
+                        "proposal_len=%s "
+                        "prior_len=%s",
+                        agent,
+                        max_similarity,
+                        most_similar_to,
+                        len(proposal),
+                        len(prior_text) if prior_text else 0,
                     )
 
                 score = NoveltyScore(
@@ -236,12 +241,14 @@ class NoveltyTracker:
 
         if low_novelty_agents:
             logger.warning(
-                f"Round {round_num}: Low novelty detected for {low_novelty_agents}. "
-                f"Min novelty: {min_novelty:.2f}"
+                "Round %s: Low novelty detected for %s. Min novelty: %.2f",
+                round_num,
+                low_novelty_agents,
+                min_novelty,
             )
         else:
             logger.debug(
-                f"Round {round_num}: Novelty OK. Avg={avg_novelty:.2f}, Min={min_novelty:.2f}"
+                "Round %s: Novelty OK. Avg=%.2f, Min=%.2f", round_num, avg_novelty, min_novelty
             )
 
         return result

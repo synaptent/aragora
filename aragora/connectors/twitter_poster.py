@@ -122,7 +122,7 @@ class TwitterRateLimiter:
             # Wait until oldest call falls out of window
             wait_time = self.window_seconds - (now - self.call_times[0]) + 1
             if wait_time > 0:
-                logger.info(f"Rate limit: waiting {wait_time:.1f}s")
+                logger.info("Rate limit: waiting %.1fs", wait_time)
                 await asyncio.sleep(wait_time)
 
         self.call_times.append(time.time())

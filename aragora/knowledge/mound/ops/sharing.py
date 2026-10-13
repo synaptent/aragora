@@ -118,7 +118,7 @@ class KnowledgeSharingMixin(_SharingMixinBase):
         )
 
         # Persist grant
-        if hasattr(self._meta_store, "save_access_grant_async"):
+        if self._meta_store is not None and hasattr(self._meta_store, "save_access_grant_async"):
             await self._meta_store.save_access_grant_async(grant)
         else:
             logger.warning("Store does not support access grants, grant not persisted")
@@ -200,7 +200,7 @@ class KnowledgeSharingMixin(_SharingMixinBase):
         )
 
         # Persist grant
-        if hasattr(self._meta_store, "save_access_grant_async"):
+        if self._meta_store is not None and hasattr(self._meta_store, "save_access_grant_async"):
             await self._meta_store.save_access_grant_async(grant)
         else:
             logger.warning("Store does not support access grants, grant not persisted")
@@ -249,7 +249,9 @@ class KnowledgeSharingMixin(_SharingMixinBase):
         items: list[KnowledgeItem] = []
         seen_ids = set()
 
-        if hasattr(self._meta_store, "get_grants_for_grantee_async"):
+        if self._meta_store is not None and hasattr(
+            self._meta_store, "get_grants_for_grantee_async"
+        ):
             # Get workspace grants
             workspace_grants = await self._meta_store.get_grants_for_grantee_async(
                 workspace_id, AccessGrantType.WORKSPACE
@@ -300,7 +302,7 @@ class KnowledgeSharingMixin(_SharingMixinBase):
         """
         self._ensure_initialized()
 
-        if hasattr(self._meta_store, "delete_access_grant_async"):
+        if self._meta_store is not None and hasattr(self._meta_store, "delete_access_grant_async"):
             result = await self._meta_store.delete_access_grant_async(item_id, grantee_id)
             if result:
                 logger.info(
@@ -331,7 +333,11 @@ class KnowledgeSharingMixin(_SharingMixinBase):
         self._ensure_initialized()
 
         # If filtering by item_id, use the standard method
-        if item_id and hasattr(self._meta_store, "get_access_grants_async"):
+        if (
+            item_id
+            and self._meta_store is not None
+            and hasattr(self._meta_store, "get_access_grants_async")
+        ):
             grants = await self._meta_store.get_access_grants_async(item_id)
             # Apply additional filters if provided
             if shared_by:
@@ -339,7 +345,9 @@ class KnowledgeSharingMixin(_SharingMixinBase):
             return grants
 
         # If filtering by shared_by or workspace_id only
-        if hasattr(self._meta_store, "get_grants_by_grantor_async"):
+        if self._meta_store is not None and hasattr(
+            self._meta_store, "get_grants_by_grantor_async"
+        ):
             return await self._meta_store.get_grants_by_grantor_async(
                 shared_by=shared_by, workspace_id=workspace_id
             )
@@ -401,7 +409,7 @@ class KnowledgeSharingMixin(_SharingMixinBase):
             expires_at=expires_at if expires_at is not None else existing.expires_at,
         )
 
-        if hasattr(self._meta_store, "save_access_grant_async"):
+        if self._meta_store is not None and hasattr(self._meta_store, "save_access_grant_async"):
             await self._meta_store.save_access_grant_async(updated_grant)
 
         logger.info(
@@ -539,11 +547,11 @@ class KnowledgeSharingMixin(_SharingMixinBase):
             )
 
         # Update visibility in store
-        if hasattr(self._meta_store, "update_visibility_async"):
+        if self._meta_store is not None and hasattr(self._meta_store, "update_visibility_async"):
             await self._meta_store.update_visibility_async(item_id, vis_level, set_by)
             logger.info("Set visibility of item %s to %s by %s", item_id, visibility, set_by)
             return True
-        elif hasattr(self._meta_store, "update_node_async"):
+        elif self._meta_store is not None and hasattr(self._meta_store, "update_node_async"):
             await self._meta_store.update_node_async(
                 item_id,
                 {
@@ -609,7 +617,7 @@ class KnowledgeSharingMixin(_SharingMixinBase):
         )
 
         # Persist grant
-        if hasattr(self._meta_store, "save_access_grant_async"):
+        if self._meta_store is not None and hasattr(self._meta_store, "save_access_grant_async"):
             await self._meta_store.save_access_grant_async(grant)
             logger.info(
                 "Granted %s access on item %s to %s:%s by %s",
@@ -643,7 +651,7 @@ class KnowledgeSharingMixin(_SharingMixinBase):
         """
         self._ensure_initialized()
 
-        if hasattr(self._meta_store, "delete_access_grant_async"):
+        if self._meta_store is not None and hasattr(self._meta_store, "delete_access_grant_async"):
             result = await self._meta_store.delete_access_grant_async(item_id, grantee_id)
             if result:
                 logger.info(

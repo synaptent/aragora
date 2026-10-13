@@ -276,18 +276,18 @@ def build_plan(
     # (c) bounded branch deletion.
     for branch in sorted(heads):
         sha = heads[branch]
-        status = effective_status.get(branch)
-        if status is None:
+        branch_status = effective_status.get(branch)
+        if branch_status is None:
             if not any(fnmatch(branch, pat) for pat in ORPHAN_BRANCH_PATTERNS):
                 continue  # not a lane-owned namespace; never ours to touch
             reason = "ledger-less orphan"
-        elif status == "dead":
+        elif branch_status == "dead":
             reason = "ledger-dead"
-        elif status == "in_progress":
+        elif branch_status == "in_progress":
             plan["skipped"].append({"branch": branch, "reason": "live ledger (in_progress)"})
             continue
         else:
-            plan["skipped"].append({"branch": branch, "reason": f"ledger status {status!r}"})
+            plan["skipped"].append({"branch": branch, "reason": f"ledger status {branch_status!r}"})
             continue
         ahead = git.ahead_count(sha)
         if ahead is None:

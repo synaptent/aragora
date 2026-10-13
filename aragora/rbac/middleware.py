@@ -252,9 +252,16 @@ DEFAULT_ROUTE_PERMISSIONS = [
     RoutePermission(r"^/api/(?:v1/)?memory", "GET", "memory.read"),
     RoutePermission(r"^/api/(?:v1/)?memory", "POST", "memory.update"),
     RoutePermission(r"^/api/(?:v1/)?memory", "DELETE", "memory.delete"),
+    RoutePermission(r"^/api/(?:v1/)?memory/[^/]+$", "PUT", "memory.update"),
     # Analytics
     RoutePermission(r"^/api/(?:v1/)?analytics", "GET", "analytics.read"),
     RoutePermission(r"^/api/(?:v1/)?analytics/export", "POST", "analytics.export_data"),
+    # Disconnect a platform; the names are the analytics platforms handler's SUPPORTED_PLATFORMS.
+    RoutePermission(
+        r"^/api/(?:v1/)?analytics/(?:metabase|google_analytics|mixpanel)$",
+        "DELETE",
+        "analytics.configure",
+    ),
     # Training
     RoutePermission(r"^/api/(?:v1/)?training", "GET", "training.read"),
     RoutePermission(r"^/api/(?:v1/)?training/export", "POST", "training.create"),
@@ -265,6 +272,24 @@ DEFAULT_ROUTE_PERMISSIONS = [
     RoutePermission(r"^/api/(?:v1/)?connectors?$", "GET", "connectors.read"),
     RoutePermission(r"^/api/(?:v1/)?connectors?$", "POST", "connectors.create"),
     RoutePermission(r"^/api/(?:v1/)?connectors?/([^/]+)$", "DELETE", "connectors.delete", 1),
+    # The connector handlers check these keys without a resource ID, so these rules capture
+    # none: a captured ID would let a resource owner without the key past this layer only.
+    # Connector type metadata: the handler checks no key, so any signed-in caller.
+    RoutePermission(r"^/api/(?:v1/)?connectors?/types$", "GET", ""),
+    # Also matches /summary, /stats, /health and /sync-history, which check connectors:read.
+    RoutePermission(r"^/api/(?:v1/)?connectors?/[^/]+$", "GET", "connectors.read"),
+    RoutePermission(r"^/api/(?:v1/)?connectors?/[^/]+$", "PUT", "connectors.configure"),
+    RoutePermission(r"^/api/(?:v1/)?connectors?/[^/]+$", "PATCH", "connectors.configure"),
+    RoutePermission(r"^/api/(?:v1/)?connectors?/test$", "POST", "connectors.configure"),
+    RoutePermission(
+        r"^/api/(?:v1/)?connectors?/sync/[^/]+/cancel$", "POST", "connectors.configure"
+    ),
+    RoutePermission(r"^/api/(?:v1/)?connectors?/[^/]+/sync$", "POST", "connectors.configure"),
+    RoutePermission(
+        r"^/api/(?:v1/)?connectors?/[^/]+/syncs/[^/]+/cancel$", "POST", "connectors.configure"
+    ),
+    RoutePermission(r"^/api/(?:v1/)?connectors?/[^/]+/health$", "GET", "connectors.read"),
+    RoutePermission(r"^/api/(?:v1/)?connectors?/[^/]+/test$", "POST", "connectors.test"),
     # Webhooks
     RoutePermission(r"^/api/(?:v1/)?webhooks?$", "GET", "webhooks.read"),
     RoutePermission(r"^/api/(?:v1/)?webhooks?$", "POST", "webhooks.create"),
@@ -635,7 +660,7 @@ DEFAULT_ROUTE_PERMISSIONS = [
     # ── Email services ──
     RoutePermission(r"^/api/(v1/)?email/followups/mark$", "POST", "email.create"),
     RoutePermission(r"^/api/(v1/)?email/followups/pending$", "GET", "email.read"),
-    RoutePermission(r"^/api/(v1/)?email/followups/check-replies$", "POST", "email.read"),
+    RoutePermission(r"^/api/(v1/)?email/followups/check-replies$", "POST", "email.update"),
     RoutePermission(r"^/api/(v1/)?email/followups/auto-detect$", "POST", "email.create"),
     RoutePermission(r"^/api/(v1/)?email/followups/([^/]+)/resolve$", "POST", "email.update", 2),
     RoutePermission(r"^/api/(v1/)?email/([^/]+)/snooze-suggestions$", "GET", "email.read", 2),
@@ -644,7 +669,7 @@ DEFAULT_ROUTE_PERMISSIONS = [
     RoutePermission(r"^/api/(v1/)?email/snoozed$", "GET", "email.read"),
     RoutePermission(r"^/api/(v1/)?email/snooze/process-due$", "POST", "email.update"),
     RoutePermission(r"^/api/(v1/)?email/categories$", "GET", "email.read"),
-    RoutePermission(r"^/api/(v1/)?email/categories/learn$", "POST", "email.create"),
+    RoutePermission(r"^/api/(v1/)?email/categories/learn$", "POST", "email.update"),
     # ── SCIM 2.0 provisioning ──
     RoutePermission(r"^/scim/v2/Users$", "GET", "users.read"),
     RoutePermission(r"^/scim/v2/Users$", "POST", "users.invite"),
@@ -762,6 +787,9 @@ DEFAULT_ROUTE_PERMISSIONS = [
     RoutePermission(r"^/api/documents", "GET", "documents.read"),
     RoutePermission(r"^/api/documents", "POST", "documents.write"),
     RoutePermission(r"^/api/documents", "DELETE", "documents.delete"),
+    # ── Document batch processing ──
+    RoutePermission(r"^/api/(?:v1/)?documents/processing/stats$", "GET", "documents.read"),
+    RoutePermission(r"^/api/(?:v1/)?batch(?:/queue/status)?$", "GET", "documents.read"),
     # ── Red team / Auditing ──
     RoutePermission(r"^/api/redteam", "GET", "auditing.read"),
     RoutePermission(r"^/api/redteam", "POST", "auditing.create"),
@@ -777,6 +805,23 @@ DEFAULT_ROUTE_PERMISSIONS = [
     # ── Evolution ──
     RoutePermission(r"^/api/evolution", "GET", "evolution.read"),
     RoutePermission(r"^/api/evolution", "POST", "evolution.write"),
+    # ── Cross-pollination and Teams routes: the keys their handlers check ──
+    RoutePermission(
+        r"^/api/(?:v1/)?cross-pollination/conflicts/[^/]+/resolve$",
+        "POST",
+        "cross_pollination.write",
+    ),
+    # Only the 501 routes: the stats, subscribers, bridge and km reads report process-wide
+    # state, so they stay without a rule (default-denied) like metrics and km/culture.
+    RoutePermission(
+        r"^/api/(?:v1/)?cross-pollination/(?:conflicts|federation|federation/sync"
+        r"|subscribe|sync/status|sync/trigger)$",
+        "GET",
+        "cross_pollination.read",
+    ),
+    RoutePermission(r"^/api/(?:v1/)?teams$", "GET", "bots.read"),
+    # Create and send have no key of their own yet; their handlers answer 501 under bots.read.
+    RoutePermission(r"^/api/(?:v1/)?teams(?:/debates/send)?$", "POST", "bots.read"),
     # ── Plugins ──
     RoutePermission(r"^/api/(v1/)?plugins", "GET", "plugins.read"),
     RoutePermission(r"^/api/(v1/)?plugins", "POST", "plugins.install"),

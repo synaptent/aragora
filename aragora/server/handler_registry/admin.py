@@ -299,6 +299,9 @@ ARAutomationHandler = _safe_import(
 )
 InvoiceHandler = _safe_import("aragora.server.handlers.finance.invoices", "InvoiceHandler")
 ExpenseHandler = _safe_import("aragora.server.handlers.finance.expenses", "ExpenseHandler")
+AccountingIntegrationHandler = _safe_import(
+    "aragora.server.handlers.finance.accounting", "AccountingIntegrationHandler"
+)
 
 # =============================================================================
 # Skills and Marketplace Handler Imports
@@ -639,6 +642,7 @@ ADMIN_HANDLER_REGISTRY: list[tuple[str, object]] = [
     ("_ar_automation_handler", ARAutomationHandler),
     ("_invoice_handler", InvoiceHandler),
     ("_expense_handler", ExpenseHandler),
+    ("_accounting_integration_handler", AccountingIntegrationHandler),
     # Skills and marketplace
     ("_skills_handler", SkillsHandler),
     ("_skill_marketplace_handler", SkillMarketplaceHandler),
@@ -834,6 +838,7 @@ __all__ = [
     "ARAutomationHandler",
     "InvoiceHandler",
     "ExpenseHandler",
+    "AccountingIntegrationHandler",
     # Skills
     "SkillsHandler",
     "SkillMarketplaceHandler",

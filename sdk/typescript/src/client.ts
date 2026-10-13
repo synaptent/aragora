@@ -105,7 +105,6 @@ import type {
   RelationshipGraph,
   RelationshipSummary,
   Replay,
-  ReplayFormat,
   RiskHeatmap,
   RoleRotationAnalytics,
   SastFinding,
@@ -5292,17 +5291,6 @@ export class AragoraClient {
    */
   async getReplay(replayId: string): Promise<Replay> {
     return this.request<Replay>('GET', `/api/v1/replays/${encodeURIComponent(replayId)}`);
-  }
-
-  /**
-   * Export a replay in a specific format.
-   */
-  async exportReplay(replayId: string, format: ReplayFormat): Promise<{ content: string; filename: string }> {
-    return this.request<{ content: string; filename: string }>(
-      'GET',
-      `/api/v1/replays/${encodeURIComponent(replayId)}/export`,
-      { params: { format } }
-    );
   }
 
   /**

@@ -98,8 +98,6 @@ class TestReceiptStoreBootstrap:
         from psycopg2 import sql
         from psycopg2.extensions import make_dsn
 
-        if not _RECEIPT_TEST_DATABASE_URL.startswith("postgresql://"):
-            pytest.skip("DATABASE_URL not set or not PostgreSQL")
         schema = f"receipt_bootstrap_{uuid.uuid4().hex}"
         connection = psycopg2.connect(_RECEIPT_TEST_DATABASE_URL)
         connection.autocommit = True

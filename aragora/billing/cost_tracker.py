@@ -532,8 +532,11 @@ class CostTracker:
         )
 
         logger.debug(
-            f"cost_recorded workspace={usage.workspace_id} agent={usage.agent_name} "
-            f"cost=${usage.cost_usd:.6f} tokens={usage.tokens_in + usage.tokens_out}"
+            "cost_recorded workspace=%s agent=%s cost=$%.6f tokens=%s",
+            usage.workspace_id,
+            usage.agent_name,
+            usage.cost_usd,
+            usage.tokens_in + usage.tokens_out,
         )
 
     async def record_batch(self, usages: list[TokenUsage]) -> None:
