@@ -188,9 +188,9 @@ Exact head: <full 40-character head SHA>
   supportive review of the same head does not lift it.
 
 Lift (the Tier 4 operator trust that `scripts/settle_tier4_pr.py` uses:
-comment author association `OWNER`; `MEMBER` whose login is on the trusted
-operator allowlist; or `COLLABORATOR` on that allowlist whose live repository
-permission is `admin`):
+comment author association `OWNER`; or `MEMBER` or `COLLABORATOR` whose login
+is on the trusted operator allowlist and whose live repository permission is
+`admin`):
 
 ```text
 ## Current-head park lift
@@ -206,11 +206,14 @@ latest park or lift comment wins.
 
 - The allowlist is the comma-separated `ARAGORA_TIER4_TRUSTED_OPERATORS`
   variable, which `scripts/settle_tier4_pr.py` also reads; when it is unset or
-  empty, the allowlist is `scarmani`. Logins compare case-insensitively.
-- The `COLLABORATOR` check reads
+  empty, the lift allowlist is `scarmani`. Logins compare case-insensitively.
+  `scripts/settle_tier4_pr.py` differs here: it also adds logins from its
+  `--trusted-operator-login` option, and with no allowlist it accepts any
+  `MEMBER` whose live permission is `admin`.
+- The `MEMBER` and `COLLABORATOR` admin check reads
   `repos/<owner>/<repo>/collaborators/<login>/permission` while
-  `review-queue merge-packet` builds the packet. If the lookup fails, the lift
-  is ignored and the park stands. An allowlisted `MEMBER` lift needs no lookup.
+  `review-queue merge-packet` builds the packet. If the permission is not
+  `admin`, or the lookup fails, the lift is ignored and the park stands.
 
 ## Rollout order
 

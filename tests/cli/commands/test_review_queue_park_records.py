@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -389,67 +390,127 @@ def _no_permission_lookup(login: str) -> bool:
     raise AssertionError(f"unexpected admin permission lookup for {login}")
 
 
-def test_member_lift_by_default_trusted_operator_clears_park() -> None:
+def _recording_checker(is_admin: bool, lookups: list[str]) -> Callable[[str], bool]:
+    def checker(login: str) -> bool:
+        lookups.append(login)
+        return is_admin
+
+    return checker
+
+
+def test_allowlisted_member_lift_with_live_admin_permission_clears_park() -> None:
+    lookups: list[str] = []
+
     record = current_head_park_record(
         [_park(), _lift("MEMBER", "scarmani")],
         head_sha=HEAD_X,
-        admin_permission_checker=_no_permission_lookup,
+        admin_permission_checker=_recording_checker(True, lookups),
     )
 
     assert record["blocked"] is False
     assert record["lifted_by"]["created_at"] == "2026-07-08T05:30:00Z"
     assert record["lifted_by"]["author_login"] == "scarmani"
     assert record["lifted_by"]["author_association"] == "MEMBER"
+    assert lookups == ["scarmani"]
+
+
+def test_allowlisted_member_lift_without_admin_permission_does_not_clear_park() -> None:
+    lookups: list[str] = []
+
+    record = current_head_park_record(
+        [_park(), _lift("MEMBER", "scarmani")],
+        head_sha=HEAD_X,
+        admin_permission_checker=_recording_checker(False, lookups),
+    )
+
+    assert record["blocked"] is True
+    assert record["park_marker"] == "Current-head repeat-blocker park"
+    assert lookups == ["scarmani"]
+
+
+def test_allowlisted_member_lift_fails_closed_when_permission_lookup_fails() -> None:
+    def failing_checker(login: str) -> bool:
+        raise RuntimeError(f"gh api failed for {login}")
+
+    record = current_head_park_record(
+        [_park(), _lift("MEMBER", "scarmani")],
+        head_sha=HEAD_X,
+        admin_permission_checker=failing_checker,
+    )
+
+    assert record["blocked"] is True
+
+
+def test_allowlisted_member_lift_without_permission_checker_does_not_clear_park() -> None:
+    record = current_head_park_record(
+        [_park(), _lift("MEMBER", "scarmani")],
+        head_sha=HEAD_X,
+    )
+
+    assert record["blocked"] is True
 
 
 @pytest.mark.parametrize("login", ["an0mium", "", None])
 def test_member_lift_off_the_trusted_operator_allowlist_does_not_clear_park(
     login: str | None,
 ) -> None:
+    lookups: list[str] = []
+
     record = current_head_park_record(
         [_park(), _lift("MEMBER", login)],
         head_sha=HEAD_X,
-        admin_permission_checker=_no_permission_lookup,
+        admin_permission_checker=_recording_checker(True, lookups),
     )
 
     assert record["blocked"] is True
     assert record["park_marker"] == "Current-head repeat-blocker park"
+    assert lookups == []
 
 
 def test_trusted_operator_env_replaces_the_default_allowlist(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv(TRUSTED_OPERATOR_LOGINS_ENV, " Other-Operator , second ")
+    lookups: list[str] = []
 
     default_login = current_head_park_record(
-        [_park(), _lift("MEMBER", "scarmani")], head_sha=HEAD_X
+        [_park(), _lift("MEMBER", "scarmani")],
+        head_sha=HEAD_X,
+        admin_permission_checker=_recording_checker(True, lookups),
     )
     configured_login = current_head_park_record(
-        [_park(), _lift("MEMBER", "other-operator")], head_sha=HEAD_X
+        [_park(), _lift("MEMBER", "other-operator")],
+        head_sha=HEAD_X,
+        admin_permission_checker=_recording_checker(True, lookups),
     )
 
     assert default_login["blocked"] is True
     assert configured_login["blocked"] is False
+    assert lookups == ["other-operator"]
 
 
 def test_explicit_trusted_operator_logins_take_precedence_over_env(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv(TRUSTED_OPERATOR_LOGINS_ENV, "scarmani")
+    lookups: list[str] = []
 
     record = current_head_park_record(
         [_park(), _lift("MEMBER", "scarmani")],
         head_sha=HEAD_X,
         trusted_operator_logins=["Release-Captain"],
+        admin_permission_checker=_recording_checker(True, lookups),
     )
     captain = current_head_park_record(
         [_park(), _lift("MEMBER", "release-captain")],
         head_sha=HEAD_X,
         trusted_operator_logins=["Release-Captain"],
+        admin_permission_checker=_recording_checker(True, lookups),
     )
 
     assert record["blocked"] is True
     assert captain["blocked"] is False
+    assert lookups == ["release-captain"]
 
 
 @pytest.mark.parametrize(
@@ -659,7 +720,11 @@ Exact head: {HEAD_X}
 """,
     )
 
-    record = current_head_park_record([_park(), quoted_lift], head_sha=HEAD_X)
+    record = current_head_park_record(
+        [_park(), quoted_lift],
+        head_sha=HEAD_X,
+        admin_permission_checker=_recording_checker(True, []),
+    )
 
     assert record["blocked"] is True
     assert record["park_marker"] == "Current-head repeat-blocker park"
@@ -696,7 +761,11 @@ def test_documented_park_and_lift_templates_are_recognized() -> None:
             author_association=association,
             author_login="scarmani",
         )
-        lifted = current_head_park_record([park, lift], head_sha=HEAD_X)
+        lifted = current_head_park_record(
+            [park, lift],
+            head_sha=HEAD_X,
+            admin_permission_checker=_recording_checker(True, []),
+        )
         assert lifted["blocked"] is False
         assert lifted["lifted_by"]["created_at"] == "2026-07-08T05:30:00Z"
 

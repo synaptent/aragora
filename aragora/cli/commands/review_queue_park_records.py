@@ -19,13 +19,14 @@ PARK_LIFT_RECORD_MARKERS: tuple[str, ...] = (
     "Current-head park override",
 )
 # A park only adds a merge block, so any maintainer may post one. A lift removes
-# a block, so it uses the Tier 4 operator trust of scripts/settle_tier4_pr.py:
-# OWNER; MEMBER on the trusted-operator allowlist; COLLABORATOR only with an
-# allowlist entry and a live repo-admin permission check.
+# a block, so it follows the Tier 4 operator trust of scripts/settle_tier4_pr.py:
+# OWNER; MEMBER or COLLABORATOR only with a trusted-operator allowlist entry and
+# a live repo-admin permission check. Unlike settle_tier4_pr.py, an unset
+# allowlist defaults to DEFAULT_TRUSTED_OPERATOR_LOGINS instead of admitting
+# any MEMBER with live admin permission.
 TRUSTED_PARK_AUTHOR_ASSOCIATIONS: frozenset[str] = frozenset({"OWNER", "MEMBER", "COLLABORATOR"})
 TRUSTED_LIFT_AUTHOR_ASSOCIATIONS: frozenset[str] = frozenset({"OWNER"})
-TRUSTED_LIFT_ALLOWLIST_ASSOCIATIONS: frozenset[str] = frozenset({"MEMBER"})
-TRUSTED_LIFT_ALLOWLIST_ADMIN_ASSOCIATIONS: frozenset[str] = frozenset({"COLLABORATOR"})
+TRUSTED_LIFT_ALLOWLIST_ADMIN_ASSOCIATIONS: frozenset[str] = frozenset({"MEMBER", "COLLABORATOR"})
 TRUSTED_OPERATOR_LOGINS_ENV = "ARAGORA_TIER4_TRUSTED_OPERATORS"
 DEFAULT_TRUSTED_OPERATOR_LOGINS: frozenset[str] = frozenset({"scarmani"})
 
@@ -57,9 +58,10 @@ def current_head_park_record(
     override record for that same head, from a trusted operator, clears it.
 
     ``trusted_operator_logins`` defaults to ``ARAGORA_TIER4_TRUSTED_OPERATORS``
-    (comma-separated), or ``scarmani`` when that is unset. A COLLABORATOR lift
-    also needs ``admin_permission_checker`` to confirm live admin permission;
-    without a checker, or when the check fails, the lift is ignored.
+    (comma-separated), or ``scarmani`` when that is unset. A MEMBER or
+    COLLABORATOR lift also needs ``admin_permission_checker`` to confirm live
+    admin permission; without a checker, or when the check fails, the lift is
+    ignored.
     """
     head = str(head_sha or "").strip().lower()
     if not re.fullmatch(r"[0-9a-f]{40}", head):
@@ -111,7 +113,7 @@ def collaborator_admin_permission_checker(
     *,
     gh_json: Callable[[list[str]], Any],
 ) -> AdminPermissionChecker:
-    """Build the live repo-admin lookup that a COLLABORATOR lift needs.
+    """Build the live repo-admin lookup that a MEMBER or COLLABORATOR lift needs.
 
     Reads GitHub's collaborator permission endpoint, as scripts/settle_tier4_pr.py
     does. Errors from ``gh_json`` propagate; the park reader treats them as
@@ -299,15 +301,11 @@ def _lift_author_is_trusted(
     association = _author_association(comment)
     if association in TRUSTED_LIFT_AUTHOR_ASSOCIATIONS:
         return True
-    if association not in (
-        TRUSTED_LIFT_ALLOWLIST_ASSOCIATIONS | TRUSTED_LIFT_ALLOWLIST_ADMIN_ASSOCIATIONS
-    ):
+    if association not in TRUSTED_LIFT_ALLOWLIST_ADMIN_ASSOCIATIONS:
         return False
     login = _author_login(comment)
     if not login or login not in trusted_operator_logins:
         return False
-    if association in TRUSTED_LIFT_ALLOWLIST_ASSOCIATIONS:
-        return True
     if admin_permission_checker is None:
         return False
     try:

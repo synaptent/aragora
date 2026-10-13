@@ -7520,7 +7520,9 @@ class TestBuildQueueAndPacket:
     @pytest.mark.parametrize(
         ("lift_association", "permission_response", "expected_blocked", "expected_lookups"),
         [
-            ("MEMBER", None, False, 0),
+            ("MEMBER", {"permission": "admin"}, False, 1),
+            ("MEMBER", {"permission": "write"}, True, 1),
+            ("MEMBER", "gh-error", True, 1),
             ("COLLABORATOR", {"permission": "admin"}, False, 1),
             ("COLLABORATOR", {"permission": "write"}, True, 1),
             ("COLLABORATOR", "gh-error", True, 1),
