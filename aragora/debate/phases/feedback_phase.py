@@ -1245,17 +1245,8 @@ class FeedbackPhase:
             return
 
         try:
-            from aragora.broadcast.pipeline import BroadcastOptions
-
-            options = BroadcastOptions(
-                audio_enabled=True,
-                generate_rss_episode=True,
-            )
-
-            pipeline_result = await pipeline.run(
-                ctx.debate_id,
-                options,
-            )
+            # The pipeline's default options generate audio and an RSS episode.
+            pipeline_result = await pipeline.run(ctx.debate_id)
 
             if pipeline_result.success:
                 logger.info(

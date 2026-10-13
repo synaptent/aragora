@@ -418,3 +418,5 @@ import-and-call tests at both paths.
 | `aragora.connectors.repository_crawler:FileType` | `aragora.analysis.codebase.repository_crawler:FileType` | #10611 | not before M4 seal |
 | `aragora.connectors.repository_crawler:crawl_repository` | `aragora.analysis.codebase.repository_crawler:crawl_repository` | #10611 | not before M4 seal |
 | `aragora.connectors.repository_crawler:EXTENSION_MAP` | `aragora.analysis.codebase.repository_crawler:EXTENSION_MAP` | #10611 | not before M4 seal |
+| `aragora.control_plane.scheduler:TaskStatus` | `aragora.types.task_scheduling:TaskStatus` | #10612 | not before M4 seal |
+| `aragora.control_plane.scheduler:TaskPriority` | `aragora.types.task_scheduling:TaskPriority` | #10612 | not before M4 seal |

@@ -28,6 +28,10 @@ from aragora.server.prometheus_control_plane import (
 from aragora.config.distributed import is_distributed_state_required
 from aragora.control_plane.leader import DistributedStateError
 
+# Defined in the types layer so the agents and knowledge packages can build and read
+# them without importing the control plane; re-exported here as the same objects.
+from aragora.types.task_scheduling import TaskPriority, TaskStatus
+
 # Observability
 from aragora.observability import (
     get_logger,
@@ -82,27 +86,6 @@ logger = get_logger(__name__)
 _scheduler_redis_cb = get_circuit_breaker(
     "scheduler_redis", failure_threshold=5, cooldown_seconds=30
 )
-
-
-class TaskStatus(Enum):
-    """Task lifecycle status."""
-
-    PENDING = "pending"  # Task is queued, waiting for assignment
-    ASSIGNED = "assigned"  # Task assigned to an agent
-    RUNNING = "running"  # Task is being executed
-    COMPLETED = "completed"  # Task completed successfully
-    FAILED = "failed"  # Task failed after all retries
-    CANCELLED = "cancelled"  # Task was cancelled
-    TIMEOUT = "timeout"  # Task timed out
-
-
-class TaskPriority(Enum):
-    """Task priority levels."""
-
-    LOW = 0
-    NORMAL = 50
-    HIGH = 75
-    URGENT = 100
 
 
 class RegionRoutingMode(Enum):
