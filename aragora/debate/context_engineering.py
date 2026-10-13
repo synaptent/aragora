@@ -62,8 +62,8 @@ _ANCHOR_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
         "Nomic Loop",
         (
             "scripts/nomic_loop.py",
-            "aragora/nomic/context_builder.py",
-            "aragora/nomic/rlm_codebase.py",
+            "aragora/rlm/context_builder.py",
+            "aragora/rlm/codebase_summary.py",
         ),
     ),
 )

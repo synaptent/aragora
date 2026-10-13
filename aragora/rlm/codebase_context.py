@@ -12,7 +12,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from aragora.nomic.context_builder import NomicContextBuilder
+from aragora.rlm.context_builder import NomicContextBuilder
 
 
 _MAX_CONTEXT_BYTES_ENV_VARS = (
