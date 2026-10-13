@@ -756,7 +756,7 @@ class ArenaExtensions:
 
         try:
             # Import task event emitters
-            from aragora.control_plane.task_events import (
+            from aragora.events.task_events import (
                 emit_task_completed,
                 get_task_event_dispatcher,
                 set_task_event_dispatcher,
@@ -799,7 +799,7 @@ class ArenaExtensions:
             # Emit deliberation consensus notification for high-confidence results
             if confidence >= 0.7 and getattr(result, "consensus_reached", False):
                 try:
-                    from aragora.control_plane.channels import (
+                    from aragora.events.notification_types import (
                         NotificationEventType,
                         NotificationPriority,
                     )
