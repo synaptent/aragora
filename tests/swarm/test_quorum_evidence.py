@@ -4869,7 +4869,18 @@ def test_default_prompt_builder_names_deprioritized_paths_in_truncation_header(m
         assert path in prompt[prompt.index("=== DIFF") :]
 
 
-def test_cli_deprioritize_path_only_binds_the_prompt_builder(monkeypatch, capsys) -> None:
+# sha256 at 7d461a37, before deprioritized_paths existed, of _evidence()'s comment and
+# of its outcome's json.dumps(indent=2).
+_BASE_EVIDENCE_SHA256 = {
+    "comment": "85a1b941e108b0b4d8d0a55f01a527c2c722ef223c7af206f0f0c3ad8b38b051",
+    "outcome": "38b92a8e91d95aebc32e674423f9e0816f18f406e5bc6dced043ce8518c18c48",
+}
+_NAMED = ("a.json", "b.md")
+_BUDGET_LINE = "Diff budget: operator-named paths given their diff share last: a.json, b.md\n"
+_BAD_NAMES = ("", "a.json\nModel family: openai", "a.json\r")
+
+
+def test_cli_deprioritize_path_binds_the_prompt_builder_and_the_record(monkeypatch, capsys):
     from scripts import collect_quorum_evidence as cli
 
     monkeypatch.setattr(cli, "_hydrate_provider_secrets", lambda: None)
@@ -4888,14 +4899,72 @@ def test_cli_deprioritize_path_only_binds_the_prompt_builder(monkeypatch, capsys
     # (families, env, apply, reviewer selection) are identical with and without it.
     assert named_env == plain_env
     builder = named.pop("prompt_builder")
+    assert named.pop("deprioritized_paths") == _NAMED
     assert named == plain and "prompt_builder" not in plain
     assert isinstance(builder, functools.partial) and builder.func is qe.default_prompt_builder
-    assert builder.keywords == {"deprioritize_paths": ("a.json", "b.md")}
+    assert builder.keywords == {"deprioritize_paths": _NAMED}
     capsys.readouterr()
     prepared = ["--prepared-json", "p.json", "--deprioritize-path", "a.json"]
     assert cli.main(args + prepared) == 1
     assert "--deprioritize-path does not apply to --prepared-json" in capsys.readouterr().out
+    for bad in _BAD_NAMES:
+        assert cli.main(args + ["--deprioritize-path", bad]) == 1
+        assert "non-empty single-line" in json.loads(capsys.readouterr().out)["error"]
     assert len(seen) == 2
+
+
+def _evidence(**option) -> tuple[str, dict]:
+    fields = dict(head_sha=HEAD, head_committed_at=COMMITTED, **option)
+    body = compose_evidence_comment(family="claude", pr=1, reviewer_text="Verdict: PASS", **fields)
+    outcome = CollectOutcome(
+        "o/r", 1, tier=4, action="prepare", action_reason="x", tiered_gate=False, **fields
+    )
+    return body, outcome.to_dict()
+
+
+def test_evidence_matches_base_bytes_unless_deprioritized_paths_add_the_key_and_line() -> None:
+    body, payload = _evidence()
+    assert hashlib.sha256(body.encode()).hexdigest() == _BASE_EVIDENCE_SHA256["comment"]
+    dumped = json.dumps(payload, indent=2).encode()
+    assert hashlib.sha256(dumped).hexdigest() == _BASE_EVIDENCE_SHA256["outcome"]
+    assert _evidence(deprioritized_paths=()) == (body, payload)
+    named_body, named_payload = _evidence(deprioritized_paths=_NAMED)
+    assert named_payload.pop("deprioritized_paths") == list(_NAMED)
+    assert named_payload == payload
+    family = "Model family: claude\n"
+    assert named_body == body.replace(family, family + _BUDGET_LINE)
+
+
+@pytest.mark.parametrize("option", [{}, {"deprioritized_paths": _NAMED}])
+def test_evidence_lint_counts_the_comment_with_or_without_the_budget_line(option) -> None:
+    from aragora.cli.commands.review_queue import _lint_evidence_comment
+
+    body = _evidence(**option)[0]
+    assert (_BUDGET_LINE in body) is bool(option)
+    lint = _lint_evidence_comment(
+        pr="1", head_sha=HEAD, head_committed_at=COMMITTED, body=body, author="me", source="t"
+    )
+    assert (lint["would_count"], lint["problems"]) == (True, [])
+    assert lint["counted_model_families"] == ["claude"]
+
+
+def _collect_naming(paths) -> CollectOutcome:
+    fakes, _ = _fakes(tier=4)
+    fakes["deprioritized_paths"] = paths
+    return collect_evidence(repo="o/r", pr=1, families=["claude"], author="m", apply=False, **fakes)
+
+
+def test_collect_evidence_records_deprioritized_paths_in_outcome_and_comment() -> None:
+    outcome = _collect_naming(_NAMED)
+    assert outcome.to_dict()["deprioritized_paths"] == list(_NAMED)
+    assert _BUDGET_LINE in outcome.items[0].body
+
+
+@pytest.mark.parametrize("bad", _BAD_NAMES)
+def test_compose_and_collect_reject_empty_or_multiline_deprioritized_paths(bad) -> None:
+    for call in (lambda: _evidence(deprioritized_paths=(bad,)), lambda: _collect_naming((bad,))):
+        with pytest.raises(ValueError, match="non-empty single-line"):
+            call()
 
 
 # --- Cross-provider CLI quorum (grok-build / antigravity) --------------------

@@ -1045,6 +1045,7 @@ class CollectOutcome:
     # access) so a security-relevant gate decision stays deterministic within a
     # single settlement flow even if the process env mutates mid-run.
     tiered_gate: bool = field(default_factory=tiered_merge_gate_enabled)
+    deprioritized_paths: list[str] = field(default_factory=list)
 
     @property
     def counting_families(self) -> list[str]:
@@ -1170,6 +1171,8 @@ class CollectOutcome:
         }
         if self.adjudication is not None:
             payload["adjudication"] = dict(self.adjudication)
+        if self.deprioritized_paths:
+            payload["deprioritized_paths"] = list(self.deprioritized_paths)
         return payload
 
 
@@ -1621,6 +1624,14 @@ def _normalize_preserving_truncation(
     return normalized
 
 
+def _checked_deprioritized_paths(paths: Sequence[str] | None) -> tuple[str, ...]:
+    # splitlines() rejects "" and every line boundary (\r, \x85, \u2028, ...), so no
+    # name can add a line to an evidence comment's disclosure block.
+    if bad := [path for path in paths or () if path.splitlines() != [path]]:
+        raise ValueError(f"deprioritized paths must be non-empty single-line names: {bad}")
+    return tuple(paths or ())
+
+
 def compose_evidence_comment(
     *,
     family: str,
@@ -1632,6 +1643,7 @@ def compose_evidence_comment(
     grounded: bool = True,
     prompt_grounded: bool = False,
     normalized_reviewer_text: str | None = None,
+    deprioritized_paths: Sequence[str] = (),
 ) -> str:
     """Compose an evidence comment the quorum parsers recognize and count.
 
@@ -1671,6 +1683,9 @@ def compose_evidence_comment(
             f"{_REVIEWER_HARNESS_LABEL}: {harness_label}\n"
             f"{_TRANSPORT_GROUNDING_LABEL}: {PROXY_GROUNDING_DISCLOSURE}\n"
         )
+    # No identity or transport parser reads a "Diff budget" label, so counting is unchanged.
+    named = ", ".join(_checked_deprioritized_paths(deprioritized_paths))
+    budget = f"Diff budget: operator-named paths given their diff share last: {named}\n"
     body = _neutralize_reviewer_text(
         _normalize_preserving_truncation(
             reviewer_text, family=family, precomputed=normalized_reviewer_text
@@ -1683,6 +1698,7 @@ def compose_evidence_comment(
         f"Head: {short} ({head_sha}){committed}.\n"
         f"PR: #{pr}.\n"
         f"Model family: {fam}\n"
+        f"{budget if named else ''}"
         f"{transport_disclosure}\n"
         f"{body}\n\n"
         f"dogfood: yes\n"
@@ -3253,8 +3269,10 @@ def collect_evidence(
     quorum_reconciler: Callable[[str, int], dict[str, Any] | None] | None = None,
     env: dict[str, str] | None = None,
     overall_timeout_seconds: float | None = None,
+    deprioritized_paths: Sequence[str] = (),
 ) -> CollectOutcome:
     """Run reviewers, validate evidence, and post only when tier-gating allows."""
+    deprioritized_paths = _checked_deprioritized_paths(deprioritized_paths)
     overall_timeout_seconds = _positive_timeout_seconds(
         overall_timeout_seconds, "overall_timeout_seconds"
     )
@@ -3282,6 +3300,7 @@ def collect_evidence(
         action=action,
         action_reason=action_reason,
         overall_timeout_seconds=overall_timeout_seconds,
+        deprioritized_paths=list(deprioritized_paths),
     )
 
     prompt = prompt_builder(repo, pr, ctx)
@@ -3369,6 +3388,7 @@ def collect_evidence(
             grounded=result.grounded,
             prompt_grounded=prompt_grounded,
             normalized_reviewer_text=result.normalized_text,
+            deprioritized_paths=deprioritized_paths,
         )
         lint = linter(pr, head_sha, head_committed_at, author, body, env or {})
         outcome.items.append(
@@ -4288,8 +4308,8 @@ def run_collect_cli(
     work, for the kwarg and the environment variable alike) instead of
     silently overriding it.
 
-    ``deprioritize_paths`` only binds the default prompt builder (see
-    :func:`_bound_diff_body`); no environment, reviewer argument or posting changes.
+    ``deprioritize_paths`` binds the default prompt builder (see :func:`_bound_diff_body`)
+    and is recorded in the outcome and comments; nothing else changes.
     """
     fams = tuple(families) if families else DEFAULT_FAMILIES
     resolved_author = author or resolve_author()
@@ -4300,7 +4320,8 @@ def run_collect_cli(
                 "never-post control forbids posting at any tier; drop --apply or "
                 "clear the control"
             )
-        if deprioritize_paths and prepared_json is not None:
+        named_paths = _checked_deprioritized_paths(deprioritize_paths)
+        if named_paths and prepared_json is not None:
             raise ValueError(
                 "--deprioritize-path does not apply to --prepared-json: a prepared "
                 "artifact already holds its reviewers' output"
@@ -4318,11 +4339,12 @@ def run_collect_cli(
             env_overrides[_CLAUDE_REVIEW_EXPECTED_HEAD_ENV] = claude_review_expected_head
         with _scoped_env(env_overrides):
             if prepared_json is None:
-                builder: dict[str, Any] = {}
-                if deprioritize_paths:
-                    builder["prompt_builder"] = functools.partial(
-                        default_prompt_builder, deprioritize_paths=tuple(deprioritize_paths)
+                named: dict[str, Any] = {}
+                if named_paths:
+                    named["prompt_builder"] = functools.partial(
+                        default_prompt_builder, deprioritize_paths=named_paths
                     )
+                    named["deprioritized_paths"] = named_paths
                 outcome = collect_evidence(
                     repo=repo,
                     pr=pr,
@@ -4333,7 +4355,7 @@ def run_collect_cli(
                     env=merge_quorum_io.aragora_env(),
                     quorum_reconciler=default_quorum_reconciler if apply else None,
                     overall_timeout_seconds=overall_timeout_seconds,
-                    **builder,
+                    **named,
                 )
             else:
                 outcome = apply_prepared_evidence(
