@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
+from aragora.stores.gateway_store_hook import get_gateway_store_factory
+
 if TYPE_CHECKING:
     from aragora.gateway.persistence import GatewayStore
     from aragora.memory.store import CritiqueStore
@@ -84,9 +86,7 @@ class CanonicalGatewayStores(GatewayStores):
 
     def gateway_store(self) -> GatewayStore:
         if self._gateway_store is None:
-            from aragora.gateway.persistence import get_gateway_store_from_env
-
-            self._gateway_store = get_gateway_store_from_env(
+            self._gateway_store = get_gateway_store_factory()(
                 backend_env="ARAGORA_GATEWAY_STORE",
                 fallback_backend_env="ARAGORA_GATEWAY_SESSION_STORE",
                 path_env="ARAGORA_GATEWAY_STORE_PATH",
