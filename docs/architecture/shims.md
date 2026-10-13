@@ -420,3 +420,7 @@ import-and-call tests at both paths.
 | `aragora.connectors.repository_crawler:EXTENSION_MAP` | `aragora.analysis.codebase.repository_crawler:EXTENSION_MAP` | #10611 | not before M4 seal |
 | `aragora.control_plane.scheduler:TaskStatus` | `aragora.types.task_scheduling:TaskStatus` | #10612 | not before M4 seal |
 | `aragora.control_plane.scheduler:TaskPriority` | `aragora.types.task_scheduling:TaskPriority` | #10612 | not before M4 seal |
+| `aragora.nomic.improvement_queue:ImprovementQueue` | `aragora.learning.improvement_queue:ImprovementQueue` | #10613 | not before M4 seal |
+| `aragora.nomic.improvement_queue:ImprovementSuggestion` | `aragora.learning.improvement_queue:ImprovementSuggestion` | #10613 | not before M4 seal |
+| `aragora.nomic.improvement_queue:get_improvement_queue` | `aragora.learning.improvement_queue:get_improvement_queue` | #10613 | not before M4 seal |
+| `aragora.integrations.email:EmailRecipient` | `aragora.notifications.email_recipient:EmailRecipient` | #10613 | not before M4 seal |
