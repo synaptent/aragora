@@ -16,6 +16,10 @@ from urllib.parse import urlparse
 
 from aragora.cli.commands import review_queue_rest_fallback as rest_fallback
 from aragora.cli.commands.review_queue_transport import _GhError
+from aragora.swarm.auto_merge_green import (
+    optional_only_proof_counts,
+    required_check_surface_proves_optional_only_unstable,
+)
 
 UNSTABLE_CANCELLATION_POLICY_PATH = "docs/runbooks/MERGE_STATE_UNSTABLE_SETTLEMENT.md"
 UNSTABLE_ALLOWLISTED_WORKFLOW_PATHS: dict[str, str] = {
@@ -31,8 +35,14 @@ UNSTABLE_RECEIPT_GUARD_PATHS: frozenset[str] = frozenset(
     {
         *UNSTABLE_ALLOWLISTED_WORKFLOW_PATHS.values(),
         ".github/workflows/required-check-priority.yml",
+        "aragora/cli/commands/review_queue.py",
+        "aragora/cli/commands/review_queue_rest_fallback.py",
+        "aragora/cli/commands/review_queue_transport.py",
         "aragora/cli/commands/review_queue_unstable.py",
+        "aragora/swarm/auto_merge_green.py",
+        "scripts/auto_merge_quorum_green.py",
         "scripts/check_required_check_priority_policy.py",
+        "scripts/merge_executor.py",
     }
 )
 UNSTABLE_CANCELLED_CONTEXT_VERIFIERS: dict[tuple[str, str], tuple[str, ...]] = {
@@ -399,6 +409,38 @@ def attach_verified_cancellation_contexts(
     return list(receipt.get("ignored_contexts") or [])
 
 
+def attach_unstable_receipt_guard(
+    *,
+    pr: dict[str, Any],
+    pr_number: int,
+    repo_override: str | None,
+    check_surfaces: dict[str, Any],
+    non_required_non_green_count: int,
+) -> None:
+    """Record whether an UNSTABLE PR modifies a receipt-guarded path.
+
+    The optional-only UNSTABLE proof fails closed without this surface, so the
+    changed-files lookup only runs when the proof could apply: the PR reports
+    UNSTABLE and has non-required non-green rows to vouch for.
+    """
+    if str(pr.get("mergeStateStatus") or "").strip().upper() != "UNSTABLE":
+        return
+    if non_required_non_green_count <= 0:
+        return
+    backend = _review_queue_backend()
+    repo_slug = rest_fallback._repo_slug_from_pr_payload(pr, repo_override)
+    modifies = (
+        _pr_modifies_guarded_paths(
+            pr_number=pr_number,
+            repo_slug=repo_slug,
+            gh_json=backend._gh_json,
+        )
+        if repo_slug
+        else True
+    )
+    check_surfaces["unstable_receipt_guard"] = {"modifies_guarded_paths": modifies}
+
+
 def _verified_unstable_cancellation_override(packet: Any) -> bool:
     receipt = packet.check_surfaces.get("unstable_non_required_cancellation_receipt")
     if not isinstance(receipt, dict):
@@ -453,6 +495,43 @@ def admin_squash_live_gate_blockers(packet: Any) -> list[str]:
             f"mergeStateStatus={merge_state_status}; admin squash requires CLEAN or BLOCKED"
         )
     return blockers
+
+
+def optional_only_unstable_executor_proof(packet: Any) -> dict[str, Any] | None:
+    """The merge-packet field the unattended Tier 0-2 executors read for UNSTABLE PRs.
+
+    The packet's own verdict keeps blocking an UNSTABLE PR whose non-green rows
+    are all optional, so a manual admin squash and the packet's other consumers
+    see it as blocked. Only ``decide_auto_merge``, which also matches the live
+    failing rows against the packet and records what it waives, reads this
+    field. It is ``None`` unless the PR is UNSTABLE without an operator hold,
+    the model quorum alone allows an admin squash with no unresolved dissent,
+    and the required-check surface proves every non-green row optional.
+    """
+    backend = _review_queue_backend()
+    labels = {str(label).strip().lower() for label in packet.labels if str(label).strip()}
+    if backend.OPERATOR_REVIEW_REQUIRED_LABEL in labels:
+        return None
+    if str(packet.merge_state_status or "").strip().upper() != "UNSTABLE":
+        return None
+    quorum = packet.model_review_quorum
+    if not isinstance(quorum, dict):
+        return None
+    if quorum.get("admin_squash_allowed") is not True:
+        return None
+    if quorum.get("unresolved_dissent") is not False:
+        return None
+    if not required_check_surface_proves_optional_only_unstable(packet.check_surfaces):
+        return None
+    proof_counts = optional_only_proof_counts(packet.check_surfaces.get("pr_rollup"))
+    if proof_counts is None:
+        return None
+    return {
+        "model_quorum_status": str(quorum.get("status") or ""),
+        "model_quorum_verdict": str(quorum.get("verdict") or ""),
+        "model_quorum_admin_squash_allowed": True,
+        "proof_counts": proof_counts,
+    }
 
 
 def render_verified_cancellations(

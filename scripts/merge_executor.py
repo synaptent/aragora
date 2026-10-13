@@ -46,6 +46,7 @@ if str(_REPO_ROOT) not in sys.path:
 from aragora.swarm.auto_merge_green import (  # noqa: E402
     MAX_AUTO_MERGE_TIER,
     REQUIRED_CHECKS,
+    MergeDecision,
     context_from_gh,
     decide_auto_merge,
 )
@@ -291,7 +292,7 @@ def run_pass(
 
     results: list[dict[str, Any]] = []
     tier_3_4_digest: list[dict[str, Any]] = []
-    eligible: list[dict[str, Any]] = []
+    eligible: list[tuple[dict[str, Any], MergeDecision]] = []
     for pr in prs:
         view = fetch_view(pr)
         if view is None:
@@ -309,10 +310,10 @@ def run_pass(
             record["blockers"] = list(decision.blockers)
             results.append(record)
             continue
-        eligible.append(record)
+        eligible.append((record, decision))
 
     merged_count = 0
-    for record in eligible:
+    for record, decision in eligible:
         pr = record["pr"]
         if merged_count >= max_merges:
             record["action"] = "deferred (max-merges reached)"
@@ -324,6 +325,7 @@ def run_pass(
             record["action"] = f"blocked (main health {health}, requires green)"
         elif not apply:
             record["action"] = "would-merge"
+            record.update(decision.waiver_record())
             merged_count += 1
         else:
             if disarm_file.exists():  # live kill switch, honored mid-pass
@@ -361,13 +363,24 @@ def run_pass(
                 continue
             ok, detail = merge_fn(pr, record["head"])
             record["detail"] = detail
+            # The re-verified decision is the one the merge relied on.
+            waiver = decision2.waiver_record()
+            record.update(waiver)
             if ok:
                 record["action"] = "merged"
                 merged_count += 1
-                authority = (
-                    "merge-quorum packet (status=satisfied) + aragora-merge-quorum "
-                    "check; executor added no new risk judgment"
-                )
+                if decision2.optional_only_unstable_proof is None:
+                    authority = (
+                        "merge-quorum packet (status=satisfied) + aragora-merge-quorum "
+                        "check; executor added no new risk judgment"
+                    )
+                else:
+                    authority = (
+                        "merge-quorum packet optional_only_unstable_executor_proof "
+                        "(model-level admin_squash_allowed verdict; the packet's live gate "
+                        "blocked only the UNSTABLE merge state) + aragora-merge-quorum check; "
+                        "executor waived only the recorded optional failing rows"
+                    )
                 receipt = {
                     "schema": "merge-executor-receipt/v1",
                     "repo": repo,
@@ -380,6 +393,7 @@ def run_pass(
                     "main_health_at_merge": health,
                     "packet_entry": packet2,
                     "authority": authority,
+                    **waiver,
                 }
                 record["receipt"] = str(_write_receipt(receipt_dir, receipt))
             else:

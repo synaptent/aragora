@@ -69,6 +69,65 @@ def _packet(number: int = 100, head: str = HEAD, tier: int = 1, **overrides) -> 
     return base
 
 
+def _optional_only_unstable_surface() -> dict:
+    return {
+        "effective_gate": {"source": "required_pr_checks", "summary": "6/6 required green"},
+        "required_pr_checks": {
+            "available": True,
+            "effective_total": 6,
+            "gate_selected": True,
+            "gate_blocked_reason": "",
+            "failing_or_cancelled": [],
+            "pending": [],
+        },
+        "pr_rollup": {
+            "available": True,
+            "non_green_count": 2,
+            "non_required_non_green_count": 2,
+            "non_required_non_green_sample": ["npm Security Scan", "Security Gate Summary"],
+            "failing_or_cancelled_count": 2,
+            "pending_count": 0,
+            "unverified_cancelled_non_required_count": 0,
+            "unverified_cancelled_non_required_sample": [],
+        },
+        "unstable_receipt_guard": {"modifies_guarded_paths": False},
+    }
+
+
+_EXPECTED_WAIVER = {
+    "waived_failing_checks": ["Security Gate Summary", "npm Security Scan"],
+    "optional_only_unstable_proof": {
+        "non_green_count": 2,
+        "non_required_non_green_count": 2,
+        "failing_or_cancelled_count": 2,
+        "pending_count": 0,
+        "unverified_cancelled_non_required_count": 0,
+    },
+}
+
+
+def _optional_only_unstable_packet(**overrides) -> dict:
+    """The entry merge-packet builds for an optional-only UNSTABLE PR.
+
+    Its own live gate blocks UNSTABLE, so the entry reads blocked; only the
+    executor proof field carries the model-level verdict and the proof counts.
+    """
+    return _packet(
+        status="blocked_by_live_gate",
+        verdict="admin_squash_blocked_by_live_gate",
+        admin_squash_allowed=False,
+        operator_review_required=False,
+        check_surfaces=_optional_only_unstable_surface(),
+        optional_only_unstable_executor_proof={
+            "model_quorum_status": "satisfied",
+            "model_quorum_verdict": "admin_squash_allowed",
+            "model_quorum_admin_squash_allowed": True,
+            "proof_counts": dict(_EXPECTED_WAIVER["optional_only_unstable_proof"]),
+        },
+        **overrides,
+    )
+
+
 def _main_runs_green() -> list[dict]:
     return [
         {"id": i, "name": name, "status": "completed", "conclusion": "success"}
@@ -196,6 +255,130 @@ def test_dry_run_never_calls_merge_fn(tmp_path):
     assert h.merge_calls == []
     assert summary["mode"] == "dry-run"
     assert _actions(summary)[100] == "would-merge"
+
+
+def test_9453_optional_security_failures_reach_would_merge(tmp_path):
+    rollup = _rollup_all_green()
+    rollup.extend(
+        [
+            {"name": "npm Security Scan", "conclusion": "FAILURE"},
+            {"name": "Security Gate Summary", "conclusion": "FAILURE"},
+        ]
+    )
+    view = _view(mergeStateStatus="UNSTABLE", statusCheckRollup=rollup)
+    packet = _optional_only_unstable_packet()
+    h = _Harness({100: view}, {100: packet})
+
+    summary = me.run_pass(**_kwargs(h, tmp_path))
+
+    assert h.merge_calls == []
+    assert _actions(summary)[100] == "would-merge"
+    record = summary["results"][0]
+    assert {key: record[key] for key in _EXPECTED_WAIVER} == _EXPECTED_WAIVER
+
+
+def test_9453_optional_security_failures_merge_with_waived_rows_in_record_and_receipt(tmp_path):
+    rollup = _rollup_all_green()
+    rollup.extend(
+        [
+            {"name": "npm Security Scan", "conclusion": "FAILURE"},
+            {"name": "Security Gate Summary", "conclusion": "FAILURE"},
+        ]
+    )
+    view = _view(mergeStateStatus="UNSTABLE", statusCheckRollup=rollup)
+    packet = _optional_only_unstable_packet(tier=2)
+    h = _Harness({100: view}, {100: packet})
+
+    summary = me.run_pass(**_kwargs(h, tmp_path, apply=True))
+
+    assert h.merge_calls == [(100, HEAD)]
+    record = summary["results"][0]
+    assert record["action"] == "merged"
+    assert {key: record[key] for key in _EXPECTED_WAIVER} == _EXPECTED_WAIVER
+    receipts = list((tmp_path / "receipts").glob("*.json"))
+    assert len(receipts) == 1
+    receipt = json.loads(receipts[0].read_text())
+    assert {key: receipt[key] for key in _EXPECTED_WAIVER} == _EXPECTED_WAIVER
+    # The packet's own status was blocked_by_live_gate; the receipt must not
+    # claim the merge rested on status=satisfied.
+    assert "status=satisfied" not in receipt["authority"]
+    assert "optional_only_unstable_executor_proof" in receipt["authority"]
+
+
+def test_merges_without_the_optional_only_proof_record_no_waiver(tmp_path):
+    h = _Harness({100: _view()}, {100: _packet(tier=2)})
+
+    summary = me.run_pass(**_kwargs(h, tmp_path, apply=True))
+
+    record = summary["results"][0]
+    assert record["action"] == "merged"
+    receipt = json.loads(next((tmp_path / "receipts").glob("*.json")).read_text())
+    for key in _EXPECTED_WAIVER:
+        assert key not in record
+        assert key not in receipt
+    assert "status=satisfied" in receipt["authority"]
+
+
+def test_9453_packet_level_relaxation_without_the_executor_proof_is_skipped(tmp_path):
+    # A packet whose own verdict admitted the UNSTABLE PR carries a valid check
+    # surface, but the executors act on the proof only through its separate field.
+    rollup = _rollup_all_green()
+    rollup.extend(
+        [
+            {"name": "npm Security Scan", "conclusion": "FAILURE"},
+            {"name": "Security Gate Summary", "conclusion": "FAILURE"},
+        ]
+    )
+    view = _view(mergeStateStatus="UNSTABLE", statusCheckRollup=rollup)
+    packet = _packet(
+        tier=2, operator_review_required=False, check_surfaces=_optional_only_unstable_surface()
+    )
+    h = _Harness({100: view}, {100: packet})
+
+    summary = me.run_pass(**_kwargs(h, tmp_path, apply=True))
+
+    assert h.merge_calls == []
+    record = summary["results"][0]
+    assert record["action"] == "skip"
+    assert "merge state not safe (mergeStateStatus=UNSTABLE)" in record["blockers"]
+
+
+def test_9453_shape_with_a_cancelled_optional_row_is_skipped(tmp_path):
+    rollup = _rollup_all_green()
+    rollup.extend(
+        [
+            {"name": "npm Security Scan", "conclusion": "FAILURE"},
+            {"name": "Security Gate Summary", "conclusion": "FAILURE"},
+            {"name": "Integration Smoke", "conclusion": "CANCELLED"},
+        ]
+    )
+    view = _view(mergeStateStatus="UNSTABLE", statusCheckRollup=rollup)
+    packet = _optional_only_unstable_packet()
+    h = _Harness({100: view}, {100: packet})
+
+    summary = me.run_pass(**_kwargs(h, tmp_path, apply=True))
+
+    assert h.merge_calls == []
+    assert _actions(summary)[100] == "skip"
+
+
+def test_9453_shape_with_an_unproven_row_failing_in_a_proven_rows_place_is_skipped(tmp_path):
+    rollup = _rollup_all_green()
+    rollup.extend(
+        [
+            {"name": "npm Security Scan", "conclusion": "SUCCESS"},
+            {"name": "Security Gate Summary", "conclusion": "FAILURE"},
+            {"name": "Release Readiness", "conclusion": "FAILURE"},
+        ]
+    )
+    view = _view(mergeStateStatus="UNSTABLE", statusCheckRollup=rollup)
+    packet = _optional_only_unstable_packet()
+    h = _Harness({100: view}, {100: packet})
+
+    summary = me.run_pass(**_kwargs(h, tmp_path, apply=True))
+
+    assert h.merge_calls == []
+    assert _actions(summary)[100] == "skip"
 
 
 def test_dry_run_writes_no_receipts_and_no_halt_even_on_red_main(tmp_path):
