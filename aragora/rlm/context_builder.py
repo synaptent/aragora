@@ -16,7 +16,7 @@ Key features:
 - Scales to 10M+ token codebases
 
 Usage:
-    from aragora.nomic.context_builder import NomicContextBuilder
+    from aragora.rlm.context_builder import NomicContextBuilder
 
     builder = NomicContextBuilder(aragora_path=Path("."))
     context = await builder.build_context()
@@ -41,7 +41,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from aragora.nomic.repository_profile import (
+from aragora.rlm.repository_profile import (
     ContextEvidenceReference,
     ContextPack,
     NomicRepositoryProfile,
@@ -1207,7 +1207,7 @@ class NomicContextBuilder:
         # Optional: augment with full-corpus TRUE RLM summary (file-backed)
         if self._full_corpus:
             try:
-                from aragora.nomic.rlm_codebase import summarize_codebase_with_rlm
+                from aragora.rlm.codebase_summary import summarize_codebase_with_rlm
                 from aragora.rlm.bridge import HAS_OFFICIAL_RLM
 
                 require_true_env = os.environ.get("NOMIC_RLM_REQUIRE_TRUE")
