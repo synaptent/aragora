@@ -428,3 +428,9 @@ import-and-call tests at both paths.
 | `aragora.nomic.feedback_orchestrator:FeedbackGoal` | `aragora.learning.improvement_goal_queue:FeedbackGoal` | #10615 | not before M4 seal |
 | `aragora.nomic.feedback_orchestrator:ImprovementQueue` | `aragora.learning.improvement_goal_queue:ImprovementQueue` | #10615 | not before M4 seal |
 | `aragora.control_plane.registry:AgentStatus` | `aragora.types.agent_status:AgentStatus` | #10616 | not before M4 seal |
+| `aragora.gateway.decision_router` | `aragora.routing.gateway_decision_router` | #10622 | not before M4 seal |
+| `aragora.coordination.cross_workspace` | `aragora.tenancy.cross_workspace` | #10622 | not before M4 seal |
+| `aragora.connectors.supermemory` | `aragora.memory.supermemory` | #10622 | not before M4 seal |
+| `aragora.connectors.supermemory.client` | `aragora.memory.supermemory.client` | #10622 | not before M4 seal |
+| `aragora.connectors.supermemory.config` | `aragora.memory.supermemory.config` | #10622 | not before M4 seal |
+| `aragora.connectors.supermemory.privacy_filter` | `aragora.memory.supermemory.privacy_filter` | #10622 | not before M4 seal |
