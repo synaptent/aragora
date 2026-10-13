@@ -14,6 +14,7 @@ defer instead of recording a wrong answer.
 
 from __future__ import annotations
 
+import sqlite3
 from collections.abc import Callable
 from typing import Any
 
@@ -59,7 +60,8 @@ def _singleton_user_store() -> Any | None:
         from aragora.storage.user_store.singleton import get_user_store
 
         return get_user_store()
-    except Exception as exc:  # noqa: BLE001 - an unusable store means "could not check"
+    except (ImportError, OSError, RuntimeError, ValueError, sqlite3.Error) as exc:
+        # an unusable store means "could not check"
         raise MembershipLookupError(f"user store unavailable: {type(exc).__name__}") from exc
 
 

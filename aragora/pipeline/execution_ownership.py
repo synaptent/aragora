@@ -14,6 +14,7 @@ authenticated user) keep running as before: there is no owner to compare.
 from __future__ import annotations
 
 import logging
+import sqlite3
 from typing import Any, NoReturn, TypedDict
 
 logger = logging.getLogger(__name__)
@@ -185,7 +186,7 @@ def _refuse(store: Any, record: dict[str, Any] | None, code: str, message: str) 
                 status="failed",
                 error={"code": code, "message": message},
             )
-        except Exception as exc:  # noqa: BLE001 - the refusal itself must still stand
+        except (sqlite3.Error, OSError, ValueError) as exc:  # the refusal itself must still stand
             logger.warning("Failed to record refusal for execution %s: %s", execution_id, exc)
         run_id = str((record.get("metadata") or {}).get("backbone_run_id") or "")
         if run_id:
@@ -199,7 +200,8 @@ def _refuse(store: Any, record: dict[str, Any] | None, code: str, message: str) 
                     run_status="execution_failed",
                     details={"code": code},
                 )
-            except Exception as exc:  # noqa: BLE001 - best-effort ledger update
+            except (ImportError, sqlite3.Error, OSError, ValueError, TypeError) as exc:
+                # best-effort ledger update; TypeError/ValueError come from a malformed stored run
                 logger.debug("Failed to record refusal on backbone run %s: %s", run_id, exc)
     raise ExecutionNotAuthorizedError(code, message)
 
