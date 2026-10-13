@@ -9,6 +9,8 @@ Provides:
 The execution safety gate retrieves and *validates* a previously-persisted
 receipt by ID instead of building one inline, closing the attestation
 inversion gap.
+
+``aragora.gauntlet.receipt_store`` resolves to this same module object.
 """
 
 from __future__ import annotations
@@ -180,7 +182,7 @@ class ReceiptStore:
             return False
 
         try:
-            from aragora.gauntlet.signing import (
+            from aragora.storage.receipt_signing import (
                 SignatureMetadata,
                 SignedReceipt,
                 get_default_signer,

@@ -242,6 +242,12 @@ chat = "aragora.connectors.chat.lookup_registration:register_chat_connector_look
 [project.entry-points."aragora.decision_plan_bridges"]
 integrations = "aragora.integrations.decision_bridge_registration:register_decision_bridge"
 
+# Run by aragora/debate/gauntlet_runners.py on the first post-debate gauntlet lookup that
+# finds no factory, so the debate engine stress-tests decisions without importing
+# aragora.gauntlet.
+[project.entry-points."aragora.debate_gauntlet_runners"]
+gauntlet = "aragora.gauntlet.debate_registration:register_debate_gauntlet_runner"
+
 # -----------------------------------------------------------------------------
 # uv resolver constraints — security floors for the pip-audit security gate
 # (scripts/run_pip_audit_gate.py). They bound what the lockfile may resolve
