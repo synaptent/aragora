@@ -300,10 +300,9 @@ class OwnershipManager:
         existing_record_id = self._by_resource.get(resource_key)
         if existing_record_id:
             existing = self._ownership_records.get(existing_record_id)
-            if existing and existing.owner_id == owner_id:
-                # Same owner, no change needed
+            if existing and existing.owner_id == owner_id and existing.org_id == org_id:
                 return existing
-            # Different owner - remove old record
+            # A changed organization replaces the record too: scoped lookups compare it.
             self._remove_record(existing_record_id)
 
         # Create new record

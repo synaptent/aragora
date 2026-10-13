@@ -751,6 +751,31 @@ class TestOwnershipOrganizationScope:
         assert not manager.is_owner("owner-user", ResourceType.DEBATE, "debate-1", org_id="org-2")
         assert not manager.is_owner("owner-user", ResourceType.DEBATE, "debate-1", org_id=None)
 
+    def test_set_owner_same_owner_new_org_moves_the_record(self, manager):
+        manager.set_owner(ResourceType.DEBATE, "debate-1", "owner-user", "org-1")
+        assert manager.get_owner(ResourceType.DEBATE, "debate-1") == "owner-user"
+
+        record = manager.set_owner(ResourceType.DEBATE, "debate-1", "owner-user", "org-2")
+
+        assert record.org_id == "org-2"
+        assert manager.get_ownership_record(ResourceType.DEBATE, "debate-1").org_id == "org-2"
+        assert manager.get_owner(ResourceType.DEBATE, "debate-1") == "owner-user"
+        assert manager.get_owner(ResourceType.DEBATE, "debate-1", org_id="org-2") == "owner-user"
+        assert manager.get_owner(ResourceType.DEBATE, "debate-1", org_id="org-1") is None
+        assert manager.get_owned_resources("owner-user", org_id="org-1") == []
+        assert len(manager.get_owned_resources("owner-user", org_id="org-2")) == 1
+        old_org = AuthorizationContext(user_id="owner-user", org_id="org-1")
+        new_org = AuthorizationContext(user_id="owner-user", org_id="org-2")
+        assert (
+            manager.check_owner_permission(old_org, ResourceType.DEBATE, "debates.read", "debate-1")
+            is None
+        )
+        decision = manager.check_owner_permission(
+            new_org, ResourceType.DEBATE, "debates.read", "debate-1"
+        )
+        assert decision is not None
+        assert decision.allowed is True
+
     def test_permission_checker_ownership_fallback_is_org_scoped(self, manager):
         from aragora.rbac.checker import PermissionChecker
 
