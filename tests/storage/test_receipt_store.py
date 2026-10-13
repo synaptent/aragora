@@ -23,6 +23,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from aragora.storage.receipt_ownership import (
+    get_receipt_link_resolver,
+    register_receipt_link_resolver,
+)
 from aragora.storage.receipt_store import (
     DEFAULT_RETENTION_DAYS,
     ReceiptStore,
@@ -68,6 +72,16 @@ def _make_git_repo_with_linked_worktree(tmp_path: Path) -> tuple[Path, Path]:
 # ===========================================================================
 # Test Fixtures
 # ===========================================================================
+
+
+# UnifiedServer.__init__ registers a process-global receipt link resolver; an
+# earlier test in the same process would otherwise make ReceiptStore query it.
+@pytest.fixture(autouse=True)
+def _no_registered_resolver():
+    previous = get_receipt_link_resolver()
+    register_receipt_link_resolver(None)
+    yield
+    register_receipt_link_resolver(previous)
 
 
 @pytest.fixture
