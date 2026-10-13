@@ -259,9 +259,10 @@ class SearchOperationsMixin:
                 default_limit=limit,
             )
             if retriever.is_available():
-                from aragora.knowledge.pipeline import mound_items_for_org, mound_read_sizes
+                from aragora.knowledge.pipeline import mound_read_sizes, new_mound_items_for_org
 
-                own: list[Any] = []
+                normalized: list[dict[str, Any]] = []
+                seen: set[Any] = set()
                 try:
                     for size in mound_read_sizes(limit):
                         page = _retrieved_items(
@@ -269,8 +270,13 @@ class SearchOperationsMixin:
                                 retriever.retrieve(query, limit=size, workspace_id=workspace_id)
                             )
                         )
-                        own = mound_items_for_org(page, org_id)
-                        if len(own) >= limit or len(page) < size:
+                        own = new_mound_items_for_org(page, org_id, seen)
+                        normalized += _filter_normalized_results(
+                            [_normalize_search_result(item) for item in own],
+                            min_confidence=min_confidence,
+                            domain=domain,
+                        )
+                        if len(normalized) >= limit or len(page) < size:
                             break
                 except (
                     KeyError,
@@ -283,13 +289,6 @@ class SearchOperationsMixin:
                 ) as e:
                     logger.error("Knowledge Mound search failed: %s", e)
                     return error_response("Search operation failed", 500)
-
-                normalized = [_normalize_search_result(item) for item in own]
-                normalized = _filter_normalized_results(
-                    normalized,
-                    min_confidence=min_confidence,
-                    domain=domain,
-                )
 
                 return json_response(
                     {

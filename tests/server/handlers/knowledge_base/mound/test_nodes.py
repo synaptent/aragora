@@ -64,6 +64,7 @@ class MockUser:
 
     id: str = "user-123"
     user_id: str = "user-123"
+    org_id: str | None = None
 
 
 @dataclass
@@ -328,7 +329,7 @@ class TestCreateNode:
         assert result.status_code == 503
 
     def test_caller_supplied_org_id_in_metadata_is_not_stored(self, tmp_path):
-        """The organization stamp the knowledge readers filter on cannot be planted here."""
+        """The node carries the caller's authenticated organization, never a planted one."""
         import asyncio
 
         from aragora.knowledge.mound import KnowledgeMound, MoundBackend, MoundConfig
@@ -341,8 +342,8 @@ class TestCreateNode:
         created: list[str] = []
         add_node = mound.add_node
 
-        async def _recording_add_node(node):
-            created.append(await add_node(node))
+        async def _recording_add_node(node, **kwargs):
+            created.append(await add_node(node, **kwargs))
             return created[-1]
 
         mound.add_node = _recording_add_node
@@ -354,7 +355,7 @@ class TestCreateNode:
             }
             # The response status is not asserted: serializing the facade's
             # NodeProxy reply fails after the node is already stored.
-            NodeHandler(mound=mound)._handle_create_node(
+            NodeHandler(mound=mound, user=MockUser(org_id="caller-org"))._handle_create_node(
                 MockHandler(body=json.dumps(body).encode())
             )
 
@@ -362,8 +363,9 @@ class TestCreateNode:
             stored = asyncio.run(mound.get(created[0]))
             assert stored is not None and stored.content == "planted note"
             assert stored.metadata.get("node_type") == "fact"
-            assert "org_id" not in stored.metadata
+            assert stored.metadata.get("org_id") == "caller-org"
             assert mound_items_for_org([stored], "victim-org") == []
+            assert mound_items_for_org([stored], "caller-org") == [stored]
         finally:
             asyncio.run(mound.close())
 

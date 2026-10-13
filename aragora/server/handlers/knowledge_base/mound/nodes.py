@@ -48,7 +48,7 @@ class _MoundNodeOps(Protocol):
         min_confidence: float = ...,
         workspace_id: str | None = ...,
     ) -> Coroutine[Any, Any, Any]: ...
-    def add_node(self, node: Any) -> Coroutine[Any, Any, str]: ...
+    def add_node(self, node: Any, *, org_id: str | None = ...) -> Coroutine[Any, Any, str]: ...
     def get_node(self, node_id: str) -> Coroutine[Any, Any, Any | None]: ...
     def query_nodes(
         self,
@@ -186,7 +186,7 @@ class NodeOperationsMixin:
             return error_response("Knowledge Mound not available", 503)
 
         try:
-            node_id = _run_async(mound.add_node(node))
+            node_id = _run_async(mound.add_node(node, org_id=getattr(user, "org_id", None)))
             saved_node = _run_async(mound.get_node(node_id))
         except (KeyError, ValueError, OSError, TypeError, RuntimeError, AttributeError) as e:
             logger.error("Failed to create node: %s", e)

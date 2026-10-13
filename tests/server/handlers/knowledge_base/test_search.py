@@ -691,6 +691,29 @@ class TestSearchOrganizationScope:
         assert body["search_backend"] == "knowledge_mound"
         assert [r["node_id"] for r in body["results"]] == ["own"]
 
+    def test_domain_filter_fills_the_page_from_matches_beyond_the_first_read(self):
+        stamp = {"org_id": "test-org-001"}
+        items = [
+            *(
+                MockKnowledgeItem(f"fin-{n}", "note", 0.9, domain="finance", metadata=stamp)
+                for n in range(3)
+            ),
+            *(
+                MockKnowledgeItem(f"arch-{n}", "note", 0.9, domain="architecture", metadata=stamp)
+                for n in range(3)
+            ),
+        ]
+        handler = SearchHandler(
+            query_engine=MockQueryEngine(),
+            fact_store=MockFactStore(),
+            knowledge_mound=MockKnowledgeMound(items),
+        )
+
+        result = handler._handle_search({"q": "note", "limit": "2", "domain": "architecture"})
+
+        assert result.status_code == 200
+        assert [r["node_id"] for r in parse_response(result)["results"]] == ["arch-0", "arch-1"]
+
 
 # =============================================================================
 # Test Stats Endpoint

@@ -496,7 +496,7 @@ class CRUDOperationsMixin(_CRUDMixinBase):
         result = await self.store(request)
         return result.node_id
 
-    async def add_node(self, node: Any) -> str:
+    async def add_node(self, node: Any, *, org_id: str | None = None) -> str:
         """
         Add a KnowledgeNode to the mound.
 
@@ -505,6 +505,9 @@ class CRUDOperationsMixin(_CRUDMixinBase):
 
         Args:
             node: KnowledgeNode with node_type, content, confidence, etc.
+            org_id: The writer's authenticated organization, stored as the
+                node's organization stamp. ``node.metadata`` never sets it;
+                without ``org_id`` the node is unstamped.
 
         Returns:
             The created node ID
@@ -516,13 +519,16 @@ class CRUDOperationsMixin(_CRUDMixinBase):
 
         # Convert tier to string if it's an enum
         tier_str = node.tier.value if hasattr(node.tier, "value") else str(node.tier)
+        metadata: dict[str, Any] = {
+            "provenance": node.provenance.to_dict() if node.provenance else None,
+            "node_type": node.node_type,
+        }
+        if org_id:
+            metadata[ORG_STAMP_KEY] = org_id
 
         return await self.add(
             content=node.content,
-            metadata={
-                "provenance": node.provenance.to_dict() if node.provenance else None,
-                "node_type": node.node_type,
-            },
+            metadata=metadata,
             workspace_id=node.workspace_id or self.workspace_id,
             node_type=node.node_type if isinstance(node.node_type, str) else node.node_type,
             confidence=node.confidence,

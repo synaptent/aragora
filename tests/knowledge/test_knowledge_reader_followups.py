@@ -413,3 +413,69 @@ async def test_mound_items_for_org_reports_the_unstamped_items_it_withholds(
 
     assert [item.content for item in kept] == ["acme roadmap"]
     assert "withheld 1 Knowledge Mound item(s) without an organization stamp" in caplog.text
+
+
+# --- (f) Writers stamp only an authenticated organization; reads keep each item once ---
+
+
+async def test_read_mound_for_org_keeps_items_across_reranked_reads_once() -> None:
+    from aragora.knowledge.pipeline import read_mound_for_org
+
+    def _node(node_id: str, org_id: str) -> Any:
+        return SimpleNamespace(id=node_id, metadata={"org_id": org_id})
+
+    beta = [_node(f"b{n}", "beta") for n in range(30)]
+    a0, a1, a2 = (_node(f"a{n}", "acme") for n in range(3))
+    # Each read is ranked afresh: a larger read repeats a0 and the last drops it.
+    reads = {5: [a0, *beta[:4]], 20: [*beta[:12], a1, a0, a2, *beta[12:17]], 80: beta}
+    sizes: list[int] = []
+
+    async def _fetch(size: int) -> list[Any]:
+        sizes.append(size)
+        return reads[size]
+
+    kept = await read_mound_for_org(_fetch, "acme", 5)
+
+    assert sizes == [5, 20, 80]
+    assert [item.id for item in kept] == ["a0", "a1", "a2"]
+
+
+async def test_add_node_stamps_only_the_writers_authenticated_organization(tmp_path: Any) -> None:
+    from aragora.knowledge.mound import KnowledgeMound, KnowledgeNode, MoundBackend, MoundConfig
+    from aragora.knowledge.pipeline import mound_items_for_org
+
+    config = MoundConfig(backend=MoundBackend.SQLITE, sqlite_path=str(tmp_path / "mound.db"))
+    mound = KnowledgeMound(config=config, workspace_id="research")  # type: ignore[abstract]
+    await mound.initialize()
+    mound._semantic_store = None
+    forged = {"org_id": "victim"}
+    try:
+        acme_id = await mound.add_node(
+            KnowledgeNode(content="acme plan", metadata=dict(forged)), org_id="acme"
+        )
+        orphan_id = await mound.add_node(KnowledgeNode(content="orphan plan", metadata=forged))
+        stored = [await mound.get(acme_id), await mound.get(orphan_id)]
+
+        assert [item.content for item in mound_items_for_org(stored, "acme")] == ["acme plan"]
+        assert mound_items_for_org(stored, "victim") == []
+        assert mound_items_for_org(stored, "beta") == []
+    finally:
+        await mound.close()
+
+
+@pytest.mark.parametrize(
+    "convert", ["vector_result_to_item", "evidence_to_item", "critique_to_item"]
+)
+def test_converters_stamp_only_an_authenticated_source_organization(convert: str) -> None:
+    from aragora.knowledge.mound import converters
+    from aragora.knowledge.pipeline import mound_items_for_org
+
+    def _source(**org: str) -> Any:
+        return SimpleNamespace(id="s1", content="note", metadata={"org_id": "victim"}, **org)
+
+    to_item = getattr(converters, convert)
+    stamped, unstamped = to_item(_source(org_id="acme")), to_item(_source())
+
+    assert mound_items_for_org([stamped, unstamped], "acme") == [stamped]
+    assert mound_items_for_org([stamped, unstamped], "victim") == []
+    assert mound_items_for_org([stamped, unstamped], "beta") == []

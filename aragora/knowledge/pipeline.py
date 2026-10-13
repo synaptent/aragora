@@ -165,14 +165,32 @@ def mound_read_sizes(limit: int) -> list[int]:
     return sizes
 
 
+def new_mound_items_for_org(items: Iterable[Any], org_id: str | None, seen: set[Any]) -> list[Any]:
+    """mound_items_for_org, without the items whose id is in ``seen``; adds the kept ids to it."""
+    new = []
+    for item in mound_items_for_org(items, org_id):
+        item_id = item.get("id") if isinstance(item, dict) else getattr(item, "id", None)
+        if item_id is None or item_id not in seen:
+            seen.add(item_id)
+            new.append(item)
+    return new
+
+
 async def read_mound_for_org(
     fetch: Callable[[int], Awaitable[list[Any]]], org_id: str | None, limit: int
 ) -> list[Any]:
-    """Up to ``limit`` of ``org_id``'s items, fetching ``fetch(size)`` per mound_read_sizes."""
+    """Up to ``limit`` of ``org_id``'s items, fetching ``fetch(size)`` per mound_read_sizes.
+
+    Every read starts from the first item: the Mound ranks each read afresh and
+    applies ``offset`` after that ranking, so offset pages overlap and skip
+    items. A larger read is not a superset of a smaller one either, so the
+    caller's items are kept across reads, each once.
+    """
     kept: list[Any] = []
+    seen: set[Any] = set()
     for size in mound_read_sizes(limit):
         items = list(await fetch(size) or [])
-        kept = mound_items_for_org(items, org_id)
+        kept += new_mound_items_for_org(items, org_id, seen)
         if len(kept) >= limit or len(items) < size:
             break
     return kept[:limit]
