@@ -10,6 +10,7 @@ real HANDLER_REGISTRY dispatch with a JWT access token.
 from __future__ import annotations
 
 import importlib
+import inspect
 import io
 import json
 import threading
@@ -20,14 +21,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from aragora.billing.jwt_auth import create_access_token
-from aragora.server.handler_registry import HandlerRegistryMixin
+from aragora.server.handler_registry import HANDLER_REGISTRY, HandlerRegistryMixin
 from aragora.server.handlers.knowledge.ml import _ml_limiter
 from aragora.server.handlers.utils.responses import json_response
 
 pytestmark = pytest.mark.no_auto_auth
 
 # (registry attribute, POST path) for every dispatched handler that reads its body
-# from handle_post's second argument.
+# from handle_post's second argument. With NOT_BODY_READERS it covers every registered
+# handler whose handle_post names that argument body or data.
 BODY_READERS: list[tuple[str, str]] = [
     ("_ml_handler", "/api/v1/ml/embed"),
     ("_smart_upload_handler", "/api/v1/upload/smart"),
@@ -38,6 +40,14 @@ BODY_READERS: list[tuple[str, str]] = [
     ("_universal_graph_handler", "/api/v1/pipeline/graphs"),
     ("_orchestration_handler", "/api/v1/orchestration/deliberate"),
 ]
+# Registered handlers whose handle_post takes a body argument but are not opted in.
+NOT_BODY_READERS: dict[str, str] = {
+    # test_debate_intervention_posts_reach_the_debates_handler traces this.
+    "_debate_intervention_handler": "the route index sends its POST paths to DebatesHandler",
+    "_decomposition_handler": "never reads the body argument",
+    "_slack_handler": "reads the raw body from rfile itself",
+    "_chat_handler": "reads the raw body from rfile itself",
+}
 
 
 class _RegistryMixin(HandlerRegistryMixin):
@@ -243,6 +253,39 @@ def test_post_handlers_without_the_declaration_keep_the_query_dict(registry_cls,
     assert received == [{}]
 
 
+def test_every_handler_taking_a_post_body_is_opted_in_or_excluded(registry_cls):
+    takes_body, opted_in = set(), set()
+    for attr, _ in HANDLER_REGISTRY:
+        handler = getattr(registry_cls, attr, None)
+        method = getattr(type(handler), "handle_post", None)
+        if method and list(inspect.signature(method).parameters)[2:3] in (["body"], ["data"]):
+            takes_body.add(attr)
+            if getattr(handler, "HANDLE_POST_JSON_BODY", False):
+                opted_in.add(attr)
+
+    assert opted_in == {attr for attr, _ in BODY_READERS}
+    assert takes_body == opted_in | set(NOT_BODY_READERS)
+
+
+@pytest.mark.parametrize("path", ["/api/v1/debates/d-1/intervene", "/api/debates/d-1/intervene"])
+def test_debate_intervention_posts_reach_the_debates_handler(registry_cls, monkeypatch, path):
+    called: list[str] = []
+
+    def spy(attr: str) -> Any:
+        def handle_post(*args: Any, **kwargs: Any) -> Any:
+            called.append(attr)
+            return json_response({"ok": True})
+
+        return handle_post
+
+    for attr in ("_debates_handler", "_debate_intervention_handler"):
+        monkeypatch.setattr(getattr(registry_cls, attr), "handle_post", spy(attr))
+
+    status, _ = _dispatch(registry_cls, path, b'{"type": "redirect"}')
+
+    assert (status, called) == (200, ["_debates_handler"])
+
+
 def _post_ml(registry_cls, path: str, body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
     with patch(
         "aragora.server.handlers.knowledge.ml.get_local_embedding_service",
@@ -316,6 +359,127 @@ def test_ml_embed_and_search_reject_texts_that_are_not_strings(registry_cls, pat
         400,
         {"error": {"message": "Texts to embed must be strings", "code": "invalid_input"}},
     )
+
+
+def _post_ml_component(registry_cls, path: str, body: dict[str, Any]) -> tuple[Any, MagicMock]:
+    component = MagicMock()
+    with patch("aragora.server.handlers.knowledge.ml._get_ml_component", return_value=component):
+        return _dispatch(registry_cls, path, json.dumps(body).encode("utf-8")), component
+
+
+def _rejected(message: str, code: str = "input_too_large") -> tuple[int, dict[str, Any]]:
+    return 400, {"error": {"message": message, "code": code}}
+
+
+_LONG = "x" * 20001
+_AT_TOTAL = ["x" * 20000] * 10
+_TEXT_CAP = _rejected("Each text may be at most 20000 bytes of UTF-8")
+_TOTAL_CAP = _rejected("Texts may total at most 200000 bytes of UTF-8")
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        ({"text": _LONG}, _TEXT_CAP),
+        ({"text": "t", "context": _LONG}, _TEXT_CAP),
+        ({"text": 5}, _rejected("Texts to score must be strings", "invalid_input")),
+    ],
+    ids=["text", "context", "not-a-string"],
+)
+def test_ml_score_caps_its_texts(registry_cls, body, expected):
+    response, scorer = _post_ml_component(registry_cls, "/api/v1/ml/score", body)
+
+    assert response == expected
+    assert scorer.method_calls == []
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        ({"texts": ["t", _LONG]}, _TEXT_CAP),
+        ({"texts": ["t"], "contexts": [_LONG]}, _TEXT_CAP),
+        ({"texts": _AT_TOTAL, "contexts": ["c"]}, _TOTAL_CAP),
+        ({"texts": ["t"], "contexts": [""] * 101}, _rejected("At most 100 contexts per batch")),
+        (
+            {"texts": ["t"], "contexts": "c"},
+            _rejected("Texts to score must be strings", "invalid_input"),
+        ),
+    ],
+    ids=["text", "context", "total", "context-count", "contexts-not-a-list"],
+)
+def test_ml_score_batch_caps_its_texts(registry_cls, body, expected):
+    response, scorer = _post_ml_component(registry_cls, "/api/v1/ml/score-batch", body)
+
+    assert response == expected
+    assert scorer.method_calls == []
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        ({"responses": [["a", _LONG]]}, _TEXT_CAP),
+        ({"responses": [["a", "t"]], "context": _LONG}, _TEXT_CAP),
+        ({"responses": [["a", t] for t in _AT_TOTAL]}, _TOTAL_CAP),
+        ({"responses": [["a", "t"]] * 101}, _rejected("At most 100 responses")),
+        *(
+            (
+                {"responses": responses},
+                _rejected(
+                    "Each response must be an [agent, text] pair of strings", "invalid_input"
+                ),
+            )
+            for responses in ([["a"]], ["ab"], [["a", 5]], "ab")
+        ),
+    ],
+    ids=["text", "context", "total", "count", "short-pair", "string-pair", "number", "not-a-list"],
+)
+def test_ml_consensus_caps_its_responses(registry_cls, body, expected):
+    response, predictor = _post_ml_component(registry_cls, "/api/v1/ml/consensus", body)
+
+    assert response == expected
+    assert predictor.method_calls == []
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        ({"task": _LONG, "available_agents": ["a"]}, _TEXT_CAP),
+        ({"task": "t", "available_agents": ["a", _LONG]}, _TEXT_CAP),
+        ({"task": "t", "available_agents": _AT_TOTAL}, _TOTAL_CAP),
+        ({"task": "t", "available_agents": ["a"] * 101}, _rejected("At most 100 available_agents")),
+        (
+            {"task": "t", "available_agents": "claude"},
+            _rejected("The task and available_agents must be strings", "invalid_input"),
+        ),
+    ],
+    ids=["task", "agent", "total", "count", "agents-not-a-list"],
+)
+def test_ml_route_caps_its_task_and_agents(registry_cls, body, expected):
+    response, router = _post_ml_component(registry_cls, "/api/v1/ml/route", body)
+
+    assert response == expected
+    assert router.method_calls == []
+
+
+@pytest.mark.parametrize(
+    ("path", "body", "method"),
+    [
+        ("/api/v1/ml/score", {"text": "x" * 20000, "context": "x" * 20000}, "score"),
+        (
+            "/api/v1/ml/score-batch",
+            {"texts": _AT_TOTAL[:9], "contexts": [None, *_AT_TOTAL[:1]]},
+            "score_batch",
+        ),
+        ("/api/v1/ml/consensus", {"responses": [["a", "x" * 19999]] * 10}, "predict"),
+        ("/api/v1/ml/route", {"task": "t", "available_agents": ["a"] * 100}, "route"),
+    ],
+    ids=["score", "score-batch", "consensus", "route"],
+)
+def test_ml_scoring_routes_accept_input_at_the_caps(registry_cls, path, body, method):
+    (status, payload), component = _post_ml_component(registry_cls, path, body)
+
+    assert status == 200, payload
+    getattr(component, method).assert_called_once()
 
 
 def _upload_result(filename: str) -> Any:
