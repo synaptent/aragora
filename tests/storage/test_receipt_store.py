@@ -23,6 +23,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from aragora.storage.receipt_ownership import (
+    get_receipt_link_resolver,
+    register_receipt_link_resolver,
+)
 from aragora.storage.receipt_store import (
     DEFAULT_RETENTION_DAYS,
     ReceiptStore,
@@ -68,6 +72,16 @@ def _make_git_repo_with_linked_worktree(tmp_path: Path) -> tuple[Path, Path]:
 # ===========================================================================
 # Test Fixtures
 # ===========================================================================
+
+
+# UnifiedServer.__init__ registers a process-global receipt link resolver; an
+# earlier test in the same process would otherwise make ReceiptStore query it.
+@pytest.fixture(autouse=True)
+def _no_registered_resolver():
+    previous = get_receipt_link_resolver()
+    register_receipt_link_resolver(None)
+    yield
+    register_receipt_link_resolver(previous)
 
 
 @pytest.fixture
@@ -180,7 +194,7 @@ def test_schema_initialization_order_and_repeated_construction(monkeypatch, engi
         store = _schema_constructor(monkeypatch, backend, engine)
         assert backend.columns == required
         assert "idx_receipts_legal_hold" in backend.indexes
-        expected = ["table"] + ["alter"] * 8 + ["index"] * (9 if engine == "postgresql" else 8)
+        expected = ["table"] + ["alter"] * 11 + ["index"] * (10 if engine == "postgresql" else 9)
         assert backend.statements == expected
         assert store.SCHEMA_STATEMENTS is ReceiptStore.SCHEMA_STATEMENTS_SQLITE
         store.close()
@@ -286,12 +300,15 @@ def test_sqlite_schema_lifecycle_preserves_rows(tmp_path, sample_receipt_dict, e
                     payload = dict(store.get(rid).data, statement="updated")
                     store.save(payload)
                     assert store.get(rid).data["statement"] == "updated"
-                    # INSERT OR REPLACE resets optional columns, the unchanged SQLite save semantics.
+                    # A re-save is an upsert: columns save() does not write keep their values.
                     with sqlite3.connect(path) as conn:
                         assert conn.execute(
                             "SELECT timestamp_token, legal_hold FROM receipts WHERE receipt_id=?",
                             (rid,),
-                        ).fetchone() == (None, 0)
+                        ).fetchone() == (
+                            expected[rid]["timestamp_token"],
+                            expected[rid]["legal_hold"],
+                        )
                     assert store.count() == len(expected)
                 store.save(dict(sample_receipt_dict, receipt_id="new", gauntlet_id="new-gauntlet"))
                 assert store.count() == len(expected) + 1

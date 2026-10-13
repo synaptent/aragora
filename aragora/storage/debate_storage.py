@@ -456,6 +456,12 @@ class DebateStorage(SQLiteStore):
             row = cursor.fetchone()
         return json.loads(row[0]) if row else None
 
+    def get_org_id(self, debate_id: str) -> str | None:
+        """Return the owning org of a debate, or None when it is missing or unowned."""
+        with self.connection() as conn:
+            row = conn.execute("SELECT org_id FROM debates WHERE id = ?", (debate_id,)).fetchone()
+        return row[0] if row and row[0] else None
+
     def list_recent(
         self, limit: int = 20, org_id: str | None = None, offset: int = 0
     ) -> list[DebateMetadata]:

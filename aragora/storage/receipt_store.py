@@ -43,11 +43,29 @@ from aragora.storage.backends import (
     PostgreSQLBackend,
     SQLiteBackend,
 )
+from aragora.storage.receipt_ownership import (
+    ReceiptLinkLookupError,
+    get_receipt_link_resolver,
+    migrate_receipt_ownership,
+    ownership_values,
+)
 
 logger = logging.getLogger(__name__)
 
 # Default configuration
 DEFAULT_RETENTION_DAYS = int(os.environ.get("ARAGORA_RECEIPT_RETENTION_DAYS", "2555"))  # ~7 years
+
+# Columns read into a StoredReceipt by _row_to_stored_receipt, in order.
+_RECEIPT_COLUMNS = """receipt_id, gauntlet_id, debate_id, created_at, expires_at,
+       verdict, confidence, risk_level, risk_score, checksum,
+       signature, signature_algorithm, signature_key_id, signed_at,
+       audit_trail_id, data_json, org_id, created_by, ownership_source"""
+
+
+def _require_org(org_id: Any) -> str:
+    if not isinstance(org_id, str) or not org_id.strip():
+        raise ValueError("org-scoped receipt store access requires a non-empty org_id")
+    return org_id
 
 
 def _compute_receipt_checksum(receipt_data: dict[str, Any]) -> str:
@@ -206,6 +224,10 @@ class StoredReceipt:
     audit_trail_id: str | None = None
     # Full data
     data: dict[str, Any] = field(default_factory=dict)
+    # Ownership (see aragora.storage.receipt_ownership); a None org_id is visible to no org
+    org_id: str | None = None
+    created_by: str | None = None
+    ownership_source: str | None = None
 
     def __post_init__(self) -> None:
         """Normalize stale confidence values when receipts are materialized."""
@@ -324,6 +346,9 @@ class ReceiptStore:
             legal_hold_placed_at REAL,
             legal_hold_matter_id TEXT,
             audit_trail_id TEXT,
+            org_id TEXT,
+            created_by TEXT,
+            ownership_source TEXT,
             data_json TEXT NOT NULL
         )
         """,
@@ -335,6 +360,7 @@ class ReceiptStore:
         "CREATE INDEX IF NOT EXISTS idx_receipts_risk ON receipts(risk_level)",
         "CREATE INDEX IF NOT EXISTS idx_receipts_signed ON receipts(signed_at)",
         "CREATE INDEX IF NOT EXISTS idx_receipts_legal_hold ON receipts(legal_hold)",
+        "CREATE INDEX IF NOT EXISTS idx_receipts_org ON receipts(org_id)",
     ]
 
     # Migration statements for existing databases (add new columns if missing)
@@ -347,6 +373,9 @@ class ReceiptStore:
         "ALTER TABLE receipts ADD COLUMN legal_hold_placed_by TEXT",
         "ALTER TABLE receipts ADD COLUMN legal_hold_placed_at REAL",
         "ALTER TABLE receipts ADD COLUMN legal_hold_matter_id TEXT",
+        "ALTER TABLE receipts ADD COLUMN org_id TEXT",
+        "ALTER TABLE receipts ADD COLUMN created_by TEXT",
+        "ALTER TABLE receipts ADD COLUMN ownership_source TEXT",
     ]
 
     # PostgreSQL schema (uses DOUBLE PRECISION for floating point, JSONB for data)
@@ -376,6 +405,9 @@ class ReceiptStore:
             legal_hold_placed_at DOUBLE PRECISION,
             legal_hold_matter_id TEXT,
             audit_trail_id TEXT,
+            org_id TEXT,
+            created_by TEXT,
+            ownership_source TEXT,
             data_json JSONB NOT NULL
         )
         """,
@@ -387,6 +419,7 @@ class ReceiptStore:
         "CREATE INDEX IF NOT EXISTS idx_receipts_risk ON receipts(risk_level)",
         "CREATE INDEX IF NOT EXISTS idx_receipts_signed ON receipts(signed_at)",
         "CREATE INDEX IF NOT EXISTS idx_receipts_legal_hold ON receipts(legal_hold)",
+        "CREATE INDEX IF NOT EXISTS idx_receipts_org ON receipts(org_id)",
         # PostgreSQL-specific: GIN index for JSONB queries
         "CREATE INDEX IF NOT EXISTS idx_receipts_data_gin ON receipts USING GIN (data_json)",
     ]
@@ -401,6 +434,9 @@ class ReceiptStore:
         "ALTER TABLE receipts ADD COLUMN IF NOT EXISTS legal_hold_placed_by TEXT",
         "ALTER TABLE receipts ADD COLUMN IF NOT EXISTS legal_hold_placed_at DOUBLE PRECISION",
         "ALTER TABLE receipts ADD COLUMN IF NOT EXISTS legal_hold_matter_id TEXT",
+        "ALTER TABLE receipts ADD COLUMN IF NOT EXISTS org_id TEXT",
+        "ALTER TABLE receipts ADD COLUMN IF NOT EXISTS created_by TEXT",
+        "ALTER TABLE receipts ADD COLUMN IF NOT EXISTS ownership_source TEXT",
     ]
 
     # Legacy property for backwards compatibility
@@ -489,6 +525,27 @@ class ReceiptStore:
 
         for statement in schema_statements[1:]:
             self._backend.execute_write(statement)
+
+        self.migrate_ownership()
+
+    def migrate_ownership(self) -> bool:
+        """Run the one-time receipt ownership backfill if it is due and possible.
+
+        Returns True when the backfill ran. It is deferred (False, nothing
+        written, retried on the next call) while no receipt link resolver is
+        registered or a linked debate or plan cannot be looked up.
+        """
+        if self._backend is None:
+            return False
+        resolver = get_receipt_link_resolver()
+        if resolver is None:
+            logger.debug("Receipt ownership backfill deferred: no link resolver registered")
+            return False
+        try:
+            return migrate_receipt_ownership(self._backend, self.backend_type, resolver)
+        except ReceiptLinkLookupError as exc:
+            logger.warning("Receipt ownership backfill deferred: %s", exc)
+            return False
 
     def close(self) -> None:
         """Close any open backend resources."""
@@ -628,6 +685,9 @@ class ReceiptStore:
         self,
         receipt_dict: dict[str, Any],
         signed_receipt: dict[str, Any] | None = None,
+        *,
+        org_id: str | None = None,
+        created_by: str | None = None,
     ) -> str:
         """
         Save a decision receipt.
@@ -635,6 +695,11 @@ class ReceiptStore:
         Args:
             receipt_dict: Receipt data from DecisionReceipt.to_dict()
             signed_receipt: Optional SignedReceipt data with signature
+            org_id: Org the receipt belongs to (recorded as ``created``)
+            created_by: User whose debate or plan produced the receipt
+
+        Re-saving an existing ``receipt_id`` keeps the ownership it already
+        has; only a receipt that was never assigned takes the new values.
 
         Returns:
             receipt_id of saved receipt
@@ -696,18 +761,21 @@ class ReceiptStore:
             signed_at,
             normalized_receipt.get("audit_trail_id"),
             json.dumps(normalized_receipt, default=_receipt_json_default),
+            *ownership_values(org_id, created_by),
         )
 
-        # Use backend-specific upsert syntax
+        # The update branch of both upserts keeps an assigned owner: a re-save
+        # (e.g. by the settlement scheduler) must never clear or move ownership.
+        keep_owner = "CASE WHEN receipts.org_id IS NULL AND receipts.ownership_source IS NULL"
         if self.backend_type == "postgresql":
             self._backend.execute_write(
-                """
+                f"""
                 INSERT INTO receipts
                 (receipt_id, gauntlet_id, debate_id, created_at, expires_at,
                  verdict, confidence, risk_level, risk_score, checksum,
                  signature, signature_algorithm, signature_key_id, signed_at,
-                 audit_trail_id, data_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 audit_trail_id, data_json, org_id, created_by, ownership_source)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (receipt_id) DO UPDATE SET
                     gauntlet_id = EXCLUDED.gauntlet_id,
                     debate_id = EXCLUDED.debate_id,
@@ -723,21 +791,46 @@ class ReceiptStore:
                     signature_key_id = EXCLUDED.signature_key_id,
                     signed_at = EXCLUDED.signed_at,
                     audit_trail_id = EXCLUDED.audit_trail_id,
-                    data_json = EXCLUDED.data_json
-                """,
+                    data_json = EXCLUDED.data_json,
+                    org_id = {keep_owner} THEN EXCLUDED.org_id ELSE receipts.org_id END,
+                    created_by = {keep_owner} THEN EXCLUDED.created_by ELSE receipts.created_by END,
+                    ownership_source = {keep_owner}
+                        THEN EXCLUDED.ownership_source ELSE receipts.ownership_source END
+                """,  # nosec B608 - only constant clauses are interpolated  # noqa: S608
                 params,
             )
         else:
-            # SQLite uses INSERT OR REPLACE
+            # OR REPLACE still resolves a gauntlet_id collision with another
+            # receipt; the ON CONFLICT clause handles a re-save of this one.
             self._backend.execute_write(
-                """
+                f"""
                 INSERT OR REPLACE INTO receipts
                 (receipt_id, gauntlet_id, debate_id, created_at, expires_at,
                  verdict, confidence, risk_level, risk_score, checksum,
                  signature, signature_algorithm, signature_key_id, signed_at,
-                 audit_trail_id, data_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
+                 audit_trail_id, data_json, org_id, created_by, ownership_source)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (receipt_id) DO UPDATE SET
+                    gauntlet_id = excluded.gauntlet_id,
+                    debate_id = excluded.debate_id,
+                    created_at = excluded.created_at,
+                    expires_at = excluded.expires_at,
+                    verdict = excluded.verdict,
+                    confidence = excluded.confidence,
+                    risk_level = excluded.risk_level,
+                    risk_score = excluded.risk_score,
+                    checksum = excluded.checksum,
+                    signature = excluded.signature,
+                    signature_algorithm = excluded.signature_algorithm,
+                    signature_key_id = excluded.signature_key_id,
+                    signed_at = excluded.signed_at,
+                    audit_trail_id = excluded.audit_trail_id,
+                    data_json = excluded.data_json,
+                    org_id = {keep_owner} THEN excluded.org_id ELSE receipts.org_id END,
+                    created_by = {keep_owner} THEN excluded.created_by ELSE receipts.created_by END,
+                    ownership_source = {keep_owner}
+                        THEN excluded.ownership_source ELSE receipts.ownership_source END
+                """,  # nosec B608 - only constant clauses are interpolated  # noqa: S608
                 params,
             )
         logger.debug("Saved receipt: %s", receipt_id)
@@ -758,13 +851,7 @@ class ReceiptStore:
         """
         if self._backend is not None:
             row = self._backend.fetch_one(
-                """
-                SELECT receipt_id, gauntlet_id, debate_id, created_at, expires_at,
-                       verdict, confidence, risk_level, risk_score, checksum,
-                       signature, signature_algorithm, signature_key_id, signed_at,
-                       audit_trail_id, data_json
-                FROM receipts WHERE receipt_id = ?
-                """,
+                f"SELECT {_RECEIPT_COLUMNS} FROM receipts WHERE receipt_id = ?",  # nosec B608  # noqa: S608
                 (receipt_id,),
             )
             if row:
@@ -780,13 +867,7 @@ class ReceiptStore:
         """
         if self._backend is not None:
             row = self._backend.fetch_one(
-                """
-                SELECT receipt_id, gauntlet_id, debate_id, created_at, expires_at,
-                       verdict, confidence, risk_level, risk_score, checksum,
-                       signature, signature_algorithm, signature_key_id, signed_at,
-                       audit_trail_id, data_json
-                FROM receipts WHERE gauntlet_id = ?
-                """,
+                f"SELECT {_RECEIPT_COLUMNS} FROM receipts WHERE gauntlet_id = ?",  # nosec B608  # noqa: S608
                 (gauntlet_id,),
             )
             if row:
@@ -795,8 +876,29 @@ class ReceiptStore:
         # Fallback: file-based receipts
         return self._get_file_receipt_by_gauntlet(gauntlet_id)
 
+    def get_for_org(self, receipt_id: str, org_id: str) -> StoredReceipt | None:
+        """Get a receipt only when ``org_id`` owns it (file receipts have no owner)."""
+        return self._get_owned("receipt_id", receipt_id, _require_org(org_id))
+
+    def get_by_gauntlet_for_org(self, gauntlet_id: str, org_id: str) -> StoredReceipt | None:
+        """Get a receipt by gauntlet ID only when ``org_id`` owns it."""
+        return self._get_owned("gauntlet_id", gauntlet_id, _require_org(org_id))
+
+    def _get_owned(self, key_column: str, key: str, org_id: str) -> StoredReceipt | None:
+        if self._backend is None:
+            return None
+        row = self._backend.fetch_one(
+            f"SELECT {_RECEIPT_COLUMNS} FROM receipts WHERE {key_column} = ? AND org_id = ?",  # nosec B608  # noqa: S608
+            (key, org_id),
+        )
+        return self._row_to_stored_receipt(row) if row else None
+
     def _row_to_stored_receipt(self, row: tuple) -> StoredReceipt:
-        """Convert database row to StoredReceipt."""
+        """Convert a row of ``_RECEIPT_COLUMNS`` to StoredReceipt.
+
+        Rows without the trailing ownership columns map to an unowned receipt.
+        """
+        owner = (tuple(row[16:19]) + (None, None, None))[:3]
         return StoredReceipt(
             receipt_id=row[0],
             gauntlet_id=row[1],
@@ -814,6 +916,9 @@ class ReceiptStore:
             signed_at=row[13],
             audit_trail_id=row[14],
             data=self._deserialize_receipt_data(row[15]),
+            org_id=owner[0],
+            created_by=owner[1],
+            ownership_source=owner[2],
         )
 
     @staticmethod
@@ -1745,7 +1850,7 @@ class ReceiptStore:
                        timestamp_token, timestamp_tsa_url, timestamp_at,
                        legal_hold, legal_hold_reason, legal_hold_placed_by,
                        legal_hold_placed_at, legal_hold_matter_id,
-                       audit_trail_id, data_json
+                       audit_trail_id, data_json, org_id, created_by, ownership_source
                 FROM receipts
                 WHERE legal_hold = ? AND legal_hold_matter_id = ?
                 ORDER BY legal_hold_placed_at DESC
@@ -1760,7 +1865,7 @@ class ReceiptStore:
                        timestamp_token, timestamp_tsa_url, timestamp_at,
                        legal_hold, legal_hold_reason, legal_hold_placed_by,
                        legal_hold_placed_at, legal_hold_matter_id,
-                       audit_trail_id, data_json
+                       audit_trail_id, data_json, org_id, created_by, ownership_source
                 FROM receipts
                 WHERE legal_hold = ?
                 ORDER BY legal_hold_placed_at DESC
@@ -1859,6 +1964,9 @@ class ReceiptStore:
             legal_hold_matter_id=row[21],
             audit_trail_id=row[22],
             data=self._deserialize_receipt_data(row[23]),
+            org_id=row[24] if len(row) > 24 else None,
+            created_by=row[25] if len(row) > 25 else None,
+            ownership_source=row[26] if len(row) > 26 else None,
         )
 
 
