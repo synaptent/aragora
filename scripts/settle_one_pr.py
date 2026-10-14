@@ -798,6 +798,9 @@ def entry_blockers(entry: dict[str, Any]) -> list[str]:
         blockers.append("requires_human_risk_settlement=true")
     if bool(entry.get("unresolved_dissent")):
         blockers.append("unresolved_dissent=true")
+    park_record = entry.get("park_record")
+    if isinstance(park_record, dict) and park_record.get("blocked"):
+        blockers.append(str(park_record.get("blocker") or "current-head park record present"))
     summary = _effective_check_summary(entry)
     if "failing" in summary.lower():
         blockers.append(f"checks failing: {summary}")

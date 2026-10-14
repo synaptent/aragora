@@ -236,13 +236,24 @@ class ExecutionNotifier:
 
     async def _dispatch_to_targets(self, payload: dict[str, Any], *, is_complete: bool) -> None:
         """Send updates to explicitly configured channel targets."""
+        from aragora.events.approval_requests import (
+            ApprovalNotifierNotRegisteredError,
+            parse_approval_targets,
+        )
+        from aragora.events.chat_connectors import (
+            ChatConnectorLookupNotRegisteredError,
+            chat_connector_lookup,
+        )
+
         try:
-            from aragora.approvals.chat import parse_chat_targets
-            from aragora.connectors.chat.registry import get_connector
-        except ImportError:
+            get_connector = chat_connector_lookup()
+        except ChatConnectorLookupNotRegisteredError:
             return
 
-        targets = parse_chat_targets(self._channel_targets)
+        try:
+            targets = parse_approval_targets(self._channel_targets)
+        except ApprovalNotifierNotRegisteredError:
+            return
         if not targets:
             return
 

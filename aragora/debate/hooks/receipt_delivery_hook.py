@@ -191,7 +191,7 @@ class ReceiptDeliveryHook:
         try:
             import hashlib
 
-            from aragora.gauntlet.receipt_models import normalize_live_explainability
+            from aragora.models.receipts.gauntlet import normalize_live_explainability
 
             # Build receipt data
             receipt_data = {
@@ -219,10 +219,9 @@ class ReceiptDeliveryHook:
 
                 builder = ExplanationBuilder()
                 decision = await builder.build(result, ctx)
+                explainability = receipt_data.get("explainability")
                 existing_explainability = (
-                    dict(receipt_data.get("explainability"))
-                    if isinstance(receipt_data.get("explainability"), dict)
-                    else {}
+                    dict(explainability) if isinstance(explainability, dict) else {}
                 )
                 receipt_data["explainability"] = {
                     **existing_explainability,

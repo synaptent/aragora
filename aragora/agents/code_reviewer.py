@@ -20,6 +20,7 @@ from typing import Any
 
 from aragora.agents.base import BaseDebateAgent
 from aragora.core_types import Critique, Message
+from aragora.runtime.connector_factory import create_connector
 
 logger = logging.getLogger(__name__)
 
@@ -724,12 +725,10 @@ class CodeReviewOrchestrator:
         Returns:
             Review result
         """
-        from aragora.connectors.github import GitHubConnector
-
         result = ReviewResult(pr_url=pr_url)
 
         # Initialize GitHub connector
-        github = GitHubConnector()
+        github = create_connector("github")
 
         # Fetch PR diff
         diff = await github.fetch_pr_diff(pr_url)

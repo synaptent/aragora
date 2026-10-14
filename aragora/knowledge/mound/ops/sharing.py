@@ -435,7 +435,7 @@ class KnowledgeSharingMixin(_SharingMixinBase):
         This provides audit logging for data sharing compliance.
         """
         try:
-            from aragora.coordination.cross_workspace import (
+            from aragora.tenancy.cross_workspace import (
                 CrossWorkspaceCoordinator,
                 DataSharingConsent,
                 OperationType,

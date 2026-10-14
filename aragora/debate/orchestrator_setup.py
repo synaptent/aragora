@@ -24,6 +24,7 @@ from aragora.debate.hierarchy import HierarchyConfig
 from aragora.debate.knowledge_manager import ArenaKnowledgeManager
 from aragora.debate.lifecycle_manager import LifecycleManager
 from aragora.debate.state_cache import DebateStateCache
+from aragora.debate.workflow_backends import WorkflowBackendNotRegisteredError, workflow_backend
 from aragora.logging_config import get_logger as get_structured_logger
 from aragora.utils.cache_registry import register_lru_cache
 
@@ -136,11 +137,9 @@ def init_post_debate_workflow(
     """
     if enable_post_debate_workflow and post_debate_workflow is None:
         try:
-            from aragora.workflow.patterns.post_debate import get_default_post_debate_workflow
-
-            post_debate_workflow = get_default_post_debate_workflow()
+            post_debate_workflow = workflow_backend().default_post_debate_workflow()
             logger.debug("[arena] Auto-created default post-debate workflow")
-        except ImportError:
+        except (ImportError, WorkflowBackendNotRegisteredError):
             logger.warning("[arena] Post-debate workflow enabled but pattern not available")
 
     arena.post_debate_workflow = post_debate_workflow

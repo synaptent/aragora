@@ -4,17 +4,21 @@ A lower package that exposes a hook cannot import the upper package that fills i
 The upper package registers from its own init, and a process that never imports it
 still reaches the registration through an entry point declared in aragora's
 ``pyproject.toml``. A source checkout whose installed metadata predates a declaration
-also reads it from that ``pyproject.toml`` (on Python 3.10 only when ``tomli`` is
-installed).
+also reads it from that ``pyproject.toml``. On Python 3.10 without ``tomli``, the
+single-line string entries of the ``[project]`` table and of the group's entry-point
+table are read without a TOML library.
 """
 
 from __future__ import annotations
 
 import importlib.metadata
 import logging
+import re
 import sys
 import threading
 from pathlib import Path
+from types import ModuleType
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +34,63 @@ _REGISTRATION_ERRORS = (
     TypeError,
     ValueError,
 )
+
+_MULTILINE_STRING = re.compile(r'"""[\s\S]*?"""|\'\'\'[\s\S]*?\'\'\'')
+_TABLE_HEADER = re.compile(r"\[\[?([^\[\]]+)\]\]?\s*(?:#.*)?")
+_KEY_PART = re.compile(r"\"([^\"\\]*)\"|'([^']*)'|([A-Za-z0-9_-]+)")
+_STRING_ENTRY = re.compile(
+    r"(\"[^\"\\]*\"|'[^']*'|[A-Za-z0-9_-]+)\s*=\s*(?:\"([^\"\\]*)\"|'([^']*)')\s*(?:#.*)?"
+)
+
+
+def _toml_module() -> ModuleType | None:
+    if sys.version_info >= (3, 11):
+        import tomllib
+
+        return tomllib
+    try:
+        import tomli
+    except ImportError:
+        return None
+    return tomli
+
+
+def _key(text: str) -> tuple[str, ...]:
+    return tuple(double or single or bare for double, single, bare in _KEY_PART.findall(text))
+
+
+def _scan_string_tables(
+    text: str, tables: set[tuple[str, ...]]
+) -> dict[tuple[str, ...], dict[str, str]]:
+    """The single-line ``key = "string"`` entries of the named tables, read without a TOML library.
+
+    Multi-line strings are blanked first, so a ``readme`` body cannot open a table or add an entry.
+    """
+    found: dict[tuple[str, ...], dict[str, str]] = {}
+    current: tuple[str, ...] = ()
+    for line in _MULTILINE_STRING.sub('""', text).splitlines():
+        header = _TABLE_HEADER.fullmatch(line.strip())
+        entry = _STRING_ENTRY.fullmatch(line.strip())
+        if header is not None:
+            current = _key(header[1])
+        elif entry is not None and current in tables:
+            value = entry[2] if entry[2] is not None else entry[3]
+            found.setdefault(current, {})[_key(entry[1])[0]] = value
+    return found
+
+
+def _read_project(text: str, group: str) -> tuple[Any, dict[str, Any]] | None:
+    """The project name and the group's declared entry points, or None if unreadable."""
+    toml = _toml_module()
+    if toml is None:
+        entry_points = ("project", "entry-points", group)
+        tables = _scan_string_tables(text, {("project",), entry_points})
+        return tables.get(("project",), {}).get("name"), tables.get(entry_points, {})
+    try:
+        project = toml.loads(text).get("project", {})
+    except toml.TOMLDecodeError:
+        return None
+    return project.get("name"), project.get("entry-points", {}).get(group, {})
 
 
 class DeclaredRegistrations:
@@ -69,23 +130,16 @@ class DeclaredRegistrations:
     def _source_declarations(self) -> list[importlib.metadata.EntryPoint]:
         # An editable install keeps the entry points it was installed with, so a source
         # checkout run against older metadata reads the declarations from its own pyproject.
-        if sys.version_info >= (3, 11):
-            import tomllib
-        else:
-            try:
-                import tomli as tomllib
-            except ImportError:
-                return []
-
         try:
-            project = tomllib.loads(self._source_pyproject.read_text(encoding="utf-8")).get(
-                "project", {}
-            )
-        except (OSError, tomllib.TOMLDecodeError):
+            text = self._source_pyproject.read_text(encoding="utf-8")
+        except OSError:
             return []
-        if project.get("name") != "aragora":
+        project = _read_project(text, self.group)
+        if project is None:
             return []
-        declared = project.get("entry-points", {}).get(self.group, {})
+        name, declared = project
+        if name != "aragora":
+            return []
         return [
             importlib.metadata.EntryPoint(name, value, self.group)
             for name, value in declared.items()

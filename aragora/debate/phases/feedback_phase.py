@@ -43,6 +43,7 @@ from aragora.debate.phases.feedback_knowledge import KnowledgeFeedback
 from aragora.debate.phases.feedback_memory import MemoryFeedback
 from aragora.debate.phases.feedback_persona import PersonaFeedback
 from aragora.debate.phases.training_emitter import TrainingEmitter
+from aragora.debate.workflow_backends import WorkflowBackendNotRegisteredError, workflow_backend
 from aragora.protocols import (
     BroadcastPipelineProtocol,
     CalibrationTrackerProtocol,
@@ -898,9 +899,7 @@ class FeedbackPhase:
         Failures are logged but don't affect the debate result.
         """
         try:
-            from aragora.workflow.engine import get_workflow_engine
-
-            engine = get_workflow_engine()
+            backend = workflow_backend()
             workflow_input = {
                 "debate_id": ctx.debate_id,
                 "task": ctx.env.task,
@@ -914,10 +913,7 @@ class FeedbackPhase:
                 "agents": [a.name for a in ctx.agents] if ctx.agents else [],
             }
 
-            workflow_result = await engine.execute(
-                definition=self.post_debate_workflow,
-                inputs=workflow_input,
-            )
+            workflow_result = await backend.execute(self.post_debate_workflow, workflow_input)
 
             if workflow_result.success:
                 logger.info(
@@ -934,7 +930,7 @@ class FeedbackPhase:
                     workflow_result.error,
                 )
 
-        except ImportError:
+        except (ImportError, WorkflowBackendNotRegisteredError):
             logger.debug("[workflow] WorkflowEngine not available")
         except Exception as e:  # noqa: BLE001 - phase isolation
             logger.warning("[workflow] Post-debate workflow failed: %s", e)
@@ -962,7 +958,10 @@ class FeedbackPhase:
             return None
 
         try:
-            from aragora.gauntlet.receipt_models import DecisionReceipt
+            from aragora.debate.receipt_operations import register_debate_receipt_operations
+            from aragora.models.receipts.gauntlet import DecisionReceipt
+
+            register_debate_receipt_operations()
 
             # Build cost summary from DebateCostTracker if available
             cost_summary = None
@@ -1002,7 +1001,7 @@ class FeedbackPhase:
                     dict(receipt.explainability) if isinstance(receipt.explainability, dict) else {}
                 )
                 try:
-                    from aragora.gauntlet.receipt_models import normalize_live_explainability
+                    from aragora.models.receipts.gauntlet import normalize_live_explainability
 
                     live_explainability = normalize_live_explainability(
                         existing_explainability.get("live_explainability")
@@ -1245,17 +1244,8 @@ class FeedbackPhase:
             return
 
         try:
-            from aragora.broadcast.pipeline import BroadcastOptions
-
-            options = BroadcastOptions(
-                audio_enabled=True,
-                generate_rss_episode=True,
-            )
-
-            pipeline_result = await pipeline.run(
-                ctx.debate_id,
-                options,
-            )
+            # The pipeline's default options generate audio and an RSS episode.
+            pipeline_result = await pipeline.run(ctx.debate_id)
 
             if pipeline_result.success:
                 logger.info(

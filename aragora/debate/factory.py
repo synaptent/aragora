@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from aragora.debate.orchestrator import Arena
 from aragora.protocols.debate import DebateProtocol
 from aragora.resilience import CircuitBreaker
-from aragora.spectate.stream import SpectatorStream
+from aragora.events.spectate.stream import SpectatorStream
 
 logger = logging.getLogger(__name__)
 

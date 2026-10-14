@@ -22,8 +22,8 @@ Example:
         org_id="org-789"
     )
 
-    # Check ownership
-    if manager.is_owner("user-456", ResourceType.DEBATE, "debate-123"):
+    # Check ownership within the caller's organization
+    if manager.is_owner("user-456", ResourceType.DEBATE, "debate-123", org_id="org-789"):
         # User owns this resource, grant implicit access
         pass
 
@@ -38,6 +38,7 @@ Example:
 
 from __future__ import annotations
 
+import enum
 import logging
 from collections import deque
 from dataclasses import dataclass, field
@@ -55,6 +56,22 @@ MAX_OWNERSHIP_RECORDS = 100_000  # Max records per manager instance
 MAX_TRANSFER_HISTORY = 10_000  # Max transfer events to keep
 OWNERSHIP_CACHE_TTL = 300.0  # 5 minutes
 OWNERSHIP_CACHE_SIZE = 10_000  # Max cache entries
+
+
+class _Unscoped(enum.Enum):
+    """Marks an ownership lookup that does not compare organizations."""
+
+    TOKEN = "unscoped"
+
+
+_UNSCOPED = _Unscoped.TOKEN
+
+
+def _same_organization(record_org_id: str | None, caller_org_id: str | None) -> bool:
+    """Owner access needs one shared organization, or no organization on either side."""
+    if record_org_id and caller_org_id:
+        return record_org_id == caller_org_id
+    return not record_org_id and not caller_org_id
 
 
 # Default implicit permissions granted to resource owners
@@ -283,10 +300,9 @@ class OwnershipManager:
         existing_record_id = self._by_resource.get(resource_key)
         if existing_record_id:
             existing = self._ownership_records.get(existing_record_id)
-            if existing and existing.owner_id == owner_id:
-                # Same owner, no change needed
+            if existing and existing.owner_id == owner_id and existing.org_id == org_id:
                 return existing
-            # Different owner - remove old record
+            # A changed organization replaces the record too: scoped lookups compare it.
             self._remove_record(existing_record_id)
 
         # Create new record
@@ -311,6 +327,8 @@ class OwnershipManager:
         self,
         resource_type: ResourceType,
         resource_id: str,
+        *,
+        org_id: str | None | _Unscoped = _UNSCOPED,
     ) -> str | None:
         """
         Get the owner of a resource.
@@ -318,10 +336,20 @@ class OwnershipManager:
         Args:
             resource_type: Type of resource
             resource_id: Specific resource ID
+            org_id: The caller's organization. When it is passed (None included), the
+                owner is returned only if the record and the caller share an
+                organization or neither has one. Omit it for an unscoped lookup.
 
         Returns:
             Owner user ID or None if not found
         """
+        if not isinstance(org_id, _Unscoped):
+            # The owner cache holds no organization, so a scoped lookup reads the record.
+            record = self.get_ownership_record(resource_type, resource_id)
+            if record is None or not _same_organization(record.org_id, org_id):
+                return None
+            return record.owner_id
+
         # Check cache first
         if self._enable_cache:
             cache_key = self._cache_key(resource_type, resource_id)
@@ -350,6 +378,8 @@ class OwnershipManager:
         user_id: str,
         resource_type: ResourceType,
         resource_id: str,
+        *,
+        org_id: str | None | _Unscoped = _UNSCOPED,
     ) -> bool:
         """
         Check if a user is the owner of a resource.
@@ -358,11 +388,13 @@ class OwnershipManager:
             user_id: User to check
             resource_type: Type of resource
             resource_id: Specific resource ID
+            org_id: The caller's organization, compared as in ``get_owner``.
+                Omit it for an unscoped check.
 
         Returns:
             True if the user owns the resource
         """
-        owner_id = self.get_owner(resource_type, resource_id)
+        owner_id = self.get_owner(resource_type, resource_id, org_id=org_id)
         return owner_id == user_id
 
     def get_ownership_record(
@@ -534,6 +566,8 @@ class OwnershipManager:
 
         This should be called before checking explicit permissions.
         Returns None if user is not owner (continue to other checks).
+        Ownership counts only within the record's organization: the context's
+        org_id must equal the record's, or both must lack one.
 
         Args:
             context: Authorization context
@@ -544,8 +578,7 @@ class OwnershipManager:
         Returns:
             AuthorizationDecision if owner has implicit permission, None otherwise
         """
-        # Check if user is owner
-        if not self.is_owner(context.user_id, resource_type, resource_id):
+        if not self.is_owner(context.user_id, resource_type, resource_id, org_id=context.org_id):
             return None
 
         # Check if this permission is in the implicit owner permissions
@@ -769,11 +802,14 @@ def set_resource_owner(
 def get_resource_owner(
     resource_type: ResourceType,
     resource_id: str,
+    *,
+    org_id: str | None | _Unscoped = _UNSCOPED,
 ) -> str | None:
     """Convenience function to get resource owner using global manager."""
     return get_ownership_manager().get_owner(
         resource_type=resource_type,
         resource_id=resource_id,
+        org_id=org_id,
     )
 
 
@@ -781,12 +817,15 @@ def is_resource_owner(
     user_id: str,
     resource_type: ResourceType,
     resource_id: str,
+    *,
+    org_id: str | None | _Unscoped = _UNSCOPED,
 ) -> bool:
     """Convenience function to check resource ownership using global manager."""
     return get_ownership_manager().is_owner(
         user_id=user_id,
         resource_type=resource_type,
         resource_id=resource_id,
+        org_id=org_id,
     )
 
 

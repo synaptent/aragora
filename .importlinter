@@ -5,7 +5,8 @@
 # it (per architecture.md section 2):
 #
 #   interface       server, cli, mcp, gateway, bots, channels, integrations,
-#                   connectors
+#                   connectors, __main__, approvals, client, extensions,
+#                   webhooks
 #   application     workflow, pipeline, nomic, swarm, gauntlet, goals,
 #                   implement, modes, verticals, autonomous, broadcast, canvas,
 #                   spectate, analytics, audit, control_plane, golden, inbox,
@@ -54,17 +55,19 @@
 # module_tiers cross-check (VAL-P0-006)
 # ----------------------------------------------------------------------------
 # Every layer assignment above was cross-checked against aragora/module_tiers.yaml
-# (first on 2026-06-12, last on 2026-10-12). Outcome: 0 discrepancies. All 161
-# layered names resolve to a real top-level module in the local source tree; the
-# 139 that are directory packages all appear in module_tiers.yaml (21 core, 92
-# integrated, 23 experimental, 3 deprecated: metrics, operations and schedulers,
-# deprecated re-export shims kept until they are retired), and the 22 that are
-# single-file modules (for example api_errors, core_types, exceptions, errors,
-# cache, container, golden, http_client, logging_config) are real importable
-# modules that module_tiers.yaml does not track because it enumerates package
-# directories only (not a discrepancy). The other 5 module_tiers packages are
-# not layered yet (approvals, client, extensions, live, webhooks);
-# tranches add names only by appending them to the existing layer lines.
+# (first on 2026-06-12, last on 2026-10-12). Outcome: 0 discrepancies. All 166
+# layered names resolve to a real top-level module in the local source tree, and
+# every top-level module is layered; the 143 that are directory packages all
+# appear in module_tiers.yaml (21 core, 94 integrated, 25 experimental, 3
+# deprecated: metrics, operations and schedulers, deprecated re-export shims
+# kept until they are retired), and the 23 that are single-file modules (for
+# example __main__, api_errors, core_types, exceptions, errors, cache,
+# container, golden, http_client, logging_config) are real importable modules
+# that module_tiers.yaml does not track because it enumerates package
+# directories only (not a discrepancy). The one module_tiers entry that is not
+# layered, live, is the Next.js frontend: it has no __init__.py, so it is not a
+# Python module. Tranches add names only by appending them to the existing
+# layer lines.
 # Because the discrepancy count is zero, no operator Decision line is required.
 # ============================================================================
 
@@ -89,7 +92,7 @@ ignore_imports =
     # Sanctioned M3 seam (architecture B8): aragora.exceptions mirrors the control-plane exception types through its lazy __getattr__.
     aragora.exceptions -> aragora.control_plane.exceptions
 layers =
-    server : cli : mcp : gateway : bots : channels : integrations : connectors
+    server : cli : mcp : gateway : bots : channels : integrations : connectors : __main__ : approvals : client : extensions : webhooks
     workflow : pipeline : nomic : swarm : gauntlet : goals : implement : modes : verticals : autonomous : broadcast : canvas : spectate : analytics : audit : control_plane : golden : inbox : marketplace : services : skills : stores : computer_use : coordination : export : markets : plugins : prompt_engine : receipts : workspace : brief_engine : codex : compat : essay : factory : fixtures : gti : harnesses : hooks : ideacloud : interrogation : missions : onboarding : operations : ops : pdb : playbooks : policy : prediction : ralph : reports : review : scheduler : schedulers : sync : trail : triage : worktree
     debate : agents : memory : knowledge : ranking : reasoning : evidence : evaluation : explainability : learning : ml : advocates : analysis : audience : blockchain : compliance : container : core : deliberation : documents : embeddings : epistemic : evolution : genesis : heterogeneity : insights : introspection : metrics : moderation : prompts : pulse : replay : reputation : rlm : routing : templates : tools : tournaments : training : uncertainty : verification : visualization : work
     storage : resilience : events : observability : security : queue : db : caching : billing : backup : migrations : cache : deletion_coordinator : fabric : maintenance : monitoring : performance : resilience_config : resilience_patterns : runtime : sandbox : streaming : telemetry : transcription : auth : logging_config : notifications : persistence : privacy : rbac : tenancy
