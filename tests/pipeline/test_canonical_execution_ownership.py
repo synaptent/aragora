@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import sqlite3
 from pathlib import Path
 from types import SimpleNamespace
@@ -21,6 +22,7 @@ from aragora.pipeline.decision_integrity_utils import (
     ensure_decision_plan_backbone_run,
     execute_decision_plan_with_backbone,
 )
+from aragora.pipeline.execution_bridge import ExecutionBridge
 from aragora.pipeline.execution_ownership import (
     EXECUTION_MEMBERSHIP_UNVERIFIED,
     EXECUTION_ORG_MISMATCH,
@@ -32,6 +34,7 @@ from aragora.pipeline.plan_store import PlanStore
 ORG_A = "org-a"
 ORG_B = "org-b"
 USER_A = "user-a"
+LEFT_ORG = [("memberships", "org-elsewhere"), ("deactivated", True)]
 
 
 class _UserStore:
@@ -40,12 +43,14 @@ class _UserStore:
     def __init__(self, memberships: dict[str, str], *, fail: bool = False) -> None:
         self.memberships = memberships
         self.fail = fail
+        self.deactivated: dict[str, bool] = {}
 
     def get_user_by_id(self, user_id: str) -> Any:
         if self.fail:
             raise ConnectionError("user store down")
-        org_id = self.memberships.get(user_id)
-        return SimpleNamespace(id=user_id, org_id=org_id) if user_id in self.memberships else None
+        active = user_id not in self.deactivated
+        user = SimpleNamespace(id=user_id, org_id=self.memberships.get(user_id), is_active=active)
+        return user if user_id in self.memberships else None
 
     def get_organization_by_id(self, org_id: str) -> Any:
         return SimpleNamespace(id=org_id)
@@ -251,12 +256,13 @@ class TestExecuteQueuedPlanRecheck:
         assert run is not None and run.status == "execution_failed"
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("field, value", LEFT_ORG)
     async def test_execute_queued_plan_not_member_refuses(
-        self, store: PlanStore, user_store: _UserStore, bridge: MagicMock
+        self, store: PlanStore, user_store: _UserStore, bridge: MagicMock, field: str, value: Any
     ) -> None:
         plan = _build_plan()
         launch = queue_plan_execution(plan, auth_context=_auth())
-        user_store.memberships[USER_A] = "org-elsewhere"
+        getattr(user_store, field)[USER_A] = value
         status_before = store.get(plan.id).status
 
         with pytest.raises(ExecutionNotAuthorizedError) as excinfo:
@@ -346,6 +352,23 @@ class TestExecuteQueuedPlanRecheck:
         )
 
         bridge.execute_approved_plan.assert_awaited_once()
+
+    @pytest.mark.parametrize("field, value", [*LEFT_ORG, ("memberships", ORG_A)])
+    async def test_schedule_execution_not_member_refuses_before_executor(
+        self, store: PlanStore, user_store: _UserStore, field: str, value: Any
+    ) -> None:
+        plan = _build_plan()
+        plan.org_id, plan.created_by, plan.status = ORG_A, USER_A, PlanStatus.APPROVED
+        store.create(plan)
+        executor = MagicMock(execute=AsyncMock())
+
+        ExecutionBridge(plan_store=store, executor=executor).schedule_execution(plan.id)
+        getattr(user_store, field)[USER_A] = value
+        await asyncio.gather(*(asyncio.all_tasks() - {asyncio.current_task()}))
+
+        (record,) = store.list_execution_records(plan_id=plan.id)
+        assert executor.execute.await_count == (record["error"] is None) == (value == ORG_A)
+        assert value == ORG_A or record["error"]["code"] == EXECUTION_SCHEDULER_NOT_MEMBER
 
 
 class TestExecuteDecisionPlanWithBackboneRecheck:

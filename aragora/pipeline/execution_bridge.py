@@ -30,7 +30,7 @@ from aragora.pipeline.execution_mode import (
     ExecutionMode as SafetyMode,
     resolve_safety_mode,
 )
-from aragora.pipeline.execution_ownership import owner_for_plan
+from aragora.pipeline.execution_ownership import ensure_execution_still_authorized, owner_for_plan
 
 if TYPE_CHECKING:
     from aragora.pipeline.executor import ExecutionMode, PlanExecutor
@@ -710,6 +710,9 @@ class ExecutionBridge:
 
         async def _run() -> None:
             try:
+                ensure_execution_still_authorized(
+                    self.plan_store, plan_id=plan_id, execution_id=record_execution_id
+                )
                 await self.execute_approved_plan(
                     plan_id,
                     auth_context=auth_context,

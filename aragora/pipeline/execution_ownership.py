@@ -4,7 +4,7 @@ A queued execution records the org and user that scheduled it, and the plan it
 runs must belong to that org. Before a queued execution runs (possibly much
 later, in a background task), the plan is reloaded and the execution is refused
 when the plan's org no longer equals the execution's org or when the scheduling
-user is no longer a member of that org. A refused execution is marked
+user is no longer an active member of that org. A refused execution is marked
 ``failed`` with the reason and the executor is never invoked.
 
 Executions and plans created without any org (internal callers that have no
@@ -154,7 +154,7 @@ def ensure_execution_still_authorized(
     from aragora.tenancy.membership import MembershipLookupError, user_org_ids
 
     try:
-        orgs = user_org_ids(scheduler, user_store)
+        orgs = user_org_ids(scheduler, user_store, require_active=True)
     except MembershipLookupError as exc:
         logger.warning(
             "Refusing execution %s: membership of its scheduler could not be checked (%s)",
@@ -172,7 +172,7 @@ def ensure_execution_still_authorized(
             store,
             record,
             EXECUTION_SCHEDULER_NOT_MEMBER,
-            "The user who scheduled this execution is no longer a member of the organization",
+            "The scheduling user is no longer an active member of the organization",
         )
 
 

@@ -33,8 +33,10 @@ def register_user_store(user_store: Any | None) -> None:
     _registered_user_store = user_store
 
 
-def user_org_ids(user_id: str, user_store: Any | None = None) -> frozenset[str]:
-    """Return the ids of the orgs ``user_id`` currently belongs to."""
+def user_org_ids(
+    user_id: str, user_store: Any | None = None, *, require_active: bool = False
+) -> frozenset[str]:
+    """Return the orgs ``user_id`` belongs to; none if deactivated and ``require_active``."""
     if not isinstance(user_id, str) or not user_id.strip():
         return frozenset()
     store = user_store if user_store is not None else _registered_user_store
@@ -44,6 +46,8 @@ def user_org_ids(user_id: str, user_store: Any | None = None) -> frozenset[str]:
         raise MembershipLookupError("no user store is available")
     try:
         user = store.get_user_by_id(user_id)
+        if require_active and getattr(user, "is_active", True) is False:
+            return frozenset()
         org_id = getattr(user, "org_id", None) if user is not None else None
         if not isinstance(org_id, str) or not org_id.strip():
             return frozenset()

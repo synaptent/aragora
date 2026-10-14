@@ -33,11 +33,16 @@ def _user(store: UserStore, email: str) -> str:
     return store.create_user(email, "hash", "salt", name=email).id
 
 
-def test_member_of_one_org(user_store: UserStore) -> None:
+def test_member_of_one_org_and_inactive_only_when_required(user_store: UserStore) -> None:
     owner = _user(user_store, "owner@example.com")
     org = user_store.create_organization("Org A", owner_id=owner)
+    no_flag = SimpleNamespace(get_user_by_id=lambda user_id: SimpleNamespace(org_id=org.id))
 
+    assert user_org_ids(owner, user_store, require_active=True) == frozenset({org.id})
+    assert user_org_ids(owner, no_flag, require_active=True) == frozenset({org.id})
+    user_store.update_user(owner, is_active=False)
     assert user_org_ids(owner, user_store) == frozenset({org.id})
+    assert user_org_ids(owner, user_store, require_active=True) == frozenset()
 
 
 def test_user_without_org_and_unknown_user_have_no_org(user_store: UserStore) -> None:
