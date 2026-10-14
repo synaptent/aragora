@@ -13,7 +13,6 @@ Tests the Knowledge Mound checkpoint HTTP handler endpoints:
 
 from __future__ import annotations
 
-import inspect
 import io
 import json
 from dataclasses import dataclass, field
@@ -1795,8 +1794,10 @@ class TestEdgeCases:
 
 
 # =============================================================================
-# Test: name validation, 405 answers and the Professional tier gate
+# Test: name validation and the Professional tier gate
 # =============================================================================
+# 405/Allow answers, 401/403 and tier denial on every route are covered through
+# the real RouteIndex in tests/server/handlers/test_serve_side_orphan_dispatch.py.
 
 UNSAFE_SEGMENTS = ["..", ".", "%2e%2e", "..%2Fetc", "a%5Cb", "%00", "x" * 129, "v2.1"]
 
@@ -1806,30 +1807,6 @@ DETAIL_OPERATIONS = [
     ("POST", "/api/v1/km/checkpoints/{name}/restore", "restore_checkpoint"),
     ("GET", "/api/v1/km/checkpoints/{name}/compare", "list_checkpoints"),
 ]
-
-ALL_OPERATIONS = [
-    ("GET", "/api/v1/km/checkpoints", None),
-    ("POST", "/api/v1/km/checkpoints", {"name": "cp-new"}),
-    ("POST", "/api/v1/km/checkpoints/compare", {"checkpoint_a": "cp-a", "checkpoint_b": "cp-b"}),
-    ("GET", "/api/v1/km/checkpoints/cp-1", None),
-    ("DELETE", "/api/v1/km/checkpoints/cp-1", None),
-    ("GET", "/api/v1/km/checkpoints/cp-1/compare", None),
-    ("POST", "/api/v1/km/checkpoints/cp-1/restore", {}),
-]
-
-STORE_METHODS = (
-    "list_checkpoints",
-    "create_checkpoint",
-    "get_checkpoint_metadata",
-    "delete_checkpoint",
-    "restore_checkpoint",
-    "compare_checkpoints",
-)
-
-
-def _assert_store_untouched(store) -> None:
-    for name in STORE_METHODS:
-        getattr(store, name).assert_not_called()
 
 
 async def _call(handler, method, path, body=None, auth_context=None):
@@ -1841,10 +1818,7 @@ async def _call(handler, method, path, body=None, auth_context=None):
         "POST": handler.handle_post,
         "DELETE": handler.handle_delete,
     }
-    if method in entry:
-        return await entry[method](path=path, query_params={}, handler=mock_handler)
-    result = handler.handle(path, {}, mock_handler)
-    return await result if inspect.isawaitable(result) else result
+    return await entry[method](path=path, query_params={}, handler=mock_handler)
 
 
 class TestCheckpointNameValidation:
@@ -1871,49 +1845,16 @@ class TestCheckpointNameValidation:
         assert _status(result) == 400
 
 
-class TestMethodNotAllowed:
-    @pytest.mark.parametrize(
-        ("method", "path", "allow"),
-        [
-            ("PUT", "/api/v1/km/checkpoints", "GET, POST"),
-            ("GET", "/api/v1/km/checkpoints/compare", "POST"),
-            ("PATCH", "/api/km/checkpoints/compare", "POST"),
-            ("DELETE", "/api/v1/km/checkpoints/compare", "POST"),
-            ("POST", "/api/v1/km/checkpoints/cp-1", "GET, DELETE"),
-            ("PUT", "/api/km/checkpoints/cp-1", "GET, DELETE"),
-            ("POST", "/api/v1/km/checkpoints/cp-1/compare", "GET"),
-            ("DELETE", "/api/v1/km/checkpoints/cp-1/compare", "GET"),
-            ("GET", "/api/v1/km/checkpoints/cp-1/restore", "POST"),
-            ("PATCH", "/api/v1/km/checkpoints/cp-1/restore", "POST"),
-        ],
-    )
-    async def test_unsupported_method_gets_405_with_allow(
-        self, handler_with_store, mock_store, method, path, allow
-    ):
-        result = await _call(handler_with_store, method, path, body={})
-        assert _status(result) == 405
-        assert result.headers.get("Allow") == allow
-        _assert_store_untouched(mock_store)
-
-
 class TestProfessionalTierGate:
-    @pytest.mark.parametrize(("method", "path", "body"), ALL_OPERATIONS)
-    async def test_free_tier_org_gets_403_on_every_route(
-        self, handler_with_store, mock_store, method, path, body
+    @pytest.mark.parametrize(("tier", "status"), [("free", 403), ("professional", 200)])
+    async def test_detail_route_follows_org_tier(
+        self, handler_with_store, mock_store, tier, status
     ):
-        ctx = AuthorizationContext(user_id="user-1", org_id="org-free", roles={"admin"})
-        with patch("aragora.billing.tier_gating._resolve_org_tier", return_value="free"):
-            result = await _call(handler_with_store, method, path, body, auth_context=ctx)
-        assert _status(result) == 403
-        assert _body(result)["code"] == "tier_insufficient"
-        assert _body(result)["required_tier"] == "professional"
-        _assert_store_untouched(mock_store)
-
-    async def test_professional_tier_org_is_served(self, handler_with_store, mock_store):
         mock_store.get_checkpoint_metadata.return_value = MockCheckpointMetadata(name="cp-1")
-        ctx = AuthorizationContext(user_id="user-1", org_id="org-pro", roles={"admin"})
-        with patch("aragora.billing.tier_gating._resolve_org_tier", return_value="professional"):
+        ctx = AuthorizationContext(user_id="user-1", org_id="org-1", roles={"admin"})
+        with patch("aragora.billing.tier_gating._resolve_org_tier", return_value=tier):
             result = await _call(
                 handler_with_store, "GET", "/api/v1/km/checkpoints/cp-1", auth_context=ctx
             )
-        assert _status(result) == 200
+        assert _status(result) == status
+        assert mock_store.get_checkpoint_metadata.called is (status == 200)

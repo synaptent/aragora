@@ -590,7 +590,8 @@ class TestKMCheckpointDispatch:
             )
         assert handled is True
         assert status == 403
-        assert json.loads(instance.wfile.getvalue())["code"] == "tier_insufficient"
+        body = json.loads(instance.wfile.getvalue())
+        assert (body["code"], body["required_tier"]) == ("tier_insufficient", "professional")
         _assert_checkpoint_store_untouched(store)
 
 
@@ -605,17 +606,8 @@ _CHECKPOINT_STORE_METHODS = (
 
 
 def _checkpoint_store() -> MagicMock:
-    meta = MagicMock(
-        id="cp-1",
-        description="",
-        created_at="2026-10-14T00:00:00",
-        node_count=1,
-        size_bytes=10,
-        compressed=True,
-        tags=[],
-        checksum="c",
-    )
-    meta.name = "cp-1"
+    meta = MagicMock(id="cp-1", description="", created_at="2026-10-14T00:00:00", tags=[])
+    meta.configure_mock(name="cp-1", node_count=1, size_bytes=10, compressed=True, checksum="c")
     restored = MagicMock(
         success=True, checkpoint_id="cp-1", nodes_restored=1, relationships_restored=0, errors=[]
     )
