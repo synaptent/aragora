@@ -343,6 +343,7 @@ def _is_undecrypted_token(token: Any) -> bool:
 def migrate_integration_store(dry_run: bool = False) -> MigrationResult:
     """Migrate integration store secrets."""
     try:
+        from aragora.storage.integration_models import EncryptionError
         from aragora.storage.integration_store import SENSITIVE_KEYS, get_integration_store
         from aragora.utils.async_utils import run_async
 
@@ -376,6 +377,10 @@ def migrate_integration_store(dry_run: bool = False) -> MigrationResult:
                 ):
                     result.already_encrypted += 1
                     continue
+                if any(is_field_encrypted(settings.get(name)) for name in sensitive_fields):
+                    # The store returns settings it could not decrypt unchanged, and saving
+                    # would encrypt that ciphertext again beside the plaintext secrets.
+                    raise ValueError("Store returned a setting it could not decrypt")
 
                 if dry_run:
                     result.migrated_records += 1
@@ -385,10 +390,10 @@ def migrate_integration_store(dry_run: bool = False) -> MigrationResult:
                 run_async(store.save(config))
                 result.migrated_records += 1
                 logger.debug("Migrated record: %s", record_id)
-            except (KeyError, ValueError, TypeError, RuntimeError, OSError) as e:
+            except (KeyError, ValueError, TypeError, RuntimeError, OSError, EncryptionError) as e:
                 result.failed_records += 1
                 result.errors.append(f"Error migrating record: {record_id}")
-                logger.warning("Failed to migrate record %s: %s", record_id, e)
+                logger.warning("Failed to migrate record %s: %s", record_id, type(e).__name__)
 
         return _finish_migration(result)
     except ImportError as e:
@@ -1058,6 +1063,7 @@ def _get_integration_store_config() -> dict[str, Any] | None:
     key when saving, so each listed config is re-saved as it was read.
     """
     try:
+        from aragora.storage.integration_models import EncryptionError
         from aragora.storage.integration_store import SENSITIVE_KEYS, get_integration_store
         from aragora.utils.async_utils import run_async
 
@@ -1076,7 +1082,11 @@ def _get_integration_store_config() -> dict[str, Any] | None:
             return records
 
         def save_config(record_id: str, _record: dict[str, Any]) -> bool:
-            run_async(store.save(configs_by_id[record_id]))
+            try:
+                run_async(store.save(configs_by_id[record_id]))
+            except EncryptionError as e:
+                # Counted per record by the caller; only the type is passed on, as for Gmail.
+                raise RuntimeError(f"Saving settings failed: {type(e).__name__}") from e
             return True
 
         return {
