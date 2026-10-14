@@ -13,6 +13,7 @@ Tests the Knowledge Mound checkpoint HTTP handler endpoints:
 
 from __future__ import annotations
 
+import inspect
 import io
 import json
 from dataclasses import dataclass, field
@@ -22,6 +23,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from aragora.knowledge.mound import checkpoint as checkpoint_module
+from aragora.rbac.models import AuthorizationContext
 from aragora.server.handlers.knowledge.checkpoints import KMCheckpointHandler
 
 
@@ -1491,7 +1494,7 @@ class TestHandleDeleteRouting:
         assert _status(result) == 200
 
     @pytest.mark.asyncio
-    async def test_handle_delete_base_path_returns_404(self, handler_with_store, mock_store):
+    async def test_handle_delete_base_path_returns_405(self, handler_with_store, mock_store):
         mock_handler = _MockHTTPHandler(
             method="DELETE",
             path="/api/v1/km/checkpoints",
@@ -1501,7 +1504,9 @@ class TestHandleDeleteRouting:
             query_params={},
             handler=mock_handler,
         )
-        assert _status(result) == 404
+        assert _status(result) == 405
+        assert result.headers.get("Allow") == "GET, POST"
+        mock_store.delete_checkpoint.assert_not_called()
 
 
 # =============================================================================
@@ -1775,15 +1780,140 @@ class TestEdgeCases:
     @pytest.mark.asyncio
     async def test_checkpoint_name_with_special_chars(self, handler_with_store, mock_store):
         """Checkpoint names with dashes and underscores should work."""
-        cp = MockCheckpointMetadata(name="my-checkpoint_v2.1")
+        cp = MockCheckpointMetadata(name="my-checkpoint_v2")
         mock_store.get_checkpoint_metadata.return_value = cp
-        mock_handler = _MockHTTPHandler(path="/api/v1/km/checkpoints/my-checkpoint_v2.1")
+        mock_handler = _MockHTTPHandler(path="/api/v1/km/checkpoints/my-checkpoint_v2")
         result = await handler_with_store.handle_get(
-            path="/api/v1/km/checkpoints/my-checkpoint_v2.1",
+            path="/api/v1/km/checkpoints/my-checkpoint_v2",
             query_params={},
             handler=mock_handler,
         )
         assert _status(result) == 200
         body = _body(result)
         data = body.get("data", body)
-        assert data["name"] == "my-checkpoint_v2.1"
+        assert data["name"] == "my-checkpoint_v2"
+
+
+# =============================================================================
+# Test: name validation, 405 answers and the Professional tier gate
+# =============================================================================
+
+UNSAFE_SEGMENTS = ["..", ".", "%2e%2e", "..%2Fetc", "a%5Cb", "%00", "x" * 129, "v2.1"]
+
+DETAIL_OPERATIONS = [
+    ("GET", "/api/v1/km/checkpoints/{name}", "get_checkpoint_metadata"),
+    ("DELETE", "/api/v1/km/checkpoints/{name}", "delete_checkpoint"),
+    ("POST", "/api/v1/km/checkpoints/{name}/restore", "restore_checkpoint"),
+    ("GET", "/api/v1/km/checkpoints/{name}/compare", "list_checkpoints"),
+]
+
+ALL_OPERATIONS = [
+    ("GET", "/api/v1/km/checkpoints", None),
+    ("POST", "/api/v1/km/checkpoints", {"name": "cp-new"}),
+    ("POST", "/api/v1/km/checkpoints/compare", {"checkpoint_a": "cp-a", "checkpoint_b": "cp-b"}),
+    ("GET", "/api/v1/km/checkpoints/cp-1", None),
+    ("DELETE", "/api/v1/km/checkpoints/cp-1", None),
+    ("GET", "/api/v1/km/checkpoints/cp-1/compare", None),
+    ("POST", "/api/v1/km/checkpoints/cp-1/restore", {}),
+]
+
+STORE_METHODS = (
+    "list_checkpoints",
+    "create_checkpoint",
+    "get_checkpoint_metadata",
+    "delete_checkpoint",
+    "restore_checkpoint",
+    "compare_checkpoints",
+)
+
+
+def _assert_store_untouched(store) -> None:
+    for name in STORE_METHODS:
+        getattr(store, name).assert_not_called()
+
+
+async def _call(handler, method, path, body=None, auth_context=None):
+    mock_handler = _MockHTTPHandler(method=method, path=path, body=body)
+    if auth_context is not None:
+        mock_handler._auth_context = auth_context
+    entry = {
+        "GET": handler.handle_get,
+        "POST": handler.handle_post,
+        "DELETE": handler.handle_delete,
+    }
+    if method in entry:
+        return await entry[method](path=path, query_params={}, handler=mock_handler)
+    result = handler.handle(path, {}, mock_handler)
+    return await result if inspect.isawaitable(result) else result
+
+
+class TestCheckpointNameValidation:
+    @pytest.mark.parametrize("name", UNSAFE_SEGMENTS)
+    @pytest.mark.parametrize(("method", "template", "store_method"), DETAIL_OPERATIONS)
+    async def test_unsafe_names_rejected_before_store(
+        self, handler_with_store, mock_store, method, template, store_method, name
+    ):
+        result = await _call(handler_with_store, method, template.format(name=name), body={})
+        assert _status(result) == 400
+        getattr(mock_store, store_method).assert_not_called()
+
+    async def test_compare_body_names_are_validated(self, handler_with_store, mock_store):
+        body = {"checkpoint_a": "../secrets", "checkpoint_b": "cp-beta"}
+        result = await _call(handler_with_store, "POST", "/api/v1/km/checkpoints/compare", body)
+        assert _status(result) == 400
+        mock_store.compare_checkpoints.assert_not_called()
+
+    async def test_store_name_rejection_maps_to_400(self, handler_with_store, mock_store):
+        mock_store.get_checkpoint_metadata.side_effect = (
+            checkpoint_module.InvalidCheckpointNameError("resolves outside")
+        )
+        result = await _call(handler_with_store, "GET", "/api/v1/km/checkpoints/km_ckpt_link")
+        assert _status(result) == 400
+
+
+class TestMethodNotAllowed:
+    @pytest.mark.parametrize(
+        ("method", "path", "allow"),
+        [
+            ("PUT", "/api/v1/km/checkpoints", "GET, POST"),
+            ("GET", "/api/v1/km/checkpoints/compare", "POST"),
+            ("PATCH", "/api/km/checkpoints/compare", "POST"),
+            ("DELETE", "/api/v1/km/checkpoints/compare", "POST"),
+            ("POST", "/api/v1/km/checkpoints/cp-1", "GET, DELETE"),
+            ("PUT", "/api/km/checkpoints/cp-1", "GET, DELETE"),
+            ("POST", "/api/v1/km/checkpoints/cp-1/compare", "GET"),
+            ("DELETE", "/api/v1/km/checkpoints/cp-1/compare", "GET"),
+            ("GET", "/api/v1/km/checkpoints/cp-1/restore", "POST"),
+            ("PATCH", "/api/v1/km/checkpoints/cp-1/restore", "POST"),
+        ],
+    )
+    async def test_unsupported_method_gets_405_with_allow(
+        self, handler_with_store, mock_store, method, path, allow
+    ):
+        result = await _call(handler_with_store, method, path, body={})
+        assert _status(result) == 405
+        assert result.headers.get("Allow") == allow
+        _assert_store_untouched(mock_store)
+
+
+class TestProfessionalTierGate:
+    @pytest.mark.parametrize(("method", "path", "body"), ALL_OPERATIONS)
+    async def test_free_tier_org_gets_403_on_every_route(
+        self, handler_with_store, mock_store, method, path, body
+    ):
+        ctx = AuthorizationContext(user_id="user-1", org_id="org-free", roles={"admin"})
+        with patch("aragora.billing.tier_gating._resolve_org_tier", return_value="free"):
+            result = await _call(handler_with_store, method, path, body, auth_context=ctx)
+        assert _status(result) == 403
+        assert _body(result)["code"] == "tier_insufficient"
+        assert _body(result)["required_tier"] == "professional"
+        _assert_store_untouched(mock_store)
+
+    async def test_professional_tier_org_is_served(self, handler_with_store, mock_store):
+        mock_store.get_checkpoint_metadata.return_value = MockCheckpointMetadata(name="cp-1")
+        ctx = AuthorizationContext(user_id="user-1", org_id="org-pro", roles={"admin"})
+        with patch("aragora.billing.tier_gating._resolve_org_tier", return_value="professional"):
+            result = await _call(
+                handler_with_store, "GET", "/api/v1/km/checkpoints/cp-1", auth_context=ctx
+            )
+        assert _status(result) == 200

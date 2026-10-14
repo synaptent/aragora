@@ -463,6 +463,192 @@ class TestKMCheckpointDispatch:
         assert not handler.can_handle("/api/v1/km/checkpoints-zz-nonexistent-canary-zz")
         assert not handler.can_handle("/api/v1/km/checkpointszz")
 
+    def test_can_handle_claims_only_implemented_detail_shapes(self) -> None:
+        handler = KMCheckpointHandler()
+        for path in (
+            "/api/v1/km/checkpoints/cp-1",
+            "/api/km/checkpoints/cp-1",
+            "/api/v1/km/checkpoints/cp-1/compare",
+            "/api/km/checkpoints/cp-1/restore",
+            "/api/v1/km/checkpoints/..",
+        ):
+            assert handler.can_handle(path), path
+        for path in (
+            "/api/v1/km/checkpoints/cp-1/download",
+            "/api/v1/km/checkpoints/cp-1/other",
+            "/api/v1/km/checkpoints/a/b/c",
+            "/api/v1/km/checkpointsX",
+        ):
+            assert not handler.can_handle(path), path
+
+    @pytest.mark.parametrize("prefix", ["/api/km/checkpoints", "/api/v1/km/checkpoints"])
+    @pytest.mark.parametrize(
+        ("method", "suffix", "role", "store_method"),
+        [
+            ("GET", "/cp-1", "member", "get_checkpoint_metadata"),
+            ("DELETE", "/cp-1", "admin", "delete_checkpoint"),
+            ("GET", "/cp-1/compare", "member", "list_checkpoints"),
+            ("POST", "/cp-1/restore", "admin", "restore_checkpoint"),
+        ],
+    )
+    def test_detail_routes_dispatch_both_forms(
+        self, prefix: str, method: str, suffix: str, role: str, store_method: str
+    ) -> None:
+        store = _checkpoint_store()
+        handled, status, _ = _dispatch_checkpoint(method, prefix + suffix, _auth_user(role), store)
+        assert handled is True
+        assert status == 200
+        getattr(store, store_method).assert_awaited_once()
+
+    @pytest.mark.parametrize(
+        ("method", "path", "allow"),
+        [
+            ("PUT", "/api/v1/km/checkpoints", "GET, POST"),
+            ("DELETE", "/api/km/checkpoints", "GET, POST"),
+            ("GET", "/api/v1/km/checkpoints/compare", "POST"),
+            ("PATCH", "/api/km/checkpoints/cp-1", "GET, DELETE"),
+            ("POST", "/api/v1/km/checkpoints/cp-1", "GET, DELETE"),
+            ("POST", "/api/v1/km/checkpoints/cp-1/compare", "GET"),
+            ("GET", "/api/km/checkpoints/cp-1/restore", "POST"),
+            ("PUT", "/api/v1/km/checkpoints/cp-1/restore", "POST"),
+        ],
+    )
+    def test_unsupported_methods_get_405_with_allow(
+        self, method: str, path: str, allow: str
+    ) -> None:
+        store = _checkpoint_store()
+        handled, status, instance = _dispatch_checkpoint(method, path, _auth_user("admin"), store)
+        assert handled is True
+        assert status == 405
+        sent_headers = {c.args[0]: c.args[1] for c in instance.send_header.call_args_list}
+        assert sent_headers.get("Allow") == allow
+        _assert_checkpoint_store_untouched(store)
+
+    @pytest.mark.parametrize(
+        ("method", "path"),
+        [
+            ("GET", "/api/v1/km/checkpoints/.."),
+            ("DELETE", "/api/v1/km/checkpoints/%2e%2e"),
+            ("POST", "/api/km/checkpoints/..%2Fetc/restore"),
+            ("GET", "/api/v1/km/checkpoints/a%5Cb/compare"),
+        ],
+    )
+    def test_traversal_names_rejected_with_400(self, method: str, path: str) -> None:
+        store = _checkpoint_store()
+        handled, status, _ = _dispatch_checkpoint(method, path, _auth_user("admin"), store)
+        assert handled is True
+        assert status == 400
+        _assert_checkpoint_store_untouched(store)
+
+    @pytest.mark.no_auto_auth
+    @pytest.mark.parametrize(
+        ("method", "path"),
+        [
+            ("GET", "/api/km/checkpoints/cp-1"),
+            ("DELETE", "/api/v1/km/checkpoints/cp-1"),
+            ("GET", "/api/v1/km/checkpoints/cp-1/compare"),
+            ("POST", "/api/v1/km/checkpoints/cp-1/restore"),
+        ],
+    )
+    def test_detail_routes_unauthenticated_get_401(self, method: str, path: str) -> None:
+        store = _checkpoint_store()
+        unauth = MagicMock(is_authenticated=False, error_reason=None)
+        handled, status, _ = _dispatch_checkpoint(method, path, unauth, store)
+        assert handled is True
+        assert status == 401
+        _assert_checkpoint_store_untouched(store)
+
+    @pytest.mark.no_auto_auth
+    @pytest.mark.parametrize(
+        ("method", "path"),
+        [("DELETE", "/api/v1/km/checkpoints/cp-1"), ("POST", "/api/km/checkpoints/cp-1/restore")],
+    )
+    def test_detail_mutations_forbidden_for_member(self, method: str, path: str) -> None:
+        store = _checkpoint_store()
+        handled, status, _ = _dispatch_checkpoint(method, path, _auth_user("member"), store)
+        assert handled is True
+        assert status == 403
+        _assert_checkpoint_store_untouched(store)
+
+    @pytest.mark.parametrize(
+        ("method", "path"),
+        [
+            ("GET", "/api/v1/km/checkpoints"),
+            ("POST", "/api/km/checkpoints"),
+            ("POST", "/api/v1/km/checkpoints/compare"),
+            ("GET", "/api/km/checkpoints/cp-1"),
+            ("DELETE", "/api/v1/km/checkpoints/cp-1"),
+            ("GET", "/api/v1/km/checkpoints/cp-1/compare"),
+            ("POST", "/api/v1/km/checkpoints/cp-1/restore"),
+        ],
+    )
+    def test_free_tier_org_denied_on_every_route(self, method: str, path: str) -> None:
+        store = _checkpoint_store()
+        with patch("aragora.billing.tier_gating._resolve_org_tier", return_value="free"):
+            handled, status, instance = _dispatch_checkpoint(
+                method, path, _auth_user("admin"), store
+            )
+        assert handled is True
+        assert status == 403
+        assert json.loads(instance.wfile.getvalue())["code"] == "tier_insufficient"
+        _assert_checkpoint_store_untouched(store)
+
+
+_CHECKPOINT_STORE_METHODS = (
+    "list_checkpoints",
+    "create_checkpoint",
+    "get_checkpoint_metadata",
+    "delete_checkpoint",
+    "restore_checkpoint",
+    "compare_checkpoints",
+)
+
+
+def _checkpoint_store() -> MagicMock:
+    meta = MagicMock(
+        id="cp-1",
+        description="",
+        created_at="2026-10-14T00:00:00",
+        node_count=1,
+        size_bytes=10,
+        compressed=True,
+        tags=[],
+        checksum="c",
+    )
+    meta.name = "cp-1"
+    restored = MagicMock(
+        success=True, checkpoint_id="cp-1", nodes_restored=1, relationships_restored=0, errors=[]
+    )
+    store = MagicMock()
+    store.list_checkpoints = AsyncMock(return_value=[meta])
+    store.create_checkpoint = AsyncMock(return_value="cp-1")
+    store.get_checkpoint_metadata = AsyncMock(return_value=meta)
+    store.delete_checkpoint = AsyncMock(return_value=True)
+    store.restore_checkpoint = AsyncMock(return_value=restored)
+    store.compare_checkpoints = AsyncMock(return_value={"node_count_diff": 0})
+    return store
+
+
+def _assert_checkpoint_store_untouched(store: MagicMock) -> None:
+    for name in _CHECKPOINT_STORE_METHODS:
+        getattr(store, name).assert_not_called()
+
+
+def _dispatch_checkpoint(
+    method: str, path: str, user: MagicMock, store: MagicMock
+) -> tuple[bool, int | None, Any]:
+    instance, index = _make_dispatch_instance(
+        {"_km_checkpoint_handler": KMCheckpointHandler()}, method=method
+    )
+    body = {"name": "cp-new", "checkpoint_a": "cp-a", "checkpoint_b": "cp-b"}
+    with (
+        patch.object(KMCheckpointHandler, "_get_checkpoint_store", return_value=store),
+        patch.object(KMCheckpointHandler, "read_json_body", return_value=body),
+        patch("aragora.billing.jwt_auth.extract_user_from_request", return_value=user),
+    ):
+        handled, status = _dispatch(instance, index, path)
+    return handled, status, instance
+
 
 class TestMatchesStatsDispatch:
     @pytest.mark.parametrize("path", ["/api/matches/stats", "/api/v1/matches/stats"])
