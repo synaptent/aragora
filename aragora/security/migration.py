@@ -16,6 +16,8 @@ from __future__ import annotations
 import asyncio
 import base64
 import concurrent.futures
+import contextvars
+import inspect
 import logging
 import os
 import sqlite3
@@ -277,20 +279,80 @@ class _StoreListingError(RuntimeError):
     """A store could not list its records; the cause is logged, never reported."""
 
 
-def _list_store_records(store: Any, store_name: str, limit: int | None = None) -> list[Any]:
-    """Await ``store.list_all()``, turning every non-import failure into a listing error.
+class _StorePass:
+    """A store plus the SQLite connections that one migration or rotation pass owns.
+
+    The SQLite stores (and the SQLite store inside their Redis variants) cache
+    one connection per context in a ContextVar and keep every connection they
+    open until the store itself is closed. ``run_async`` runs each call in a
+    copied context, or an empty one on its worker thread, so a pass making one
+    call per record would open and keep one connection per record. Each call
+    made through :meth:`run` first binds this pass's own connection in the
+    context the call runs in, and :meth:`close` closes only those connections.
+    A connection bound in the caller's context or opened by any other context
+    is never used or closed. Other backends are called exactly as before.
+    """
+
+    def __init__(self, store: Any, sqlite_type: type) -> None:
+        self.store = store
+        backends = (store, getattr(store, "_sqlite", None))
+        self._owned: list[list[Any]] = [
+            [backend, None] for backend in backends if isinstance(backend, sqlite_type)
+        ]
+
+    def _bind(self) -> None:
+        for entry in self._owned:
+            backend, conn = entry
+            if conn is None:
+                # An empty context, so the store opens a new connection rather than
+                # returning one already bound for the caller.
+                conn = entry[1] = contextvars.Context().run(backend._get_conn)
+            backend._conn_var.set(conn)
+
+    async def _bound(self, coro: Coroutine[Any, Any, T]) -> T:
+        self._bind()
+        return await coro
+
+    def run(self, coro: Coroutine[Any, Any, T]) -> T:
+        """Run ``coro`` through ``run_async`` on this pass's connections."""
+        from aragora.utils.async_utils import run_async
+
+        try:
+            return run_async(self._bound(coro))
+        finally:
+            # Not started when binding failed or run_async refused the call.
+            if (
+                inspect.iscoroutine(coro)
+                and inspect.getcoroutinestate(coro) == inspect.CORO_CREATED
+            ):
+                coro.close()
+
+    def close(self) -> None:
+        """Close the connections this pass opened; the store stays open."""
+        owned, self._owned = self._owned, []
+        for backend, conn in owned:
+            if conn is None:
+                continue
+            with backend._connections_lock:
+                backend._connections.discard(conn)
+            conn.close()
+
+
+def _list_store_records(
+    store_pass: _StorePass, store_name: str, limit: int | None = None
+) -> list[Any]:
+    """Await the pass store's ``list_all()``; every non-import failure is a listing error.
 
     With ``limit``, a store holding more than ``limit`` records is a listing
     error rather than a silently partial list. ImportError propagates so
     callers keep their optional-dependency handling.
     """
-    from aragora.utils.async_utils import run_async
-
+    store = store_pass.store
     try:
         if limit is None:
-            records = list(run_async(store.list_all()))
+            records = list(store_pass.run(store.list_all()))
         else:
-            records = list(run_async(store.list_all(limit=limit + 1)))
+            records = list(store_pass.run(store.list_all(limit=limit + 1)))
     except ImportError:
         raise
     except Exception as e:  # noqa: BLE001 - driver errors (sqlite3, asyncpg) are not builtins
@@ -344,8 +406,11 @@ def migrate_integration_store(dry_run: bool = False) -> MigrationResult:
     """Migrate integration store secrets."""
     try:
         from aragora.storage.integration_models import EncryptionError
-        from aragora.storage.integration_store import SENSITIVE_KEYS, get_integration_store
-        from aragora.utils.async_utils import run_async
+        from aragora.storage.integration_store import (
+            SENSITIVE_KEYS,
+            SQLiteIntegrationStore,
+            get_integration_store,
+        )
 
         store = get_integration_store()
         result = MigrationResult(store_name="integration_store")
@@ -353,51 +418,66 @@ def migrate_integration_store(dry_run: bool = False) -> MigrationResult:
         # Exactly the keys the store encrypts on save, so every plaintext one is re-saved.
         sensitive_fields = sorted(SENSITIVE_KEYS)
 
+        store_pass = _StorePass(store, SQLiteIntegrationStore)
         try:
-            configs = _list_store_records(store, result.store_name, limit=_INTEGRATION_LIST_LIMIT)
-        except _StoreListingError:
-            return _listing_failed(result)
-        result.total_records = len(configs)
-
-        logger.info(
-            "Starting migration for %s: %s records",
-            result.store_name,
-            result.total_records,
-        )
-
-        for config in configs:
-            integration_type = str(getattr(config, "type", "") or "unknown")
-            user_id = str(getattr(config, "user_id", "") or "default")
-            record_id = f"{user_id}:{integration_type}"
-
             try:
-                settings = getattr(config, "settings", {})
-                if isinstance(settings, dict) and any(
-                    is_field_encrypted(settings.get(name)) for name in sensitive_fields
-                ):
-                    # The store returns settings it could not decrypt unchanged. Such a record
-                    # is not cleanly encrypted, and saving it would encrypt that ciphertext again.
-                    raise ValueError("Store returned a setting it could not decrypt")
-                if not isinstance(settings, dict) or not needs_migration(
-                    settings, sensitive_fields
-                ):
-                    result.already_encrypted += 1
-                    continue
+                configs = _list_store_records(
+                    store_pass, result.store_name, limit=_INTEGRATION_LIST_LIMIT
+                )
+            except _StoreListingError:
+                return _listing_failed(result)
+            result.total_records = len(configs)
 
-                if dry_run:
+            logger.info(
+                "Starting migration for %s: %s records",
+                result.store_name,
+                result.total_records,
+            )
+
+            for config in configs:
+                integration_type = str(getattr(config, "type", "") or "unknown")
+                user_id = str(getattr(config, "user_id", "") or "default")
+                record_id = f"{user_id}:{integration_type}"
+
+                try:
+                    settings = getattr(config, "settings", {})
+                    if isinstance(settings, dict) and any(
+                        is_field_encrypted(settings.get(name)) for name in sensitive_fields
+                    ):
+                        # The store returns settings it could not decrypt unchanged. Such a
+                        # record is not cleanly encrypted, and saving it would encrypt that
+                        # ciphertext again.
+                        raise ValueError("Store returned a setting it could not decrypt")
+                    if not isinstance(settings, dict) or not needs_migration(
+                        settings, sensitive_fields
+                    ):
+                        result.already_encrypted += 1
+                        continue
+
+                    if dry_run:
+                        result.migrated_records += 1
+                        logger.debug("[DRY RUN] Would migrate record: %s", record_id)
+                        continue
+
+                    store_pass.run(store.save(config))
                     result.migrated_records += 1
-                    logger.debug("[DRY RUN] Would migrate record: %s", record_id)
-                    continue
+                    logger.debug("Migrated record: %s", record_id)
+                except (
+                    KeyError,
+                    ValueError,
+                    TypeError,
+                    RuntimeError,
+                    OSError,
+                    sqlite3.Error,
+                    EncryptionError,
+                ) as e:
+                    result.failed_records += 1
+                    result.errors.append(f"Error migrating record: {record_id}")
+                    logger.warning("Failed to migrate record %s: %s", record_id, type(e).__name__)
 
-                run_async(store.save(config))
-                result.migrated_records += 1
-                logger.debug("Migrated record: %s", record_id)
-            except (KeyError, ValueError, TypeError, RuntimeError, OSError, EncryptionError) as e:
-                result.failed_records += 1
-                result.errors.append(f"Error migrating record: {record_id}")
-                logger.warning("Failed to migrate record %s: %s", record_id, type(e).__name__)
-
-        return _finish_migration(result)
+            return _finish_migration(result)
+        finally:
+            store_pass.close()
     except ImportError as e:
         logger.warning("Integration store not available: %s", e)
         return MigrationResult(
@@ -416,55 +496,59 @@ def migrate_gmail_token_store(dry_run: bool = False) -> MigrationResult:
         from aragora.storage.gmail_token_store import (
             ENCRYPTED_FIELDS,
             EncryptionError,
+            SQLiteGmailTokenStore,
             get_gmail_token_store,
         )
-        from aragora.utils.async_utils import run_async
 
         store = get_gmail_token_store()
         result = MigrationResult(store_name="gmail_token_store")
 
+        store_pass = _StorePass(store, SQLiteGmailTokenStore)
         try:
-            states = _list_store_records(store, result.store_name)
-        except _StoreListingError:
-            return _listing_failed(result)
-        result.total_records = len(states)
-
-        logger.info(
-            "Starting migration for %s: %s records",
-            result.store_name,
-            result.total_records,
-        )
-
-        for state in states:
-            user_id = str(getattr(state, "user_id", "") or "unknown")
             try:
-                tokens = [getattr(state, name) for name in ENCRYPTED_FIELDS]
-                if not any(tokens):
-                    result.already_encrypted += 1
-                    continue
-                if any(_is_undecrypted_token(token) for token in tokens):
-                    raise ValueError("Store returned a token it could not decrypt")
+                states = _list_store_records(store_pass, result.store_name)
+            except _StoreListingError:
+                return _listing_failed(result)
+            result.total_records = len(states)
 
-                if dry_run:
-                    logger.debug("[DRY RUN] Would migrate record: %s", user_id)
-                else:
-                    run_async(store.save(state))
-                result.migrated_records += 1
-            except (
-                AttributeError,
-                KeyError,
-                ValueError,
-                TypeError,
-                RuntimeError,
-                OSError,
-                sqlite3.Error,
-                EncryptionError,
-            ) as e:
-                result.failed_records += 1
-                result.errors.append(f"Error migrating record: {user_id}")
-                logger.warning("Failed to migrate record %s: %s", user_id, type(e).__name__)
+            logger.info(
+                "Starting migration for %s: %s records",
+                result.store_name,
+                result.total_records,
+            )
 
-        return _finish_migration(result)
+            for state in states:
+                user_id = str(getattr(state, "user_id", "") or "unknown")
+                try:
+                    tokens = [getattr(state, name) for name in ENCRYPTED_FIELDS]
+                    if not any(tokens):
+                        result.already_encrypted += 1
+                        continue
+                    if any(_is_undecrypted_token(token) for token in tokens):
+                        raise ValueError("Store returned a token it could not decrypt")
+
+                    if dry_run:
+                        logger.debug("[DRY RUN] Would migrate record: %s", user_id)
+                    else:
+                        store_pass.run(store.save(state))
+                    result.migrated_records += 1
+                except (
+                    AttributeError,
+                    KeyError,
+                    ValueError,
+                    TypeError,
+                    RuntimeError,
+                    OSError,
+                    sqlite3.Error,
+                    EncryptionError,
+                ) as e:
+                    result.failed_records += 1
+                    result.errors.append(f"Error migrating record: {user_id}")
+                    logger.warning("Failed to migrate record %s: %s", user_id, type(e).__name__)
+
+            return _finish_migration(result)
+        finally:
+            store_pass.close()
     except ImportError as e:
         logger.warning("Gmail token store not available: %s", e)
         return MigrationResult(
@@ -1062,18 +1146,25 @@ def _get_integration_store_config() -> dict[str, Any] | None:
     """Get configuration for integration store re-encryption.
 
     The store decrypts settings when listing and encrypts them with the active
-    key when saving, so each listed config is re-saved as it was read.
+    key when saving, so each listed config is re-saved as it was read. The
+    returned ``close_fn`` must be called once the store has been processed.
     """
     try:
         from aragora.storage.integration_models import EncryptionError
-        from aragora.storage.integration_store import SENSITIVE_KEYS, get_integration_store
-        from aragora.utils.async_utils import run_async
+        from aragora.storage.integration_store import (
+            SENSITIVE_KEYS,
+            SQLiteIntegrationStore,
+            get_integration_store,
+        )
 
         store = get_integration_store()
+        store_pass = _StorePass(store, SQLiteIntegrationStore)
         configs_by_id: dict[str, Any] = {}
 
         def list_configs() -> list[dict[str, Any]]:
-            configs = _list_store_records(store, "integration_store", limit=_INTEGRATION_LIST_LIMIT)
+            configs = _list_store_records(
+                store_pass, "integration_store", limit=_INTEGRATION_LIST_LIMIT
+            )
             configs_by_id.clear()
             records: list[dict[str, Any]] = []
             for config in configs:
@@ -1085,7 +1176,7 @@ def _get_integration_store_config() -> dict[str, Any] | None:
 
         def save_config(record_id: str, _record: dict[str, Any]) -> bool:
             try:
-                run_async(store.save(configs_by_id[record_id]))
+                store_pass.run(store.save(configs_by_id[record_id]))
             except EncryptionError as e:
                 # Counted per record by the caller; only the type is passed on, as for Gmail.
                 raise RuntimeError(f"Saving settings failed: {type(e).__name__}") from e
@@ -1099,6 +1190,7 @@ def _get_integration_store_config() -> dict[str, Any] | None:
             "sensitive_fields": sorted(SENSITIVE_KEYS),
             "id_field": _INTEGRATION_RECORD_ID_FIELD,
             "force_resave": True,
+            "close_fn": store_pass.close,
         }
     except ImportError:
         return None
@@ -1108,21 +1200,23 @@ def _get_gmail_store_config() -> dict[str, Any] | None:
     """Get configuration for Gmail store re-encryption.
 
     The store decrypts tokens when listing and encrypts them with the active
-    key when saving, so each listed user state is re-saved as it was read.
+    key when saving, so each listed user state is re-saved as it was read. The
+    returned ``close_fn`` must be called once the store has been processed.
     """
     try:
         from aragora.storage.gmail_token_store import (
             ENCRYPTED_FIELDS,
             EncryptionError,
+            SQLiteGmailTokenStore,
             get_gmail_token_store,
         )
-        from aragora.utils.async_utils import run_async
 
         store = get_gmail_token_store()
+        store_pass = _StorePass(store, SQLiteGmailTokenStore)
         states_by_user: dict[str, Any] = {}
 
         def list_states() -> list[dict[str, Any]]:
-            states = _list_store_records(store, "gmail_token_store")
+            states = _list_store_records(store_pass, "gmail_token_store")
             states_by_user.clear()
             records: list[dict[str, Any]] = []
             for state in states:
@@ -1135,7 +1229,7 @@ def _get_gmail_store_config() -> dict[str, Any] | None:
             if any(_is_undecrypted_token(record.get(name)) for name in ENCRYPTED_FIELDS):
                 raise RuntimeError("Store returned a token it could not decrypt")
             try:
-                run_async(store.save(states_by_user[user_id]))
+                store_pass.run(store.save(states_by_user[user_id]))
             except EncryptionError as e:
                 # Counted as a per-record failure by the caller; the store's message
                 # can carry key or path detail, so only the type is passed on.
@@ -1148,6 +1242,7 @@ def _get_gmail_store_config() -> dict[str, Any] | None:
             "sensitive_fields": list(ENCRYPTED_FIELDS),
             "id_field": "user_id",
             "force_resave": True,
+            "close_fn": store_pass.close,
         }
     except ImportError:
         return None
