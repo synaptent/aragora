@@ -998,6 +998,25 @@ class TestStoreMigrations:
         else:
             assert after["user-0"]["api_key"]["_encrypted"] is True
 
+    @pytest.mark.parametrize("dry_run", [False, True])
+    def test_record_with_only_undecryptable_settings_is_failed_not_clean(
+        self, integration_sqlite_store, dry_run
+    ):
+        _insert_raw_slack_settings(
+            integration_sqlite_store,
+            {"bot_token": _foreign_settings_value("bot_token", "xoxb-FAKE-foreign")},
+        )
+        before = _raw_integration_settings(integration_sqlite_store)
+
+        result = migrate_integration_store(dry_run=dry_run)
+
+        assert result.success is False
+        assert result.failed_records == 1
+        assert result.already_encrypted == 0
+        assert result.migrated_records == 0
+        assert result.errors == ["Error migrating record: user-1:slack"]
+        assert _raw_integration_settings(integration_sqlite_store) == before
+
 
 class TestGmailTokenMigration:
     """Gmail migration against a real temp SQLite store and a throwaway key."""
