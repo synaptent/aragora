@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 from datetime import datetime, timezone
 from typing import Any
 
@@ -76,6 +77,7 @@ _decision_result_store = LazyStoreFactory(
 
 # Fallback in-memory cache (used only if persistent store fails)
 _decision_results_fallback: dict[str, dict[str, Any]] = {}
+_fallback_lock = threading.Lock()
 
 
 def _save_result(
@@ -92,22 +94,23 @@ def _save_result(
             return bool(store.save(request_id, data, org_id=org_id, created_by=created_by))
         except (KeyError, ValueError, OSError, TypeError) as e:
             logger.warning("Failed to persist result, using fallback: %s", e)
-    # Fallback to in-memory; an existing owner is kept, as in the store.
-    previous = _decision_results_fallback.get(request_id) or {}
-    if previous.get("org_id") and previous["org_id"] != (org_id or data.get("org_id")):
-        logger.warning("Refused to save decision result %s for another org", request_id)
-        return False
-    owner_org = previous.get("org_id") or org_id or data.get("org_id")
-    owner_user = (
-        previous.get("created_by")
-        if previous.get("org_id")
-        else (created_by or data.get("created_by"))
-    )
-    _decision_results_fallback[request_id] = {
-        **data,
-        "org_id": owner_org,
-        "created_by": owner_user,
-    }
+    # In-memory fallback keeps an existing owner; locked as requests run on many threads.
+    with _fallback_lock:
+        previous = _decision_results_fallback.get(request_id) or {}
+        if previous.get("org_id") and previous["org_id"] != (org_id or data.get("org_id")):
+            logger.warning("Refused to save decision result %s for another org", request_id)
+            return False
+        owner_org = previous.get("org_id") or org_id or data.get("org_id")
+        owner_user = (
+            previous.get("created_by")
+            if previous.get("org_id")
+            else (created_by or data.get("created_by"))
+        )
+        _decision_results_fallback[request_id] = {
+            **data,
+            "org_id": owner_org,
+            "created_by": owner_user,
+        }
     return True
 
 

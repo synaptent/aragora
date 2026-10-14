@@ -9,6 +9,7 @@ Tests cover:
 - Persistence across restarts
 """
 
+import os
 import pytest
 import time
 from pathlib import Path
@@ -19,6 +20,10 @@ from aragora.storage.decision_result_store import (
     get_decision_result_store,
     reset_decision_result_store,
 )
+from tests.conftest import REQUIRES_POSTGRES, requires_postgres
+
+_PG_URL = os.environ.get("DATABASE_URL")  # read at import: an autouse fixture unsets it
+_postgres = pytest.mark.skipif(requires_postgres, reason=REQUIRES_POSTGRES)
 
 
 class TestDecisionResultEntry:
@@ -330,20 +335,23 @@ class TestDecisionResultOwnership:
         assert store.count_for_org("org-none") == 0
         assert store.count() == 4
 
-    def test_later_save_does_not_change_owner(self, store, temp_db):
-        assert store.save("req-1", {"status": "pending"}, org_id="org-a", created_by="u1")
-        assert not store.save("req-1", {"status": "done", "error": "x"}, org_id="org-b")
-        assert not store.save("req-1", {"status": "failed", "result": {"answer": "x"}})
+    @pytest.mark.parametrize("backend", ["sqlite", pytest.param("postgresql", marks=_postgres)])
+    def test_later_save_does_not_change_owner(self, temp_db, backend):
+        open_store = lambda: DecisionResultStore(temp_db, backend=backend, database_url=_PG_URL)
+        store, rid = open_store(), f"req-{time.time_ns()}"
+        assert store.save(rid, {"status": "pending"}, org_id="org-a", created_by="u1")
+        assert not store.save(rid, {"status": "done", "error": "x"}, org_id="org-b")
+        assert not store.save(rid, {"status": "failed", "result": {"answer": "x"}})
 
-        cached = store.get("req-1")
+        cached = store.get(rid)
         assert (cached["status"], cached["error"], cached["result"]) == ("pending", None, {})
         assert (cached["org_id"], cached["created_by"]) == ("org-a", "u1")
-        fresh = DecisionResultStore(db_path=temp_db).get("req-1")
+        fresh = open_store().get(rid)
         assert (fresh["status"], fresh["error"], fresh["result"]) == ("pending", None, {})
         assert (fresh["org_id"], fresh["created_by"]) == ("org-a", "u1")
         assert store.count_for_org("org-b") == 0
-        assert store.save("req-1", {"status": "completed"}, org_id="org-a")
-        assert DecisionResultStore(db_path=temp_db).get("req-1")["status"] == "completed"
+        assert store.save(rid, {"status": "completed"}, org_id="org-a")
+        assert open_store().get(rid)["status"] == "completed"
 
     def test_save_from_uncached_instance_keeps_stored_owner(self, store, temp_db):
         store.save("req-1", {"status": "pending"}, org_id="org-a", created_by="u1")

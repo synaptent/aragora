@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -23,6 +24,7 @@ import os
 import pytest
 
 from aragora.server.handlers.decision import DecisionHandler
+from aragora.server.handlers.decisions import decision as decision_mod
 
 
 # ===========================================================================
@@ -990,17 +992,34 @@ async def test_other_org_cannot_overwrite_a_decision(tmp_path, monkeypatch, pers
     async def create(org, body):
         monkeypatch.setattr(mod, "require_org_scope", lambda handler: (scopes[org], None))
         result = await h.handle_post("/api/v1/decisions", {}, create_mock_handler("POST", body))
-        return json.loads(result.body)
+        return result.status_code, json.loads(result.body)
 
     def read(org, request_id):
-        return json.loads(h._get_decision(request_id, scopes[org]).body)
+        result = h._get_decision(request_id, scopes[org])
+        return result.status_code, json.loads(result.body)
 
-    rid_a = (await create("A", {"content": "A?"}))["request_id"]
+    rid_a = (await create("A", {"content": "A?"}))[1]["request_id"]
     before = read("A", rid_a)
     reused = await create("B", {"content": "B?", "request_id": rid_a})
     refused = mod._save_result(rid_a, {"request_id": rid_a, "status": "failed"}, org_id="B")
 
-    assert reused == read("B", rid_a) == {"error": "Decision not found", "code": "not_found"}
+    missing = (404, {"error": "Decision not found", "code": "not_found"})
+    assert reused == read("B", rid_a) == read("B", "dec_never_created") == missing
     assert refused is False
     assert read("A", rid_a) == before
-    assert before["result"]["answer"] == "Answer for: A?"
+    assert before[1]["result"]["answer"] == "Answer for: A?"
+
+
+async def test_fallback_save_refuses_other_org_atomically_across_threads(monkeypatch):
+    class _SlowReads(dict):  # unless check and write are atomic, both orgs read "unowned"
+        def get(self, *args):
+            value = super().get(*args)
+            time.sleep(0.2)
+            return value
+
+    monkeypatch.setattr(decision_mod._decision_result_store, "get", lambda: None)
+    monkeypatch.setattr(decision_mod, "_decision_results_fallback", _SlowReads())
+    save = decision_mod._save_result
+    saved = await asyncio.gather(*(asyncio.to_thread(save, "r", {}, org_id=o) for o in "AB"))
+
+    assert sorted(saved) == [False, True]
