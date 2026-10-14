@@ -1891,23 +1891,67 @@ def _is_open(conn: sqlite3.Connection) -> bool:
     return True
 
 
+def _connections_left_open(
+    pass_name: str, directory: Path, count: int, run_pass: Any = _run_pass
+) -> int:
+    """Run one pass over ``count`` seeded records; count the connections it left open."""
+    store, factory = _pass_store(pass_name, directory)
+    _seed_pass_records(pass_name, store, count)
+    with patch(factory, return_value=store), _sqlite_connections_opened() as opened:
+        assert run_pass(pass_name) == count
+    left_open = sum(_is_open(conn) for conn in opened)
+    asyncio.run(store.close())
+    return left_open
+
+
+async def _run_pass_on_running_loop(pass_name: str) -> int:
+    return _run_pass(pass_name)
+
+
 class TestPassConnectionLifetime:
     """Each migration and rotation pass closes the SQLite connections it opened, and only those."""
+
+    @pytest.fixture
+    def running_pool_loop(self, monkeypatch):
+        loop = asyncio.new_event_loop()
+        thread = threading.Thread(target=loop.run_forever, name="test-pool-loop", daemon=True)
+        thread.start()
+        monkeypatch.setattr(async_utils, "_pool_event_loop_provider", lambda: loop)
+        yield loop
+        loop.call_soon_threadsafe(loop.stop)
+        thread.join(timeout=5)
+        loop.close()
 
     @pytest.mark.parametrize("pass_name", _CONNECTION_PASSES)
     def test_open_connections_do_not_grow_with_record_count(
         self, tmp_path, throwaway_encryption, pass_name
     ):
-        left_open = {}
-        for count in (8, 32):
-            store, factory = _pass_store(pass_name, tmp_path / str(count))
-            _seed_pass_records(pass_name, store, count)
-            with patch(factory, return_value=store), _sqlite_connections_opened() as opened:
-                assert _run_pass(pass_name) == count
-            left_open[count] = sum(_is_open(conn) for conn in opened)
-            asyncio.run(store.close())
+        left_open = {
+            count: _connections_left_open(pass_name, tmp_path / str(count), count)
+            for count in (8, 32)
+        }
 
         assert left_open == {8: 0, 32: 0}
+
+    @pytest.mark.parametrize("pass_name", _CONNECTION_PASSES)
+    def test_no_connection_left_open_when_calls_run_on_the_pool_loop(
+        self, tmp_path, throwaway_encryption, running_pool_loop, pass_name
+    ):
+        assert _connections_left_open(pass_name, tmp_path / "store", 8) == 0
+
+    @pytest.mark.parametrize("pass_name", _CONNECTION_PASSES)
+    def test_no_connection_left_open_when_calls_run_on_worker_threads(
+        self, tmp_path, throwaway_encryption, monkeypatch, pass_name
+    ):
+        # Inside a running loop, with no pool loop and no nest_asyncio, run_async
+        # runs each call on a fresh worker thread that starts with an empty context.
+        monkeypatch.setattr(async_utils, "_pool_event_loop_provider", None)
+        monkeypatch.setitem(sys.modules, "nest_asyncio", None)
+
+        def run_inside_loop(name: str) -> int:
+            return asyncio.run(_run_pass_on_running_loop(name))
+
+        assert _connections_left_open(pass_name, tmp_path / "store", 8, run_inside_loop) == 0
 
     @pytest.mark.parametrize("pass_name", _CONNECTION_PASSES)
     def test_connections_held_by_other_contexts_stay_open_and_bound(
