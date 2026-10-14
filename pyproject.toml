@@ -266,6 +266,12 @@ workflow = "aragora.workflow.debate_registration:register_debate_workflow_backen
 [project.entry-points."aragora.email_senders"]
 integrations = "aragora.integrations.email_sender_registration:register_email_sender"
 
+# Run by aragora/debate/mode_prompts.py on the first mode prompt lookup that finds no
+# provider, so debate prompts include the active operational mode's system prompt without
+# the debate engine importing aragora.modes.
+[project.entry-points."aragora.debate_mode_prompts"]
+modes = "aragora.cli.mode_prompt_registration:register_mode_prompts"
+
 # -----------------------------------------------------------------------------
 # uv resolver constraints — security floors for the pip-audit security gate
 # (scripts/run_pip_audit_gate.py). They bound what the lockfile may resolve
