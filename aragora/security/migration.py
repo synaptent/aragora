@@ -372,15 +372,17 @@ def migrate_integration_store(dry_run: bool = False) -> MigrationResult:
 
             try:
                 settings = getattr(config, "settings", {})
+                if isinstance(settings, dict) and any(
+                    is_field_encrypted(settings.get(name)) for name in sensitive_fields
+                ):
+                    # The store returns settings it could not decrypt unchanged. Such a record
+                    # is not cleanly encrypted, and saving it would encrypt that ciphertext again.
+                    raise ValueError("Store returned a setting it could not decrypt")
                 if not isinstance(settings, dict) or not needs_migration(
                     settings, sensitive_fields
                 ):
                     result.already_encrypted += 1
                     continue
-                if any(is_field_encrypted(settings.get(name)) for name in sensitive_fields):
-                    # The store returns settings it could not decrypt unchanged, and saving
-                    # would encrypt that ciphertext again beside the plaintext secrets.
-                    raise ValueError("Store returned a setting it could not decrypt")
 
                 if dry_run:
                     result.migrated_records += 1
