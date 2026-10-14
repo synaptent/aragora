@@ -510,7 +510,7 @@ class JsonFormatter(logging.Formatter):
 
 
 class TextFormatter(logging.Formatter):
-    """Human-readable output, redacted as a whole line except for logger metadata.
+    """Human-readable output, redacted field by field, then as a line except for logger metadata.
 
     Extras and format defaults named like a secret print as ***; brace fields reaching into a
     secret-named attribute or item fail like other formatting errors. Logger, level, path, module,
@@ -525,8 +525,8 @@ class TextFormatter(logging.Formatter):
             raise ValueError("a brace field reaches into a secret")
         defaults = getattr(self._style, "_defaults", None) or {}
         safe = copy.copy(record)
-        secret = filter(_KEY_PATTERN.search, {*vars(record), *defaults} - _STANDARD_FIELDS)
-        safe.__dict__.update(dict.fromkeys(secret, _REDACTED))
+        extras = {key: value for key, value in vars(record).items() if key not in _STANDARD_FIELDS}
+        safe.__dict__.update(redact(dict.fromkeys(filter(_KEY_PATTERN.search, defaults)) | extras))
         safe.msg, safe.args, safe.exc_text = _message(record)[0], (), None
         # One private-use character per metadata character: never a secret's name, width-safe.
         table: dict[int, str] = {}

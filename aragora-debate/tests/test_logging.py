@@ -1847,11 +1847,9 @@ logging.getLogger({name!r}).warning("rotated token=SECRET-NAME-1")
     assert TextFormatter("%(name)s: %(message)s").format(record) == f"{name}: api_key=*** sent"
 
 
-_BYTES = {
-    b"Authorization: Bearer abc": b"Authorization: ***",
-    b"retry api_key=SECRET-X now": b"retry api_key=*** now",
-    b"\xff\xfe api_key=SECRET-X": b"***",
-}
+_BYTES = {b"Authorization: Bearer abc": b"Authorization: ***"}
+_BYTES[b"retry api_key=SECRET-X now"] = b"retry api_key=*** now"
+_BYTES[b"\xff\xfe api_key=SECRET-X"] = b"***"
 
 
 @pytest.mark.parametrize("kind", [bytes, bytearray])
@@ -1923,14 +1921,17 @@ _DEFAULTS = {"note": "password=LEAK-R1", "token": "LEAK-R1"}
 _LEAKS = {"api_key=%(credential)s": "api_key=***", "%(note)s": "password=***", "%(token)s": "***"}
 _LEAKS["{payload.__dict__}"] = "{'password': '***', 'inner': namespace(token='***')}"
 _LEAKS["{payload.inner.token}"] = _LEAKS["{payload.__dict__[_value].password}"] = "format_error"
+_DATA = {"items": [({"api_key[primary]": "LEAK-R1"},)]}
+_LEAKS["%(data)s %(message)s"] = _LEAKS["{data} {message}"] = "[({'api_key[primary]': '***'},)]"
 
 
 @pytest.mark.parametrize("text_format", _LEAKS)
 def test_labels_defaults_and_brace_traversal_are_redacted_with_the_line(text_format):
     style = "{" if "{" in text_format else "%"
-    record = logging.makeLogRecord({"credential": "LEAK-R1", "payload": _PAYLOAD})
+    record = logging.makeLogRecord({"credential": "LEAK-R1", "payload": _PAYLOAD, "data": _DATA})
     line = TextFormatter(text_format, style=style, defaults=_DEFAULTS).format(record)
     assert _LEAKS[text_format] in line and "LEAK-R1" not in line
+    assert _DATA == {"items": [({"api_key[primary]": "LEAK-R1"},)]}
 
 
 @pytest.mark.parametrize("field, shown", [("context", "{'api_key': '***'}"), ("api_token", "***")])
