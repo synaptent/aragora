@@ -16,7 +16,12 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any, Protocol
 
+from aragora.billing.tier_gating import TierInsufficientError, TrialExpiredError, require_tier
 from aragora.events.handler_events import emit_handler_event, CREATED
+from aragora.knowledge.mound.checkpoint import (
+    InvalidCheckpointNameError,
+    validate_checkpoint_name,
+)
 
 if TYPE_CHECKING:
     from aragora.knowledge.mound.checkpoint import KMCheckpointMetadata, KMCheckpointStore
@@ -106,6 +111,35 @@ _checkpoint_limiter = RateLimiter(requests_per_minute=20)
 # More restrictive rate limiter for write operations (5 per minute)
 _checkpoint_write_limiter = RateLimiter(requests_per_minute=5)
 
+_COLLECTION_PATH = "/api/v1/km/checkpoints"
+
+# Methods implemented per route shape; anything else answers 405 with Allow.
+_ALLOWED_METHODS: dict[str, tuple[str, ...]] = {
+    "collection": ("GET", "POST"),
+    "compare": ("POST",),
+    "detail": ("GET", "DELETE"),
+    "detail_compare": ("GET",),
+    "restore": ("POST",),
+}
+
+
+def _match_route(request_path: str) -> tuple[str, str | None] | None:
+    """Return ``(shape, name)`` for a canonical checkpoint path, or None if unrouted."""
+    if request_path == _COLLECTION_PATH:
+        return "collection", None
+    if request_path == _COLLECTION_PATH + "/compare":
+        return "compare", None
+    if not request_path.startswith(_COLLECTION_PATH + "/"):
+        return None
+    parts = request_path[len(_COLLECTION_PATH) + 1 :].split("/")
+    if not parts[0]:
+        return None
+    if len(parts) == 1:
+        return "detail", parts[0]
+    if len(parts) == 2 and parts[1] in ("compare", "restore"):
+        return ("detail_compare" if parts[1] == "compare" else "restore"), parts[0]
+    return None
+
 
 class KMCheckpointHandler(BaseHandler):
     """Handler for Knowledge Mound checkpoint management endpoints."""
@@ -118,12 +152,15 @@ class KMCheckpointHandler(BaseHandler):
         "/api/v1/km/checkpoints/compare",
     ]
 
+    # Detail paths reach the handler through these prefixes; can_handle() then
+    # accepts only the shapes in _match_route.
+    ROUTE_PREFIXES = ["/api/v1/km/checkpoints/", "/api/km/checkpoints/"]
+
     # Dynamic routes handled via pattern matching in handle_*
     dynamic_routes = [
         "/api/v1/km/checkpoints/{name}",
         "/api/v1/km/checkpoints/{name}/restore",
         "/api/v1/km/checkpoints/{name}/compare",
-        "/api/v1/km/checkpoints/{name}/download",
     ]
 
     def __init__(self, server_context: dict[str, Any] | None = None):
@@ -160,10 +197,9 @@ class KMCheckpointHandler(BaseHandler):
         return raw
 
     def can_handle(self, path: str) -> bool:
-        # Exact match only. BaseHandler.can_handle prefix-matches ROUTES, so the
-        # collection path would otherwise claim look-alike siblings and every
-        # /{name} detail path through the registry's can_handle fallback.
-        return self._request_path(path, None) in self.ROUTES
+        # Shape match, not BaseHandler's prefix match: look-alike siblings such
+        # as /checkpointsX and unimplemented sub-paths must stay unclaimed.
+        return _match_route(self._request_path(path, None)) is not None
 
     def _check_auth(self, handler: Any) -> tuple[dict[str, Any] | None, HandlerResult | None]:
         """Check authentication for checkpoint operations.
@@ -639,6 +675,8 @@ class KMCheckpointHandler(BaseHandler):
 
             if not checkpoint_a or not checkpoint_b:
                 return error_response("Both checkpoint_a and checkpoint_b are required", status=400)
+            validate_checkpoint_name(checkpoint_a)
+            validate_checkpoint_name(checkpoint_b)
 
             store = self._get_checkpoint_store()
             comparison = await store.compare_checkpoints(checkpoint_a, checkpoint_b)
@@ -652,15 +690,53 @@ class KMCheckpointHandler(BaseHandler):
             return error_response("Failed to compare checkpoints", status=500)
 
     def handle(self, path: str, query_params: dict[str, Any], handler: Any) -> Any:
-        """Route GET requests through handle_get for registry dispatch.
+        """Entry point for GET and for methods without a ``handle_*`` override.
 
-        The handler registry dispatches GET via ``handle()``; without this
-        alias the GET surface (list/get/compare) was unreachable.
+        The registry sends GET here, and PUT/PATCH fall through here because
+        BaseHandler's ``handle_put``/``handle_patch`` stubs return None.
         """
         method = (getattr(handler, "command", None) or "GET").upper()
-        if method != "GET":
-            return None
-        return self.handle_get(path, query_params, handler)
+        if method == "GET":
+            return self.handle_get(path, query_params, handler)
+        return self._route(method, path, handler)
+
+    async def _route(self, method: str, path: str, handler: Any) -> HandlerResult:
+        if handler is None:
+            return error_response("Missing handler", status=500)
+        route = _match_route(self._request_path(path, handler))
+        if route is None:
+            return error_response("Not found", status=404)
+        shape, name = route
+        allowed = _ALLOWED_METHODS[shape]
+        if method not in allowed:
+            return error_response(
+                "Method not allowed", status=405, headers={"Allow": ", ".join(allowed)}
+            )
+        try:
+            return await self._serve(method, shape, name, handler)
+        except (TierInsufficientError, TrialExpiredError) as e:
+            return json_response(e.to_response(), status=403)
+        except InvalidCheckpointNameError as e:
+            return error_response(str(e), status=400)
+
+    @require_tier("professional", feature_name="Knowledge Mound")
+    async def _serve(
+        self, method: str, shape: str, name: str | None, handler: Any
+    ) -> HandlerResult:
+        if name is None:
+            if shape == "compare":
+                return await self._compare_checkpoints(handler)
+            if method == "POST":
+                return await self._create_checkpoint(handler)
+            return await self._list_checkpoints(handler)
+        validate_checkpoint_name(name)
+        if shape == "restore":
+            return await self._restore_checkpoint(handler, name)
+        if shape == "detail_compare":
+            return await self._compare_checkpoint(handler, name)
+        if method == "DELETE":
+            return await self._delete_checkpoint(handler, name)
+        return await self._get_checkpoint(handler, name)
 
     @require_permission("knowledge:read")
     async def handle_get(
@@ -674,25 +750,7 @@ class KMCheckpointHandler(BaseHandler):
         Note: This overrides BaseHandler.handle() with async signature and different
         parameters to match the handler registry's calling convention.
         """
-        if handler is None:
-            return error_response("Missing handler", status=500)
-
-        request_path = self._request_path(path, handler)
-
-        if request_path == "/api/v1/km/checkpoints":
-            return await self._list_checkpoints(handler)
-
-        # Handle /api/km/checkpoints/{name} or /api/km/checkpoints/{name}/compare
-        if request_path.startswith("/api/v1/km/checkpoints/"):
-            parts = request_path.replace("/api/v1/km/checkpoints/", "").split("/")
-            name = parts[0]
-
-            if len(parts) == 1:
-                return await self._get_checkpoint(handler, name)
-            elif len(parts) == 2 and parts[1] == "compare":
-                return await self._compare_checkpoint(handler, name)
-
-        return error_response("Not found", status=404)
+        return await self._route("GET", path, handler)
 
     @handle_errors("k m checkpoint creation")
     @require_permission("knowledge:write")
@@ -707,23 +765,7 @@ class KMCheckpointHandler(BaseHandler):
         Note: This overrides BaseHandler.handle_post() with async signature to
         match the handler registry's calling convention.
         """
-        if handler is None:
-            return error_response("Missing handler", status=500)
-
-        request_path = self._request_path(path, handler)
-
-        if request_path == "/api/v1/km/checkpoints":
-            return await self._create_checkpoint(handler)
-
-        if request_path == "/api/v1/km/checkpoints/compare":
-            return await self._compare_checkpoints(handler)
-
-        # Handle /api/km/checkpoints/{name}/restore
-        if request_path.startswith("/api/v1/km/checkpoints/") and request_path.endswith("/restore"):
-            name = request_path.replace("/api/v1/km/checkpoints/", "").replace("/restore", "")
-            return await self._restore_checkpoint(handler, name)
-
-        return error_response("Not found", status=404)
+        return await self._route("POST", path, handler)
 
     @handle_errors("k m checkpoint deletion")
     @require_permission("knowledge:delete")
@@ -738,15 +780,4 @@ class KMCheckpointHandler(BaseHandler):
         Note: This overrides BaseHandler.handle_delete() with async signature to
         match the handler registry's calling convention.
         """
-        if handler is None:
-            return error_response("Missing handler", status=500)
-
-        request_path = self._request_path(path, handler)
-
-        # Handle /api/km/checkpoints/{name}
-        if request_path.startswith("/api/v1/km/checkpoints/"):
-            name = request_path.replace("/api/v1/km/checkpoints/", "")
-            if "/" not in name:  # Ensure it's just the name
-                return await self._delete_checkpoint(handler, name)
-
-        return error_response("Not found", status=404)
+        return await self._route("DELETE", path, handler)

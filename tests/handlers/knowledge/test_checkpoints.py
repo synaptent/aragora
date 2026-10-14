@@ -195,7 +195,7 @@ class TestHandlerInit:
         assert "/api/v1/km/checkpoints/{name}" in handler.dynamic_routes
         assert "/api/v1/km/checkpoints/{name}/restore" in handler.dynamic_routes
         assert "/api/v1/km/checkpoints/{name}/compare" in handler.dynamic_routes
-        assert "/api/v1/km/checkpoints/{name}/download" in handler.dynamic_routes
+        assert "/api/v1/km/checkpoints/{name}/download" not in handler.dynamic_routes
 
 
 # =============================================================================
