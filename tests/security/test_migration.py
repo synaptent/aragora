@@ -7,6 +7,7 @@ Tests automatic detection, migration, and startup migration functionality.
 import argparse
 import ast
 import asyncio
+import contextvars
 import importlib
 import json
 import logging
@@ -14,7 +15,7 @@ import secrets
 import sqlite3
 import sys
 import threading
-from contextlib import closing
+from contextlib import closing, contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
@@ -963,6 +964,34 @@ class TestStoreMigrations:
         assert "EncryptionError" in _migration_log(caplog)
         assert "secret-value" not in _migration_log(caplog) + " ".join(result.errors)
 
+    def test_sqlite_error_on_save_fails_each_record_without_raising(
+        self, integration_sqlite_store, caplog
+    ):
+        _insert_raw_integration_rows(integration_sqlite_store, 2)
+        before = _raw_integration_settings(integration_sqlite_store)
+        with closing(sqlite3.connect(integration_sqlite_store.db_path)) as conn:
+            # The trigger names a missing table, so the store's own save raises
+            # sqlite3.OperationalError with that name in the driver message.
+            conn.execute(
+                "CREATE TRIGGER fail_saves BEFORE INSERT ON integrations BEGIN "
+                'INSERT INTO "/data/secret-value/integrations.db" VALUES (1); END'
+            )
+            conn.commit()
+
+        with caplog.at_level(logging.DEBUG, logger="aragora.security.migration"):
+            result = migrate_integration_store(dry_run=False)
+
+        assert result.success is False
+        assert result.failed_records == 2
+        assert result.migrated_records == 0
+        assert sorted(result.errors) == [
+            "Error migrating record: user-0:slack",
+            "Error migrating record: user-1:slack",
+        ]
+        assert _raw_integration_settings(integration_sqlite_store) == before
+        assert "OperationalError" in _migration_log(caplog)
+        assert "secret-value" not in _migration_log(caplog) + " ".join(result.errors)
+
     @pytest.mark.parametrize("dry_run", [False, True])
     @pytest.mark.parametrize("plaintext_key", ["webhook_url", "api_key"])
     def test_undecryptable_setting_fails_mixed_record_and_leaves_it(
@@ -1789,6 +1818,124 @@ class TestRotationReencryptsRealStores:
         assert _raw_integration_settings(integration_sqlite_store) == before
         assert "EncryptionError" in _migration_log(caplog)
         assert "secret-value" not in _migration_log(caplog) + " ".join(result.errors)
+
+
+_CONNECTION_PASSES = [
+    "gmail_migration",
+    "gmail_rotation",
+    "integration_migration",
+    "integration_rotation",
+]
+
+
+def _pass_store(pass_name: str, directory: Path) -> tuple[Any, str]:
+    """A real temp SQLite store for one pass, and the factory path that returns it."""
+    directory.mkdir()
+    if pass_name.startswith("gmail"):
+        from aragora.storage.gmail_token_store import SQLiteGmailTokenStore
+
+        return (
+            SQLiteGmailTokenStore(directory / "gmail_tokens.db"),
+            "aragora.storage.gmail_token_store.get_gmail_token_store",
+        )
+    from aragora.storage.integration_sqlite import SQLiteIntegrationStore
+
+    return (
+        SQLiteIntegrationStore(directory / "integrations.db"),
+        "aragora.storage.integration_store.get_integration_store",
+    )
+
+
+def _seed_pass_records(pass_name: str, store: Any, count: int) -> None:
+    if pass_name.startswith("gmail"):
+        for index in range(count):
+            _insert_raw_gmail_row(store, f"user-{index}", f"ya29.FAKE-{index}", "")
+    else:
+        _insert_raw_integration_rows(store, count)
+
+
+def _run_pass(pass_name: str) -> int:
+    """Run one live pass and return how many records it re-saved."""
+    if pass_name == "gmail_migration":
+        result: Any = migrate_gmail_token_store(dry_run=False)
+    elif pass_name == "integration_migration":
+        result = migrate_integration_store(dry_run=False)
+    else:
+        result = rotate_encryption_key(dry_run=False, stores=[pass_name.split("_")[0]])
+    assert result.errors == []
+    if isinstance(result, MigrationResult):
+        return result.migrated_records
+    return result.records_reencrypted
+
+
+@contextmanager
+def _sqlite_connections_opened():
+    """Record every SQLite connection opened while the block runs."""
+    opened: list[sqlite3.Connection] = []
+    connect = sqlite3.connect
+
+    def recording_connect(*args: Any, **kwargs: Any) -> sqlite3.Connection:
+        conn = connect(*args, **kwargs)
+        opened.append(conn)
+        return conn
+
+    with patch("sqlite3.connect", recording_connect):
+        yield opened
+
+
+def _is_open(conn: sqlite3.Connection) -> bool:
+    try:
+        conn.execute("SELECT 1")
+    except sqlite3.ProgrammingError:
+        return False
+    return True
+
+
+class TestPassConnectionLifetime:
+    """Each migration and rotation pass closes the SQLite connections it opened, and only those."""
+
+    @pytest.mark.parametrize("pass_name", _CONNECTION_PASSES)
+    def test_open_connections_do_not_grow_with_record_count(
+        self, tmp_path, throwaway_encryption, pass_name
+    ):
+        left_open = {}
+        for count in (8, 32):
+            store, factory = _pass_store(pass_name, tmp_path / str(count))
+            _seed_pass_records(pass_name, store, count)
+            with patch(factory, return_value=store), _sqlite_connections_opened() as opened:
+                assert _run_pass(pass_name) == count
+            left_open[count] = sum(_is_open(conn) for conn in opened)
+            asyncio.run(store.close())
+
+        assert left_open == {8: 0, 32: 0}
+
+    @pytest.mark.parametrize("pass_name", _CONNECTION_PASSES)
+    def test_connections_held_by_other_contexts_stay_open_and_bound(
+        self, tmp_path, throwaway_encryption, pass_name
+    ):
+        store, factory = _pass_store(pass_name, tmp_path / "store")
+        _seed_pass_records(pass_name, store, 3)
+        caller = contextvars.copy_context()
+        held = caller.run(store._get_conn)
+        concurrent = contextvars.Context()
+        concurrent_conns: list[sqlite3.Connection] = []
+        save = store.save
+
+        async def save_while_another_context_connects(record: Any) -> None:
+            if not concurrent_conns:
+                concurrent_conns.append(concurrent.run(store._get_conn))
+            await save(record)
+
+        with (
+            patch(factory, return_value=store),
+            patch.object(store, "save", save_while_another_context_connects),
+        ):
+            assert caller.run(_run_pass, pass_name) == 3
+
+        for context, conn in ((caller, held), (concurrent, concurrent_conns[0])):
+            assert context.run(store._get_conn) is conn
+            assert conn.execute("SELECT 1").fetchone() == (1,)
+        asyncio.run(store.close())
 
 
 class TestMigrationAuditComposition:
