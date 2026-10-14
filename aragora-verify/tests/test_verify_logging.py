@@ -1725,3 +1725,97 @@ logging.getLogger("val").debug("visible")
         ARAGORA_LOG_LEVEL="debug",
     )
     assert json.loads(result.stderr)["level"] == "DEBUG"
+
+
+_SECRET_WORD_LOGGERS = ["aragora.security.token_rotation", "svc.authorization.check"]
+_SECRET_WORD_LOGGERS += ["api_key_loader", "password_reset"]
+
+
+@pytest.mark.parametrize("name", _SECRET_WORD_LOGGERS)
+def test_a_logger_name_with_a_secret_word_never_masks_the_message(name):
+    result = _probe(f"""
+from aragora_verify._logging import configure_logging
+import logging
+configure_logging()
+logging.getLogger({name!r}).warning("rotating keys")
+logging.getLogger({name!r}).warning("rotated token=SECRET-NAME-1")
+""")
+    assert result.stderr == f"WARNING {name}: rotating keys\nWARNING {name}: rotated token=***\n"
+    fields = dict(name=name, msg="rotating keys", pathname="token.py", funcName="api_key_get")
+    record = logging.makeLogRecord(fields)
+    assert TextFormatter("%(name)s: %(message)s").format(record) == f"{name}: rotating keys"
+    line = TextFormatter("%(pathname)s %(funcName)s %(name)s: %(message)s").format(record)
+    assert line == f"token.py api_key_get {name}: rotating keys"
+    record.msg = "api_key=SECRET-NAME-2 sent"
+    assert TextFormatter("%(name)s: %(message)s").format(record) == f"{name}: api_key=*** sent"
+
+
+_BYTES = {
+    b"Authorization: Bearer abc": b"Authorization: ***",
+    b"retry api_key=SECRET-X now": b"retry api_key=*** now",
+    b"\xff\xfe api_key=SECRET-X": b"***",
+}
+
+
+@pytest.mark.parametrize("kind", [bytes, bytearray])
+@pytest.mark.parametrize("raw", _BYTES, ids=["header", "assignment", "undecodable"])
+def test_redact_masks_bytes_alone_and_nested_and_keeps_their_type(kind, raw):
+    masked = redact({"raw": kind(raw), "items": [kind(raw)], "pair": (kind(raw), "ok")})
+    for value in (redact(kind(raw)), masked["raw"], masked["items"][0], masked["pair"][0]):
+        assert (type(value), value) == (kind, _BYTES[raw])
+    assert masked["pair"][1] == "ok"
+
+
+@pytest.mark.parametrize("kind", [set, frozenset])
+def test_redact_masks_set_items_alone_and_nested_and_keeps_their_type(kind):
+    value = kind({"api_key=SECRET-X", "plain", b"Authorization: Bearer abc", 42})
+    expected = kind({"api_key=***", "plain", b"Authorization: ***", 42})
+    masked = redact({"tags": value, "items": [value], "pair": (value, "ok")})
+    for item in (redact(value), masked["tags"], masked["items"][0], masked["pair"][0]):
+        assert (type(item), item) == (kind, expected)
+
+
+_RECORD = dict(msg="login for %s token=%s", args=("alice", "SECRET-EXTRA-7"), user="alice", count=3)
+_RECORD.update(api_key="SECRET-EXTRA-1", token=123456, authorization="Bearer SECRET-EXTRA-3")
+_RECORD.update(password=b"SECRET-EXTRA-4", note="password=SECRET-EXTRA-5")
+_RECORD["error"] = RuntimeError("token=SECRET-EXTRA-6")
+
+
+@pytest.mark.parametrize(
+    ("text_format", "expected"),
+    [
+        ("%(api_key)s %(message)s", "*** login for alice token=***"),
+        ("%(token)s %(authorization)s %(password)s", "*** *** ***"),
+        ("%(note)s %(error)s %(user)s %(count)d", "password=*** token=*** alice 3"),
+        ("%(msg)s %(args)s", "login for alice token=*** ()"),
+    ],
+)
+def test_text_formats_naming_extras_never_print_a_secret(text_format, expected):
+    assert TextFormatter(text_format).format(logging.makeLogRecord(_RECORD)) == expected
+
+
+def test_text_formats_never_print_secrets_from_exceptions_stacks_or_object_extras():
+    try:
+        raise ValueError("password=SECRET-EXTRA-8")
+    except ValueError:
+        record = logging.makeLogRecord({"msg": "failed", "exc_info": sys.exc_info()})
+    record.stack_info = "Stack (most recent call last):\n  token=SECRET-EXTRA-9"
+    record.payload = {"items": [RuntimeError("api_key=SECRET-EXTRA-10")], "n": 1}
+    text_format = "%(exc_info)s %(exc_text)s %(stack_info)s %(payload)s %(message)s"
+    line = TextFormatter(text_format).format(record)
+    assert "SECRET-" not in line
+    assert "password=***" in line and "token=***" in line and "api_key=***" in line
+
+
+def test_json_extras_named_like_fixed_fields_move_to_a_prefixed_key():
+    record = logging.LogRecord("val", logging.WARNING, "", 0, "hello", (), None, sinfo="here")
+    record.created = 0.0
+    record.__dict__.update(level="DEBUG token=SECRET-FIX-1", logger="x", ts="then", stack="mine")
+    record.extra_ts = "kept"
+    line = JsonFormatter().format(record)
+    data = json.loads(line)
+    fixed = [data[key] for key in ("ts", "level", "logger", "msg", "stack")]
+    assert fixed == ["1970-01-01T00:00:00+00:00", "WARNING", "val", "hello", "here"]
+    moved = [data[key] for key in ("extra_level", "extra_logger", "extra_extra_ts", "extra_stack")]
+    assert moved == ["DEBUG token=***", "x", "then", "mine"]
+    assert data["extra_ts"] == "kept" and "SECRET-" not in line

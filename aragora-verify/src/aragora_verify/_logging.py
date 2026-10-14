@@ -375,17 +375,29 @@ def _redact(obj: Any, active: frozenset[int]) -> Any:
         return [_redact(value, active) for value in obj]
     if isinstance(obj, tuple):
         return tuple(_redact(value, active) for value in obj)
+    if isinstance(obj, (set, frozenset)):
+        items = (_redact(value, active) for value in obj)
+        return frozenset(items) if isinstance(obj, frozenset) else set(items)
     if isinstance(obj, str):
         return _redact_text(obj)
+    if isinstance(obj, (bytes, bytearray)):
+        try:
+            masked = _redact_text(obj.decode()).encode()
+        except UnicodeDecodeError:
+            # Text that cannot be decoded cannot be searched for a secret name.
+            masked = _REDACTED.encode()
+        return bytearray(masked) if isinstance(obj, bytearray) else masked
     return obj
 
 
 def redact(obj: Any) -> Any:
-    """Copy nested mappings/sequences, masking sensitive keys and assignments.
+    """Copy nested mappings/sequences/sets, masking sensitive keys and assignments.
 
     Mapping keys other than str/int/float/None become strings, with the value
     masked, so the result is always JSON-encodable as far as keys go. A
     container that contains itself is replaced by "<cycle>" where it recurs.
+    Sets, frozensets, bytes and bytearrays keep their type; bytes are masked as
+    UTF-8 text, and bytes that are not UTF-8 are masked whole.
     An Authorization value (under any key containing "authorization", or after
     Authorization phrasing and a scheme) is masked to the end of its line, folded
     continuation lines included, also inside a JSON or repr string; only a quoted
@@ -465,7 +477,12 @@ def _format_safely(render: Callable[[logging.LogRecord], str], record: logging.L
 
 
 class JsonFormatter(logging.Formatter):
-    """One JSON object per line, including redacted structured extras."""
+    """One JSON object per line, including redacted structured extras.
+
+    Its own fields (ts, level, logger, msg, format_error, exception, stack) come
+    from the record; an extra with one of those names moves to extra_<name>,
+    prefixed again while that name is taken, and is redacted like other extras.
+    """
 
     def format(self, record: logging.LogRecord) -> str:
         return _format_safely(self._render, record)
@@ -473,6 +490,12 @@ class JsonFormatter(logging.Formatter):
     def _render(self, record: logging.LogRecord) -> str:
         message, error = _message(record)
         data = {key: value for key, value in record.__dict__.items() if key not in _STANDARD_FIELDS}
+        for key in ("ts", "level", "logger", "msg", "format_error", "exception", "stack"):
+            if key in data:
+                moved = f"extra_{key}"
+                while moved in data:
+                    moved = f"extra_{moved}"
+                data[moved] = data.pop(key)
         data.update(
             ts=_timestamp(record.created), level=record.levelname, logger=record.name, msg=message
         )
@@ -485,18 +508,52 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(redact(data), default=lambda obj: redact(str(obj)), ensure_ascii=False)
 
 
+class _Masked:
+    """Redacted text of a record attribute, made only if the format prints it."""
+
+    def __init__(self, value: object) -> None:
+        self._value = value
+
+    def __str__(self) -> str:
+        return _redact_text(str(redact(self._value)))
+
+    def __repr__(self) -> str:
+        return _redact_text(repr(redact(self._value)))
+
+    def __format__(self, spec: str) -> str:
+        return format(str(self), spec)
+
+
 class TextFormatter(logging.Formatter):
-    """Human-readable output with the same message/exception redaction."""
+    """Human-readable output that redacts each field carrying caller data.
+
+    Extras named like a secret print as ***. The level, logger name, path,
+    function and time print as they are, so they never mask the message.
+    """
 
     def format(self, record: logging.LogRecord) -> str:
         return _format_safely(self._render, record)
 
     def _render(self, record: logging.LogRecord) -> str:
         safe = copy.copy(record)
+        for key, value in record.__dict__.items():
+            if key in _STANDARD_FIELDS:
+                continue
+            if _KEY_PATTERN.search(key):
+                safe.__dict__[key] = _REDACTED
+            # Numbers stay numbers so %d still formats; str() of an unused extra never runs.
+            elif not isinstance(value, (int, float)):
+                safe.__dict__[key] = _Masked(value)
         safe.msg = _message(record)[0]
         safe.args = ()
         safe.exc_text = None
-        return str(redact(super().format(safe)))
+        if record.exc_info:
+            safe.exc_text = _redact_text(self.formatException(record.exc_info))
+            # %(exc_info)s prints the tuple's repr, which holds the exception message.
+            safe.__dict__["exc_info"] = _Masked(record.exc_info)
+        if record.stack_info:
+            safe.stack_info = _redact_text(record.stack_info)
+        return super().format(safe)
 
 
 class _ErrorSafeStreamHandler(_StreamHandler):

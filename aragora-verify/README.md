@@ -104,6 +104,7 @@ from there. A bracket that ends its line without closing within one level
 masks the lines after it, up to the line where its closing bracket starts at
 the key's indentation, or to the end of the text. Log objects rather than their
 repr to keep their other fields readable: mappings are redacted field by field.
+Sets and bytes keep their type; bytes that are not UTF-8 are masked whole.
 
 Matching fails closed, so it over-masks: labels such as `token_count: 5` are
 masked, keys such as `authorization_token` or `Authorization.value` get
