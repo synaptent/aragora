@@ -12,6 +12,7 @@ import random
 import subprocess
 import sys
 import time
+from types import SimpleNamespace
 
 import pytest
 
@@ -1915,3 +1916,33 @@ def test_json_extras_named_like_fixed_fields_move_to_a_prefixed_key():
     moved = [data[key] for key in ("extra_level", "extra_logger", "extra_extra_ts", "extra_stack")]
     assert moved == ["DEBUG token=***", "x", "then", "mine"]
     assert data["extra_ts"] == "kept" and "SECRET-" not in line
+
+
+_PAYLOAD = SimpleNamespace(password="LEAK-R1", inner=SimpleNamespace(token="LEAK-R1"))
+_DEFAULTS = {"note": "password=LEAK-R1", "token": "LEAK-R1"}
+_LEAKS = {"api_key=%(credential)s": "api_key=***", "%(note)s": "password=***", "%(token)s": "***"}
+_LEAKS["{payload.__dict__}"] = "{'password': '***', 'inner': namespace(token='***')}"
+_LEAKS["{payload.inner.token}"] = _LEAKS["{payload.__dict__[_value].password}"] = "format_error"
+
+
+@pytest.mark.parametrize("text_format", _LEAKS)
+def test_labels_defaults_and_brace_traversal_are_redacted_with_the_line(text_format):
+    style = "{" if "{" in text_format else "%"
+    record = logging.makeLogRecord({"credential": "LEAK-R1", "payload": _PAYLOAD})
+    line = TextFormatter(text_format, style=style, defaults=_DEFAULTS).format(record)
+    assert _LEAKS[text_format] in line and "LEAK-R1" not in line
+
+
+@pytest.mark.parametrize("field, shown", [("context", "{'api_key': '***'}"), ("api_token", "***")])
+def test_fields_a_record_factory_adds_are_caller_data(field, shown):
+    result = _probe(f"""
+import logging
+class Record(logging.LogRecord):
+    def __init__(self, *args):
+        super().__init__(*args)
+        self.__dict__.update(context={{"api_key": "LEAK-R1"}}, api_token="LEAK-R1")
+logging.setLogRecordFactory(Record)
+from aragora_debate._logging import TextFormatter
+print(TextFormatter("%({field})s").format(logging.makeLogRecord({{}})))
+""")
+    assert result.stdout == f"{shown}\n"

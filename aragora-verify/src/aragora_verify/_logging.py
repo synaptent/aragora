@@ -143,10 +143,11 @@ _CYCLE = "<cycle>"
 _MAPPING_FIELD = re.compile(
     r"%(?:%|\((?P<key>[^)]+)\)[#0 +\-]*\d*(?:\.\d+)?[hlL]?[diouxXeEfFgGcrsa])"
 )
-_STANDARD_FIELDS = frozenset(logging.makeLogRecord({}).__dict__) | {
-    "message",
-    "asctime",
-}
+# LogRecord itself, not the configured factory: fields a factory adds are caller data.
+_STANDARD_FIELDS = frozenset(vars(logging.LogRecord("", 0, "", 0, "", (), None)))
+_STANDARD_FIELDS |= {"message", "asctime"}
+_METADATA = "name levelname pathname filename module funcName threadName processName taskName"
+_TRAVERSAL = re.compile(r"\{[^{}]*[.\[][^{}]*" + _SECRET_KEY, re.IGNORECASE)
 
 
 class _Matches:
@@ -508,52 +509,33 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(redact(data), default=lambda obj: redact(str(obj)), ensure_ascii=False)
 
 
-class _Masked:
-    """Redacted text of a record attribute, made only if the format prints it."""
-
-    def __init__(self, value: object) -> None:
-        self._value = value
-
-    def __str__(self) -> str:
-        return _redact_text(str(redact(self._value)))
-
-    def __repr__(self) -> str:
-        return _redact_text(repr(redact(self._value)))
-
-    def __format__(self, spec: str) -> str:
-        return format(str(self), spec)
-
-
 class TextFormatter(logging.Formatter):
-    """Human-readable output that redacts each field carrying caller data.
+    """Human-readable output, redacted as a whole line except for logger metadata.
 
-    Extras named like a secret print as ***. The level, logger name, path,
-    function and time print as they are, so they never mask the message.
+    Extras and format defaults named like a secret print as ***; brace fields reaching into a
+    secret-named attribute or item fail like other formatting errors. Logger, level, path, module,
+    function, thread, process and task names never count as a secret's name or mask the message.
     """
 
     def format(self, record: logging.LogRecord) -> str:
         return _format_safely(self._render, record)
 
     def _render(self, record: logging.LogRecord) -> str:
+        if isinstance(self._style, logging.StrFormatStyle) and _TRAVERSAL.search(self._style._fmt):
+            raise ValueError("a brace field reaches into a secret")
+        defaults = getattr(self._style, "_defaults", None) or {}
         safe = copy.copy(record)
-        for key, value in record.__dict__.items():
-            if key in _STANDARD_FIELDS:
-                continue
-            if _KEY_PATTERN.search(key):
-                safe.__dict__[key] = _REDACTED
-            # Numbers stay numbers so %d still formats; str() of an unused extra never runs.
-            elif not isinstance(value, (int, float)):
-                safe.__dict__[key] = _Masked(value)
-        safe.msg = _message(record)[0]
-        safe.args = ()
-        safe.exc_text = None
-        if record.exc_info:
-            safe.exc_text = _redact_text(self.formatException(record.exc_info))
-            # %(exc_info)s prints the tuple's repr, which holds the exception message.
-            safe.__dict__["exc_info"] = _Masked(record.exc_info)
-        if record.stack_info:
-            safe.stack_info = _redact_text(record.stack_info)
-        return super().format(safe)
+        secret = filter(_KEY_PATTERN.search, {*vars(record), *defaults} - _STANDARD_FIELDS)
+        safe.__dict__.update(dict.fromkeys(secret, _REDACTED))
+        safe.msg, safe.args, safe.exc_text = _message(record)[0], (), None
+        # One private-use character per metadata character: never a secret's name, width-safe.
+        table: dict[int, str] = {}
+        for key in _METADATA.split():
+            if isinstance(value := getattr(record, key, None), str):
+                hidden = range(0xF0000 + len(table), 0xF0000 + len(table) + len(value))
+                table.update(zip(hidden, value))
+                setattr(safe, key, "".join(map(chr, hidden)))
+        return _redact_text(super().format(safe)).translate(table)
 
 
 class _ErrorSafeStreamHandler(_StreamHandler):
