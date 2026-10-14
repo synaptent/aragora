@@ -254,6 +254,18 @@ gauntlet = "aragora.gauntlet.debate_registration:register_debate_gauntlet_runner
 [project.entry-points."aragora.harness_mcp_configs"]
 mcp = "aragora.mcp.harness_registration:register_harness_impl_mcp_config"
 
+# Run by aragora/debate/workflow_backends.py on the first post-debate workflow lookup that
+# finds no backend, so the debate engine runs post-debate workflows without importing
+# aragora.workflow.
+[project.entry-points."aragora.debate_workflow_backends"]
+workflow = "aragora.workflow.debate_registration:register_debate_workflow_backend"
+
+# Run by aragora/notifications/email_senders.py on the first email sender a lower package
+# builds from an email config, so aragora.services sends invoices without importing
+# aragora.integrations.
+[project.entry-points."aragora.email_senders"]
+integrations = "aragora.integrations.email_sender_registration:register_email_sender"
+
 # -----------------------------------------------------------------------------
 # uv resolver constraints — security floors for the pip-audit security gate
 # (scripts/run_pip_audit_gate.py). They bound what the lockfile may resolve
