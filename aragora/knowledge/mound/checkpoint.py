@@ -223,6 +223,8 @@ class KMCheckpointStore:
         Returns:
             Checkpoint ID (str) or KMCheckpointMetadata if return_metadata=True
         """
+        if name is not None:
+            validate_checkpoint_name(name)
         start_time = time.time()
 
         # Generate checkpoint ID (not for security, just uniqueness)

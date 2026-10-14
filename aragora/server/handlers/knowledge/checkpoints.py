@@ -4,10 +4,12 @@ Knowledge Mound Checkpoint HTTP Handler.
 Provides REST endpoints for managing KM checkpoints:
 - GET /api/km/checkpoints - List all checkpoints
 - POST /api/km/checkpoints - Create a checkpoint
-- GET /api/km/checkpoints/{name} - Get checkpoint details
-- DELETE /api/km/checkpoints/{name} - Delete a checkpoint
-- POST /api/km/checkpoints/{name}/restore - Restore from checkpoint
-- GET /api/km/checkpoints/{name}/compare - Compare with current state
+- GET /api/km/checkpoints/{id} - Get checkpoint details
+- DELETE /api/km/checkpoints/{id} - Delete a checkpoint
+- POST /api/km/checkpoints/{id}/restore - Restore from checkpoint
+- GET /api/km/checkpoints/{id}/compare - Compare with current state
+
+{id} is the km_ckpt_... ``id`` that create and list return; names are never resolved.
 """
 
 from __future__ import annotations
@@ -309,6 +311,7 @@ class KMCheckpointHandler(BaseHandler):
                 {
                     "checkpoints": [
                         {
+                            "id": cp.id,
                             "name": cp.name,
                             "description": cp.description,
                             "created_at": cp.created_at,
@@ -359,6 +362,7 @@ class KMCheckpointHandler(BaseHandler):
             name = body.get("name")
             if not name:
                 return error_response("Checkpoint name is required", status=400)
+            validate_checkpoint_name(name)
 
             description = body.get("description", "")
             tags = body.get("tags", [])
@@ -389,6 +393,7 @@ class KMCheckpointHandler(BaseHandler):
             emit_handler_event("knowledge", CREATED, {"checkpoint": metadata.name})
             return json_response(
                 {
+                    "id": metadata.id,
                     "name": metadata.name,
                     "description": metadata.description,
                     "created_at": metadata.created_at,
@@ -399,6 +404,8 @@ class KMCheckpointHandler(BaseHandler):
                 },
                 status=201,
             )
+        except InvalidCheckpointNameError as e:
+            return error_response(str(e), status=400)
         except ValueError as e:
             logger.warning("Invalid checkpoint request: %s", e)
             return error_response("Invalid request", status=400)
@@ -416,9 +423,9 @@ class KMCheckpointHandler(BaseHandler):
 
     @rate_limit(requests_per_minute=30)
     async def _get_checkpoint(self, handler: Any, name: str) -> HandlerResult:
-        """Get checkpoint details by name.
+        """Get checkpoint details by id.
 
-        GET /api/km/checkpoints/{name}
+        GET /api/km/checkpoints/{id}
         """
         user, err = self._check_auth(handler)
         if err:
@@ -444,6 +451,7 @@ class KMCheckpointHandler(BaseHandler):
 
             return success_response(
                 {
+                    "id": metadata.id,
                     "name": metadata.name,
                     "description": metadata.description,
                     "created_at": created_at_str,
@@ -463,7 +471,7 @@ class KMCheckpointHandler(BaseHandler):
     async def _delete_checkpoint(self, handler: Any, name: str) -> HandlerResult:
         """Delete a checkpoint.
 
-        DELETE /api/km/checkpoints/{name}
+        DELETE /api/km/checkpoints/{id}
         """
         user, err = self._check_auth(handler)
         if err:
@@ -498,7 +506,7 @@ class KMCheckpointHandler(BaseHandler):
     async def _restore_checkpoint(self, handler: Any, name: str) -> HandlerResult:
         """Restore KM state from a checkpoint.
 
-        POST /api/km/checkpoints/{name}/restore
+        POST /api/km/checkpoints/{id}/restore
 
         Body:
             strategy: "merge" (default) or "replace"
@@ -554,6 +562,7 @@ class KMCheckpointHandler(BaseHandler):
 
             return success_response(
                 {
+                    "checkpoint_id": result.checkpoint_id,
                     "checkpoint_name": result.checkpoint_id,
                     "strategy": strategy,
                     "nodes_restored": nodes_restored,
@@ -580,7 +589,7 @@ class KMCheckpointHandler(BaseHandler):
     async def _compare_checkpoint(self, handler: Any, name: str) -> HandlerResult:
         """Compare checkpoint with current KM state.
 
-        GET /api/km/checkpoints/{name}/compare
+        GET /api/km/checkpoints/{id}/compare
 
         Note: This compares the checkpoint with a "current" checkpoint.
         The actual implementation uses compare_checkpoints between two checkpoints.
@@ -607,7 +616,7 @@ class KMCheckpointHandler(BaseHandler):
             # Find the requested checkpoint
             target_checkpoint = None
             for cp in checkpoints:
-                if cp.id == name or cp.name == name:
+                if cp.id == name:
                     target_checkpoint = cp
                     break
 
@@ -653,8 +662,8 @@ class KMCheckpointHandler(BaseHandler):
         POST /api/km/checkpoints/compare
 
         Body:
-            checkpoint_a: First checkpoint name
-            checkpoint_b: Second checkpoint name
+            checkpoint_a: First checkpoint id
+            checkpoint_b: Second checkpoint id
         """
         user, err = self._check_auth(handler)
         if err:
