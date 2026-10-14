@@ -51,13 +51,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from aragora.cli.commands.review_queue_comment_verdicts import (
+from aragora.review.comment_verdicts import (
     has_blocking_finding_or_label,
     has_blocking_or_negative_verdict,
 )
-from aragora.cli.commands.review_queue_transport import (
+from aragora.review.github_transport import (
     GITHUB_TRANSPORT_BLOCKED_STATUS,
-    _is_github_transport_error,
+    is_github_transport_error as _is_github_transport_error,
 )
 from aragora.swarm import merge_quorum_io
 

@@ -13,8 +13,8 @@ baseline [scripts/baselines/import_contracts_baseline.json](../../scripts/baseli
 Symbols moved down a layer keep a compatibility re-export at their old path; every such move is listed in
 [shims.md](shims.md).
 
-This page is in its M4 form. Measured on `origin/main` at `f754e076ca9b` (2026-10-12, after #10609) with
-tranche T6 applied: 166 layered names (every top-level module), 60 baselined pairs (18 in Partition A, 42 in
+This page is in its M4 form. Measured with #10603 applied on `origin/main` at `a297d7d91bbc` (2026-10-14,
+after #10635): 166 layered names (every top-level module), 29 baselined pairs (18 in Partition A, 11 in
 Partition B), and the live pair set equals the baseline.
 
 ## Enforcement
@@ -193,6 +193,7 @@ through `aragora.training.specialist_models`).
 | #10607 | `2647ad8b5a` | Approval-request inversion: `aragora.events.approval_requests` holds the notifier hook, and `aragora.approvals` registers its chat notifier from its init and through the `aragora.approval_notifiers` entry point; the `aragora.workflow`, `aragora.pipeline` and `aragora.computer_use` sites call the hook, so none of them imports `aragora.approvals` (tranche T6). Resolved `aragora.computer_use -> aragora.connectors` (its only chain ran through `aragora.approvals.chat`) | 161 | 61 to 60 |
 | #10609 | `f754e076ca` | Moved the gastown hook runner to `aragora.worktree.hook_runner`, with shims at `aragora.extensions.gastown.hooks` and `aragora.extensions.gastown.models`, so `aragora.nomic` no longer imports `aragora.extensions` (tranche T6) | 161 | 60 |
 | #10610 | squash merge of #10610 | Tranche T6: `__main__ approvals client extensions webhooks` (interface), so every top-level module is layered; no pair adopted and none resolved (interface is the top layer, and the pairs into `aragora.approvals` and `aragora.extensions` were removed by #10607 and #10609) | 166 | 60 |
+| #10603 | squash merge of #10603 | `cli.review` seam, part 4 (Tier 4): the CLI modules re-export the `aragora.review` homes (`comment_verdicts`, `settlement_receipt` and the new `github_transport` for the GitHub transport-error classification), so each object has one definition, and `aragora/swarm/quorum_evidence.py` imports them there. The four `aragora/review` modules the merge-gate classifier now loads join its Tier-4 authority closure. Resolved `aragora.swarm -> aragora.cli`. Measured after the burn-down merges #10611 to #10635, which have no rows here and took the baseline from 60 to 30 | 166 | 30 to 29 |
 
 The two config pairs adopted by #10314 (`aragora.config -> aragora.persistence`, `aragora.config ->
 aragora.tenancy`) were fixed by the config-seam PR #10316 (Tier 4, settled by the operator).

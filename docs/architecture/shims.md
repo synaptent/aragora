@@ -446,3 +446,12 @@ import-and-call tests at both paths.
 | `aragora.spectate.redaction` | `aragora.events.spectate.redaction` | #10630 | not before M4 seal |
 | `aragora.spectate.ws_bridge` | `aragora.events.spectate.ws_bridge` | #10630 | not before M4 seal |
 | `aragora.services.pii_redactor` | `aragora.utils.pii_redactor` | #10630 | not before M4 seal |
+| `aragora.cli.commands.review_queue:SettlementReceipt` | `aragora.review.settlement_receipt:SettlementReceipt` | #10603 | not before M4 seal |
+| `aragora.cli.commands.review_queue_comment_verdicts:extract_finding_lines` | `aragora.review.comment_verdicts:extract_finding_lines` | #10603 | not before M4 seal |
+| `aragora.cli.commands.review_queue_comment_verdicts:has_blocking_finding_or_label` | `aragora.review.comment_verdicts:has_blocking_finding_or_label` | #10603 | not before M4 seal |
+| `aragora.cli.commands.review_queue_comment_verdicts:has_blocking_or_negative_verdict` | `aragora.review.comment_verdicts:has_blocking_or_negative_verdict` | #10603 | not before M4 seal |
+| `aragora.cli.commands.review_queue_comment_verdicts:highest_blocking_severity` | `aragora.review.comment_verdicts:highest_blocking_severity` | #10603 | not before M4 seal |
+| `aragora.cli.commands.review_queue_transport:GITHUB_TRANSPORT_BLOCKED_STATUS` | `aragora.review.github_transport:GITHUB_TRANSPORT_BLOCKED_STATUS` | #10603 | not before M4 seal |
+| `aragora.cli.commands.review_queue_transport:GITHUB_TRANSPORT_ERROR_KIND` | `aragora.review.github_transport:GITHUB_TRANSPORT_ERROR_KIND` | #10603 | not before M4 seal |
+| `aragora.cli.commands.review_queue_transport:_gh_error_kind` | `aragora.review.github_transport:gh_error_kind` | #10603 | not before M4 seal |
+| `aragora.cli.commands.review_queue_transport:_is_github_transport_error` | `aragora.review.github_transport:is_github_transport_error` | #10603 | not before M4 seal |
