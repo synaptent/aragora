@@ -21,7 +21,7 @@ from aragora.protocols.debate import DebateProtocol
 from aragora.resilience import CircuitBreaker
 from aragora.debate.safety import resolve_auto_evolve, resolve_prompt_evolution
 from aragora.debate.subsystem_coordinator import SubsystemCoordinator
-from aragora.spectate.stream import SpectatorStream
+from aragora.events.spectate.stream import SpectatorStream
 
 if TYPE_CHECKING:
     from aragora.agents.airlock import AirlockProxy
@@ -241,7 +241,7 @@ class ArenaInitializer:
         # Enable spectator if the bridge is running (allows landing page live demos)
         if spectator is None:
             try:
-                from aragora.spectate.ws_bridge import get_spectate_bridge
+                from aragora.events.spectate.ws_bridge import get_spectate_bridge
 
                 bridge = get_spectate_bridge()
                 spectator = SpectatorStream(enabled=bridge.running)

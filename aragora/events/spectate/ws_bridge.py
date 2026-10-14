@@ -4,7 +4,7 @@ Connects the terminal-only SpectatorStream to WebSocket event delivery,
 enabling real-time debate and pipeline visualization in the dashboard.
 
 Usage:
-    from aragora.spectate.ws_bridge import SpectateWebSocketBridge
+    from aragora.events.spectate.ws_bridge import SpectateWebSocketBridge
 
     bridge = SpectateWebSocketBridge()
     bridge.start()  # Begin forwarding events
@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable
 
-from aragora.spectate.redaction import redact_spectator_payload
+from aragora.events.spectate.redaction import redact_spectator_payload
 
 logger = logging.getLogger(__name__)
 
@@ -144,7 +144,7 @@ class SpectateWebSocketBridge:
         if self._running:
             return
 
-        from aragora.spectate.stream import SpectatorStream
+        from aragora.events.spectate.stream import SpectatorStream
 
         # Save original emit method
         self._original_emit = SpectatorStream.emit
@@ -187,7 +187,7 @@ class SpectateWebSocketBridge:
     def stop(self) -> None:
         """Stop the bridge, restoring original SpectatorStream.emit()."""
         if self._original_emit is not None:
-            from aragora.spectate.stream import SpectatorStream
+            from aragora.events.spectate.stream import SpectatorStream
 
             SpectatorStream.emit = self._original_emit  # type: ignore[assignment]
             self._original_emit = None

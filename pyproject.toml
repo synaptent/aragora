@@ -248,6 +248,12 @@ integrations = "aragora.integrations.decision_bridge_registration:register_decis
 [project.entry-points."aragora.debate_gauntlet_runners"]
 gauntlet = "aragora.gauntlet.debate_registration:register_debate_gauntlet_runner"
 
+# Run by aragora/harnesses/mcp_config.py on the Claude Code harness's first MCP config
+# request that finds no generator, so the harness attaches Aragora's MCP server without
+# importing aragora.mcp.
+[project.entry-points."aragora.harness_mcp_configs"]
+mcp = "aragora.mcp.harness_registration:register_harness_impl_mcp_config"
+
 # -----------------------------------------------------------------------------
 # uv resolver constraints — security floors for the pip-audit security gate
 # (scripts/run_pip_audit_gate.py). They bound what the lockfile may resolve
