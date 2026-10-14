@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from aragora.runtime.connector_factory import create_connector
 from aragora.verticals.base import VerticalSpecialistAgent
 from aragora.verticals.config import (
     ComplianceConfig,
@@ -195,8 +196,6 @@ class SoftwareSpecialist(VerticalSpecialistAgent):
 
     async def _code_search(self, parameters: dict[str, Any]) -> dict[str, Any]:
         """Search codebase for patterns."""
-        from aragora.connectors.local_docs import LocalDocsConnector
-
         pattern = parameters.get("pattern") or parameters.get("query") or ""
         if not pattern:
             return {"matches": [], "error": "pattern is required"}
@@ -207,7 +206,7 @@ class SoftwareSpecialist(VerticalSpecialistAgent):
         regex = bool(parameters.get("regex", False))
         context_lines = int(parameters.get("context_lines", 2))
 
-        connector = LocalDocsConnector(root_path=root_path, file_types=file_types)
+        connector = create_connector("local_docs", root_path=root_path, file_types=file_types)
         evidence = await connector.search(
             query=pattern,
             limit=limit,
@@ -288,8 +287,6 @@ class SoftwareSpecialist(VerticalSpecialistAgent):
         """Look up GitHub issues or PRs."""
         import os
 
-        from aragora.connectors.github import GitHubConnector
-
         query = parameters.get("query") or parameters.get("q") or ""
         if not query:
             return {"results": [], "error": "query is required"}
@@ -300,7 +297,7 @@ class SoftwareSpecialist(VerticalSpecialistAgent):
         state = parameters.get("state", "all")
         token = parameters.get("token") or os.environ.get("GITHUB_TOKEN")
 
-        connector = GitHubConnector(repo=repo, token=token)
+        connector = create_connector("github", repo=repo, token=token)
         evidence = await connector.search(
             query=query,
             limit=limit,

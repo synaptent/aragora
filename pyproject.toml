@@ -272,6 +272,12 @@ integrations = "aragora.integrations.email_sender_registration:register_email_se
 [project.entry-points."aragora.debate_mode_prompts"]
 modes = "aragora.cli.mode_prompt_registration:register_mode_prompts"
 
+# Run by aragora/runtime/connector_factory.py on the first connector a lower package builds,
+# so vertical specialists and the code reviewer reach the web, GitHub, research, legal,
+# medical, accounting, tax and SEC connectors without importing aragora.connectors.
+[project.entry-points."aragora.connector_factories"]
+connectors = "aragora.connectors.factory_registration:register_evidence_connectors"
+
 # -----------------------------------------------------------------------------
 # uv resolver constraints — security floors for the pip-audit security gate
 # (scripts/run_pip_audit_gate.py). They bound what the lockfile may resolve
