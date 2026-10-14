@@ -319,7 +319,7 @@ def test_anthropic_refusal_fallback_opt_in_through_the_setting_object(
     assert agent._request_headers()["anthropic-beta"] == _REFUSAL_FALLBACK_BETA
 
 
-@pytest.mark.parametrize("error", [ImportError, AttributeError])
+@pytest.mark.parametrize("error", [ImportError, AttributeError, TypeError, ValueError])
 def test_anthropic_refusal_fallback_stays_off_when_settings_unavailable(
     refusal_fallback_default: None, monkeypatch: pytest.MonkeyPatch, error: type
 ) -> None:
@@ -334,6 +334,64 @@ def test_anthropic_refusal_fallback_stays_off_when_settings_unavailable(
     assert agent._refusal_fallback_enabled() is False
     assert "fallbacks" not in agent._build_payload("hello")
     assert "anthropic-beta" not in agent._request_headers()
+
+
+def test_anthropic_malformed_setting_still_counts_as_a_provider_failure(
+    refusal_fallback_default: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A malformed ``ARAGORA_*`` value makes ``get_settings()`` raise
+    pydantic's ``ValidationError`` (a ``ValueError``). Header building runs
+    before ``generate``'s ``try``, so the refusal-fallback gate must not let
+    that error escape there: it has to surface from the session layer inside
+    the ``try``, where the circuit breaker and the provider-call metric
+    record it, as they do for a model without the gate. ``generate_stream``
+    keeps no such accounting; it must still raise the same error and send
+    nothing.
+    """
+    import asyncio
+    from unittest.mock import MagicMock
+
+    from pydantic import ValidationError
+
+    import aragora.agents.api_agents.anthropic as anthropic_mod
+    import aragora.agents.api_agents.common as common_mod
+    from aragora.agents.api_agents.anthropic import AnthropicAPIAgent
+    from aragora.config.settings import get_settings
+
+    agent = AnthropicAPIAgent(
+        name="malformed-setting", model="claude-fable-5-1", api_key="test-key"
+    )
+    agent.enable_web_search = False
+    breaker = agent._circuit_breaker
+    assert breaker is not None
+    failures_before = breaker.failures
+
+    monkeypatch.delenv("ARAGORA_MONTHLY_BUDGET_USD", raising=False)
+    monkeypatch.setenv("ARAGORA_STREAM_BUFFER_SIZE", "not-an-int")
+    get_settings.cache_clear()
+    # Without a pooled connector, create_client_session must read the settings.
+    monkeypatch.setattr(common_mod._pool_state, "connector", None)
+    provider_call = MagicMock()
+    monkeypatch.setattr(anthropic_mod, "record_provider_call", provider_call)
+    client_session = MagicMock()
+    monkeypatch.setattr(common_mod.aiohttp, "ClientSession", client_session)
+
+    with pytest.raises(ValidationError):
+        asyncio.run(agent.generate("hello"))
+
+    assert breaker.failures - failures_before == 1
+    provider_call.assert_called_once()
+    assert provider_call.call_args.kwargs["provider"] == "anthropic"
+    assert provider_call.call_args.kwargs["success"] is False
+    assert provider_call.call_args.kwargs["error_type"] is anthropic_mod.ErrorType.UNKNOWN
+
+    async def _consume() -> None:
+        async for _ in agent.generate_stream("hello"):
+            pass
+
+    with pytest.raises(ValidationError):
+        asyncio.run(_consume())
+    client_session.assert_not_called()
 
 
 def test_anthropic_refusal_fallback_payload_and_headers(refusal_fallback_opted_in: None) -> None:

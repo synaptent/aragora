@@ -464,8 +464,8 @@ class AnthropicAPIAgent(QuotaFallbackMixin, APIAgent):
             from aragora.config import get_settings
 
             return bool(get_settings().agent.anthropic_refusal_fallback)
-        except (ImportError, AttributeError):
-            # Settings unavailable: keep the documented default (off) so an
+        except (ImportError, AttributeError, TypeError, ValueError):
+            # Settings unavailable or invalid: keep the documented default (off) so an
             # unreadable config can never opt a request into the beta.
             return False
 
