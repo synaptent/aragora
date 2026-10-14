@@ -88,6 +88,14 @@ async def test_store_methods_reject_traversal_before_touching_disk(store_and_out
     assert (outside / "metadata.json").exists()
 
 
+@pytest.mark.parametrize("name", UNSAFE_NAMES)
+async def test_create_rejects_unsafe_names_before_writing(store_and_outside, name: str) -> None:
+    store, _ = store_and_outside
+    with pytest.raises(checkpoint_module.InvalidCheckpointNameError):
+        await store.create_checkpoint(name=name)
+    assert list(store.checkpoint_dir.iterdir()) == []
+
+
 async def test_symlink_that_resolves_outside_the_directory_is_rejected(store_and_outside) -> None:
     store, outside = store_and_outside
     os.symlink(outside, store.checkpoint_dir / "km_ckpt_link")

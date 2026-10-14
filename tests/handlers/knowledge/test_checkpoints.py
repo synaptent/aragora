@@ -17,6 +17,7 @@ import io
 import json
 from dataclasses import dataclass, field
 from datetime import datetime
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -1858,3 +1859,105 @@ class TestProfessionalTierGate:
             )
         assert _status(result) == status
         assert mock_store.get_checkpoint_metadata.called is (status == 200)
+
+
+# =============================================================================
+# Test: a real KMCheckpointStore behind the API (only the returned id addresses)
+# =============================================================================
+
+BASE = "/api/v1/km/checkpoints"
+_NODE = {"id": "node-1", "node_type": "fact", "content": "c", "confidence": 0.9}
+
+
+class _StubMetaStore:
+    def query_nodes(self, workspace_id, limit, offset):
+        node = SimpleNamespace(**_NODE, workspace_id=workspace_id, metadata={}, topics=[])
+        return [node] if offset == 0 else []
+
+
+class _StubMound:
+    workspace_id = "ws"
+    config = SimpleNamespace(
+        backend="sqlite", enable_staleness_detection=False, enable_culture_accumulator=False
+    )
+
+    def __init__(self):
+        self._meta_store = _StubMetaStore()
+        self.saved: list[str] = []
+
+    async def _save_node(self, node):
+        self.saved.append(node["id"])
+
+
+@pytest.fixture
+def real_store(tmp_path):
+    store = checkpoint_module.KMCheckpointStore(_StubMound(), checkpoint_dir=str(tmp_path))
+    handler = KMCheckpointHandler(server_context={})
+    handler._checkpoint_store = store
+    return handler, store
+
+
+def _data(result) -> dict:
+    body = _body(result)
+    return body.get("data", body)
+
+
+class TestRealStoreIdContract:
+    async def test_lifecycle_uses_the_id_the_api_returned(self, real_store):
+        handler, store = real_store
+        created = []
+        for name in ("release-1", "release-2"):
+            result = await _call(handler, "POST", BASE, {"name": name})
+            assert _status(result) == 201
+            created.append(_data(result))
+        ids = [c["id"] for c in created]
+        assert all(i.startswith("km_ckpt_") for i in ids) and len(set(ids)) == 2
+        listed = _data(await _call(handler, "GET", BASE))["checkpoints"]
+        assert {(c["id"], c["name"]) for c in listed} == {(c["id"], c["name"]) for c in created}
+        first = ids[0]
+        detail = _data(await _call(handler, "GET", f"{BASE}/{first}"))
+        assert (detail["id"], detail["name"]) == (first, "release-1")
+        compared = await _call(handler, "GET", f"{BASE}/{first}/compare")
+        assert _status(compared) == 200 and _data(compared)["checkpoint_1"] == first
+        pair = {"checkpoint_a": ids[0], "checkpoint_b": ids[1]}
+        assert _status(await _call(handler, "POST", f"{BASE}/compare", pair)) == 200
+        restored = await _call(handler, "POST", f"{BASE}/{first}/restore", {})
+        assert _status(restored) == 200 and _data(restored)["checkpoint_id"] == first
+        assert store.mound.saved == ["node-1"]
+        assert _status(await _call(handler, "DELETE", f"{BASE}/{first}")) == 200
+        assert _status(await _call(handler, "GET", f"{BASE}/{first}")) == 404
+        listed = _data(await _call(handler, "GET", BASE))["checkpoints"]
+        assert [c["id"] for c in listed] == [ids[1]]
+
+    async def test_names_are_not_resolved_to_ids(self, real_store, tmp_path):
+        handler, _ = real_store
+        created = _data(await _call(handler, "POST", BASE, {"name": "release-1"}))
+        pair = {"checkpoint_a": "release-1", "checkpoint_b": created["id"]}
+        for method, path, body in [
+            ("GET", f"{BASE}/release-1", None),
+            ("GET", f"{BASE}/release-1/compare", None),
+            ("POST", f"{BASE}/release-1/restore", {}),
+            ("DELETE", f"{BASE}/release-1", None),
+            ("POST", f"{BASE}/compare", pair),
+        ]:
+            assert _status(await _call(handler, method, path, body)) == 404, (method, path)
+        assert [p.name for p in tmp_path.iterdir()] == [created["id"]]
+
+    @pytest.mark.parametrize("name", ["../outside", "a%2Fb", "release.1", "x" * 129])
+    async def test_invalid_create_names_get_400_and_persist_nothing(
+        self, real_store, tmp_path, name
+    ):
+        handler, _ = real_store
+        result = await _call(handler, "POST", BASE, {"name": name})
+        assert _status(result) == 400
+        assert _body(result)["error"].startswith("Invalid checkpoint name")
+        assert list(tmp_path.iterdir()) == []
+
+    async def test_older_on_disk_names_stay_listable(self, real_store):
+        handler, store = real_store
+        ckpt_id = await store.create_checkpoint(name="placeholder")
+        meta = store.checkpoint_dir / ckpt_id / "metadata.json"
+        meta.write_text(json.dumps({**json.loads(meta.read_text()), "name": "release.1"}))
+        listed = _data(await _call(handler, "GET", BASE))["checkpoints"]
+        assert [(c["id"], c["name"]) for c in listed] == [(ckpt_id, "release.1")]
+        assert _data(await _call(handler, "GET", f"{BASE}/{ckpt_id}"))["name"] == "release.1"
