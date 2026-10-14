@@ -10,7 +10,7 @@ import random
 import subprocess
 import sys
 import time
-from collections import OrderedDict
+from collections import OrderedDict, namedtuple
 from datetime import datetime
 from types import SimpleNamespace
 
@@ -1751,13 +1751,12 @@ logging.getLogger({name!r}).warning("rotated token=SECRET-NAME-1")
     assert TextFormatter("%(name)s: %(message)s").format(record) == f"{name}: api_key=*** sent"
 
 
-_BYTES = {b"Authorization: Bearer abc": b"Authorization: ***"}
+_BYTES = {b"Authorization: Bearer abc": b"Authorization: ***", b"\xff\xfe api_key=SECRET-X": b"***"}
 _BYTES[b"retry api_key=SECRET-X now"] = b"retry api_key=*** now"
-_BYTES[b"\xff\xfe api_key=SECRET-X"] = b"***"
 
 
 @pytest.mark.parametrize("kind", [bytes, bytearray])
-@pytest.mark.parametrize("raw", _BYTES, ids=["header", "assignment", "undecodable"])
+@pytest.mark.parametrize("raw", _BYTES, ids=["header", "undecodable", "assignment"])
 def test_redact_masks_bytes_alone_and_nested_and_keeps_their_type(kind, raw):
     masked = redact({"raw": kind(raw), "items": [kind(raw)], "pair": (kind(raw), "ok")})
     for value in (redact(kind(raw)), masked["raw"], masked["items"][0], masked["pair"][0]):
@@ -1778,17 +1777,13 @@ _RECORD = dict(msg="login for %s token=%s", args=("alice", "SECRET-EXTRA-7"), us
 _RECORD.update(api_key="SECRET-EXTRA-1", token=123456, authorization="Bearer SECRET-EXTRA-3")
 _RECORD.update(password=b"SECRET-EXTRA-4", note="password=SECRET-EXTRA-5")
 _RECORD["error"] = RuntimeError("token=SECRET-EXTRA-6")
+_TEXT = {"%(api_key)s %(message)s": "*** login for alice token=***"}
+_TEXT["%(token)s %(authorization)s %(password)s"] = "*** *** ***"
+_TEXT["%(note)s %(error)s %(user)s %(count)d"] = "password=*** token=*** alice 3"
+_TEXT["%(msg)s %(args)s"] = "login for alice token=*** ()"
 
 
-@pytest.mark.parametrize(
-    ("text_format", "expected"),
-    [
-        ("%(api_key)s %(message)s", "*** login for alice token=***"),
-        ("%(token)s %(authorization)s %(password)s", "*** *** ***"),
-        ("%(note)s %(error)s %(user)s %(count)d", "password=*** token=*** alice 3"),
-        ("%(msg)s %(args)s", "login for alice token=*** ()"),
-    ],
-)
+@pytest.mark.parametrize(("text_format", "expected"), _TEXT.items())
 def test_text_formats_naming_extras_never_print_a_secret(text_format, expected):
     assert TextFormatter(text_format).format(logging.makeLogRecord(_RECORD)) == expected
 
@@ -1808,11 +1803,9 @@ def test_text_formats_never_print_secrets_from_exceptions_stacks_or_object_extra
 
 def test_json_extras_named_like_fixed_fields_move_to_a_prefixed_key():
     record = logging.LogRecord("val", logging.WARNING, "", 0, "hello", (), None, sinfo="here")
-    record.created = 0.0
+    record.created, record.extra_ts = 0.0, "kept"
     record.__dict__.update(level="DEBUG token=SECRET-FIX-1", logger="x", ts="then", stack="mine")
-    record.extra_ts = "kept"
-    line = JsonFormatter().format(record)
-    data = json.loads(line)
+    data = json.loads(line := JsonFormatter().format(record))
     fixed = [data[key] for key in ("ts", "level", "logger", "msg", "stack")]
     assert fixed == ["1970-01-01T00:00:00+00:00", "WARNING", "val", "hello", "here"]
     moved = [data[key] for key in ("extra_level", "extra_logger", "extra_extra_ts", "extra_stack")]
@@ -1827,6 +1820,12 @@ _LEAKS["{payload.__dict__}"] = "{'password': '***', 'inner': namespace(token='**
 _LEAKS["{payload.inner.token}"] = _LEAKS["{payload.__dict__[_value].password}"] = "format_error"
 _DATA = {"items": [({"api_key[primary]": "LEAK-R1"},)]}
 _LEAKS["%(data)s %(message)s"] = _LEAKS["{data} {message}"] = "[({'api_key[primary]': '***'},)]"
+_Pair = namedtuple("Credentials", "password user")
+_PAIRS = [(_Pair("LEAK-R3", "alice"), "Credentials(password='***', user='alice')")]
+_PAIRS += [(namedtuple("Credentials", "password")("LEAK-R3"), "Credentials(password='***')")]
+_odd = lambda **attrs: (type("Odd", (_Pair,), attrs)._make(["LEAK-R3", "bob"]), "('***', '***')")
+_PAIRS += [_odd(_fields=f) for f in [(0, 1), ("password",), ("user", "password")]]
+_PAIRS += [_odd(__new__=f) for f in [lambda cls: cls, lambda *_: 1 / 0, lambda *_: _PAIRS[0][0]]]
 
 
 @pytest.mark.parametrize("text_format", _LEAKS)
@@ -1836,6 +1835,17 @@ def test_labels_defaults_and_brace_traversal_are_redacted_with_the_line(text_for
     line = TextFormatter(text_format, style=style, defaults=_DEFAULTS).format(record)
     assert _LEAKS[text_format] in line and "LEAK-R1" not in line
     assert _DATA == {"items": [({"api_key[primary]": "LEAK-R1"},)]}
+
+
+@pytest.mark.parametrize(("pair", "shown"), _PAIRS)
+def test_namedtuple_fields_are_masked_by_name_or_the_tuple_is_masked_whole(pair, shown):
+    nested, inner = {"items": [pair]}, f"{{'items': [{shown}]}}"
+    record = logging.makeLogRecord({"msg": "ok", "pair": pair, "nested": nested})
+    for fmt in ("%(pair)s %(nested)s %(message)s", "{pair} {nested} {message}"):
+        assert TextFormatter(fmt, style=fmt[0]).format(record) == f"{shown} {inner} ok"
+    assert (repr(redact(pair)), repr(redact(nested)), nested) == (shown, inner, {"items": [pair]})
+    line = JsonFormatter().format(record)
+    assert json.loads(line)["pair"] == json.loads(line)["nested"]["items"][0] == list(redact(pair))
 
 
 @pytest.mark.parametrize("field, shown", [("context", "{'api_key': '***'}"), ("api_token", "***")])

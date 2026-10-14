@@ -365,6 +365,16 @@ def _redact_item(key: Any, value: Any, active: frozenset[int]) -> tuple[Any, Any
     return _redact(str(key), active), _REDACTED
 
 
+def _redact_fields(obj: tuple[Any, ...], active: frozenset[int]) -> tuple[Any, ...]:
+    # Fields are masked by name only if each name reads back its item and the type rebuilds them.
+    with contextlib.suppress(Exception):
+        pairs = list(zip(getattr(type(obj), "_fields"), obj, strict=True))
+        items = [_redact_item(name, value, active)[1] for name, value in pairs]
+        if all(getattr(obj, n) is v for n, v in pairs) and list(new := type(obj)(*items)) == items:
+            return new
+    return (_REDACTED,) * len(obj)
+
+
 def _redact(obj: Any, active: frozenset[int]) -> Any:
     if isinstance(obj, (Mapping, list, tuple)):
         if id(obj) in active:
@@ -375,7 +385,8 @@ def _redact(obj: Any, active: frozenset[int]) -> Any:
     if isinstance(obj, list):
         return [_redact(value, active) for value in obj]
     if isinstance(obj, tuple):
-        return tuple(_redact(value, active) for value in obj)
+        named = hasattr(type(obj), "_fields")
+        return _redact_fields(obj, active) if named else tuple(_redact(v, active) for v in obj)
     if isinstance(obj, (set, frozenset)):
         items = (_redact(value, active) for value in obj)
         return frozenset(items) if isinstance(obj, frozenset) else set(items)
@@ -384,8 +395,7 @@ def _redact(obj: Any, active: frozenset[int]) -> Any:
     if isinstance(obj, (bytes, bytearray)):
         try:
             masked = _redact_text(obj.decode()).encode()
-        except UnicodeDecodeError:
-            # Text that cannot be decoded cannot be searched for a secret name.
+        except UnicodeDecodeError:  # undecodable text cannot be searched for a secret name
             masked = _REDACTED.encode()
         return bytearray(masked) if isinstance(obj, bytearray) else masked
     return obj
@@ -480,9 +490,8 @@ def _format_safely(render: Callable[[logging.LogRecord], str], record: logging.L
 class JsonFormatter(logging.Formatter):
     """One JSON object per line, including redacted structured extras.
 
-    Its own fields (ts, level, logger, msg, format_error, exception, stack) come
-    from the record; an extra with one of those names moves to extra_<name>,
-    prefixed again while that name is taken, and is redacted like other extras.
+    Its own fields (ts, level, logger, msg, format_error, exception, stack) come from the record;
+    an extra with one of those names moves to extra_<name>, prefixed again while that is taken.
     """
 
     def format(self, record: logging.LogRecord) -> str:
