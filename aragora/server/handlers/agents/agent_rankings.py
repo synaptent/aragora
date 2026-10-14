@@ -17,7 +17,7 @@ from aragora.config import (
 from aragora.persistence.db_config import DatabaseType, get_db_path
 
 if TYPE_CHECKING:
-    from aragora.ranking.elo import EloSystem  # noqa: F401
+    from aragora.ranking.elo import EloSystem
 
 from ..base import (
     HandlerResult,

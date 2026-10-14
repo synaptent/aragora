@@ -2185,41 +2185,6 @@ export class DebatesAPI {
   // ===========================================================================
 
   /**
-   * Add tags to a debate.
-   *
-   * @deprecated Not served: no handler dispatches
-   * POST /api/v1/debates/{id}/tags — the request falls through to
-   * DebatesHandler's slug lookup and returns 404. Use {@link update}
-   * (documented PATCH /api/v1/debates/{id} with a `tags` field) instead.
-   *
-   * @param debateId - The debate ID
-   * @param tags - Array of tags to add
-   */
-  async addTags(debateId: string, tags: string[]): Promise<{ success: boolean; tags: string[] }> {
-    return this.client.request('POST', `/api/v1/debates/${debateId}/tags`, {
-      body: { tags },
-    });
-  }
-
-  /**
-   * Remove tags from a debate.
-   *
-   * @deprecated Not served: no handler dispatches
-   * DELETE /api/v1/debates/{id}/tags — the request falls through to
-   * DebatesHandler's slug lookup and returns 404. Use {@link update}
-   * (documented PATCH /api/v1/debates/{id} with the desired `tags` list)
-   * instead.
-   *
-   * @param debateId - The debate ID
-   * @param tags - Array of tags to remove
-   */
-  async removeTags(debateId: string, tags: string[]): Promise<{ success: boolean; tags: string[] }> {
-    return this.client.request('DELETE', `/api/v1/debates/${debateId}/tags`, {
-      body: { tags },
-    });
-  }
-
-  /**
    * List debates by tag.
    *
    * @param tag - The tag to filter by

@@ -962,7 +962,10 @@ class FeedbackPhase:
             return None
 
         try:
-            from aragora.gauntlet.receipt_models import DecisionReceipt
+            from aragora.debate.receipt_operations import register_debate_receipt_operations
+            from aragora.models.receipts.gauntlet import DecisionReceipt
+
+            register_debate_receipt_operations()
 
             # Build cost summary from DebateCostTracker if available
             cost_summary = None
@@ -1002,7 +1005,7 @@ class FeedbackPhase:
                     dict(receipt.explainability) if isinstance(receipt.explainability, dict) else {}
                 )
                 try:
-                    from aragora.gauntlet.receipt_models import normalize_live_explainability
+                    from aragora.models.receipts.gauntlet import normalize_live_explainability
 
                     live_explainability = normalize_live_explainability(
                         existing_explainability.get("live_explainability")
@@ -1245,17 +1248,8 @@ class FeedbackPhase:
             return
 
         try:
-            from aragora.broadcast.pipeline import BroadcastOptions
-
-            options = BroadcastOptions(
-                audio_enabled=True,
-                generate_rss_episode=True,
-            )
-
-            pipeline_result = await pipeline.run(
-                ctx.debate_id,
-                options,
-            )
+            # The pipeline's default options generate audio and an RSS episode.
+            pipeline_result = await pipeline.run(ctx.debate_id)
 
             if pipeline_result.success:
                 logger.info(

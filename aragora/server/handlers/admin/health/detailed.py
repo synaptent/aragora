@@ -671,11 +671,11 @@ def deep_health_check(handler) -> HandlerResult:
         from aragora.services.snooze_recommender import SnoozeRecommender
 
         # Check follow-up tracker - instantiate to verify module works
-        _tracker = FollowUpTracker()  # noqa: F841
+        _tracker = FollowUpTracker()
         checks["email_followup_tracker"] = {"healthy": True, "status": "available"}
 
         # Check snooze recommender - instantiate to verify module works
-        _recommender = SnoozeRecommender()  # noqa: F841
+        _recommender = SnoozeRecommender()
         checks["email_snooze_recommender"] = {"healthy": True, "status": "available"}
 
     except ImportError:
@@ -693,7 +693,7 @@ def deep_health_check(handler) -> HandlerResult:
         from aragora.audit.dependency_analyzer import DependencyAnalyzer
 
         # Instantiate to verify module works
-        _analyzer = DependencyAnalyzer()  # noqa: F841
+        _analyzer = DependencyAnalyzer()
         checks["dependency_analyzer"] = {"healthy": True, "status": "available"}
 
     except ImportError:

@@ -363,8 +363,10 @@ async def compress_debate_messages(
 
         if result.compression_applied:
             logger.info(
-                f"[arena] Compressed debate context: {result.original_chars} -> "
-                f"{result.compressed_chars} chars ({result.compression_ratio:.0%} of original)"
+                "[arena] Compressed debate context: %s -> %s chars (%.0f%% of original)",
+                result.original_chars,
+                result.compressed_chars,
+                result.compression_ratio * 100,
             )
 
         return result.messages, result.critiques

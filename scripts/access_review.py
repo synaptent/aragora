@@ -95,13 +95,16 @@ def get_user_store() -> UserStore:
     return UserStore(db_path)
 
 
-def calculate_inactivity_days(last_login: str | None) -> int | None:
+def calculate_inactivity_days(last_login: datetime | str | None) -> int | None:
     """Calculate days since last login."""
     if not last_login:
         return None
 
     try:
-        last_dt = datetime.fromisoformat(last_login.replace("Z", "+00:00"))
+        if isinstance(last_login, datetime):
+            last_dt = last_login
+        else:
+            last_dt = datetime.fromisoformat(last_login.replace("Z", "+00:00"))
         # Make datetime naive for comparison if it has timezone
         if last_dt.tzinfo is not None:
             last_dt = last_dt.replace(tzinfo=None)
@@ -153,7 +156,7 @@ def get_access_findings(
         )
 
     # Check for API key without expiration tracking
-    if user.api_key and not user.api_key_expires_at:
+    if user.api_key_hash and not user.api_key_expires_at:
         findings.append(
             {
                 "type": "API_KEY_NO_EXPIRY",
@@ -174,7 +177,7 @@ def generate_access_report(
     elevated_only: bool = False,
 ) -> dict:
     """Generate comprehensive access review report."""
-    report = {
+    report: dict[str, Any] = {
         "metadata": {
             "generated_at": datetime.utcnow().isoformat(),
             "inactive_threshold_days": inactive_threshold,
@@ -226,7 +229,7 @@ def generate_access_report(
             "created_at": user.created_at,
             "last_login_at": user.last_login_at,
             "inactivity_days": inactivity_days,
-            "has_api_key": bool(user.api_key),
+            "has_api_key": bool(user.api_key_hash),
             "api_key_expires_at": user.api_key_expires_at,
             "findings": [],
         }

@@ -344,7 +344,7 @@ class InMemoryDeliveryStore(WebhookDeliveryStore):
     async def count_by_status(self) -> dict[DeliveryStatus, int]:
         """Count deliveries by status."""
         async with self._lock:
-            counts: dict[DeliveryStatus, int] = {status: 0 for status in DeliveryStatus}
+            counts: dict[DeliveryStatus, int] = dict.fromkeys(DeliveryStatus, 0)
             for delivery in self._deliveries.values():
                 counts[delivery.status] += 1
             return counts
@@ -935,14 +935,14 @@ class WebhookRetryQueue:
                 if parsed.scheme not in ("http", "https"):
                     return False, 0, f"Unsupported URL scheme: {parsed.scheme}"
 
-                request = Request(  # noqa: S310 -- URL scheme validated above
+                request = Request(  # URL scheme validated above
                     delivery.url,
                     data=payload_json.encode("utf-8"),
                     headers=headers,
                     method="POST",
                 )
 
-                with urlopen(request, timeout=self._request_timeout) as response:  # noqa: S310
+                with urlopen(request, timeout=self._request_timeout) as response:
                     return True, response.status, None
 
             except HTTPError as e:

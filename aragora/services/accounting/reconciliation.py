@@ -341,10 +341,11 @@ class ReconciliationService:
         self._reconciliation_history[reconciliation_id] = result
 
         logger.info(
-            f"[Reconciliation] {reconciliation_id}: "
-            f"Matched {result.matched_count}, "
-            f"Discrepancies {len(discrepancies)}, "
-            f"Difference ${float(result.difference):.2f}"
+            "[Reconciliation] %s: Matched %s, Discrepancies %s, Difference $%.2f",
+            reconciliation_id,
+            result.matched_count,
+            len(discrepancies),
+            float(result.difference),
         )
 
         return result

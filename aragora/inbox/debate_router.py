@@ -737,7 +737,7 @@ class InboxDebateRouter:
         """
         try:
             from aragora.core import Environment
-            from aragora.debate.protocol import DebateProtocol
+            from aragora.protocols.debate import DebateProtocol
             from aragora.debate.orchestrator import Arena
 
             env = Environment(task=question)

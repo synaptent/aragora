@@ -333,7 +333,7 @@ class TestExtractReviewFindings:
         mock_report.agreement_score = 0.8
         mock_report.agent_alignment = {}
 
-        with patch("aragora.cli.review.DisagreementReporter") as mock_reporter_class:
+        with patch("aragora.review.diff_review.DisagreementReporter") as mock_reporter_class:
             mock_reporter_class.return_value.generate_report.return_value = mock_report
             findings = extract_review_findings(result)
 
@@ -360,7 +360,7 @@ class TestExtractReviewFindings:
         mock_report.agreement_score = 0.5
         mock_report.agent_alignment = {}
 
-        with patch("aragora.cli.review.DisagreementReporter") as mock_reporter_class:
+        with patch("aragora.review.diff_review.DisagreementReporter") as mock_reporter_class:
             mock_reporter_class.return_value.generate_report.return_value = mock_report
             findings = extract_review_findings(result)
 
@@ -392,7 +392,7 @@ class TestExtractReviewFindings:
         mock_report.agreement_score = 0.5
         mock_report.agent_alignment = {}
 
-        with patch("aragora.cli.review.DisagreementReporter") as mock_reporter_class:
+        with patch("aragora.review.diff_review.DisagreementReporter") as mock_reporter_class:
             mock_reporter_class.return_value.generate_report.return_value = mock_report
             findings = extract_review_findings(result)
 
@@ -421,7 +421,7 @@ class TestExtractReviewFindings:
         mock_report.agreement_score = 0.5
         mock_report.agent_alignment = {}
 
-        with patch("aragora.cli.review.DisagreementReporter") as mock_reporter_class:
+        with patch("aragora.review.diff_review.DisagreementReporter") as mock_reporter_class:
             mock_reporter_class.return_value.generate_report.return_value = mock_report
             findings = extract_review_findings(result)
 
@@ -452,7 +452,7 @@ class TestExtractReviewFindings:
         mock_report.agreement_score = 0.5
         mock_report.agent_alignment = {}
 
-        with patch("aragora.cli.review.DisagreementReporter") as mock_reporter_class:
+        with patch("aragora.review.diff_review.DisagreementReporter") as mock_reporter_class:
             mock_reporter_class.return_value.generate_report.return_value = mock_report
             findings = extract_review_findings(result)
 
@@ -489,7 +489,7 @@ class TestExtractReviewFindings:
         mock_report.agreement_score = 0.5
         mock_report.agent_alignment = {}
 
-        with patch("aragora.cli.review.DisagreementReporter") as mock_reporter_class:
+        with patch("aragora.review.diff_review.DisagreementReporter") as mock_reporter_class:
             mock_reporter_class.return_value.generate_report.return_value = mock_report
             findings = extract_review_findings(result)
 
@@ -522,7 +522,7 @@ class TestExtractReviewFindings:
         mock_report.agreement_score = 0.5
         mock_report.agent_alignment = {}
 
-        with patch("aragora.cli.review.DisagreementReporter") as mock_reporter_class:
+        with patch("aragora.review.diff_review.DisagreementReporter") as mock_reporter_class:
             mock_reporter_class.return_value.generate_report.return_value = mock_report
             findings = extract_review_findings(result)
 
@@ -554,7 +554,7 @@ class TestExtractReviewFindings:
         mock_report.agreement_score = 0.5
         mock_report.agent_alignment = {}
 
-        with patch("aragora.cli.review.DisagreementReporter") as mock_reporter_class:
+        with patch("aragora.review.diff_review.DisagreementReporter") as mock_reporter_class:
             mock_reporter_class.return_value.generate_report.return_value = mock_report
             findings = extract_review_findings(result)
 
@@ -585,7 +585,7 @@ class TestExtractReviewFindings:
         mock_report.agreement_score = 0.5
         mock_report.agent_alignment = {}
 
-        with patch("aragora.cli.review.DisagreementReporter") as mock_reporter_class:
+        with patch("aragora.review.diff_review.DisagreementReporter") as mock_reporter_class:
             mock_reporter_class.return_value.generate_report.return_value = mock_report
             findings = extract_review_findings(result)
 
@@ -845,6 +845,35 @@ class TestCmdReview:
         # Demo receipts must never pass for a real review's receipt.
         assert "[DEMO MODE]" in odr_text
 
+    @pytest.mark.parametrize("env,expected", [(None, "0.2"), ("", "0.2"), ("0.1", "0.1")])
+    def test_emit_odr_profile_follows_env(self, review_args, tmp_path, monkeypatch, env, expected):
+        """The review receipt uses the library default unless the env var asks for 0.1."""
+        from aragora.gauntlet.odr_verify import verify_odr_document
+
+        monkeypatch.delenv("ARAGORA_ODR_PROFILE_VERSION", raising=False)
+        if env is not None:
+            monkeypatch.setenv("ARAGORA_ODR_PROFILE_VERSION", env)
+        review_args.demo = True
+        review_args.output_dir = str(tmp_path)
+        review_args.emit_odr = ""
+        monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+
+        assert cmd_review(review_args) == 0
+        odr = json.loads((tmp_path / "review.odr.json").read_text())
+        assert odr["odr_version"] == expected
+        assert verify_odr_document(odr).ok
+
+    def test_emit_odr_invalid_profile_env_writes_nothing(self, review_args, tmp_path, monkeypatch):
+        """An invalid ARAGORA_ODR_PROFILE_VERSION fails the ODR step (exit 3), no file."""
+        monkeypatch.setenv("ARAGORA_ODR_PROFILE_VERSION", "banana")
+        review_args.demo = True
+        review_args.output_dir = str(tmp_path)
+        review_args.emit_odr = ""
+        monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+
+        assert cmd_review(review_args) == 3
+        assert not (tmp_path / "review.odr.json").exists()
+
     def test_real_review_emits_odr_to_explicit_path(self, review_args, tmp_path, monkeypatch):
         """A standard review can produce its portable receipt in one invocation."""
         diff_file = tmp_path / "test.diff"
@@ -1087,7 +1116,7 @@ class TestCmdReview:
         mock_report.agent_alignment = {}
 
         with patch("aragora.cli.review.asyncio.run", return_value=mock_result):
-            with patch("aragora.cli.review.DisagreementReporter") as mock_reporter:
+            with patch("aragora.review.diff_review.DisagreementReporter") as mock_reporter:
                 mock_reporter.return_value.generate_report.return_value = mock_report
                 result = cmd_review(review_args)
 
@@ -1151,7 +1180,7 @@ class TestCmdReview:
         mock_report.agent_alignment = {}
 
         with patch("aragora.cli.review.asyncio.run", return_value=mock_result):
-            with patch("aragora.cli.review.DisagreementReporter") as mock_reporter:
+            with patch("aragora.review.diff_review.DisagreementReporter") as mock_reporter:
                 mock_reporter.return_value.generate_report.return_value = mock_report
                 result = cmd_review(review_args)
 
@@ -1218,7 +1247,7 @@ class TestCmdReview:
         mock_report.agent_alignment = {}
 
         with patch("aragora.cli.review.asyncio.run", return_value=mock_result):
-            with patch("aragora.cli.review.DisagreementReporter") as mock_reporter:
+            with patch("aragora.review.diff_review.DisagreementReporter") as mock_reporter:
                 mock_reporter.return_value.generate_report.return_value = mock_report
                 result = cmd_review(review_args)
 

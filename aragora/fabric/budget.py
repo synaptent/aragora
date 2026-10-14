@@ -245,7 +245,7 @@ class BudgetManager:
 
     async def _send_alert(self, entity_id: str, status: BudgetStatus) -> None:
         """Send a budget alert."""
-        logger.warning(f"Budget alert for {entity_id}: {status.usage_percent:.1f}% used")
+        logger.warning("Budget alert for %s: %.1f%% used", entity_id, status.usage_percent)
         if self._alert_callback:
             try:
                 await self._alert_callback(entity_id, status)

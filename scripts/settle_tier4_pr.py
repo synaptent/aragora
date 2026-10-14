@@ -37,6 +37,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from aragora.cli.commands import review_queue_rest_fallback as rest_fallback
 from aragora.cli.commands.review_queue_transport import _GhError
+from aragora.swarm.merge_halt import evaluate_merge_halt
 
 try:
     from aragora.swarm.github_app_auth import (
@@ -2127,6 +2128,19 @@ def _apply_merge(
 ) -> list[list[str]]:
     if protected_squash_only and reconcile_branch_protection:
         raise RuntimeError("protected squash cannot reconcile branch protection")
+    # #9216: refuse before any branch-protection or merge mutation.
+    halt = evaluate_merge_halt(pr, head)
+    if not halt.allowed:
+        raise Tier4ApplyError(
+            f"Tier 4 merge refused: {halt.reason}",
+            phase="merge_halt",
+            mutation_occurred=False,
+            completed_commands=0,
+            recovery_action=(
+                "wait for main to be green and the halt to be cleared, or record an "
+                "exact-head single-pr waiver for this PR, then rerun --merge-apply"
+            ),
+        )
     commands: list[list[str]] = []
     if reconcile_branch_protection:
         _preflight_branch_protection_reconcile(repo=repo, cwd=cwd)

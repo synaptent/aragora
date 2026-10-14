@@ -3168,6 +3168,7 @@ def harvest_tranche_queue(
                         normalized_pr_url,
                         required_checks_green=snapshot.required_checks_green,
                         allow_admin=allow_admin,
+                        head_sha=snapshot.head_sha,
                     )
                     pr_record["merge_result"] = merge_result.to_dict()
                     disposition = "merged" if merge_result.merged else "merge_failed"

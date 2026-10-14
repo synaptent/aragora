@@ -23,6 +23,11 @@ from enum import Enum
 from typing import Any
 from collections.abc import Callable
 
+from aragora.security.approval_mappings import (
+    APPROVAL_CATEGORY_UNKNOWN,
+    APPROVAL_SOURCE_CATEGORIES,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -265,11 +270,10 @@ class ChatApprovalNotifier(ApprovalNotifier):
         targets = self._resolve_targets(request)
         if not targets:
             return
-        try:
-            from aragora.approvals.chat import send_chat_approval_request
-        except ImportError:
-            logger.debug("Chat approval integration not available")
-            return
+        from aragora.events.approval_requests import (
+            ApprovalNotifierNotRegisteredError,
+            send_approval_request,
+        )
 
         fields = [
             ("Request ID", request.id),
@@ -281,15 +285,18 @@ class ChatApprovalNotifier(ApprovalNotifier):
             fields.append(("URL", request.context.current_url))
 
         ttl_seconds = int(max(0.0, request.expires_at - time.time()))
-        await send_chat_approval_request(
-            title="Computer-Use Approval Required",
-            description=request.context.reason,
-            fields=fields,
-            targets=targets,
-            kind="computer_use",
-            target_id=request.id,
-            ttl_seconds=ttl_seconds if ttl_seconds > 0 else None,
-        )
+        try:
+            await send_approval_request(
+                title="Computer-Use Approval Required",
+                description=request.context.reason,
+                fields=fields,
+                targets=targets,
+                kind="computer_use",
+                target_id=request.id,
+                ttl_seconds=ttl_seconds if ttl_seconds > 0 else None,
+            )
+        except ApprovalNotifierNotRegisteredError:
+            logger.debug("Chat approval integration not available")
 
     async def notify_decision(self, request: ApprovalRequest) -> None:
         """No-op for now; decisions are reflected in the original message."""
@@ -306,11 +313,10 @@ class ApprovalWorkflow:
     approval_context_type = ApprovalContext
     approval_priority_high = ApprovalPriority.HIGH
     approval_category_map = {
-        "gateway": ApprovalCategory.SYSTEM_MODIFICATION,
-        "device": ApprovalCategory.EXTERNAL_SYSTEM,
-        "computer_use": ApprovalCategory.DESTRUCTIVE_ACTION,
+        source: ApprovalCategory(category)
+        for source, category in APPROVAL_SOURCE_CATEGORIES.items()
     }
-    approval_category_unknown = ApprovalCategory.UNKNOWN
+    approval_category_unknown = ApprovalCategory(APPROVAL_CATEGORY_UNKNOWN)
     approval_status_approved = ApprovalStatus.APPROVED
 
     def __init__(

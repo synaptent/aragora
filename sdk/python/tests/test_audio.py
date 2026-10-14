@@ -69,23 +69,6 @@ class TestAudioEpisodes:
         assert call_kwargs["params"]["limit"] == 10
         assert call_kwargs["params"]["offset"] == 20
 
-    def test_get_episode(self, client: AragoraClient, mock_request) -> None:
-        """Get a specific episode."""
-        mock_request.return_value = {
-            "id": "ep_123",
-            "title": "Test Episode",
-            "audio_url": "https://example.com/audio.mp3",
-            "duration_seconds": 600,
-        }
-
-        result = client.audio.get_episode("ep_123")
-
-        mock_request.assert_called_once_with(
-            "GET",
-            "/api/v1/podcast/episodes/ep_123",
-        )
-        assert result["title"] == "Test Episode"
-
 
 class TestAsyncAudio:
     """Tests for async audio API."""
@@ -120,16 +103,6 @@ class TestAsyncAudio:
             result = await client.audio.list_episodes()
 
             assert len(result["episodes"]) == 1
-
-    @pytest.mark.asyncio
-    async def test_async_get_episode(self, mock_async_request) -> None:
-        """Get episode asynchronously."""
-        mock_async_request.return_value = {"id": "ep_async", "title": "Async Episode"}
-
-        async with AragoraAsyncClient(base_url="https://api.aragora.ai") as client:
-            result = await client.audio.get_episode("ep_async")
-
-            assert result["title"] == "Async Episode"
 
     @pytest.mark.asyncio
     async def test_async_get_feed_url(self) -> None:

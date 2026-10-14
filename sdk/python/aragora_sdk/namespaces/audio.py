@@ -89,18 +89,6 @@ class AudioAPI:
             params=params if params else None,
         )
 
-    def get_episode(self, episode_id: str) -> dict[str, Any]:
-        """
-        Get a specific podcast episode.
-
-        Args:
-            episode_id: The episode identifier.
-
-        Returns:
-            Episode details including title, description, audio URL, and duration.
-        """
-        return self._client.request("GET", f"/api/v1/podcast/episodes/{episode_id}")
-
     def get_feed_url(self) -> str:
         """
         Get the podcast RSS feed URL.
@@ -192,10 +180,6 @@ class AsyncAudioAPI:
             "/api/v1/podcast/episodes",
             params=params if params else None,
         )
-
-    async def get_episode(self, episode_id: str) -> dict[str, Any]:
-        """Get a specific podcast episode."""
-        return await self._client.request("GET", f"/api/v1/podcast/episodes/{episode_id}")
 
     def get_feed_url(self) -> str:
         """Get the podcast RSS feed URL."""

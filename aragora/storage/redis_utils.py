@@ -25,14 +25,14 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
-    from aragora.type_protocols import RedisClientProtocol
+    from aragora.protocols import RedisClientProtocol
 
 logger = logging.getLogger(__name__)
 
-_cached_client: Any | None = None
+_cached_client: RedisClientProtocol | None = None
 _initialized = False
 
 
@@ -87,10 +87,13 @@ def get_redis_client(redis_url: str | None = None) -> RedisClientProtocol | None
         standalone_client = redis.from_url(url, encoding="utf-8", decode_responses=True)
         standalone_client.ping()
         logger.info("Using standalone Redis client at %s", url)
+        # Not a checked assignment: under the types-redis stubs, Redis[str] is not a
+        # structural RedisClientProtocol (zadd, info and zrangebyscore signatures differ).
+        client_proto = cast("RedisClientProtocol", standalone_client)
         if redis_url is None:
-            _cached_client = standalone_client
+            _cached_client = client_proto
             _initialized = True
-        return cast(Any, standalone_client)
+        return client_proto
     except ImportError:
         logger.debug("redis package not installed")
         return None

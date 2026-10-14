@@ -22,15 +22,6 @@ def api(mock_client):
 
 
 class TestSpectateAPI:
-    def test_connect_sse(self, api, mock_client):
-        result = api.connect_sse("debate-123")
-        mock_client.request.assert_called_once_with("GET", "/api/v1/spectate/debate-123/stream")
-        assert "stream_url" in result
-
-    def test_connect_sse_different_debate(self, api, mock_client):
-        api.connect_sse("debate-456")
-        mock_client.request.assert_called_once_with("GET", "/api/v1/spectate/debate-456/stream")
-
     def test_async_class_exists(self):
         """Verify AsyncSpectateAPI can be instantiated."""
         mock_client = MagicMock()
@@ -42,8 +33,3 @@ class TestSpectateAPI:
         mock_client = MagicMock()
         api = SpectateAPI(mock_client)
         assert api._client is mock_client
-
-    def test_connect_returns_response(self, api, mock_client):
-        mock_client.request.return_value = {"stream_url": "/sse/test", "debate_id": "test"}
-        result = api.connect_sse("test")
-        assert result["debate_id"] == "test"

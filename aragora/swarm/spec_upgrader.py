@@ -71,7 +71,7 @@ _BOUND_LABELS = {
 
 def _classify_missing_bounds(missing_bounds: list[str]) -> dict[str, bool]:
     """Map ``missing_dispatch_bounds()`` labels to actionable flags for enrichment."""
-    classified = {flag: False for flag in _BOUND_LABELS.values()}
+    classified = dict.fromkeys(_BOUND_LABELS.values(), False)
     for label in missing_bounds:
         flag = _BOUND_LABELS.get(label)
         if flag is not None:

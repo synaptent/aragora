@@ -506,7 +506,7 @@ class DebateFactory:
         if enable_rlm_training is None:
             enable_rlm_training = get_settings().integration.rlm_training_enabled
         from aragora.debate.arena_builder import ArenaBuilder
-        from aragora.debate.protocol import (
+        from aragora.protocols.debate import (
             ARAGORA_AI_LIGHT_PROTOCOL,
             ARAGORA_AI_PROTOCOL,
             DebateProtocol,

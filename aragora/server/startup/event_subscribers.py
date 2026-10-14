@@ -13,16 +13,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from aragora.server.webhook_store_registration import register_webhook_store
+
 if TYPE_CHECKING:
     from aragora.events.cross_subscribers import CrossSubscriberManager
 
-
-def register_webhook_store() -> None:
-    """Register durable webhook storage without loading server subscribers."""
-    from aragora.events.dispatcher import register_webhook_store_provider
-    from aragora.storage.webhook_config_store import get_webhook_config_store
-
-    register_webhook_store_provider(get_webhook_config_store)
+__all__ = ["bootstrap_event_subscribers", "register_webhook_store"]
 
 
 def bootstrap_event_subscribers() -> CrossSubscriberManager:

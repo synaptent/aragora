@@ -107,7 +107,7 @@ def normalize_match_params(
             scores = build_match_scores(winner, loser, bool(draw))
             participants_list = [winner, loser]
         if scores is None and draw and participants_list:
-            scores = {name: 0.5 for name in participants_list}
+            scores = dict.fromkeys(participants_list, 0.5)
         if participants_list is None and scores is not None:
             participants_list = list(scores.keys())
         if debate_id is None:

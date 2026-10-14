@@ -9,6 +9,7 @@ Tests cover:
 - EnterpriseMeter class methods
 """
 
+import sqlite3
 import tempfile
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
@@ -1344,3 +1345,40 @@ class TestUsageForecastComprehensive:
             days_ahead=30,
         )
         assert forecast.data_points_used > 0
+
+
+class TestConnectionAccessor:
+    """Tests for the metering store connection accessor."""
+
+    def test_connection_raises_before_initialize(self, tmp_path):
+        """Using the store before initialize() should fail loudly, not return None."""
+        meter = EnterpriseMeter(db_path=tmp_path / "metering.db")
+
+        with pytest.raises(RuntimeError, match="^metering store not initialized$"):
+            meter._connection
+
+        assert not (tmp_path / "metering.db").exists()
+
+    @pytest.mark.asyncio
+    async def test_connection_returns_established_connection_after_initialize(self, tmp_path):
+        """After initialize() the accessor returns the live connection."""
+        meter = EnterpriseMeter(db_path=tmp_path / "metering.db")
+        await meter.initialize()
+        try:
+            connection = meter._connection
+            assert isinstance(connection, sqlite3.Connection)
+            assert connection is meter._conn
+            assert connection.execute("SELECT 1").fetchone()[0] == 1
+        finally:
+            await meter.close()
+
+    @pytest.mark.asyncio
+    async def test_guarded_public_call_initializes_before_using_connection(self, tmp_path):
+        """Public methods that self-initialize keep working on a fresh meter."""
+        meter = EnterpriseMeter(db_path=tmp_path / "metering.db")
+        try:
+            assert await meter.get_budget("tenant_fresh") is None
+            assert meter._initialized is True
+            assert await meter.get_invoices("tenant_fresh") == []
+        finally:
+            await meter.close()

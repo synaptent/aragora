@@ -10,8 +10,11 @@ Tests multi-format export for receipts and heatmaps:
 """
 
 import json
+import subprocess
+import sys
 import pytest
 from datetime import datetime
+from pathlib import Path
 from unittest.mock import MagicMock
 
 from aragora.gauntlet.api.export import (
@@ -597,6 +600,64 @@ class TestSARIFExport:
 # PDF Export Tests
 # ============================================================================
 
+# Real WeasyPrint renders run in a child interpreter, never in the pytest
+# process. WeasyPrint 68's FontConfiguration.__init__ calls FcConfigDestroy() on
+# its FcConfig and also leaves an ffi.gc(FcConfigDestroy) destructor attached, so
+# garbage-collecting one frees the config pango still holds and
+# pango_fc_font_map_finalize() then writes to freed memory. In a shared test
+# process that corrupted unrelated CPython allocations later on: a dataclass
+# ``__init__`` compiled without its ``_dflt_metadata`` cell ("NameError: cannot
+# access free variable" in tests/server/handlers) or a segfault in dataclasses.
+# The child drops the redundant destructor so its own render cannot crash.
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_PDF_CHILD = """
+import sys, types
+import weasyprint.text.fonts as fonts
+_init = fonts.FontConfiguration.__init__
+def _init_without_double_release(self):
+    _init(self)
+    fonts.ffi.gc(self._config, None)
+fonts.FontConfiguration.__init__ = _init_without_double_release
+from aragora.gauntlet.api.export import (
+    ExportOptions, ReceiptExportFormat, export_receipt, export_receipt_pdf_to_file,
+)
+html = sys.stdin.read()
+receipt = types.SimpleNamespace(to_html=lambda **_: html, to_html_paginated=lambda **_: html)
+if len(sys.argv) > 1:
+    print(export_receipt_pdf_to_file(receipt, sys.argv[1], options=ExportOptions()), end="")
+else:
+    sys.stdout.buffer.write(
+        export_receipt(receipt, format=ReceiptExportFormat.PDF, options=ExportOptions())
+    )
+"""
+
+
+def _render_pdf_in_child(receipt, *args: str) -> subprocess.CompletedProcess:
+    """Render ``receipt``'s HTML to PDF with real WeasyPrint in a child interpreter."""
+    proc = subprocess.run(
+        [sys.executable, "-c", _PDF_CHILD, *args],
+        input=receipt.to_html_paginated().encode(),
+        capture_output=True,
+        cwd=_REPO_ROOT,
+        timeout=120,
+    )
+    assert proc.returncode == 0, proc.stderr.decode(errors="replace")
+    return proc
+
+
+@pytest.fixture(autouse=True)
+def _no_in_process_weasyprint_render(monkeypatch):
+    """Fail any test in this module that renders a real PDF in the pytest process."""
+    try:
+        import weasyprint
+    except (ImportError, OSError):
+        return
+
+    def _refuse(*_args, **_kwargs):
+        raise AssertionError("render real PDFs with _render_pdf_in_child, not in-process")
+
+    monkeypatch.setattr(weasyprint.HTML, "write_pdf", _refuse)
+
 
 class TestPDFExport:
     """Tests for PDF export functionality."""
@@ -607,10 +668,28 @@ class TestPDFExport:
         result = is_pdf_export_available()
         assert isinstance(result, bool)
 
-    def test_export_receipt_pdf_returns_bytes(self, sample_receipt, export_options):
+    def test_export_receipt_pdf_returns_bytes(self, sample_receipt):
         """Test exporting receipt to PDF returns bytes."""
         if not is_pdf_export_available():
             pytest.skip("WeasyPrint native dependencies unavailable")
+
+        result = _render_pdf_in_child(sample_receipt).stdout
+
+        # Should be bytes (PDF content)
+        assert isinstance(result, bytes)
+        # PDF files start with %PDF
+        assert result[:4] == b"%PDF"
+
+    def test_export_receipt_pdf_with_mock(self, sample_receipt, export_options, monkeypatch):
+        """Test PDF export with mocked WeasyPrint."""
+        # Create a mock for WeasyPrint
+        mock_html = MagicMock()
+        mock_html.write_pdf.return_value = b"%PDF-1.4 mock pdf content"
+
+        mock_weasyprint = MagicMock()
+        mock_weasyprint.HTML.return_value = mock_html
+        # setitem restores any real weasyprint afterwards instead of dropping it
+        monkeypatch.setitem(sys.modules, "weasyprint", mock_weasyprint)
 
         result = export_receipt(
             sample_receipt,
@@ -618,42 +697,13 @@ class TestPDFExport:
             options=export_options,
         )
 
-        # Should be bytes (PDF content)
+        # Should be bytes
         assert isinstance(result, bytes)
-        # PDF files start with %PDF
-        assert result[:4] == b"%PDF"
+        assert result.startswith(b"%PDF")
 
-    def test_export_receipt_pdf_with_mock(self, sample_receipt, export_options):
-        """Test PDF export with mocked WeasyPrint."""
-        # Create a mock for WeasyPrint
-        mock_html = MagicMock()
-        mock_html.write_pdf.return_value = b"%PDF-1.4 mock pdf content"
-
-        with pytest.MonkeyPatch.context() as mp:
-            # Mock the weasyprint import
-            import sys
-
-            mock_weasyprint = MagicMock()
-            mock_weasyprint.HTML.return_value = mock_html
-            sys.modules["weasyprint"] = mock_weasyprint
-
-            try:
-                result = export_receipt(
-                    sample_receipt,
-                    format=ReceiptExportFormat.PDF,
-                    options=export_options,
-                )
-
-                # Should be bytes
-                assert isinstance(result, bytes)
-                assert result.startswith(b"%PDF")
-
-                # HTML should have been generated from receipt
-                mock_weasyprint.HTML.assert_called_once()
-                mock_html.write_pdf.assert_called_once()
-            finally:
-                # Clean up the mock
-                del sys.modules["weasyprint"]
+        # HTML should have been generated from receipt
+        mock_weasyprint.HTML.assert_called_once()
+        mock_html.write_pdf.assert_called_once()
 
     def test_export_receipt_pdf_requires_weasyprint(self, sample_receipt, export_options):
         """Test PDF export raises ImportError without WeasyPrint."""
@@ -690,18 +740,14 @@ class TestPDFExport:
             if original_weasyprint is not None:
                 sys.modules["weasyprint"] = original_weasyprint
 
-    def test_export_receipt_pdf_to_file(self, sample_receipt, export_options, tmp_path):
+    def test_export_receipt_pdf_to_file(self, sample_receipt, tmp_path):
         """Test exporting receipt PDF directly to file."""
         if not is_pdf_export_available():
             pytest.skip("WeasyPrint native dependencies unavailable")
 
         output_path = tmp_path / "receipt.pdf"
 
-        result_path = export_receipt_pdf_to_file(
-            sample_receipt,
-            str(output_path),
-            options=export_options,
-        )
+        result_path = _render_pdf_in_child(sample_receipt, str(output_path)).stdout.decode()
 
         # Should return the path
         assert result_path == str(output_path)
@@ -712,35 +758,30 @@ class TestPDFExport:
             content = f.read()
         assert content[:4] == b"%PDF"
 
-    def test_export_receipt_pdf_to_file_with_mock(self, sample_receipt, tmp_path):
+    def test_export_receipt_pdf_to_file_with_mock(self, sample_receipt, tmp_path, monkeypatch):
         """Test PDF file export with mocked WeasyPrint."""
-        import sys
-
         mock_html = MagicMock()
         mock_html.write_pdf.return_value = b"%PDF-1.4 mock pdf content for file"
 
         mock_weasyprint = MagicMock()
         mock_weasyprint.HTML.return_value = mock_html
-        sys.modules["weasyprint"] = mock_weasyprint
+        monkeypatch.setitem(sys.modules, "weasyprint", mock_weasyprint)
 
-        try:
-            output_path = tmp_path / "receipt_mock.pdf"
+        output_path = tmp_path / "receipt_mock.pdf"
 
-            result_path = export_receipt_pdf_to_file(
-                sample_receipt,
-                str(output_path),
-            )
+        result_path = export_receipt_pdf_to_file(
+            sample_receipt,
+            str(output_path),
+        )
 
-            # Should return the path
-            assert result_path == str(output_path)
-            # File should exist
-            assert output_path.exists()
-            # File should contain mock PDF content
-            with open(output_path, "rb") as f:
-                content = f.read()
-            assert content == b"%PDF-1.4 mock pdf content for file"
-        finally:
-            del sys.modules["weasyprint"]
+        # Should return the path
+        assert result_path == str(output_path)
+        # File should exist
+        assert output_path.exists()
+        # File should contain mock PDF content
+        with open(output_path, "rb") as f:
+            content = f.read()
+        assert content == b"%PDF-1.4 mock pdf content for file"
 
 
 # ============================================================================

@@ -24,8 +24,8 @@ docker pull ghcr.io/synaptent/aragora/backend:latest
 docker pull ghcr.io/synaptent/aragora/frontend:latest
 
 # Or pin to a specific version
-docker pull ghcr.io/synaptent/aragora/backend:2.10.0
-docker pull ghcr.io/synaptent/aragora/frontend:2.10.0
+docker pull ghcr.io/synaptent/aragora/backend:2.11.1
+docker pull ghcr.io/synaptent/aragora/frontend:2.11.1
 
 # Verify images downloaded
 docker images | grep aragora

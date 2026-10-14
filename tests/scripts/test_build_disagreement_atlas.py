@@ -41,11 +41,16 @@ def _load_module(script_name: str) -> Any:
 atlas = _load_module("build_disagreement_atlas.py")
 
 
-def _build(root: Path, cache: Path = FIXTURE) -> tuple[list[dict[str, Any]], dict[str, Any], Path]:
+def _build(
+    root: Path,
+    cache: Path = FIXTURE,
+    name: str = "atlas-v1.jsonl",
+    extra: tuple[str, ...] = (),
+) -> tuple[list[dict[str, Any]], dict[str, Any], Path]:
     out_dir = root / "docs" / "atlas"
     out_dir.mkdir(parents=True, exist_ok=True)
     shutil.copy(SCHEMA, out_dir / "schema.json")
-    out = out_dir / "atlas-v1.jsonl"
+    out = out_dir / name
     rc = atlas.main(
         [
             "build",
@@ -59,6 +64,7 @@ def _build(root: Path, cache: Path = FIXTURE) -> tuple[list[dict[str, Any]], dic
             str(root),
             "--eval-fixture",
             str(FIXTURE / "eval_cases.json"),
+            *extra,
             "--receipt-dirs",
         ]
     )
@@ -389,6 +395,90 @@ def test_build_refreshes_existing_sample_after_dataset_shrinks(tmp_path: Path) -
     records, manifest, _out = _build(tmp_path)
     assert atlas.read_jsonl(sample_path) == atlas.select_sample(records, atlas.SAMPLE_SIZE)
     assert manifest["sample"]["sha256"] == atlas._sha256(sample_path.read_bytes())
+
+
+MORE_THAN_A_SAMPLE = atlas.SAMPLE_SIZE + 1
+
+
+@pytest.fixture
+def many_records(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Widen the fixture's real records past SAMPLE_SIZE, still far below the byte threshold."""
+    real_build_records = atlas.build_records
+
+    def widened(*args: Any, **kwargs: Any) -> list[dict[str, Any]]:
+        base = real_build_records(*args, **kwargs)
+        records = []
+        for copy_no in range(-(-MORE_THAN_A_SAMPLE // len(base))):
+            for record in base:
+                clone = copy.deepcopy(record)
+                clone["record_id"] = f"{record['record_id']}:copy{copy_no}"
+                clone["source_id"] = f"{record['source_id']}:copy{copy_no}"
+                records.append(clone)
+        records = records[:MORE_THAN_A_SAMPLE]
+        records.sort(key=atlas._sort_key)
+        return records
+
+    monkeypatch.setattr(atlas, "build_records", widened)
+
+
+def _assert_full_dataset(out: Path, manifest: dict[str, Any]) -> None:
+    payload = out.read_bytes()
+    assert len(payload) < atlas.FULL_COMMIT_LIMIT_BYTES
+    assert len(atlas.read_jsonl(out)) == MORE_THAN_A_SAMPLE
+    assert manifest["dataset"]["record_count"] == MORE_THAN_A_SAMPLE
+    assert manifest["dataset"]["bytes"] == len(payload)
+    assert manifest["dataset"]["sha256"] == atlas._sha256(payload)
+
+
+@pytest.mark.parametrize("name", ["atlas.ndjson", "atlas", "atlas.JSONL"])
+def test_build_keeps_the_full_dataset_for_any_out_name(
+    tmp_path: Path, many_records: None, name: str
+) -> None:
+    _records, manifest, out = _build(tmp_path, name=name)
+    _assert_full_dataset(out, manifest)
+    assert "sample" not in manifest
+    assert sorted(p.name for p in out.parent.iterdir()) == sorted(
+        [name, "manifest.json", "schema.json"]
+    )
+
+
+@pytest.mark.parametrize(
+    "name,sample_name",
+    [
+        ("atlas-v1.jsonl", "atlas-v1.sample.jsonl"),
+        ("atlas.ndjson", "atlas.ndjson.sample.jsonl"),
+    ],
+)
+def test_forced_and_stale_samples_regenerate_beside_the_full_dataset(
+    tmp_path: Path, many_records: None, name: str, sample_name: str
+) -> None:
+    records, manifest, out = _build(tmp_path, name=name, extra=("--force-sample",))
+    sample_path = out.with_name(sample_name)
+    _assert_full_dataset(out, manifest)
+    assert atlas.read_jsonl(sample_path) == atlas.select_sample(records, atlas.SAMPLE_SIZE)
+    assert manifest["sample"]["path"] == f"docs/atlas/{sample_name}"
+    assert manifest["sample"]["record_count"] == atlas.SAMPLE_SIZE
+
+    sample_path.write_text("{}\n", encoding="utf-8")
+    records, manifest, out = _build(tmp_path, name=name)
+    _assert_full_dataset(out, manifest)
+    assert atlas.read_jsonl(sample_path) == atlas.select_sample(records, atlas.SAMPLE_SIZE)
+    assert manifest["sample"]["sha256"] == atlas._sha256(sample_path.read_bytes())
+    ok, lines = atlas.verify_manifest(out.parent / "manifest.json", base=tmp_path)
+    assert ok, lines
+
+
+def test_build_refuses_a_sample_path_that_aliases_the_dataset(
+    tmp_path: Path, many_records: None
+) -> None:
+    _records, _manifest, out = _build(tmp_path)
+    manifest_path = out.parent / "manifest.json"
+    dataset_before, manifest_before = out.read_bytes(), manifest_path.read_bytes()
+    out.with_name("atlas-v1.sample.jsonl").symlink_to(out.name)
+    with pytest.raises(RuntimeError, match="resolves to the dataset"):
+        _build(tmp_path)
+    assert out.read_bytes() == dataset_before
+    assert manifest_path.read_bytes() == manifest_before
 
 
 @pytest.mark.parametrize("status,error", [(403, PermissionError), (404, LookupError)])

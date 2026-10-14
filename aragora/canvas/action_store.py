@@ -141,8 +141,7 @@ class ActionCanvasStore(SQLiteStore):
 
         with self.connection() as conn:
             rows = conn.execute(
-                f"SELECT * FROM action_canvases{where}"  # noqa: S608
-                " ORDER BY updated_at DESC LIMIT ? OFFSET ?",
+                f"SELECT * FROM action_canvases{where} ORDER BY updated_at DESC LIMIT ? OFFSET ?",
                 params,
             ).fetchall()
         return [self._row_to_dict(r, include_state=False) for r in rows]
@@ -193,7 +192,7 @@ class ActionCanvasStore(SQLiteStore):
 
         with self.connection() as conn:
             conn.execute(
-                f"UPDATE action_canvases SET {', '.join(updates)} WHERE id = ?",  # noqa: S608
+                f"UPDATE action_canvases SET {', '.join(updates)} WHERE id = ?",
                 params,
             )
         return self.load_canvas(canvas_id)

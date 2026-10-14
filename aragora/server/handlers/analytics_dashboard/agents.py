@@ -245,7 +245,7 @@ class AgentAnalyticsMixin:
                     GROUP BY {date_format}, flip_type
                     ORDER BY period
                     LIMIT ?
-                    """,  # noqa: S608 -- internal query construction
+                    """,  # internal query construction
                     (period_start.isoformat(), row_limit),
                 ).fetchall()
 

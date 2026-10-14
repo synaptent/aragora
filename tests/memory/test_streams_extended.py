@@ -160,7 +160,7 @@ class TestEmbeddingCacheConcurrency:
         mock_registry.has.return_value = False
 
         # Patch at the import location inside get_embedding_provider
-        with patch("aragora.services.ServiceRegistry") as mock_sr_class:
+        with patch("aragora.runtime.service_registry.ServiceRegistry") as mock_sr_class:
             mock_sr_class.get.return_value = mock_registry
 
             # Should raise ConfigurationError (or RuntimeError subclass)

@@ -250,68 +250,98 @@ class TestReadinessProbeFast:
         assert "latency_ms" in body
         assert body["latency_ms"] >= 0
 
-    def test_readiness_fast_reports_redis_pool_when_url_set(self, monkeypatch):
-        """With REDIS_URL set, the fast probe reports a live pool as True."""
+    @staticmethod
+    def _run_ready_probe_with_redis_pool(pool: Any) -> tuple[int, dict[str, Any]]:
+        """Run the fast probe on an otherwise-ready server with the real shared
+        pool global set to ``pool``.
+
+        Fails if the probe tries to build the pool or changes the Redis
+        availability latch.
+        """
+        import aragora.server.unified_server as usrv
+        import aragora.utils.redis_config as redis_config
         from aragora.server.handlers.admin.health.kubernetes import readiness_probe_fast
 
-        monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
-        monkeypatch.delenv("ARAGORA_REDIS_URL", raising=False)
         handler = MockHandler(storage=MagicMock(), elo_system=MagicMock())
-
         mock_degraded = MagicMock()
         mock_degraded.is_degraded.return_value = False
-
-        with (
-            patch.dict("sys.modules", {"aragora.server.degraded_mode": mock_degraded}),
-            patch("aragora.utils.redis_config.redis_pool_initialized", return_value=True),
-        ):
-            result = readiness_probe_fast(handler)
-
-        body = json.loads(result.body.decode("utf-8"))
-        assert body["checks"]["redis_pool"] is True
-
-    def test_readiness_fast_reports_missing_redis_pool_when_url_set(self, monkeypatch):
-        """With REDIS_URL set but no pool built yet, the fast probe reports False."""
-        from aragora.server.handlers.admin.health.kubernetes import readiness_probe_fast
-
-        monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
-        monkeypatch.delenv("ARAGORA_REDIS_URL", raising=False)
-        handler = MockHandler(storage=MagicMock(), elo_system=MagicMock())
-
-        mock_degraded = MagicMock()
-        mock_degraded.is_degraded.return_value = False
-
-        with (
-            patch.dict("sys.modules", {"aragora.server.degraded_mode": mock_degraded}),
-            patch("aragora.utils.redis_config.redis_pool_initialized", return_value=False),
-        ):
-            result = readiness_probe_fast(handler)
-
-        body = json.loads(result.body.decode("utf-8"))
-        assert body["checks"]["redis_pool"] is False
-
-    def test_readiness_fast_never_builds_redis_pool(self, monkeypatch):
-        """The fast probe must not call get_redis_pool (it pings the network on first use)."""
-        from aragora.server.handlers.admin.health.kubernetes import readiness_probe_fast
-
-        monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
-        monkeypatch.delenv("ARAGORA_REDIS_URL", raising=False)
-        handler = MockHandler(storage=MagicMock(), elo_system=MagicMock())
-
-        mock_degraded = MagicMock()
-        mock_degraded.is_degraded.return_value = False
+        route_index_mock = MagicMock()
+        route_index_mock._exact_routes = {"/health": ("_h", None)}
+        latch = object()
 
         def _must_not_be_called():
             raise AssertionError("readiness_probe_fast called get_redis_pool")
 
         with (
+            patch.object(usrv, "_server_ready", True),
             patch.dict("sys.modules", {"aragora.server.degraded_mode": mock_degraded}),
-            patch("aragora.utils.redis_config.get_redis_pool", side_effect=_must_not_be_called),
+            patch(
+                "aragora.server.handler_registry.core.get_route_index",
+                return_value=route_index_mock,
+            ),
+            patch.object(redis_config, "_redis_pool", pool),
+            patch.object(redis_config, "_redis_available", latch),
+            patch.object(redis_config, "get_redis_pool", side_effect=_must_not_be_called),
         ):
             result = readiness_probe_fast(handler)
+            assert redis_config._redis_available is latch
 
-        body = json.loads(result.body.decode("utf-8"))
+        return result.status_code, json.loads(result.body.decode("utf-8"))
+
+    @pytest.mark.parametrize(
+        ("redis_url", "aragora_redis_url", "pool_built", "expected"),
+        [
+            (None, None, False, "not_configured"),
+            (None, None, True, "not_configured"),
+            ("redis://legacy:6379/0", None, False, "not_configured"),
+            ("redis://legacy:6379/0", None, True, "not_configured"),
+            (None, "redis://shared:6379/0", False, False),
+            (None, "redis://shared:6379/0", True, True),
+            ("redis://legacy:6379/0", "redis://shared:6379/0", False, False),
+            ("redis://legacy:6379/0", "redis://shared:6379/0", True, True),
+        ],
+        ids=[
+            "neither-no-pool",
+            "neither-pool-built",
+            "redis_url_only-no-pool",
+            "redis_url_only-pool-built",
+            "aragora_redis_url_only-no-pool",
+            "aragora_redis_url_only-pool-built",
+            "both-no-pool",
+            "both-pool-built",
+        ],
+    )
+    def test_readiness_fast_redis_pool_url_matrix(
+        self, monkeypatch, redis_url, aragora_redis_url, pool_built, expected
+    ):
+        """Only ARAGORA_REDIS_URL configures the shared pool, so REDIS_URL alone
+        reports "not_configured" instead of a False that looks like a broken pool.
+        When configured, the value says whether the pool is built yet; it never
+        affects readiness."""
+        for name, value in (("REDIS_URL", redis_url), ("ARAGORA_REDIS_URL", aragora_redis_url)):
+            if value is None:
+                monkeypatch.delenv(name, raising=False)
+            else:
+                monkeypatch.setenv(name, value)
+
+        status, body = self._run_ready_probe_with_redis_pool(object() if pool_built else None)
+
+        actual = body["checks"]["redis_pool"]
+        assert (type(actual), actual) == (type(expected), expected)
+        assert status == 200
+        assert body["status"] == "ready"
+
+    def test_readiness_fast_never_builds_redis_pool(self, monkeypatch):
+        """With the shared pool configured but not built, the fast probe reports
+        False without calling get_redis_pool (which pings the network on first
+        use) or touching the availability latch."""
+        monkeypatch.delenv("REDIS_URL", raising=False)
+        monkeypatch.setenv("ARAGORA_REDIS_URL", "redis://localhost:6379/0")
+
+        status, body = self._run_ready_probe_with_redis_pool(None)
+
         assert body["checks"]["redis_pool"] is False
+        assert status == 200
 
 
 class TestReadinessDependencies:

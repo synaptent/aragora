@@ -42,11 +42,6 @@ export class TasksAPI {
     return this.client.request('GET', '/api/control-plane/tasks/history', { params });
   }
 
-  /** Approve task checkpoint data for an in-flight task. */
-  async update(taskId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return this.client.request('POST', `/api/v2/tasks/${encodeURIComponent(taskId)}`, { body: data });
-  }
-
   /** Cancel a task by ID. */
   async delete(taskId: string): Promise<Record<string, unknown>> {
     return this.client.request('POST', `/api/control-plane/tasks/${encodeURIComponent(taskId)}/cancel`);

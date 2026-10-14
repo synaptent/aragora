@@ -164,8 +164,11 @@ class RiskBudget:
 
         if not within_budget:
             logger.warning(
-                f"Risk budget exceeded: spent {self.spent:.1f}/{self.total:.1f} "
-                f"after '{description}' by {agent}"
+                "Risk budget exceeded: spent %.1f/%.1f after '%s' by %s",
+                self.spent,
+                self.total,
+                description,
+                agent,
             )
 
         return within_budget

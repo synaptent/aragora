@@ -5,12 +5,16 @@ Provides pattern matching and dispatch for mapping URL paths to handler methods.
 """
 
 from typing import Any, TypeAlias
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
+
+from .responses import HandlerResult, json_response
 
 # Type aliases for clarity
 PathParams: TypeAlias = dict[str, str]
 QueryParams: TypeAlias = dict[str, Any]
 RouteHandler: TypeAlias = Callable[..., Any]
+
+_UNREAD = object()
 
 
 class PathMatcher:
@@ -153,3 +157,65 @@ class RouteDispatcher:
         path_segments = len(path.strip("/").split("/"))
         route_indices = self._segment_index.get(path_segments, [])
         return any(self.routes[idx][0].matches(path) for idx in route_indices)
+
+
+class HandlerRequest:
+    """aiohttp-style view of the server's HTTP request handler.
+
+    Lets a handler written as ``handle_request(request)`` run under the modular
+    dispatcher, which only calls ``handle(path, query_params, handler)``.
+    """
+
+    def __init__(
+        self,
+        handler: Any,
+        path: str,
+        query_params: QueryParams,
+        read_json_body: Callable[[Any], dict[str, Any] | None],
+    ) -> None:
+        self.method = str(getattr(handler, "command", "GET") or "GET").upper()
+        self.path = path
+        self.query = query_params
+        self.headers = getattr(handler, "headers", None) or {}
+        self.client_address = getattr(handler, "client_address", None)
+        self.app = {"user_store": getattr(handler, "user_store", None)}
+        self._auth_context = getattr(handler, "_auth_context", None)
+        self._handler = handler
+        self._read_json_body = read_json_body
+        self._body: Any = _UNREAD
+
+    async def json(self) -> dict[str, Any]:
+        # Read on first use only, so routes that take no body never touch the socket.
+        if self._body is _UNREAD:
+            self._body = self._read_json_body(self._handler)
+        if self._body is None:
+            raise ValueError("Request body is not a JSON object")
+        return dict(self._body)
+
+
+def to_handler_result(response: Any) -> HandlerResult | None:
+    """Convert a ``handle_request`` reply (HandlerResult or response dict) to a HandlerResult."""
+    if response is None or isinstance(response, HandlerResult):
+        return response
+    if isinstance(response, dict) and "status_code" in response:
+        headers = {
+            str(name): str(value)
+            for name, value in (response.get("headers") or {}).items()
+            if str(name).lower() != "content-type"
+        }
+        return json_response(
+            response.get("body"), status=int(response["status_code"]), headers=headers
+        )
+    raise TypeError(f"Unsupported handle_request reply: {type(response).__name__}")
+
+
+async def call_request_handler(
+    handle_request: Callable[[Any], Awaitable[Any]],
+    path: str,
+    query_params: QueryParams,
+    handler: Any,
+    read_json_body: Callable[[Any], dict[str, Any] | None],
+) -> HandlerResult | None:
+    """Run ``handle_request`` for a modular-dispatch call and return a HandlerResult."""
+    request = HandlerRequest(handler, path, query_params, read_json_body)
+    return to_handler_result(await handle_request(request))

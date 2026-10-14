@@ -522,7 +522,7 @@ class HookHandlerRegistry:
 
                 def handle_consensus_check(
                     ctx: Any = None,
-                    votes: list[Any] = None,
+                    votes: list[Any] | None = None,
                     **kwargs: Any,
                 ) -> None:
                     try:
@@ -547,7 +547,7 @@ class HookHandlerRegistry:
                 def handle_flip_check(
                     ctx: Any = None,
                     round_num: int = 0,
-                    positions: dict[str, str] = None,
+                    positions: dict[str, str] | None = None,
                     **kwargs: Any,
                 ) -> None:
                     try:
@@ -973,7 +973,10 @@ class HookHandlerRegistry:
                     return
 
                 # Import receipt module
-                from aragora.gauntlet.receipt import DecisionReceipt
+                from aragora.debate.receipt_operations import register_debate_receipt_operations
+                from aragora.models.receipts.gauntlet import DecisionReceipt
+
+                register_debate_receipt_operations()
 
                 # Generate receipt from debate result
                 receipt = DecisionReceipt.from_debate_result(result)
@@ -996,7 +999,7 @@ class HookHandlerRegistry:
                 # Legacy: If we have a store with save_signed, use that
                 if receipt_store and hasattr(receipt_store, "save_signed") and receipt.signature:
                     try:
-                        from aragora.gauntlet.signing import SignedReceipt, SignatureMetadata
+                        from aragora.storage.receipt_signing import SignedReceipt, SignatureMetadata
 
                         signed = SignedReceipt(
                             receipt_data=receipt._to_dict_for_signing(),

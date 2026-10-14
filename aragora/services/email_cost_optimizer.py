@@ -332,15 +332,17 @@ class CostOptimizedPrioritizer:
         async with self._stats_lock:
             if self._stats.daily_cost_usd >= self.config.daily_budget_usd:
                 logger.warning(
-                    f"Daily budget exceeded: ${self._stats.daily_cost_usd:.2f} "
-                    f">= ${self.config.daily_budget_usd:.2f}"
+                    "Daily budget exceeded: $%.2f >= $%.2f",
+                    self._stats.daily_cost_usd,
+                    self.config.daily_budget_usd,
                 )
                 return False
 
             if self._stats.monthly_cost_usd >= self.config.monthly_budget_usd:
                 logger.warning(
-                    f"Monthly budget exceeded: ${self._stats.monthly_cost_usd:.2f} "
-                    f">= ${self.config.monthly_budget_usd:.2f}"
+                    "Monthly budget exceeded: $%.2f >= $%.2f",
+                    self._stats.monthly_cost_usd,
+                    self.config.monthly_budget_usd,
                 )
                 return False
 

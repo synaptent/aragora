@@ -685,4 +685,4 @@ See [ADR-002: Control Plane Architecture](../ADR/009-control-plane-architecture.
 
 - [API Reference](../api/API_REFERENCE.md)
 - [Environment Variables](../reference/ENVIRONMENT.md)
-- [Deployment Guide](../deployment/DEPLOYMENT.md)
+- [Deployment Guide](../DEPLOYMENT.md)

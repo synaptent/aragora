@@ -44,7 +44,7 @@ _BRIER_NAMES = {
 }
 
 
-def __getattr__(name: str):  # noqa: ANN001, ANN201 — PEP 562 module __getattr__
+def __getattr__(name: str):  # PEP 562 module __getattr__
     if name in _VIAH_NAMES:
         from aragora.evaluation.viah import ViahReport, compute_viah, viah_score
 

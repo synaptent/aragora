@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import logging
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any
 
 from aragora.utils.request_ip import extract_client_ip
@@ -129,6 +130,26 @@ def extract_user_from_request(handler: Any, user_store=None) -> UserAuthContext:
     return context
 
 
+def _api_key_expired(user: Any) -> bool:
+    """Return True when the user's API key has an expiry time that has passed.
+
+    An expiry that cannot be parsed counts as expired. Naive timestamps are read as UTC.
+    """
+    expires_at = getattr(user, "api_key_expires_at", None)
+    if not expires_at:
+        return False
+    if isinstance(expires_at, str):
+        try:
+            expires_at = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+        except ValueError:
+            return True
+    if not isinstance(expires_at, datetime):
+        return False
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc) > expires_at
+
+
 def _validate_api_key(api_key: str, context: UserAuthContext, user_store=None) -> UserAuthContext:
     """
     Validate an API key and populate context.
@@ -164,6 +185,12 @@ def _validate_api_key(api_key: str, context: UserAuthContext, user_store=None) -
             # Check if user is active
             if not user.is_active:
                 logger.warning("api_key_user_inactive user_id=%s", user.id)
+                context.authenticated = False
+                return context
+
+            # Not every store filters expired keys (the Postgres store returns them).
+            if _api_key_expired(user):
+                logger.warning("api_key_expired user_id=%s", user.id)
                 context.authenticated = False
                 return context
 

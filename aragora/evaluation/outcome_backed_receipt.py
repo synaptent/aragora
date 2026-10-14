@@ -7,12 +7,18 @@ from dataclasses import dataclass
 import re
 from typing import Any
 
+from aragora.agents.receipt_hooks import register_receipt_agent_hooks
 from aragora.evaluation.outcome_backed_conditions import ARAGORA_TEAM
 from aragora.evaluation.outcome_backed_corpus import BENCHMARK_ID
-from aragora.gauntlet.receipt_models import (
+from aragora.models.receipts.gauntlet import (
     RECEIPT_SCHEMA_VERSION_EVIDENCE,
     DecisionReceipt,
 )
+
+# DecisionReceipt.from_debate_result classifies failed responses and infers
+# providers through these hooks; registering them here keeps aragora.gauntlet
+# out of the import graph.
+register_receipt_agent_hooks()
 
 
 TEAM_RECEIPT_BINDING_SCHEMA = "outcome-backed-team-receipt-binding/1.0"

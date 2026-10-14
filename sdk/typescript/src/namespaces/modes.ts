@@ -18,8 +18,4 @@ export class ModesAPI {
   async listModes(): Promise<Record<string, unknown>> {
     return this.client.request('GET', '/api/v1/modes');
   }
-
-  async getMode(modeName: string): Promise<Record<string, unknown>> {
-    return this.client.request('GET', `/api/v1/modes/${encodeURIComponent(modeName)}`);
-  }
 }

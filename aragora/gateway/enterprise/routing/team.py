@@ -401,9 +401,9 @@ class TeamTenantHandler:
 
         total_weight = sum(weights)
         if total_weight == 0:
-            return random.choice(endpoints)  # noqa: S311 -- load balancing
+            return random.choice(endpoints)
 
-        r = random.uniform(0, total_weight)  # noqa: S311 -- load balancing
+        r = random.uniform(0, total_weight)
         cumulative = 0.0
         for i, endpoint in enumerate(endpoints):
             cumulative += weights[i]

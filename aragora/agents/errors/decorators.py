@@ -426,8 +426,11 @@ def handle_agent_errors(
                 # Retry if appropriate
                 if action.should_retry and action.error.recoverable:
                     logger.debug(
-                        f"[{agent_name}] Retrying in {action.delay_seconds:.1f}s "
-                        f"(attempt {attempt}/{max_retries + 1})"
+                        "[%s] Retrying in %.1fs (attempt %s/%s)",
+                        agent_name,
+                        action.delay_seconds,
+                        attempt,
+                        max_retries + 1,
                     )
                     await asyncio.sleep(action.delay_seconds)
                     continue

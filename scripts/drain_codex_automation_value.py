@@ -23,6 +23,7 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
+from aragora.swarm.merge_halt import evaluate_merge_halt  # noqa: E402
 from scripts.github_cli_health import check_github_cli_health  # noqa: E402
 
 DEFAULT_GITHUB_REPO = "synaptent/aragora"
@@ -701,6 +702,20 @@ def _run_merge_phase(config: DrainConfig, runner: Runner) -> dict[str, Any]:
         if not config.apply:
             phase["evaluations"].append(evaluation_payload)
             continue
+
+        halt = evaluate_merge_halt(evaluation.pr_number, evaluation.head_sha)  # #9216
+        if not halt.allowed:
+            phase["evaluations"].append(evaluation_payload)
+            phase["skipped"].append(
+                {
+                    "pr_number": evaluation.pr_number,
+                    "head_sha": evaluation.head_sha,
+                    "reason": "merge halt armed",
+                    "error": halt.reason,
+                }
+            )
+            phase["ok"] = False
+            return phase
 
         merge_cmd = evaluation.command
         proc = runner(merge_cmd, config.repo_root)

@@ -14,6 +14,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from aragora.swarm.merge_halt import evaluate_merge_halt
+
 from .dispatch import GateVerdict
 from .state import Feature
 
@@ -203,6 +205,9 @@ class LiveBossLoopGate:
         if not verdict.satisfied:
             return False
         if verdict.tier >= 3:
+            return False
+        # #9216: this is a real merge, so it must obey the main-red halt.
+        if not evaluate_merge_halt(int(pr), head).allowed:
             return False
         self.runner(
             [

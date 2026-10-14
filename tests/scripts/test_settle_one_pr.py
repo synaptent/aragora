@@ -553,7 +553,7 @@ def test_policy_exclusion_reasons_allows_docs_site_generated_secrets_deploy_docs
                     {"path": "docs-site/docs/deployment/secrets-management.md"},
                     {"path": "docs-site/docs/getting-started/environment.md"},
                     {"path": "docs-site/docs/operations/overview.md"},
-                    {"path": "docs/FOCUS.md"},
+                    {"path": "docs/strategy/FOCUS.md"},
                     {"path": "docs/status/B0_BENCHMARK_TRUTH_STATUS.md"},
                 ],
             }
@@ -2034,6 +2034,39 @@ def test_required_check_source_report_fallback_blocks_status_only_required_check
     assert report["blockers"] == [
         "aragora-merge-quorum lacks a matching successful exact-head GitHub Actions CheckRun"
     ]
+
+
+def test_build_report_blocks_merge_suggestion_for_current_head_park_record() -> None:
+    entry = _entry(
+        9005,
+        tier=0,
+        status="satisfied",
+        verdict="admin_squash_allowed",
+        admin_squash_allowed=True,
+        reasons=["docs-only change"],
+    )
+    entry["park_record"] = {
+        "blocked": True,
+        "head_sha": entry["head_sha"],
+        "park_marker": "Current-head repeat-blocker park",
+        "created_at": "2026-07-08T05:20:08Z",
+        "comment_url": "https://github.example/comment/park",
+        "reason": "Do not merge this PR on this head.",
+    }
+
+    report = build_report(
+        _packet(entry, admin_order=[9005]),
+        cwd=Path.cwd(),
+        state_root=Path.cwd(),
+        explicit_pr=9005,
+        exclude_prs=set(),
+        live=False,
+        validate=False,
+    )
+
+    assert report["status"] == "blocked"
+    assert report["suggested_commands"] == []
+    assert any("current-head park record present" in blocker for blocker in report["blockers"])
 
 
 def test_build_report_reads_required_checks_from_pr_base_branch(monkeypatch) -> None:

@@ -346,7 +346,7 @@ class BaseRepository(ABC, Generic[T]):
         safe_where = _validate_where_clause(where)
 
         # nosec B608: table name is regex-validated, where is validated for dangerous patterns, values are parameterized
-        query = f"SELECT COUNT(*) FROM {safe_table}"  # nosec B608  # noqa: S608
+        query = f"SELECT COUNT(*) FROM {safe_table}"  # nosec B608
         if safe_where:
             query += f" WHERE {safe_where}"  # nosec B608
 
@@ -420,7 +420,7 @@ class BaseRepository(ABC, Generic[T]):
         """
         # nosec B608: _table_name is abstract property returning constant, entity_id is parameterized
         row = self._fetch_one(
-            f"SELECT * FROM {self._table_name} WHERE id = ?",  # nosec B608  # noqa: S608
+            f"SELECT * FROM {self._table_name} WHERE id = ?",  # nosec B608
             (entity_id,),
         )
         return self._to_entity(row) if row else None
@@ -463,7 +463,7 @@ class BaseRepository(ABC, Generic[T]):
             INSERT INTO {self._table_name} ({",".join(columns)})
             VALUES ({placeholders})
             ON CONFLICT(id) DO UPDATE SET {updates}
-        """  # nosec B608  # noqa: S608
+        """  # nosec B608
 
         with self._transaction() as conn:
             conn.execute(query, tuple(data.values()))
@@ -483,7 +483,7 @@ class BaseRepository(ABC, Generic[T]):
         with self._transaction() as conn:
             # nosec B608: _table_name is abstract property returning constant, entity_id is parameterized
             cursor = conn.execute(
-                f"DELETE FROM {self._table_name} WHERE id = ?",  # nosec B608  # noqa: S608
+                f"DELETE FROM {self._table_name} WHERE id = ?",  # nosec B608
                 (entity_id,),
             )
             return cursor.rowcount > 0
@@ -501,7 +501,7 @@ class BaseRepository(ABC, Generic[T]):
         """
         # nosec B608: _table_name is abstract property returning constant, limit/offset are parameterized
         rows = self._fetch_all(
-            f"SELECT * FROM {self._table_name} LIMIT ? OFFSET ?",  # nosec B608  # noqa: S608
+            f"SELECT * FROM {self._table_name} LIMIT ? OFFSET ?",  # nosec B608
             (limit, offset),
         )
         return [self._to_entity(row) for row in rows]

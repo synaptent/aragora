@@ -17,7 +17,7 @@ from aragora.logging_config import get_logger as get_structured_logger
 
 if TYPE_CHECKING:
     from aragora.core import Agent, Environment
-    from aragora.debate.protocol import DebateProtocol
+    from aragora.protocols.debate import DebateProtocol
 
 logger = get_structured_logger(__name__)
 

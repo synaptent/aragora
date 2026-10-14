@@ -372,7 +372,7 @@ class EventRegistry:
                 logger.debug("Notification event contributor not available: %s", e)
 
         try:
-            from aragora.control_plane.deliberation_events import DeliberationEventType
+            from aragora.events.deliberation_events import DeliberationEventType
 
             self._register_deliberation_events(DeliberationEventType)
         except ImportError:

@@ -305,7 +305,7 @@ class TestRedisReadinessCheck:
         handler = TestProbeHandler()
 
         with patch.dict("os.environ", {}, clear=True):
-            with patch.dict("sys.modules", {"aragora.control_plane.leader": None}):
+            with patch.dict("sys.modules", {"aragora.config.distributed": None}):
                 ready, checks = handler._check_redis_readiness(True, {})
 
         assert ready is True
@@ -322,11 +322,11 @@ class TestRedisReadinessCheck:
         """Redis check passes when configured but not required for distributed state."""
         handler = TestProbeHandler()
 
-        mock_leader = MagicMock()
-        mock_leader.is_distributed_state_required.return_value = False
+        mock_distributed = MagicMock()
+        mock_distributed.is_distributed_state_required.return_value = False
 
         with patch.dict("os.environ", {"REDIS_URL": "redis://localhost:6379"}):
-            with patch.dict("sys.modules", {"aragora.control_plane.leader": mock_leader}):
+            with patch.dict("sys.modules", {"aragora.config.distributed": mock_distributed}):
                 ready, checks = handler._check_redis_readiness(True, {})
 
         assert ready is True

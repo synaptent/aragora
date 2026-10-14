@@ -193,7 +193,7 @@ class GitHubEnterpriseConnector(EnterpriseConnector):
 
         try:
             result = subprocess.run(
-                ["gh", "auth", "status"],  # noqa: S607 -- fixed command
+                ["gh", "auth", "status"],  # fixed command
                 capture_output=True,
                 timeout=10,
             )

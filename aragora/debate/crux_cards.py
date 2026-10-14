@@ -231,7 +231,7 @@ def _link_critiques(network: Any, messages: list[Any], critiques: list[Any]) -> 
         # `severity != severity` catches NaN: every NaN comparison is False, so a
         # NaN would pass `<= 0` and then `min(1.0, nan/10.0)` returns 1.0 —
         # a maximum-strength edge from an unusable value.
-        if severity != severity or severity <= 0:  # noqa: PLR0124 - NaN check
+        if severity != severity or severity <= 0:  # NaN check
             continue
 
         target_claim = _target_claim_for_critique(messages, target, critique)

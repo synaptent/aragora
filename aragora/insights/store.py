@@ -332,7 +332,8 @@ class InsightStore(SQLiteStore):
         """Sync helper: Retrieve insight row by ID."""
         with self.connection() as conn:
             cursor = conn.cursor()
-            cursor.execute(f"SELECT {INSIGHT_COLUMNS} FROM insights WHERE id = ?", (insight_id,))  # noqa: S608 -- column name interpolation, parameterized
+            # column name interpolation, parameterized
+            cursor.execute(f"SELECT {INSIGHT_COLUMNS} FROM insights WHERE id = ?", (insight_id,))
             return cursor.fetchone()
 
     async def get_insight(self, insight_id: str) -> Insight | None:
@@ -353,7 +354,8 @@ class InsightStore(SQLiteStore):
         with self.connection() as conn:
             cursor = conn.cursor()
 
-            sql = f"SELECT {INSIGHT_COLUMNS} FROM insights WHERE 1=1"  # noqa: S608 -- column name interpolation, parameterized
+            # column name interpolation, parameterized
+            sql = f"SELECT {INSIGHT_COLUMNS} FROM insights WHERE 1=1"
             params: list = []
 
             if query:
@@ -531,8 +533,9 @@ class InsightStore(SQLiteStore):
         with self.connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
-                f"SELECT {INSIGHT_COLUMNS} FROM insights ORDER BY created_at DESC LIMIT ?",  # noqa: S608 -- column constant
-                (limit,),  # noqa: S608 -- column name interpolation, parameterized
+                # column constant
+                f"SELECT {INSIGHT_COLUMNS} FROM insights ORDER BY created_at DESC LIMIT ?",
+                (limit,),
             )
             return cursor.fetchall()
 
@@ -745,7 +748,7 @@ class InsightStore(SQLiteStore):
             sql = f"""
                 SELECT {INSIGHT_COLUMNS} FROM insights
                 WHERE confidence >= ?
-            """  # noqa: S608 -- column name interpolation, parameterized
+            """  # column name interpolation, parameterized
             params: list = [min_confidence]
 
             if domain:

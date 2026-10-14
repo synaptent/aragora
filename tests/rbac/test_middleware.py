@@ -664,9 +664,20 @@ class TestDefaultRoutePermissions:
             for r in DEFAULT_ROUTE_PERMISSIONS
             if hasattr(r.pattern, "pattern") and "health" in r.pattern.pattern.lower()
         ]
+        # Health routes that serve resource data stay behind that resource's read key:
+        # per-connector health scores are connector data behind connectors.read.
+        keyed_health = {("/api/v1/connectors/c1/health", "connectors.read")}
+        keyed: set[int] = set()
+        for path, key in keyed_health:
+            served_by = [r for r in health_rules if r.matches(path, "GET")[0]]
+            # A stale exception (route gone, or its key changed) fails here.
+            assert [(r.permission_key, r.allow_unauthenticated) for r in served_by] == [
+                (key, False)
+            ], path
+            keyed.update(id(r) for r in served_by)
 
-        # All health rules should allow unauthenticated
-        assert all(r.allow_unauthenticated for r in health_rules)
+        # All other health rules should allow unauthenticated
+        assert all(r.allow_unauthenticated for r in health_rules if id(r) not in keyed)
 
     @pytest.mark.parametrize(
         "path,method,expected_permission",

@@ -51,7 +51,7 @@ from aragora.debate.cancellation import (
 if TYPE_CHECKING:
     from aragora.core import Agent, DebateResult, Environment
     from aragora.debate.checkpoint import CheckpointManager, DebateCheckpoint
-    from aragora.debate.protocol import DebateProtocol
+    from aragora.protocols.debate import DebateProtocol
 
 __all__ = [
     "DebateSessionState",

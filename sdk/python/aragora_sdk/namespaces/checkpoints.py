@@ -165,45 +165,6 @@ class CheckpointsAPI:
     # Debate-Specific Checkpoint Operations
     # =========================================================================
 
-    def list_for_debate(self, debate_id: str) -> dict[str, Any]:
-        """
-        List checkpoints for a specific debate.
-
-        DEPRECATED: GET /api/v1/debates/{id}/checkpoints is not dispatched
-        by any server handler (the checkpoint handler that implements it is
-        shadowed by DebatesHandler in the route index); the request falls
-        into the debate slug lookup and returns 404. Use list() -- the
-        documented GET /api/v1/checkpoints contract -- and filter by
-        debate_id.
-
-        Args:
-            debate_id: The debate identifier.
-        """
-        _warn_deprecated(
-            "checkpoints.list_for_debate() targets a shadowed, unserved "
-            "route (404 via slug fallback); use list() and filter by "
-            "debate_id."
-        )
-        return self._client._request("GET", f"/api/v1/debates/{debate_id}/checkpoints")
-
-    def create_for_debate(self, debate_id: str) -> dict[str, Any]:
-        """
-        Create a checkpoint for a running debate.
-
-        DEPRECATED: POST /api/v1/debates/{id}/checkpoint is not dispatched
-        by any server handler; the request falls into the debate slug
-        lookup and returns 404. Checkpoints are created server-side when a
-        debate is paused -- use pause_debate() instead.
-
-        Args:
-            debate_id: The debate identifier.
-        """
-        _warn_deprecated(
-            "checkpoints.create_for_debate() targets an unserved route "
-            "(404 via slug fallback); use pause_debate()."
-        )
-        return self._client._request("POST", f"/api/v1/debates/{debate_id}/checkpoint")
-
     def pause_debate(self, debate_id: str) -> dict[str, Any]:
         """
         Pause a debate and create a checkpoint.
@@ -414,36 +375,6 @@ class AsyncCheckpointsAPI:
     # =========================================================================
     # Debate-Specific Checkpoint Operations
     # =========================================================================
-
-    async def list_for_debate(self, debate_id: str) -> dict[str, Any]:
-        """List checkpoints for a specific debate.
-
-        DEPRECATED: GET /api/v1/debates/{id}/checkpoints is not dispatched
-        by any server handler (the checkpoint handler that implements it is
-        shadowed by DebatesHandler in the route index); the request falls
-        into the debate slug lookup and returns 404. Use list() and filter
-        by debate_id.
-        """
-        _warn_deprecated(
-            "checkpoints.list_for_debate() targets a shadowed, unserved "
-            "route (404 via slug fallback); use list() and filter by "
-            "debate_id."
-        )
-        return await self._client._request("GET", f"/api/v1/debates/{debate_id}/checkpoints")
-
-    async def create_for_debate(self, debate_id: str) -> dict[str, Any]:
-        """Create a checkpoint for a running debate.
-
-        DEPRECATED: POST /api/v1/debates/{id}/checkpoint is not dispatched
-        by any server handler; the request falls into the debate slug
-        lookup and returns 404. Checkpoints are created server-side when a
-        debate is paused -- use pause_debate() instead.
-        """
-        _warn_deprecated(
-            "checkpoints.create_for_debate() targets an unserved route "
-            "(404 via slug fallback); use pause_debate()."
-        )
-        return await self._client._request("POST", f"/api/v1/debates/{debate_id}/checkpoint")
 
     async def pause_debate(self, debate_id: str) -> dict[str, Any]:
         """Pause a debate and create a checkpoint."""

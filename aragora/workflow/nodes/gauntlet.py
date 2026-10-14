@@ -177,7 +177,7 @@ class GauntletStep(BaseStep):
 
             def on_progress(phase: str, percent: float):
                 progress_updates.append({"phase": phase, "percent": percent})
-                logger.debug(f"Gauntlet progress: {phase} - {percent:.1%}")
+                logger.debug("Gauntlet progress: %s - %.1f%%", phase, percent * 100)
 
             result = await runner.run(
                 input_content=input_content,

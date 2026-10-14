@@ -23,7 +23,10 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import copy
 import logging
+import threading
+from collections.abc import Coroutine
 from datetime import datetime, timezone
 from typing import Any, TypedDict
 from uuid import uuid4
@@ -43,7 +46,8 @@ class ConnectorTypeMeta(TypedDict, total=False):
 
 from aragora.server.handlers.secure import SecureHandler, ForbiddenError, UnauthorizedError
 from aragora.server.handlers.utils import parse_json_body
-from aragora.server.handlers.utils.responses import error_response
+from aragora.server.handlers.utils.responses import HandlerResult, error_response
+from aragora.server.handlers.utils.routing import call_request_handler
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +55,7 @@ logger = logging.getLogger(__name__)
 try:
     from aragora.storage.sync_store import (
         SyncStore,
+        _is_sensitive_key,
         get_sync_store,
     )
 
@@ -62,6 +67,11 @@ except ImportError:
         "CONNECTOR CONFIGURATIONS WILL BE LOST ON RESTART! "
         "To fix: ensure aragora.storage.sync_store is importable."
     )
+
+    def _is_sensitive_key(key: str) -> bool:
+        # Without the store's classifier, mask every config value rather than none.
+        return True
+
 
 # In-memory fallback storage (used when sync_store not available)
 _connectors: dict[str, dict[str, Any]] = {}
@@ -85,6 +95,95 @@ async def _get_store() -> SyncStore | None:
                 e,
             )
     return _store
+
+
+CONFIG_SECRET_MASK = "********"
+
+
+def _mask_secrets(value: Any) -> Any:
+    """Copy ``value`` with every sensitive config value replaced by the mask."""
+    if isinstance(value, dict):
+        return {
+            k: CONFIG_SECRET_MASK if _is_sensitive_key(str(k)) else _mask_secrets(v)
+            for k, v in value.items()
+        }
+    if isinstance(value, list):
+        return [_mask_secrets(v) for v in value]
+    return value
+
+
+def _contains_mask(value: Any) -> bool:
+    """Whether the mask appears anywhere in ``value``."""
+    if isinstance(value, dict):
+        return any(_contains_mask(v) for v in value.values())
+    if isinstance(value, list):
+        return any(_contains_mask(v) for v in value)
+    return value == CONFIG_SECRET_MASK
+
+
+def _mask_inside_list(value: Any, in_list: bool = False) -> bool:
+    """Whether the mask appears anywhere inside a list element of ``value``."""
+    if isinstance(value, dict):
+        return any(_mask_inside_list(v, in_list) for v in value.values())
+    if isinstance(value, list):
+        return any(_mask_inside_list(v, True) for v in value)
+    return in_list and value == CONFIG_SECRET_MASK
+
+
+def _restore_masked(incoming: Any, stored: Any) -> Any:
+    """Copy ``incoming`` with each mask sent back under a dict key replaced by the stored value.
+
+    List entries carry no identity to match a mask to its stored entry by, so
+    callers must refuse a config with a mask inside a list (``_mask_inside_list``);
+    lists are taken as sent.
+    """
+    if isinstance(incoming, dict):
+        prior = stored if isinstance(stored, dict) else {}
+        return {
+            k: prior[k]
+            if v == CONFIG_SECRET_MASK and k in prior and _is_sensitive_key(str(k))
+            else _restore_masked(v, prior.get(k))
+            for k, v in incoming.items()
+        }
+    return incoming
+
+
+def _schedule_sync(job: Coroutine[Any, Any, None], sync_id: str) -> None:
+    """Run a sync job on an event loop that outlives the request that started it.
+
+    Without a PostgreSQL pool each request runs on its own event loop, which
+    stops once the response is ready, so a task created there never finishes.
+    """
+    main_loop = None
+    try:
+        from aragora.server.unified_server import get_main_event_loop
+
+        main_loop = get_main_event_loop()
+    except ImportError:
+        pass
+    if main_loop is not None and main_loop.is_running():
+        future = asyncio.run_coroutine_threadsafe(job, main_loop)
+        future.add_done_callback(
+            lambda f: logger.error("Connector sync %s failed: %s", sync_id, f.exception())
+            if not f.cancelled() and f.exception()
+            else None
+        )
+        return
+
+    def _run_in_thread() -> None:
+        try:
+            asyncio.run(job)
+        except (RuntimeError, OSError, ValueError, TypeError, KeyError, AttributeError):
+            logger.exception("Connector sync %s failed", sync_id)
+
+    threading.Thread(target=_run_in_thread, name=f"connector-sync-{sync_id}", daemon=True).start()
+
+
+def _public_connector(connector: dict[str, Any]) -> dict[str, Any]:
+    """Shallow copy of a connector for a response, with secret config values masked."""
+    if "config" not in connector:
+        return dict(connector)
+    return {**connector, "config": _mask_secrets(connector["config"])}
 
 
 # Connector type metadata
@@ -212,7 +311,23 @@ class ConnectorsHandler(SecureHandler):
 
     def can_handle(self, path: str, method: str = "GET") -> bool:
         """Check if this handler can handle the given path."""
-        return path.startswith("/api/v1/connectors/")
+        if not path.startswith("/api/v1/connectors/"):
+            return False
+        # The runtime-registry summary and per-connector health and test are
+        # ConnectorManagementHandler's routes; declining them lets the route
+        # index fall through to it.
+        segments = path[len("/api/v1/connectors/") :].split("/")
+        if segments == ["summary"]:
+            return False
+        return not (len(segments) == 2 and segments[1] in ("health", "test"))
+
+    async def handle(
+        self, path: str, query_params: dict[str, Any], handler: Any
+    ) -> HandlerResult | None:
+        """Serve modular-dispatch requests through handle_request."""
+        return await call_request_handler(
+            self.handle_request, path, query_params, handler, self.read_json_body
+        )
 
     async def handle_request(self, request: Any) -> dict[str, Any]:
         """Route request to appropriate handler."""
@@ -222,6 +337,7 @@ class ConnectorsHandler(SecureHandler):
         # Parse IDs from path
         connector_id = None
         sync_id = None
+        remaining: list[str] = []
 
         if "/connectors/" in path:
             parts = path.split("/connectors/")
@@ -230,6 +346,31 @@ class ConnectorsHandler(SecureHandler):
                 # First segment after /connectors/ is the connector_id (unless it's a special route)
                 if remaining[0] not in ("sync-history", "stats", "health", "test", "types", "sync"):
                     connector_id = remaining[0]
+
+        is_connector_item = connector_id is not None and len(remaining) == 1
+
+        # SDK sync routes: /connectors/{id}/syncs[/{sync_id}[/cancel]]
+        if connector_id and len(remaining) > 1 and remaining[1] == "syncs":
+            if method == "POST" and len(remaining) == 4 and remaining[3] == "cancel":
+                if err := await self._check_permission(request, "connectors:configure"):
+                    return err
+                sync_job = _sync_jobs.get(remaining[2])
+                if sync_job is not None and sync_job.get("connector_id") != connector_id:
+                    return self._error_response(404, f"Sync job {remaining[2]} not found")
+                return await self._cancel_sync(request, remaining[2])
+            if method == "GET" and len(remaining) in (2, 3):
+                if err := await self._check_permission(request, "connectors:read"):
+                    return err
+                return self._json_response(
+                    501,
+                    {
+                        "error": {
+                            "message": "Per-connector sync records are not implemented",
+                            "code": "not_implemented",
+                        }
+                    },
+                )
+            return self._error_response(404, "Endpoint not found")
 
         # For sync cancel operations, parse sync_id from /sync/{sync_id}/cancel
         if "/connectors/sync/" in path:
@@ -270,19 +411,19 @@ class ConnectorsHandler(SecureHandler):
             if err := await self._check_permission(request, "connectors:configure"):
                 return err
             return await self._cancel_sync(request, sync_id)
-        elif connector_id and path.endswith("/sync") and method == "POST":
+        elif connector_id and remaining[1:] == ["sync"] and method == "POST":
             if err := await self._check_permission(request, "connectors:configure"):
                 return err
             return await self._start_sync(request, connector_id)
-        elif connector_id and method == "GET":
+        elif connector_id and is_connector_item and method == "GET":
             if err := await self._check_permission(request, "connectors:read"):
                 return err
             return await self._get_connector(request, connector_id)
-        elif connector_id and method == "PUT":
+        elif connector_id and is_connector_item and method in ("PUT", "PATCH"):
             if err := await self._check_permission(request, "connectors:configure"):
                 return err
             return await self._update_connector(request, connector_id)
-        elif connector_id and method == "DELETE":
+        elif connector_id and is_connector_item and method == "DELETE":
             if err := await self._check_permission(request, "connectors:delete"):
                 return err
             return await self._delete_connector(request, connector_id)
@@ -354,7 +495,7 @@ class ConnectorsHandler(SecureHandler):
         return self._json_response(
             200,
             {
-                "connectors": connectors,
+                "connectors": [_public_connector(c) for c in connectors],
                 "total": len(connectors),
                 "connected": sum(
                     1 for c in connectors if c["status"] in ("connected", "syncing", "configured")
@@ -417,7 +558,7 @@ class ConnectorsHandler(SecureHandler):
         connector["type_name"] = type_meta.get("name", connector["type"])
         connector["category"] = type_meta.get("category", "unknown")
 
-        return self._json_response(200, connector)
+        return self._json_response(200, _public_connector(connector))
 
     async def _create_connector(self, request: Any) -> dict[str, Any]:
         """Configure a new connector."""
@@ -425,7 +566,7 @@ class ConnectorsHandler(SecureHandler):
             body = await self._get_json_body(request)
         except (ValueError, KeyError, TypeError) as e:
             logger.warning("Handler error: %s", e)
-            return self._error_response(400, "Invalid request body")
+            return self._error_response(400, "Invalid JSON body")
 
         connector_type = body.get("type")
         if not connector_type:
@@ -437,11 +578,18 @@ class ConnectorsHandler(SecureHandler):
         if CONNECTOR_TYPES[connector_type].get("coming_soon"):
             return self._error_response(400, f"Connector type {connector_type} is coming soon")
 
+        config = body.get("config", {})
+        # A new connector has no stored secret for the mask to stand for.
+        if _contains_mask(config):
+            return self._error_response(
+                400,
+                f"config contains the secret mask {CONFIG_SECRET_MASK}; send the real values",
+            )
+
         # Create connector
         connector_id = str(uuid4())
         type_meta = CONNECTOR_TYPES[connector_type]
         name = body.get("name", type_meta.get("name", connector_type))
-        config = body.get("config", {})
 
         # Save to persistent store if available
         store = await _get_store()
@@ -471,11 +619,34 @@ class ConnectorsHandler(SecureHandler):
 
         logger.info("Created connector %s of type %s", connector_id, connector_type)
 
-        return self._json_response(201, connector)
+        return self._json_response(201, _public_connector(connector))
+
+    async def _load_connector(
+        self, connector_id: str
+    ) -> tuple[SyncStore | None, dict[str, Any] | None]:
+        """Return the store and the connector, loading a stored one into memory if needed."""
+        store = await _get_store()
+        connector = _connectors.get(connector_id)
+        if connector is None and store is not None:
+            stored = await store.get_connector(connector_id)
+            if stored is not None:
+                connector = {
+                    "id": stored.id,
+                    "type": stored.connector_type,
+                    "name": stored.name,
+                    "status": stored.status,
+                    "config": dict(stored.config),
+                    "created_at": stored.created_at.isoformat(),
+                    "updated_at": stored.updated_at.isoformat(),
+                    "items_synced": stored.items_indexed,
+                    "last_sync": stored.last_sync_at.isoformat() if stored.last_sync_at else None,
+                }
+                _connectors[connector_id] = connector
+        return store, connector
 
     async def _update_connector(self, request: Any, connector_id: str) -> dict[str, Any]:
         """Update connector configuration."""
-        connector = _connectors.get(connector_id)
+        store, connector = await self._load_connector(connector_id)
         if not connector:
             return self._error_response(404, f"Connector {connector_id} not found")
 
@@ -483,30 +654,51 @@ class ConnectorsHandler(SecureHandler):
             body = await self._get_json_body(request)
         except (ValueError, KeyError, TypeError) as e:
             logger.warning("Handler error: %s", e)
-            return self._error_response(400, "Invalid request body")
+            return self._error_response(400, "Invalid JSON body")
+
+        if "config" in body and _mask_inside_list(body["config"]):
+            return self._error_response(
+                400,
+                f"config contains the secret mask {CONFIG_SECRET_MASK} inside a list; "
+                "send the real values or leave the key out",
+            )
 
         # Update allowed fields
         if "name" in body:
             connector["name"] = body["name"]
         if "config" in body:
-            connector["config"].update(body["config"])
+            connector["config"].update(_restore_masked(body["config"], connector["config"]))
 
         connector["updated_at"] = datetime.now(timezone.utc).isoformat()
 
         # If config is updated and was previously connected, mark as needing reconnection
-        if "config" in body and connector["status"] == "connected":
+        needs_reconnect = "config" in body and connector["status"] == "connected"
+        if needs_reconnect:
             connector["status"] = "configuring"
 
         _connectors[connector_id] = connector
+        if store:
+            saved = await store.save_connector(
+                connector_id=connector_id,
+                connector_type=connector["type"],
+                name=connector["name"],
+                config=copy.deepcopy(connector["config"]),
+            )
+            # save_connector keeps the stored status, which GET reads.
+            if needs_reconnect:
+                await store.update_connector_status(
+                    connector_id, connector["status"], saved.error_message
+                )
 
         logger.info("Updated connector %s", connector_id)
 
-        return self._json_response(200, connector)
+        return self._json_response(200, _public_connector(connector))
 
     @require_permission("connectors:delete")
     async def _delete_connector(self, request: Any, connector_id: str) -> dict[str, Any]:
         """Remove a connector (doesn't delete synced data)."""
-        if connector_id not in _connectors:
+        store, connector = await self._load_connector(connector_id)
+        if not connector:
             return self._error_response(404, f"Connector {connector_id} not found")
 
         # Cancel any active syncs
@@ -515,7 +707,9 @@ class ConnectorsHandler(SecureHandler):
                 sync_job["status"] = "cancelled"
                 sync_job["completed_at"] = datetime.now(timezone.utc).isoformat()
 
-        del _connectors[connector_id]
+        if store:
+            await store.delete_connector(connector_id)
+        _connectors.pop(connector_id, None)
 
         logger.info("Deleted connector %s", connector_id)
 
@@ -523,7 +717,7 @@ class ConnectorsHandler(SecureHandler):
 
     async def _start_sync(self, request: Any, connector_id: str) -> dict[str, Any]:
         """Start a sync operation for a connector."""
-        connector = _connectors.get(connector_id)
+        _, connector = await self._load_connector(connector_id)
         if not connector:
             return self._error_response(404, f"Connector {connector_id} not found")
 
@@ -557,13 +751,7 @@ class ConnectorsHandler(SecureHandler):
         _sync_jobs[sync_id] = sync_job
         connector["status"] = "syncing"
 
-        # Start background sync task
-        task = asyncio.create_task(self._run_sync(sync_id, connector_id))
-        task.add_done_callback(
-            lambda t: logger.error("Connector sync %s failed: %s", sync_id, t.exception())
-            if not t.cancelled() and t.exception()
-            else None
-        )
+        _schedule_sync(self._run_sync(sync_id, connector_id), sync_id)
 
         logger.info("Started sync %s for connector %s", sync_id, connector_id)
 
@@ -627,7 +815,7 @@ class ConnectorsHandler(SecureHandler):
             body = await self._get_json_body(request)
         except (ValueError, KeyError, TypeError) as e:
             logger.warning("Handler error: %s", e)
-            return self._error_response(400, "Invalid request body")
+            return self._error_response(400, "Invalid JSON body")
 
         connector_id = body.get("connector_id")
 
@@ -966,7 +1154,9 @@ class ConnectorsHandler(SecureHandler):
 
         Wraps parse_json_body and returns just the dict, raising on error.
         """
-        body, _err = await parse_json_body(request, context="connectors")
+        body, err = await parse_json_body(request, context="connectors")
+        if err is not None:
+            raise ValueError("Invalid JSON body")
         return body if body is not None else {}
 
     def _json_response(self, status: int, data: Any) -> dict[str, Any]:

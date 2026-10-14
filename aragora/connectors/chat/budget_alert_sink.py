@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import Any
 
 from aragora.billing.budget_alert_notifier import register_budget_alert_sink
 
@@ -29,7 +29,7 @@ class SlackBudgetAlertSink:
         await connector.send_message(
             channel_id=channel_id,
             text=message["text"],
-            blocks=cast(list[dict[str, Any] | None], message.get("blocks")),
+            blocks=message.get("blocks"),
         )
 
 

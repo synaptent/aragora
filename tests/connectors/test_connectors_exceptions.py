@@ -27,9 +27,11 @@ class TestConnectorError:
     """Tests for base ConnectorError."""
 
     def test_basic_creation(self):
-        """ConnectorError should store message."""
+        """ConnectorError should store message; str() appends the details dict."""
         error = ConnectorError("Something went wrong")
-        assert str(error) == "Something went wrong"
+        assert error.message == "Something went wrong"
+        assert str(error).startswith("Something went wrong (")
+        assert "details={'connector_name': 'unknown', 'is_retryable': False}" in str(error)
         assert error.connector_name == "unknown"
         assert error.retry_after is None
         assert error.is_retryable is False

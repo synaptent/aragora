@@ -427,7 +427,7 @@ class SQLConnector(BaseConnector):
             evidence_list.append(evidence)
 
         logger.info(
-            f"SQL search returned {len(evidence_list)} results in {result.query_time_ms:.1f}ms"
+            "SQL search returned %s results in %.1fms", len(evidence_list), result.query_time_ms
         )
 
         return evidence_list

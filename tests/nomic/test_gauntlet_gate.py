@@ -342,6 +342,21 @@ class TestGauntletGateErrors:
         assert result.error is not None
 
 
+def test_module_binds_gauntlet_components_when_available():
+    """The private runtime names point at the real Gauntlet classes when importable."""
+    from aragora.gauntlet.config import AttackCategory, GauntletConfig, ProbeCategory
+    from aragora.gauntlet.result import SeverityLevel
+    from aragora.gauntlet.runner import GauntletRunner
+    from aragora.nomic import gauntlet_gate
+
+    assert gauntlet_gate._GAUNTLET_AVAILABLE is True
+    assert gauntlet_gate._AttackCategory is AttackCategory
+    assert gauntlet_gate._GauntletConfig is GauntletConfig
+    assert gauntlet_gate._ProbeCategory is ProbeCategory
+    assert gauntlet_gate._SeverityLevel is SeverityLevel
+    assert gauntlet_gate._GauntletRunner is GauntletRunner
+
+
 # ---------------------------------------------------------------------------
 # Integration with AutonomousOrchestrator
 # ---------------------------------------------------------------------------

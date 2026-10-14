@@ -1050,7 +1050,7 @@ class HL7v2Connector(EnterpriseConnector):
         # Source configuration
         source_type: str = "file",  # "file", "mllp", "http"
         source_path: str | None = None,  # For file source
-        mllp_host: str = "0.0.0.0",  # noqa: S104 - MLLP listener binds all interfaces by default
+        mllp_host: str = "0.0.0.0",  # MLLP listener binds all interfaces by default
         mllp_port: int = 2575,
         # Message filtering
         message_types: list[str] | None = None,  # Filter by type (e.g., ["ADT", "ORU"])

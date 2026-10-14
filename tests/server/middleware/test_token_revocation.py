@@ -496,7 +496,7 @@ class TestGetRevocationStore:
 
         with patch.dict("os.environ", {}, clear=True):
             with patch(
-                "aragora.control_plane.leader.is_distributed_state_required",
+                "aragora.config.distributed.is_distributed_state_required",
                 return_value=False,
             ):
                 store = get_revocation_store()
@@ -508,7 +508,7 @@ class TestGetRevocationStore:
 
         with patch.dict("os.environ", {}, clear=True):
             with patch(
-                "aragora.control_plane.leader.is_distributed_state_required",
+                "aragora.config.distributed.is_distributed_state_required",
                 return_value=False,
             ):
                 store1 = get_revocation_store()
@@ -522,7 +522,7 @@ class TestGetRevocationStore:
 
         with patch.dict("os.environ", {}, clear=True):
             with patch(
-                "aragora.control_plane.leader.is_distributed_state_required",
+                "aragora.config.distributed.is_distributed_state_required",
                 return_value=True,
             ):
                 with pytest.raises(DistributedStateError) as exc_info:
@@ -554,7 +554,7 @@ class TestGetRevocationStore:
                 side_effect=ImportError("No redis"),
             ):
                 with patch(
-                    "aragora.control_plane.leader.is_distributed_state_required",
+                    "aragora.config.distributed.is_distributed_state_required",
                     return_value=False,
                 ):
                     store = get_revocation_store()
@@ -573,7 +573,7 @@ class TestGetRevocationStore:
                 side_effect=ImportError("No redis"),
             ):
                 with patch(
-                    "aragora.control_plane.leader.is_distributed_state_required",
+                    "aragora.config.distributed.is_distributed_state_required",
                     return_value=True,
                 ):
                     with pytest.raises(DistributedStateError):
@@ -629,7 +629,7 @@ class TestRevokeToken:
 
         with patch.dict("os.environ", {}, clear=True):
             with patch(
-                "aragora.control_plane.leader.is_distributed_state_required",
+                "aragora.config.distributed.is_distributed_state_required",
                 return_value=False,
             ):
                 entry = revoke_token(
@@ -648,7 +648,7 @@ class TestRevokeToken:
 
         with patch.dict("os.environ", {}, clear=True):
             with patch(
-                "aragora.control_plane.leader.is_distributed_state_required",
+                "aragora.config.distributed.is_distributed_state_required",
                 return_value=False,
             ):
                 entry = revoke_token("my-token")
@@ -663,7 +663,7 @@ class TestRevokeToken:
 
         with patch.dict("os.environ", {}, clear=True):
             with patch(
-                "aragora.control_plane.leader.is_distributed_state_required",
+                "aragora.config.distributed.is_distributed_state_required",
                 return_value=False,
             ):
                 entry = revoke_token("my-token", ttl_seconds=3600)
@@ -678,7 +678,7 @@ class TestRevokeToken:
 
         with patch.dict("os.environ", {}, clear=True):
             with patch(
-                "aragora.control_plane.leader.is_distributed_state_required",
+                "aragora.config.distributed.is_distributed_state_required",
                 return_value=False,
             ):
                 entry = revoke_token(
@@ -695,7 +695,7 @@ class TestRevokeToken:
 
         with patch.dict("os.environ", {}, clear=True):
             with patch(
-                "aragora.control_plane.leader.is_distributed_state_required",
+                "aragora.config.distributed.is_distributed_state_required",
                 return_value=False,
             ):
                 with patch(
@@ -719,7 +719,7 @@ class TestRevokeToken:
 
         with patch.dict("os.environ", {}, clear=True):
             with patch(
-                "aragora.control_plane.leader.is_distributed_state_required",
+                "aragora.config.distributed.is_distributed_state_required",
                 return_value=False,
             ):
                 # Make the audit function raise ImportError when called
@@ -748,7 +748,7 @@ class TestIsTokenRevoked:
 
         with patch.dict("os.environ", {}, clear=True):
             with patch(
-                "aragora.control_plane.leader.is_distributed_state_required",
+                "aragora.config.distributed.is_distributed_state_required",
                 return_value=False,
             ):
                 assert is_token_revoked("unknown-token") is False
@@ -762,7 +762,7 @@ class TestIsTokenRevoked:
 
         with patch.dict("os.environ", {}, clear=True):
             with patch(
-                "aragora.control_plane.leader.is_distributed_state_required",
+                "aragora.config.distributed.is_distributed_state_required",
                 return_value=False,
             ):
                 revoke_token("my-token", reason="test")
@@ -779,7 +779,7 @@ class TestIsTokenRevoked:
 
         with patch.dict("os.environ", {}, clear=True):
             with patch(
-                "aragora.control_plane.leader.is_distributed_state_required",
+                "aragora.config.distributed.is_distributed_state_required",
                 return_value=False,
             ):
                 store = get_revocation_store()
@@ -814,7 +814,7 @@ class TestUnrevokeToken:
 
         with patch.dict("os.environ", {}, clear=True):
             with patch(
-                "aragora.control_plane.leader.is_distributed_state_required",
+                "aragora.config.distributed.is_distributed_state_required",
                 return_value=False,
             ):
                 revoke_token("my-token")
@@ -831,7 +831,7 @@ class TestUnrevokeToken:
 
         with patch.dict("os.environ", {}, clear=True):
             with patch(
-                "aragora.control_plane.leader.is_distributed_state_required",
+                "aragora.config.distributed.is_distributed_state_required",
                 return_value=False,
             ):
                 result = unrevoke_token("never-revoked-token")
@@ -855,7 +855,7 @@ class TestGetRevocationStats:
 
         with patch.dict("os.environ", {}, clear=True):
             with patch(
-                "aragora.control_plane.leader.is_distributed_state_required",
+                "aragora.config.distributed.is_distributed_state_required",
                 return_value=False,
             ):
                 stats = get_revocation_stats()
@@ -900,7 +900,7 @@ class TestRaceConditions:
 
         with patch.dict("os.environ", {}, clear=True):
             with patch(
-                "aragora.control_plane.leader.is_distributed_state_required",
+                "aragora.config.distributed.is_distributed_state_required",
                 return_value=False,
             ):
                 results = {"revoked": [], "checks": []}
@@ -942,7 +942,7 @@ class TestRaceConditions:
 
         with patch.dict("os.environ", {}, clear=True):
             with patch(
-                "aragora.control_plane.leader.is_distributed_state_required",
+                "aragora.config.distributed.is_distributed_state_required",
                 return_value=False,
             ):
                 errors = []

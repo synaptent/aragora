@@ -5,7 +5,7 @@
  *
  * Features:
  * - Direct audio URL generation
- * - Audio file listing and upload
+ * - Audio file listing
  * - Podcast episode management
  * - RSS feed access
  *
@@ -18,12 +18,6 @@
  *
  * // List podcast episodes
  * const { episodes } = await client.media.listPodcastEpisodes({ limit: 10 });
- *
- * // Upload audio
- * const uploaded = await client.media.uploadAudio({
- *   filePath: '/path/to/audio.mp3',
- *   debateId: 'debate_456'
- * });
  * ```
  */
 
@@ -235,37 +229,6 @@ export class MediaAPI {
     });
   }
 
-  /**
-   * Upload an audio file.
-   *
-   * @param params - Upload parameters
-   * @param params.filePath - Path to the audio file
-   * @param params.debateId - Optional debate ID to associate with
-   * @param params.format - Audio format (mp3, aac, m4a, wav, ogg)
-   * @param params.metadata - Optional metadata for the audio file
-   * @returns Uploaded audio file details
-   *
-   * @example
-   * ```typescript
-   * const uploaded = await client.media.uploadAudio({
-   *   filePath: '/path/to/recording.mp3',
-   *   debateId: 'debate_123',
-   *   format: 'mp3',
-   *   metadata: { speaker: 'Agent A' }
-   * });
-   * ```
-   */
-  async uploadAudio(params: AudioUploadParams): Promise<AudioFile> {
-    const json: Record<string, unknown> = {
-      file_path: params.filePath,
-    };
-    if (params.debateId !== undefined) json.debate_id = params.debateId;
-    if (params.format !== undefined) json.format = params.format;
-    if (params.metadata !== undefined) json.metadata = params.metadata;
-
-    return this.client.request('POST', '/api/v1/media/audio', { json });
-  }
-
   // =========================================================================
   // Podcast Episodes
   // =========================================================================
@@ -295,22 +258,6 @@ export class MediaAPI {
     return this.client.request('GET', '/api/v1/podcast/episodes', {
       params: Object.keys(params).length > 0 ? params : undefined,
     });
-  }
-
-  /**
-   * Get a specific podcast episode by ID.
-   *
-   * @param episodeId - The episode identifier
-   * @returns Episode details including title, description, audio URL, and duration
-   *
-   * @example
-   * ```typescript
-   * const episode = await client.media.getPodcastEpisode('episode_123');
-   * console.log(`${episode.title}: ${episode.description}`);
-   * ```
-   */
-  async getPodcastEpisode(episodeId: string): Promise<PodcastEpisode> {
-    return this.client.request('GET', `/api/v1/podcast/episodes/${episodeId}`);
   }
 
   /**

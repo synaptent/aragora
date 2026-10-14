@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aragora"
-version = "2.10.0"
+version = "2.11.1"
 description = "Auditable execution control plane for AI-assisted decisions: multi-model review in, a verifiable Decision Receipt out"
 readme = {text = """
 # Aragora
@@ -94,12 +94,17 @@ aragora = "aragora.cli.main:main"
 [project.optional-dependencies]
 test = [
     "build>=1.5.0,<2.0",
+    # Backends for the cold-cache installed-CLI receipt fixture.
+    "hatchling>=1.30.1,<2.0",
     "pydantic>=2.13.4,<3.0",
     "pydantic-settings>=2.14.2,<3.0",
     "PyYAML>=6.0.3,<7.0",
     "pytest>=9.1.1,<10.0",
     "pytest-asyncio>=1.4.0,<2.0",
+    "setuptools>=83.0.0,<84.0",
     "twine>=6.2.0,<8.0",
+    "uv>=0.11.19,<0.12",
+    "wheel>=0.46.0,<1.0",
 ]
 gateway = [
     "fastapi>=0.139.0,<1.0",
@@ -156,6 +161,99 @@ Homepage = "https://aragora.ai"
 Repository = "https://github.com/synaptent/aragora"
 Issues = "https://github.com/synaptent/aragora/issues"
 
+# Run by aragora/core/decision_route_hooks.py on the first lookup that finds nothing
+# registered, so a caller that only imports aragora.core still reaches the workflow,
+# gauntlet, pipeline, chat connector and audit hooks.
+[project.entry-points."aragora.decision_routes"]
+server = "aragora.server.decision_routes:register_decision_routes"
+
+# Run by aragora/agents/code_scanners.py on the first lookup that finds nothing
+# registered, so a caller that only imports aragora.agents still builds the audit
+# package's security scanner and bug detector.
+[project.entry-points."aragora.code_scanners"]
+audit = "aragora.audit.code_scanners:register_code_scanners"
+
+# Run by aragora/training/evaluation_protocols.py on the first lookup that finds
+# nothing registered, so specialist training reaches the gauntlet evaluator without
+# importing the gauntlet package.
+[project.entry-points."aragora.training_evaluators"]
+gauntlet = "aragora.gauntlet.training_adapter:register_training_adapter"
+
+# Run by aragora/events/debate_completion.py on the first debate_completed emit, so a
+# process that only runs debates still records them in the debate analytics store.
+[project.entry-points."aragora.debate_completed_subscribers"]
+analytics = "aragora.analytics.debate_events:subscribe_debate_analytics"
+
+# Run by aragora/debate/workspace_stores.py on the first lookup that finds nothing
+# registered, so the debate engine records beads in the canonical workspace stores
+# without importing aragora.stores.
+[project.entry-points."aragora.workspace_stores"]
+stores = "aragora.stores.debate_registration:register_debate_workspace_stores"
+
+# Run by aragora/debate/template_registry_hooks.py on the first template lookup that
+# finds no registry factory, so team selection reads marketplace templates without
+# importing aragora.marketplace.
+[project.entry-points."aragora.debate_template_registries"]
+marketplace = "aragora.marketplace.debate_registration:register_debate_template_registry"
+
+# Run by aragora/agents/scheduler_protocol.py on the first distributed adapter that finds
+# no scheduler registered, so a process that only imports aragora.agents still builds
+# the control plane's task scheduler.
+[project.entry-points."aragora.distributed_schedulers"]
+control_plane = "aragora.control_plane.scheduler_registration:register_distributed_scheduler"
+
+# Run by aragora/debate/extensions.py, through aragora/events/task_events.py, before a
+# debate notification with no configured dispatcher, so a process that only runs debates
+# still falls back to the control plane's default notification dispatcher.
+[project.entry-points."aragora.task_event_dispatchers"]
+control_plane = "aragora.control_plane.event_registry:register_task_event_dispatcher"
+
+# Run by aragora/rbac/security_notifier.py the first time break-glass access needs to
+# alert the security team and nothing registered a sender, so a process that only
+# imports aragora.rbac still notifies through the control plane.
+[project.entry-points."aragora.security_notifiers"]
+control_plane = "aragora.control_plane.security_registration:register_rbac_security_notifier"
+
+# Lets aragora/tenancy/record_scope.py reach the server without importing it.
+[project.entry-points."aragora.tenancy_bindings"]
+server = "aragora.server.tenancy_bindings:register_tenancy_bindings"
+
+# Run by aragora/events/approval_requests.py on the first approval request that finds
+# no notifier, so workflows, pipelines and computer use still reach the chat approval
+# notifier without importing aragora.approvals.
+[project.entry-points."aragora.approval_notifiers"]
+approvals = "aragora.approvals.notifier_registration:register_chat_approval_notifier"
+
+# Run by aragora/stores/gateway_store_hook.py on the first canonical gateway store lookup
+# that finds no factory, so aragora.stores builds the gateway store without importing
+# aragora.gateway.
+[project.entry-points."aragora.gateway_stores"]
+gateway = "aragora.gateway.store_registration:register_canonical_gateway_store"
+
+# Run by aragora/events/chat_connectors.py on the first chat connector lookup that finds
+# none registered, so pipeline progress reaches chat channels without importing
+# aragora.connectors.
+[project.entry-points."aragora.chat_connector_lookups"]
+chat = "aragora.connectors.chat.lookup_registration:register_chat_connector_lookup_from_registry"
+
+# Run by aragora/debate/decision_plan_bridges.py on the first post-debate bridge lookup
+# that finds no factory, so the debate engine routes decision plans to Jira, Linear or n8n
+# without importing aragora.integrations.
+[project.entry-points."aragora.decision_plan_bridges"]
+integrations = "aragora.integrations.decision_bridge_registration:register_decision_bridge"
+
+# Run by aragora/debate/gauntlet_runners.py on the first post-debate gauntlet lookup that
+# finds no factory, so the debate engine stress-tests decisions without importing
+# aragora.gauntlet.
+[project.entry-points."aragora.debate_gauntlet_runners"]
+gauntlet = "aragora.gauntlet.debate_registration:register_debate_gauntlet_runner"
+
+# Run by aragora/harnesses/mcp_config.py on the Claude Code harness's first MCP config
+# request that finds no generator, so the harness attaches Aragora's MCP server without
+# importing aragora.mcp.
+[project.entry-points."aragora.harness_mcp_configs"]
+mcp = "aragora.mcp.harness_registration:register_harness_impl_mcp_config"
+
 # -----------------------------------------------------------------------------
 # uv resolver constraints — security floors for the pip-audit security gate
 # (scripts/run_pip_audit_gate.py). They bound what the lockfile may resolve
@@ -172,11 +270,24 @@ Issues = "https://github.com/synaptent/aragora/issues"
 #     resolves to the starlette 1.x line, so this stays on fastapi 0.x — no
 #     FastAPI 1.x migration required. Aragora's only direct starlette usage is
 #     BaseHTTPMiddleware / Response / StreamingResponse, all stable across 1.x.
+#   * pyjwt >=2.15.0 — fixes PYSEC-2026-4140, PYSEC-2026-4141, PYSEC-2026-4142,
+#     PYSEC-2026-4143, PYSEC-2026-4144, PYSEC-2026-4145, PYSEC-2026-4146,
+#     PYSEC-2026-4147, PYSEC-2026-4148, PYSEC-2026-4149, PYSEC-2026-4150,
+#     PYSEC-2026-4151, PYSEC-2026-4152. Pulled in via supabase-auth. 2.14.0
+#     clears every id except PYSEC-2026-4141, which is fixed only in 2.15.0.
+#   * urllib3 >=2.8.0 — fixes PYSEC-2026-4175, PYSEC-2026-4176,
+#     PYSEC-2026-4177. Pulled in via requests (also id, twine, types-requests).
+#   * virtualenv >=21.7.13 — fixes PYSEC-2026-4011, PYSEC-2026-4012,
+#     PYSEC-2026-4013, PYSEC-2026-4014 (PYSEC-2026-4013 needs 21.7.13). Pulled
+#     in via pre-commit (dev tooling only).
 # -----------------------------------------------------------------------------
 [tool.uv]
 constraint-dependencies = [
     "cryptography>=48.0.1",
+    "pyjwt>=2.15.0",
     "starlette>=1.3.1",
+    "urllib3>=2.8.0",
+    "virtualenv>=21.7.13",
 ]
 
 [tool.setuptools.packages.find]
@@ -215,7 +326,7 @@ ignore = ["E402", "E501", "E731", "E741", "E712", "C401", "C405", "C408", "C416"
 "aragora/training/tinker_client.py" = ["T201", "BLE001"]
 "aragora/debate/breakpoints.py" = ["T201", "BLE001"]
 "aragora/nomic/gates.py" = ["T201", "BLE001"]
-"aragora/nomic/approval.py" = ["T201", "BLE001"]
+"aragora/agents/change_approval.py" = ["T201", "BLE001"]
 "aragora/nomic/scope_guard.py" = ["T201", "BLE001"]
 "aragora/server/__main__.py" = ["T201", "BLE001"]
 "aragora/server/startup/health_check.py" = ["T201", "BLE001"]
@@ -229,7 +340,146 @@ ignore = ["E402", "E501", "E731", "E741", "E712", "C401", "C405", "C408", "C416"
 "examples/*" = ["T201", "BLE001"]
 "sdk/cookbook/*" = ["T201", "BLE001", "F841"]
 "deprecated/*" = ["UP"]
-"aragora/*" = ["BLE001", "G004", "C4", "SIM910"]
+# Per-file debt left after removing the package-wide BLE001/G004/C4/SIM910
+# ignore: each entry lists only codes the file still violates, with counts.
+# Delete codes as the sites are fixed; do not add new files here.
+"aragora/agents/api_agents/base.py" = ["G004"]  # debt: 1 G004
+"aragora/agents/api_agents/openclaw.py" = ["BLE001"]  # debt: 1 BLE001
+"aragora/agents/api_agents/openrouter.py" = ["G004"]  # debt: 1 G004
+"aragora/agents/api_agents/rate_limiter.py" = ["G004"]  # debt: 4 G004
+"aragora/agents/cv.py" = ["BLE001"]  # debt: 2 BLE001
+"aragora/agents/fallback.py" = ["G004"]  # debt: 1 G004
+"aragora/agents/semantic_extraction.py" = ["BLE001"]  # debt: 2 BLE001
+"aragora/analysis/codebase/sast/scanner.py" = ["BLE001"]  # debt: 1 BLE001
+"aragora/backup/offsite.py" = ["BLE001"]  # debt: 2 BLE001
+"aragora/billing/usage.py" = ["G004"]  # debt: 1 G004
+"aragora/billing/usage_metering.py" = ["G004"]  # debt: 2 G004
+"aragora/billing/usage_metering_integration.py" = ["G004"]  # debt: 1 G004
+"aragora/codex/insights.py" = ["BLE001"]  # debt: 1 BLE001
+"aragora/connectors/chat/base/_session.py" = ["BLE001"]  # debt: 1 BLE001
+"aragora/connectors/chat/teams_conversations.py" = ["BLE001"]  # debt: 5 BLE001
+"aragora/connectors/enterprise/collaboration/jira.py" = ["BLE001"]  # debt: 1 BLE001
+"aragora/connectors/enterprise/collaboration/notion.py" = ["BLE001"]  # debt: 2 BLE001
+"aragora/connectors/enterprise/streaming/kafka.py" = ["G004"]  # debt: 1 G004
+"aragora/connectors/enterprise/streaming/rabbitmq.py" = ["G004"]  # debt: 1 G004
+"aragora/connectors/enterprise/streaming/snssqs.py" = ["G004"]  # debt: 2 G004
+"aragora/connectors/recovery.py" = ["G004"]  # debt: 2 G004
+"aragora/debate/arena_phases.py" = ["G004"]  # debt: 3 G004
+"aragora/debate/autonomic_executor.py" = ["G004"]  # debt: 1 G004
+"aragora/debate/complexity_governor.py" = ["G004"]  # debt: 2 G004
+"aragora/debate/cross_verification.py" = ["BLE001"]  # debt: 1 BLE001
+"aragora/debate/judge_selector.py" = ["G004"]  # debt: 4 G004
+"aragora/debate/km_outcome_bridge.py" = ["BLE001"]  # debt: 1 BLE001
+"aragora/debate/outcome_complexity_bridge.py" = ["G004"]  # debt: 2 G004
+"aragora/debate/prompt_context_providers.py" = ["G004"]  # debt: 1 G004
+"aragora/debate/security_debate.py" = ["BLE001"]  # debt: 2 BLE001
+"aragora/debate/team_selector.py" = ["BLE001", "G004"]  # debt: 1 BLE001, 6 G004
+"aragora/deletion_coordinator.py" = ["BLE001"]  # debt: 7 BLE001
+"aragora/deliberation/templates/registry.py" = ["BLE001"]  # debt: 1 BLE001
+"aragora/evaluation/llm_judge.py" = ["BLE001"]  # debt: 3 BLE001
+"aragora/gauntlet/orchestrator.py" = ["G004"]  # debt: 4 G004
+"aragora/goals/extractor.py" = ["C420"]  # debt: 2 C420
+"aragora/ideacloud/ingestion/rss_feeds.py" = ["BLE001"]  # debt: 2 BLE001
+"aragora/inbox/triage_instrumentation.py" = ["BLE001"]  # debt: 1 BLE001
+"aragora/integrations/langchain/tools.py" = ["SIM910"]  # debt: 1 SIM910
+"aragora/integrations/platform_resilience.py" = ["G004"]  # debt: 1 G004
+"aragora/knowledge/mound/staleness.py" = ["G004"]  # debt: 1 G004
+"aragora/memory/streams.py" = ["BLE001"]  # debt: 1 BLE001
+"aragora/memory/triggers.py" = ["BLE001"]  # debt: 2 BLE001
+"aragora/migrations/runner.py" = ["G004"]  # debt: 1 G004
+"aragora/migrations/sqlite_to_postgres.py" = ["G004"]  # debt: 1 G004
+"aragora/missions/swarm.py" = ["BLE001"]  # debt: 1 BLE001
+"aragora/moderation/spam_integration.py" = ["G004"]  # debt: 1 G004
+"aragora/modes/deep_audit.py" = ["BLE001"]  # debt: 1 BLE001
+"aragora/nomic/hardened_audit.py" = ["BLE001"]  # debt: 1 BLE001
+"aragora/nomic/hardened_orchestrator.py" = ["BLE001"]  # debt: 1 BLE001
+"aragora/nomic/stuck_detector.py" = ["G004"]  # debt: 1 G004
+"aragora/observability/memory_profiler.py" = ["G004"]  # debt: 2 G004
+"aragora/pipeline/canonical_execution.py" = ["BLE001"]  # debt: 2 BLE001
+"aragora/pipeline/km_bridge.py" = ["BLE001"]  # debt: 3 BLE001
+"aragora/privacy/classifier.py" = ["C420"]  # debt: 1 C420
+"aragora/pulse/scheduler.py" = ["G004"]  # debt: 2 G004
+"aragora/ralph/classifier.py" = ["BLE001"]  # debt: 2 BLE001
+"aragora/ralph/dashboard.py" = ["BLE001"]  # debt: 4 BLE001
+"aragora/ralph/llm_classifier.py" = ["BLE001"]  # debt: 6 BLE001
+"aragora/ralph/supervisor.py" = ["BLE001"]  # debt: 16 BLE001
+"aragora/rbac/approvals.py" = ["BLE001"]  # debt: 1 BLE001
+"aragora/rbac/audit.py" = ["BLE001"]  # debt: 1 BLE001
+"aragora/rbac/enforcer.py" = ["G004"]  # debt: 1 G004
+"aragora/reputation/selection_bridge.py" = ["C420"]  # debt: 1 C420
+"aragora/scheduler/dr_drill_scheduler.py" = ["G004"]  # debt: 1 G004
+"aragora/security/api_key_proxy.py" = ["G004"]  # debt: 1 G004
+"aragora/server/agent_selection.py" = ["G004"]  # debt: 1 G004
+"aragora/server/debate_origin/registry.py" = ["BLE001"]  # debt: 1 BLE001
+"aragora/server/debate_origin/senders/teams.py" = ["BLE001"]  # debt: 1 BLE001
+"aragora/server/debate_utils.py" = ["G004"]  # debt: 1 G004
+"aragora/server/fastapi/routes/canvas_pipeline.py" = ["BLE001"]  # debt: 1 BLE001
+"aragora/server/fastapi/routes/swarm_status.py" = ["BLE001"]  # debt: 1 BLE001
+"aragora/server/handler_registry/admin.py" = ["BLE001"]  # debt: 1 BLE001
+"aragora/server/handlers/_oauth/base.py" = ["G004"]  # debt: 1 G004
+"aragora/server/handlers/admin/billing.py" = ["G004"]  # debt: 1 G004
+"aragora/server/handlers/agents/agent_bridge.py" = ["BLE001"]  # debt: 5 BLE001
+"aragora/server/handlers/agents/calibration.py" = ["C420"]  # debt: 1 C420
+"aragora/server/handlers/autonomous/nomic.py" = ["G004"]  # debt: 1 G004
+"aragora/server/handlers/canvas/canvas_pipeline.py" = ["BLE001"]  # debt: 3 BLE001
+"aragora/server/handlers/catalog/template_marketplace.py" = ["BLE001"]  # debt: 1 BLE001
+"aragora/server/handlers/codebase/intelligence.py" = ["G004"]  # debt: 2 G004
+"aragora/server/handlers/codebase/metrics.py" = ["G004"]  # debt: 1 G004
+"aragora/server/handlers/codebase/quick_scan.py" = ["G004"]  # debt: 1 G004
+"aragora/server/handlers/costs/models.py" = ["G004"]  # debt: 1 G004
+"aragora/server/handlers/debates/create.py" = ["G004"]  # debt: 2 G004
+"aragora/server/handlers/demo/playground.py" = ["BLE001", "C420"]  # debt: 8 BLE001, 2 C420
+"aragora/server/handlers/features/transcription.py" = ["C414"]  # debt: 3 C414
+"aragora/server/handlers/gauntlet/gauntlet_v1.py" = ["BLE001"]  # debt: 1 BLE001
+"aragora/server/handlers/gauntlet/heatmap.py" = ["C414"]  # debt: 1 C414
+"aragora/server/handlers/gauntlet/results.py" = ["C414"]  # debt: 1 C414
+"aragora/server/handlers/gauntlet/storage.py" = ["G004"]  # debt: 1 G004
+"aragora/server/handlers/metrics/metrics_endpoint.py" = ["G004"]  # debt: 1 G004
+"aragora/server/handlers/notifications/history.py" = ["BLE001"]  # debt: 1 BLE001
+"aragora/server/handlers/pipeline/transitions.py" = ["BLE001"]  # debt: 3 BLE001
+"aragora/server/handlers/security/security_debate.py" = ["G004"]  # debt: 1 G004
+"aragora/server/handlers/shared_inbox/rule_handlers.py" = ["G004"]  # debt: 1 G004
+"aragora/server/handlers/social/_slack_impl/config.py" = ["BLE001"]  # debt: 1 BLE001
+"aragora/server/handlers/social/_slack_impl/handler.py" = ["BLE001"]  # debt: 1 BLE001
+"aragora/server/handlers/social/discord_oauth.py" = ["BLE001"]  # debt: 1 BLE001
+"aragora/server/handlers/social/slack_oauth.py" = ["BLE001"]  # debt: 6 BLE001
+"aragora/server/handlers/utils/safe_fetch.py" = ["G004"]  # debt: 4 G004
+"aragora/server/middleware/auth.py" = ["BLE001"]  # debt: 3 BLE001
+"aragora/server/oauth_state_store.py" = ["BLE001"]  # debt: 1 BLE001
+"aragora/server/startup/__init__.py" = ["G004"]  # debt: 2 G004
+"aragora/server/startup/parallel.py" = ["G004"]  # debt: 5 G004
+"aragora/server/startup/security.py" = ["G004"]  # debt: 2 G004
+"aragora/server/startup/validation.py" = ["BLE001", "G004"]  # debt: 1 BLE001, 2 G004
+"aragora/server/startup/validation_runner.py" = ["G004"]  # debt: 2 G004
+"aragora/server/stream/debate_executor.py" = ["G004", "SIM910"]  # debt: 4 G004, 1 SIM910
+"aragora/server/stream/debate_stream_server.py" = ["BLE001"]  # debt: 2 BLE001
+"aragora/server/unified_server.py" = ["G004"]  # debt: 2 G004
+"aragora/services/expense_tracker.py" = ["BLE001"]  # debt: 2 BLE001
+"aragora/storage/debate_storage.py" = ["C420"]  # debt: 1 C420
+"aragora/swarm/boss_feed.py" = ["BLE001"]  # debt: 1 BLE001
+"aragora/swarm/boss_loop.py" = ["BLE001"]  # debt: 40 BLE001
+"aragora/swarm/boss_loop_outcome.py" = ["BLE001"]  # debt: 2 BLE001
+"aragora/swarm/boss_loop_selection.py" = ["BLE001"]  # debt: 3 BLE001
+"aragora/swarm/boss_worker_lifecycle.py" = ["BLE001"]  # debt: 6 BLE001
+"aragora/swarm/commander.py" = ["BLE001"]  # debt: 7 BLE001
+"aragora/swarm/debate_gate.py" = ["BLE001"]  # debt: 2 BLE001
+"aragora/swarm/dispatch_followups.py" = ["BLE001"]  # debt: 1 BLE001
+"aragora/swarm/fusion_tiebreak.py" = ["BLE001"]  # debt: 1 BLE001
+"aragora/swarm/issue_upgrader.py" = ["BLE001"]  # debt: 2 BLE001
+"aragora/swarm/pr_review_protocol.py" = ["BLE001"]  # debt: 1 BLE001
+"aragora/swarm/preflight.py" = ["BLE001"]  # debt: 2 BLE001
+"aragora/swarm/quorum_evidence.py" = ["BLE001"]  # debt: 5 BLE001
+"aragora/swarm/rescue_planner.py" = ["BLE001"]  # debt: 2 BLE001
+"aragora/swarm/strategic_issue_bridge.py" = ["BLE001"]  # debt: 3 BLE001
+"aragora/swarm/supervisor.py" = ["BLE001"]  # debt: 2 BLE001
+"aragora/swarm/supervisor_workers.py" = ["BLE001"]  # debt: 3 BLE001
+"aragora/swarm/tranche_integrate.py" = ["BLE001"]  # debt: 3 BLE001
+"aragora/swarm/tranche_queue.py" = ["BLE001"]  # debt: 4 BLE001
+"aragora/swarm/tranche_watch.py" = ["BLE001"]  # debt: 2 BLE001
+"aragora/swarm/worker_launcher.py" = ["BLE001"]  # debt: 2 BLE001
+"aragora/tournaments/tournament.py" = ["BLE001"]  # debt: 4 BLE001
+"aragora/triage/issue_evaluator.py" = ["BLE001"]  # debt: 1 BLE001
+"aragora/visualization/replay.py" = ["G004"]  # debt: 1 G004
 "aragora/analysis/codebase/bug_detector.py" = ["BLE001", "G004"]
 "aragora/agents/code_reviewer.py" = ["BLE001", "G004"]
 "aragora/broadcast/mixer.py" = ["BLE001", "G004"]
@@ -252,7 +502,7 @@ ignore = ["E402", "E501", "E731", "E741", "E712", "C401", "C405", "C408", "C416"
 "aragora/storage/*.py" = ["BLE001", "G004"]
 "aragora/connectors/blockchain/connector.py" = ["BLE001", "G004"]
 "aragora/connectors/enterprise/database/*.py" = ["BLE001", "G004"]
-"aragora/connectors/supermemory/*.py" = ["BLE001", "G004"]
+"aragora/memory/supermemory/*.py" = ["BLE001", "G004"]
 "aragora/knowledge/mound/api/*.py" = ["BLE001", "G004"]
 "aragora/knowledge/mound/core.py" = ["BLE001", "G004"]
 "aragora/knowledge/mound/checkpoint.py" = ["BLE001", "G004"]
@@ -285,6 +535,26 @@ disable_error_code = [
     "truthy-function",       # ~45 legacy optional-import idioms
     "import-untyped",        # defense in depth; stubs installed via [dev] extras
 ]
+
+# Grow-only strict enrollment (#8261). These packages also type-check the
+# bodies of unannotated functions. A package joins only when it has no
+# ``.mypy-baseline`` entries, no BLE001/G004 per-file-ignores, and no
+# ``check_untyped_defs`` errors in either the CI changed-file form
+# (``--follow-imports=skip``) or the full-tree form. Packages are added to
+# this list, never removed; the enrolled count is the
+# ``mypy_check_untyped_defs_packages`` metric in
+# docs/audits/2026-06-12-codebase-health-baseline.json.
+[[tool.mypy.overrides]]
+module = [
+    "aragora.caching.*",
+    "aragora.events.*",
+    "aragora.protocols.*",
+    "aragora.resilience.*",
+    "aragora.shared.*",
+    "aragora.types.*",
+    "aragora.utils.*",
+]
+check_untyped_defs = true
 
 # Optional-import fallback modules. These deliberately rebind a symbol to
 # ``None`` when the optional dependency is unavailable, e.g.

@@ -57,6 +57,7 @@ from aragora.config.trusted_authors import (  # noqa: E402
     TRUSTED_AUTHORS_ENV as GLOBAL_TRUSTED_AUTHORS_ENV,
     resolve_trusted_authors,
 )
+from aragora.swarm.merge_halt import assert_merge_allowed  # noqa: E402
 from scripts.post_merge_lane_audit import (  # noqa: E402
     post_merge_lane_audit_failed,
     post_merge_lane_audit_failure_reason,
@@ -288,6 +289,7 @@ def gh_pr_merge_squash(
     process so callers can inspect stdout/stderr.
     """
     runner = runner or _default_runner
+    assert_merge_allowed(pr_number, head_sha)  # #9216: raises MergeHalted
     args = [
         "gh",
         "pr",

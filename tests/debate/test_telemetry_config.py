@@ -193,7 +193,7 @@ class TestGetInstance:
             assert a is b
 
     def test_fallback_when_service_registry_unavailable(self):
-        with patch.dict("sys.modules", {"aragora.services": None}):
+        with patch.dict("sys.modules", {"aragora.runtime.service_registry": None}):
             inst = TelemetryConfig.get_instance()
             assert isinstance(inst, TelemetryConfig)
 
@@ -205,7 +205,7 @@ class TestGetInstance:
 
         mock_mod = MagicMock()
         mock_mod.ServiceRegistry.get.return_value = mock_registry
-        with patch.dict("sys.modules", {"aragora.services": mock_mod}):
+        with patch.dict("sys.modules", {"aragora.runtime.service_registry": mock_mod}):
             result = TelemetryConfig.get_instance()
             assert result is sentinel
 
@@ -215,7 +215,7 @@ class TestGetInstance:
 
         mock_mod = MagicMock()
         mock_mod.ServiceRegistry.get.return_value = mock_registry
-        with patch.dict("sys.modules", {"aragora.services": mock_mod}):
+        with patch.dict("sys.modules", {"aragora.runtime.service_registry": mock_mod}):
             result = TelemetryConfig.get_instance()
             mock_registry.register.assert_called_once_with(TelemetryConfig, result)
 
@@ -234,12 +234,12 @@ class TestResetInstance:
 
         mock_mod = MagicMock()
         mock_mod.ServiceRegistry.get.return_value = mock_registry
-        with patch.dict("sys.modules", {"aragora.services": mock_mod}):
+        with patch.dict("sys.modules", {"aragora.runtime.service_registry": mock_mod}):
             TelemetryConfig.reset_instance()
             mock_registry.unregister.assert_called_once_with(TelemetryConfig)
 
     def test_handles_missing_service_registry(self):
-        with patch.dict("sys.modules", {"aragora.services": None}):
+        with patch.dict("sys.modules", {"aragora.runtime.service_registry": None}):
             TelemetryConfig.reset_instance()  # should not raise
 
 

@@ -66,8 +66,9 @@ from enum import Enum, auto
 from typing import TYPE_CHECKING, Any
 
 from aragora.core import Agent, Environment
-from aragora.debate.protocol import CircuitBreaker, DebateProtocol
-from aragora.spectate.stream import SpectatorStream
+from aragora.protocols.debate import DebateProtocol
+from aragora.resilience import CircuitBreaker
+from aragora.events.spectate.stream import SpectatorStream
 
 
 class InitPhase(Enum):
@@ -1158,7 +1159,7 @@ class ArenaBuilder:
             except ImportError:
                 logger.debug("RLM training hook unavailable - debate_integration not found")
 
-        from aragora.debate.protocol import resolve_default_protocol
+        from aragora.debate.protocol_resolver import resolve_default_protocol
 
         arena_kwargs: dict[str, Any] = {
             "environment": self._environment,

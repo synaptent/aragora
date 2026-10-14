@@ -40,7 +40,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Import distributed state requirements
-from aragora.control_plane.leader import (
+from aragora.resilience.leader import (
     DistributedStateError,
     is_distributed_state_required,
 )
@@ -282,6 +282,8 @@ class SyncStore:
         self,
         database_url: str | None = None,
         use_encryption: bool = True,
+        *,
+        recover_jobs_on_init: bool = True,
     ):
         """
         Initialize the sync store.
@@ -291,6 +293,9 @@ class SyncStore:
                 - sqlite:///path/to/db.sqlite
                 - postgresql://user:pass@host/db
             use_encryption: Whether to encrypt sensitive config fields
+            recover_jobs_on_init: Mark jobs left ``running`` as interrupted during
+                :meth:`initialize`. Disable it for short-lived stores opened beside
+                the process that owns those jobs, which would otherwise interrupt them.
         """
         default_sqlite_path = resolve_db_path("connectors.db")
         default_url = f"sqlite:///{default_sqlite_path}"
@@ -303,6 +308,7 @@ class SyncStore:
         else:
             self._database_url = default_url
         self._use_encryption = use_encryption
+        self._recover_jobs_on_init = recover_jobs_on_init
         self._initialized = False
         self._connection: aiosqlite.Connection | asyncpg.Connection | None = None
 
@@ -412,7 +418,8 @@ class SyncStore:
                 self._connectors_cache[config.id] = config
 
         # Recover stale running jobs (mark as interrupted)
-        await self._recover_running_jobs()
+        if self._recover_jobs_on_init:
+            await self._recover_running_jobs()
 
     async def _init_postgres(self) -> None:
         """Initialize PostgreSQL database."""
@@ -496,7 +503,8 @@ class SyncStore:
             self._connectors_cache[config.id] = config
 
         # Recover stale running jobs (mark as interrupted)
-        await self._recover_running_jobs()
+        if self._recover_jobs_on_init:
+            await self._recover_running_jobs()
 
     async def close(self) -> None:
         """Close database connection."""
@@ -750,7 +758,7 @@ class SyncStore:
                     connector.id,
                     connector.connector_type,
                     connector.name,
-                    encrypted_config,
+                    config_json,
                     connector.status,
                     connector.created_at,
                     connector.updated_at,
@@ -825,6 +833,18 @@ class SyncStore:
                     (status, error_message, connector.updated_at.isoformat(), connector_id),
                 )
                 await self._connection.commit()
+            else:
+                await self._connection.execute(
+                    """
+                    UPDATE connectors
+                    SET status = $1, error_message = $2, updated_at = $3
+                    WHERE id = $4
+                """,
+                    status,
+                    error_message,
+                    connector.updated_at,
+                    connector_id,
+                )
 
     # ==================== Sync Job Operations ====================
 

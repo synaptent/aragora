@@ -103,6 +103,10 @@ ADAPTER_SPECS: list[dict[str, str]] = [
         "module": "aragora.knowledge.mound.adapters.provenance_adapter",
         "class_name": "ProvenanceAdapter",
     },
+    {
+        "module": "aragora.knowledge.mound.adapters.executable_claim_adapter",
+        "class_name": "ExecutableClaimAdapter",
+    },
 ]
 
 

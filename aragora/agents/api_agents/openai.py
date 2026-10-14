@@ -2,12 +2,15 @@
 OpenAI API agent with OpenRouter fallback support.
 
 Supports web search tool for web-capable responses when URLs
-or web-related keywords are detected in the prompt.
+or web-related keywords are detected in the prompt (except under
+ARAGORA_MODEL_TRANSPORT=vibeproxy-required, where the request goes
+through VibeProxy without the tool).
 """
 
 import asyncio
 import logging
 import re
+import threading
 import time
 from collections.abc import AsyncGenerator
 from concurrent.futures import ThreadPoolExecutor
@@ -65,6 +68,23 @@ _PROXY_DISCOVERY_TIMEOUT_SECONDS = 6.0
 # inferences cannot starve the event loop's shared default executor.
 # Threads are spawned lazily on first use.
 _PROXY_EXECUTOR = ThreadPoolExecutor(max_workers=8, thread_name_prefix="vibeproxy-openai")
+
+_required_web_search_notice_lock = threading.Lock()
+_required_web_search_notice_logged = False
+
+
+def _log_required_web_search_disabled_once(agent_name: str) -> None:
+    global _required_web_search_notice_logged
+    with _required_web_search_notice_lock:
+        if _required_web_search_notice_logged:
+            return
+        _required_web_search_notice_logged = True
+    logger.warning(
+        "[%s] web search disabled under vibeproxy-required: prompts that match "
+        "web-search patterns are sent through VibeProxy without the web_search tool "
+        "(logged once per process)",
+        agent_name,
+    )
 
 
 def _resolve_openai_base_url() -> str:
@@ -187,15 +207,21 @@ class OpenAIAPIAgent(OpenAICompatibleMixin, APIAgent):
 
         Returns True if the prompt contains URLs, GitHub references,
         or keywords indicating need for current/web information.
+
+        Always False under vibeproxy-required: the web_search tool is outside
+        the proxy slice, and refusing every matching prompt would leave the
+        agent unable to answer ordinary debate questions.
         """
         if not self.enable_web_search:
             return False
 
         # Use pre-compiled patterns for performance
-        for pattern in _WEB_SEARCH_PATTERNS:
-            if pattern.search(prompt):
-                return True
-        return False
+        if not any(pattern.search(prompt) for pattern in _WEB_SEARCH_PATTERNS):
+            return False
+        if self._model_transport_policy.mode is TransportMode.REQUIRED:
+            _log_required_web_search_disabled_once(self.name)
+            return False
+        return True
 
     def _build_messages(self, full_prompt: str) -> list[dict]:
         """Build messages and track prompt for web search detection."""
@@ -233,8 +259,7 @@ class OpenAIAPIAgent(OpenAICompatibleMixin, APIAgent):
         if self._model_transport_policy.mode is TransportMode.REQUIRED:
             raise AgentAPIError(
                 f"vibeproxy-required cannot serve this request ({reason}); "
-                "web search, tools, custom endpoints, and streaming are outside "
-                "the contract-tested proxy slice",
+                "tools and custom endpoints are outside the contract-tested proxy slice",
                 agent_name=self.name,
             )
 
@@ -243,14 +268,15 @@ class OpenAIAPIAgent(OpenAICompatibleMixin, APIAgent):
 
         In PREFER mode, web search, streaming, custom endpoints, and any request
         the policy does not resolve exactly continue through the established
-        direct path. In REQUIRED mode those requests fail closed instead.
+        direct path. In REQUIRED mode custom endpoints and tool-bearing payloads
+        fail closed; web-search detection is off (see ``_needs_web_search``).
         """
 
         full_prompt = prompt
         if context:
             full_prompt = self._build_context_prompt(context) + prompt
         if not self._can_route_exact_chat(full_prompt):
-            self._reject_if_required_ineligible("web search or custom endpoint requested")
+            self._reject_if_required_ineligible("custom endpoint requested")
             return await super().generate(prompt, context)
 
         start_time = time.perf_counter()
@@ -449,11 +475,19 @@ class OpenAIAPIAgent(OpenAICompatibleMixin, APIAgent):
     ) -> AsyncGenerator[str, None]:
         """Streaming is outside the contract-tested proxy slice.
 
-        PREFER mode streams through the established direct path; REQUIRED mode
-        fails closed so the egress boundary also covers streaming requests.
+        DIRECT and PREFER modes stream through the established direct path.
+        REQUIRED mode never opens a direct stream: it yields the non-streaming
+        VibeProxy result as a single chunk, so streaming callers (such as the
+        server's debate stream wrapper) still get an answer inside the egress
+        boundary.
         """
 
-        self._reject_if_required_ineligible("streaming requested")
+        if self._model_transport_policy.mode is TransportMode.REQUIRED:
+            # wrap_agent_for_streaming replaces the instance's generate() with a
+            # wrapper that calls generate_stream(); resolve generate on the class
+            # so the substitution cannot recurse into that wrapper.
+            yield await type(self).generate(self, prompt, context)
+            return
         async for chunk in super().generate_stream(prompt, context):
             yield chunk
 

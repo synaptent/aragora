@@ -95,18 +95,6 @@ export class PodcastNamespace {
   }
 
   /**
-   * Get a specific episode by ID.
-   *
-   * @param episodeId - The episode ID
-   */
-  async getEpisode(episodeId: string): Promise<PodcastEpisode> {
-    return this.client.request<PodcastEpisode>(
-      'GET',
-      `/api/v1/podcast/episodes/${encodeURIComponent(episodeId)}`
-    );
-  }
-
-  /**
    * Get the full podcast feed metadata.
    */
   async getFeed(): Promise<PodcastFeed> {
@@ -139,15 +127,4 @@ export class PodcastNamespace {
     );
   }
 
-  /**
-   * Delete a podcast episode.
-   *
-   * @param episodeId - The episode to delete
-   */
-  async deleteEpisode(episodeId: string): Promise<{ success: boolean }> {
-    return this.client.request<{ success: boolean }>(
-      'DELETE',
-      `/api/v1/podcast/episodes/${encodeURIComponent(episodeId)}`
-    );
-  }
 }

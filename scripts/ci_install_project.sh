@@ -62,6 +62,7 @@ LEGACY_CONTROL_PLANE_DEV_DEPS=(
 )
 
 LEGACY_CONTROL_PLANE_TEST_EXTRA_DEPS=(
+  "uv>=0.11.19,<0.12"               # aligned to pyproject [test]; installed-CLI fixture
   "aiosqlite>=0.19,<1.0"
   "supabase>=2.0,<3.0"
   "redis>=5.0.0,<8.0"

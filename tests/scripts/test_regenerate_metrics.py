@@ -127,6 +127,79 @@ def test_rbac_permission_calls_command_reproduces_value(snapshot):
     )
 
 
+def test_rbac_unique_permissions_command_reproduces_value(snapshot):
+    """Same contract as the calls row, for the unique permission strings row."""
+    metric = snapshot["rbac_unique_permissions"]
+    result = subprocess.run(
+        ["bash", "-c", metric.command],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    reproduced = int(result.stdout.strip())
+    assert reproduced == metric.value, (
+        f"printed command reproduces {reproduced} but the generator computed "
+        f"{metric.value}; the command's file set must match the generator's "
+        f".py-only file set"
+    )
+
+
+_FIXTURE_FILES = {
+    "aragora/server/handlers.py": (
+        '@require_permission("fixture:read")\n'
+        "def read_handler(ctx):\n"
+        "    return None\n"
+        "\n"
+        "@require_permission('fixture:write')\n"
+        "def write_handler(ctx):\n"
+        "    return None\n"
+    ),
+    "aragora/rbac/README.md": (
+        'Decorate route handlers with `@require_permission("fixture:prose")`.\n'
+    ),
+    "aragora/capabilities.yaml": ("notes: '@require_permission(\"fixture:yaml\")'\n"),
+}
+
+
+@pytest.mark.parametrize("metric_key", ["rbac_permission_calls", "rbac_unique_permissions"])
+def test_rbac_commands_ignore_non_python_mentions(tmp_path, monkeypatch, metric_key):
+    """The printed commands must not count decorator text outside .py files.
+
+    On the live tree the reproduction tests above can pass by coincidence when
+    no tracked prose happens to mention a decorator. This fixture repository
+    tracks Markdown and YAML files that do, so a command whose pathspec covers
+    every tracked file under aragora/ disagrees with the generator here.
+    """
+    for var in ("GIT_DIR", "GIT_INDEX_FILE", "GIT_WORK_TREE"):
+        monkeypatch.delenv(var, raising=False)
+    for rel_path, text in _FIXTURE_FILES.items():
+        path = tmp_path / rel_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "add", "--", *_FIXTURE_FILES], cwd=tmp_path, check=True)
+
+    mod = _load_module()
+    monkeypatch.setattr(mod, "REPO_ROOT", tmp_path)
+    metric = {m.key: m for m in mod.gather_metrics().metrics}[metric_key]
+    assert metric.value == 2
+
+    result = subprocess.run(
+        ["bash", "-c", metric.command],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    reproduced = int(result.stdout.strip())
+    assert reproduced == metric.value, (
+        f"{metric_key}: printed command reproduces {reproduced} but the "
+        f"generator computed {metric.value}; the command counted decorator "
+        f"text in tracked non-.py files"
+    )
+
+
 def test_markdown_has_no_timestamp_or_sha(snapshot):
     """Canonical doc must not embed generation timestamp or git SHA.
 

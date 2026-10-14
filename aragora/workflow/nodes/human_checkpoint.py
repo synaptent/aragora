@@ -572,16 +572,14 @@ class HumanCheckpointStep(BaseStep):
         except (RuntimeError, OSError, ValueError, TypeError, ConnectionError) as e:
             logger.warning("Failed to send approval notification: %s", e)
 
-        # Send interactive chat approval request (best-effort)
+        # Send interactive chat approval request (best-effort; an unregistered notifier is a
+        # RuntimeError and skipped like a delivery failure)
         try:
-            from aragora.approvals.chat import send_chat_approval_request
+            from aragora.events.approval_requests import send_approval_request
 
             metadata = context.metadata if isinstance(context.metadata, dict) else {}
-            plan_meta = (
-                metadata.get("plan_metadata")
-                if isinstance(metadata.get("plan_metadata"), dict)
-                else {}
-            )
+            raw_plan_meta = metadata.get("plan_metadata")
+            plan_meta: dict[str, Any] = raw_plan_meta if isinstance(raw_plan_meta, dict) else {}
 
             targets = (
                 config.get("chat_targets")
@@ -620,7 +618,7 @@ class HumanCheckpointStep(BaseStep):
             if request.timeout_seconds:
                 fields.append(("Timeout", f"{int(request.timeout_seconds)}s"))
 
-            await send_chat_approval_request(
+            await send_approval_request(
                 title=request.title,
                 description=request.description,
                 fields=fields,

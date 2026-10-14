@@ -703,7 +703,7 @@ class ControlPlaneAdapter(KnowledgeMoundAdapter):
             Dict mapping agent_id to success rate (0.0-1.0)
         """
         if not self._knowledge_mound:
-            return {agent: 0.5 for agent in agents}  # Default 50% if no KM
+            return dict.fromkeys(agents, 0.5)  # Default 50% if no KM
 
         try:
             # Query for task outcomes
@@ -759,7 +759,7 @@ class ControlPlaneAdapter(KnowledgeMoundAdapter):
 
         except (RuntimeError, ValueError, OSError, AttributeError) as e:
             logger.error("Failed to get agent success rates: %s", e)
-            return {agent: 0.5 for agent in agents}
+            return dict.fromkeys(agents, 0.5)
 
     async def get_agent_recommendations_for_task(
         self,

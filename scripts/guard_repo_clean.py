@@ -106,6 +106,7 @@ _HARDCODED_PATH_PATTERNS = [
 
 # Files that legitimately reference .nomic (configs, docs, tests, migrations)
 _HARDCODED_PATH_ALLOWLIST = {
+    "aragora/config/data_dir.py",
     "aragora/config/legacy.py",
     "aragora/config/settings.py",
     "aragora/persistence/db_config.py",

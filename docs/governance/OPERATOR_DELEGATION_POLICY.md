@@ -80,7 +80,7 @@ until it is reclassified.
   merged
 - > 60 days old + still draft + zero activity in last 30 days + no
   reference from any canonical doc (`docs/CANONICAL_GOALS.md`,
-  `docs/FOCUS.md`, `docs/status/NEXT_STEPS_CANONICAL.md`,
+  `docs/strategy/FOCUS.md`, `docs/status/NEXT_STEPS_CANONICAL.md`,
   `docs/AGENT_ASSIGNMENTS.md`)
 - CI red for >7 consecutive days with zero fix-attempt commits
 
@@ -207,7 +207,7 @@ implementation. Tracking issues are filed under the
 |---|---|
 | `docs/AGENT_OPERATING_CONTRACT.md` | Parent contract; this doc specializes its review-workload section. The contract remains authoritative on anything not addressed here. |
 | `docs/CANONICAL_GOALS.md` | Sets project intent; Bucket D escalations check PRs against it. |
-| `docs/FOCUS.md` / `docs/THESIS.md` | Strategic direction inputs to Bucket D classification. |
+| `docs/strategy/FOCUS.md` / `docs/THESIS.md` | Strategic direction inputs to Bucket D classification. |
 | `docs/status/NEXT_STEPS_CANONICAL.md` | Active gate; the policy explicitly does not auto-merge PRs that widen scope while the canonical gate says otherwise. |
 | `docs/REVIEW_AUTHORITY_PRINCIPLES.md` | 5-tier merge classification; Bucket A is only possible when the review-queue merge packet says admin squash is allowed at the exact current head. |
 | `scripts/apply_operator_decisions.py` | Implements the operator-decisions JSON consumption side of Bucket A/B/C; honors the hold list above. |

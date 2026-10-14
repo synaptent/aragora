@@ -605,7 +605,7 @@ def require_resource_owner(resource_type: str) -> Callable[[F], F]:
             kwargs.get(f"{resource_type}_id") or kwargs.get("resource_id")
 
             if not user:
-                from aragora.server.errors import AuthenticationError, format_error_response
+                from aragora.api_errors import AuthenticationError, format_error_response
 
                 return format_error_response(AuthenticationError("Authentication required"))
 
@@ -615,7 +615,7 @@ def require_resource_owner(resource_type: str) -> Callable[[F], F]:
 
             if resource_owner_id and user.id != resource_owner_id:
                 if not getattr(user, "is_admin", False):
-                    from aragora.server.errors import ForbiddenError, format_error_response
+                    from aragora.api_errors import ForbiddenError, format_error_response
 
                     return format_error_response(
                         ForbiddenError(f"You do not have permission to modify this {resource_type}")
@@ -648,7 +648,7 @@ def require_access(
             resource_id = kwargs.get("resource_id")
 
             if not user:
-                from aragora.server.errors import AuthenticationError, format_error_response
+                from aragora.api_errors import AuthenticationError, format_error_response
 
                 return format_error_response(AuthenticationError("Authentication required"))
 
@@ -664,7 +664,7 @@ def require_access(
             )
 
             if not decision.allowed:
-                from aragora.server.errors import ForbiddenError, format_error_response
+                from aragora.api_errors import ForbiddenError, format_error_response
 
                 return format_error_response(ForbiddenError(decision.reason))
 

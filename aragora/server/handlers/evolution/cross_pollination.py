@@ -11,6 +11,7 @@ Endpoints:
 from __future__ import annotations
 
 import logging
+import re
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -21,9 +22,14 @@ logger = logging.getLogger(__name__)
 from aragora.rbac.decorators import require_permission
 from ..base import BaseHandler, HandlerResult, error_response, json_response
 from ..utils.rate_limit import RateLimiter
+from ..utils.responses import not_implemented_response
 
 # Rate limiter for cross-pollination endpoints
 _cross_pollination_limiter = RateLimiter(requests_per_minute=60)
+
+
+def _is_get(handler: Any) -> bool:
+    return getattr(handler, "command", "GET") == "GET"
 
 
 class CrossPollinationStatsHandler(BaseHandler):
@@ -50,6 +56,47 @@ class CrossPollinationStatsHandler(BaseHandler):
         "/api/v1/cross-pollination/sync/status",
         "/api/v1/cross-pollination/sync/trigger",
     ]
+
+    _RESOLVE_CONFLICT_RE = re.compile(r"^/api/(?:v1/)?cross-pollination/conflicts/[^/]+/resolve$")
+
+    _NOT_IMPLEMENTED = {
+        "/api/v1/cross-pollination/conflicts": (
+            "Listing cross-pollination conflicts is not implemented"
+        ),
+        "/api/v1/cross-pollination/federation": "Cross-pollination federation is not implemented",
+        "/api/v1/cross-pollination/federation/sync": (
+            "Cross-pollination federation sync is not implemented"
+        ),
+        "/api/v1/cross-pollination/subscribe": "Cross-pollination subscription is not implemented",
+        "/api/v1/cross-pollination/sync/status": (
+            "Cross-pollination sync status is not implemented"
+        ),
+        "/api/v1/cross-pollination/sync/trigger": (
+            "Triggering cross-pollination sync is not implemented"
+        ),
+    }
+
+    def handle(self, path: str, query_params: dict[str, Any], handler: Any) -> Any:
+        """Answer the unimplemented sub-paths with 501 after authorizing; stats is not served."""
+        if not _is_get(handler):
+            return None
+        message = self._NOT_IMPLEMENTED.get(path)
+        return self._not_implemented(handler, message) if message else None
+
+    @require_permission("cross_pollination:read")
+    def _not_implemented(self, handler: Any, message: str) -> HandlerResult:
+        return not_implemented_response(message)
+
+    def handle_post(
+        self, path: str, query_params: dict[str, Any], handler: Any
+    ) -> HandlerResult | None:
+        """Answer conflict resolution, which has no implementation, after authorizing it."""
+        if not self._RESOLVE_CONFLICT_RE.match(path):
+            return None
+        _, perm_err = self.require_permission_or_error(handler, "cross_pollination:write")
+        if perm_err:
+            return perm_err
+        return not_implemented_response("Resolving cross-pollination conflicts is not implemented")
 
     @require_permission("cross_pollination:read")
     async def get(self) -> HandlerResult:

@@ -11,11 +11,17 @@ Shrink-only ratchet: when the count drops below the baseline the check passes
 and reports the delta; the baseline file is never rewritten automatically.
 Tighten it deliberately with ``--update-baseline`` in its own reviewed change.
 
+The baseline count is only comparable when it is measured with a mypy that
+satisfies the project's ``mypy`` requirement in ``pyproject.toml``: different
+mypy releases report different errors for the same tree, so a count from an
+older (or newer major) mypy is neither a regression nor a shrink.
+
 Exit codes:
     0  error count at or below baseline (shrink reported when below)
     1  error count exceeds baseline (regression)
-    2  infrastructure failure (mypy missing/crashed, unparsable output,
-       missing baseline) — inconclusive, message prefixed MYPY_BASELINE_INFRA
+    2  infrastructure failure (mypy missing/crashed, mypy version outside the
+       pyproject requirement, unparsable output, missing baseline) —
+       inconclusive, message prefixed MYPY_BASELINE_INFRA
 
 Usage:
     python scripts/check_mypy_baseline.py
@@ -36,15 +42,86 @@ from pathlib import Path
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_BASELINE = _SCRIPT_DIR / "baselines" / "mypy_full_baseline.json"
+DEFAULT_PYPROJECT = _SCRIPT_DIR.parent / "pyproject.toml"
 DEFAULT_PATHS = ("aragora/",)
 MYPY_FLAGS = ("--ignore-missing-imports",)
 INFRA_EXIT = 2
 INFRA_PREFIX = "MYPY_BASELINE_INFRA:"
 EVIDENCE_TAIL_LINES = 20
+VERSION_TIMEOUT_SECONDS = 60.0
+
+_MYPY_REQUIREMENT = re.compile(r'(?m)^\s*"mypy(?P<spec>[<>=!~][^";]*)"')
+_SPEC_CLAUSE = re.compile(r"^(?P<op>>=|<=|==|!=|<|>)\s*(?P<version>\d+(?:\.\d+)*)$")
+_MYPY_VERSION = re.compile(r"\bmypy (?P<version>\d+(?:\.\d+)*)")
 
 
 class InfraError(RuntimeError):
     """The mypy run itself is broken — inconclusive about the codebase."""
+
+
+def _version_tuple(text: str) -> tuple[int, ...]:
+    parts = [int(part) for part in text.split(".")]
+    while len(parts) > 1 and parts[-1] == 0:
+        parts.pop()
+    return tuple(parts)
+
+
+def required_mypy_spec(pyproject: Path) -> str:
+    """Return the ``mypy`` version specifier declared in ``pyproject``."""
+    try:
+        text = pyproject.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise InfraError(f"cannot read the mypy requirement from {pyproject}: {exc}") from exc
+    match = _MYPY_REQUIREMENT.search(text)
+    if match is None:
+        raise InfraError(f"no mypy version requirement found in {pyproject}")
+    return match.group("spec").strip()
+
+
+def version_satisfies(version: str, spec: str) -> bool:
+    """Evaluate a comma-separated ``>=``/``<=``/``==``/``!=``/``<``/``>`` specifier."""
+    have = _version_tuple(version)
+    for clause in (part.strip() for part in spec.split(",")):
+        match = _SPEC_CLAUSE.match(clause)
+        if match is None:
+            raise InfraError(f"unsupported mypy version specifier clause {clause!r} in {spec!r}")
+        want = _version_tuple(match.group("version"))
+        op = match.group("op")
+        ok = {
+            ">=": have >= want,
+            "<=": have <= want,
+            "==": have == want,
+            "!=": have != want,
+            "<": have < want,
+            ">": have > want,
+        }[op]
+        if not ok:
+            return False
+    return True
+
+
+def check_mypy_version(mypy_bin: str, spec: str, *, cwd: Path) -> str:
+    """Return the mypy version, or raise InfraError when it is outside ``spec``."""
+    cmd = [mypy_bin, "--version"]
+    try:
+        proc = subprocess.run(
+            cmd, cwd=cwd, capture_output=True, text=True, timeout=VERSION_TIMEOUT_SECONDS
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise InfraError(f"mypy --version failed ({type(exc).__name__}: {exc})") from exc
+    match = _MYPY_VERSION.search(f"{proc.stdout}\n{proc.stderr}")
+    if proc.returncode != 0 or match is None:
+        raise InfraError(
+            f"could not read the mypy version from {' '.join(cmd)} (exit {proc.returncode})"
+        )
+    version = match.group("version")
+    if not version_satisfies(version, spec):
+        raise InfraError(
+            f"mypy {version} does not satisfy the project requirement mypy{spec}; "
+            "its error count is not comparable to the baseline. Run the check with "
+            "a mypy inside that range (--mypy-bin)."
+        )
+    return version
 
 
 def _run_mypy(
@@ -98,7 +175,9 @@ def load_baseline(path: Path) -> dict:
     return data
 
 
-def write_baseline(path: Path, *, error_count: int, file_count: int, paths: list[str]) -> None:
+def write_baseline(
+    path: Path, *, error_count: int, file_count: int, paths: list[str], mypy_version: str
+) -> None:
     payload = {
         "comment": (
             "Shrink-only full-codebase mypy debt baseline (issue #9045). "
@@ -109,6 +188,7 @@ def write_baseline(path: Path, *, error_count: int, file_count: int, paths: list
         "command": f"mypy {' '.join(paths)} {' '.join(MYPY_FLAGS)}",
         "error_count": error_count,
         "file_count": file_count,
+        "mypy_version": mypy_version,
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -121,6 +201,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--paths", nargs="+", default=list(DEFAULT_PATHS))
     parser.add_argument("--root", type=Path, default=Path.cwd(), help="directory to run mypy in")
     parser.add_argument("--mypy-bin", default=None, help="mypy executable (default: PATH lookup)")
+    parser.add_argument(
+        "--pyproject",
+        type=Path,
+        default=DEFAULT_PYPROJECT,
+        help="pyproject.toml whose mypy requirement the mypy version must satisfy",
+    )
     parser.add_argument("--timeout-seconds", type=float, default=3600)
     parser.add_argument(
         "--update-baseline",
@@ -133,6 +219,9 @@ def main(argv: list[str] | None = None) -> int:
         mypy_bin = args.mypy_bin or shutil.which("mypy")
         if mypy_bin is None:
             raise InfraError("mypy missing from PATH")
+        mypy_version = check_mypy_version(
+            mypy_bin, required_mypy_spec(args.pyproject), cwd=args.root
+        )
         returncode, output = _run_mypy(
             mypy_bin, args.paths, cwd=args.root, timeout_seconds=args.timeout_seconds
         )
@@ -143,6 +232,7 @@ def main(argv: list[str] | None = None) -> int:
                 error_count=error_count,
                 file_count=file_count,
                 paths=args.paths,
+                mypy_version=mypy_version,
             )
             print(
                 f"baseline updated: {error_count} errors in {file_count} files -> {args.baseline}"

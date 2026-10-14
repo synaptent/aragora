@@ -114,8 +114,10 @@ async def trigger_security_debate(
         event.debate_id = debate_id
 
         logger.info(
-            f"[Security] Debate {debate_id} completed: "
-            f"consensus={result.consensus_reached}, confidence={result.confidence:.2f}"
+            "[Security] Debate %s completed: consensus=%s, confidence=%.2f",
+            debate_id,
+            result.consensus_reached,
+            result.confidence,
         )
 
         # Store result for later retrieval

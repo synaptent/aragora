@@ -29,16 +29,28 @@ Usage:
 
     # Check status
     status = await scheduler.get_task_status(handle.task_id)
+
+The distributed adapter builds the control plane's ``TaskScheduler`` without importing
+``aragora.control_plane``: the control plane registers it with
+:func:`register_distributed_scheduler_factory` from its own init, and the first adapter
+that finds nothing registered runs, once per process, the registrations declared under the
+``aragora.distributed_schedulers`` entry-point group. The adapter raises
+:class:`DistributedSchedulerNotRegisteredError` when nothing is registered after that.
 """
 
 from __future__ import annotations
 
 import os
 from abc import abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+
+from aragora.types.task_scheduling import TaskPriority as CPTaskPriority
+from aragora.types.task_scheduling import TaskStatus as CPTaskStatus
+from aragora.utils.declared_registrations import DeclaredRegistrations
 
 if TYPE_CHECKING:
     from aragora.control_plane.scheduler import TaskScheduler
@@ -54,6 +66,39 @@ class SchedulerType(Enum):
     LOCAL = "local"  # In-memory AgentScheduler
     DISTRIBUTED = "distributed"  # Redis-backed TaskScheduler
     AUTO = "auto"  # Auto-detect based on environment
+
+
+DISTRIBUTED_SCHEDULERS_ENTRY_POINT_GROUP = "aragora.distributed_schedulers"
+
+DistributedSchedulerFactory = Callable[[], "TaskScheduler"]
+
+
+class DistributedSchedulerNotRegisteredError(RuntimeError):
+    """No distributed scheduler factory is registered."""
+
+
+_factory: DistributedSchedulerFactory | None = None
+_declared_registrations = DeclaredRegistrations(DISTRIBUTED_SCHEDULERS_ENTRY_POINT_GROUP)
+
+
+def register_distributed_scheduler_factory(factory: DistributedSchedulerFactory) -> None:
+    """Make ``factory`` the builder of the distributed scheduler, replacing any earlier one."""
+    global _factory
+    _factory = factory
+
+
+def _create_distributed_scheduler() -> TaskScheduler:
+    factory = _factory
+    if factory is None:
+        _declared_registrations.load()
+        factory = _factory
+    if factory is None:
+        raise DistributedSchedulerNotRegisteredError(
+            "no distributed scheduler factory is registered; import aragora.control_plane, "
+            "or declare a registration under the "
+            f"{DISTRIBUTED_SCHEDULERS_ENTRY_POINT_GROUP!r} entry-point group"
+        )
+    return factory()
 
 
 @dataclass
@@ -335,11 +380,14 @@ class DistributedSchedulerAdapter:
     """
 
     def __init__(self, scheduler: TaskScheduler | None = None):
-        """Initialize with optional existing scheduler."""
-        if scheduler is None:
-            from aragora.control_plane.scheduler import TaskScheduler
+        """Initialize with optional existing scheduler.
 
-            scheduler = TaskScheduler()
+        Raises:
+            DistributedSchedulerNotRegisteredError: no scheduler is given and no
+                distributed scheduler factory is registered.
+        """
+        if scheduler is None:
+            scheduler = _create_distributed_scheduler()
         self._scheduler = scheduler
 
     async def schedule_task(
@@ -353,16 +401,14 @@ class DistributedSchedulerAdapter:
         metadata: dict[str, Any] | None = None,
     ) -> TaskInfo:
         """Schedule task via distributed scheduler."""
-        from aragora.control_plane.scheduler import TaskPriority
-
         # Map priority
         priority_map = {
-            Priority.CRITICAL: TaskPriority.URGENT,
-            Priority.HIGH: TaskPriority.HIGH,
-            Priority.NORMAL: TaskPriority.NORMAL,
-            Priority.LOW: TaskPriority.LOW,
+            Priority.CRITICAL: CPTaskPriority.URGENT,
+            Priority.HIGH: CPTaskPriority.HIGH,
+            Priority.NORMAL: CPTaskPriority.NORMAL,
+            Priority.LOW: CPTaskPriority.LOW,
         }
-        cp_priority = priority_map.get(priority, TaskPriority.NORMAL)
+        cp_priority = priority_map.get(priority, CPTaskPriority.NORMAL)
 
         # Submit task (returns task_id string)
         task_id = await self._scheduler.submit(
@@ -384,8 +430,6 @@ class DistributedSchedulerAdapter:
 
     async def get_task_status(self, task_id: str) -> TaskInfo | None:
         """Get task status from distributed scheduler."""
-        from aragora.control_plane.scheduler import TaskStatus as CPTaskStatus
-
         task = await self._scheduler.get(task_id)
         if task is None:
             return None
@@ -427,8 +471,6 @@ class DistributedSchedulerAdapter:
         limit: int = 100,
     ) -> list[TaskInfo]:
         """List tasks from distributed scheduler."""
-        from aragora.control_plane.scheduler import TaskStatus as CPTaskStatus
-
         if status is not None:
             cp_status = CPTaskStatus(status.value)
             raw_tasks = await self._scheduler.list_by_status(
@@ -534,6 +576,10 @@ __all__ = [
     "TaskStatus",
     "LocalSchedulerAdapter",
     "DistributedSchedulerAdapter",
+    "DISTRIBUTED_SCHEDULERS_ENTRY_POINT_GROUP",
+    "DistributedSchedulerFactory",
+    "DistributedSchedulerNotRegisteredError",
     "get_scheduler",
+    "register_distributed_scheduler_factory",
     "reset_scheduler",
 ]

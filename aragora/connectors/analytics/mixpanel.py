@@ -271,7 +271,7 @@ class MixpanelConnector:
                     retry_after = float(
                         response.headers.get("Retry-After", _BASE_DELAY * (2**attempt))
                     )
-                    jitter = random.uniform(0, retry_after * 0.3)  # noqa: S311 -- retry jitter
+                    jitter = random.uniform(0, retry_after * 0.3)
                     delay = min(retry_after + jitter, _MAX_DELAY)
                     logger.warning(
                         "Mixpanel rate limited, retrying in %.1fs (attempt %d/%d)",
@@ -283,7 +283,7 @@ class MixpanelConnector:
                     continue
 
                 if response.status_code >= 500 and attempt < _MAX_RETRIES:
-                    delay = min(_BASE_DELAY * (2**attempt) + random.uniform(0, 1), _MAX_DELAY)  # noqa: S311 -- retry jitter
+                    delay = min(_BASE_DELAY * (2**attempt) + random.uniform(0, 1), _MAX_DELAY)
                     logger.warning(
                         "Mixpanel server error %d, retrying in %.1fs (attempt %d/%d)",
                         response.status_code,
@@ -312,7 +312,7 @@ class MixpanelConnector:
             except httpx.TimeoutException as e:
                 last_error = e
                 if attempt < _MAX_RETRIES:
-                    delay = min(_BASE_DELAY * (2**attempt) + random.uniform(0, 1), _MAX_DELAY)  # noqa: S311 -- retry jitter
+                    delay = min(_BASE_DELAY * (2**attempt) + random.uniform(0, 1), _MAX_DELAY)
                     logger.warning(
                         "Mixpanel request timeout, retrying in %.1fs (attempt %d/%d)",
                         delay,
@@ -324,7 +324,7 @@ class MixpanelConnector:
             except httpx.ConnectError as e:
                 last_error = e
                 if attempt < _MAX_RETRIES:
-                    delay = min(_BASE_DELAY * (2**attempt) + random.uniform(0, 1), _MAX_DELAY)  # noqa: S311 -- retry jitter
+                    delay = min(_BASE_DELAY * (2**attempt) + random.uniform(0, 1), _MAX_DELAY)
                     logger.warning(
                         "Mixpanel connection error, retrying in %.1fs (attempt %d/%d)",
                         delay,

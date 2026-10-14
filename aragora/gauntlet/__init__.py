@@ -42,7 +42,7 @@ from .receipt import DecisionReceipt
 
 # Result types
 from .result import GauntletResult, Vulnerability
-from .result import RiskSummary as ResultRiskSummary  # noqa: F401 - Alias for backward compat
+from .result import RiskSummary as ResultRiskSummary  # Alias for backward compat
 
 # Runner
 from .runner import GauntletRunner
@@ -188,3 +188,8 @@ __all__ = [
 
 # Import stable API module
 from aragora.gauntlet import api
+
+# The core decision router routes gauntlet decisions through this registration.
+from aragora.gauntlet.decision_route import register_decision_route as _register_decision_route
+
+_register_decision_route()

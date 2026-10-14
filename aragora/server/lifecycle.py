@@ -335,7 +335,7 @@ class ServerLifecycleManager:
         await self._run_shutdown_callbacks()
 
         elapsed = time.time() - shutdown_start
-        logger.info(f"Graceful shutdown completed in {elapsed:.1f}s")
+        logger.info("Graceful shutdown completed in %.1fs", elapsed)
 
     async def _wait_for_debates(self, timeout: float) -> None:
         """Wait for in-flight debates to complete."""

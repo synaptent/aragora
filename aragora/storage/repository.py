@@ -181,7 +181,7 @@ class DatabaseRepository:
         safe_col = _validate_column_name(id_column)
         with self.connection() as conn:
             cursor = conn.cursor()
-            query = f"SELECT 1 FROM {self.TABLE_NAME} WHERE {safe_col} = ? LIMIT 1"  # nosec B608  # noqa: S608
+            query = f"SELECT 1 FROM {self.TABLE_NAME} WHERE {safe_col} = ? LIMIT 1"  # nosec B608
             cursor.execute(query, (id_value,))
             return cursor.fetchone() is not None
 
@@ -198,7 +198,7 @@ class DatabaseRepository:
         """
         _validate_where_clause(where, has_params=bool(params))
         # nosec B608: TABLE_NAME is class constant, where validated above
-        query = f"SELECT COUNT(*) FROM {self.TABLE_NAME}"  # nosec B608  # noqa: S608
+        query = f"SELECT COUNT(*) FROM {self.TABLE_NAME}"  # nosec B608
         if where:
             query += f" WHERE {where}"  # nosec B608
 
@@ -223,7 +223,7 @@ class DatabaseRepository:
         with self.connection() as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
-            query = f"SELECT * FROM {self.TABLE_NAME} WHERE {safe_col} = ? LIMIT 1"  # nosec B608  # noqa: S608
+            query = f"SELECT * FROM {self.TABLE_NAME} WHERE {safe_col} = ? LIMIT 1"  # nosec B608
             cursor.execute(query, (id_value,))
             row = cursor.fetchone()
             return dict(row) if row else None
@@ -255,7 +255,7 @@ class DatabaseRepository:
         """
         _validate_where_clause(where, has_params=bool(params))
         # nosec B608: TABLE_NAME is class constant, where validated above
-        query = f"SELECT * FROM {self.TABLE_NAME}"  # nosec B608  # noqa: S608
+        query = f"SELECT * FROM {self.TABLE_NAME}"  # nosec B608
         if where:
             query += f" WHERE {where}"  # nosec B608
         if order_by:
@@ -304,7 +304,7 @@ class DatabaseRepository:
         safe_col = _validate_column_name(id_column)
         placeholders = ",".join("?" * len(id_values))
         # nosec B608: TABLE_NAME is class constant, safe_col is regex-validated, id_values are parameterized
-        query = f"SELECT * FROM {self.TABLE_NAME} WHERE {safe_col} IN ({placeholders})"  # nosec B608  # noqa: S608
+        query = f"SELECT * FROM {self.TABLE_NAME} WHERE {safe_col} IN ({placeholders})"  # nosec B608
 
         with self.connection() as conn:
             conn.row_factory = sqlite3.Row
@@ -327,7 +327,7 @@ class DatabaseRepository:
         with self.connection() as conn:
             cursor = conn.cursor()
             # nosec B608: TABLE_NAME is class constant, safe_col is regex-validated, id_value is parameterized
-            cursor.execute(f"DELETE FROM {self.TABLE_NAME} WHERE {safe_col} = ?", (id_value,))  # nosec B608  # noqa: S608
+            cursor.execute(f"DELETE FROM {self.TABLE_NAME} WHERE {safe_col} = ?", (id_value,))  # nosec B608
             conn.commit()
             deleted = cursor.rowcount > 0
 
@@ -349,7 +349,7 @@ class DatabaseRepository:
         """
         _validate_where_clause(where, has_params=bool(params))
         # nosec B608: TABLE_NAME is class constant, where validated above
-        query = f"DELETE FROM {self.TABLE_NAME} WHERE {where}"  # nosec B608  # noqa: S608
+        query = f"DELETE FROM {self.TABLE_NAME} WHERE {where}"  # nosec B608
 
         with self.connection() as conn:
             cursor = conn.cursor()
@@ -385,7 +385,7 @@ class DatabaseRepository:
         safe_col = _validate_column_name(id_column)
         placeholders = ",".join("?" * len(id_values))
         # nosec B608: TABLE_NAME is class constant, safe_col is regex-validated, id_values are parameterized
-        query = f"DELETE FROM {self.TABLE_NAME} WHERE {safe_col} IN ({placeholders})"  # nosec B608  # noqa: S608
+        query = f"DELETE FROM {self.TABLE_NAME} WHERE {safe_col} IN ({placeholders})"  # nosec B608
 
         with self.connection() as conn:
             cursor = conn.cursor()
@@ -458,7 +458,7 @@ class DatabaseRepository:
                 # Build SET clause: "col1 = ?, col2 = ?, ..."
                 set_clause = ", ".join(f"{col} = ?" for col in cols)
                 # nosec B608: TABLE_NAME is class constant, cols are regex-validated
-                query = f"UPDATE {self.TABLE_NAME} SET {set_clause} WHERE {safe_id_col} = ?"  # nosec B608  # noqa: S608
+                query = f"UPDATE {self.TABLE_NAME} SET {set_clause} WHERE {safe_id_col} = ?"  # nosec B608
 
                 # Build params: (val1, val2, ..., id_value) for each update
                 params_list = [values + (id_value,) for id_value, values in group_updates]
@@ -516,7 +516,7 @@ class DatabaseRepository:
         placeholders = ",".join("?" * len(id_values))
 
         # nosec B608: TABLE_NAME is class constant, cols are regex-validated, values are parameterized
-        query = f"UPDATE {self.TABLE_NAME} SET {set_clause} WHERE {safe_id_col} IN ({placeholders})"  # nosec B608  # noqa: S608
+        query = f"UPDATE {self.TABLE_NAME} SET {set_clause} WHERE {safe_id_col} IN ({placeholders})"  # nosec B608
 
         # Build params: column values followed by id values
         params = tuple(column_values[col] for col in cols) + tuple(id_values)

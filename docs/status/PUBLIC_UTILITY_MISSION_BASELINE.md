@@ -224,7 +224,8 @@ duplicate:
 `factory_review_benchmark_manifest.json` (the manifest M9's VAL-PROOF-008 golden references point
 into), `gauntlet_results.md`, `convergence_results.md`, `belief_network_results.md`,
 `trickster_ab_results.md`, `admission_recovery_scenarios.json`, `auth_failure_scenarios.json`,
-`benchmark_corpus_freshness.json`, `corpus_honesty_audit_2026-04-17.md`, `corpus_rev4_staging.md`,
+`benchmark_corpus_freshness.json`, `corpus_honesty_audit_2026-04-17.md` (since archived as a dated
+snapshot), `corpus_rev4_staging.md`,
 `rescue_productization.json`, `rescue_productization_auth_failure.md`,
 `B0_PROXY_METRIC_INTERPRETATION.md`.
 

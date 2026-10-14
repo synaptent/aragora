@@ -47,6 +47,10 @@ from aragora.debate.stability_detector import (
     BetaBinomialStabilityDetector,
     StabilityConfig,
 )
+from aragora.debate.triage_diagnostics import (
+    get_active_triage_diagnostics,
+    triage_diagnostics_should_mirror_logs,
+)
 from aragora.events.context import streaming_task_context
 
 # Backward-compatible aliases with underscore prefix
@@ -66,17 +70,9 @@ logger = logging.getLogger(__name__)
 
 
 def _should_emit_slow_round_warning() -> bool:
-    try:
-        from aragora.inbox.triage_diagnostics import (
-            get_active_triage_diagnostics,
-            triage_diagnostics_should_mirror_logs,
-        )
-
-        if get_active_triage_diagnostics() is None:
-            return True
-        return triage_diagnostics_should_mirror_logs()
-    except ImportError:
+    if get_active_triage_diagnostics() is None:
         return True
+    return triage_diagnostics_should_mirror_logs()
 
 
 class DebateRoundsPhase:

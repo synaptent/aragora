@@ -6,11 +6,11 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
 from aragora.config import DEFAULT_ROUNDS
-from aragora.debate.protocol import CircuitBreaker
+from aragora.resilience import CircuitBreaker
 
 if TYPE_CHECKING:
-    from aragora.debate.protocol import DebateProtocol
-from aragora.spectate.stream import SpectatorStream
+    from aragora.protocols.debate import DebateProtocol
+from aragora.events.spectate.stream import SpectatorStream
 from aragora.protocols import (
     BroadcastPipelineProtocol,
     CalibrationTrackerProtocol,

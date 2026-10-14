@@ -36,6 +36,12 @@ from collections.abc import Generator
 
 from contextlib import contextmanager
 
+from aragora.debate.triage_diagnostics import (
+    DiagnosticSeverity,
+    record_triage_diagnostic,
+    triage_diagnostics_should_mirror_logs,
+)
+
 logger = logging.getLogger(__name__)
 
 # Default threshold for slow debate detection (seconds per round)
@@ -52,28 +58,18 @@ def _record_triage_perf_event(
     details: str = "",
     debate_id: str | None = None,
 ) -> bool:
-    try:
-        from aragora.inbox.triage_diagnostics import DiagnosticSeverity, record_triage_diagnostic
-
-        return record_triage_diagnostic(
-            code=code,
-            severity=DiagnosticSeverity.DIAGNOSTIC,
-            logger_name=__name__,
-            summary=summary,
-            details=details,
-            debate_id=debate_id,
-        )
-    except ImportError:
-        return False
+    return record_triage_diagnostic(
+        code=code,
+        severity=DiagnosticSeverity.DIAGNOSTIC,
+        logger_name=__name__,
+        summary=summary,
+        details=details,
+        debate_id=debate_id,
+    )
 
 
 def _should_mirror_triage_perf_logs() -> bool:
-    try:
-        from aragora.inbox.triage_diagnostics import triage_diagnostics_should_mirror_logs
-
-        return triage_diagnostics_should_mirror_logs()
-    except ImportError:
-        return False
+    return triage_diagnostics_should_mirror_logs()
 
 
 @dataclass

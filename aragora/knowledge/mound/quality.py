@@ -38,7 +38,7 @@ class QualityWeights:
     def __post_init__(self):
         total = self.freshness + self.confidence + self.usage + self.relevance + self.relationships
         if abs(total - 1.0) > 0.01:
-            logger.warning(f"Quality weights sum to {total:.2f}, not 1.0")
+            logger.warning("Quality weights sum to %.2f, not 1.0", total)
 
 
 @dataclass

@@ -626,7 +626,7 @@ class VerticalPersonaManager:
             ],
         }
 
-        scores = {v: 0 for v in Vertical}
+        scores = dict.fromkeys(Vertical, 0)
         for vertical, keywords in vertical_keywords.items():
             for keyword in keywords:
                 if keyword in task_lower:

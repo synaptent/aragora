@@ -20,7 +20,7 @@ from aragora.observability.server_metrics import track_circuit_breaker_state
 if TYPE_CHECKING:
     from typing import Any
 
-    from aragora.debate.protocol import CircuitBreaker
+    from aragora.resilience import CircuitBreaker
     from aragora.debate.state_cache import DebateStateCache
 
 logger = logging.getLogger(__name__)

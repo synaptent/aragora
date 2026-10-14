@@ -337,8 +337,8 @@ class EmailThreader:
             )
 
         # Extract key info from messages
-        _first_msg = thread.messages[0]  # noqa: F841
-        _last_msg = thread.messages[-1]  # noqa: F841
+        _first_msg = thread.messages[0]
+        _last_msg = thread.messages[-1]
 
         # Generate summary
         summary_parts = []
@@ -385,7 +385,7 @@ class EmailThreader:
                 f"From: {msg.sender}\nDate: {msg.date}\nContent: {msg.body_preview[:500]}\n"
             )
 
-        _thread_content = "\n---\n".join(content_parts)  # noqa: F841
+        _thread_content = "\n---\n".join(content_parts)
 
         # This would call the actual summarizer
         # For now, return heuristic summary

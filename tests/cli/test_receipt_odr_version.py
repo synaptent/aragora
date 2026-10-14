@@ -18,8 +18,9 @@ def parser():
 @pytest.mark.parametrize(
     "explicit,env,expected",
     [
-        (None, None, "0.1"),
-        (None, "", "0.1"),
+        (None, None, "0.2"),
+        (None, "", "0.2"),
+        (None, "0.1", "0.1"),
         (None, "0.2", "0.2"),
         ("0.2", "0.1", "0.2"),
         ("0.1", "0.2", "0.1"),

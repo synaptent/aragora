@@ -756,8 +756,10 @@ class ActionFilter:
         self._record_decision(decision, auth_context)
 
         logger.debug(
-            f"Action check completed in {(time.monotonic() - start_time) * 1000:.2f}ms: "
-            f"action={action}, allowed={decision.allowed}"
+            "Action check completed in %.2fms: action=%s, allowed=%s",
+            (time.monotonic() - start_time) * 1000,
+            action,
+            decision.allowed,
         )
 
         return decision

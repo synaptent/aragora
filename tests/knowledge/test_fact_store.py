@@ -10,6 +10,7 @@ from aragora.knowledge import (
     FactRelationType,
     FactStore,
     InMemoryFactStore,
+    ScopedFactStore,
     ValidationStatus,
 )
 
@@ -20,7 +21,7 @@ class TestInMemoryFactStore:
     @pytest.fixture
     def store(self):
         """Create in-memory store for testing."""
-        return InMemoryFactStore()
+        return ScopedFactStore(InMemoryFactStore(), "org-test")
 
     def test_add_fact(self, store):
         """Test adding a fact."""
@@ -216,7 +217,7 @@ class TestFactStore:
     def store(self, tmp_path):
         """Create SQLite store for testing."""
         db_path = tmp_path / "test_facts.db"
-        return FactStore(db_path=db_path)
+        return ScopedFactStore(FactStore(db_path=db_path), "org-test")
 
     def test_add_and_get_fact(self, store):
         """Test adding and retrieving a fact."""

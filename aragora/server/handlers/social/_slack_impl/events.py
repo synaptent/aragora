@@ -286,7 +286,7 @@ class EventsMixin(MessagingMixin):
                 response_text = "Could not fetch agent list."
         elif text.lower() == "recent":
             try:
-                from aragora.server.storage import get_debates_db
+                from aragora.storage.debate_storage import get_debates_db
 
                 db = get_debates_db()
                 if db and hasattr(db, "list"):

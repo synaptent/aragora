@@ -122,7 +122,7 @@ class AnalyticsPhase:
         if ctx.cancellation_token and ctx.cancellation_token.is_cancelled:
             from aragora.debate.cancellation import DebateCancelled
 
-            raise DebateCancelled(ctx.cancellation_token.reason)
+            raise DebateCancelled(ctx.cancellation_token.reason or "Cancellation requested")
 
         if not ctx.result:
             logger.warning("AnalyticsPhase called without result")
@@ -209,6 +209,8 @@ class AnalyticsPhase:
             from aragora.observability.prometheus import record_debate_completed
 
             result = ctx.result
+            if result is None:
+                return
             record_debate_completed(
                 duration_seconds=result.duration_seconds,
                 rounds_used=result.rounds_used,
@@ -291,7 +293,8 @@ class AnalyticsPhase:
         try:
             winner_agent = max(ctx.vote_tally.items(), key=lambda x: x[1])[0]
             ctx.winner_agent = winner_agent
-            ctx.result.winner = winner_agent
+            if ctx.result is not None:
+                ctx.result.winner = winner_agent
         except (RuntimeError, AttributeError, TypeError) as e:  # noqa: BLE001
             logger.debug("Winner determination failed: %s", e)
 
@@ -301,6 +304,8 @@ class AnalyticsPhase:
             return
 
         result = ctx.result
+        if result is None:
+            return
         debate_id = getattr(result, "id", None) or ctx.env.task[:50]
 
         self._update_agent_relationships(
@@ -327,7 +332,7 @@ class AnalyticsPhase:
             return
 
         result = ctx.result
-        if not result.votes:
+        if result is None or not result.votes:
             return
 
         try:
@@ -388,6 +393,8 @@ class AnalyticsPhase:
             return
 
         result = ctx.result
+        if result is None:
+            return
         result.disagreement_report = self._generate_disagreement_report(
             votes=result.votes,
             critiques=result.critiques,
@@ -412,6 +419,8 @@ class AnalyticsPhase:
             return
 
         result = ctx.result
+        if result is None:
+            return
         result.grounded_verdict = self._create_grounded_verdict(result)
 
         if result.grounded_verdict:
@@ -491,6 +500,8 @@ class AnalyticsPhase:
     def _log_completion(self, ctx: DebateContext) -> None:
         """Log completion and formatted conclusion."""
         result = ctx.result
+        if result is None:
+            return
         logger.info(
             f"debate_completed duration={result.duration_seconds:.1f}s "
             f"rounds={result.rounds_used} consensus={result.consensus_reached}"
@@ -507,6 +518,8 @@ class AnalyticsPhase:
 
         try:
             result = ctx.result
+            if result is None:
+                return
             verdict = result.final_answer[:100] if result.final_answer else "incomplete"
             self.recorder.finalize(verdict, ctx.vote_tally)
         except (RuntimeError, AttributeError, TypeError) as e:  # noqa: BLE001

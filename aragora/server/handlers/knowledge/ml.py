@@ -32,6 +32,7 @@ __all__ = [
     "MLHandler",
     "MLCircuitBreaker",
     "get_ml_circuit_breaker_status",
+    "get_local_embedding_service",
     "_clear_ml_components",
 ]
 
@@ -141,6 +142,27 @@ def _get_ml_component(name: str) -> Any:
         return _ml_components.get(name)
 
 
+def get_local_embedding_service() -> Any:
+    """Return the local embedding service with its model loaded, or None if it cannot load.
+
+    /api/v1/ml/embed and /api/v1/index/embed-batch both embed through this, so they
+    share one model and dimension and answer the same 503 when the model is missing.
+    """
+    service = _get_ml_component("embeddings")
+    if service is None:
+        return None
+    try:
+        # LocalEmbeddingService loads its model lazily; reading the dimension loads it.
+        _ = service.dimension
+    except (ImportError, RuntimeError, OSError, ValueError) as e:
+        # Not recorded on the shared "embeddings" breaker: /api/v1/ml/search and
+        # /api/v1/ml/models take its half-open probes without reporting an outcome,
+        # so a breaker opened by load failures could stay half-open after recovery.
+        logger.warning("Local embedding model not available: %s", e)
+        return None
+    return service
+
+
 def _clear_ml_components() -> None:
     """Clear cached ML components (useful for testing)."""
     with _ml_components_lock:
@@ -213,7 +235,7 @@ class MLHandler(BaseHandler):
         if path == "/api/v1/ml/export-training":
             required_permission = "ml:train"
             if not user or not has_permission(
-                user.role if hasattr(user, "role") else None, required_permission
+                getattr(user, "role", None) or "", required_permission
             ):
                 return error_response("Permission denied", 403)
             return self._handle_export_training(data)
@@ -552,7 +574,7 @@ class MLHandler(BaseHandler):
                 "dimension": 384
             }
         """
-        embeddings = _get_ml_component("embeddings")
+        embeddings = get_local_embedding_service()
         if not embeddings:
             return error_response("ML embeddings not available", 503)
 

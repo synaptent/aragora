@@ -437,7 +437,7 @@ class TestHookRunner:
         )
 
         with patch(
-            "aragora.extensions.gastown.hooks.WorktreeLifecycleService", return_value=mock_service
+            "aragora.worktree.hook_runner.WorktreeLifecycleService", return_value=mock_service
         ):
             result = await runner.create_worktree(
                 repo_path=str(repo),
@@ -463,7 +463,7 @@ class TestHookRunner:
         )
 
         with patch(
-            "aragora.extensions.gastown.hooks.WorktreeLifecycleService", return_value=mock_service
+            "aragora.worktree.hook_runner.WorktreeLifecycleService", return_value=mock_service
         ):
             result = await runner.remove_worktree(str(worktree))
 

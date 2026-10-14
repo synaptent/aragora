@@ -215,8 +215,8 @@ class MoltbotCanvasHandler(BaseHandler):
     async def _handle_create_canvas(self, handler: Any) -> HandlerResult:
         """Create a new canvas."""
         user, err = self.require_auth_or_error(handler)
-        if err:
-            return err
+        if err or user is None:
+            return err or error_response("Authentication required", 401)
 
         body, err = self.read_json_body_validated(handler)
         if err:
@@ -238,10 +238,14 @@ class MoltbotCanvasHandler(BaseHandler):
             background_color=body.get("background", "#ffffff"),
         )
 
+        owner_id = body.get("owner_id", user.user_id)
+        if not owner_id:
+            return error_response("owner_id is required", 400)
+
         manager = get_canvas_manager()
         canvas = await manager.create_canvas(
             config=config,
-            owner_id=body.get("owner_id", user.user_id),
+            owner_id=owner_id,
             tenant_id=body.get("tenant_id"),
         )
 
@@ -289,8 +293,8 @@ class MoltbotCanvasHandler(BaseHandler):
     ) -> HandlerResult:
         """Delete a canvas."""
         user, err = self.require_auth_or_error(handler)
-        if err:
-            return err
+        if err or user is None:
+            return err or error_response("Authentication required", 401)
 
         manager = get_canvas_manager()
         canvas = await manager.get_canvas(canvas_id)
@@ -385,6 +389,8 @@ class MoltbotCanvasHandler(BaseHandler):
             style=body.get("style", {}),
             layer_id=body.get("layer_id"),
         )
+        if element is None:
+            return error_response("Canvas not found", 404)
 
         return json_response(
             {"success": True, "element": self._serialize_element(element)},
@@ -447,8 +453,8 @@ class MoltbotCanvasHandler(BaseHandler):
     async def _handle_add_collaborator(self, canvas_id: str, handler: Any) -> HandlerResult:
         """Add collaborator to canvas."""
         user, err = self.require_auth_or_error(handler)
-        if err:
-            return err
+        if err or user is None:
+            return err or error_response("Authentication required", 401)
 
         body, err = self.read_json_body_validated(handler)
         if err:
@@ -496,8 +502,8 @@ class MoltbotCanvasHandler(BaseHandler):
     ) -> HandlerResult:
         """Remove collaborator from canvas."""
         user, err = self.require_auth_or_error(handler)
-        if err:
-            return err
+        if err or user is None:
+            return err or error_response("Authentication required", 401)
 
         manager = get_canvas_manager()
         canvas = await manager.get_canvas(canvas_id)

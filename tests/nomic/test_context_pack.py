@@ -204,7 +204,7 @@ async def test_pack_identity_binds_test_inclusion_policy(clean_repository: Path)
 async def test_pack_reads_commit_evidence_with_one_git_batch(clean_repository: Path) -> None:
     profile = load_nomic_repository_profile(clean_repository)
 
-    with patch("aragora.nomic.context_builder.subprocess.run", wraps=subprocess.run) as run:
+    with patch("aragora.rlm.context_builder.subprocess.run", wraps=subprocess.run) as run:
         await NomicContextBuilder(clean_repository, full_corpus=False).build_context_pack(
             "Batch evidence", profile=profile
         )

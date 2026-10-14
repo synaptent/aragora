@@ -31,9 +31,9 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_REPO_ROOT))
 
 from aragora.nomic.throughput import LedgerRecord, ThroughputLedger  # noqa: E402
+from aragora.swarm.merge_halt import DEFAULT_HALT_FILE  # noqa: E402
 
 DEFAULT_PRISTINE_DIR = Path.home() / ".aragora" / "pristine-main"
-DEFAULT_HALT_FILE = _REPO_ROOT / ".aragora" / "merge_executor.halt"
 OWNER_MARKER_PURPOSE = "aragora.pristine_main_health"
 EVIDENCE_TAIL_LINES = 15
 EVIDENCE_TAIL_CHARS = 4_000

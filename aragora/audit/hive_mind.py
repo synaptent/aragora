@@ -606,8 +606,10 @@ class AuditHiveMind:
         )
 
         logger.info(
-            f"HiveMind audit complete: findings={len(all_findings)} "
-            f"verified={len(verified_findings)} duration={result.duration_seconds:.1f}s"
+            "HiveMind audit complete: findings=%s verified=%s duration=%.1fs",
+            len(all_findings),
+            len(verified_findings),
+            result.duration_seconds,
         )
 
         return result
@@ -656,13 +658,16 @@ Is this a valid security/compliance finding that should be addressed?"""
                     finding.confirmed_by = list(result.agent_votes.keys())
                     verified.append(finding)
                     logger.info(
-                        f"Finding verified by consensus: {finding.title} "
-                        f"(confidence={result.confidence:.2f})"
+                        "Finding verified by consensus: %s (confidence=%.2f)",
+                        finding.title,
+                        result.confidence,
                     )
                 else:
                     logger.debug(
-                        f"Finding not verified: {finding.title} "
-                        f"(success={result.success}, confidence={result.confidence:.2f})"
+                        "Finding not verified: %s (success=%s, confidence=%.2f)",
+                        finding.title,
+                        result.success,
+                        result.confidence,
                     )
 
             except (ValueError, RuntimeError, OSError) as e:

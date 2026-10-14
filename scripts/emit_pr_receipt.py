@@ -36,14 +36,20 @@ from aragora.gauntlet.odr_export import (  # noqa: E402
     sign_odr_if_configured,
 )
 from aragora.gauntlet.odr_signing import OdrSigningError  # noqa: E402
-from aragora.swarm.quorum_receipt import collect_outcome_to_decision_receipt  # noqa: E402
+from aragora.swarm.quorum_receipt import (  # noqa: E402
+    DECISION_BASES,
+    collect_outcome_to_decision_receipt,
+)
 
 
 def build_receipt(
-    outcome_dict: dict[str, Any], *, odr_version: str = ODR_DEFAULT_VERSION
+    outcome_dict: dict[str, Any],
+    *,
+    odr_version: str = ODR_DEFAULT_VERSION,
+    decision_basis: str = "posted",
 ) -> dict[str, Any]:
     """CollectOutcome dict -> portable ODR receipt dict (never fabricates)."""
-    receipt = collect_outcome_to_decision_receipt(outcome_dict)
+    receipt = collect_outcome_to_decision_receipt(outcome_dict, decision_basis=decision_basis)
     return sign_odr_if_configured(decision_receipt_to_odr(receipt, odr_version=odr_version))
 
 
@@ -99,7 +105,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--odr-version",
         choices=ODR_VERSIONS,
-        help="ODR profile version: flag > ARAGORA_ODR_PROFILE_VERSION > default (0.1)",
+        help="ODR profile version: flag > ARAGORA_ODR_PROFILE_VERSION > "
+        f"default ({ODR_DEFAULT_VERSION})",
+    )
+    parser.add_argument(
+        "--decision-basis",
+        choices=DECISION_BASES,
+        default="posted",
+        help="what 'reached' means: posted (supportive evidence was posted; the "
+        "merge-quorum default) or reviews (the reviewer verdicts satisfy the tier "
+        "rule; for callers that never post evidence, such as the GitHub Action)",
     )
     args = parser.parse_args(argv)
     try:
@@ -109,7 +124,9 @@ def main(argv: list[str] | None = None) -> int:
 
     outcome_dict = json.loads(args.outcome.read_text(encoding="utf-8"))
     try:
-        odr = build_receipt(outcome_dict, odr_version=odr_version)
+        odr = build_receipt(
+            outcome_dict, odr_version=odr_version, decision_basis=args.decision_basis
+        )
     except OdrSigningError:
         print(
             "Error: ODR signing key is configured but could not be used; "
@@ -129,7 +146,12 @@ def main(argv: list[str] | None = None) -> int:
 
     verdict = odr.get("claim", {}).get("verdict", "")
     receipt_id = odr.get("receipt_id", "")
-    print(f"receipt {receipt_id} verdict={verdict} digest=sha-256:{digest} verified={verified}")
+    signatures = odr.get("signatures") or []
+    key_id = signatures[0].get("key_id", "") if signatures else ""
+    print(
+        f"receipt {receipt_id} verdict={verdict} digest=sha-256:{digest} verified={verified} "
+        f"signed={bool(signatures)}"
+    )
 
     if args.github_output is not None:
         with args.github_output.open("a", encoding="utf-8") as fh:
@@ -137,6 +159,8 @@ def main(argv: list[str] | None = None) -> int:
             _write_github_output(fh, "receipt_verdict", verdict)
             _write_github_output(fh, "receipt_digest", digest)
             _write_github_output(fh, "receipt_verified", "true" if verified else "false")
+            _write_github_output(fh, "receipt_signed", "true" if signatures else "false")
+            _write_github_output(fh, "receipt_key_id", key_id)
 
     if args.verify and not verified:
         print("receipt verification failed: jsonschema validation did not run", file=sys.stderr)

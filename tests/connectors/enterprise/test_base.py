@@ -903,6 +903,131 @@ class TestSyncOperations:
 
 
 # =============================================================================
+# SyncResult.errors Tests
+# =============================================================================
+
+
+class RecordingErrorsConnector(MockEnterpriseConnector):
+    """Records per-source failures in state.errors, as the database and storage connectors do."""
+
+    def __init__(
+        self,
+        recorded_errors: list[str],
+        raise_after_items: Exception | None = None,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self._recorded_errors = recorded_errors
+        self._raise_after_items = raise_after_items
+
+    async def sync_items(
+        self,
+        state: SyncState,
+        batch_size: int = 100,
+    ) -> AsyncIterator[SyncItem]:
+        state.errors.extend(self._recorded_errors)
+        for item in self._items_to_yield:
+            yield item
+        if self._raise_after_items:
+            raise self._raise_after_items
+
+
+class TestSyncResultErrors:
+    """SyncResult.errors reports the failures recorded during the run."""
+
+    @pytest.mark.asyncio
+    async def test_reports_errors_recorded_by_sync_items(self, tmp_path):
+        items = [
+            SyncItem(id="orders:1", content="Content", source_type="doc", source_id="orders:1"),
+        ]
+        connector = RecordingErrorsConnector(
+            recorded_errors=["users: sync failed"],
+            items_to_yield=items,
+            state_dir=tmp_path,
+        )
+
+        with patch.object(
+            connector, "_ingest_item", new_callable=AsyncMock, return_value="created"
+        ):
+            result = await connector.sync()
+
+        state = connector.load_state()
+        assert result.success is True
+        assert result.items_synced == 1
+        assert result.items_failed == 0
+        assert result.errors == ["users: sync failed"]
+        assert state.errors == ["users: sync failed"]
+        assert result.errors is not state.errors
+
+    @pytest.mark.asyncio
+    async def test_reports_recorded_and_ingest_errors_once_in_order(self, tmp_path):
+        items = [
+            SyncItem(id="item_1", content="Content 1", source_type="doc", source_id="doc_1"),
+            SyncItem(id="item_2", content="Content 2", source_type="doc", source_id="doc_2"),
+        ]
+        connector = RecordingErrorsConnector(
+            recorded_errors=["users: sync failed"],
+            items_to_yield=items,
+            state_dir=tmp_path,
+        )
+        ingest_mock = AsyncMock(side_effect=["created", ValueError("Ingest failed")])
+
+        with patch.object(connector, "_ingest_item", ingest_mock):
+            result = await connector.sync()
+
+        assert result.success is True
+        assert result.items_synced == 1
+        assert result.items_failed == 1
+        assert result.errors == [
+            "users: sync failed",
+            "Failed to ingest item_2: Ingest failed",
+        ]
+
+    @pytest.mark.asyncio
+    async def test_failed_run_reports_recorded_error_then_run_failure(self, tmp_path):
+        connector = RecordingErrorsConnector(
+            recorded_errors=["Failed to process key: boom"],
+            raise_after_items=RuntimeError("Failed to process key: boom"),
+            state_dir=tmp_path,
+        )
+
+        result = await connector.sync()
+
+        assert result.success is False
+        assert result.errors == [
+            "Failed to process key: boom",
+            "Sync failed: Failed to process key: boom",
+        ]
+        assert connector.load_state().status == SyncStatus.FAILED
+
+    @pytest.mark.asyncio
+    async def test_excludes_errors_saved_by_a_previous_run(self, tmp_path):
+        previous = RecordingErrorsConnector(
+            recorded_errors=["users: sync failed"],
+            state_dir=tmp_path,
+        )
+        await previous.sync()
+
+        items = [
+            SyncItem(id="item_1", content="Content", source_type="doc", source_id="doc_1"),
+        ]
+        connector = RecordingErrorsConnector(
+            recorded_errors=[],
+            items_to_yield=items,
+            state_dir=tmp_path,
+        )
+        assert connector.load_state().errors == ["users: sync failed"]
+
+        with patch.object(
+            connector, "_ingest_item", new_callable=AsyncMock, return_value="created"
+        ):
+            result = await connector.sync()
+
+        assert result.success is True
+        assert result.errors == []
+
+
+# =============================================================================
 # Callback Tests
 # =============================================================================
 

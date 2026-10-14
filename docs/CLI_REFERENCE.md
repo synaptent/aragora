@@ -2,6 +2,10 @@
 
 Aragora provides a unified CLI for running multi-agent debates, managing the decision pipeline, operating the server, and administering the platform. All commands follow the pattern `aragora <command> [subcommand] [options]`.
 
+This page is the canonical CLI reference. The flag-level catalog in
+[reference/CLI_REFERENCE.md](reference/CLI_REFERENCE.md) is generated from the parser by
+`scripts/generate_cli_reference.py`; use it to confirm every option a command accepts.
+
 ## Top-Level Commands
 
 | Command | Purpose |

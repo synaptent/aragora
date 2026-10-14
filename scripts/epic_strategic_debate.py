@@ -22,7 +22,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 # Import broadcast mixer for audio concatenation
 from aragora.broadcast.mixer import mix_audio_with_ffmpeg
@@ -328,11 +328,11 @@ AGENT_CONFIGS = [
 
 def create_agent_with_fallback(config: AgentConfig):
     """Create agent with OpenRouter fallback if primary fails."""
-    from aragora.agents.base import create_agent
+    from aragora.agents.base import AgentType, create_agent
 
     try:
         agent = create_agent(
-            config.agent_type,
+            cast(AgentType, config.agent_type),
             name=config.name,
         )
         logger.info(f"Created {config.display_name} via {config.agent_type}")
@@ -447,7 +447,7 @@ Respond with your {phase.name} contribution. Be specific and actionable.
     return responses
 
 
-async def run_epic_debate() -> dict[str, Any]:
+async def run_epic_debate() -> dict[str, Any] | None:
     """Run the full multi-phase strategic debate."""
     logger.info("\n" + "=" * 70)
     logger.info("ARAGORA EPIC STRATEGIC POSITIONING DEBATE")
@@ -467,8 +467,8 @@ async def run_epic_debate() -> dict[str, Any]:
         logger.info(f"  - {config.display_name} via {provider}")
 
     # Run each phase
-    all_responses = {}
-    previous_responses = {}
+    all_responses: dict[str, dict[str, str]] = {}
+    previous_responses: dict[str, str] = {}
 
     for phase in DEBATE_PHASES:
         phase_responses = await run_single_phase(

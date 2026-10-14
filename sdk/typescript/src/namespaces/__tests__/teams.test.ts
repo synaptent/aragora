@@ -175,43 +175,6 @@ describe('TeamsAPI Namespace', () => {
       expect(result[0].name).toBe('Acme Corp');
     });
 
-    it('should get tenant by ID', async () => {
-      const mockTenant = {
-        tenant_id: 't1',
-        name: 'Acme Corp',
-        enabled: true,
-        created_at: '2024-01-01',
-        last_active: '2024-01-20T10:00:00Z',
-        channels_count: 5,
-      };
-      mockClient.request.mockResolvedValue(mockTenant);
-
-      const result = await api.getTenant('t1');
-
-      expect(mockClient.request).toHaveBeenCalledWith('GET', '/api/v1/teams/tenants/t1');
-      expect(result.channels_count).toBe(5);
-    });
-
-    it('should enable tenant', async () => {
-      const mockTenant = { tenant_id: 't1', enabled: true };
-      mockClient.request.mockResolvedValue(mockTenant);
-
-      const result = await api.setTenantEnabled('t1', true);
-
-      expect(mockClient.request).toHaveBeenCalledWith('PATCH', '/api/v1/teams/tenants/t1', {
-        body: { enabled: true },
-      });
-      expect(result.enabled).toBe(true);
-    });
-
-    it('should disable tenant', async () => {
-      const mockTenant = { tenant_id: 't1', enabled: false };
-      mockClient.request.mockResolvedValue(mockTenant);
-
-      const result = await api.setTenantEnabled('t1', false);
-
-      expect(result.enabled).toBe(false);
-    });
   });
 
   // ===========================================================================
@@ -233,55 +196,6 @@ describe('TeamsAPI Namespace', () => {
       expect(mockClient.request).toHaveBeenCalledWith('GET', '/api/v1/teams/tenants/t1/channels');
       expect(result).toHaveLength(2);
       expect(result[0].name).toBe('General');
-    });
-  });
-
-  // ===========================================================================
-  // Notification Settings
-  // ===========================================================================
-
-  describe('Notification Settings', () => {
-    it('should get notification settings', async () => {
-      const mockSettings = {
-        tenant_id: 't1',
-        channel_id: 'c1',
-        notifications_enabled: true,
-        notify_on_debate_start: true,
-        notify_on_consensus: true,
-        notify_on_completion: false,
-      };
-      mockClient.request.mockResolvedValue(mockSettings);
-
-      const result = await api.getNotificationSettings('t1', 'c1');
-
-      expect(mockClient.request).toHaveBeenCalledWith(
-        'GET',
-        '/api/v1/teams/tenants/t1/channels/c1/notifications'
-      );
-      expect(result.notifications_enabled).toBe(true);
-    });
-
-    it('should update notification settings', async () => {
-      const mockSettings = {
-        tenant_id: 't1',
-        channel_id: 'c1',
-        notifications_enabled: true,
-        notify_on_debate_start: false,
-        notify_on_consensus: true,
-        notify_on_completion: true,
-      };
-      mockClient.request.mockResolvedValue(mockSettings);
-
-      const result = await api.updateNotificationSettings('t1', 'c1', {
-        notify_on_completion: true,
-      });
-
-      expect(mockClient.request).toHaveBeenCalledWith(
-        'PATCH',
-        '/api/v1/teams/tenants/t1/channels/c1/notifications',
-        { body: { notify_on_completion: true } }
-      );
-      expect(result.notify_on_completion).toBe(true);
     });
   });
 

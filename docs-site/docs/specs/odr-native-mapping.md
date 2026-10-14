@@ -28,7 +28,7 @@ portable Open Decision Receipt (ODR) content profile emitted by
 
 | ODR field | Native source | Emitter mapping | Notes |
 |---|---|---|---|
-| `odr_version` | (constant) | `ODR_VERSION` in `odr_export.py` | On-wire profile version; stays `"0.1"` until the coordinated GA flip (ODR §9.5). |
+| `odr_version` | (constant) | `ODR_VERSION` in `odr_export.py` | On-wire profile version; `"0.2"` by default from release 2.11.0, `"0.1"` on request (ODR §9.5). |
 | `profile` | (constant) | `ODR_PROFILE_URI` in `odr_export.py` | Profile URI; revs with a major bump. |
 | `receipt_id` | `DecisionReceipt.receipt_id` | copied verbatim | Stable identifier; also echoed in `source.receipt_id`. |
 | `issued_at` | `DecisionReceipt.timestamp` | `receipt.timestamp or None` | ISO-8601 UTC; `None` when the source has no timestamp. |

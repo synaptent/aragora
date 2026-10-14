@@ -64,7 +64,7 @@ def main() -> int:
     required_files = [
         "README.md",
         "docs/README.md",
-        "docs/COLD_REVIEWER_GUIDE.md",
+        "docs/guides/COLD_REVIEWER_GUIDE.md",
         "docs/api/SUPPORTED_SURFACE.md",
         "docs/CANONICAL_GOALS.md",
         "docs/THESIS.md",
@@ -81,19 +81,19 @@ def main() -> int:
         require_file(relative_path)
 
     require_contains("README.md", "auditable execution control plane")
-    require_contains("README.md", "docs/COLD_REVIEWER_GUIDE.md")
+    require_contains("README.md", "docs/guides/COLD_REVIEWER_GUIDE.md")
     require_not_contains("README.md", "github.com/an0mium/aragora")
 
     require_contains(
         "docs/README.md",
-        "auditable execution control plane for consequential",
+        "auditable execution control plane for AI-assisted decisions",
     )
     require_contains("docs/README.md", "Cold Reviewer Guide")
     require_contains("docs/README.md", "Supported API Surface")
 
-    require_contains("docs/COLD_REVIEWER_GUIDE.md", "What Aragora Is Good For Today")
-    require_contains("docs/COLD_REVIEWER_GUIDE.md", "What Is Still Aspirational")
-    require_contains("docs/COLD_REVIEWER_GUIDE.md", "Fast Verification")
+    require_contains("docs/guides/COLD_REVIEWER_GUIDE.md", "What Aragora Is Good For Today")
+    require_contains("docs/guides/COLD_REVIEWER_GUIDE.md", "What Is Still Aspirational")
+    require_contains("docs/guides/COLD_REVIEWER_GUIDE.md", "Fast Verification")
     require_contains("docs/api/SUPPORTED_SURFACE.md", "Stability Tiers")
     require_contains("docs/api/SUPPORTED_SURFACE.md", "Promotion Checklist")
 
@@ -109,7 +109,7 @@ def main() -> int:
 
     require_contains(
         "docs-site/docusaurus.config.js",
-        "Auditable execution control plane for consequential AI-assisted work",
+        "Auditable execution control plane for AI-assisted decisions",
     )
     require_contains("docs-site/docusaurus.config.js", "github.com/synaptent/aragora")
     require_not_contains("docs-site/docusaurus.config.js", "github.com/aragora/aragora")
@@ -117,6 +117,10 @@ def main() -> int:
     require_not_contains("docs-site/docusaurus.config.js", "Aragora v2.4")
 
     require_contains("docs-site/src/pages/index.md", "Cold Reviewer Guide")
+    require_contains(
+        "docs-site/src/pages/index.md",
+        "auditable execution control plane for AI-assisted decisions",
+    )
     require_contains("docs-site/src/pages/index.md", "Supported API Surface")
     require_contains("docs-site/src/pages/index.md", "Current Boundary")
 

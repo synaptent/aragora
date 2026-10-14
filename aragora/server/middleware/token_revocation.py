@@ -291,10 +291,8 @@ def get_revocation_store() -> RevocationStore:
                         logger.info("token_revocation using Redis store")
                     except ImportError:
                         # Check if distributed state is required
-                        from aragora.control_plane.leader import (
-                            DistributedStateError,
-                            is_distributed_state_required,
-                        )
+                        from aragora.config.distributed import is_distributed_state_required
+                        from aragora.control_plane.leader import DistributedStateError
 
                         if is_distributed_state_required():
                             raise DistributedStateError(
@@ -308,10 +306,8 @@ def get_revocation_store() -> RevocationStore:
                         )
                 else:
                     # No Redis URL - check if distributed state is required
-                    from aragora.control_plane.leader import (
-                        DistributedStateError,
-                        is_distributed_state_required,
-                    )
+                    from aragora.config.distributed import is_distributed_state_required
+                    from aragora.control_plane.leader import DistributedStateError
 
                     if is_distributed_state_required():
                         raise DistributedStateError(

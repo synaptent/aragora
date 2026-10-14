@@ -17,7 +17,13 @@ Internal layout (TCP-3 PR-A split; see
 
 - :mod:`aragora.nomic.dev_coordination.models` — dataclasses, enums, errors
 - :mod:`aragora.nomic.dev_coordination.utils`  — stateless helpers
-- :mod:`aragora.nomic.dev_coordination.core`   — store, classification, CLI
+- :mod:`aragora.nomic.dev_coordination.core`   — store and ``main`` entry point
+- :mod:`aragora.nomic.dev_coordination.cli`    — argparse parser, command dispatch
+- ``work_order_overlap``, ``work_order_archive``, ``merge_gate_replay``,
+  ``work_order_waiting_conflict``, ``work_order_rehabilitation`` — work-order
+  predicates re-imported by ``core``
+- ``work_order_maintenance`` — ``WorkOrderMaintenanceMixin`` (maintenance passes,
+  queue projection) inherited by ``DevCoordinationStore``
 
 The public import surface is re-exported verbatim from this package so
 external callers (``aragora.swarm.*``, ``aragora.server.handlers.*``,
@@ -85,7 +91,7 @@ from aragora.nomic.dev_coordination.utils import (  # noqa: E402, F401
     _status_paths,
     _utcnow,
 )
-from aragora.nomic.dev_coordination import core as _core  # noqa: E402
+from aragora.nomic.dev_coordination import core as _core
 from aragora.nomic.dev_coordination.core import (  # noqa: E402, F401
     DevCoordinationStore,
     _glob_overlap,

@@ -161,13 +161,19 @@ class TestSupabaseClientInitialization:
                 "SUPABASE_KEY": "test-key",
             },
         ):
-            with patch(
-                "aragora.persistence.supabase_client.create_client",
-                return_value=mock_supabase_client,
-            ):
-                client = SupabaseClient()
-                assert client.url == "https://test.supabase.co"
-                assert client.key == "test-key"
+            # Pin SUPABASE_AVAILABLE so the lazy SDK import is skipped. When it
+            # runs, _ensure_supabase() rebinds create_client over this patch,
+            # the real SDK builds the client, and the test fails outright if
+            # supabase is not installed.
+            with patch("aragora.persistence.supabase_client.SUPABASE_AVAILABLE", True):
+                with patch(
+                    "aragora.persistence.supabase_client.create_client",
+                    return_value=mock_supabase_client,
+                ) as mock_create:
+                    client = SupabaseClient()
+                    assert client.url == "https://test.supabase.co"
+                    assert client.key == "test-key"
+                    mock_create.assert_called_once_with("https://test.supabase.co", "test-key")
 
     def test_init_with_explicit_args(self, mock_supabase_client):
         """Client should use explicit arguments over env vars."""
@@ -178,16 +184,20 @@ class TestSupabaseClientInitialization:
                 "SUPABASE_KEY": "env-key",
             },
         ):
-            with patch(
-                "aragora.persistence.supabase_client.create_client",
-                return_value=mock_supabase_client,
-            ):
-                client = SupabaseClient(
-                    url="https://explicit.supabase.co",
-                    key="explicit-key",
-                )
-                assert client.url == "https://explicit.supabase.co"
-                assert client.key == "explicit-key"
+            with patch("aragora.persistence.supabase_client.SUPABASE_AVAILABLE", True):
+                with patch(
+                    "aragora.persistence.supabase_client.create_client",
+                    return_value=mock_supabase_client,
+                ) as mock_create:
+                    client = SupabaseClient(
+                        url="https://explicit.supabase.co",
+                        key="explicit-key",
+                    )
+                    assert client.url == "https://explicit.supabase.co"
+                    assert client.key == "explicit-key"
+                    mock_create.assert_called_once_with(
+                        "https://explicit.supabase.co", "explicit-key"
+                    )
 
     def test_is_configured_true_with_client(self, client_with_mock):
         """is_configured should be True when client is set."""

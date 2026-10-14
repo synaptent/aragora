@@ -218,7 +218,7 @@ class NotificationService:
         self,
         notification: Notification,
         channels: list[NotificationChannel] | None = None,
-        recipients: dict[NotificationChannel, list[str] | None] = None,
+        recipients: dict[NotificationChannel, list[str]] | None = None,
     ) -> list[NotificationResult]:
         """
         Send notification to specified channels and recipients.

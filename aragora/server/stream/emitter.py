@@ -171,7 +171,7 @@ class AudienceInbox:
             # Per-choice intensity histograms: {choice: {intensity: count}}
             histograms: dict[str, dict[int, int]] = {}
             # Global conviction distribution: {intensity: count}
-            conviction_distribution: dict[int, int] = {i: 0 for i in range(1, 11)}
+            conviction_distribution: dict[int, int] = dict.fromkeys(range(1, 11), 0)
 
             for msg in self._messages:
                 # Filter by loop_id if provided
@@ -187,7 +187,7 @@ class AudienceInbox:
 
                     # Per-choice histogram
                     if choice not in histograms:
-                        histograms[choice] = {i: 0 for i in range(1, 11)}
+                        histograms[choice] = dict.fromkeys(range(1, 11), 0)
                     histograms[choice][intensity] = histograms[choice].get(intensity, 0) + 1
 
                     # Global conviction distribution

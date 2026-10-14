@@ -345,4 +345,4 @@ engine = WorkflowEngine(
 
 - [HANDLERS.md](../reference/HANDLERS.md) - WorkflowHandler documentation
 - [QUEUE.md](../resilience/QUEUE.md) - Job queue management
-- [OPERATIONS.md](../OPERATIONS.md) - Operational workflows
+- [OPERATIONS.md](../operations/OPERATIONS.md) - Operational workflows

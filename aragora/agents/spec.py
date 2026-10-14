@@ -36,7 +36,7 @@ from collections.abc import Sequence
 if TYPE_CHECKING:
     from typing import TypedDict
 
-    from aragora.nomic.agent_roles import AgentRole as GastownRole
+    from aragora.agents.roles import AgentRole as GastownRole
 
     class AgentSpecDict(TypedDict, total=False):
         provider: str
@@ -196,7 +196,7 @@ class AgentSpec:
         if self.hierarchy_role is None:
             return None
         try:
-            from aragora.nomic.agent_roles import AgentRole
+            from aragora.agents.roles import AgentRole
 
             return AgentRole(self.hierarchy_role)
         except (ImportError, ValueError):
@@ -215,7 +215,7 @@ class AgentSpec:
         if gastown is None:
             return False
         try:
-            from aragora.nomic.agent_roles import ROLE_CAPABILITIES, RoleCapability
+            from aragora.agents.roles import ROLE_CAPABILITIES, RoleCapability
 
             try:
                 cap = RoleCapability(capability)

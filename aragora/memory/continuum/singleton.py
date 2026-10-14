@@ -11,7 +11,7 @@ import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from aragora.types.protocols import EventEmitterProtocol
+    from aragora.protocols import LegacyEventEmitterProtocol
     from .core import ContinuumMemory
 
 logger = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ _global_continuum_memory: ContinuumMemory | None = None
 
 def _create_continuum_memory(
     db_path: str | None = None,
-    event_emitter: EventEmitterProtocol | None = None,
+    event_emitter: LegacyEventEmitterProtocol | None = None,
 ) -> ContinuumMemory:
     """Create a ContinuumMemory instance behind a patchable hook."""
     # Import here to avoid circular imports
@@ -36,7 +36,7 @@ def _create_continuum_memory(
 
 def get_continuum_memory(
     db_path: str | None = None,
-    event_emitter: EventEmitterProtocol | None = None,
+    event_emitter: LegacyEventEmitterProtocol | None = None,
 ) -> ContinuumMemory:
     """Get the global ContinuumMemory singleton instance.
 

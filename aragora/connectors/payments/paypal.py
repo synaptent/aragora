@@ -1237,8 +1237,8 @@ class PayPalClient:
             age_seconds = abs((datetime.now(timezone.utc) - ts).total_seconds())
             if age_seconds > 300:
                 logger.warning(
-                    f"SECURITY: PayPal webhook timestamp too old: {age_seconds:.0f}s. "
-                    "Possible replay attack."
+                    "SECURITY: PayPal webhook timestamp too old: %.0fs. Possible replay attack.",
+                    age_seconds,
                 )
                 return False
         except (ValueError, TypeError) as e:

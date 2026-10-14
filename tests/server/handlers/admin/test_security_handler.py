@@ -139,6 +139,16 @@ def security_handler(mock_server_context: dict[str, Any]) -> SecurityHandler:
     return SecurityHandler(mock_server_context)
 
 
+@pytest.fixture(autouse=True)
+def isolated_migration_audit_provider():
+    """Start each test without a migration audit provider and leave none behind."""
+    from aragora.security.migration import register_migration_audit_provider
+
+    register_migration_audit_provider(None)
+    yield
+    register_migration_audit_provider(None)
+
+
 class TestCanHandle:
     """Tests for route matching."""
 
@@ -359,6 +369,55 @@ class TestRotateKey:
         assert body["success"] is True
         assert body["new_key_version"] == 2
         assert body["records_reencrypted"] == 150
+
+    def test_rotate_key_emits_unified_audit_event_without_server_startup(
+        self, security_handler: SecurityHandler, mock_handler: MagicMock
+    ):
+        """An embedded handler wires the unified audit provider before rotating."""
+        service = MagicMock()
+        service._keys = {}
+        service._active_key_id = None
+
+        with (
+            patch(f"{ENCRYPTION_MODULE}.get_encryption_service", return_value=service),
+            patch(f"{ENCRYPTION_MODULE}.CRYPTO_AVAILABLE", True),
+            patch("aragora.audit.unified.audit_security") as audit_security,
+        ):
+            result = _call_unwrapped(security_handler._rotate_key, mock_handler, {"dry_run": True})
+
+        assert result.status_code == 200
+        audit_security.assert_called_once_with(
+            event_type="key_rotation",
+            actor_id="system",
+            reason="dry_run_key_rotation",
+        )
+
+    def test_rotate_key_keeps_injected_audit_provider(
+        self, security_handler: SecurityHandler, mock_handler: MagicMock
+    ):
+        """A provider injected by the embedding application is not replaced."""
+        from aragora.security.migration import register_migration_audit_provider
+
+        provider = MagicMock()
+        register_migration_audit_provider(provider)
+        service = MagicMock()
+        service._keys = {}
+        service._active_key_id = None
+
+        with (
+            patch(f"{ENCRYPTION_MODULE}.get_encryption_service", return_value=service),
+            patch(f"{ENCRYPTION_MODULE}.CRYPTO_AVAILABLE", True),
+            patch("aragora.audit.unified.audit_security") as audit_security,
+        ):
+            result = _call_unwrapped(security_handler._rotate_key, mock_handler, {"dry_run": True})
+
+        assert result.status_code == 200
+        provider.assert_called_once_with(
+            event_type="key_rotation",
+            actor_id="system",
+            reason="dry_run_key_rotation",
+        )
+        audit_security.assert_not_called()
 
     def test_rotate_key_too_recent(
         self, security_handler: SecurityHandler, mock_handler: MagicMock

@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any
 from collections.abc import Sequence
 
-from aragora.connectors.repository_crawler import (
+from aragora.analysis.codebase.repository_crawler import (
     CrawlConfig,
     CrawledFile,
     FileSymbol,

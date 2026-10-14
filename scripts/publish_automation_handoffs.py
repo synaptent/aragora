@@ -119,6 +119,7 @@ except Exception:  # pragma: no cover - fallback for partially bootstrapped scri
     def gh_subprocess_run(
         args: Sequence[str],
         *,
+        cwd: Path | None = None,
         timeout: float = 30.0,
         prefer_app: bool = True,
         write_op: bool = False,
@@ -131,6 +132,7 @@ except Exception:  # pragma: no cover - fallback for partially bootstrapped scri
         del prefer_app, write_op, max_retries, base_backoff, max_backoff, sleep
         return subprocess.run(
             ["gh", *list(args)],
+            cwd=cwd,
             capture_output=True,
             text=True,
             timeout=timeout,
@@ -367,7 +369,7 @@ def _outbox_files(outbox_dir: Path) -> list[Path]:
     return sorted(path for path in outbox_dir.glob("*.json") if path.is_file())
 
 
-def _source_mtime(source_file: str) -> float:
+def _source_mtime(source_file: str | Path) -> float:
     try:
         return Path(source_file).stat().st_mtime
     except OSError:
@@ -1544,7 +1546,7 @@ def main(argv: list[str] | None = None) -> int:
     memory_handoffs = load_handoffs(codex_home, automation_ids=automation_ids)
     outbox_preview_limit = None
     if args.no_outbox:
-        outbox_handoffs = []
+        outbox_handoffs: list[Handoff] = []
         outbox_skipped_reason_counts: Counter[str] = Counter()
     else:
         outbox_preview_limit = max(args.limit, 0) if args.summary_only and not args.apply else None

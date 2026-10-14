@@ -34,9 +34,12 @@ from build_benchmark_truth_artifact import (
     DEFAULT_CORPUS_PATH,
     DEFAULT_FRESHNESS_MAP_PATH,
     DEFAULT_PUBLISH_DIR as DEFAULT_TRUTH_ARTIFACT_PUBLISH_DIR,
+    DEFAULT_RESCUE_LEDGER_PATH,
     attach_corpus_freshness_follow_up,
     build_benchmark_truth_artifact,
+    elapsed_time_status,
     ensure_corpus_freshness_issue_linkage,
+    has_elapsed_sample,
     load_corpus as load_benchmark_corpus,
     publish_artifact_bundle as publish_truth_artifact_bundle,
 )
@@ -71,6 +74,28 @@ FAILURE_CLASSES = frozenset(
         "blocked_no_runner",
     }
 )
+
+# Published-scorecard fields that depend on each observation dimension.
+RAW_INPUT_DEPENDENT_FIELDS = ("proxy_metrics",)
+ELAPSED_DEPENDENT_FIELDS = (
+    "proxy_metrics.mean_elapsed_seconds",
+    "proxy_metrics.median_elapsed_seconds",
+)
+RESCUE_DEPENDENT_FIELDS = (
+    "failure_class_distribution",
+    "rescue_counts_by_type",
+    "truth_metrics.no_rescue_truth_success_rate",
+    "proxy_metrics.no_rescue_success_rate",
+    "proxy_metrics.failure_classes",
+    "proxy_metrics.terminal_class_distribution",
+)
+DELTA_SOURCE_FIELDS = {
+    "truth_success_rate": "truth_metrics.truth_success_rate",
+    "no_rescue_truth_success_rate": "truth_metrics.no_rescue_truth_success_rate",
+    "merged_only_rate": "truth_metrics.merged_only_rate",
+    "proxy_no_rescue_success_rate": "proxy_metrics.no_rescue_success_rate",
+    "unique_issues_attempted": "proxy_metrics.unique_issues_attempted",
+}
 
 
 def _coerce_utc_datetime(value: str | None = None) -> dt.datetime:
@@ -203,6 +228,7 @@ def auto_publish_truth_artifact(
     corpus_path: Path,
     truth_publish_dir: Path,
     freshness_map_path: Path,
+    rescue_ledger_path: Path | None = None,
     ensure_issues: bool = False,
     dry_run: bool = False,
 ) -> tuple[Path, dict[str, Any]]:
@@ -213,6 +239,7 @@ def auto_publish_truth_artifact(
         corpus_path=corpus_path,
         client=truth_client,
         freshness_map_path=freshness_map_path,
+        rescue_ledger_path=rescue_ledger_path,
     )
     if ensure_issues:
         issue_drafts = [
@@ -317,9 +344,122 @@ def _previous_published_scorecard_path(
     return candidates[-1] if candidates else None
 
 
+def metrics_input_status(path: Path) -> str:
+    try:
+        with path.open("rb"):
+            return "available"
+    except OSError:
+        return "unavailable"
+
+
+def _status_dependent_fields(status: dict[str, Any]) -> list[str]:
+    fields: list[str] = []
+    if status.get("raw_inputs") != "available":
+        fields.extend(RAW_INPUT_DEPENDENT_FIELDS)
+    if status.get("elapsed_time") != "measured":
+        fields.extend(ELAPSED_DEPENDENT_FIELDS)
+    if status.get("rescue_history") != "complete":
+        fields.extend(RESCUE_DEPENDENT_FIELDS)
+    return fields
+
+
+def _is_listed(field: str, listed: list[str]) -> bool:
+    return any(field == item or field.startswith(f"{item}.") for item in listed)
+
+
+def build_scorecard_observation_markers(
+    *,
+    rows: list[dict[str, Any]],
+    raw_inputs: str,
+    truth_artifact: dict[str, Any],
+    deltas: dict[str, Any],
+    previous: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Derive the published scorecard's ``observation_status``/``observation_limits``.
+
+    Elapsed time is judged from the rows behind ``proxy_metrics``; rescue
+    history is inherited from the linked truth artifact, whose rescue fields
+    this scorecard republishes. A delta is only as authoritative as the values
+    on both sides of it.
+    """
+    truth_status = dict(truth_artifact.get("observation_status") or {})
+    status = {
+        "raw_inputs": raw_inputs,
+        "elapsed_time": elapsed_time_status(rows),
+        # A truth artifact without markers never established its rescue history.
+        "rescue_history": str(truth_status.get("rescue_history") or "unknown"),
+        "raw_input_replay": "unmeasured",
+    }
+    fields = _status_dependent_fields(status)
+    previous_fields: list[str] = []
+    if previous is not None:
+        previous_fields = _status_dependent_fields(
+            dict(previous.get("observation_status") or {})
+        ) + [
+            str(item)
+            for item in list(
+                (previous.get("observation_limits") or {}).get("non_authoritative_fields") or []
+            )
+        ]
+    previous_limited_deltas = False
+    for key in sorted(deltas):
+        source = DELTA_SOURCE_FIELDS.get(key)
+        if source is None:
+            continue
+        if _is_listed(source, fields):
+            fields.append(f"deltas.{key}")
+        elif _is_listed(source, previous_fields):
+            fields.append(f"deltas.{key}")
+            previous_limited_deltas = True
+
+    markers: dict[str, Any] = {"observation_status": status}
+    if not fields:
+        return markers
+    reasons: list[str] = []
+    if status["raw_inputs"] != "available":
+        reasons.append("The metrics file could not be read, so proxy metrics observed no rows.")
+    elif status["elapsed_time"] == "unmeasured":
+        reasons.append(
+            "No metrics row carries a positive `elapsed_seconds` sample, so the elapsed "
+            "aggregates are placeholders."
+        )
+    elif status["elapsed_time"] == "incomplete":
+        reasons.append(
+            "Some executed attempt rows carry no positive `elapsed_seconds` sample, so the "
+            "elapsed aggregates cover only part of the executed attempts."
+        )
+    if status["rescue_history"] != "complete":
+        reasons.append(
+            f"The linked truth artifact reports rescue history as `{status['rescue_history']}`; "
+            "see its `observation_limits`."
+        )
+    if previous_limited_deltas:
+        reasons.append(
+            "The previous snapshot marks the source value of some deltas as non-authoritative."
+        )
+    reasons.append("Independent raw-input replay was not performed.")
+    value_semantics = [
+        "Listed fields retain the values computed for this snapshot but are not "
+        "authoritative measurements."
+    ]
+    if _is_listed("proxy_metrics.mean_elapsed_seconds", fields):
+        value_semantics.append("Zero elapsed seconds do not establish zero-duration execution.")
+    if status["rescue_history"] != "complete":
+        value_semantics.append(
+            "Empty rescue counts and no-rescue rates do not establish that no rescue occurred."
+        )
+    markers["observation_limits"] = {
+        "reason": " ".join(reasons),
+        "value_semantics": " ".join(value_semantics),
+        "non_authoritative_fields": fields,
+    }
+    return markers
+
+
 def build_published_scorecard(
     *,
     scorecard: dict[str, Any],
+    rows: list[dict[str, Any]],
     metrics_path: Path,
     truth_artifact_path: Path,
     publish_dir: Path,
@@ -346,7 +486,7 @@ def build_published_scorecard(
         "issue_count": int(corpus.get("issue_count", 0) or 0),
     }
 
-    published = {
+    published: dict[str, Any] = {
         "generated_at": normalize_generated_at(generated_at),
         "metrics_file": _repo_stable_path(metrics_path),
         "truth_artifact_path": _repo_stable_path(truth_artifact_path),
@@ -365,6 +505,7 @@ def build_published_scorecard(
         corpus_id=str(published_corpus["corpus_id"]),
         revision=int(published_corpus["revision"] or 0),
     )
+    previous: dict[str, Any] | None = None
     if previous_path is not None:
         previous = _load_json(previous_path)
         published["previous_artifact"] = {
@@ -394,6 +535,15 @@ def build_published_scorecard(
                 digits=0,
             ),
         }
+    published.update(
+        build_scorecard_observation_markers(
+            rows=rows,
+            raw_inputs=metrics_input_status(metrics_path),
+            truth_artifact=truth_artifact,
+            deltas=dict(published.get("deltas") or {}),
+            previous=previous,
+        )
+    )
     return published
 
 
@@ -474,9 +624,8 @@ def compute_scorecard(rows: list[dict[str, Any]]) -> dict[str, Any]:
             if tc:
                 latest_terminal_class_by_issue[issue_num] = tc
 
-        elapsed = row.get("elapsed_seconds")
-        if isinstance(elapsed, (int, float)) and elapsed > 0:
-            elapsed_times.append(float(elapsed))
+        if has_elapsed_sample(row):
+            elapsed_times.append(float(row["elapsed_seconds"]))
 
     issues_succeeded = {
         issue_num
@@ -641,6 +790,15 @@ def main(argv: list[str] | None = None) -> int:
         help=f"Tracked benchmark corpus freshness map (default: {DEFAULT_FRESHNESS_MAP_PATH})",
     )
     parser.add_argument(
+        "--rescue-ledger",
+        type=Path,
+        default=DEFAULT_RESCUE_LEDGER_PATH,
+        help=(
+            "RescueEvent ledger consulted for rescue-history completeness when --publish "
+            f"auto-builds the truth artifact (default: {DEFAULT_RESCUE_LEDGER_PATH})"
+        ),
+    )
+    parser.add_argument(
         "--ensure-issues",
         action="store_true",
         help="Create or relink a bounded follow-up issue when stale closed corpus issues are detected.",
@@ -736,6 +894,7 @@ def main(argv: list[str] | None = None) -> int:
                 corpus_path=corpus_path,
                 truth_publish_dir=truth_publish_dir,
                 freshness_map_path=args.freshness_map.resolve(),
+                rescue_ledger_path=args.rescue_ledger.expanduser().resolve(),
                 ensure_issues=bool(args.ensure_issues),
                 dry_run=bool(args.dry_run),
             )
@@ -750,6 +909,7 @@ def main(argv: list[str] | None = None) -> int:
                 corpus_metadata_source_path = corpus_path
         published_scorecard = build_published_scorecard(
             scorecard=scorecard,
+            rows=selected_rows,
             metrics_path=metrics_path,
             truth_artifact_path=truth_artifact_path,
             publish_dir=publish_dir,

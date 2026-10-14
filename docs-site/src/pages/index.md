@@ -1,13 +1,14 @@
 ---
 title: Aragora Docs
-description: Auditable execution control plane for consequential AI-assisted work.
+description: Auditable execution control plane for AI-assisted decisions.
 ---
 
 # Aragora Documentation
 
-Aragora is an auditable execution control plane for consequential AI-assisted
-work. It uses multi-model review, receipts, provenance, and truthful gates so
-software and organizational decisions can be inspected instead of merely trusted.
+Aragora is an auditable execution control plane for AI-assisted decisions:
+multi-model review in, a verifiable Decision Receipt out. It uses multi-model
+review, receipts, provenance, and truthful gates so software and organizational
+decisions can be inspected instead of merely trusted.
 
 This site is the published view of the canonical docs in `docs/`. If you are
 reviewing the project cold, start with the proof path below before diving into

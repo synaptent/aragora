@@ -181,7 +181,7 @@ class TestRequirePermission:
             permissions={"debates:read"},
         )
 
-        with patch("aragora.audit.unified.audit_access") as mock_audit:
+        with patch("aragora.observability.unified_audit.audit_access") as mock_audit:
             with pytest.raises(PermissionDeniedError):
                 delete_debate(context)
 
@@ -205,7 +205,7 @@ class TestRequirePermission:
             permissions={"debates:read"},
         )
 
-        with patch("aragora.audit.unified.audit_access") as mock_audit:
+        with patch("aragora.observability.unified_audit.audit_access") as mock_audit:
             with pytest.raises(PermissionDeniedError):
                 delete_debate(context)
 
@@ -230,7 +230,7 @@ class TestRequirePermission:
             permissions={"debates:read"},
         )
 
-        with patch("aragora.audit.unified.audit_access") as mock_audit:
+        with patch("aragora.observability.unified_audit.audit_access") as mock_audit:
             with pytest.raises(PermissionDeniedError):
                 delete_debate(context)
 
@@ -256,7 +256,9 @@ class TestRequirePermission:
         def raise_import_error(*args, **kwargs):
             raise ImportError("Module not available")
 
-        with patch("aragora.audit.unified.audit_access", side_effect=raise_import_error):
+        with patch(
+            "aragora.observability.unified_audit.audit_access", side_effect=raise_import_error
+        ):
             # Should still raise PermissionDeniedError, not crash on audit
             with pytest.raises(PermissionDeniedError):
                 delete_debate(context)

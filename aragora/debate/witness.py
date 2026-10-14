@@ -404,7 +404,7 @@ class DebateWitness:
         elif time_since and time_since > self.config.slow_threshold_seconds:
             if agent.status != ProgressStatus.SLOW:
                 agent.status = ProgressStatus.SLOW
-                logger.warning(f"Agent {agent.agent_id} slow: {time_since:.1f}s since activity")
+                logger.warning("Agent %s slow: %.1fs since activity", agent.agent_id, time_since)
 
         return None
 

@@ -32,6 +32,7 @@ Endpoints:
 from __future__ import annotations
 
 import logging
+import re
 import threading
 from datetime import datetime
 from decimal import Decimal
@@ -46,6 +47,7 @@ from aragora.server.handlers.base import (
 )
 from aragora.server.handlers.utils.decorators import require_permission
 from aragora.server.handlers.utils.rate_limit import rate_limit
+from aragora.server.validation.query_params import parse_date_range_params
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +102,7 @@ def get_ar_automation():
 async def handle_create_invoice(
     data: dict[str, Any],
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Create a new AR invoice.
@@ -111,8 +114,7 @@ async def handle_create_invoice(
         customer_email: str (optional),
         line_items: list[{description, quantity, unit_price, amount}] (required),
         payment_terms: str (optional, default "Net 30"),
-        memo: str (optional),
-        tax_rate: float (optional, default 0)
+        memo: str (optional)
     }
     """
     # Check circuit breaker before processing
@@ -150,7 +152,6 @@ async def handle_create_invoice(
                 line_items=line_items,
                 payment_terms=data.get("payment_terms", "Net 30"),
                 memo=data.get("memo", ""),
-                tax_rate=data.get("tax_rate", 0),
             )
 
         return success_response(
@@ -173,9 +174,12 @@ async def handle_create_invoice(
 async def handle_list_invoices(
     data: dict[str, Any],
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     List AR invoices with filters.
+
+    Date filters must be scalar ISO strings; repeated/list values return 400.
 
     GET /api/v1/accounting/ar/invoices
     Query params: {
@@ -199,29 +203,41 @@ async def handle_list_invoices(
         ar = get_ar_automation()
 
         # Parse filters
+        from aragora.services.ar_automation import InvoiceStatus
+
         customer_id = data.get("customer_id")
-        status = data.get("status")
-        start_date = None
-        end_date = None
+        try:
+            status = InvoiceStatus(data["status"]) if data.get("status") else None
+        except ValueError:
+            return error_response("Invalid invoice status", status=400)
+        start_date, end_date, date_error = parse_date_range_params(data)
+        if date_error:
+            return error_response(date_error, status=400)
 
         try:
-            if data.get("start_date"):
-                start_date = datetime.fromisoformat(data["start_date"])
-            if data.get("end_date"):
-                end_date = datetime.fromisoformat(data["end_date"])
-        except ValueError:
-            return error_response("Invalid date format. Use ISO 8601.", 400)
-
-        limit = max(1, min(int(data.get("limit", 100)), 1000))
-        offset = max(0, int(data.get("offset", 0)))
+            limit = int(data.get("limit", 100))
+            offset = int(data.get("offset", 0))
+            if limit < 1 or limit > 1000:
+                return error_response("limit must be 1-1000", status=400)
+            if offset < 0:
+                return error_response("offset must be non-negative", status=400)
+        except (TypeError, ValueError):
+            return error_response("limit and offset must be integers", status=400)
 
         async with _ar_circuit_breaker.protected_call():
             invoices = await ar.list_invoices(
                 customer_id=customer_id,
                 status=status,
-                start_date=start_date,
-                end_date=end_date,
             )
+
+        if start_date:
+            invoices = [
+                inv for inv in invoices if inv.invoice_date.timestamp() >= start_date.timestamp()
+            ]
+        if end_date:
+            invoices = [
+                inv for inv in invoices if inv.invoice_date.timestamp() <= end_date.timestamp()
+            ]
 
         # Apply pagination
         paginated = invoices[offset : offset + limit]
@@ -249,6 +265,7 @@ async def handle_get_invoice(
     data: dict[str, Any],
     invoice_id: str,
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Get an invoice by ID.
@@ -292,6 +309,7 @@ async def handle_send_invoice(
     data: dict[str, Any],
     invoice_id: str,
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Send an invoice to the customer.
@@ -344,6 +362,7 @@ async def handle_send_reminder(
     data: dict[str, Any],
     invoice_id: str,
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Send a payment reminder for an invoice.
@@ -411,6 +430,7 @@ async def handle_record_payment(
     data: dict[str, Any],
     invoice_id: str,
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Record a payment against an invoice.
@@ -496,6 +516,7 @@ async def handle_record_payment(
 async def handle_get_aging_report(
     data: dict[str, Any],
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Get AR aging report.
@@ -536,6 +557,7 @@ async def handle_get_aging_report(
 async def handle_get_collections(
     data: dict[str, Any],
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Get collection action suggestions.
@@ -581,6 +603,7 @@ async def handle_get_collections(
 async def handle_add_customer(
     data: dict[str, Any],
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Add a new customer.
@@ -589,10 +612,7 @@ async def handle_add_customer(
     Body: {
         customer_id: str (required),
         name: str (required),
-        email: str (optional),
-        phone: str (optional),
-        address: str (optional),
-        payment_terms: str (optional, default "Net 30")
+        email: str (optional)
     }
     """
     # Validate required fields before service call
@@ -625,7 +645,6 @@ async def handle_add_customer(
                 customer_id=customer_id.strip(),
                 name=name.strip(),
                 email=data.get("email"),
-                payment_terms=data.get("payment_terms", "Net 30"),
             )
 
         return success_response(
@@ -649,6 +668,7 @@ async def handle_get_customer_balance(
     data: dict[str, Any],
     customer_id: str,
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Get outstanding balance for a customer.
@@ -688,6 +708,15 @@ async def handle_get_customer_balance(
         return error_response("Failed to retrieve balance", status=500)
 
 
+async def _reject_invalid_body(permission: str, handler: Any) -> HandlerResult:
+    """Answer a malformed body with 400 only after the route permission passes."""
+
+    async def invalid(handler: Any = None) -> HandlerResult:
+        return error_response("Invalid JSON body", status=400)
+
+    return await require_permission(permission)(invalid)(handler=handler)
+
+
 # =============================================================================
 # Handler Registration
 # =============================================================================
@@ -722,3 +751,53 @@ class ARAutomationHandler(BaseHandler):
         "POST /api/v1/accounting/ar/invoices/{invoice_id}/payment": handle_record_payment,
         "GET /api/v1/accounting/ar/customers/{customer_id}/balance": handle_get_customer_balance,
     }
+    # The OpenAPI generator reads per-route verbs from _ROUTE_MAP, not DYNAMIC_ROUTES.
+    _ROUTE_MAP = {**_ROUTE_MAP, **DYNAMIC_ROUTES}
+
+    def can_handle(self, path: str) -> bool:
+        """Claim only AR routes, including single-segment dynamic IDs."""
+        return path in self.ROUTES or any(
+            re.fullmatch(re.sub(r"\{[^}]+\}", "[^/]+", route.split(" ", 1)[1]), path)
+            for route in self.DYNAMIC_ROUTES
+        )
+
+    async def handle(self, path: str, query_params: dict[str, Any], handler: Any) -> HandlerResult:
+        """Dispatch modular GET requests through the permission-checked functions."""
+        if path == "/api/v1/accounting/ar/invoices":
+            return await handle_list_invoices(query_params, handler=handler)
+        if path == "/api/v1/accounting/ar/aging":
+            return await handle_get_aging_report(query_params, handler=handler)
+        if path == "/api/v1/accounting/ar/collections":
+            return await handle_get_collections(query_params, handler=handler)
+        match = re.fullmatch(r"/api/v1/accounting/ar/invoices/([^/]+)", path)
+        if match:
+            return await handle_get_invoice(query_params, invoice_id=match[1], handler=handler)
+        match = re.fullmatch(r"/api/v1/accounting/ar/customers/([^/]+)/balance", path)
+        if match:
+            return await handle_get_customer_balance(
+                query_params, customer_id=match[1], handler=handler
+            )
+        return error_response("Route not found", status=404)
+
+    async def handle_post(
+        self, path: str, query_params: dict[str, Any], handler: Any
+    ) -> HandlerResult:
+        """Read the HTTP body and dispatch AR mutations."""
+        data = self.read_json_body(handler)
+        if data is None:
+            permission = "ar:read" if path.endswith("/reminder") else "finance:write"
+            return await _reject_invalid_body(permission, handler)
+        if path == "/api/v1/accounting/ar/invoices":
+            return await handle_create_invoice(data, handler=handler)
+        if path == "/api/v1/accounting/ar/customers":
+            return await handle_add_customer(data, handler=handler)
+        match = re.fullmatch(
+            r"/api/v1/accounting/ar/invoices/([^/]+)/(send|reminder|payment)", path
+        )
+        if match:
+            if match[2] == "send":
+                return await handle_send_invoice(data, invoice_id=match[1], handler=handler)
+            if match[2] == "reminder":
+                return await handle_send_reminder(data, invoice_id=match[1], handler=handler)
+            return await handle_record_payment(data, invoice_id=match[1], handler=handler)
+        return error_response("Route not found", status=404)

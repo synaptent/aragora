@@ -25,10 +25,12 @@ from aragora.server.prometheus_control_plane import (
     record_control_plane_task_completed,
     record_control_plane_task_retry,
 )
-from aragora.control_plane.leader import (
-    is_distributed_state_required,
-    DistributedStateError,
-)
+from aragora.config.distributed import is_distributed_state_required
+from aragora.control_plane.leader import DistributedStateError
+
+# Defined in the types layer so the agents and knowledge packages can build and read
+# them without importing the control plane; re-exported here as the same objects.
+from aragora.types.task_scheduling import TaskPriority, TaskStatus
 
 # Observability
 from aragora.observability import (
@@ -54,10 +56,12 @@ CostLimitExceededError: Any = None
 # Policy imports (optional - graceful fallback if not available)
 try:
     from aragora.control_plane.policy import (
-        PolicyViolationError,
-        EnforcementLevel,
+        PolicyViolationError as _PolicyViolationError,
+        EnforcementLevel as _EnforcementLevel,
     )
 
+    PolicyViolationError = _PolicyViolationError
+    EnforcementLevel = _EnforcementLevel
     HAS_POLICY = True
 except ImportError:
     HAS_POLICY = False
@@ -65,9 +69,10 @@ except ImportError:
 # Cost enforcement imports (optional - graceful fallback if not available)
 try:
     from aragora.control_plane.cost_enforcement import (
-        CostLimitExceededError,
+        CostLimitExceededError as _CostLimitExceededError,
     )
 
+    CostLimitExceededError = _CostLimitExceededError
     HAS_COST_ENFORCEMENT = True
 except ImportError:
     HAS_COST_ENFORCEMENT = False
@@ -81,27 +86,6 @@ logger = get_logger(__name__)
 _scheduler_redis_cb = get_circuit_breaker(
     "scheduler_redis", failure_threshold=5, cooldown_seconds=30
 )
-
-
-class TaskStatus(Enum):
-    """Task lifecycle status."""
-
-    PENDING = "pending"  # Task is queued, waiting for assignment
-    ASSIGNED = "assigned"  # Task assigned to an agent
-    RUNNING = "running"  # Task is being executed
-    COMPLETED = "completed"  # Task completed successfully
-    FAILED = "failed"  # Task failed after all retries
-    CANCELLED = "cancelled"  # Task was cancelled
-    TIMEOUT = "timeout"  # Task timed out
-
-
-class TaskPriority(Enum):
-    """Task priority levels."""
-
-    LOW = 0
-    NORMAL = 50
-    HIGH = 75
-    URGENT = 100
 
 
 class RegionRoutingMode(Enum):
@@ -331,7 +315,7 @@ class TaskScheduler:
         self._claim_timeout_ms = claim_timeout_ms
         self._policy_manager = policy_manager
         self._cost_enforcer = cost_enforcer
-        self._redis: Any | None = None
+        self._redis: Any = None
         self._local_tasks: dict[str, Task] = {}
         self._local_queue: list[Task] = []
         # Local indexes for in-memory fallback

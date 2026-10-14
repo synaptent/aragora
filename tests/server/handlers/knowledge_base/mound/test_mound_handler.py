@@ -1454,6 +1454,7 @@ class TestSyncOperations:
         data = parse_response(result)
         assert data["synced"] == 30
 
+    @pytest.mark.xfail(strict=True, reason="fact sync closed until mound is org-scoped")
     def test_sync_facts_success(self, mock_mound, mock_user):
         """Test successful sync from FactStore."""
         from aragora.server.handlers.knowledge_base.mound.sync import SyncOperationsMixin

@@ -30,6 +30,8 @@ from aragora.triage.auto_handle_calibration import (
     fingerprint_admin_merge_class,
 )
 
+_GATE_HEAD_SHA = "a" * 40
+
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -83,6 +85,7 @@ def _gate_snapshot(
     blocker_detail: str | None = None,
     required_checks_green: bool = True,
     required_checks_known: bool = True,
+    head_sha: str | None = _GATE_HEAD_SHA,
 ) -> GitHubGateSnapshot:
     return GitHubGateSnapshot(
         pr_url=pr_url,
@@ -100,6 +103,7 @@ def _gate_snapshot(
         required_checks_source="ruleset" if required_checks_known else None,
         disposition=disposition,
         blocker_detail=blocker_detail,
+        head_sha=head_sha,
     )
 
 
@@ -1939,7 +1943,12 @@ class TestStepDispatch:
 
         assert result.status == SupervisorStatus.WAITING_FOR_MERGE.value
         assert "Admin merge initiated" in result.detail
-        mock_merge.assert_called_once()
+        mock_merge.assert_called_once_with(
+            "https://github.com/org/repo/pull/99",
+            required_checks_green=True,
+            allow_admin=True,
+            head_sha=_GATE_HEAD_SHA,
+        )
 
     def test_wait_for_review_admin_merge_blocks_uncalibrated_class_after_failure(
         self, tmp_path: Path
@@ -2038,6 +2047,33 @@ class TestStepDispatch:
             "https://github.com/org/repo/pull/99",
             required_checks_green=True,
             allow_admin=True,
+            head_sha=_GATE_HEAD_SHA,
+        )
+
+    def test_backward_auto_merge_wrapper_merges_the_snapshot_head(self, tmp_path: Path) -> None:
+        supervisor = RalphSupervisor(
+            state_path=tmp_path / "state.yaml",
+            repo_root=tmp_path,
+            merge_policy="admin_merge_allowed",
+        )
+        snapshot = _gate_snapshot(
+            pr_url="https://github.com/org/repo/pull/99",
+            disposition="merge_now",
+            required_checks_green=False,
+            head_sha="b" * 40,
+        )
+
+        with (
+            patch.object(supervisor, "_fetch_pr_gate_snapshot", return_value=snapshot),
+            patch.object(supervisor, "_merge_pr", return_value=MagicMock(merged=False)) as merge,
+        ):
+            assert supervisor._auto_merge_pr("https://github.com/org/repo/pull/99") is False
+
+        merge.assert_called_once_with(
+            "https://github.com/org/repo/pull/99",
+            required_checks_green=False,
+            allow_admin=True,
+            head_sha="b" * 40,
         )
 
     def test_auto_merge_not_called_for_manual_policy(self, tmp_path: Path) -> None:

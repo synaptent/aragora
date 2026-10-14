@@ -273,7 +273,7 @@ class TransactionManager:
         delay = self._config.deadlock_base_delay * (2**attempt)
         delay = min(delay, self._config.deadlock_max_delay)
         # Add jitter (+-25%)
-        jitter = delay * (0.75 + random.random() * 0.5)  # noqa: S311 -- retry jitter
+        jitter = delay * (0.75 + random.random() * 0.5)
         return jitter
 
     async def _validate_connection(self, conn: Any) -> bool:

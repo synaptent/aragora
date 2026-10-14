@@ -507,15 +507,15 @@ class MemoryMigrator:
                     INSERT INTO {table} ({insert_columns})
                     VALUES ({placeholders})
                     ON CONFLICT DO NOTHING
-                """  # nosec B608 - columns from config  # noqa: S608
+                """  # nosec B608 - columns from config
             else:
                 insert_sql = f"""
                     INSERT INTO {table} ({insert_columns})
                     VALUES ({placeholders})
-                """  # nosec B608  # noqa: S608
+                """  # nosec B608
 
             # Fetch and migrate data in batches
-            cursor = sqlite_conn.execute(f"SELECT {select_columns} FROM {table}")  # nosec B608  # noqa: S608
+            cursor = sqlite_conn.execute(f"SELECT {select_columns} FROM {table}")  # nosec B608
 
             batch = []
             for row in cursor:

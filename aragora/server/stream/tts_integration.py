@@ -171,8 +171,10 @@ class TTSIntegration:
                 record_tts_synthesis(voice=agent_name, platform="debate_stream")
                 record_tts_latency(synthesis_duration)
                 logger.debug(
-                    f"[TTS Integration] Synthesized for {agent_name} -> "
-                    f"{sessions_sent} voice session(s) in {synthesis_duration:.2f}s"
+                    "[TTS Integration] Synthesized for %s -> %s voice session(s) in %.2fs",
+                    agent_name,
+                    sessions_sent,
+                    synthesis_duration,
                 )
 
         except (OSError, RuntimeError, ValueError, TimeoutError) as e:
@@ -247,8 +249,11 @@ class TTSIntegration:
             record_tts_latency(synthesis_duration)
 
             logger.debug(
-                f"[TTS Integration] Synthesized {len(tts_text)} chars -> "
-                f"{len(audio_bytes)} bytes for {channel_type} in {synthesis_duration:.2f}s"
+                "[TTS Integration] Synthesized %s chars -> %s bytes for %s in %.2fs",
+                len(tts_text),
+                len(audio_bytes),
+                channel_type,
+                synthesis_duration,
             )
             return audio_bytes
 

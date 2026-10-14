@@ -340,7 +340,7 @@ class RecoveryNarrator:
             unused = options
 
         # Pick and track
-        choice = random.choice(unused)  # noqa: S311 -- retry jitter
+        choice = random.choice(unused)
         self.used_templates[key].add(choice)
 
         return choice

@@ -95,6 +95,8 @@ class AuditKnowledgeAdapter:
         self,
         chunks: list[dict[str, Any]],
         workspace_id: str | None = None,
+        *,
+        org_id: str | None = None,
     ) -> list[EnrichedChunk]:
         """
         Enrich document chunks with related facts from knowledge base.
@@ -102,6 +104,8 @@ class AuditKnowledgeAdapter:
         Args:
             chunks: Document chunks to enrich
             workspace_id: Workspace ID for fact lookup
+            org_id: Organization from verified authentication; only its facts
+                are read. Without it, OrgScopeRequiredError is raised.
 
         Returns:
             Enriched chunks with related facts
@@ -121,6 +125,8 @@ class AuditKnowledgeAdapter:
                 for c in chunks
             ]
 
+        from aragora.knowledge.embeddings import chunk_namespace
+
         workspace = workspace_id or self.config.workspace_id
         enriched = []
 
@@ -135,7 +141,7 @@ class AuditKnowledgeAdapter:
                     raise RuntimeError("Embedding service not initialized")
                 related = await self._embedding_service.hybrid_search(
                     query=chunk_content[:500],  # First 500 chars for query
-                    workspace_id=workspace,
+                    workspace_id=chunk_namespace(workspace, org_id, require_org=True),
                     limit=5,
                 )
 
@@ -144,7 +150,9 @@ class AuditKnowledgeAdapter:
 
                 if self._fact_store is None:
                     raise RuntimeError("Fact store not initialized")
-                facts = self._fact_store.list_facts(FactFilters(workspace_id=workspace, limit=10))
+                facts = self._fact_store.list_facts(
+                    FactFilters(workspace_id=workspace, limit=10, org_id=org_id or None)
+                )
 
                 # Filter for relevance (simple keyword matching)
                 relevant_facts: list[dict[str, Any]] = []
@@ -200,7 +208,8 @@ class AuditKnowledgeAdapter:
 
         Args:
             finding: Audit finding to store
-            session: Audit session for context
+            session: Audit session for context; the fact belongs to its
+                ``org_id``. A session without one raises OrgScopeRequiredError.
 
         Returns:
             Fact ID if stored, None if skipped
@@ -253,6 +262,7 @@ class AuditKnowledgeAdapter:
                 confidence=fact.confidence,
                 workspace_id=fact.workspace_id,
                 topics=fact.topics,
+                org_id=session.org_id or None,
             )
 
             logger.debug("Stored finding %s as fact %s", finding.id, fact.id)
@@ -289,6 +299,8 @@ class AuditKnowledgeAdapter:
         self,
         finding: AuditFinding,
         workspace_id: str | None = None,
+        *,
+        org_id: str | None = None,
     ) -> list[dict[str, Any]]:
         """
         Query knowledge base for cross-references to a finding.
@@ -296,6 +308,8 @@ class AuditKnowledgeAdapter:
         Args:
             finding: Finding to cross-reference
             workspace_id: Workspace to search
+            org_id: Organization from verified authentication; only its facts
+                are read. Without it, OrgScopeRequiredError is raised.
 
         Returns:
             List of related facts/chunks
@@ -305,6 +319,8 @@ class AuditKnowledgeAdapter:
 
         if not self._initialized or not self.config.enable_cross_reference:
             return []
+
+        from aragora.knowledge.embeddings import chunk_namespace
 
         workspace = workspace_id or self.config.workspace_id
         references: list[dict[str, Any]] = []
@@ -316,7 +332,7 @@ class AuditKnowledgeAdapter:
                 raise RuntimeError("Embedding service not initialized")
             results = await self._embedding_service.hybrid_search(
                 query=query,
-                workspace_id=workspace,
+                workspace_id=chunk_namespace(workspace, org_id, require_org=True),
                 limit=5,
             )
 
@@ -339,7 +355,7 @@ class AuditKnowledgeAdapter:
                 raise RuntimeError("Fact store not initialized")
             facts = self._fact_store.query_facts(
                 query=finding.title,
-                filters=FactFilters(workspace_id=workspace, limit=5),
+                filters=FactFilters(workspace_id=workspace, limit=5, org_id=org_id or None),
             )
 
             for fact in facts:
@@ -363,6 +379,8 @@ class AuditKnowledgeAdapter:
         self,
         finding: AuditFinding,
         workspace_id: str | None = None,
+        *,
+        org_id: str | None = None,
     ) -> dict[str, Any]:
         """
         Validate a finding against the knowledge base.
@@ -372,6 +390,8 @@ class AuditKnowledgeAdapter:
         Args:
             finding: Finding to validate
             workspace_id: Workspace to search
+            org_id: Organization from verified authentication; only its facts
+                are read. Without it, OrgScopeRequiredError is raised.
 
         Returns:
             Validation result with support/contradiction info
@@ -392,7 +412,7 @@ class AuditKnowledgeAdapter:
                 raise RuntimeError("Fact store not initialized")
             facts = self._fact_store.query_facts(
                 query=f"{finding.title} {finding.description}",
-                filters=FactFilters(workspace_id=workspace, limit=10),
+                filters=FactFilters(workspace_id=workspace, limit=10, org_id=org_id or None),
             )
 
             supporting: list[dict[str, Any]] = []

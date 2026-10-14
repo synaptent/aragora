@@ -4,7 +4,7 @@ Debates Namespace API
 Provides methods for creating, managing, and analyzing debates.
 
 Note: A number of methods below (get_rounds, get_agents, get_votes,
-get_metadata, get_timeline, get_tags, ...) target routes that no server
+get_metadata, get_timeline, ...) target routes that no server
 handler dispatches. Because ``DebatesHandler.can_handle`` claims all of
 ``/api/debates/*``, such requests do not 404 cleanly at the router: the
 dispatcher matches DebatesHandler, finds no route branch, and falls
@@ -129,7 +129,9 @@ class DebatesAPI:
         if status:
             params["status"] = status
 
-        return SyncPaginator(self._client, "/api/v1/debates", params, page_size)
+        return SyncPaginator(
+            self._client, "/api/v1/debates", params, page_size, items_key="debates"
+        )
 
     def get_messages(self, debate_id: str) -> dict[str, Any]:
         """
@@ -1000,19 +1002,6 @@ class DebatesAPI:
         )
         return self._client.request("GET", f"/api/v1/debates/{debate_id}/timeline")
 
-    def get_tags(self, debate_id: str) -> dict[str, Any]:
-        """Get tags for a debate.
-
-        DEPRECATED: GET /api/v1/debates/{id}/tags is not dispatched by any
-        server handler; the request falls into the debate slug lookup and
-        returns 404. Use get() -- the debate detail includes tags; update
-        tags via update().
-        """
-        _warn_deprecated(
-            "debates.get_tags() targets an unserved route (404 via slug fallback); use get()."
-        )
-        return self._client.request("GET", f"/api/v1/debates/{debate_id}/tags")
-
     # ========== Graph & Matrix ==========
 
     def get_graph(self, debate_id: str) -> dict[str, Any]:
@@ -1250,7 +1239,9 @@ class AsyncDebatesAPI:
         if status:
             params["status"] = status
 
-        return AsyncPaginator(self._client, "/api/v1/debates", params, page_size)
+        return AsyncPaginator(
+            self._client, "/api/v1/debates", params, page_size, items_key="debates"
+        )
 
     async def stream(self, debate_id: str) -> AsyncIterator[WebSocketEvent]:
         """
@@ -2018,19 +2009,6 @@ class AsyncDebatesAPI:
             "slug fallback); use get_messages()."
         )
         return await self._client.request("GET", f"/api/v1/debates/{debate_id}/timeline")
-
-    async def get_tags(self, debate_id: str) -> dict[str, Any]:
-        """Get tags for a debate.
-
-        DEPRECATED: GET /api/v1/debates/{id}/tags is not dispatched by any
-        server handler; the request falls into the debate slug lookup and
-        returns 404. Use get() -- the debate detail includes tags; update
-        tags via update().
-        """
-        _warn_deprecated(
-            "debates.get_tags() targets an unserved route (404 via slug fallback); use get()."
-        )
-        return await self._client.request("GET", f"/api/v1/debates/{debate_id}/tags")
 
     # ========== Graph & Matrix ==========
 

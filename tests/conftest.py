@@ -51,6 +51,7 @@ pytest_plugins = [
     "tests.fixtures.sample_data",
     "tests.fixtures.api_responses",
     "tests.fixtures.clients",
+    "tests.fixtures.knowledge_fact_closure",
 ]
 
 
