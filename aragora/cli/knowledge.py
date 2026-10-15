@@ -629,7 +629,7 @@ def cmd_stats(args: Namespace) -> int:
         return 1
 
     fact_store = InMemoryFactStore()
-    _embedding_service = InMemoryEmbeddingService()  # noqa: F841
+    _embedding_service = InMemoryEmbeddingService()
 
     # Get stats
     stats_filters = FactFilters(workspace_id=args.workspace, limit=10000)

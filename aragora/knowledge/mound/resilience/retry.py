@@ -81,7 +81,7 @@ class RetryConfig:
 
         if self.jitter:
             # Add ±25% jitter
-            delay = delay * (0.75 + random.random() * 0.5)  # noqa: S311 -- retry jitter
+            delay = delay * (0.75 + random.random() * 0.5)
 
         return delay
 

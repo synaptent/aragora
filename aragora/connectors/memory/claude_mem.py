@@ -114,7 +114,8 @@ class ClaudeMemConnector(BaseConnector):
 
     async def _get_json(self, url: str) -> dict[str, Any]:
         try:
-            with urllib.request.urlopen(url, timeout=self.config.timeout_seconds) as response:  # noqa: S310 -- config URL
+            # config URL
+            with urllib.request.urlopen(url, timeout=self.config.timeout_seconds) as response:
                 raw = response.read()
             return json.loads(raw.decode("utf-8")) if raw else {}
         except (OSError, ValueError, UnicodeDecodeError) as exc:

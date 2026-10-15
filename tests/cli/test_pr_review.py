@@ -88,7 +88,7 @@ class TestExtractReviewFindings:
         mock_result.final_answer = "Test summary"
         mock_result.messages = []
 
-        with patch("aragora.cli.review.DisagreementReporter") as MockReporter:
+        with patch("aragora.review.diff_review.DisagreementReporter") as MockReporter:
             mock_report = Mock()
             mock_report.unanimous_critiques = []
             mock_report.split_opinions = []
@@ -132,7 +132,7 @@ class TestExtractReviewFindings:
 
         mock_result.critiques = [critical_critique, low_critique]
 
-        with patch("aragora.cli.review.DisagreementReporter") as MockReporter:
+        with patch("aragora.review.diff_review.DisagreementReporter") as MockReporter:
             mock_report = Mock()
             mock_report.unanimous_critiques = []
             mock_report.split_opinions = []
@@ -165,7 +165,7 @@ class TestExtractReviewFindings:
         ]
         mock_result.critiques = [meta_critique]
 
-        with patch("aragora.cli.review.DisagreementReporter") as MockReporter:
+        with patch("aragora.review.diff_review.DisagreementReporter") as MockReporter:
             mock_report = Mock()
             mock_report.unanimous_critiques = []
             mock_report.split_opinions = []
@@ -194,7 +194,7 @@ class TestExtractReviewFindings:
         meta_critique.suggestions = []
         mock_result.critiques = [meta_critique]
 
-        with patch("aragora.cli.review.DisagreementReporter") as MockReporter:
+        with patch("aragora.review.diff_review.DisagreementReporter") as MockReporter:
             mock_report = Mock()
             mock_report.unanimous_critiques = []
             mock_report.split_opinions = []
@@ -230,7 +230,7 @@ class TestExtractReviewFindings:
         ]
         mock_result.critiques = [meta_critique]
 
-        with patch("aragora.cli.review.DisagreementReporter") as MockReporter:
+        with patch("aragora.review.diff_review.DisagreementReporter") as MockReporter:
             mock_report = Mock()
             mock_report.unanimous_critiques = []
             mock_report.split_opinions = []
@@ -262,7 +262,7 @@ class TestExtractReviewFindings:
         meta_critique.suggestions = []
         mock_result.critiques = [meta_critique]
 
-        with patch("aragora.cli.review.DisagreementReporter") as MockReporter:
+        with patch("aragora.review.diff_review.DisagreementReporter") as MockReporter:
             mock_report = Mock()
             mock_report.unanimous_critiques = []
             mock_report.split_opinions = []
@@ -294,7 +294,7 @@ class TestExtractReviewFindings:
         meta_critique.suggestions = []
         mock_result.critiques = [meta_critique]
 
-        with patch("aragora.cli.review.DisagreementReporter") as MockReporter:
+        with patch("aragora.review.diff_review.DisagreementReporter") as MockReporter:
             mock_report = Mock()
             mock_report.unanimous_critiques = []
             mock_report.split_opinions = []
@@ -325,7 +325,7 @@ class TestExtractReviewFindings:
         meta_critique.suggestions = []
         mock_result.critiques = [meta_critique]
 
-        with patch("aragora.cli.review.DisagreementReporter") as MockReporter:
+        with patch("aragora.review.diff_review.DisagreementReporter") as MockReporter:
             mock_report = Mock()
             mock_report.unanimous_critiques = []
             mock_report.split_opinions = []
@@ -606,14 +606,14 @@ class TestRunReviewDebate:
 
         with (
             patch(
-                "aragora.cli.review.get_available_agents",
+                "aragora.review.diff_review.get_available_agents",
                 return_value="anthropic-api,openai-api",
             ),
             patch(
-                "aragora.cli.review.create_agent",
+                "aragora.review.diff_review.create_agent",
                 side_effect=lambda **kwargs: Mock(name=kwargs["name"]),
             ) as create_agent_mock,
-            patch("aragora.cli.review.Arena", return_value=mock_arena),
+            patch("aragora.review.diff_review.Arena", return_value=mock_arena),
         ):
             result = await run_review_debate("diff --git a/a.py b/a.py", rounds=1)
 

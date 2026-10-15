@@ -571,7 +571,7 @@ class SalesforceConnector(EnterpriseConnector):
 
     async def _get_record_count(self, object_name: str, where_clause: str = "") -> int:
         """Get count of records for an object."""
-        soql = f"SELECT COUNT() FROM {object_name}"  # noqa: S608 -- internal query construction
+        soql = f"SELECT COUNT() FROM {object_name}"  # internal query construction
         if where_clause:
             soql += f" WHERE {where_clause}"
 
@@ -589,7 +589,7 @@ class SalesforceConnector(EnterpriseConnector):
         safe_fields = [f for f in fields if not f.startswith("__")]
         field_list = ", ".join(safe_fields)
 
-        soql = f"SELECT {field_list} FROM {object_name}"  # noqa: S608 -- internal query construction
+        soql = f"SELECT {field_list} FROM {object_name}"  # internal query construction
 
         # Build WHERE clause
         conditions = []
@@ -844,7 +844,7 @@ class SalesforceConnector(EnterpriseConnector):
             FROM Contact
             WHERE AccountId = '{account_id}'
             LIMIT {limit}
-        """  # noqa: S608 -- dynamic clause from internal state
+        """  # dynamic clause from internal state
 
         contacts = []
         async for record in self._query(soql):
@@ -863,7 +863,7 @@ class SalesforceConnector(EnterpriseConnector):
             SELECT Id, Name, StageName, Amount, CloseDate, Probability, IsWon
             FROM Opportunity
             WHERE AccountId = '{account_id}'
-        """  # noqa: S608 -- internal query construction
+        """  # internal query construction
 
         if not include_closed:
             soql += " AND IsClosed = false"

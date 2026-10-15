@@ -381,7 +381,7 @@ class ReceiptDeletionLog:
                 WHERE {where_clause}
                 ORDER BY deleted_at DESC
                 LIMIT ? OFFSET ?
-                """,  # noqa: S608 -- dynamic clause from internal state
+                """,  # dynamic clause from internal state
                 (*params, limit, offset),
             )
             return [self._row_to_record(row) for row in cursor.fetchall()]
@@ -415,7 +415,8 @@ class ReceiptDeletionLog:
 
         try:
             cursor = conn.execute(
-                f"SELECT COUNT(*) FROM receipt_deletions WHERE {where_clause}",  # noqa: S608 -- dynamic clause from internal state
+                # dynamic clause from internal state
+                f"SELECT COUNT(*) FROM receipt_deletions WHERE {where_clause}",
                 params,
             )
             result = cursor.fetchone()

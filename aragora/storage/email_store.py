@@ -504,7 +504,8 @@ class EmailStore(SQLiteStore):
 
         with self.connection() as conn:
             cursor = conn.execute(
-                f"UPDATE shared_inboxes SET {', '.join(set_clauses)} WHERE id = ?",  # noqa: S608 -- dynamic clause from internal state
+                # dynamic clause from internal state
+                f"UPDATE shared_inboxes SET {', '.join(set_clauses)} WHERE id = ?",
                 params,
             )
             return cursor.rowcount > 0
@@ -635,7 +636,7 @@ class EmailStore(SQLiteStore):
             WHERE {" AND ".join(conditions)}
             ORDER BY received_at DESC
             LIMIT ? OFFSET ?
-            """,  # noqa: S608 -- dynamic clause from internal state
+            """,  # dynamic clause from internal state
             tuple(params),
         )
 
@@ -826,7 +827,7 @@ class EmailStore(SQLiteStore):
                 AND shared_inbox_messages_fts MATCH ?
             ORDER BY fts.rank
             LIMIT ? OFFSET ?
-            """,  # nosec B608 - where_clause built from hardcoded conditions  # noqa: S608
+            """,  # nosec B608 - where_clause built from hardcoded conditions
             tuple(params),
         )
 
@@ -1008,7 +1009,7 @@ class EmailStore(SQLiteStore):
             SELECT * FROM routing_rules
             WHERE {" AND ".join(conditions)}
             ORDER BY priority DESC, created_at ASC
-            """,  # noqa: S608 -- dynamic clause from internal state
+            """,  # dynamic clause from internal state
             tuple(params),
         )
 
@@ -1050,7 +1051,8 @@ class EmailStore(SQLiteStore):
 
         with self.connection() as conn:
             cursor = conn.execute(
-                f"UPDATE routing_rules SET {', '.join(set_clauses)} WHERE id = ?",  # noqa: S608 -- dynamic clause from internal state
+                # dynamic clause from internal state
+                f"UPDATE routing_rules SET {', '.join(set_clauses)} WHERE id = ?",
                 params,
             )
             return cursor.rowcount > 0
@@ -1178,7 +1180,7 @@ class EmailStore(SQLiteStore):
             priority = row[1]
             total = row[2]
             correct = row[3] or 0
-            _incorrect = row[4] or 0  # noqa: F841
+            _incorrect = row[4] or 0
 
             if tier not in stats["by_tier"]:
                 stats["by_tier"][tier] = {"total": 0, "correct": 0}

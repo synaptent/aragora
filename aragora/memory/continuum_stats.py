@@ -192,7 +192,7 @@ def cleanup_expired_memories(
                       AND datetime(updated_at) < datetime(?)
                       AND COALESCE(red_line, 0) = 0
                       {tenant_clause}
-                    """,  # noqa: S608 -- dynamic clause from internal state
+                    """,  # dynamic clause from internal state
                     (tier_name, cutoff_str, *tenant_params),
                 )
                 archived_count = cursor.rowcount
@@ -207,7 +207,7 @@ def cleanup_expired_memories(
                   AND datetime(updated_at) < datetime(?)
                   AND COALESCE(red_line, 0) = 0
                   {tenant_clause}
-                """,  # noqa: S608 -- dynamic clause from internal state
+                """,  # dynamic clause from internal state
                 (tier_name, cutoff_str, *tenant_params),
             )
             deleted_count = cursor.rowcount
@@ -385,7 +385,8 @@ def enforce_tier_limits(
 
             # Count current entries (filtered by tenant if specified)
             cursor.execute(
-                f"SELECT COUNT(*) FROM continuum_memory WHERE tier = ?{tenant_clause}",  # noqa: S608 -- internal query construction
+                # internal query construction
+                f"SELECT COUNT(*) FROM continuum_memory WHERE tier = ?{tenant_clause}",
                 (tier_name, *tenant_params),
             )
             row = cursor.fetchone()
@@ -416,7 +417,7 @@ def enforce_tier_limits(
                       {tenant_clause}
                     ORDER BY importance ASC, updated_at ASC
                     LIMIT ?
-                    """,  # noqa: S608 -- dynamic clause from internal state
+                    """,  # dynamic clause from internal state
                     (tier_name, *tenant_params, excess),
                 )
 
@@ -432,7 +433,7 @@ def enforce_tier_limits(
                     ORDER BY importance ASC, updated_at ASC
                     LIMIT ?
                 )
-                """,  # noqa: S608 -- dynamic clause from internal state
+                """,  # dynamic clause from internal state
                 (tier_name, *tenant_params, excess),
             )
 

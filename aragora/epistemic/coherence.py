@@ -116,7 +116,7 @@ class CoherenceReport:
             "enabled": self.enabled,
         }
         if self.proposals:
-            d["proposals"] = [p.provenance for p in self.proposals]
+            d["proposals"] = [p.to_dict() for p in self.proposals]
         return d
 
 

@@ -205,3 +205,24 @@ class TestScanCoherenceFollowupIntegration:
             d = report.to_dict()
             assert "proposals" in d
             assert isinstance(d["proposals"], list)
+
+    def test_to_dict_proposals_carry_every_proposal_field(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Serialized proposals keep title, body, labels and keys, not only provenance."""
+        monkeypatch.setenv("ARAGORA_COHERENCE_MONITOR_ENABLED", "1")
+        monkeypatch.setenv("ARAGORA_EPISTEMIC_FOLLOWUP_ENABLED", "1")
+        report = scan_coherence(_CONTRADICTING_ENTRIES, emit_followup_proposals=True)
+        assert report.proposals
+        serialized = report.to_dict()["proposals"]
+        assert len(serialized) == len(report.proposals)
+        for entry, proposal in zip(serialized, report.proposals):
+            assert entry == {
+                "source_kind": proposal.source_kind,
+                "source_key": proposal.source_key,
+                "title": proposal.title,
+                "body": proposal.body,
+                "labels": list(proposal.labels),
+                "rationale": proposal.rationale,
+                "provenance": proposal.provenance,
+            }

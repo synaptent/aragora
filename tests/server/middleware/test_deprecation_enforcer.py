@@ -611,6 +611,59 @@ class TestRegisterDeprecatedEndpoint:
 
 
 # ===========================================================================
+# Test Default Knowledge Fact Replacements
+# ===========================================================================
+
+
+class TestDefaultKnowledgeFactReplacements:
+    """v1 fact-store routes point at the v2 fact router, not the Knowledge Mound router."""
+
+    @pytest.fixture(scope="class")
+    def served_paths(self) -> set[str]:
+        from aragora.server.fastapi import create_app
+
+        # FastAPI 0.138+ keeps included routers behind an internal wrapper, so
+        # app.routes no longer lists their APIRoutes; the generated schema does.
+        return set(create_app().openapi()["paths"])
+
+    @pytest.mark.parametrize(
+        ("method", "path", "replacement"),
+        [
+            ("GET", "/api/v1/facts", "/api/v2/knowledge-base/facts"),
+            ("POST", "/api/v1/facts", "/api/v2/knowledge-base/facts"),
+            ("GET", "/api/v1/facts/fact-1", "/api/v2/knowledge-base/facts/"),
+            ("GET", "/api/v1/knowledge/facts", "/api/v2/knowledge-base/facts"),
+            ("DELETE", "/api/v1/knowledge/facts/fact-1", "/api/v2/knowledge-base/facts/"),
+            ("POST", "/api/v1/knowledge/facts/fact-1/relations", "/api/v2/knowledge-base/facts/"),
+            ("POST", "/api/v1/knowledge/query", "/api/v2/knowledge-base/query"),
+            ("GET", "/api/v1/knowledge/search", "/api/v2/knowledge-base/search"),
+            ("GET", "/api/v1/knowledge/stats", "/api/v2/knowledge-base/stats"),
+            ("GET", "/api/v1/knowledge/export", "/api/v2/knowledge-base/export"),
+        ],
+    )
+    def test_fact_routes_map_to_served_knowledge_base_paths(
+        self, served_paths, method, path, replacement
+    ):
+        dep_mod.register_default_deprecations()
+
+        endpoint = dep_mod.get_deprecation_enforcer().check_request(path, method)
+
+        assert endpoint is not None
+        assert endpoint.replacement == replacement
+        assert replacement.rstrip("/") in served_paths
+
+    def test_other_knowledge_routes_keep_the_mound_replacement(self):
+        dep_mod.register_default_deprecations()
+
+        endpoint = dep_mod.get_deprecation_enforcer().check_request(
+            "/api/v1/knowledge/mound/nodes", "GET"
+        )
+
+        assert endpoint is not None
+        assert endpoint.replacement == "/api/v2/knowledge/"
+
+
+# ===========================================================================
 # Test aiohttp Middleware Integration
 # ===========================================================================
 

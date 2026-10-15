@@ -120,11 +120,11 @@ class TestArenaExtensionsNotifications:
 
         # Mock the task_events module functions
         with patch(
-            "aragora.control_plane.task_events.get_task_event_dispatcher",
+            "aragora.events.task_events.get_task_event_dispatcher",
             return_value=mock_dispatcher,
         ):
             with patch(
-                "aragora.control_plane.task_events.emit_task_completed",
+                "aragora.events.task_events.emit_task_completed",
                 new_callable=AsyncMock,
             ):
                 # Run the notification method - it creates tasks but doesn't await them
@@ -142,7 +142,7 @@ class TestArenaExtensionsNotifications:
         result = MockDebateResult()
 
         # Mock import to fail
-        with patch.dict("sys.modules", {"aragora.control_plane.task_events": None}):
+        with patch.dict("sys.modules", {"aragora.events.task_events": None}):
             with patch("aragora.debate.extensions.logger") as mock_logger:
                 # Should not raise
                 extensions._emit_debate_notifications(ctx, result)
@@ -240,7 +240,7 @@ class TestNotificationIntegration:
 
         # Mock the import to raise an exception during notification
         with patch(
-            "aragora.control_plane.task_events.get_task_event_dispatcher",
+            "aragora.events.task_events.get_task_event_dispatcher",
             side_effect=RuntimeError("Dispatcher unavailable"),
         ):
             # The method catches exceptions internally, so should not raise

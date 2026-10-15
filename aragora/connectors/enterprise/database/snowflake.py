@@ -377,7 +377,7 @@ class SnowflakeConnector(EnterpriseConnector):
                         SELECT *
                         FROM {table_ref}_CHANGES
                         LIMIT {batch_size}
-                    """  # noqa: S608 -- table name interpolation, parameterized
+                    """  # table name interpolation, parameterized
                     rows = await self._async_query(query)
 
                 elif ts_column and state.last_item_timestamp:
@@ -388,7 +388,7 @@ class SnowflakeConnector(EnterpriseConnector):
                         WHERE "{ts_column}" > %s
                         ORDER BY "{ts_column}" ASC
                         LIMIT {batch_size}
-                    """  # noqa: S608 -- table name interpolation, parameterized
+                    """  # table name interpolation, parameterized
                     rows = await self._async_query(query, (state.last_item_timestamp,))
 
                 else:
@@ -401,7 +401,7 @@ class SnowflakeConnector(EnterpriseConnector):
                             WHERE "{self.primary_key_column}" > %s
                             ORDER BY "{self.primary_key_column}" ASC
                             LIMIT {batch_size}
-                        """  # noqa: S608 -- table name interpolation, parameterized
+                        """  # table name interpolation, parameterized
                         rows = await self._async_query(query, (last_id,))
                     else:
                         query = f"""
@@ -409,7 +409,7 @@ class SnowflakeConnector(EnterpriseConnector):
                             FROM {table_ref}
                             ORDER BY "{self.primary_key_column}" ASC
                             LIMIT {batch_size}
-                        """  # noqa: S608 -- table name interpolation, parameterized
+                        """  # table name interpolation, parameterized
                         rows = await self._async_query(query)
 
                 for row in rows:
@@ -509,7 +509,7 @@ class SnowflakeConnector(EnterpriseConnector):
                     FROM {self.database}.{self.schema}.{tbl}
                     WHERE {conditions}
                     LIMIT {limit}
-                """  # noqa: S608 -- dynamic clause from internal state
+                """  # dynamic clause from internal state
 
                 params = tuple([search_pattern] * min(len(text_columns), 3))
                 rows = await self._async_query(search_query, params)
@@ -556,7 +556,7 @@ class SnowflakeConnector(EnterpriseConnector):
             query = f"""
                 SELECT * FROM {self.database}.{self.schema}."{table}"
                 WHERE "{self.primary_key_column}" = %s
-            """  # noqa: S608 -- table name interpolation, parameterized
+            """  # table name interpolation, parameterized
             rows = await self._async_query(query, (pk_value,))
 
             if rows:
@@ -600,7 +600,7 @@ class SnowflakeConnector(EnterpriseConnector):
                 COUNT(*) as row_count,
                 MAX("{self.primary_key_column}") as max_id
             FROM {self.database}.{self.schema}.{table}
-        """  # noqa: S608 -- table name interpolation, parameterized
+        """  # table name interpolation, parameterized
 
         try:
             rows = await self._async_query(query)
@@ -637,7 +637,7 @@ class SnowflakeConnector(EnterpriseConnector):
             FROM {self.database}.{self.schema}.{table}
             AT(TIMESTAMP => '{ts_str}'::TIMESTAMP_LTZ)
             LIMIT {limit}
-        """  # noqa: S608 -- table name interpolation, parameterized
+        """  # table name interpolation, parameterized
 
         return await self._async_query(query)
 

@@ -27,6 +27,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
+from aragora.runtime.connector_factory import create_connector
+
 if TYPE_CHECKING:
     from aragora.debate.context import DebateContext
     from aragora.core_types import DebateResult
@@ -191,7 +193,7 @@ class ReceiptDeliveryHook:
         try:
             import hashlib
 
-            from aragora.gauntlet.receipt_models import normalize_live_explainability
+            from aragora.models.receipts.gauntlet import normalize_live_explainability
 
             # Build receipt data
             receipt_data = {
@@ -219,10 +221,9 @@ class ReceiptDeliveryHook:
 
                 builder = ExplanationBuilder()
                 decision = await builder.build(result, ctx)
+                explainability = receipt_data.get("explainability")
                 existing_explainability = (
-                    dict(receipt_data.get("explainability"))
-                    if isinstance(receipt_data.get("explainability"), dict)
-                    else {}
+                    dict(explainability) if isinstance(explainability, dict) else {}
                 )
                 receipt_data["explainability"] = {
                     **existing_explainability,
@@ -340,10 +341,9 @@ class ReceiptDeliveryHook:
                     error=f"Slack workspace not found: {workspace_id}",
                 )
 
-            from aragora.connectors.chat.slack import SlackConnector
-
-            connector = SlackConnector(
-                token=workspace.access_token,
+            connector = create_connector(
+                "slack_chat",
+                bot_token=workspace.access_token,
                 signing_secret=workspace.signing_secret or "",
             )
 
@@ -404,9 +404,8 @@ class ReceiptDeliveryHook:
                     error=f"Teams workspace not found: {workspace_id}",
                 )
 
-            from aragora.connectors.chat.teams import TeamsConnector
-
-            connector = TeamsConnector(
+            connector = create_connector(
+                "teams_chat",
                 app_id=workspace.bot_id,
                 app_password="",
                 service_url=workspace.service_url or "https://smba.trafficmanager.net/amer/",

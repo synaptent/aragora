@@ -284,7 +284,7 @@ class MergedConfig:
     enable_sandbox_verification: bool
 
 
-def merge_config_objects(  # noqa: C901 - complexity inherent in config merging
+def merge_config_objects(  # complexity inherent in config merging
     *,
     # Config objects
     debate_config: DebateConfig | None,

@@ -231,18 +231,10 @@ class TestGatherEvidenceContext:
         pack.to_context_string.return_value = context_str
         return pack
 
-    def test_no_connectors_returns_none(self):
+    def test_no_connectors_returns_none(self, connector_factory):
         """Returns (None, None) when no connectors can be loaded."""
         fetcher = make_fetcher()
-        with patch.dict(
-            sys.modules,
-            {
-                "aragora.evidence.collector": None,
-                "aragora.connectors.web": None,
-                "aragora.connectors.github": None,
-                "aragora.connectors.local_docs": None,
-            },
-        ):
+        with patch.dict(sys.modules, {"aragora.evidence.collector": None}):
             ctx, pack = run(fetcher.gather_evidence_context("test task"))
         assert ctx is None
         assert pack is None
@@ -255,7 +247,7 @@ class TestGatherEvidenceContext:
         assert ctx is None
         assert pack is None
 
-    def test_success_with_web_connector(self):
+    def test_success_with_web_connector(self, connector_factory):
         """Returns formatted context when web connector provides evidence."""
         evidence_pack = self._make_evidence_pack(context_str="web evidence")
         mock_collector = MagicMock()
@@ -267,27 +259,18 @@ class TestGatherEvidenceContext:
         mock_evidence_module = MagicMock()
         mock_evidence_module.EvidenceCollector = mock_collector_class
 
-        mock_web_module = MagicMock()
-        mock_web_module.DDGS_AVAILABLE = True
-        mock_web_module.WebConnector = MagicMock(return_value=mock_web_connector)
+        connector_factory["web_search"] = mock_web_connector
 
         fetcher = make_fetcher()
-        with patch.dict(
-            sys.modules,
-            {
-                "aragora.evidence.collector": mock_evidence_module,
-                "aragora.connectors.web": mock_web_module,
-                "aragora.connectors.github": None,
-                "aragora.connectors.local_docs": None,
-            },
-        ):
+        with patch.dict(sys.modules, {"aragora.evidence.collector": mock_evidence_module}):
             ctx, pack = run(fetcher.gather_evidence_context("test task"))
 
         assert ctx is not None
         assert "EVIDENCE CONTEXT" in ctx
         assert pack is evidence_pack
+        mock_collector.add_connector.assert_called_once_with("web", mock_web_connector)
 
-    def test_evidence_store_callback_called(self):
+    def test_evidence_store_callback_called(self, connector_factory):
         """Calls evidence_store_callback when evidence is available."""
         evidence_pack = self._make_evidence_pack()
         mock_collector = MagicMock()
@@ -297,26 +280,16 @@ class TestGatherEvidenceContext:
         mock_evidence_module = MagicMock()
         mock_evidence_module.EvidenceCollector = mock_collector_class
 
-        mock_web_module = MagicMock()
-        mock_web_module.DDGS_AVAILABLE = True
-        mock_web_module.WebConnector = MagicMock()
+        connector_factory["web_search"] = MagicMock()
 
         callback = MagicMock()
         fetcher = make_fetcher()
-        with patch.dict(
-            sys.modules,
-            {
-                "aragora.evidence.collector": mock_evidence_module,
-                "aragora.connectors.web": mock_web_module,
-                "aragora.connectors.github": None,
-                "aragora.connectors.local_docs": None,
-            },
-        ):
+        with patch.dict(sys.modules, {"aragora.evidence.collector": mock_evidence_module}):
             run(fetcher.gather_evidence_context("task", evidence_store_callback=callback))
 
         callback.assert_called_once()
 
-    def test_prompt_builder_receives_evidence_pack(self):
+    def test_prompt_builder_receives_evidence_pack(self, connector_factory):
         """Calls prompt_builder.set_evidence_pack when evidence is available."""
         evidence_pack = self._make_evidence_pack()
         mock_collector = MagicMock()
@@ -326,26 +299,16 @@ class TestGatherEvidenceContext:
         mock_evidence_module = MagicMock()
         mock_evidence_module.EvidenceCollector = mock_collector_class
 
-        mock_web_module = MagicMock()
-        mock_web_module.DDGS_AVAILABLE = True
-        mock_web_module.WebConnector = MagicMock()
+        connector_factory["web_search"] = MagicMock()
 
         prompt_builder = MagicMock()
         fetcher = make_fetcher()
-        with patch.dict(
-            sys.modules,
-            {
-                "aragora.evidence.collector": mock_evidence_module,
-                "aragora.connectors.web": mock_web_module,
-                "aragora.connectors.github": None,
-                "aragora.connectors.local_docs": None,
-            },
-        ):
+        with patch.dict(sys.modules, {"aragora.evidence.collector": mock_evidence_module}):
             run(fetcher.gather_evidence_context("task", prompt_builder=prompt_builder))
 
         prompt_builder.set_evidence_pack.assert_called_once_with(evidence_pack)
 
-    def test_empty_snippets_returns_none(self):
+    def test_empty_snippets_returns_none(self, connector_factory):
         """Returns (None, None) when evidence pack has no snippets."""
         evidence_pack = self._make_evidence_pack(snippets=[])
         mock_collector = MagicMock()
@@ -355,26 +318,16 @@ class TestGatherEvidenceContext:
         mock_evidence_module = MagicMock()
         mock_evidence_module.EvidenceCollector = mock_collector_class
 
-        mock_web_module = MagicMock()
-        mock_web_module.DDGS_AVAILABLE = True
-        mock_web_module.WebConnector = MagicMock()
+        connector_factory["web_search"] = MagicMock()
 
         fetcher = make_fetcher()
-        with patch.dict(
-            sys.modules,
-            {
-                "aragora.evidence.collector": mock_evidence_module,
-                "aragora.connectors.web": mock_web_module,
-                "aragora.connectors.github": None,
-                "aragora.connectors.local_docs": None,
-            },
-        ):
+        with patch.dict(sys.modules, {"aragora.evidence.collector": mock_evidence_module}):
             ctx, pack = run(fetcher.gather_evidence_context("task"))
 
         assert ctx is None
         assert pack is None
 
-    def test_connection_error_returns_none(self):
+    def test_connection_error_returns_none(self, connector_factory):
         """Returns (None, None) on ConnectionError during collection."""
         mock_collector = MagicMock()
         mock_collector.collect_evidence = AsyncMock(side_effect=ConnectionError("net fail"))
@@ -383,50 +336,32 @@ class TestGatherEvidenceContext:
         mock_evidence_module = MagicMock()
         mock_evidence_module.EvidenceCollector = mock_collector_class
 
-        mock_web_module = MagicMock()
-        mock_web_module.DDGS_AVAILABLE = True
-        mock_web_module.WebConnector = MagicMock()
+        connector_factory["web_search"] = MagicMock()
 
         fetcher = make_fetcher()
-        with patch.dict(
-            sys.modules,
-            {
-                "aragora.evidence.collector": mock_evidence_module,
-                "aragora.connectors.web": mock_web_module,
-                "aragora.connectors.github": None,
-                "aragora.connectors.local_docs": None,
-            },
-        ):
+        with patch.dict(sys.modules, {"aragora.evidence.collector": mock_evidence_module}):
             ctx, pack = run(fetcher.gather_evidence_context("task"))
 
         assert ctx is None
         assert pack is None
 
-    def test_ddgs_unavailable_skips_web_connector(self):
-        """Skips web connector when DDGS_AVAILABLE is False."""
+    def test_ddgs_unavailable_skips_web_connector(self, connector_factory):
+        """Skips web connector when the web search kind builds nothing."""
         mock_evidence_module = MagicMock()
         mock_collector = MagicMock()
         mock_collector.collect_evidence = AsyncMock(return_value=MagicMock(snippets=[]))
         mock_evidence_module.EvidenceCollector = MagicMock(return_value=mock_collector)
 
-        mock_web_module = MagicMock()
-        mock_web_module.DDGS_AVAILABLE = False
+        connector_factory["web_search"] = None
 
         fetcher = make_fetcher()
-        with patch.dict(
-            sys.modules,
-            {
-                "aragora.evidence.collector": mock_evidence_module,
-                "aragora.connectors.web": mock_web_module,
-                "aragora.connectors.github": None,
-                "aragora.connectors.local_docs": None,
-            },
-        ):
+        with patch.dict(sys.modules, {"aragora.evidence.collector": mock_evidence_module}):
             ctx, pack = run(fetcher.gather_evidence_context("task"))
 
         # No connectors → (None, None)
         assert ctx is None
         assert pack is None
+        mock_collector.add_connector.assert_not_called()
 
 
 # ===========================================================================

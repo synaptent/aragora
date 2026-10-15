@@ -774,7 +774,9 @@ class PermissionChecker:
                     self._ownership_manager = get_ownership_manager()
                 resource_type_str = permission_key.split(".")[0]
                 resource_type = ResourceType(resource_type_str)
-                if self._ownership_manager.is_owner(context.user_id, resource_type, resource_id):
+                if self._ownership_manager.is_owner(
+                    context.user_id, resource_type, resource_id, org_id=context.org_id
+                ):
                     return AuthorizationDecision(
                         allowed=True,
                         reason=f"Implicit owner permission for '{permission_key}' on owned resource",

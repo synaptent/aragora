@@ -374,12 +374,22 @@ class TestModeEdgeCases:
         assert propose_prompt != critique_prompt
         assert critique_prompt != revise_prompt
 
-    def test_import_error_returns_empty(self):
+    def test_import_error_returns_empty(self, monkeypatch):
         """Test graceful degradation when modes module is unavailable."""
+        from aragora.debate import mode_prompts
+        from aragora.utils.declared_registrations import DeclaredRegistrations
+
         pb = _make_prompt_builder()
         pb._active_mode_name = "architect"
+        monkeypatch.setattr(mode_prompts, "_provider", None)
+        monkeypatch.setattr(
+            mode_prompts,
+            "_declared",
+            DeclaredRegistrations(mode_prompts.MODE_PROMPTS_ENTRY_POINT_GROUP),
+        )
+        monkeypatch.setattr("importlib.metadata.entry_points", lambda *, group: [])
 
-        with patch.dict("sys.modules", {"aragora.modes.base": None}):
-            # The lazy import in get_mode_prompt should catch ImportError
+        with patch.dict("sys.modules", {"aragora.cli.mode_prompt_registration": None}):
+            # The declared registration fails to import, so no provider is registered
             result = pb.get_mode_prompt()
             assert result == ""

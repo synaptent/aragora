@@ -659,7 +659,7 @@ class DebateAnalytics:
                         FROM debate_records
                         WHERE org_id = ? AND created_at >= ?
                         GROUP BY period ORDER BY period
-                    """  # noqa: S608 -- dynamic clause from internal state
+                    """  # dynamic clause from internal state
                     cursor = conn.execute(query, (org_id, period_start.isoformat()))
                 else:
                     query = f"""
@@ -667,7 +667,7 @@ class DebateAnalytics:
                         FROM debate_records
                         WHERE created_at >= ?
                         GROUP BY period ORDER BY period
-                    """  # noqa: S608 -- dynamic clause from internal state
+                    """  # dynamic clause from internal state
                     cursor = conn.execute(query, (period_start.isoformat(),))
 
                 for row in cursor.fetchall():

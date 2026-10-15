@@ -31,7 +31,8 @@ def _is_server_available(server_url: str) -> bool:
     try:
         import urllib.request
 
-        with urllib.request.urlopen(f"{server_url}/api/health", timeout=2) as resp:  # noqa: S310 -- local server health check
+        # local server health check
+        with urllib.request.urlopen(f"{server_url}/api/health", timeout=2) as resp:
             status_code = getattr(resp, "status", None) or resp.getcode()
             return status_code == 200
     except (OSError, TimeoutError):

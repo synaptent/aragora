@@ -13,7 +13,12 @@ import os
 from typing import Any
 from collections.abc import Iterable
 
+from aragora.runtime.connector_factory import ConnectorFactoryNotRegisteredError, create_connector
+
 logger = logging.getLogger(__name__)
+
+# What building a connector raises when it is not installed or nothing registered a factory.
+_CONNECTOR_UNAVAILABLE = (ImportError, ConnectorFactoryNotRegisteredError)
 
 
 def _as_list(value: Any) -> list[Any]:
@@ -62,12 +67,12 @@ async def web_search_fallback(
         return {"results": [], "error": "query is required"}
 
     try:
-        from aragora.connectors.web import DDGS_AVAILABLE, WebConnector
-    except ImportError as e:  # pragma: no cover - import failure should be rare
+        connector = create_connector("web_search")
+    except _CONNECTOR_UNAVAILABLE as e:  # pragma: no cover - import failure should be rare
         logger.warning("Web connector unavailable: %s", e)
         return {"results": [], "error": "web connector unavailable"}
 
-    if not DDGS_AVAILABLE:
+    if connector is None:
         return {
             "results": [],
             "error": "duckduckgo-search not installed",
@@ -75,7 +80,6 @@ async def web_search_fallback(
         }
 
     search_query = f"site:{site} {query}" if site else query
-    connector = WebConnector()
     try:
         results = await connector.search(search_query, limit=limit)
     except (
@@ -117,12 +121,11 @@ async def arxiv_search(
         return {"papers": [], "error": "query is required"}
 
     try:
-        from aragora.connectors import ArXivConnector
-    except ImportError as e:  # pragma: no cover - import failure should be rare
+        connector = create_connector("arxiv")
+    except _CONNECTOR_UNAVAILABLE as e:  # pragma: no cover - import failure should be rare
         logger.warning("ArXiv connector unavailable: %s", e)
         return {"papers": [], "error": "arXiv connector unavailable"}
 
-    connector = ArXivConnector()
     if not getattr(connector, "is_available", True):
         return {"papers": [], "error": "arXiv connector unavailable (missing httpx)"}
 
@@ -169,12 +172,11 @@ async def pubmed_search(
         return {"articles": [], "error": "query is required"}
 
     try:
-        from aragora.connectors import PubMedConnector
-    except ImportError as e:  # pragma: no cover
+        connector = create_connector("pubmed")
+    except _CONNECTOR_UNAVAILABLE as e:  # pragma: no cover
         logger.warning("PubMed connector unavailable: %s", e)
         return {"articles": [], "error": "pubmed connector unavailable"}
 
-    connector = PubMedConnector()
     if not getattr(connector, "is_available", True):
         return {"articles": [], "error": "pubmed connector unavailable (missing httpx)"}
 
@@ -215,12 +217,11 @@ async def courtlistener_search(
         return {"cases": [], "error": "query is required"}
 
     try:
-        from aragora.connectors import CourtListenerConnector
-    except ImportError as e:  # pragma: no cover
+        connector = create_connector("courtlistener")
+    except _CONNECTOR_UNAVAILABLE as e:  # pragma: no cover
         logger.warning("CourtListener connector unavailable: %s", e)
         return {"cases": [], "error": "courtlistener connector unavailable"}
 
-    connector = CourtListenerConnector()
     if not getattr(connector, "is_available", True):
         return {"cases": [], "error": "courtlistener connector unavailable (missing httpx)"}
 
@@ -266,12 +267,11 @@ async def westlaw_search(
         return {"cases": [], "error": "query is required"}
 
     try:
-        from aragora.connectors import WestlawConnector
-    except ImportError as e:  # pragma: no cover
+        connector = create_connector("westlaw")
+    except _CONNECTOR_UNAVAILABLE as e:  # pragma: no cover
         logger.warning("Westlaw connector unavailable: %s", e)
         return {"cases": [], "error": "westlaw connector unavailable"}
 
-    connector = WestlawConnector()
     if not getattr(connector, "is_available", True):
         return {"cases": [], "error": "westlaw connector unavailable (missing httpx)"}
     if hasattr(connector, "is_configured") and not connector.is_configured:
@@ -310,12 +310,11 @@ async def lexis_search(
         return {"cases": [], "error": "query is required"}
 
     try:
-        from aragora.connectors import LexisConnector
-    except ImportError as e:  # pragma: no cover
+        connector = create_connector("lexis")
+    except _CONNECTOR_UNAVAILABLE as e:  # pragma: no cover
         logger.warning("Lexis connector unavailable: %s", e)
         return {"cases": [], "error": "lexis connector unavailable"}
 
-    connector = LexisConnector()
     if not getattr(connector, "is_available", True):
         return {"cases": [], "error": "lexis connector unavailable (missing httpx)"}
     if hasattr(connector, "is_configured") and not connector.is_configured:
@@ -357,12 +356,11 @@ async def govinfo_search(
         return {"results": [], "error": "query is required"}
 
     try:
-        from aragora.connectors import GovInfoConnector
-    except ImportError as e:  # pragma: no cover
+        connector = create_connector("govinfo")
+    except _CONNECTOR_UNAVAILABLE as e:  # pragma: no cover
         logger.warning("GovInfo connector unavailable: %s", e)
         return {"results": [], "error": "govinfo connector unavailable"}
 
-    connector = GovInfoConnector()
     if not getattr(connector, "is_available", True):
         return {"results": [], "error": "govinfo connector unavailable (missing httpx)"}
 
@@ -406,12 +404,11 @@ async def nice_guidance_search(
         return {"guidelines": [], "error": "query is required"}
 
     try:
-        from aragora.connectors import NICEGuidanceConnector
-    except ImportError as e:  # pragma: no cover
+        connector = create_connector("nice_guidance")
+    except _CONNECTOR_UNAVAILABLE as e:  # pragma: no cover
         logger.warning("NICE guidance connector unavailable: %s", e)
         return {"guidelines": [], "error": "nice guidance connector unavailable"}
 
-    connector = NICEGuidanceConnector()
     if not getattr(connector, "is_available", True):
         return {"guidelines": [], "error": "nice guidance connector unavailable (missing httpx)"}
 
@@ -448,12 +445,11 @@ async def semantic_scholar_search(
         return {"papers": [], "error": "query is required"}
 
     try:
-        from aragora.connectors import SemanticScholarConnector
-    except ImportError as e:  # pragma: no cover
+        connector = create_connector("semantic_scholar")
+    except _CONNECTOR_UNAVAILABLE as e:  # pragma: no cover
         logger.warning("Semantic Scholar connector unavailable: %s", e)
         return {"papers": [], "error": "semantic scholar connector unavailable"}
 
-    connector = SemanticScholarConnector()
     if not getattr(connector, "is_available", True):
         return {"papers": [], "error": "semantic scholar connector unavailable (missing httpx)"}
 
@@ -492,12 +488,11 @@ async def crossref_lookup(
         return {"results": [], "error": "query or doi is required"}
 
     try:
-        from aragora.connectors import CrossRefConnector
-    except ImportError as e:  # pragma: no cover
+        connector = create_connector("crossref")
+    except _CONNECTOR_UNAVAILABLE as e:  # pragma: no cover
         logger.warning("Crossref connector unavailable: %s", e)
         return {"results": [], "error": "crossref connector unavailable"}
 
-    connector = CrossRefConnector()
     if not getattr(connector, "is_available", True):
         return {"results": [], "error": "crossref connector unavailable (missing httpx)"}
 
@@ -539,12 +534,11 @@ async def icd_lookup(
         return {"codes": [], "error": "query is required"}
 
     try:
-        from aragora.connectors import ClinicalTablesConnector
-    except ImportError as e:  # pragma: no cover
+        connector = create_connector("clinical_tables")
+    except _CONNECTOR_UNAVAILABLE as e:  # pragma: no cover
         logger.warning("ClinicalTables connector unavailable: %s", e)
         return {"codes": [], "error": "clinical tables connector unavailable"}
 
-    connector = ClinicalTablesConnector()
     if not getattr(connector, "is_available", True):
         return {"codes": [], "error": "clinical tables connector unavailable (missing httpx)"}
 
@@ -578,12 +572,11 @@ async def drug_lookup(
         return {"drug_info": None, "interactions": [], "error": "query is required"}
 
     try:
-        from aragora.connectors import RxNavConnector
-    except ImportError as e:  # pragma: no cover
+        connector = create_connector("rxnav")
+    except _CONNECTOR_UNAVAILABLE as e:  # pragma: no cover
         logger.warning("RxNav connector unavailable: %s", e)
         return {"drug_info": None, "interactions": [], "error": "rxnav connector unavailable"}
 
-    connector = RxNavConnector()
     if not getattr(connector, "is_available", True):
         return {
             "drug_info": None,
@@ -635,12 +628,11 @@ async def gaap_lookup(
         return {"standards": [], "error": "query is required"}
 
     try:
-        from aragora.connectors import FASBConnector
-    except ImportError as e:  # pragma: no cover
+        connector = create_connector("fasb")
+    except _CONNECTOR_UNAVAILABLE as e:  # pragma: no cover
         logger.warning("FASB connector unavailable: %s", e)
         return {"standards": [], "error": "fasb connector unavailable"}
 
-    connector = FASBConnector()
     if not getattr(connector, "is_available", True):
         return {"standards": [], "error": "fasb connector unavailable (missing httpx)"}
     if hasattr(connector, "is_configured") and not connector.is_configured:
@@ -682,10 +674,8 @@ async def tax_reference_search(
     jurisdiction_norm = jurisdiction.lower().strip() if jurisdiction else "us"
 
     try:
-        from aragora.connectors import resolve_tax_connector
-
-        connector = resolve_tax_connector(jurisdiction_norm)
-    except (ImportError, ValueError, KeyError) as e:  # pragma: no cover
+        connector = create_connector("tax", jurisdiction=jurisdiction_norm)
+    except (*_CONNECTOR_UNAVAILABLE, ValueError, KeyError) as e:  # pragma: no cover
         logger.warning("Tax connector unavailable: %s", e)
         return {"results": [], "error": "tax connector unavailable"}
 
@@ -697,7 +687,7 @@ async def tax_reference_search(
         return {"results": [], "error": f"{connector_label} connector not configured"}
 
     try:
-        results = await connector.search(query=query, limit=limit)  # type: ignore[attr-defined]
+        results = await connector.search(query=query, limit=limit)
     except (
         ConnectionError,
         TimeoutError,
@@ -734,12 +724,11 @@ async def sec_filings_search(
         return {"filings": [], "error": "query is required"}
 
     try:
-        from aragora.connectors import SECConnector
-    except ImportError as e:  # pragma: no cover
+        connector = create_connector("sec")
+    except _CONNECTOR_UNAVAILABLE as e:  # pragma: no cover
         logger.warning("SEC connector unavailable: %s", e)
         return {"filings": [], "error": "SEC connector unavailable"}
 
-    connector = SECConnector()
     if not getattr(connector, "is_available", True):
         return {"filings": [], "error": "SEC connector unavailable (missing httpx)"}
 

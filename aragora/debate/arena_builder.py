@@ -68,7 +68,7 @@ from typing import TYPE_CHECKING, Any
 from aragora.core import Agent, Environment
 from aragora.protocols.debate import DebateProtocol
 from aragora.resilience import CircuitBreaker
-from aragora.spectate.stream import SpectatorStream
+from aragora.events.spectate.stream import SpectatorStream
 
 
 class InitPhase(Enum):

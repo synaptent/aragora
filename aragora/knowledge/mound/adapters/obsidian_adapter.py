@@ -25,9 +25,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from aragora.connectors.knowledge.obsidian import ObsidianConfig, ObsidianConnector
     from aragora.connectors.knowledge.obsidian_watcher import VaultChangeEvent
 
-from aragora.connectors.knowledge.obsidian import ObsidianConfig, ObsidianConnector
 from aragora.knowledge.mound.adapters._base import (
     KnowledgeMoundAdapter,
     ADAPTER_CIRCUIT_CONFIGS,
@@ -35,6 +35,7 @@ from aragora.knowledge.mound.adapters._base import (
 )
 from aragora.knowledge.mound.adapters._types import SyncResult, ValidationSyncResult
 from aragora.knowledge.mound.types import IngestionRequest, KnowledgeSource
+from aragora.runtime.connector_factory import create_connector
 
 logger = logging.getLogger(__name__)
 
@@ -103,13 +104,12 @@ class ObsidianAdapter(KnowledgeMoundAdapter):
         super().__init__(**kwargs)
 
         if connector is None:
-            if config is None:
-                if vault_path is not None:
-                    config = ObsidianConfig(vault_path=str(vault_path))
-                else:
-                    config = ObsidianConfig.from_env()
             if config is not None:
-                connector = ObsidianConnector(config)
+                connector = create_connector("obsidian", config=config)
+            elif vault_path is not None:
+                connector = create_connector("obsidian", vault_path=str(vault_path))
+            else:
+                connector = create_connector("obsidian")
 
         self._connector = connector
         self._config = config or getattr(connector, "_config", None)
@@ -294,12 +294,7 @@ class ObsidianAdapter(KnowledgeMoundAdapter):
 
         try:
             async with self._resilient_call("sync_to_km"):
-                from aragora.connectors.enterprise.base import SyncState
-
-                sync_state = SyncState(connector_id=connector.name)
-                if since is not None:
-                    sync_state.last_sync_at = since
-
+                sync_state = connector.new_sync_state(since)
                 async for item in connector.sync_items(sync_state, batch_size=max_notes or 1000):
                     item_tags: list[str] = []
                     if isinstance(item.metadata, dict):

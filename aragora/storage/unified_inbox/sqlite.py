@@ -252,7 +252,7 @@ class SQLiteUnifiedInboxStore(UnifiedInboxStoreBackend):
             UPDATE unified_inbox_accounts
             SET {", ".join(fields)}
             WHERE tenant_id = ? AND account_id = ?
-        """  # noqa: S608 -- dynamic clause from internal state
+        """  # dynamic clause from internal state
         conn = self._get_conn()
         conn.execute(sql, tuple(params))
         conn.commit()
@@ -436,7 +436,8 @@ class SQLiteUnifiedInboxStore(UnifiedInboxStoreBackend):
         where_clause = " AND ".join(clauses)
         conn = self._get_conn()
         total_row = conn.execute(
-            f"SELECT COUNT(*) AS total FROM unified_inbox_messages WHERE {where_clause}",  # noqa: S608 -- dynamic clause from internal state
+            # dynamic clause from internal state
+            f"SELECT COUNT(*) AS total FROM unified_inbox_messages WHERE {where_clause}",
             tuple(params),
         ).fetchone()
         total = int(total_row[0]) if total_row else 0
@@ -457,7 +458,7 @@ class SQLiteUnifiedInboxStore(UnifiedInboxStoreBackend):
             WHERE {where_clause}
             ORDER BY priority_score DESC, received_at DESC
             {limit_clause}
-        """,  # noqa: S608 -- dynamic clause from internal state
+        """,  # dynamic clause from internal state
             tuple(params),
         ).fetchall()
         return [self._row_to_message(row) for row in rows], total
@@ -533,7 +534,7 @@ class SQLiteUnifiedInboxStore(UnifiedInboxStoreBackend):
             UPDATE unified_inbox_messages
             SET {", ".join(updates)}
             WHERE tenant_id = ? AND message_id = ?
-        """,  # noqa: S608 -- dynamic clause from internal state
+        """,  # dynamic clause from internal state
             tuple(params),
         )
         conn.commit()

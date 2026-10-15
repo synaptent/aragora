@@ -19,8 +19,8 @@ import json
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
-from collections.abc import Sequence
+from typing import Any, cast
+from collections.abc import Awaitable, Sequence
 
 # Observability
 from aragora.observability import (
@@ -30,21 +30,14 @@ from aragora.observability import (
 # Resilience
 from aragora.resilience import get_v2_circuit_breaker as get_circuit_breaker
 
+# Defined in the types layer so debate team selection can read it without importing
+# the control plane; re-exported here as the same object.
+from aragora.types.agent_status import AgentStatus
+
 logger = get_logger(__name__)
 
 # Circuit breaker for Redis operations in registry
 _registry_redis_cb = get_circuit_breaker("registry_redis", failure_threshold=3, cooldown_seconds=30)
-
-
-class AgentStatus(Enum):
-    """Agent lifecycle status."""
-
-    STARTING = "starting"  # Agent is initializing
-    READY = "ready"  # Agent is ready to accept tasks
-    BUSY = "busy"  # Agent is processing a task
-    DRAINING = "draining"  # Agent is completing current task, no new tasks
-    OFFLINE = "offline"  # Agent is not responding
-    FAILED = "failed"  # Agent has failed
 
 
 class AgentCapability(Enum):
@@ -275,7 +268,7 @@ class AgentRegistry:
                 decode_responses=True,
             )
             # Test connection
-            await self._redis.ping()
+            await cast(Awaitable[bool], self._redis.ping())
             _registry_redis_cb.record_success()
             logger.info("AgentRegistry connected to Redis: %s", self._redis_url)
 
@@ -644,7 +637,7 @@ class AgentRegistry:
         elif strategy == "random":
             import random
 
-            return random.choice(candidates)  # noqa: S311 -- load balancing
+            return random.choice(candidates)
         else:
             return candidates[0]
 
@@ -721,7 +714,7 @@ class AgentRegistry:
         elif strategy == "random":
             import random
 
-            return random.choice(candidates)  # noqa: S311 -- load balancing
+            return random.choice(candidates)
         else:
             return candidates[0]
 
@@ -902,5 +895,5 @@ def get_default_registry() -> AgentRegistry | None:
 
 def set_default_registry(registry: AgentRegistry | None) -> None:
     """Set (or clear) the module-level default registry."""
-    global _default_registry  # noqa: PLW0603
+    global _default_registry
     _default_registry = registry

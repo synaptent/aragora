@@ -11,7 +11,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-from aragora.connectors.prediction_markets.synthetic_github import (
+from aragora.markets.synthetic_github import (
     SYNTHETIC_MARKETS_FLAG,
     SyntheticGitHubAdapter,
     SyntheticGitHubError,

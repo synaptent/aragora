@@ -381,7 +381,8 @@ class PolicyStore(SQLiteStore):
             conditions.append("enabled = 1")
 
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
-        sql = f"SELECT * FROM policies {where} ORDER BY created_at DESC LIMIT ? OFFSET ?"  # noqa: S608 -- internal query construction
+        # internal query construction
+        sql = f"SELECT * FROM policies {where} ORDER BY created_at DESC LIMIT ? OFFSET ?"
         params.extend([limit, offset])
 
         rows = self.fetch_all(sql, tuple(params))
@@ -533,7 +534,8 @@ class PolicyStore(SQLiteStore):
             params.append(severity)
 
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
-        sql = f"SELECT * FROM violations {where} ORDER BY detected_at DESC LIMIT ? OFFSET ?"  # noqa: S608 -- internal query construction
+        # internal query construction
+        sql = f"SELECT * FROM violations {where} ORDER BY detected_at DESC LIMIT ? OFFSET ?"
         params.extend([limit, offset])
 
         rows = self.fetch_all(sql, tuple(params))
@@ -604,7 +606,7 @@ class PolicyStore(SQLiteStore):
         sql = f"""
             SELECT severity, COUNT(*) as count FROM violations {where}
             GROUP BY severity
-        """  # noqa: S608 -- internal query construction
+        """  # internal query construction
 
         rows = self.fetch_all(sql, tuple(params))
         counts = {"critical": 0, "high": 0, "medium": 0, "low": 0, "total": 0}
@@ -794,7 +796,8 @@ class PostgresPolicyStore:
             conditions.append("enabled = 1")
 
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
-        sql = f"SELECT * FROM policies {where} ORDER BY created_at DESC LIMIT ? OFFSET ?"  # noqa: S608 -- internal query construction
+        # internal query construction
+        sql = f"SELECT * FROM policies {where} ORDER BY created_at DESC LIMIT ? OFFSET ?"
         params.extend([limit, offset])
 
         rows = self._fetch_all(sql, tuple(params))
@@ -943,7 +946,8 @@ class PostgresPolicyStore:
             params.append(severity)
 
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
-        sql = f"SELECT * FROM violations {where} ORDER BY detected_at DESC LIMIT ? OFFSET ?"  # noqa: S608 -- internal query construction
+        # internal query construction
+        sql = f"SELECT * FROM violations {where} ORDER BY detected_at DESC LIMIT ? OFFSET ?"
         params.extend([limit, offset])
 
         rows = self._fetch_all(sql, tuple(params))
@@ -1014,7 +1018,7 @@ class PostgresPolicyStore:
         sql = f"""
             SELECT severity, COUNT(*) as count FROM violations {where}
             GROUP BY severity
-        """  # noqa: S608 -- internal query construction
+        """  # internal query construction
 
         rows = self._fetch_all(sql, tuple(params))
         counts = {"critical": 0, "high": 0, "medium": 0, "low": 0, "total": 0}

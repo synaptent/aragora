@@ -120,6 +120,9 @@ class QueryHandler(QueryOperationsMixin):
     def _get_query_engine(self):
         return self._query_engine
 
+    def require_auth_or_error(self, handler):
+        return MagicMock(org_id="test-org-001"), None
+
 
 # =============================================================================
 # Fixtures

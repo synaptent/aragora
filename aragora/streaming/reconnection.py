@@ -159,7 +159,7 @@ class ReconnectionContext:
         # Apply jitter
         if self._config.jitter_factor > 0:
             jitter_range = delay * self._config.jitter_factor
-            delay += random.uniform(-jitter_range, jitter_range)  # noqa: S311 -- retry jitter
+            delay += random.uniform(-jitter_range, jitter_range)
             delay = max(0.0, delay)
 
         self._attempt += 1

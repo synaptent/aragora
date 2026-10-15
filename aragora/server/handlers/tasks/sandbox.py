@@ -58,7 +58,7 @@ _MAX_CODE_LENGTH = 50_000  # 50KB
 
 def _get_executor() -> Any:
     """Get or create the module-level sandbox executor."""
-    global _executor, _config  # noqa: PLW0603
+    global _executor, _config
     if _executor is None and EXECUTOR_AVAILABLE and SandboxExecutor and SandboxConfig:
         _config = SandboxConfig()
         _executor = SandboxExecutor(_config)
@@ -196,7 +196,7 @@ class SandboxHandler(BaseHandler):
 
     def _update_config(self, handler: Any) -> HandlerResult:
         """Update sandbox configuration."""
-        global _executor, _config  # noqa: PLW0603
+        global _executor, _config
 
         if not EXECUTOR_AVAILABLE or not SandboxConfig:
             return error_response("Sandbox module not available", 503)

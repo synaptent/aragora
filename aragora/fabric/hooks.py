@@ -517,7 +517,7 @@ class HookManager:
         try:
             # Check if we're in a git repo
             result = subprocess.run(
-                ["git", "rev-parse", "--git-dir"],  # noqa: S607 -- fixed command
+                ["git", "rev-parse", "--git-dir"],  # fixed command
                 cwd=self._config.workspace_root,
                 capture_output=True,
                 text=True,
@@ -528,8 +528,8 @@ class HookManager:
                 return None
 
             # Create worktree with a new branch
-            subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
-                ["git", "worktree", "add", "-b", branch_name, str(worktree_path)],  # noqa: S607 -- fixed command
+            subprocess.run(  # subprocess with fixed args, no shell
+                ["git", "worktree", "add", "-b", branch_name, str(worktree_path)],  # fixed command
                 cwd=self._config.workspace_root,
                 capture_output=True,
                 text=True,
@@ -548,8 +548,8 @@ class HookManager:
         worktree_path = self._hook_dir(hook_id) / "worktree"
 
         try:
-            subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
-                ["git", "worktree", "remove", "--force", str(worktree_path)],  # noqa: S607 -- fixed command
+            subprocess.run(  # subprocess with fixed args, no shell
+                ["git", "worktree", "remove", "--force", str(worktree_path)],  # fixed command
                 cwd=self._config.workspace_root,
                 capture_output=True,
                 text=True,

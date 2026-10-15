@@ -181,6 +181,59 @@ _TRANCHES: dict[str, dict[str, tuple[str, ...]]] = {
             "stores",
         ),
     },
+    "T4b": {
+        "application": (
+            "computer_use",
+            "coordination",
+            "export",
+            "markets",
+            "plugins",
+            "prompt_engine",
+            "receipts",
+            "workspace",
+        ),
+    },
+    "T5": {
+        "application": (
+            "brief_engine",
+            "codex",
+            "compat",
+            "essay",
+            "factory",
+            "fixtures",
+            "gti",
+            "harnesses",
+            "hooks",
+            "ideacloud",
+            "interrogation",
+            "missions",
+            "onboarding",
+            "operations",
+            "ops",
+            "pdb",
+            "playbooks",
+            "policy",
+            "prediction",
+            "ralph",
+            "reports",
+            "review",
+            "scheduler",
+            "schedulers",
+            "sync",
+            "trail",
+            "triage",
+            "worktree",
+        ),
+    },
+    "T6": {
+        "interface": (
+            "__main__",
+            "approvals",
+            "client",
+            "extensions",
+            "webhooks",
+        ),
+    },
 }
 
 _SEAMS = {
@@ -295,6 +348,15 @@ def test_every_layer_token_is_a_real_top_level_module():
         and not (REPO_ROOT / "aragora" / token / "__init__.py").is_file()
     )
     assert not missing, missing
+
+
+def test_every_top_level_module_is_layered():
+    # A directory without __init__.py (for example the aragora/live frontend) is not a module.
+    package = REPO_ROOT / "aragora"
+    modules = {path.stem for path in package.glob("*.py")} - {"__init__"}
+    modules |= {path.parent.name for path in package.glob("*/__init__.py")}
+    layered = {token for names in _tokens_by_layer().values() for token in names}
+    assert sorted(modules - layered) == []
 
 
 def test_checker_maps_every_token_to_its_expected_layer():

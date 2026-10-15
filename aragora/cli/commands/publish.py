@@ -84,7 +84,7 @@ def _run(cmd: list[str], cwd: Path, dry_run: bool = False) -> tuple[bool, str]:
         print(f"  [dry-run] would run: {cmd_str}")
         return True, ""
     try:
-        result = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
+        result = subprocess.run(  # subprocess with fixed args, no shell
             cmd,
             cwd=str(cwd),
             capture_output=True,
@@ -121,7 +121,7 @@ def _check_credentials(pkg_type: str) -> tuple[bool, str]:
         if npmrc.exists() and npmrc.read_text().strip():
             return True, "~/.npmrc found"
         result = subprocess.run(
-            ["npm", "whoami"],  # noqa: S607 -- fixed command
+            ["npm", "whoami"],  # fixed command
             capture_output=True,
             text=True,
             timeout=10,
@@ -137,8 +137,8 @@ def _verify_package(dist_dir: Path) -> tuple[bool, str]:
     dists = list(dist_dir.glob("*.tar.gz")) + list(dist_dir.glob("*.whl"))
     if not dists:
         return False, "No distribution files found"
-    result = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
-        ["python", "-m", "twine", "check", *[str(d) for d in dists]],  # noqa: S607 -- fixed command
+    result = subprocess.run(  # subprocess with fixed args, no shell
+        ["python", "-m", "twine", "check", *[str(d) for d in dists]],  # fixed command
         capture_output=True,
         text=True,
         timeout=30,
@@ -157,7 +157,8 @@ def _publish_python(dist_dir: Path, dry_run: bool = False) -> tuple[bool, str]:
         print(f"  [dry-run] would upload {len(dists)} file(s) to PyPI")
         return True, ""
     cmd = ["python", "-m", "twine", "upload", *[str(d) for d in dists]]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)  # noqa: S603 -- subprocess with fixed args, no shell
+    # subprocess with fixed args, no shell
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
     if result.returncode != 0:
         return False, result.stderr or result.stdout
     return True, result.stdout
@@ -168,7 +169,7 @@ def _publish_npm(pkg_dir: Path, dry_run: bool = False) -> tuple[bool, str]:
     cmd = ["npm", "publish", "--access", "public"]
     if dry_run:
         cmd.append("--dry-run")
-    result = subprocess.run(  # noqa: S603 -- subprocess with fixed args, no shell
+    result = subprocess.run(  # subprocess with fixed args, no shell
         cmd,
         cwd=str(pkg_dir),
         capture_output=True,

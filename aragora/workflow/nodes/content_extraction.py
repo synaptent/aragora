@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from aragora.runtime.connector_factory import create_connector
 from aragora.workflow.step import BaseStep, WorkflowContext
 
 logger = logging.getLogger(__name__)
@@ -289,9 +290,7 @@ class ContentExtractionStep(BaseStep):
         try:
             import asyncio
 
-            from aragora.connectors.web import WebConnector
-
-            connector = WebConnector()
+            connector = create_connector("web")
             # WebConnector.search is async; run in a new event loop
             results = asyncio.run(connector.search(url, limit=1))
             if results:

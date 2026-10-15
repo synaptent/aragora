@@ -33,7 +33,7 @@ Usage (unchanged):
 from __future__ import annotations
 
 # Re-export everything from the performance subpackage
-from aragora.knowledge.mound.adapters.performance.models import (  # noqa: F401
+from aragora.knowledge.mound.adapters.performance.models import (
     AgentExpertise,
     EloAdjustmentRecommendation,
     EloSyncResult,
@@ -41,7 +41,7 @@ from aragora.knowledge.mound.adapters.performance.models import (  # noqa: F401
     KMEloPattern,
     RatingSearchResult,
 )
-from aragora.knowledge.mound.adapters.performance.adapter import (  # noqa: F401
+from aragora.knowledge.mound.adapters.performance.adapter import (
     EloAdapter,
     EventCallback,
     PerformanceAdapter,

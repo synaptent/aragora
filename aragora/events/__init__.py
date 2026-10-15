@@ -67,7 +67,7 @@ from .async_dispatcher import (
     dispatch_webhook_async_with_retry,
     shutdown_async_dispatcher,
 )
-from .security_events import (  # noqa: F401
+from .security_events import (
     # Event types
     SecurityEventType,
     SecuritySeverity,
@@ -91,7 +91,7 @@ from .security_events import (  # noqa: F401
     create_secret_event,
     create_scan_completed_event,
 )
-from .security_dispatcher import (  # noqa: F401
+from .security_dispatcher import (
     # Main class
     SecurityDispatcher,
     DispatcherConfig,

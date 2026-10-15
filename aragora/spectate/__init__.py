@@ -1,8 +1,8 @@
 """Spectator Mode - Real-time debate observation."""
 
-from .events import SpectatorEvents
-from .stream import SpectatorStream
-from .ws_bridge import (
+from aragora.events.spectate.events import SpectatorEvents
+from aragora.events.spectate.stream import SpectatorStream
+from aragora.events.spectate.ws_bridge import (
     SpectateEvent,
     SpectateWebSocketBridge,
     bind_spectate_context,

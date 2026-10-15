@@ -25,6 +25,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from aragora.runtime.connector_factory import create_connector
+
 logger = logging.getLogger(__name__)
 
 API_SOURCE_PREFIX = "api:"
@@ -115,9 +117,7 @@ async def fetch_live_entries(
     path = Path(state_path) if state_path else STATE_PATH
 
     if connector is None:
-        from aragora.connectors.twitter import TwitterConnector
-
-        connector = TwitterConnector()
+        connector = create_connector("twitter")
 
     user_id = await connector.get_authenticated_user_id()
     if not user_id:

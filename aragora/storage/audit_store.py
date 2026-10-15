@@ -25,8 +25,8 @@ from __future__ import annotations
 
 __all__ = [
     "AuditStore",
-    "get_audit_store",  # noqa: F822
-    "reset_audit_store",  # noqa: F822
+    "get_audit_store",
+    "reset_audit_store",
 ]
 
 import contextvars
@@ -312,7 +312,7 @@ class AuditStore:
             WHERE {where_clause}
             ORDER BY timestamp DESC
             LIMIT ? OFFSET ?
-            """  # nosec B608 - where_clause built from hardcoded conditions  # noqa: S608
+            """  # nosec B608 - where_clause built from hardcoded conditions
 
         def _row_to_dict(row: tuple) -> dict:
             return {
@@ -368,7 +368,7 @@ class AuditStore:
             params.append(resource_type)
 
         where_clause = " AND ".join(conditions) if conditions else "1=1"
-        query = f"SELECT COUNT(*) FROM audit_log WHERE {where_clause}"  # nosec B608  # noqa: S608
+        query = f"SELECT COUNT(*) FROM audit_log WHERE {where_clause}"  # nosec B608
 
         if self._backend is not None:
             result = self._backend.fetch_one(query, tuple(params))

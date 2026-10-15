@@ -157,7 +157,7 @@ def _default_http(method: str, url: str, body: bytes | None) -> tuple[int, bytes
     """Stdlib transport. HTTPS only; returns (status, body) even on 4xx/5xx."""
     if not url.startswith("https://"):
         raise RekorError("rekor transport requires an https:// URL")
-    request = urllib.request.Request(  # noqa: S310 - scheme pinned to https above
+    request = urllib.request.Request(  # scheme pinned to https above
         url,
         data=body,
         method=method,
@@ -168,7 +168,7 @@ def _default_http(method: str, url: str, body: bytes | None) -> tuple[int, bytes
         },
     )
     try:
-        with urllib.request.urlopen(  # noqa: S310  # nosec B310 - scheme pinned to https above
+        with urllib.request.urlopen(  # nosec B310 - scheme pinned to https above
             request, timeout=HTTP_TIMEOUT_SECONDS
         ) as response:
             return int(response.status), response.read()

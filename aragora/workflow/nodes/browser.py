@@ -40,6 +40,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
+from aragora.runtime.connector_factory import create_connector
 from aragora.workflow.step import BaseStep, WorkflowContext
 
 logger = logging.getLogger(__name__)
@@ -59,9 +60,8 @@ async def _get_browser_connector(config: dict[str, Any]):
         _browser_connector = None
 
     if _browser_connector is None:
-        from aragora.connectors.browser import PlaywrightConnector
-
-        _browser_connector = PlaywrightConnector(
+        _browser_connector = create_connector(
+            "browser",
             headless=config.get("headless", True),
             browser_type=config.get("browser_type", "chromium"),
             allowed_domains=set(config.get("allowed_domains", [])),

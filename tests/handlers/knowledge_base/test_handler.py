@@ -789,7 +789,7 @@ class TestStatsEndpoint:
     def test_stats_passes_workspace_to_store(self, handler, get_handler, mock_fact_store):
         params = {"workspace_id": ["ws-123"]}
         handler.handle("/api/v1/knowledge/stats", params, get_handler)
-        mock_fact_store.get_statistics.assert_called_once_with("ws-123")
+        mock_fact_store.get_statistics.assert_called_once_with("ws-123", org_id="test-org-001")
 
     def test_stats_store_error_returns_500(self, handler, get_handler, mock_fact_store):
         mock_fact_store.get_statistics.side_effect = RuntimeError("DB down")
@@ -985,7 +985,7 @@ class TestFactRoutesEdgeCases:
     def test_get_on_facts_id_returns_fact(self, handler, get_handler, mock_fact_store):
         result = handler.handle("/api/v1/knowledge/facts/fact-abc", {}, get_handler)
         assert _status(result) == 200
-        mock_fact_store.get_fact.assert_called_with("fact-abc")
+        mock_fact_store.get_fact.assert_called_with("fact-abc", org_id="test-org-001")
 
     def test_put_on_facts_id_updates_fact(self, handler, mock_fact_store):
         http = MockHTTPHandler(body={"confidence": 0.5}, method="PUT")
@@ -997,7 +997,7 @@ class TestFactRoutesEdgeCases:
         http = MockHTTPHandler(method="DELETE")
         result = handler.handle("/api/v1/knowledge/facts/fact-abc", {}, http)
         assert _status(result) == 200
-        mock_fact_store.delete_fact.assert_called_once_with("fact-abc")
+        mock_fact_store.delete_fact.assert_called_once_with("fact-abc", org_id="test-org-001")
 
     def test_post_on_facts_id_verify(self, handler, mock_fact_store):
         http = MockHTTPHandler(body={}, method="POST")
@@ -1011,7 +1011,9 @@ class TestFactRoutesEdgeCases:
             get_handler,
         )
         assert _status(result) == 200
-        mock_fact_store.get_contradictions.assert_called_once_with("fact-001")
+        mock_fact_store.get_contradictions.assert_called_once_with(
+            "fact-001", org_id="test-org-001"
+        )
 
     def test_get_relations(self, handler, get_handler, mock_fact_store):
         result = handler.handle(
@@ -1247,7 +1249,7 @@ class TestEdgeCases:
             get_handler,
         )
         assert _status(result) == 200
-        mock_fact_store.get_fact.assert_called_with("fact-001-abc_xyz")
+        mock_fact_store.get_fact.assert_called_with("fact-001-abc_xyz", org_id="test-org-001")
 
     def test_handler_inherits_from_base_handler(self):
         """KnowledgeHandler should inherit from BaseHandler."""

@@ -828,7 +828,7 @@ class ResilientPostgresConnection:
         delay = self.base_delay * (2**attempt)
         delay = min(delay, self.max_delay)
         # Add jitter (±25%)
-        jitter = delay * 0.25 * (2 * random.random() - 1)  # noqa: S311 -- retry jitter
+        jitter = delay * 0.25 * (2 * random.random() - 1)
         return delay + jitter
 
     @contextmanager
@@ -984,7 +984,7 @@ def with_postgres_retry(
 
                     delay = min(base_delay * (2**attempt), max_delay)
                     # Add jitter
-                    jitter = delay * 0.25 * (2 * random.random() - 1)  # noqa: S311 -- retry jitter
+                    jitter = delay * 0.25 * (2 * random.random() - 1)
                     delay += jitter
 
                     logger.warning(

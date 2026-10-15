@@ -59,7 +59,7 @@ import warnings as _warnings
 
 with _warnings.catch_warnings():
     _warnings.simplefilter("ignore", DeprecationWarning)
-    from aragora.observability.logging import (  # noqa: E402
+    from aragora.observability.logging import (
         LogConfig,
         StructuredLogger,
         configure_logging,

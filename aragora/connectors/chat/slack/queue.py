@@ -432,7 +432,7 @@ class SlackMessageQueue:
     def _calculate_retry_delay(self, retries: int) -> float:
         """Calculate exponential backoff with jitter."""
         delay = min(self._base_delay * (2**retries), self._max_delay)
-        jitter = random.uniform(0, delay * 0.1)  # 10% jitter  # noqa: S311 -- retry jitter
+        jitter = random.uniform(0, delay * 0.1)  # 10% jitter
         return delay + jitter
 
     async def _send_message(self, message: QueuedMessage) -> bool:

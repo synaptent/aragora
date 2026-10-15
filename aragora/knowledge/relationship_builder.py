@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-from aragora.connectors.repository_crawler import (
+from aragora.analysis.codebase.repository_crawler import (
     CrawledFile,
     CrawlResult,
     FileDependency,

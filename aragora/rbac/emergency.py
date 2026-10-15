@@ -47,6 +47,8 @@ from enum import Enum
 from typing import Any
 from uuid import uuid4
 
+from aragora.rbac.security_notifier import get_security_notifier
+
 logger = logging.getLogger(__name__)
 
 # Configuration
@@ -745,25 +747,25 @@ class BreakGlassAccess:
 
         This should integrate with notification system (Slack, PagerDuty, email).
         """
-        try:
-            from aragora.control_plane.notifications import send_security_notification
-
-            await send_security_notification(
-                title=f"Break-Glass Access {event.title()}",
-                message=(
-                    f"User: {record.user_id}\n"
-                    f"Access ID: {record.id}\n"
-                    f"Reason: {record.reason}\n"
-                    f"Duration: {record.duration_minutes} minutes\n"
-                    f"IP: {record.ip_address or 'Unknown'}"
-                ),
-                severity="high" if event == "activated" else "medium",
-                metadata=record.to_dict(),
-            )
-        except ImportError:
+        notifier = get_security_notifier()
+        if notifier is None:
             logger.info(
                 "Security notification (not sent): break-glass %s for %s", event, record.user_id
             )
+            return
+
+        await notifier(
+            title=f"Break-Glass Access {event.title()}",
+            message=(
+                f"User: {record.user_id}\n"
+                f"Access ID: {record.id}\n"
+                f"Reason: {record.reason}\n"
+                f"Duration: {record.duration_minutes} minutes\n"
+                f"IP: {record.ip_address or 'Unknown'}"
+            ),
+            severity="high" if event == "activated" else "medium",
+            metadata=record.to_dict(),
+        )
 
     async def _audit_log(self, event_type: str, **kwargs) -> None:
         """Log an audit event for break-glass actions."""

@@ -252,15 +252,19 @@ DEFAULT_ROUTE_PERMISSIONS = [
     RoutePermission(r"^/api/(?:v1/)?memory", "GET", "memory.read"),
     RoutePermission(r"^/api/(?:v1/)?memory", "POST", "memory.update"),
     RoutePermission(r"^/api/(?:v1/)?memory", "DELETE", "memory.delete"),
+    RoutePermission(r"^/api/(?:v1/)?memory/[^/]+$", "PUT", "memory.update"),
     # Analytics
     RoutePermission(r"^/api/(?:v1/)?analytics", "GET", "analytics.read"),
     RoutePermission(r"^/api/(?:v1/)?analytics/export", "POST", "analytics.export_data"),
     # Disconnect a platform; the names are the analytics platforms handler's SUPPORTED_PLATFORMS.
     RoutePermission(
-        r"^/api/v1/analytics/(?:metabase|google_analytics|mixpanel)$",
+        r"^/api/(?:v1/)?analytics/(?:metabase|google_analytics|mixpanel)$",
         "DELETE",
         "analytics.configure",
     ),
+    # Connecting a platform stores its credentials; this must precede the versioned
+    # analytics POST rule below, which needs only analytics.read.
+    RoutePermission(r"^/api/(?:v1/)?analytics/connect$", "POST", "analytics.configure"),
     # Training
     RoutePermission(r"^/api/(?:v1/)?training", "GET", "training.read"),
     RoutePermission(r"^/api/(?:v1/)?training/export", "POST", "training.create"),
@@ -788,6 +792,7 @@ DEFAULT_ROUTE_PERMISSIONS = [
     RoutePermission(r"^/api/documents", "DELETE", "documents.delete"),
     # ── Document batch processing ──
     RoutePermission(r"^/api/(?:v1/)?documents/processing/stats$", "GET", "documents.read"),
+    RoutePermission(r"^/api/(?:v1/)?batch(?:/queue/status)?$", "GET", "documents.read"),
     # ── Red team / Auditing ──
     RoutePermission(r"^/api/redteam", "GET", "auditing.read"),
     RoutePermission(r"^/api/redteam", "POST", "auditing.create"),
@@ -803,13 +808,23 @@ DEFAULT_ROUTE_PERMISSIONS = [
     # ── Evolution ──
     RoutePermission(r"^/api/evolution", "GET", "evolution.read"),
     RoutePermission(r"^/api/evolution", "POST", "evolution.write"),
-    # ── Cross-pollination conflicts and the Teams list: the keys their handlers check ──
+    # ── Cross-pollination and Teams routes: the keys their handlers check ──
     RoutePermission(
         r"^/api/(?:v1/)?cross-pollination/conflicts/[^/]+/resolve$",
         "POST",
         "cross_pollination.write",
     ),
+    # Only the 501 routes: the stats, subscribers, bridge and km reads report process-wide
+    # state, so they stay without a rule (default-denied) like metrics and km/culture.
+    RoutePermission(
+        r"^/api/(?:v1/)?cross-pollination/(?:conflicts|federation|federation/sync"
+        r"|subscribe|sync/status|sync/trigger)$",
+        "GET",
+        "cross_pollination.read",
+    ),
     RoutePermission(r"^/api/(?:v1/)?teams$", "GET", "bots.read"),
+    # Create and send have no key of their own yet; their handlers answer 501 under bots.read.
+    RoutePermission(r"^/api/(?:v1/)?teams(?:/debates/send)?$", "POST", "bots.read"),
     # ── Plugins ──
     RoutePermission(r"^/api/(v1/)?plugins", "GET", "plugins.read"),
     RoutePermission(r"^/api/(v1/)?plugins", "POST", "plugins.install"),

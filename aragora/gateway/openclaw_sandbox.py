@@ -109,7 +109,7 @@ class SandboxConfig:
         default_factory=lambda: [
             "localhost",
             "127.0.0.1",
-            "0.0.0.0",  # noqa: S104 - SSRF blocklist entry, not a bind address
+            "0.0.0.0",  # SSRF blocklist entry, not a bind address
             "169.254.169.254",  # AWS metadata
         ]
     )

@@ -186,7 +186,8 @@ class DataMigrator:
                 return stats
 
             # Get SQLite data
-            cursor = sqlite_conn.execute(f"SELECT * FROM {table}")  # noqa: S608 -- table name interpolation, parameterized
+            # table name interpolation, parameterized
+            cursor = sqlite_conn.execute(f"SELECT * FROM {table}")
             sqlite_columns = [desc[0] for desc in cursor.description]
 
             # Find common columns
@@ -202,7 +203,7 @@ class DataMigrator:
                 INSERT INTO {table} ({columns_str})
                 VALUES ({placeholders})
                 ON CONFLICT DO NOTHING
-            """  # noqa: S608 -- table name interpolation, parameterized
+            """  # table name interpolation, parameterized
 
             # Migrate in batches
             batch = []

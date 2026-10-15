@@ -227,7 +227,7 @@ class PostgresBackend(AuditPersistenceBackend):
             WHERE {where_clause}
             ORDER BY timestamp DESC
             LIMIT %s OFFSET %s
-        """  # noqa: S608 -- dynamic clause from internal state
+        """  # dynamic clause from internal state
         params.extend([query.limit, query.offset])
 
         conn = self._get_connection()
@@ -265,7 +265,8 @@ class PostgresBackend(AuditPersistenceBackend):
         conn = self._get_connection()
         with conn.cursor() as cursor:
             cursor.execute(
-                f"SELECT COUNT(*) FROM audit_events WHERE {where_clause}",  # noqa: S608 -- dynamic clause from internal state
+                # dynamic clause from internal state
+                f"SELECT COUNT(*) FROM audit_events WHERE {where_clause}",
                 tuple(params),
             )
             row = cursor.fetchone()
@@ -319,7 +320,8 @@ class PostgresBackend(AuditPersistenceBackend):
         conn = self._get_connection()
         with conn.cursor() as cursor:
             cursor.execute(
-                f"SELECT * FROM audit_events WHERE {where_clause} ORDER BY timestamp",  # noqa: S608 -- dynamic clause from internal state
+                # dynamic clause from internal state
+                f"SELECT * FROM audit_events WHERE {where_clause} ORDER BY timestamp",
                 tuple(params),
             )
             rows = cursor.fetchall()

@@ -294,7 +294,8 @@ class GovernanceStore:
 
         params.append(approval_id)
 
-        sql = f"UPDATE governance_approvals SET {', '.join(updates)} WHERE approval_id = ?"  # noqa: S608 -- dynamic clause from internal state
+        # dynamic clause from internal state
+        sql = f"UPDATE governance_approvals SET {', '.join(updates)} WHERE approval_id = ?"
         self._backend.execute_write(sql, tuple(params))
 
         logger.debug("Updated approval %s -> %s", approval_id, status)

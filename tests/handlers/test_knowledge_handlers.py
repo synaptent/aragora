@@ -211,7 +211,7 @@ def mock_fact_store():
 
     # Configure store methods
     store.list_facts.return_value = facts[:2]
-    store.get_fact.side_effect = lambda fid: next((f for f in facts if f.id == fid), None)
+    store.get_fact.side_effect = lambda fid, **_kw: next((f for f in facts if f.id == fid), None)
     store.add_fact.return_value = facts[0]
     store.update_fact.return_value = facts[0]
     store.delete_fact.return_value = True
@@ -717,7 +717,7 @@ class TestFactsDeleteOperation:
 
         assert result is not None
         assert result.status_code == 200
-        mock_fact_store.delete_fact.assert_called_once_with("fact-1")
+        mock_fact_store.delete_fact.assert_called_once_with("fact-1", org_id=mock_user.org_id)
 
     def test_delete_fact_not_found(self, knowledge_handler, mock_fact_store):
         """Test deleting a non-existent fact returns 404."""
@@ -890,7 +890,7 @@ class TestFactsRelationsOperation:
 
     def test_add_relation_source_not_found(self, knowledge_handler, mock_fact_store):
         """Test adding a relation with non-existent source returns 404."""
-        mock_fact_store.get_fact.side_effect = lambda fid: (
+        mock_fact_store.get_fact.side_effect = lambda fid, **_kw: (
             MockFact(id="fact-2", statement="test") if fid == "fact-2" else None
         )
 

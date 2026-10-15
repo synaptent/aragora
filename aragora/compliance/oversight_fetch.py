@@ -2,7 +2,7 @@
 
 Walks recently merged PRs and converts each head-bound
 ``aragora/human-settlement`` commit status into an oversight attestation via
-:mod:`aragora.gauntlet.attestation` — automating the ``--attestations`` input
+:mod:`aragora.models.receipts.attestation` — automating the ``--attestations`` input
 of the Article 14 oversight pack with real, resolvable trail evidence.
 
 Honesty rules:
@@ -25,7 +25,7 @@ import subprocess
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
-from aragora.gauntlet.attestation import (
+from aragora.models.receipts.attestation import (
     HUMAN_SETTLEMENT_CONTEXT,
     attestation_from_settlement_status,
 )

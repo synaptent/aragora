@@ -59,25 +59,19 @@ from aragora.gateway.credential_proxy import (
     reset_credential_proxy,
 )
 
-# Suppress deprecation warning for this internal re-export; the warning should
-# only fire when external code imports aragora.gateway.decision_router directly.
-import warnings as _warnings
-
-with _warnings.catch_warnings():
-    _warnings.simplefilter("ignore", DeprecationWarning)
-    from aragora.gateway.decision_router import (
-        DecisionRouter,
-        RoutingCriteria,
-        RouteDecision,
-        RoutingRule as DecisionRoutingRule,
-        TenantRoutingConfig as DecisionTenantConfig,
-        RouteDestination,
-        RiskLevel,
-        ActionCategory,
-        RoutingEventType as DecisionRoutingEventType,
-        RoutingMetrics,
-        SimpleAnomalyDetector,
-    )
+from aragora.routing.gateway_decision_router import (
+    DecisionRouter,
+    RoutingCriteria,
+    RouteDecision,
+    RoutingRule as DecisionRoutingRule,
+    TenantRoutingConfig as DecisionTenantConfig,
+    RouteDestination,
+    RiskLevel,
+    ActionCategory,
+    RoutingEventType as DecisionRoutingEventType,
+    RoutingMetrics,
+    SimpleAnomalyDetector,
+)
 from aragora.gateway.metrics import (
     init_gateway_metrics,
     record_gateway_request,

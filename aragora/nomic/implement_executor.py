@@ -400,9 +400,9 @@ class ConvoyImplementExecutor:
         infrastructure is not initialized.
         """
         try:
-            import aragora.nomic.convoys  # noqa: F401
-            import aragora.nomic.beads  # noqa: F401
-            import aragora.nomic.hook_queue  # noqa: F401
+            import aragora.nomic.convoys
+            import aragora.nomic.beads
+            import aragora.nomic.hook_queue
             import aragora.nomic.convoy_coordinator  # noqa: F401
 
             # Use full convoy infrastructure

@@ -863,7 +863,7 @@ async def get_token_trends(
                 GROUP BY {date_format}
                 ORDER BY period
                 LIMIT 1000
-                """,  # noqa: S608 -- internal query construction
+                """,  # internal query construction
                 (org_id, period_start.isoformat(), period_end.isoformat()),
             ).fetchall()
 
@@ -1161,7 +1161,7 @@ async def get_flip_trends(
                 GROUP BY {date_format}, flip_type
                 ORDER BY period
                 LIMIT ?
-                """,  # noqa: S608 -- internal query construction
+                """,  # internal query construction
                 (period_start.isoformat(), row_limit),
             ).fetchall()
 

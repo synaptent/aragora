@@ -34,7 +34,7 @@ import os
 import smtplib
 import ssl
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -45,6 +45,7 @@ import aiohttp
 
 from aragora.core import DebateResult
 from aragora.http_client import DEFAULT_TIMEOUT
+from aragora.notifications.email_recipient import EmailRecipient
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +108,7 @@ _distributed_rate_limiter: Any = None
 
 def _get_distributed_rate_limiter() -> Any:
     """Get the distributed email rate limiter, if available."""
-    global _distributed_rate_limiter  # noqa: PLW0603
+    global _distributed_rate_limiter
     if _distributed_rate_limiter is not None:
         return _distributed_rate_limiter
     try:
@@ -229,22 +230,6 @@ class EmailConfig:
     def email_provider(self) -> EmailProvider:
         """Get the email provider enum."""
         return EmailProvider(self.provider)
-
-
-@dataclass
-class EmailRecipient:
-    """An email recipient."""
-
-    email: str
-    name: str | None = None
-    preferences: dict[str, Any] = field(default_factory=dict)
-
-    @property
-    def formatted(self) -> str:
-        """Get formatted email address."""
-        if self.name:
-            return f"{self.name} <{self.email}>"
-        return self.email
 
 
 class EmailIntegration:

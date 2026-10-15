@@ -49,9 +49,9 @@ def _ensure_embeddings_checked() -> None:
         return
     _EMBEDDINGS_CHECKED = True
     try:
-        import numpy as __np  # noqa: N812
+        import numpy as __np
         from sentence_transformers import (
-            SentenceTransformer as __ST,  # noqa: N812
+            SentenceTransformer as __ST,
         )
 
         _SentenceTransformer = __ST

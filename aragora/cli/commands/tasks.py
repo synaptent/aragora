@@ -9,14 +9,15 @@ import inspect
 import json
 import subprocess
 import sys
+from collections.abc import Coroutine
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 
 def _resolve(result: Any) -> Any:
     """Resolve an awaitable from sync CLI code."""
     if inspect.isawaitable(result):
-        return asyncio.run(result)
+        return asyncio.run(cast(Coroutine[Any, Any, Any], result))
     return result
 
 
@@ -110,15 +111,15 @@ def _active_lease(store: Any, lease_id: str) -> Any | None:
 
 
 def _print_json(payload: Any) -> None:
-    print(json.dumps(payload, indent=2, default=str))  # noqa: T201
+    print(json.dumps(payload, indent=2, default=str))
 
 
 def _print_queue_table(items: list[dict[str, Any]]) -> None:
-    print(f"{'ID':28s} {'Status':12s} {'Type':12s} {'Pri':>4s} Title")  # noqa: T201
-    print("-" * 88)  # noqa: T201
+    print(f"{'ID':28s} {'Status':12s} {'Type':12s} {'Pri':>4s} Title")
+    print("-" * 88)
     for item in items:
         priority = item.get("computed_priority", item.get("base_priority", 0))
-        print(  # noqa: T201
+        print(
             f"{str(item.get('id', ''))[:28]:28s} "
             f"{str(item.get('status', ''))[:12]:12s} "
             f"{str(item.get('work_type', ''))[:12]:12s} "
@@ -128,12 +129,10 @@ def _print_queue_table(items: list[dict[str, Any]]) -> None:
 
 
 def _print_leases_table(items: list[dict[str, Any]]) -> None:
-    print(  # noqa: T201
-        f"{'Lease ID':14s} {'Task ID':28s} {'Agent':18s} {'Status':12s} {'Branch':18s} Expires"
-    )
-    print("-" * 118)  # noqa: T201
+    print(f"{'Lease ID':14s} {'Task ID':28s} {'Agent':18s} {'Status':12s} {'Branch':18s} Expires")
+    print("-" * 118)
     for item in items:
-        print(  # noqa: T201
+        print(
             f"{str(item.get('lease_id', ''))[:14]:14s} "
             f"{str(item.get('task_id', ''))[:28]:28s} "
             f"{str(item.get('owner_agent', ''))[:18]:18s} "
@@ -144,10 +143,10 @@ def _print_leases_table(items: list[dict[str, Any]]) -> None:
 
 
 def _print_salvage_table(items: list[dict[str, Any]]) -> None:
-    print(f"{'Candidate ID':14s} {'Source':12s} {'Branch':18s} Summary")  # noqa: T201
-    print("-" * 88)  # noqa: T201
+    print(f"{'Candidate ID':14s} {'Source':12s} {'Branch':18s} Summary")
+    print("-" * 88)
     for item in items:
-        print(  # noqa: T201
+        print(
             f"{str(item.get('candidate_id', ''))[:14]:14s} "
             f"{str(item.get('source_kind', ''))[:12]:12s} "
             f"{str(item.get('branch', ''))[:18]:18s} "
@@ -263,7 +262,7 @@ def add_tasks_parser(subparsers: argparse._SubParsersAction) -> None:
 def cmd_tasks(args: argparse.Namespace) -> None:
     command = getattr(args, "tasks_command", None)
     if not command:
-        print(  # noqa: T201
+        print(
             "Usage: aragora tasks {list|show|claim|leases|heartbeat|release|complete|salvage|stats|sync}",
             file=sys.stderr,
         )
@@ -304,7 +303,7 @@ def _cmd_show(args: argparse.Namespace) -> None:
     queue = _load_queue()
     item = _resolve(queue.get(args.task_id))
     if item is None:
-        print(f"Task {args.task_id} not found", file=sys.stderr)  # noqa: T201
+        print(f"Task {args.task_id} not found", file=sys.stderr)
         raise SystemExit(1)
     payload = _serialize(item)
     if args.output_format == "json":
@@ -401,7 +400,7 @@ def _cmd_complete(args: argparse.Namespace) -> None:
     if args.output_format == "json":
         _print_json(payload)
         return
-    print(f"receipt_id={payload['receipt_id']} lease_id={payload['lease_id']}")  # noqa: T201
+    print(f"receipt_id={payload['receipt_id']} lease_id={payload['lease_id']}")
 
 
 def _cmd_salvage(args: argparse.Namespace) -> None:
@@ -419,7 +418,7 @@ def _cmd_stats(args: argparse.Namespace) -> None:
     if args.output_format == "json":
         _print_json(payload)
         return
-    print(  # noqa: T201
+    print(
         "total_items={total_items} pending_items={pending_items} completed_items={completed_items}".format(
             total_items=payload.get("total_items", 0),
             pending_items=payload.get("pending_items", 0),
@@ -445,5 +444,5 @@ def _cmd_sync(args: argparse.Namespace) -> None:
         _print_json(counts)
         return
     for section, payload in counts.items():
-        print(section)  # noqa: T201
-        print(json.dumps(payload, indent=2))  # noqa: T201
+        print(section)
+        print(json.dumps(payload, indent=2))

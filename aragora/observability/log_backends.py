@@ -874,7 +874,7 @@ class PostgreSQLAuditBackend(AuditLogBackend):
                      action, details, correlation_id, workspace_id, ip_address,
                      user_agent, signature)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    """,  # noqa: S608 -- table name interpolation, parameterized
+                    """,  # table name interpolation, parameterized
                     (
                         entry.id,
                         entry.timestamp,
@@ -939,7 +939,7 @@ class PostgreSQLAuditBackend(AuditLogBackend):
                            user_agent, signature
                     FROM {self.entries_table}
                     WHERE id = %s
-                    """,  # noqa: S608 -- table name interpolation, parameterized
+                    """,  # table name interpolation, parameterized
                     (entry_id,),
                 )
                 row = cur.fetchone()
@@ -963,7 +963,7 @@ class PostgreSQLAuditBackend(AuditLogBackend):
                            user_agent, signature
                     FROM {self.entries_table}
                     WHERE sequence_number = %s
-                    """,  # noqa: S608 -- table name interpolation, parameterized
+                    """,  # table name interpolation, parameterized
                     (sequence_number,),
                 )
                 row = cur.fetchone()
@@ -987,7 +987,7 @@ class PostgreSQLAuditBackend(AuditLogBackend):
                     FROM {self.entries_table}
                     ORDER BY sequence_number DESC
                     LIMIT 1
-                    """)  # noqa: S608 -- table name interpolation, parameterized
+                    """)  # table name interpolation, parameterized
                 row = cur.fetchone()
                 if row:
                     return self._row_to_entry(row)
@@ -1014,7 +1014,7 @@ class PostgreSQLAuditBackend(AuditLogBackend):
                     FROM {self.entries_table}
                     WHERE sequence_number BETWEEN %s AND %s
                     ORDER BY sequence_number
-                    """,  # noqa: S608 -- table name interpolation, parameterized
+                    """,  # table name interpolation, parameterized
                     (start_sequence, end_sequence),
                 )
                 return [self._row_to_entry(row) for row in cur.fetchall()]
@@ -1076,7 +1076,7 @@ class PostgreSQLAuditBackend(AuditLogBackend):
                     WHERE {where_clause}
                     ORDER BY timestamp DESC
                     LIMIT %s OFFSET %s
-                    """,  # noqa: S608 -- table name interpolation, parameterized
+                    """,  # table name interpolation, parameterized
                     tuple(params),
                 )
                 return [self._row_to_entry(row) for row in cur.fetchall()]
@@ -1110,7 +1110,8 @@ class PostgreSQLAuditBackend(AuditLogBackend):
         try:
             with conn.cursor() as cur:
                 cur.execute(
-                    f"SELECT COUNT(*) FROM {self.entries_table} WHERE {where_clause}",  # noqa: S608 -- table name interpolation, parameterized
+                    # table name interpolation, parameterized
+                    f"SELECT COUNT(*) FROM {self.entries_table} WHERE {where_clause}",
                     tuple(params),
                 )
                 result = cur.fetchone()
@@ -1137,7 +1138,7 @@ class PostgreSQLAuditBackend(AuditLogBackend):
                         merkle_root = EXCLUDED.merkle_root,
                         chain_hash = EXCLUDED.chain_hash,
                         created_at = EXCLUDED.created_at
-                    """,  # noqa: S608 -- table name interpolation, parameterized
+                    """,  # table name interpolation, parameterized
                     (
                         anchor.date,
                         anchor.first_sequence,
@@ -1168,7 +1169,7 @@ class PostgreSQLAuditBackend(AuditLogBackend):
                            merkle_root, chain_hash, created_at
                     FROM {self.anchors_table}
                     WHERE date = %s
-                    """,  # noqa: S608 -- table name interpolation, parameterized
+                    """,  # table name interpolation, parameterized
                     (date,),
                 )
                 row = cur.fetchone()
