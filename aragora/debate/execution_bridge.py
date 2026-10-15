@@ -372,7 +372,7 @@ class ExecutionBridge:
             )
 
         try:
-            from aragora.nomic.improvement_queue import (
+            from aragora.learning.improvement_queue import (
                 ImprovementSuggestion,
                 get_improvement_queue,
             )
