@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator, Iterator, Mapping
 
 import yaml
 
@@ -625,7 +625,7 @@ class ObsidianConnector(BaseConnector):
         self,
         path: str,
         content: str,
-        frontmatter: Frontmatter | None = None,
+        frontmatter: Frontmatter | Mapping[str, Any] | None = None,
         overwrite: bool = False,
     ) -> ObsidianNote | None:
         """Write a note to the vault.
@@ -633,12 +633,14 @@ class ObsidianConnector(BaseConnector):
         Args:
             path: Relative path for the note
             content: Note content (markdown)
-            frontmatter: Optional frontmatter
+            frontmatter: Optional frontmatter, or a mapping of ``Frontmatter`` fields
             overwrite: Whether to overwrite existing note
 
         Returns:
             Created/updated ObsidianNote or None on failure
         """
+        if isinstance(frontmatter, Mapping):
+            frontmatter = Frontmatter(**frontmatter)
         file_path = self._vault_path / path
         if not path.endswith(".md"):
             file_path = self._vault_path / f"{path}.md"
@@ -970,6 +972,10 @@ class ObsidianConnector(BaseConnector):
     # =========================================================================
     # Sync Operations
     # =========================================================================
+
+    def new_sync_state(self, since: datetime | None = None) -> SyncState:
+        """A sync state for :meth:`sync_items` that skips notes not modified after ``since``."""
+        return SyncState(connector_id=self.name, last_sync_at=since)
 
     async def sync_items(
         self,
