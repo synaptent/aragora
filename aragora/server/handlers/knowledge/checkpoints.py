@@ -172,12 +172,12 @@ class KMCheckpointHandler(BaseHandler):
         self._checkpoint_store: KMCheckpointStore | None = None
 
     def _get_checkpoint_store(self) -> KMCheckpointStore:
-        """Get or create the checkpoint store instance."""
+        """Get the checkpoint store, created on first use from the server's KnowledgeMound."""
         if self._checkpoint_store is None:
             try:
                 from aragora.knowledge.mound.checkpoint import get_km_checkpoint_store
 
-                store = get_km_checkpoint_store()
+                store = get_km_checkpoint_store(self.ctx.get("knowledge_mound"))
                 if store is None:
                     raise RuntimeError("KM checkpoint store not initialized")
                 self._checkpoint_store = store
