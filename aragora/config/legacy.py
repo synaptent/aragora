@@ -20,12 +20,16 @@ Import these values instead of hardcoding throughout the codebase.
 from __future__ import annotations
 
 
+import logging
 import os
+import threading
 import warnings
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 from aragora.config.data_dir import get_default_data_dir
+
+logger = logging.getLogger(__name__)
 
 # Emit deprecation warning on import
 warnings.warn(
@@ -39,6 +43,9 @@ warnings.warn(
 __all__ = [
     # Helper functions
     "get_api_key",
+    "get_provider_key",
+    "select_provider_key",
+    "ProviderKey",
     "validate_configuration",
     "ConfigurationError",
     # Authentication
@@ -253,6 +260,74 @@ def get_api_key(*env_vars: str, required: bool = True) -> str | None:
         var_names = " or ".join(env_vars)
         raise ValueError(f"{var_names} environment variable required")
     return None
+
+
+class ProviderKey(NamedTuple):
+    """The key an optional provider reader selected.
+
+    ``value`` is ``None`` when ``name``'s mounted secret file was rejected.
+    """
+
+    name: str
+    value: str | None
+
+    @property
+    def rejected(self) -> bool:
+        return self.value is None
+
+
+_reported_rejected_provider_keys: set[tuple[str, str, str]] = set()
+_reported_rejected_provider_keys_lock = threading.Lock()
+
+
+def _report_rejected_provider_key(consumer: str, name: str, reason: str | None) -> None:
+    detail = reason or "its mounted file was rejected"
+    with _reported_rejected_provider_keys_lock:
+        if (consumer, name, detail) in _reported_rejected_provider_keys:
+            return
+        _reported_rejected_provider_keys.add((consumer, name, detail))
+    logger.warning(
+        "%s is unavailable: %s was rejected by secret custody (%s)", consumer, name, detail
+    )
+
+
+def select_provider_key(*env_vars: str, consumer: str) -> ProviderKey | None:
+    """Select the key for an optional reader that uses one provider at a time.
+
+    Names are read lazily in order and the first present one decides, so a valid
+    earlier name never touches a later name. When that name's mounted file was
+    rejected, the value-free reason is logged once per consumer and the result is
+    ``ProviderKey(name, None)``: the caller treats its provider as unavailable and
+    must not move on to a later name, an alias or another provider. Returns
+    ``None`` when no name is present.
+
+    Raises:
+        SecretSourceError: If configured custody itself is unusable.
+    """
+    from aragora.config.secrets import (
+        get_secret_manager,
+        get_secret_presence,
+        is_secret_presence_available,
+    )
+
+    for var in env_vars:
+        presence = get_secret_presence(var)
+        if presence.source == "mounted_file_rejected":
+            reason = get_secret_manager().rejected_mounted_secrets().get(var)
+            _report_rejected_provider_key(consumer, var, reason)
+            return ProviderKey(var, None)
+        if not is_secret_presence_available(presence):
+            continue
+        value = get_api_key(var, required=False)
+        if value:
+            return ProviderKey(var, value)
+    return None
+
+
+def get_provider_key(*env_vars: str, consumer: str) -> str | None:
+    """Return the key from ``select_provider_key``, or ``None`` when absent or rejected."""
+    selected = select_provider_key(*env_vars, consumer=consumer)
+    return selected.value if selected is not None else None
 
 
 # === Authentication ===

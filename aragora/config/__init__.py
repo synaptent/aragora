@@ -131,8 +131,11 @@ _LEGACY_NAMES: set[str] = {
     "USER_EVENT_QUEUE_SIZE",
     "WS_HEARTBEAT_INTERVAL",
     "WS_MAX_MESSAGE_SIZE",
+    "ProviderKey",
     "get_api_key",
+    "get_provider_key",
     "resolve_db_path",
+    "select_provider_key",
     "validate_configuration",
 }
 from .settings import (
@@ -219,10 +222,14 @@ from typing import Any as _Any, TYPE_CHECKING
 if TYPE_CHECKING:
     from pathlib import Path as _Path
 
+    from .legacy import ProviderKey as ProviderKey
+
     # Explicit type declarations for lazily-loaded legacy names.
     # These allow mypy to resolve types without triggering runtime imports.
     def resolve_db_path(path_str: str | _Path) -> str: ...
     def get_api_key(*env_vars: str, required: bool = True) -> str | None: ...
+    def get_provider_key(*env_vars: str, consumer: str) -> str | None: ...
+    def select_provider_key(*env_vars: str, consumer: str) -> ProviderKey | None: ...
     def validate_configuration() -> dict[str, _Any]: ...
 
     DB_TIMEOUT_SECONDS: float

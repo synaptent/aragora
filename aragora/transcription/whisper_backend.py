@@ -32,7 +32,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from aragora.config import get_api_key
+from aragora.config import get_provider_key
 
 logger = logging.getLogger(__name__)
 
@@ -155,9 +155,10 @@ class TranscriptionConfig:
         else:
             priority = ["openai", "faster-whisper", "whisper-cpp"]
 
+        # The OpenAI key is read by the OpenAI backend when it is tried, so a
+        # local-only backend order never touches that secret.
         return cls(
             backend_priority=priority,
-            openai_api_key=get_api_key("OPENAI_API_KEY", required=False),
             whisper_model=os.getenv("ARAGORA_WHISPER_MODEL", DEFAULT_MODEL),
             whisper_device=os.getenv("ARAGORA_WHISPER_DEVICE", "auto"),
             language=os.getenv("ARAGORA_WHISPER_LANGUAGE"),
@@ -235,7 +236,7 @@ class OpenAIWhisperBackend(TranscriptionBackend):
         if model:
             self.config.openai_model = model
         # Validate API key is available
-        api_key = self.config.openai_api_key or get_api_key("OPENAI_API_KEY", required=False)
+        api_key = self._api_key()
         if not api_key:
             raise ValueError(
                 "OPENAI_API_KEY environment variable or config.openai_api_key required"
@@ -246,9 +247,14 @@ class OpenAIWhisperBackend(TranscriptionBackend):
         """Return the OpenAI model name."""
         return self.config.openai_model
 
+    def _api_key(self) -> str | None:
+        return self.config.openai_api_key or get_provider_key(
+            "OPENAI_API_KEY", consumer="OpenAI Whisper transcription"
+        )
+
     def is_available(self) -> bool:
         """Check if OpenAI API is available."""
-        api_key = self.config.openai_api_key or get_api_key("OPENAI_API_KEY", required=False)
+        api_key = self._api_key()
         if not api_key:
             return False
 
@@ -264,7 +270,7 @@ class OpenAIWhisperBackend(TranscriptionBackend):
         if self._client is None:
             import openai
 
-            api_key = self.config.openai_api_key or get_api_key("OPENAI_API_KEY", required=False)
+            api_key = self._api_key()
             self._client = openai.AsyncOpenAI(api_key=api_key)
         if self._client is None:
             raise RuntimeError("OpenAI client not initialized - client creation failed")
