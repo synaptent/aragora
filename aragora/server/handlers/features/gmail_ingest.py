@@ -105,8 +105,6 @@ class GmailIngestHandler(SecureHandler):
         """Initialize handler with optional context."""
         self.ctx = server_context or ctx or {}
 
-    HANDLE_POST_JSON_BODY = True
-
     RESOURCE_TYPE = "gmail"
 
     ROUTES = [
@@ -178,10 +176,8 @@ class GmailIngestHandler(SecureHandler):
 
         # SECURITY: Extract user_id from JWT token, not from query params
         user_id, org_id, auth_error = self._get_authenticated_user(handler)
-        if auth_error is not None:
+        if auth_error:
             return auth_error
-        if user_id is None:
-            return error_response("Authentication required", 401)
 
         if path == "/api/v1/gmail/status":
             return await self._get_status(user_id)
@@ -235,10 +231,8 @@ class GmailIngestHandler(SecureHandler):
 
         # SECURITY: Extract user_id from JWT token, not from body
         user_id, org_id, auth_error = self._get_authenticated_user(handler)
-        if auth_error is not None:
+        if auth_error:
             return auth_error
-        if user_id is None:
-            return error_response("Authentication required", 401)
 
         if path == "/api/v1/gmail/connect":
             return self._start_connect(body, user_id)

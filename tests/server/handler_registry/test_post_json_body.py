@@ -31,9 +31,6 @@ pytestmark = pytest.mark.no_auto_auth
 BODY_READERS: list[tuple[str, str]] = [
     ("_ml_handler", "/api/v1/ml/embed"),
     ("_evolution_ab_testing_handler", "/api/v1/evolution/ab-tests"),
-    ("_breakpoints_handler", "/api/v1/breakpoints/bp-1/resolve"),
-    ("_gmail_ingest_handler", "/api/v1/gmail/search"),
-    ("_universal_graph_handler", "/api/v1/pipeline/graphs"),
 ]
 # Registered handlers whose handle_post takes a body argument but are not opted in.
 NOT_BODY_READERS: dict[str, str] = {
@@ -45,6 +42,9 @@ NOT_BODY_READERS: dict[str, str] = {
     "_smart_upload_handler": "its options would set user, workspace and tenant attribution",
     "_tournament_handler": "tournament creation has no participant cap",
     "_orchestration_handler": "async deliberation would run on a per-request event loop",
+    "_breakpoints_handler": "resolve would take reviewer_id from the body as the human id",
+    "_gmail_ingest_handler": "sync and search fields have no type or bound checks",
+    "_universal_graph_handler": "graph create would upsert a caller-chosen graph id",
 }
 # Not opted in, so handle_post keeps receiving the (empty) query dict.
 QUERY_DICT_POSTS: list[tuple[str, str]] = [
@@ -52,6 +52,9 @@ QUERY_DICT_POSTS: list[tuple[str, str]] = [
     ("_smart_upload_handler", "/api/v1/upload/smart"),
     ("_tournament_handler", "/api/v1/tournaments"),
     ("_orchestration_handler", "/api/v1/orchestration/deliberate"),
+    ("_breakpoints_handler", "/api/v1/breakpoints/bp-1/resolve"),
+    ("_gmail_ingest_handler", "/api/v1/gmail/search"),
+    ("_universal_graph_handler", "/api/v1/pipeline/graphs"),
 ]
 
 
@@ -284,9 +287,11 @@ def test_post_without_a_usable_length_is_refused_unread(
     )
 
 
+# Without Content-Length too: the 411 rule applies only to opted-in handlers.
+@pytest.mark.parametrize("content_length", [None, ""], ids=["with-length", "no-length"])
 @pytest.mark.parametrize(("attr", "path"), QUERY_DICT_POSTS, ids=[p for _, p in QUERY_DICT_POSTS])
 def test_post_handlers_without_the_declaration_keep_the_query_dict(
-    registry_cls, monkeypatch, attr, path
+    registry_cls, monkeypatch, attr, path, content_length
 ):
     handler = getattr(registry_cls, attr)
     assert getattr(handler, "HANDLE_POST_JSON_BODY", False) is False
@@ -298,7 +303,7 @@ def test_post_handlers_without_the_declaration_keep_the_query_dict(
 
     monkeypatch.setattr(handler, "handle_post", spy, raising=False)
 
-    status, _ = _dispatch(registry_cls, path, b'{"question": "q"}')
+    status, _ = _dispatch(registry_cls, path, b'{"question": "q"}', content_length=content_length)
 
     assert status == 200
     assert received == [{}]
