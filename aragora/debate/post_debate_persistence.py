@@ -15,8 +15,9 @@ import logging
 import re
 from typing import TYPE_CHECKING, Any
 
+from aragora.debate.pipeline_backends import pipeline_backend
 from aragora.debate.post_debate_config import PostDebateConfig
-from aragora.pipeline.execution_mode import ExecutionMode
+from aragora.types.execution_mode import ExecutionMode
 
 # The coordinator's logger name, so log filters and caplog assertions keyed on
 # "aragora.debate.post_debate_coordinator" still see records from these methods.
@@ -58,7 +59,7 @@ class PostDebatePersistenceMixin:
             self._backbone_failure("Post-debate backbone runtime unavailable")
             return None
         try:
-            from aragora.pipeline.backbone_runtime import BackboneRuntime
+            BackboneRuntime = pipeline_backend().backbone_runtime()
 
             self._backbone_runtime = BackboneRuntime()
         except (ImportError, RuntimeError, OSError, ValueError, TypeError) as e:
@@ -120,7 +121,7 @@ class PostDebatePersistenceMixin:
             if isinstance(plan_obj, dict):
                 plan_obj.setdefault("backbone_run_id", run_id)
             elif plan_obj is not None:
-                from aragora.pipeline.backbone_runtime import BackboneRuntime
+                BackboneRuntime = pipeline_backend().backbone_runtime()
 
                 BackboneRuntime.ensure_plan_metadata(
                     plan_obj,

@@ -228,7 +228,7 @@ class TestCodebaseRLMIntegration:
         mock_rlm.query = AsyncMock(return_value="RLM found 5 relevant modules")
 
         with (
-            patch("aragora.nomic.context_builder.NomicContextBuilder", return_value=mock_builder),
+            patch("aragora.rlm.context_builder.NomicContextBuilder", return_value=mock_builder),
             patch("aragora.rlm.bridge.AragoraRLM", return_value=mock_rlm),
             patch("pathlib.Path.exists", return_value=True),
         ):
@@ -255,7 +255,7 @@ class TestCodebaseRLMIntegration:
         mock_builder.build_debate_context = AsyncMock(return_value="# Standard context")
 
         with (
-            patch("aragora.nomic.context_builder.NomicContextBuilder", return_value=mock_builder),
+            patch("aragora.rlm.context_builder.NomicContextBuilder", return_value=mock_builder),
             patch.dict("sys.modules", {"aragora.rlm.bridge": None}),
             patch("pathlib.Path.exists", return_value=True),
         ):
@@ -282,7 +282,7 @@ class TestCodebaseRLMIntegration:
         mock_builder.build_debate_context = AsyncMock(return_value="# Context")
 
         with (
-            patch("aragora.nomic.context_builder.NomicContextBuilder", return_value=mock_builder),
+            patch("aragora.rlm.context_builder.NomicContextBuilder", return_value=mock_builder),
             patch("pathlib.Path.exists", return_value=True),
         ):
             result = await provider.build_context("Test task")

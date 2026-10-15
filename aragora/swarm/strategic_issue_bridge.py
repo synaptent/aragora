@@ -66,7 +66,7 @@ THEME_FILE_HINTS = {
     "UDW": [
         "aragora/pipeline/universal_node.py",
         "aragora/pipeline/graph_state.py",
-        "aragora/pipeline/execution_mode.py",
+        "aragora/types/execution_mode.py",
     ],
     "MCF": [
         "aragora/knowledge/mound/store.py",

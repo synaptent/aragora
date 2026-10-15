@@ -12,6 +12,7 @@ import asyncio
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from aragora.debate.nomic_backends import NomicBackendNotRegisteredError, nomic_backend
 from aragora.debate.workspace_stores import get_workspace_stores
 from aragora.logging_config import get_logger as get_structured_logger
 
@@ -81,7 +82,7 @@ async def create_debate_bead(
         return None
 
     try:
-        from aragora.nomic.beads import Bead, BeadPriority, BeadType
+        Bead, BeadPriority, _, BeadType = nomic_backend().bead_classes()
 
         bead_store = await _resolve_bead_store(protocol, env, bead_store_holder)
         if bead_store is None:
@@ -117,7 +118,7 @@ async def create_debate_bead(
         logger.info("Created debate bead: %s for debate %s", bead_id[:8], result.debate_id[:8])
         return bead_id
 
-    except ImportError:
+    except (ImportError, NomicBackendNotRegisteredError):
         logger.debug("Bead tracking unavailable: aragora.nomic.beads not found")
         return None
     except (OSError, ValueError, TypeError, AttributeError, KeyError, RuntimeError) as e:
@@ -155,7 +156,7 @@ async def create_pending_debate_bead(
         return None
 
     try:
-        from aragora.nomic.beads import Bead, BeadPriority, BeadType
+        Bead, BeadPriority, _, BeadType = nomic_backend().bead_classes()
 
         bead_store = await _resolve_bead_store(protocol, env, bead_store_holder)
         if bead_store is None:
@@ -180,7 +181,7 @@ async def create_pending_debate_bead(
         logger.debug("Created pending debate bead: %s for debate %s", bead_id[:8], debate_id[:8])
         return bead_id
 
-    except ImportError:
+    except (ImportError, NomicBackendNotRegisteredError):
         logger.debug("Bead tracking unavailable")
         return None
     except (OSError, ValueError, TypeError, AttributeError, KeyError, RuntimeError) as e:
@@ -206,7 +207,7 @@ async def update_debate_bead(
         return
 
     try:
-        from aragora.nomic.beads import BeadPriority, BeadStatus
+        _, BeadPriority, BeadStatus, _ = nomic_backend().bead_classes()
 
         holder_state = getattr(bead_store_holder, "__dict__", {})
         bead_store = holder_state.get("_bead_store") if "_bead_store" in holder_state else None
@@ -252,7 +253,7 @@ async def update_debate_bead(
             "Updated debate bead: %s status=%s", bead_id[:8], "completed" if success else "failed"
         )
 
-    except ImportError:
+    except (ImportError, NomicBackendNotRegisteredError):
         logger.debug("Bead tracking unavailable: aragora.nomic.beads not installed")
     except (OSError, ValueError, TypeError, AttributeError, KeyError, RuntimeError) as e:
         logger.warning("Failed to update debate bead: %s", e)
@@ -285,7 +286,7 @@ async def init_hook_tracking(
         return {}
 
     try:
-        from aragora.nomic.hook_queue import HookQueueRegistry
+        HookQueueRegistry = nomic_backend().hook_queue_registry()
 
         hook_registry = getattr(hook_registry_holder, "_hook_registry", None)
         if hook_registry is None:
@@ -318,7 +319,7 @@ async def init_hook_tracking(
 
         return hook_entries
 
-    except ImportError:
+    except (ImportError, NomicBackendNotRegisteredError):
         logger.debug("Hook tracking unavailable: aragora.nomic.hook_queue not found")
         return {}
     except (OSError, ValueError, TypeError, AttributeError) as e:
@@ -389,8 +390,9 @@ async def recover_pending_debates(
     try:
         from datetime import datetime, timedelta, timezone
 
-        from aragora.nomic.beads import BeadStatus, BeadType
-        from aragora.nomic.hook_queue import HookQueueRegistry
+        backend = nomic_backend()
+        _, _, BeadStatus, BeadType = backend.bead_classes()
+        HookQueueRegistry = backend.hook_queue_registry()
 
         if bead_store is None:
             stores = get_workspace_stores(
@@ -439,7 +441,7 @@ async def recover_pending_debates(
 
         return result
 
-    except ImportError as e:
+    except (ImportError, NomicBackendNotRegisteredError) as e:
         logger.debug("GUPP recovery unavailable: %s", e)
         return []
     except (OSError, ValueError, TypeError, KeyError, RuntimeError) as e:

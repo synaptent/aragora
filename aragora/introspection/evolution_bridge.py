@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from aragora.introspection.active import AgentPerformanceSummary
     from aragora.introspection.types import IntrospectionSnapshot
-    from aragora.nomic.feedback_orchestrator import ImprovementQueue
+    from aragora.learning.improvement_goal_queue import ImprovementQueue
 
 
 # ---------------------------------------------------------------------------
@@ -205,7 +205,7 @@ class IntrospectionEvolutionBridge:
         for rec in recommendations:
             try:
                 # Lazy import to avoid circular dependencies
-                from aragora.nomic.feedback_orchestrator import ImprovementGoal
+                from aragora.learning.improvement_goal_queue import ImprovementGoal
 
                 priority = self._severity_to_priority(rec.severity)
                 goal = ImprovementGoal(
@@ -505,7 +505,7 @@ class IntrospectionEvolutionBridge:
             return self._queue
 
         try:
-            from aragora.nomic.feedback_orchestrator import ImprovementQueue
+            from aragora.learning.improvement_goal_queue import ImprovementQueue
 
             self._queue = ImprovementQueue()
             return self._queue

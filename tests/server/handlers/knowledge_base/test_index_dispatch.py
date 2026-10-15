@@ -151,12 +151,7 @@ def _dispatch(
 
 
 def _ml_embed(registry_cls: type[_RegistryMixin], body: dict[str, Any]) -> tuple[int, Any]:
-    # The registry passes MLHandler.handle_post the query dict rather than the JSON
-    # body, so /api/v1/ml/embed is called here with the parsed body, as its own tests do.
-    http = MagicMock()
-    http.client_address = ("127.0.0.1", 12345)
-    result = registry_cls._ml_handler.handle_post("/api/v1/ml/embed", body, http)
-    return result.status_code, json.loads(result.body)
+    return _dispatch(registry_cls, "POST", "/api/v1/ml/embed", body)
 
 
 @pytest.mark.parametrize("path", INDEX_PATHS)
@@ -250,10 +245,7 @@ class _ModelLoadsLater:
 
 
 def _ml_search(registry_cls: type[_RegistryMixin], body: dict[str, Any]) -> tuple[int, Any]:
-    http = MagicMock()
-    http.client_address = ("127.0.0.1", 12345)
-    result = registry_cls._ml_handler.handle_post("/api/v1/ml/search", body, http)
-    return result.status_code, json.loads(result.body)
+    return _dispatch(registry_cls, "POST", "/api/v1/ml/search", body)
 
 
 def test_embed_routes_answer_again_once_the_local_model_loads(
@@ -518,3 +510,102 @@ def test_real_jwt_roles_follow_rbac_v2(
     else:
         assert body["count"] == 1
         assert body["model"] == local_service.model_name
+
+
+_EMBEDDINGS_UNAVAILABLE = {
+    "error": {"message": "ML embeddings not available", "code": "service_unavailable"}
+}
+
+
+@pytest.mark.parametrize(
+    "sentence_transformer",
+    [None, _raise_os_error],
+    ids=["dependency-missing", "model-cannot-load"],
+)
+def test_embed_routes_keep_the_unavailable_message_in_production(
+    registry_cls, install_local_service, monkeypatch, sentence_transformer: Any
+) -> None:
+    # 5xx messages from error_response are rewritten in production; this one must not be.
+    monkeypatch.setenv("ARAGORA_ENV", "production")
+    monkeypatch.setattr("aragora.ml.embeddings.SentenceTransformer", sentence_transformer)
+    install_local_service(LocalEmbeddingService())
+    batch_status, batch = _dispatch(
+        registry_cls, "POST", "/api/v1/index/embed-batch", {"texts": ["alpha"]}
+    )
+    embed_status, single = _ml_embed(registry_cls, {"texts": ["alpha"]})
+    search_status, search = _ml_search(registry_cls, {"query": "q", "documents": ["d"]})
+    assert batch_status == embed_status == search_status == 503, (batch, single, search)
+    assert batch == single == search == _EMBEDDINGS_UNAVAILABLE
+
+
+class _DimensionRaisesAttributeError:
+    model_name = _FakeLocalService.model_name
+
+    @property
+    def dimension(self) -> int:
+        raise AttributeError(
+            "'NoneType' object has no attribute 'get_sentence_embedding_dimension'"
+        )
+
+
+def test_embed_routes_answer_503_when_loading_the_model_raises_attribute_error(
+    registry_cls, install_local_service
+) -> None:
+    install_local_service(_DimensionRaisesAttributeError())
+    batch_status, batch = _dispatch(
+        registry_cls, "POST", "/api/v1/index/embed-batch", {"texts": ["alpha"]}
+    )
+    embed_status, single = _ml_embed(registry_cls, {"texts": ["alpha"]})
+    assert batch_status == embed_status == 503, (batch, single)
+    assert batch == single == _EMBEDDINGS_UNAVAILABLE
+
+
+class _SearchableModelLoadsLater(_ModelLoadsLater):
+    def search(self, **kwargs: Any) -> list[Any]:
+        raise OSError("model download timed out")
+
+
+def test_ml_search_answers_503_when_the_local_model_cannot_load(
+    registry_cls, install_local_service
+) -> None:
+    install_local_service(_SearchableModelLoadsLater())
+    status, body = _ml_search(registry_cls, {"query": "q", "documents": ["d"]})
+    assert status == 503, body
+    assert body == _EMBEDDINGS_UNAVAILABLE
+
+
+class _TruncatingService(_FakeLocalService):
+    """Reports texts longer than five characters as cut to the model's window."""
+
+    def exceeds_max_seq_length(self, texts: Sequence[str]) -> list[bool]:
+        return [len(text) > 5 for text in texts]
+
+
+@pytest.mark.parametrize(
+    ("texts", "truncated"),
+    [(["alpha", "beta"], False), (["alpha", "a much longer text"], True)],
+    ids=["within-window", "one-truncated"],
+)
+def test_embed_routes_report_whether_the_model_truncated_a_text(
+    registry_cls, install_local_service, texts: list[str], truncated: bool
+) -> None:
+    install_local_service(_TruncatingService())
+    batch_status, batch = _dispatch(
+        registry_cls, "POST", "/api/v1/index/embed-batch", {"texts": texts}
+    )
+    embed_status, single = _ml_embed(registry_cls, {"texts": texts})
+    text_status, one = _ml_embed(registry_cls, {"text": texts[-1]})
+    assert batch_status == embed_status == text_status == 200, (batch, single, one)
+    assert batch["truncated"] is single["truncated"] is one["truncated"] is truncated
+
+
+def test_embed_routes_omit_truncated_when_the_service_cannot_tell(
+    registry_cls, local_service
+) -> None:
+    batch_status, batch = _dispatch(
+        registry_cls, "POST", "/api/v1/index/embed-batch", {"texts": ["alpha"]}
+    )
+    embed_status, single = _ml_embed(registry_cls, {"texts": ["alpha"]})
+    assert batch_status == embed_status == 200, (batch, single)
+    assert "truncated" not in batch
+    assert "truncated" not in single

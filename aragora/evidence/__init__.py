@@ -1,7 +1,5 @@
 """Evidence collection, verification, and persistence module."""
 
-# Import Evidence from connectors where it's defined
-from aragora.connectors.base import Evidence
 from aragora.evidence.attribution import (
     AttributionChain,
     AttributionChainEntry,
@@ -37,8 +35,9 @@ from aragora.evidence.store import (
     InMemoryEvidenceStore,
 )
 
-# Import EvidenceType from reasoning where it's defined
+# Import EvidenceType and Evidence from reasoning where they're defined
 from aragora.reasoning.claims import EvidenceType
+from aragora.reasoning.source_evidence import Evidence
 
 __all__ = [
     # Collector

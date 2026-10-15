@@ -16,6 +16,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from aragora.debate.pipeline_backends import pipeline_backend
 from aragora.debate.post_debate_coordinator import (
     PostDebateConfig,
     PostDebateCoordinator,
@@ -377,6 +378,8 @@ class TestGracefulErrorHandling:
         coordinator = PostDebateCoordinator(config=config)
         msg = _make_message("test", agent="a", round_num=1)
         debate_result = _make_debate_result(messages=[msg])
+        # The declared registrations run once per process; register before hiding a module.
+        pipeline_backend()
 
         with patch.dict("sys.modules", {"aragora.pipeline.idea_to_execution": None}):
             result = coordinator.run(

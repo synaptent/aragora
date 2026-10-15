@@ -148,6 +148,73 @@ record; the commit status is only its GitHub-visible projection. The
 `admin_squash_merge` receipt is a post-merge audit record, not the pre-merge
 human-risk signal.
 
+## Parking an exact head
+
+A maintainer can stop one exact head from merging, without pushing, by posting
+a park record as a PR comment. While it stands, `review-queue merge-packet`
+leaves the PR out of `admin_squash_order` and reports it as
+`blocked_by_live_gate` (for Tier 3-4 too, so `aragora-merge-quorum` and
+`scripts/settle_tier4_pr.py` refuse the head even when an
+`aragora/human-settlement` status exists), and `scripts/settle_one_pr.py`
+suggests no merge. The reader
+(`aragora/cli/commands/review_queue_park_records.py`) is deliberately strict:
+a comment that does not follow the template below is ignored, and the head
+stays mergeable.
+
+Park record (comment author association `OWNER`, `MEMBER` or `COLLABORATOR`):
+
+```text
+## Current-head repeat-blocker park
+
+Exact head: <full 40-character head SHA>
+
+<reason; for example: Do not merge this PR on this head.>
+```
+
+- The marker stands alone on its line, optionally as a Markdown heading and
+  with a trailing colon. Park markers: `Current-head repeat-blocker park`,
+  `Current-head evidence blocker`, `Evidence safety correction`. A marker in
+  bold, quoted, or followed by other text on the same line is not recognized.
+- The head line starts with `Exact head:`, `Current head:` or `Head:` (or `=`)
+  followed by the full 40-character SHA, optionally in backticks. `Head SHA:`,
+  `head_sha:` and abbreviated SHAs are not recognized.
+- The head line belongs to the marker: it must come after the marker line and
+  before the next heading or marker line. A head named elsewhere in the
+  comment does not count.
+- Lines inside ```` ``` ```` or `~~~` code fences, indented code blocks and
+  `>` quotes are ignored, so quoting this template (or the lift template) in a
+  comment neither parks nor lifts a head.
+- A park applies only to the head it names; a new push clears it. A later
+  supportive review of the same head does not lift it.
+
+Lift (the Tier 4 operator trust that `scripts/settle_tier4_pr.py` uses:
+comment author association `OWNER`; or `MEMBER` or `COLLABORATOR` whose login
+is on the trusted operator allowlist and whose live repository permission is
+`admin`):
+
+```text
+## Current-head park lift
+
+Exact head: <full 40-character head SHA>
+
+<reason>
+```
+
+`Current-head park override` is accepted as the lift marker too. The same
+marker, head-line and quoting rules apply as for a park. For one head, the
+latest park or lift comment wins.
+
+- The allowlist is the comma-separated `ARAGORA_TIER4_TRUSTED_OPERATORS`
+  variable, which `scripts/settle_tier4_pr.py` also reads; when it is unset or
+  empty, the lift allowlist is `scarmani`. Logins compare case-insensitively.
+  `scripts/settle_tier4_pr.py` differs here: it also adds logins from its
+  `--trusted-operator-login` option, and with no allowlist it accepts any
+  `MEMBER` whose live permission is `admin`.
+- The `MEMBER` and `COLLABORATOR` admin check reads
+  `repos/<owner>/<repo>/collaborators/<login>/permission` while
+  `review-queue merge-packet` builds the packet. If the permission is not
+  `admin`, or the lookup fails, the lift is ignored and the park stands.
+
 ## Rollout order
 
 1. Merge the enforcing workflow `.github/workflows/aragora-merge-quorum.yml`.

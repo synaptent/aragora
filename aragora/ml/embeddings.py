@@ -200,6 +200,27 @@ class LocalEmbeddingService:
         # encode() returns np.ndarray when convert_to_numpy=True (default)
         return np.asarray(embeddings).tolist()
 
+    def exceeds_max_seq_length(self, texts: Sequence[str]) -> list[bool]:
+        """Report, per text, whether encoding cuts it to the model's max_seq_length.
+
+        sentence-transformers truncates such texts without saying so. A model that
+        exposes no window or no tokenizer reports no truncation.
+        """
+        self._ensure_model_loaded()
+        max_seq_length = getattr(self._model, "max_seq_length", None)
+        tokenizer = getattr(self._model, "tokenizer", None)
+        if not texts or not isinstance(max_seq_length, int) or not callable(tokenizer):
+            return [False] * len(texts)
+        # One token past the window is enough to tell, and it bounds the ids built
+        # for an arbitrarily long text to the window's size.
+        encoded = tokenizer(
+            list(texts),
+            add_special_tokens=True,
+            truncation=True,
+            max_length=max_seq_length + 1,
+        )
+        return [len(ids) > max_seq_length for ids in encoded["input_ids"]]
+
     async def embed_async(self, text: str) -> list[float]:
         """Async version of embed."""
         async with self._lock:

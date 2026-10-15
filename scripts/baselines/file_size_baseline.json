@@ -9,7 +9,6 @@
     "aragora/cli/commands/review_queue.py": 5293,
     "aragora/cli/commands/swarm.py": 3525,
     "aragora/cli/parser.py": 5372,
-    "aragora/compliance/eu_ai_act.py": 2207,
     "aragora/debate/orchestrator_runner.py": 2158,
     "aragora/debate/phases/feedback_phase.py": 2033,
     "aragora/gauntlet/receipt_models.py": 2344,

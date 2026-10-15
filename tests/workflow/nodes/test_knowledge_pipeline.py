@@ -17,6 +17,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+CREATE_CONNECTOR = "aragora.workflow.nodes.knowledge_pipeline.create_connector"
+
 
 # ============================================================================
 # Helper Functions
@@ -465,16 +467,16 @@ class TestKnowledgePipelineProcessSource:
         # Mock the web connector
         mock_connector = MagicMock()
         mock_connector.fetch = AsyncMock(return_value="Fetched content from URL")
-        mock_web_module = MagicMock()
-        mock_web_module.WebConnector = MagicMock(return_value=mock_connector)
 
-        with patch.dict(
-            sys.modules,
-            {
-                "aragora.knowledge.pipeline": mock_pipeline_module,
-                "aragora.documents.chunking": mock_chunking_module,
-                "aragora.connectors.web": mock_web_module,
-            },
+        with (
+            patch.dict(
+                sys.modules,
+                {
+                    "aragora.knowledge.pipeline": mock_pipeline_module,
+                    "aragora.documents.chunking": mock_chunking_module,
+                },
+            ),
+            patch(CREATE_CONNECTOR, return_value=mock_connector),
         ):
             ctx = _make_context()
             result = await step.execute(ctx)
@@ -747,10 +749,8 @@ class TestKnowledgePipelineURLProcessing:
 
         mock_connector = MagicMock()
         mock_connector.fetch = AsyncMock(return_value="Fetched web content")
-        mock_web_module = MagicMock()
-        mock_web_module.WebConnector = MagicMock(return_value=mock_connector)
 
-        with patch.dict(sys.modules, {"aragora.connectors.web": mock_web_module}):
+        with patch(CREATE_CONNECTOR, return_value=mock_connector):
             result = await step._process_url("https://example.com/page", {})
 
         assert result["type"] == "url"
@@ -765,13 +765,7 @@ class TestKnowledgePipelineURLProcessing:
 
         step = KnowledgePipelineStep(name="URL No Connector Test")
 
-        # Create a module that raises ImportError when WebConnector is accessed
-        class FailingModule:
-            @property
-            def WebConnector(self):
-                raise ImportError("Web connector not available")
-
-        with patch.dict(sys.modules, {"aragora.connectors.web": FailingModule()}):
+        with patch(CREATE_CONNECTOR, side_effect=ImportError("no httpx")):
             result = await step._process_url("https://example.com/page", {})
 
         assert result["type"] == "url"
@@ -790,10 +784,8 @@ class TestKnowledgePipelineURLProcessing:
 
         mock_connector = MagicMock()
         mock_connector.fetch = AsyncMock(return_value="Content")
-        mock_web_module = MagicMock()
-        mock_web_module.WebConnector = MagicMock(return_value=mock_connector)
 
-        with patch.dict(sys.modules, {"aragora.connectors.web": mock_web_module}):
+        with patch(CREATE_CONNECTOR, return_value=mock_connector):
             await step._process_url("https://example.com/docs/readme.md", {})
 
         # Verify the filename was extracted

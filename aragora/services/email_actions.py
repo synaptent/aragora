@@ -24,6 +24,8 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Protocol, cast
 
+from aragora.runtime.connector_factory import create_connector
+
 logger = logging.getLogger(__name__)
 
 
@@ -259,12 +261,9 @@ class EmailActionsService:
 
         if key not in self._connectors:
             if provider_str == "gmail":
-                from aragora.connectors.enterprise.communication.gmail import GmailConnector
                 from aragora.storage.gmail_token_store import get_gmail_token_store
 
-                # GmailConnector uses mixins to implement abstract methods from EnterpriseConnector.
-                # The type checker cannot verify this statically, so we cast to the Protocol.
-                connector = cast(EmailActionConnector, GmailConnector())
+                connector = cast(EmailActionConnector, create_connector("gmail"))
                 token_store = get_gmail_token_store()
                 state = await token_store.get(user_id)
                 if state is None or not state.refresh_token:
@@ -274,11 +273,7 @@ class EmailActionsService:
                 setattr(connector, "_token_expiry", state.token_expiry)
                 self._connectors[key] = connector
             elif provider_str == "outlook":
-                from aragora.connectors.enterprise.communication.outlook import OutlookConnector
-
-                # OutlookConnector implements EnterpriseConnector directly.
-                # Cast to Protocol for consistent typing.
-                outlook_connector = cast(EmailActionConnector, OutlookConnector())
+                outlook_connector = cast(EmailActionConnector, create_connector("outlook"))
                 self._connectors[key] = outlook_connector
             else:
                 raise ValueError(f"Unsupported provider: {provider}")
