@@ -1,18 +1,21 @@
 """Registers the evidence connectors with :mod:`aragora.runtime.connector_factory`.
 
 Reached through the ``aragora.connector_factories`` entry point in ``pyproject.toml`` on the
-first connector a lower package builds, so ``aragora.agents``, ``aragora.verticals`` and
-``aragora.debate`` never import the connectors.
+first connector a lower package builds, so ``aragora.agents``, ``aragora.verticals``,
+``aragora.debate``, ``aragora.knowledge``, ``aragora.swarm`` and ``aragora.ideacloud`` never
+import the connectors.
 
 Kinds: ``web_search`` (a :class:`~aragora.connectors.web.WebConnector`, or None when
 duckduckgo-search is not installed), ``tax`` (the connector
 :func:`~aragora.connectors.tax.resolve_tax_connector` picks for ``jurisdiction``),
-``slack_chat`` and ``teams_chat`` (the Slack and Teams chat connectors), and one kind per class
-in ``CONNECTOR_CLASSES``.
+``slack_chat`` and ``teams_chat`` (the Slack and Teams chat connectors), ``obsidian`` (see
+:func:`build_obsidian_connector`), ``feed_ingestor`` (see :func:`build_feed_ingestor`), and one
+kind per class in ``CONNECTOR_CLASSES``.
 """
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from typing import Any
 
 import aragora.connectors as connectors
@@ -34,7 +37,34 @@ CONNECTOR_CLASSES: dict[str, str] = {
     "sec": "SECConnector",
     "semantic_scholar": "SemanticScholarConnector",
     "westlaw": "WestlawConnector",
+    "claude_mem": "ClaudeMemConnector",
+    "twitter": "TwitterConnector",
 }
+
+
+def build_obsidian_connector(config: Any = None, **config_fields: Any) -> Any:
+    """An Obsidian connector for ``config``, else for an ``ObsidianConfig`` built from
+    ``config_fields``, else for the vault the environment names; None when no vault is named.
+    """
+    from aragora.connectors.knowledge import obsidian
+
+    if config is None:
+        config = (
+            obsidian.ObsidianConfig(**config_fields)
+            if config_fields
+            else obsidian.ObsidianConfig.from_env()
+        )
+    return None if config is None else obsidian.ObsidianConnector(config)
+
+
+def build_feed_ingestor(sources: Iterable[Mapping[str, Any]] = (), **kwargs: Any) -> Any:
+    """A feed ingestor built from ``kwargs`` that reads one ``FeedSource`` per mapping."""
+    from aragora.connectors.feeds import ingestor
+
+    feed_ingestor = ingestor.FeedIngestor(**kwargs)
+    for source in sources:
+        feed_ingestor.add_source(ingestor.FeedSource(**source))
+    return feed_ingestor
 
 
 def build_connector(kind: str, /, **kwargs: Any) -> Any:
@@ -60,6 +90,10 @@ def build_connector(kind: str, /, **kwargs: Any) -> Any:
         from aragora.connectors.chat import teams
 
         return teams.TeamsConnector(**kwargs)
+    if kind == "obsidian":
+        return build_obsidian_connector(**kwargs)
+    if kind == "feed_ingestor":
+        return build_feed_ingestor(**kwargs)
     class_name = CONNECTOR_CLASSES.get(kind)
     if class_name is None:
         raise ValueError(f"unknown connector kind {kind!r}")
@@ -71,4 +105,10 @@ def register_evidence_connectors() -> None:
     register_connector_factory(build_connector)
 
 
-__all__ = ["CONNECTOR_CLASSES", "build_connector", "register_evidence_connectors"]
+__all__ = [
+    "CONNECTOR_CLASSES",
+    "build_connector",
+    "build_feed_ingestor",
+    "build_obsidian_connector",
+    "register_evidence_connectors",
+]

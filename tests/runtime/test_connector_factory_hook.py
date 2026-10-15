@@ -49,6 +49,8 @@ CONNECTOR_CLASSES = {
     "sec": "SECConnector",
     "semantic_scholar": "SemanticScholarConnector",
     "westlaw": "WestlawConnector",
+    "claude_mem": "ClaudeMemConnector",
+    "twitter": "TwitterConnector",
 }
 
 # The kinds built from a chat connector class, with the module that holds it.
@@ -568,7 +570,9 @@ def _runtime_imports(tree):
             yield node.lineno, node.module
 
 
-@pytest.mark.parametrize("package", ["verticals", "agents", "debate"])
+@pytest.mark.parametrize(
+    "package", ["verticals", "agents", "debate", "knowledge", "swarm", "ideacloud"]
+)
 def test_package_holds_no_runtime_import_of_connectors(package):
     offenders = [
         f"{path.relative_to(REPO_ROOT)}:{line}: {name}"
