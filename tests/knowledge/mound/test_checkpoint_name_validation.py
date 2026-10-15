@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import gzip
+import hashlib
 import json
 import os
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -103,6 +105,8 @@ async def test_symlink_that_resolves_outside_the_directory_is_rejected(store_and
         await store.get_checkpoint_metadata("km_ckpt_link")
     with pytest.raises(checkpoint_module.InvalidCheckpointNameError):
         await store.delete_checkpoint("km_ckpt_link")
+    with pytest.raises(checkpoint_module.InvalidCheckpointNameError):
+        await store.restore_checkpoint("km_ckpt_link")
     assert await store.list_checkpoints() == []
     assert (outside / "metadata.json").exists()
 
@@ -117,6 +121,33 @@ async def test_metadata_outside_the_entry_is_neither_read_nor_listed(store_and_o
     assert await store.get_checkpoint_metadata("km_ckpt_linked") is None
     assert await store.list_checkpoints() == []
     assert await store.get_checkpoint_metadata("km_ckpt_loop") is None
+
+
+@pytest.mark.parametrize("linked", [None, "metadata.json", "content.json.gz", "content.json"])
+async def test_restore_reads_only_files_inside_the_entry(
+    tmp_path: Path, linked: str | None
+) -> None:
+    compressed = linked != "content.json"
+    content_name = "content.json.gz" if compressed else "content.json"
+    raw = json.dumps({"nodes": [{"id": "node-1"}]}).encode()
+    content = gzip.compress(raw) if compressed else raw
+    meta: dict[str, object] = {"id": "km_ckpt_entry", "created_at": "2026-10-15T00:00:00"}
+    meta |= {"description": "", "workspace_id": "ws", "compressed": compressed}
+    meta["checksum"] = hashlib.sha256(content).hexdigest()
+    outside, entry = tmp_path / "outside", tmp_path / "checkpoints" / "km_ckpt_entry"
+    outside.mkdir()
+    entry.mkdir(parents=True)
+    (entry / "metadata.json").write_text(json.dumps(meta))
+    (entry / content_name).write_bytes(content)
+    if linked:
+        (entry / linked).rename(outside / linked)
+        (entry / linked).symlink_to(outside / linked)
+    mound = MagicMock(workspace_id="ws", _save_node=AsyncMock())
+    store = KMCheckpointStore(mound=mound, checkpoint_dir=str(entry.parent))
+    result = await store.restore_checkpoint("km_ckpt_entry")
+    assert result.success is (linked is None)
+    assert mound._save_node.await_count == (0 if linked else 1)
+    assert mound._meta_store.clear_workspace.called is (linked is None)
 
 
 async def test_safe_missing_names_keep_not_found_results(store_and_outside) -> None:

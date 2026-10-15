@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import io
 import json
+import shutil
 from dataclasses import dataclass, field
 from datetime import datetime
 from types import SimpleNamespace
@@ -1981,3 +1982,18 @@ class TestRealStoreIdContract:
         assert _status(restored) == 200 and store.mound.saved == ["node-1"]
         assert _status(await _call(handler, "DELETE", f"{BASE}/{cid}")) == 200
         assert _data(await _call(handler, "GET", BASE))["checkpoints"] == []
+
+    @pytest.mark.parametrize("linked", ["metadata.json", "content.json.gz"])
+    async def test_restore_refuses_linked_files_and_saves_nothing(
+        self, real_store, tmp_path_factory, linked
+    ):
+        handler, store = real_store
+        cid = _data(await _call(handler, "POST", BASE, {"name": "kept"}))["id"]
+        outside, entry = tmp_path_factory.mktemp("outside"), store.checkpoint_dir / "km_ckpt_link"
+        shutil.copytree(store.checkpoint_dir / cid, entry)
+        (entry / linked).rename(outside / linked)
+        (entry / linked).symlink_to(outside / linked)
+        restored = await _call(handler, "POST", f"{BASE}/km_ckpt_link/restore", {})
+        assert _status(restored) == 404 and store.mound.saved == []
+        restored = await _call(handler, "POST", f"{BASE}/{cid}/restore", {})
+        assert _status(restored) == 200 and store.mound.saved == ["node-1"]
