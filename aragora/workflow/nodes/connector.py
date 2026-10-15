@@ -27,11 +27,33 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any
+from typing import Any, Protocol, TypeGuard
 
+from aragora.exceptions import AragoraError
 from aragora.workflow.step import BaseStep, WorkflowContext
 
 logger = logging.getLogger(__name__)
+
+_DEFAULT_RETRY_DELAY = 5.0
+
+
+class _ConnectorErrorLike(Protocol):
+    is_retryable: bool
+    retry_after: float | None
+
+
+def _is_connector_error(error: BaseException) -> TypeGuard[_ConnectorErrorLike]:
+    # Matched by its retry attributes, not by class: aragora.exceptions only re-exports
+    # ConnectorError when it is imported before aragora.connectors.
+    return hasattr(error, "is_retryable") and hasattr(error, "retry_after")
+
+
+def _retry_delay(error: _ConnectorErrorLike) -> float:
+    """Seconds to wait before retrying after ``error``: its ``retry_after`` when set.
+
+    Rate-limit errors always carry one (60 seconds unless the provider names another).
+    """
+    return error.retry_after or _DEFAULT_RETRY_DELAY
 
 
 class ConnectorOperation(str, Enum):
@@ -394,12 +416,6 @@ class ConnectorStep(BaseStep):
         connector = self._connector_cache[cache_key]
 
         # Execute operation with retry
-        from aragora.connectors.exceptions import (
-            ConnectorError,
-            is_retryable_error,
-            get_retry_delay,
-        )
-
         last_error: Exception | None = None
         for attempt in range(max_retries + 1):
             try:
@@ -416,15 +432,17 @@ class ConnectorStep(BaseStep):
                 last_error = TimeoutError(f"Operation timed out after {timeout}s")
                 if not retry_on_error or attempt >= max_retries:
                     raise last_error
-                delay = get_retry_delay(last_error)
+                delay = _DEFAULT_RETRY_DELAY
                 logger.warning("[ConnectorStep] %s: Timeout, retrying in %ss...", self._name, delay)
                 await asyncio.sleep(delay)
 
-            except ConnectorError as e:
+            except AragoraError as e:
                 last_error = e
-                if not retry_on_error or not is_retryable_error(e) or attempt >= max_retries:
+                if not _is_connector_error(e):
                     raise
-                delay = get_retry_delay(e)
+                if not retry_on_error or not e.is_retryable or attempt >= max_retries:
+                    raise
+                delay = _retry_delay(e)
                 logger.warning("[ConnectorStep] %s: %s, retrying in %ss...", self._name, e, delay)
                 await asyncio.sleep(delay)
 
