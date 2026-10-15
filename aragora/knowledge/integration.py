@@ -17,6 +17,8 @@ from collections.abc import AsyncIterator, Callable
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 
+from aragora.exceptions import CacheCapacityError
+from aragora.knowledge.embeddings import InMemoryEmbeddingService
 from aragora.knowledge.fact_store import OrgScopeRequiredError
 from aragora.knowledge.pipeline import KnowledgePipeline, PipelineConfig, ProcessingResult
 
@@ -25,11 +27,13 @@ logger = logging.getLogger(__name__)
 # Pipelines keyed by (org_id, workspace_id): workspace ids are not unique across
 # organizations, so two orgs must never share a pipeline. A None org is the
 # unscoped pipeline, whose fact reads and writes fail closed. Insertion order is
-# recency: get_pipeline re-inserts on every hit and, past _MAX_PIPELINES, drops
-# the least recently used pipeline (it is rebuilt on its next request). A dropped
-# pipeline that a caller of this module is still using is stopped only when that
-# last caller returns it. A pipeline get_pipeline ever returned is never stopped
-# on eviction: its callers have no way to return it.
+# recency: get_pipeline re-inserts on every hit and, at _MAX_PIPELINES, a new
+# key drops the least recently used pipeline that holds no in-memory index (it
+# is rebuilt on its next request); when every cached pipeline holds one, the new
+# key gets CacheCapacityError instead. A dropped pipeline that a caller of this
+# module is still using is stopped only when that last caller returns it. A
+# pipeline get_pipeline ever returned is never stopped on eviction: its callers
+# have no way to return it.
 _pipelines: dict[tuple[str | None, str], KnowledgePipeline] = {}
 _MAX_PIPELINES = 64
 _pipeline_lock = asyncio.Lock()
@@ -103,10 +107,10 @@ async def _checkout_pipeline(
 ) -> KnowledgePipeline:
     org_id = org_id or None
     key = (org_id, workspace_id)
-    idle: list[KnowledgePipeline] = []
     async with _pipeline_lock:
         pipeline = _pipelines.pop(key, None)
         if pipeline is None:
+            await _make_room()
             config = PipelineConfig(
                 workspace_id=workspace_id,
                 org_id=org_id,
@@ -118,23 +122,36 @@ async def _checkout_pipeline(
             await pipeline.start()
             logger.info("Knowledge pipeline initialized for workspace %s", workspace_id)
         _pipelines[key] = pipeline
+        # Counted last, with no await after it, so a failure or cancellation
+        # above never leaves a borrow that no caller will return.
         if borrow:
             _borrowers[id(pipeline)] = _borrowers.get(id(pipeline), 0) + 1
         else:
             _handed_out.add(pipeline)
-
-        while len(_pipelines) > _MAX_PIPELINES:
-            evicted = _pipelines.pop(next(iter(_pipelines)))
-            if evicted in _handed_out:
-                continue
-            if _borrowers.get(id(evicted)):
-                _evicted_in_use[id(evicted)] = evicted
-            else:
-                idle.append(evicted)
-
-    for evicted in idle:
-        await _stop_evicted(evicted)
     return pipeline
+
+
+async def _make_room() -> None:
+    while len(_pipelines) >= _MAX_PIPELINES:
+        key = next((k for k, p in _pipelines.items() if not _holds_memory(p)), None)
+        if key is None:
+            raise CacheCapacityError(len(_pipelines), _MAX_PIPELINES)
+        evicted = _pipelines.pop(key)
+        if evicted in _handed_out:
+            continue
+        if _borrowers.get(id(evicted)):
+            _evicted_in_use[id(evicted)] = evicted
+        else:
+            await _stop_evicted(evicted)
+
+
+def _holds_memory(pipeline: KnowledgePipeline) -> bool:
+    # An in-memory embedding service is the only copy of its chunks and BM25
+    # index; a holder or borrower may still be adding to an empty one.
+    service = getattr(pipeline, "_embedding_service", None)
+    if not isinstance(service, InMemoryEmbeddingService):
+        return False
+    return bool(service._chunks) or pipeline in _handed_out or id(pipeline) in _borrowers
 
 
 async def _return_pipeline(pipeline: KnowledgePipeline) -> None:
@@ -162,7 +179,7 @@ async def _borrowed_pipeline(
 async def _stop_evicted(pipeline: KnowledgePipeline) -> None:
     try:
         await pipeline.stop()
-    except (OSError, RuntimeError) as e:
+    except Exception as e:  # noqa: BLE001 - a failed cleanup must not fail the request
         logger.warning(
             "Failed to stop evicted pipeline for workspace %s: %s",
             pipeline.config.workspace_id,
@@ -435,6 +452,7 @@ def queue_text_processing(
             ConnectionError,
             KeyError,
             OrgScopeRequiredError,
+            CacheCapacityError,
         ) as e:  # noqa: BLE001 - adapter isolation
             job.status = "failed"
             job.error = f"Processing failed: {type(e).__name__}"
@@ -520,6 +538,7 @@ def queue_document_processing(
             ConnectionError,
             KeyError,
             OrgScopeRequiredError,
+            CacheCapacityError,
         ) as e:  # noqa: BLE001 - adapter isolation
             job.status = "failed"
             job.error = f"Processing failed: {type(e).__name__}"
