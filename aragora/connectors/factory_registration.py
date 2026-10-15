@@ -3,7 +3,7 @@
 Reached through the ``aragora.connector_factories`` entry point in ``pyproject.toml`` on the
 first connector a lower package builds, so ``aragora.agents``, ``aragora.verticals``,
 ``aragora.debate``, ``aragora.knowledge``, ``aragora.swarm``, ``aragora.ideacloud``,
-``aragora.services`` and ``aragora.workflow`` never import the connectors.
+``aragora.services``, ``aragora.workflow`` and ``aragora.evidence`` never import the connectors.
 
 Kinds: ``web_search`` (a :class:`~aragora.connectors.web.WebConnector`, or None when
 duckduckgo-search is not installed), ``web`` (a ``WebConnector`` for fetching pages, built
@@ -12,8 +12,8 @@ whether or not search is available), ``tax`` (the connector
 ``slack_chat`` and ``teams_chat`` (the Slack and Teams chat connectors), ``obsidian`` (see
 :func:`build_obsidian_connector`), ``feed_ingestor`` (see :func:`build_feed_ingestor`),
 ``gmail`` and ``outlook`` (the enterprise mail connectors), ``slack_enterprise`` (the
-enterprise Slack workspace connector), ``browser`` (the Playwright connector), and one kind
-per class in ``CONNECTOR_CLASSES``.
+enterprise Slack workspace connector), ``browser`` (the Playwright connector), ``documents``
+(the document parsing connector), and one kind per class in ``CONNECTOR_CLASSES``.
 """
 
 from __future__ import annotations
@@ -103,6 +103,10 @@ def build_connector(kind: str, /, **kwargs: Any) -> Any:
         from aragora.connectors import browser
 
         return browser.PlaywrightConnector(**kwargs)
+    if kind == "documents":
+        from aragora.connectors import documents
+
+        return documents.DocumentConnector(**kwargs)
     if kind == "tax":
         return connectors.resolve_tax_connector(**kwargs)
     if kind == "slack_chat":
