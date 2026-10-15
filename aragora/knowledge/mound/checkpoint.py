@@ -364,8 +364,8 @@ class KMCheckpointStore:
             )
 
         # Load metadata
-        metadata_file = checkpoint_path / "metadata.json"
-        if not metadata_file.exists():
+        metadata_file = self._contained_metadata_file(checkpoint_path)
+        if metadata_file is None:
             return RestoreResult(
                 success=False,
                 checkpoint_id=checkpoint_id,
@@ -376,10 +376,14 @@ class KMCheckpointStore:
         metadata = KMCheckpointMetadata(**metadata_dict)
 
         # Load content
-        if metadata.compressed:
-            content_file = checkpoint_path / "content.json.gz"
-        else:
-            content_file = checkpoint_path / "content.json"
+        content_name = "content.json.gz" if metadata.compressed else "content.json"
+        content_file = self._contained_file(checkpoint_path, content_name)
+        if content_file is None:
+            return RestoreResult(
+                success=False,
+                checkpoint_id=checkpoint_id,
+                errors=["Checkpoint content not found"],
+            )
 
         # Verify checksum first (before decompression)
         content_bytes = content_file.read_bytes()
@@ -514,12 +518,17 @@ class KMCheckpointStore:
     @staticmethod
     def _contained_metadata_file(entry: Path) -> Path | None:
         """Return ``entry/metadata.json`` if it is a file that resolves directly inside ``entry``."""
-        metadata_file = entry / "metadata.json"
+        return KMCheckpointStore._contained_file(entry, "metadata.json")
+
+    @staticmethod
+    def _contained_file(entry: Path, name: str) -> Path | None:
+        """Return ``entry/name`` if it is a regular file that resolves directly inside ``entry``."""
+        path = entry / name
         try:
-            inside = metadata_file.resolve().parent == entry.resolve()
+            inside = path.resolve().parent == entry.resolve()
         except (OSError, RuntimeError):  # RuntimeError: symlink loop (Python < 3.13)
             return None
-        return metadata_file if inside and metadata_file.is_file() else None
+        return path if inside and path.is_file() else None
 
     async def get_checkpoint_metadata(self, checkpoint_id: str) -> KMCheckpointMetadata | None:
         """Get metadata for a specific checkpoint."""
