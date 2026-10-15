@@ -349,7 +349,7 @@ class SourceFetcher:
             insights = []
 
             for item in result.items:
-                source = getattr(item, "source", None)
+                source: Any = getattr(item, "source", None)
                 source_name = (
                     source.value
                     if hasattr(source, "value")
