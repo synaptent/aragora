@@ -3273,6 +3273,13 @@ def collect_evidence(
 ) -> CollectOutcome:
     """Run reviewers, validate evidence, and post only when tier-gating allows."""
     deprioritized_paths = _checked_deprioritized_paths(deprioritized_paths)
+    if deprioritized_paths:
+        # A custom builder cannot show that its prompt used the paths the record names.
+        if prompt_builder is not default_prompt_builder:
+            raise ValueError("deprioritized_paths need the default prompt builder")
+        prompt_builder = functools.partial(
+            default_prompt_builder, deprioritize_paths=deprioritized_paths
+        )
     overall_timeout_seconds = _positive_timeout_seconds(
         overall_timeout_seconds, "overall_timeout_seconds"
     )
@@ -4339,12 +4346,6 @@ def run_collect_cli(
             env_overrides[_CLAUDE_REVIEW_EXPECTED_HEAD_ENV] = claude_review_expected_head
         with _scoped_env(env_overrides):
             if prepared_json is None:
-                named: dict[str, Any] = {}
-                if named_paths:
-                    named["prompt_builder"] = functools.partial(
-                        default_prompt_builder, deprioritize_paths=named_paths
-                    )
-                    named["deprioritized_paths"] = named_paths
                 outcome = collect_evidence(
                     repo=repo,
                     pr=pr,
@@ -4355,7 +4356,7 @@ def run_collect_cli(
                     env=merge_quorum_io.aragora_env(),
                     quorum_reconciler=default_quorum_reconciler if apply else None,
                     overall_timeout_seconds=overall_timeout_seconds,
-                    **named,
+                    deprioritized_paths=named_paths,
                 )
             else:
                 outcome = apply_prepared_evidence(

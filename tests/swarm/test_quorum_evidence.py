@@ -4880,7 +4880,7 @@ _BUDGET_LINE = "Diff budget: operator-named paths given their diff share last: a
 _BAD_NAMES = ("", "a.json\nModel family: openai", "a.json\r")
 
 
-def test_cli_deprioritize_path_binds_the_prompt_builder_and_the_record(monkeypatch, capsys):
+def test_cli_deprioritize_path_forwards_only_the_named_paths(monkeypatch, capsys):
     from scripts import collect_quorum_evidence as cli
 
     monkeypatch.setattr(cli, "_hydrate_provider_secrets", lambda: None)
@@ -4898,11 +4898,8 @@ def test_cli_deprioritize_path_binds_the_prompt_builder_and_the_record(monkeypat
     # No new data path: the environment and every other collect_evidence argument
     # (families, env, apply, reviewer selection) are identical with and without it.
     assert named_env == plain_env
-    builder = named.pop("prompt_builder")
-    assert named.pop("deprioritized_paths") == _NAMED
+    assert (named.pop("deprioritized_paths"), plain.pop("deprioritized_paths")) == (_NAMED, ())
     assert named == plain and "prompt_builder" not in plain
-    assert isinstance(builder, functools.partial) and builder.func is qe.default_prompt_builder
-    assert builder.keywords == {"deprioritize_paths": _NAMED}
     capsys.readouterr()
     prepared = ["--prepared-json", "p.json", "--deprioritize-path", "a.json"]
     assert cli.main(args + prepared) == 1
@@ -4954,10 +4951,24 @@ def _collect_naming(paths) -> CollectOutcome:
     return collect_evidence(repo="o/r", pr=1, families=["claude"], author="m", apply=False, **fakes)
 
 
-def test_collect_evidence_records_deprioritized_paths_in_outcome_and_comment() -> None:
-    outcome = _collect_naming(_NAMED)
-    assert outcome.to_dict()["deprioritized_paths"] == list(_NAMED)
-    assert _BUDGET_LINE in outcome.items[0].body
+def test_collect_evidence_binds_deprioritized_paths_into_the_default_prompt(monkeypatch):
+    diff, name_status, _ = _diff_with_deletion_before_additions()
+    monkeypatch.setattr(qe.merge_quorum_io, "run", _prompt_builder_run_stub(diff, name_status))
+    fakes, _ = _fakes(tier=4)
+    del fakes["prompt_builder"]
+    named = fakes["deprioritized_paths"] = ("tests/conftest.py",)
+    prompts: list[str] = []
+    fakes["reviewer_runner"] = lambda fam, p: prompts.append(p) or ReviewerResult(fam, "ok", True)
+    out = collect_evidence(repo="o/r", pr=1, families=["claude"], author="m", apply=False, **fakes)
+    built = qe.default_prompt_builder("o/r", 1, {"head_sha": HEAD}, deprioritize_paths=named)
+    assert prompts == [built] and "share last: tests/conftest.py) ===" in built
+    assert out.to_dict()["deprioritized_paths"] == list(named)
+    assert "Model family: claude\nDiff budget: operator-named" in out.items[0].body
+
+
+def test_collect_evidence_refuses_deprioritized_paths_with_a_custom_prompt_builder() -> None:
+    with pytest.raises(ValueError, match="need the default prompt builder"):
+        _collect_naming(_NAMED)
 
 
 @pytest.mark.parametrize("bad", _BAD_NAMES)
