@@ -17,6 +17,7 @@ import logging
 from typing import Any, TYPE_CHECKING
 
 from aragora.debate.context_budgeter import ContextBudgeter, ContextSection
+from aragora.debate.mode_prompts import ModePromptProviderNotRegisteredError, mode_system_prompt
 from .prompt_assemblers import PromptAssemblyMixin
 from .prompt_context_providers import PromptContextMixin
 
@@ -445,14 +446,11 @@ class PromptBuilder(PromptContextMixin, PromptAssemblyMixin):
         if not self._active_mode_name:
             return ""
         try:
-            from aragora.modes.base import ModeRegistry
-
-            mode = ModeRegistry.get(self._active_mode_name)
-            if mode is not None:
-                return mode.get_system_prompt()
-        except ImportError:
+            prompt = mode_system_prompt(self._active_mode_name)
+        except ModePromptProviderNotRegisteredError:
             logger.debug("Modes module not available for phase prompts")
-        return ""
+            return ""
+        return prompt if prompt is not None else ""
 
     def set_memory_fabric(self, fabric: Any) -> None:
         """Set the MemoryFabric for unified cross-system context retrieval."""

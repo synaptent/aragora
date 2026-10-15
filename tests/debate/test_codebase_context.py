@@ -72,7 +72,7 @@ class TestCodebaseContextProvider:
         )
 
         with patch(
-            "aragora.nomic.context_builder.NomicContextBuilder",
+            "aragora.rlm.context_builder.NomicContextBuilder",
             return_value=mock_builder,
         ):
             result = await provider.build_context("refactor debate module")
@@ -87,7 +87,7 @@ class TestCodebaseContextProvider:
         mock_builder.build_debate_context = AsyncMock(return_value="cached context")
 
         with patch(
-            "aragora.nomic.context_builder.NomicContextBuilder",
+            "aragora.rlm.context_builder.NomicContextBuilder",
             return_value=mock_builder,
         ):
             result1 = await provider.build_context("task 1")
@@ -106,7 +106,7 @@ class TestCodebaseContextProvider:
         mock_builder.build_debate_context = AsyncMock(return_value="fresh context")
 
         with patch(
-            "aragora.nomic.context_builder.NomicContextBuilder",
+            "aragora.rlm.context_builder.NomicContextBuilder",
             return_value=mock_builder,
         ):
             await provider.build_context("task")
@@ -121,7 +121,7 @@ class TestCodebaseContextProvider:
         provider = CodebaseContextProvider(config=config)
 
         with patch(
-            "aragora.nomic.context_builder.NomicContextBuilder",
+            "aragora.rlm.context_builder.NomicContextBuilder",
             side_effect=RuntimeError("build failed"),
         ):
             result = await provider.build_context("task")
@@ -139,7 +139,7 @@ class TestCodebaseContextProvider:
 
         with (
             patch(
-                "aragora.nomic.context_builder.NomicContextBuilder",
+                "aragora.rlm.context_builder.NomicContextBuilder",
                 return_value=mock_builder,
             ),
             patch(

@@ -25,6 +25,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from aragora.debate.pipeline_backends import pipeline_backend
+
 if TYPE_CHECKING:
     from aragora.billing.debate_costs import DebateCostSummary
     from aragora.core import Agent, DebateResult
@@ -970,9 +972,7 @@ class ArenaExtensions:
         try:
             # Lazy import to avoid circular dependencies
             if self.plan_executor is None:
-                from aragora.pipeline.executor import PlanExecutor
-
-                self.plan_executor = PlanExecutor()
+                self.plan_executor = pipeline_backend().plan_executor()()
 
             issue_result = self.plan_executor.execute_to_github_issue(plan)
             if issue_result.get("url"):

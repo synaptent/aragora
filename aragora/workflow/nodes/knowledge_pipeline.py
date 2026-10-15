@@ -14,6 +14,7 @@ import logging
 from pathlib import Path
 from typing import Any, TypedDict
 
+from aragora.runtime.connector_factory import ConnectorFactoryNotRegisteredError, create_connector
 from aragora.workflow.step import BaseStep, WorkflowContext
 
 
@@ -73,7 +74,7 @@ class KnowledgePipelineStep(BaseStep):
 
     def __init__(self, name: str, config: dict[str, Any] | None = None):
         super().__init__(name, config)
-        self._pipeline: Any | None = None
+        self._pipeline: Any = None
         self._documents_processed = 0
 
     async def execute(self, context: WorkflowContext) -> Any:
@@ -270,8 +271,6 @@ class KnowledgePipelineStep(BaseStep):
     ) -> dict[str, Any]:
         """Process a URL source."""
         try:
-            from aragora.connectors.web import WebConnector
-
             web_config = WebConnectorConfig(
                 default_confidence=connector_config.get("default_confidence", 0.6),
                 timeout=connector_config.get("timeout", 30),
@@ -280,7 +279,7 @@ class KnowledgePipelineStep(BaseStep):
                 cache_dir=connector_config.get("cache_dir", ".web_cache"),
                 enable_circuit_breaker=connector_config.get("enable_circuit_breaker", True),
             )
-            connector = WebConnector(**web_config)
+            connector = create_connector("web", **web_config)
             content = await connector.fetch(url)
 
             result = await self._pipeline.process_document(
@@ -296,7 +295,7 @@ class KnowledgePipelineStep(BaseStep):
                 "chunks": result.get("chunks_created", 0),
             }
 
-        except ImportError:
+        except (ImportError, ConnectorFactoryNotRegisteredError):
             logger.warning("Web connector not available, skipping URL")
             return {
                 "source": url,

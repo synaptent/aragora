@@ -49,7 +49,7 @@ from aragora.resilience import CircuitBreaker
 
 if TYPE_CHECKING:
     pass
-from aragora.spectate.stream import SpectatorStream
+from aragora.events.spectate.stream import SpectatorStream
 from aragora.protocols import (
     BroadcastPipelineProtocol,
     DebateEmbeddingsProtocol,

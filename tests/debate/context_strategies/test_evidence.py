@@ -14,6 +14,7 @@ from aragora.debate.context_strategies.evidence import (
     MAX_EVIDENCE_CACHE_SIZE,
     EvidenceStrategy,
 )
+from aragora.runtime import connector_factory
 
 
 # ---------------------------------------------------------------------------
@@ -314,7 +315,10 @@ def _import_error_for(module_name: str):
 
 
 class _patch_evidence_imports:
-    """Context manager to patch evidence-related imports."""
+    """Patches EvidenceCollector and serves the connectors through the connector factory hook.
+
+    An unavailable connector raises ImportError from the factory, as a missing module does.
+    """
 
     def __init__(
         self,
@@ -324,50 +328,27 @@ class _patch_evidence_imports:
         local_available: bool = False,
     ) -> None:
         self._collector = collector
-        self._web_available = web_available
-        self._github_available = github_available
-        self._local_available = local_available
+        self._available = {
+            "web_search": web_available,
+            "github": github_available,
+            "local_docs": local_available,
+        }
         self._patches: list[Any] = []
 
+    def _build(self, kind: str, /, **kwargs: Any) -> Any:
+        if not self._available.get(kind):
+            raise ImportError(f"No connector for {kind!r}")
+        return MagicMock()
+
     def __enter__(self) -> _patch_evidence_imports:
-        # Patch EvidenceCollector
         collector_mod = MagicMock()
         collector_mod.EvidenceCollector = MagicMock(return_value=self._collector)
-        p1 = patch.dict("sys.modules", {"aragora.evidence.collector": collector_mod})
-        p1.start()
-        self._patches.append(p1)
-
-        # Patch web connector
-        if self._web_available:
-            web_mod = MagicMock()
-            web_mod.DDGS_AVAILABLE = True
-            web_mod.WebConnector = MagicMock
-            p2 = patch.dict("sys.modules", {"aragora.connectors.web": web_mod})
-        else:
-            p2 = patch.dict("sys.modules", {"aragora.connectors.web": None})
-        p2.start()
-        self._patches.append(p2)
-
-        # Patch github connector
-        if self._github_available:
-            gh_mod = MagicMock()
-            gh_mod.GitHubConnector = MagicMock
-            p3 = patch.dict("sys.modules", {"aragora.connectors.github": gh_mod})
-        else:
-            p3 = patch.dict("sys.modules", {"aragora.connectors.github": None})
-        p3.start()
-        self._patches.append(p3)
-
-        # Patch local docs connector
-        if self._local_available:
-            ld_mod = MagicMock()
-            ld_mod.LocalDocsConnector = MagicMock
-            p4 = patch.dict("sys.modules", {"aragora.connectors.local_docs": ld_mod})
-        else:
-            p4 = patch.dict("sys.modules", {"aragora.connectors.local_docs": None})
-        p4.start()
-        self._patches.append(p4)
-
+        self._patches = [
+            patch.dict("sys.modules", {"aragora.evidence.collector": collector_mod}),
+            patch.object(connector_factory, "_factory", self._build),
+        ]
+        for p in self._patches:
+            p.start()
         return self
 
     def __exit__(self, *args: Any) -> None:

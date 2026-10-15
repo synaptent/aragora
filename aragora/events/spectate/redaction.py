@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from aragora.services.pii_redactor import PIIRedactor, PIIType
+from aragora.utils.pii_redactor import PIIRedactor, PIIType
 
 _REDACTABLE_TEXT_KEYS = frozenset(
     {

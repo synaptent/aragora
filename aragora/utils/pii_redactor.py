@@ -14,7 +14,7 @@ before sending to LLMs for analysis. Supports:
 - Dates of birth
 
 Usage:
-    from aragora.services.pii_redactor import PIIRedactor
+    from aragora.utils.pii_redactor import PIIRedactor
 
     redactor = PIIRedactor()
     sanitized_text = redactor.redact(text)

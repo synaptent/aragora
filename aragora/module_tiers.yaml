@@ -24,14 +24,14 @@ thresholds:
   integrated_test_threshold: 5
 
 summary:
-  core: 21
-  integrated: 96
+  core: 22
+  integrated: 95
   experimental: 24
   deprecated: 3
   total: 144
 
 modules:
-  # --- core (21) ---
+  # --- core (22) ---
   - name: agents
     tier: core
     py_files: 89
@@ -147,8 +147,13 @@ modules:
     importer_count: 235
     test_file_count: 169
     override_reason: "persistence layer"
+  - name: utils
+    tier: core
+    py_files: 23
+    importer_count: 193
+    test_file_count: 50
 
-  # --- integrated (96) ---
+  # --- integrated (95) ---
   - name: analysis
     tier: integrated
     py_files: 29
@@ -595,11 +600,6 @@ modules:
     py_files: 5
     importer_count: 11
     test_file_count: 5
-  - name: utils
-    tier: integrated
-    py_files: 21
-    importer_count: 158
-    test_file_count: 25
   - name: verification
     tier: integrated
     py_files: 8

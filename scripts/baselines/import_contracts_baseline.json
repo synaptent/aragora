@@ -1,8 +1,8 @@
 {
   "_comment": "Shrink-only baseline of import-linter layer-contract violations (fail-on-new). Frozen from origin/main by scripts/ci/check_import_contracts.py --freeze. New violations fail the checker; this baseline may only shrink. Layer membership was cross-checked against aragora/module_tiers.yaml (see .importlinter).",
   "config": ".importlinter",
-  "frozen_from_ref": "a01b2692b9056334ac5b7c203b8828fa6d465850",
-  "frozen_at": "2026-10-13T16:49:04Z",
+  "frozen_from_ref": "d8a5564fb9505b8dea38a20bd391fa69501a3a79",
+  "frozen_at": "2026-10-15T15:59:16Z",
   "layers": [
     "interface",
     "application",
@@ -13,27 +13,14 @@
   "contracts": {
     "Aragora layers: interface > application > domain > infrastructure > foundation": {
       "violations": [
-        "aragora.agents -> aragora.connectors",
-        "aragora.auth -> aragora.connectors",
         "aragora.auth -> aragora.server",
         "aragora.blockchain -> aragora.server",
         "aragora.compat -> aragora.server",
         "aragora.control_plane -> aragora.server",
-        "aragora.debate -> aragora.connectors",
-        "aragora.debate -> aragora.gauntlet",
-        "aragora.debate -> aragora.modes",
-        "aragora.debate -> aragora.nomic",
-        "aragora.debate -> aragora.pipeline",
         "aragora.debate -> aragora.server",
-        "aragora.debate -> aragora.spectate",
-        "aragora.debate -> aragora.workflow",
-        "aragora.evidence -> aragora.connectors",
         "aragora.gauntlet -> aragora.server",
-        "aragora.harnesses -> aragora.mcp",
-        "aragora.ideacloud -> aragora.connectors",
         "aragora.implement -> aragora.server",
         "aragora.inbox -> aragora.server",
-        "aragora.knowledge -> aragora.connectors",
         "aragora.knowledge -> aragora.server",
         "aragora.modes -> aragora.server",
         "aragora.nomic -> aragora.server",
@@ -42,15 +29,8 @@
         "aragora.pipeline -> aragora.server",
         "aragora.ranking -> aragora.server",
         "aragora.rbac -> aragora.server",
-        "aragora.security -> aragora.analysis",
-        "aragora.services -> aragora.connectors",
-        "aragora.services -> aragora.integrations",
         "aragora.services -> aragora.server",
-        "aragora.skills -> aragora.server",
-        "aragora.swarm -> aragora.cli",
-        "aragora.swarm -> aragora.connectors",
-        "aragora.verticals -> aragora.connectors",
-        "aragora.workflow -> aragora.connectors"
+        "aragora.skills -> aragora.server"
       ]
     }
   }

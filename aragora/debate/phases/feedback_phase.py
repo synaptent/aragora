@@ -43,6 +43,9 @@ from aragora.debate.phases.feedback_knowledge import KnowledgeFeedback
 from aragora.debate.phases.feedback_memory import MemoryFeedback
 from aragora.debate.phases.feedback_persona import PersonaFeedback
 from aragora.debate.phases.training_emitter import TrainingEmitter
+from aragora.debate.nomic_backends import NomicBackendNotRegisteredError, nomic_backend
+from aragora.debate.pipeline_backends import pipeline_backend
+from aragora.debate.workflow_backends import WorkflowBackendNotRegisteredError, workflow_backend
 from aragora.protocols import (
     BroadcastPipelineProtocol,
     CalibrationTrackerProtocol,
@@ -568,7 +571,7 @@ class FeedbackPhase:
             return
 
         try:
-            from aragora.nomic.outcome_feedback import OutcomeFeedbackBridge
+            OutcomeFeedbackBridge = nomic_backend().outcome_feedback_bridge()
 
             bridge = OutcomeFeedbackBridge()
             queued = bridge.queue_improvement_suggestions()
@@ -578,7 +581,7 @@ class FeedbackPhase:
                     queued,
                     ctx.debate_id,
                 )
-        except (ImportError, OSError) as e:
+        except (ImportError, OSError, NomicBackendNotRegisteredError) as e:
             logger.debug("[outcome_feedback] OutcomeFeedbackBridge not available: %s", e)
         except (TypeError, ValueError, AttributeError, RuntimeError) as e:
             logger.debug("[outcome_feedback] Feedback queueing failed: %s", e)
@@ -810,7 +813,7 @@ class FeedbackPhase:
             return
 
         try:
-            from aragora.pipeline.pr_generator import DecisionMemo
+            DecisionMemo = pipeline_backend().decision_memo()
 
             debate_id = getattr(result, "id", None) or getattr(ctx, "debate_id", "unknown")
             task = getattr(ctx.env, "task", "") if ctx.env else ""
@@ -898,9 +901,7 @@ class FeedbackPhase:
         Failures are logged but don't affect the debate result.
         """
         try:
-            from aragora.workflow.engine import get_workflow_engine
-
-            engine = get_workflow_engine()
+            backend = workflow_backend()
             workflow_input = {
                 "debate_id": ctx.debate_id,
                 "task": ctx.env.task,
@@ -914,10 +915,7 @@ class FeedbackPhase:
                 "agents": [a.name for a in ctx.agents] if ctx.agents else [],
             }
 
-            workflow_result = await engine.execute(
-                definition=self.post_debate_workflow,
-                inputs=workflow_input,
-            )
+            workflow_result = await backend.execute(self.post_debate_workflow, workflow_input)
 
             if workflow_result.success:
                 logger.info(
@@ -934,7 +932,7 @@ class FeedbackPhase:
                     workflow_result.error,
                 )
 
-        except ImportError:
+        except (ImportError, WorkflowBackendNotRegisteredError):
             logger.debug("[workflow] WorkflowEngine not available")
         except Exception as e:  # noqa: BLE001 - phase isolation
             logger.warning("[workflow] Post-debate workflow failed: %s", e)
@@ -962,7 +960,10 @@ class FeedbackPhase:
             return None
 
         try:
-            from aragora.gauntlet.receipt_models import DecisionReceipt
+            from aragora.debate.receipt_operations import register_debate_receipt_operations
+            from aragora.models.receipts.gauntlet import DecisionReceipt
+
+            register_debate_receipt_operations()
 
             # Build cost summary from DebateCostTracker if available
             cost_summary = None
@@ -1002,7 +1003,7 @@ class FeedbackPhase:
                     dict(receipt.explainability) if isinstance(receipt.explainability, dict) else {}
                 )
                 try:
-                    from aragora.gauntlet.receipt_models import normalize_live_explainability
+                    from aragora.models.receipts.gauntlet import normalize_live_explainability
 
                     live_explainability = normalize_live_explainability(
                         existing_explainability.get("live_explainability")

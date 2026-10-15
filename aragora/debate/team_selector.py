@@ -1214,15 +1214,17 @@ class TeamSelector(TeamSelectorHistoryMixin):
     def _compute_regression_penalty(self, agent: Any, domain: str | None = None) -> float:
         """Penalize agents that participated in recent Nomic Loop regressions.
 
-        Queries NomicOutcomeTracker for recent regression history and applies
-        a penalty scaled by regression count and recency.
+        Queries the nomic loop's outcome tracker for recent regression history
+        and applies a penalty scaled by regression count and recency. Without a
+        registered nomic backend there is no history and no penalty.
 
         Returns:
             Penalty from 0.0 (no regressions) to -0.5 (many recent regressions).
         """
         try:
-            from aragora.nomic.outcome_tracker import NomicOutcomeTracker
+            from aragora.debate.nomic_backends import nomic_backend
 
+            NomicOutcomeTracker = nomic_backend().outcome_tracker()
             regressions = NomicOutcomeTracker.get_regression_history(limit=5)
             if not regressions:
                 return 0.0

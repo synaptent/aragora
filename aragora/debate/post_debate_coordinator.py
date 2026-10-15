@@ -34,10 +34,16 @@ from aragora.debate.decision_plan_bridges import (
     DecisionPlanBridgeNotRegisteredError,
     create_decision_plan_bridge,
 )
+from aragora.debate.gauntlet_runners import (
+    GauntletRunnerNotRegisteredError,
+    create_gauntlet_runner,
+)
+from aragora.debate.nomic_backends import NomicBackendNotRegisteredError, nomic_backend
+from aragora.debate.pipeline_backends import PipelineBackendNotRegisteredError, pipeline_backend
 from aragora.debate.post_debate_config import PostDebateConfig, PostDebateResult
 from aragora.debate.post_debate_persistence import PostDebatePersistenceMixin
-from aragora.pipeline.backbone_contracts import BackboneStage, RunLedger, RunStageEvent
-from aragora.pipeline.execution_mode import ExecutionMode
+from aragora.types.backbone_contracts import BackboneStage, RunLedger, RunStageEvent
+from aragora.types.execution_mode import ExecutionMode
 
 logger = logging.getLogger(__name__)
 # Per-step timeout for async callables run from the sync coordinator.
@@ -413,7 +419,7 @@ class PostDebateCoordinator(PostDebatePersistenceMixin):
             return None
 
         try:
-            from aragora.pipeline.backbone_contracts import (
+            from aragora.types.backbone_contracts import (
                 DeliberationBundle,
                 IntakeBundle,
                 RunLedger,
@@ -572,7 +578,7 @@ class PostDebateCoordinator(PostDebatePersistenceMixin):
             return
 
         try:
-            from aragora.pipeline.decision_plan.core import ApprovalMode, PlanStatus
+            from aragora.types.decision_plans import ApprovalMode, PlanStatus
 
             if not isinstance(getattr(plan_obj, "metadata", None), dict):
                 setattr(plan_obj, "metadata", {})
@@ -627,7 +633,7 @@ class PostDebateCoordinator(PostDebatePersistenceMixin):
         entry.
         """
         try:
-            from aragora.pipeline.decision_plan.factory import DecisionPlanFactory
+            DecisionPlanFactory = pipeline_backend().decision_plan_factory()
 
             # Include explanation in plan metadata if available
             metadata = {"debate_id": debate_id, "task": task}
@@ -647,8 +653,7 @@ class PostDebateCoordinator(PostDebatePersistenceMixin):
                     # receipt stages can look it up from the plan object alone.
                     run_id = self._current_run_id(debate_result)
                     if run_id:
-                        from aragora.pipeline.backbone_runtime import BackboneRuntime as _BR
-
+                        _BR = pipeline_backend().backbone_runtime()
                         _BR.ensure_plan_metadata(plan, run_id, "post_debate_coordinator.run")
 
                     # Persist the full plan object into the backbone PlanStore.
@@ -678,7 +683,7 @@ class PostDebateCoordinator(PostDebatePersistenceMixin):
                 "plan": plan,
                 "has_explanation_context": explanation is not None,
             }
-        except ImportError:
+        except (ImportError, PipelineBackendNotRegisteredError):
             logger.debug("DecisionPlanFactory not available")
             return None
         except (ValueError, TypeError, AttributeError, RuntimeError) as e:
@@ -736,7 +741,7 @@ class PostDebateCoordinator(PostDebatePersistenceMixin):
     ) -> dict[str, Any] | None:
         """Step 4: Execute approved plan, using explanation as issue body context."""
         try:
-            from aragora.pipeline.executor import PlanExecutor
+            PlanExecutor = pipeline_backend().plan_executor()
 
             executor = PlanExecutor()
             plan_obj = plan_data.get("plan")
@@ -752,7 +757,7 @@ class PostDebateCoordinator(PostDebatePersistenceMixin):
             result = executor.execute_to_github_issue(plan_obj)
             logger.info("Plan executed: %s", result)
             return result
-        except ImportError:
+        except (ImportError, PipelineBackendNotRegisteredError):
             logger.debug("PlanExecutor not available")
             return None
         except (
@@ -774,7 +779,7 @@ class PostDebateCoordinator(PostDebatePersistenceMixin):
     ) -> dict[str, Any] | None:
         """Step 4.5: Create a draft PR for code-related debate outcomes."""
         try:
-            from aragora.pipeline.executor import PlanExecutor
+            PlanExecutor = pipeline_backend().plan_executor()
 
             executor = PlanExecutor()
             plan_obj = plan_data.get("plan")
@@ -784,7 +789,7 @@ class PostDebateCoordinator(PostDebatePersistenceMixin):
             result = executor.execute_to_github_pr(plan_obj, draft=True)
             logger.info("Draft PR created for task: %s", task[:80])
             return result
-        except ImportError:
+        except (ImportError, PipelineBackendNotRegisteredError):
             logger.debug("PlanExecutor not available for PR creation")
             return None
         except (RuntimeError, ValueError, OSError, KeyError) as e:
@@ -799,7 +804,8 @@ class PostDebateCoordinator(PostDebatePersistenceMixin):
         """Step 5: Build a DecisionIntegrityPackage from the debate result."""
         try:
             from aragora.core_types import DebateResult
-            from aragora.pipeline.decision_integrity import build_integrity_package_from_result
+
+            build_integrity_package_from_result = pipeline_backend().integrity_package_builder()
 
             # Coerce to DebateResult if needed
             if isinstance(debate_result, DebateResult):
@@ -828,7 +834,7 @@ class PostDebateCoordinator(PostDebatePersistenceMixin):
 
             logger.info("Decision integrity package built for %s", debate_id)
             return package.to_dict()
-        except ImportError:
+        except (ImportError, PipelineBackendNotRegisteredError):
             logger.debug("Decision integrity pipeline not available")
             return None
         except (ValueError, TypeError, AttributeError, RuntimeError, KeyError) as e:
@@ -939,9 +945,12 @@ class PostDebateCoordinator(PostDebatePersistenceMixin):
         Returns the ``receipt_id`` on success, ``None`` on failure.
         """
         try:
-            from aragora.gauntlet.receipt_models import DecisionReceipt
-            from aragora.gauntlet.receipt_store import ReceiptState, get_receipt_store
-            from aragora.gauntlet.signing import get_default_signer
+            from aragora.debate.receipt_operations import register_debate_receipt_operations
+            from aragora.models.receipts.gauntlet import DecisionReceipt
+            from aragora.storage.receipt_lifecycle_store import ReceiptState, get_receipt_store
+            from aragora.storage.receipt_signing import get_default_signer
+
+            register_debate_receipt_operations()
 
             # Build a full DecisionReceipt from the debate result
             receipt = DecisionReceipt.from_debate_result(
@@ -1080,9 +1089,7 @@ class PostDebateCoordinator(PostDebatePersistenceMixin):
     ) -> dict[str, Any] | None:
         """Step 2.5: Run lightweight adversarial stress test on high-confidence decisions."""
         try:
-            from aragora.gauntlet.runner import GauntletRunner
-
-            runner = GauntletRunner()
+            runner = create_gauntlet_runner()
             input_content = str(
                 getattr(debate_result, "final_answer", getattr(debate_result, "consensus", ""))
             )
@@ -1101,7 +1108,7 @@ class PostDebateCoordinator(PostDebatePersistenceMixin):
                 "debate_id": debate_id,
                 "verdict": verdict,
             }
-        except ImportError:
+        except (ImportError, GauntletRunnerNotRegisteredError):
             logger.debug("GauntletRunner not available")
             return None
         except (ValueError, TypeError, AttributeError, RuntimeError, OSError, ConnectionError) as e:
@@ -1180,7 +1187,7 @@ class PostDebateCoordinator(PostDebatePersistenceMixin):
     ) -> bool:
         """Step 7: Queue improvement suggestion for self-improvement pipeline."""
         try:
-            from aragora.nomic.improvement_queue import (
+            from aragora.learning.improvement_queue import (
                 ImprovementSuggestion,
                 get_improvement_queue,
             )
@@ -1583,7 +1590,7 @@ class PostDebateCoordinator(PostDebatePersistenceMixin):
         receipt_data = metadata.get("receipt")
         if isinstance(receipt_data, dict):
             try:
-                from aragora.gauntlet.receipt_models import DecisionReceipt
+                from aragora.models.receipts.gauntlet import DecisionReceipt
 
                 return DecisionReceipt.from_dict(receipt_data)
             except (ValueError, TypeError, KeyError):
@@ -1601,7 +1608,7 @@ class PostDebateCoordinator(PostDebatePersistenceMixin):
         improvement goals for the Nomic Loop MetaPlanner.
         """
         try:
-            from aragora.nomic.outcome_feedback import OutcomeFeedbackBridge
+            OutcomeFeedbackBridge = nomic_backend().outcome_feedback_bridge()
 
             bridge = OutcomeFeedbackBridge()
             cycle_result = bridge.run_feedback_cycle()
@@ -1614,7 +1621,7 @@ class PostDebateCoordinator(PostDebatePersistenceMixin):
                     debate_id,
                 )
             return cycle_result
-        except ImportError:
+        except (ImportError, NomicBackendNotRegisteredError):
             logger.debug("OutcomeFeedbackBridge not available, skipping outcome feedback")
             return None
         except (ValueError, TypeError, AttributeError, RuntimeError, OSError) as e:
@@ -1671,8 +1678,8 @@ class PostDebateCoordinator(PostDebatePersistenceMixin):
         _build_cartographer_data for lightweight conversion.
         """
         try:
-            from aragora.pipeline.idea_to_execution import IdeaToExecutionPipeline
-        except ImportError:
+            IdeaToExecutionPipeline = pipeline_backend().idea_to_execution_pipeline()
+        except (ImportError, PipelineBackendNotRegisteredError):
             logger.debug("Canvas pipeline not available")
             return None
 
