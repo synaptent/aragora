@@ -222,7 +222,8 @@ lands in a later feature, which replaces the marked comment in place.
   runner with `--tool todo` and a fixed scan scope; documented when it lands.
 - **Dependency cooldown (uv).** See [Dependency release age](#dependency-release-age)
   below: `scripts/ci/uv_lock_with_cooldown.sh` is the only place the uv
-  cooldown applies.
+  cooldown applies, and the Dependabot relock in `dependabot-uv-lock.yml` runs
+  it.
 
 ## Dependency release age
 
@@ -249,10 +250,11 @@ effect) and `npm config list` (the project section shows the raw line).
 
 `exclude-newer` is never written into `uv.lock` or `pyproject.toml`: a lock
 produced with `--exclude-newer` carries an `[options] exclude-newer = ...`
-table, and plain `uv lock --check` (the BLOCKING step in `security-gate.yml`
-and the refresh in `dependabot-uv-lock.yml`) fails on such a lock. The cooldown
-therefore applies only when *regenerating* the lock, through this script, and
-CI never sets `UV_EXCLUDE_NEWER` in a job that runs `uv lock --check`.
+table, and plain `uv lock --check` (the BLOCKING step in `security-gate.yml`)
+fails on such a lock. The cooldown therefore applies only when *regenerating*
+the lock, through this script, and CI never sets `UV_EXCLUDE_NEWER` in a job
+that runs `uv lock --check`. `dependabot-uv-lock.yml` relocks through this
+script and then runs plain `uv lock --check` on the result.
 
 Run it from the workspace root (it operates on `pyproject.toml` + `uv.lock` in
 `$PWD`; every uv call inside runs with `UV_EXCLUDE_NEWER` unset):
@@ -263,21 +265,77 @@ bash scripts/ci/uv_lock_with_cooldown.sh
 
 Flow:
 
-1. Prints `exclude-newer cutoff: <YYYY-MM-DD>` (UTC now minus 7 days).
-2. Runs plain `uv lock` into a temp copy (the plain resolution), then restores
-   the original lock.
-3. Runs `uv lock --exclude-newer <cutoff>` (the cooled-down resolution).
-4. Re-runs plain `uv lock` on top of it: uv keeps the cooled-down pins as
-   preferences and drops only the `[options]` table, so the committed lock
-   passes plain `uv lock --check`.
+1. Prints `exclude-newer cutoff: <YYYY-MM-DDTHH:MM:SSZ>` (UTC now minus exactly
+   7 days; a full RFC 3339 timestamp because uv reads a bare date as the next
+   local midnight).
+2. Runs `uv lock --exclude-newer <cutoff>` from the original lock (the
+   cooled-down resolution). If no resolution satisfies the cooldown, it
+   restores the original lock and exits `4`; nothing is relocked without the
+   cooldown.
+3. Runs plain `uv lock` from the original lock into a temp copy (the plain
+   resolution). It serves only the comparison in step 5 and is never kept.
+4. Copies the cooled-down lock back and re-runs plain `uv lock` on top of it:
+   uv keeps the cooled-down pins as preferences and drops only the `[options]`
+   tables, so the committed lock passes plain `uv lock --check`. The script then
+   verifies that the final `uv.lock` carries no `exclude-newer` and pins exactly
+   the cooled-down versions.
 5. Compares package versions between the two resolutions and prints
    `held back: <name> <plain> -> <cooled>` for each difference.
 
 Exit codes: `0` when the two resolutions agree (lock regenerated); `2` when
-packages were held back (listed; `uv.lock` holds the cooled-down resolution and
-a human decides whether to commit it); `3` when `uv` is not on `PATH`; `1` on
-any other failure, in which case the original `uv.lock` is restored
+packages were held back (listed and reported; `uv.lock` holds the verified
+cooled-down resolution); `3` when `uv` is not on `PATH` (nothing touched); `4`
+when no resolution satisfies the cooldown (no unrestricted fallback); `1` on any
+other failure, including a final lock that drifted from the cooled-down
+resolution or bad usage. On `4` and `1` the original `uv.lock` is restored
 byte-for-byte. Temp copies live under `/tmp/aragora-readiness/`.
+
+#### Dependabot relock
+
+The `Regenerate uv.lock` step of `.github/workflows/dependabot-uv-lock.yml`
+relocks only through this script. It takes the helper from `origin/main`
+(`git show origin/main:scripts/ci/uv_lock_with_cooldown.sh` into
+`$RUNNER_TEMP`), so the reviewed main copy runs even on a Dependabot branch cut
+before the helper existed, installs uv in the `pyproject.toml` range
+(`uv>=0.11.19,<0.12`), and writes the cutoff, the helper exit code and any
+`held back:` lines to the job summary. By helper exit code:
+
+- `0`: the regenerated lock is committed to the Dependabot branch.
+- `2`: the cooled-down lock is committed; the held-back packages are listed in
+  the job summary, the step log and a `::warning::`.
+- `4`: the job fails with an `::error::` that points here and commits nothing.
+  Dependabot's own `cooldown` does not apply to security updates, so a security
+  PR that needs a release younger than 7 days ends here; see the next section.
+- anything else: the job fails and commits nothing.
+
+There is no unrestricted fallback: the step never runs a bare `uv lock`. After a
+relock it still runs the `uv.lock`-only diff guard and plain `uv lock --check`.
+
+#### Manual security relock
+
+When a security fix needs a release younger than the cooldown (for example a
+Dependabot security PR whose relock job failed with exit `4`), a human relocks
+on a local branch:
+
+```bash
+bash scripts/ci/uv_lock_with_cooldown.sh --allow-package <name>
+```
+
+Repeat `--allow-package` for each package the resolver names. Only the named
+packages may be newer than the cutoff (`--exclude-newer-package`); every other
+package, including any new dependency of a named one, keeps the 7-day cooldown,
+and the committed lock still carries no `exclude-newer`. Commit only `uv.lock`
+(and the manifest bump), and state in the PR body the advisory ID, every lifted
+package with its version and release date, and the helper output.
+
+Never run it in CI or a workflow: the option has no environment-variable form,
+and a reviewer of a workflow change rejects any `--allow-package` under
+`.github/`. The Dependabot relock job is not rerun for that PR; the human-made
+lock replaces it. A human push of the manually relocked lock to a Dependabot
+branch does re-trigger the job (its `uv.lock` path filter), which then fails
+with exit `4` until the lifted package is 7 days old, because the bumped
+manifest requires the version the cooldown excludes. That failure is expected:
+the job commits nothing and the human-made lock stands.
 
 ### Dependabot cooldown
 

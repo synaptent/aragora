@@ -111,8 +111,32 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
-          python -m pip install uv
-          uv lock
+          python -m pip install "uv>=0.11.19,<0.12"
+          # The relock goes only through main's cooldown helper. A failed cooled-down
+          # resolution fails the job: there is no unrestricted relock fallback.
+          helper="${RUNNER_TEMP}/uv_lock_with_cooldown.sh"
+          log="${RUNNER_TEMP}/uv-cooldown.log"
+          git show origin/main:scripts/ci/uv_lock_with_cooldown.sh > "${helper}"
+          rc=0
+          bash "${helper}" 2>&1 | tee "${log}" || rc=$?
+          held="$(grep '^held back: ' "${log}" || true)"
+          {
+            echo "### uv.lock relock under the 7-day cooldown"
+            grep '^exclude-newer cutoff: ' "${log}" || true
+            echo "helper exit code: ${rc}"
+            if [[ -n "${held}" ]]; then
+              echo
+              echo '```'
+              echo "${held}"
+              echo '```'
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
+          case "${rc}" in
+            0) ;;
+            2) echo "::warning::the uv cooldown held back $(grep -c '^held back: ' "${log}") package(s); see the job summary" ;;
+            4) echo "::error::no resolution satisfies the 7-day uv cooldown; uv.lock not refreshed (manual security relock: docs/RATCHETS.md)"; exit 1 ;;
+            *) echo "::error::cooldown relock failed (helper exit ${rc}); uv.lock not refreshed"; exit 1 ;;
+          esac
           unexpected="$(git diff --name-only | grep -vx 'uv.lock' || true)"
           if [[ -n "${unexpected}" ]]; then
             echo "::error::uv lock changed unexpected files:"
