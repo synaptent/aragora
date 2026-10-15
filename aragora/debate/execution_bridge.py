@@ -45,6 +45,7 @@ from datetime import datetime
 from typing import Any
 from collections.abc import Callable
 
+from aragora.debate.pipeline_backends import pipeline_backend
 from aragora.debate.workflow_backends import WorkflowBackendNotRegisteredError, workflow_backend
 
 logger = logging.getLogger(__name__)
@@ -463,8 +464,9 @@ class ExecutionBridge:
             )
 
         try:
-            from aragora.pipeline.executor import PlanExecutor
-            from aragora.pipeline.decision_plan.factory import DecisionPlanFactory
+            pipeline = pipeline_backend()
+            PlanExecutor = pipeline.plan_executor()
+            DecisionPlanFactory = pipeline.decision_plan_factory()
 
             plan = DecisionPlanFactory.from_debate_result(
                 debate_result,

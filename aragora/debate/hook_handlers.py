@@ -23,6 +23,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 from collections.abc import Callable
 
+from aragora.debate.pipeline_backends import PipelineBackendNotRegisteredError, pipeline_backend
+
 if TYPE_CHECKING:
     from aragora.debate.hooks import HookManager, HookPriority
 
@@ -1202,9 +1204,11 @@ class HookHandlerRegistry:
                     return
 
                 # Import plan factory
-                from aragora.pipeline.decision_plan import DecisionPlanFactory
-                from aragora.pipeline.executor import store_plan
                 from aragora.types.decision_plans import ApprovalMode
+
+                pipeline = pipeline_backend()
+                DecisionPlanFactory = pipeline.decision_plan_factory()
+                _, store_plan = pipeline.plan_registry()
                 from aragora.server.decision_integrity_utils import (
                     ensure_decision_plan_backbone_run,
                     sync_decision_plan_backbone_receipt,
@@ -1319,7 +1323,7 @@ class HookHandlerRegistry:
                     result.plan_id = plan.id
                     result.decision_plan_run_id = run_id
 
-            except ImportError as e:
+            except (ImportError, PipelineBackendNotRegisteredError) as e:
                 logger.debug("Decision plan creation unavailable: %s", e)
             except (AttributeError, TypeError, ValueError, RuntimeError, KeyError, OSError) as e:
                 logger.warning("Auto decision plan creation failed: %s", e)
