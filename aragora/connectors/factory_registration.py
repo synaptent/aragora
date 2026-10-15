@@ -1,13 +1,14 @@
 """Registers the evidence connectors with :mod:`aragora.runtime.connector_factory`.
 
 Reached through the ``aragora.connector_factories`` entry point in ``pyproject.toml`` on the
-first connector a lower package builds, so ``aragora.agents`` and ``aragora.verticals`` never
-import the connectors.
+first connector a lower package builds, so ``aragora.agents``, ``aragora.verticals`` and
+``aragora.debate`` never import the connectors.
 
 Kinds: ``web_search`` (a :class:`~aragora.connectors.web.WebConnector`, or None when
 duckduckgo-search is not installed), ``tax`` (the connector
-:func:`~aragora.connectors.tax.resolve_tax_connector` picks for ``jurisdiction``), and one kind
-per class in ``CONNECTOR_CLASSES``.
+:func:`~aragora.connectors.tax.resolve_tax_connector` picks for ``jurisdiction``),
+``slack_chat`` and ``teams_chat`` (the Slack and Teams chat connectors), and one kind per class
+in ``CONNECTOR_CLASSES``.
 """
 
 from __future__ import annotations
@@ -43,14 +44,22 @@ def build_connector(kind: str, /, **kwargs: Any) -> Any:
         ImportError: the connector's module, or an optional dependency it needs, is missing.
         ValueError: ``kind`` is not a known connector kind.
     """
-    # Names are read from aragora.connectors on each call, so its lazy imports stay per kind
-    # and a patched class applies.
+    # Classes are read from their module on each call, so imports stay per kind and a
+    # patched class applies.
     if kind == "web_search":
         from aragora.connectors import web
 
         return web.WebConnector(**kwargs) if web.DDGS_AVAILABLE else None
     if kind == "tax":
         return connectors.resolve_tax_connector(**kwargs)
+    if kind == "slack_chat":
+        from aragora.connectors.chat import slack
+
+        return slack.SlackConnector(**kwargs)
+    if kind == "teams_chat":
+        from aragora.connectors.chat import teams
+
+        return teams.TeamsConnector(**kwargs)
     class_name = CONNECTOR_CLASSES.get(kind)
     if class_name is None:
         raise ValueError(f"unknown connector kind {kind!r}")

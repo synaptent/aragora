@@ -16,6 +16,8 @@ import logging
 from typing import Any
 from collections.abc import Callable
 
+from aragora.runtime.connector_factory import ConnectorFactoryNotRegisteredError, create_connector
+
 from .constants import (
     CLAUDE_SEARCH_TIMEOUT,
     EVIDENCE_TIMEOUT,
@@ -30,6 +32,8 @@ from .constants import (
 )
 
 logger = logging.getLogger(__name__)
+
+_CONNECTOR_UNAVAILABLE = (ImportError, ConnectorFactoryNotRegisteredError)
 
 
 class SourceGatheringMixin:
@@ -303,38 +307,33 @@ class SourceGatheringMixin:
             collector = EvidenceCollector()
             enabled_connectors = []
 
-            # Add web connector if available
+            # Add web connector if available (None without duckduckgo_search)
             try:
-                from aragora.connectors.web import DDGS_AVAILABLE, WebConnector
-
-                if DDGS_AVAILABLE:
-                    collector.add_connector("web", WebConnector())
+                web = create_connector("web_search")
+                if web is not None:
+                    collector.add_connector("web", web)
                     enabled_connectors.append("web")
-            except ImportError:
+            except _CONNECTOR_UNAVAILABLE:
                 logger.debug("WebConnector not available: duckduckgo_search not installed")
 
             # Add GitHub connector if available
             try:
-                from aragora.connectors.github import GitHubConnector
-
                 if os.environ.get("GITHUB_TOKEN"):
-                    collector.add_connector("github", GitHubConnector())
+                    collector.add_connector("github", create_connector("github"))
                     enabled_connectors.append("github")
-            except ImportError:
+            except _CONNECTOR_UNAVAILABLE:
                 logger.debug("GitHubConnector not available")
 
             # Add local docs connector
             try:
-                from aragora.connectors.local_docs import LocalDocsConnector
-
                 collector.add_connector(
                     "local_docs",
-                    LocalDocsConnector(
-                        root_path=str(self._project_root / "docs"), file_types="docs"
+                    create_connector(
+                        "local_docs", root_path=str(self._project_root / "docs"), file_types="docs"
                     ),
                 )
                 enabled_connectors.append("local_docs")
-            except ImportError:
+            except _CONNECTOR_UNAVAILABLE:
                 logger.debug("LocalDocsConnector not available")
 
             if not enabled_connectors:

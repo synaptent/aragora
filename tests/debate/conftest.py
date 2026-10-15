@@ -235,3 +235,23 @@ def _suppress_stray_resource_warnings():
         # inside the catch_warnings block ensures any ResourceWarnings emitted by
         # __del__ / finalizer methods are also suppressed.
         gc.collect()
+
+
+@pytest.fixture
+def connector_factory(monkeypatch):
+    """Serves connectors by kind from the returned dict through the connector factory hook.
+
+    A kind missing from the dict raises ImportError, as a connector whose module cannot be
+    imported does; a kind mapped to None builds nothing (web search without duckduckgo-search).
+    """
+    from aragora.runtime import connector_factory as hook
+
+    connectors = {}
+
+    def factory(kind, **kwargs):
+        if kind not in connectors:
+            raise ImportError(f"no {kind} connector")
+        return connectors[kind]
+
+    monkeypatch.setattr(hook, "_factory", factory)
+    return connectors

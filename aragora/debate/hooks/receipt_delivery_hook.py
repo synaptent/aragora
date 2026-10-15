@@ -27,6 +27,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
+from aragora.runtime.connector_factory import create_connector
+
 if TYPE_CHECKING:
     from aragora.debate.context import DebateContext
     from aragora.core_types import DebateResult
@@ -339,9 +341,8 @@ class ReceiptDeliveryHook:
                     error=f"Slack workspace not found: {workspace_id}",
                 )
 
-            from aragora.connectors.chat.slack import SlackConnector
-
-            connector = SlackConnector(
+            connector = create_connector(
+                "slack_chat",
                 token=workspace.access_token,
                 signing_secret=workspace.signing_secret or "",
             )
@@ -403,9 +404,8 @@ class ReceiptDeliveryHook:
                     error=f"Teams workspace not found: {workspace_id}",
                 )
 
-            from aragora.connectors.chat.teams import TeamsConnector
-
-            connector = TeamsConnector(
+            connector = create_connector(
+                "teams_chat",
                 app_id=workspace.bot_id,
                 app_password="",
                 service_url=workspace.service_url or "https://smba.trafficmanager.net/amer/",
