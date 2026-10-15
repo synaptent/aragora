@@ -32,6 +32,7 @@ import pytest
 
 from aragora.autonomous.loop_enhancement import ApprovalStatus
 
+pytestmark = pytest.mark.usefixtures("caller_owns_source_debate")
 
 # ---------------------------------------------------------------------------
 # Helpers

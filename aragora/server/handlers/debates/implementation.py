@@ -47,9 +47,10 @@ from aragora.pipeline.execution_notifier import ExecutionNotifier
 from aragora.autonomous.loop_enhancement import ApprovalStatus
 from aragora.server.handlers.autonomous.approvals import get_approval_flow
 from aragora.rbac.checker import get_permission_checker
-from aragora.tenancy.record_scope import record_not_found
+from aragora.tenancy.record_scope import record_not_found, require_org_scope
 
 from ..base import HandlerResult, error_response, handle_errors, json_response, require_storage
+from ..decisions.pipeline import _source_debate_owned
 from ..openapi_decorator import api_endpoint
 
 if TYPE_CHECKING:
@@ -419,9 +420,12 @@ class ImplementationOperationsMixin:
     ) -> HandlerResult:
         """Generate a decision receipt and implementation plan for a debate."""
         storage = self.get_storage()
+        scope, scope_err = require_org_scope(handler)
+        if scope is None or not _source_debate_owned(debate_id, {"storage": storage}, scope):
+            return scope_err or record_not_found("Debate")
         debate = storage.get_debate(debate_id) if storage else None
         if not debate:
-            return error_response("Debate not found", 404)
+            return record_not_found("Debate")
 
         payload = self.read_json_body(handler) or {}
         rc = _parse_request(payload, self.ctx)
