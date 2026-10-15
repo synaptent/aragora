@@ -423,7 +423,7 @@ class TestGatherEvidenceContext:
             result = await g.gather_evidence_context("my topic")
         assert result is None
 
-    async def test_returns_none_when_evidence_pack_has_no_snippets(self):
+    async def test_returns_none_when_evidence_pack_has_no_snippets(self, connector_factory):
         g = make_gatherer()
 
         mock_collector = MagicMock()
@@ -435,18 +435,10 @@ class TestGatherEvidenceContext:
         mock_module.EvidenceCollector = MagicMock(return_value=mock_collector)
 
         with patch.dict("sys.modules", {"aragora.evidence.collector": mock_module}):
-            with patch.dict(
-                "sys.modules",
-                {
-                    "aragora.connectors.web": None,
-                    "aragora.connectors.github": None,
-                    "aragora.connectors.local_docs": None,
-                },
-            ):
-                result = await g.gather_evidence_context("topic")
+            result = await g.gather_evidence_context("topic")
         assert result is None
 
-    async def test_returns_formatted_context_on_success(self):
+    async def test_returns_formatted_context_on_success(self, connector_factory):
         g = make_gatherer()
 
         mock_snippet = MagicMock()
@@ -460,25 +452,16 @@ class TestGatherEvidenceContext:
         collector_module = MagicMock()
         collector_module.EvidenceCollector = MagicMock(return_value=mock_collector)
 
-        local_docs_mod = MagicMock()
-        local_docs_mod.LocalDocsConnector = MagicMock(return_value=MagicMock())
+        connector_factory["local_docs"] = MagicMock()
 
-        with patch.dict(
-            "sys.modules",
-            {
-                "aragora.evidence.collector": collector_module,
-                "aragora.connectors.web": None,
-                "aragora.connectors.github": None,
-                "aragora.connectors.local_docs": local_docs_mod,
-            },
-        ):
+        with patch.dict("sys.modules", {"aragora.evidence.collector": collector_module}):
             result = await g.gather_evidence_context("my task")
 
         assert result is not None
         assert "EVIDENCE CONTEXT" in result
         assert "snippet content here" in result
 
-    async def test_caches_evidence_pack_by_task_hash(self):
+    async def test_caches_evidence_pack_by_task_hash(self, connector_factory):
         g = make_gatherer()
 
         mock_snippet = MagicMock()
@@ -492,25 +475,16 @@ class TestGatherEvidenceContext:
         collector_module = MagicMock()
         collector_module.EvidenceCollector = MagicMock(return_value=mock_collector)
 
-        local_docs_mod = MagicMock()
-        local_docs_mod.LocalDocsConnector = MagicMock(return_value=MagicMock())
+        connector_factory["local_docs"] = MagicMock()
 
-        with patch.dict(
-            "sys.modules",
-            {
-                "aragora.evidence.collector": collector_module,
-                "aragora.connectors.web": None,
-                "aragora.connectors.github": None,
-                "aragora.connectors.local_docs": local_docs_mod,
-            },
-        ):
+        with patch.dict("sys.modules", {"aragora.evidence.collector": collector_module}):
             await g.gather_evidence_context("caching task")
 
         task_hash = g._get_task_hash("caching task")
         assert task_hash in g._research_evidence_pack
         assert g._research_evidence_pack[task_hash] is mock_pack
 
-    async def test_updates_prompt_builder_when_available(self):
+    async def test_updates_prompt_builder_when_available(self, connector_factory):
         g = make_gatherer()
         prompt_builder = MagicMock()
         g._prompt_builder = prompt_builder
@@ -526,23 +500,14 @@ class TestGatherEvidenceContext:
         collector_module = MagicMock()
         collector_module.EvidenceCollector = MagicMock(return_value=mock_collector)
 
-        local_docs_mod = MagicMock()
-        local_docs_mod.LocalDocsConnector = MagicMock(return_value=MagicMock())
+        connector_factory["local_docs"] = MagicMock()
 
-        with patch.dict(
-            "sys.modules",
-            {
-                "aragora.evidence.collector": collector_module,
-                "aragora.connectors.web": None,
-                "aragora.connectors.github": None,
-                "aragora.connectors.local_docs": local_docs_mod,
-            },
-        ):
+        with patch.dict("sys.modules", {"aragora.evidence.collector": collector_module}):
             await g.gather_evidence_context("task")
 
         prompt_builder.set_evidence_pack.assert_called_once_with(mock_pack)
 
-    async def test_calls_evidence_store_callback_when_provided(self):
+    async def test_calls_evidence_store_callback_when_provided(self, connector_factory):
         callback = MagicMock()
         g = make_gatherer(_evidence_store_callback=callback)
 
@@ -557,23 +522,14 @@ class TestGatherEvidenceContext:
         collector_module = MagicMock()
         collector_module.EvidenceCollector = MagicMock(return_value=mock_collector)
 
-        local_docs_mod = MagicMock()
-        local_docs_mod.LocalDocsConnector = MagicMock(return_value=MagicMock())
+        connector_factory["local_docs"] = MagicMock()
 
-        with patch.dict(
-            "sys.modules",
-            {
-                "aragora.evidence.collector": collector_module,
-                "aragora.connectors.web": None,
-                "aragora.connectors.github": None,
-                "aragora.connectors.local_docs": local_docs_mod,
-            },
-        ):
+        with patch.dict("sys.modules", {"aragora.evidence.collector": collector_module}):
             await g.gather_evidence_context("task")
 
         callback.assert_called_once_with(mock_pack.snippets, "task")
 
-    async def test_connection_error_returns_none(self):
+    async def test_connection_error_returns_none(self, connector_factory):
         g = make_gatherer()
 
         mock_collector = MagicMock()
@@ -582,29 +538,18 @@ class TestGatherEvidenceContext:
         collector_module = MagicMock()
         collector_module.EvidenceCollector = MagicMock(return_value=mock_collector)
 
-        local_docs_mod = MagicMock()
-        local_docs_mod.LocalDocsConnector = MagicMock(return_value=MagicMock())
+        connector_factory["local_docs"] = MagicMock()
 
-        with patch.dict(
-            "sys.modules",
-            {
-                "aragora.evidence.collector": collector_module,
-                "aragora.connectors.web": None,
-                "aragora.connectors.github": None,
-                "aragora.connectors.local_docs": local_docs_mod,
-            },
-        ):
+        with patch.dict("sys.modules", {"aragora.evidence.collector": collector_module}):
             result = await g.gather_evidence_context("topic")
         assert result is None
 
-    async def test_adds_web_connector_when_ddgs_available(self):
-        """WebConnector is added to collector when DDGS_AVAILABLE is True."""
+    async def test_adds_web_connector_when_ddgs_available(self, connector_factory):
+        """WebConnector is added to collector when the web search kind builds one."""
         g = make_gatherer()
 
         web_connector_instance = MagicMock()
-        web_mod = MagicMock()
-        web_mod.DDGS_AVAILABLE = True
-        web_mod.WebConnector = MagicMock(return_value=web_connector_instance)
+        connector_factory["web_search"] = web_connector_instance
 
         mock_pack = MagicMock()
         mock_pack.snippets = []
@@ -614,15 +559,7 @@ class TestGatherEvidenceContext:
         collector_module = MagicMock()
         collector_module.EvidenceCollector = MagicMock(return_value=mock_collector)
 
-        with patch.dict(
-            "sys.modules",
-            {
-                "aragora.evidence.collector": collector_module,
-                "aragora.connectors.web": web_mod,
-                "aragora.connectors.github": None,
-                "aragora.connectors.local_docs": None,
-            },
-        ):
+        with patch.dict("sys.modules", {"aragora.evidence.collector": collector_module}):
             await g.gather_evidence_context("topic")
 
         mock_collector.add_connector.assert_any_call("web", web_connector_instance)

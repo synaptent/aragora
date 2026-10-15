@@ -1,8 +1,8 @@
-"""Verticals and agents build evidence connectors through ``aragora.runtime.connector_factory``.
+"""Verticals, agents and debate build connectors through ``aragora.runtime.connector_factory``.
 
-``aragora.verticals`` (application layer) and ``aragora.agents`` (domain layer) must not import
-``aragora.connectors`` (interface layer) at runtime. The connectors package registers its factory
-through the ``aragora.connector_factories`` entry point.
+``aragora.verticals`` (application layer), ``aragora.agents`` and ``aragora.debate`` (domain
+layer) must not import ``aragora.connectors`` (interface layer) at runtime. The connectors
+package registers its factory through the ``aragora.connector_factories`` entry point.
 """
 
 from __future__ import annotations
@@ -18,6 +18,10 @@ from types import SimpleNamespace
 import pytest
 
 from aragora.agents.code_reviewer import CodeReviewOrchestrator
+from aragora.debate.context.sources import SourceFetcher
+from aragora.debate.context_gatherer.sources import SourceGatheringMixin
+from aragora.debate.context_strategies.evidence import EvidenceStrategy
+from aragora.debate.hooks.receipt_delivery_hook import create_receipt_delivery_hook
 from aragora.runtime import connector_factory as hook
 from aragora.utils.declared_registrations import DeclaredRegistrations
 from aragora.verticals import VerticalRegistry, tooling
@@ -47,6 +51,12 @@ CONNECTOR_CLASSES = {
     "westlaw": "WestlawConnector",
 }
 
+# The kinds built from a chat connector class, with the module that holds it.
+CHAT_CONNECTOR_CLASSES = {
+    "slack_chat": ("aragora.connectors.chat.slack", "SlackConnector"),
+    "teams_chat": ("aragora.connectors.chat.teams", "TeamsConnector"),
+}
+
 
 class FakeConnector:
     name = "Fake Tax"
@@ -55,6 +65,7 @@ class FakeConnector:
         self.kind = kind
         self.kwargs = kwargs
         self.searches = []
+        self.sent = []
 
     async def search(self, query=None, limit=10, **kwargs):
         self.searches.append((query, limit, kwargs))
@@ -65,6 +76,10 @@ class FakeConnector:
 
     async def fetch_pr_diff(self, pr_url):
         return ""
+
+    async def send_message(self, **kwargs):
+        self.sent.append(kwargs)
+        return SimpleNamespace(timestamp="1.2", message_id="m-1")
 
 
 @pytest.fixture
@@ -180,6 +195,32 @@ def test_the_registration_builds_real_connectors(isolated_hook, monkeypatch, tmp
         hook.create_connector("nope")
 
 
+def test_the_registration_reads_each_chat_connector_class_at_call_time(isolated_hook, monkeypatch):
+    from aragora.connectors.factory_registration import register_evidence_connectors
+
+    register_evidence_connectors()
+    for kind, (module_name, class_name) in CHAT_CONNECTOR_CLASSES.items():
+        recording = type(class_name, (), {"__init__": lambda self, **kw: setattr(self, "kw", kw)})
+        monkeypatch.setattr(f"{module_name}.{class_name}", recording)
+        connector = hook.create_connector(kind, marker=kind)
+        assert type(connector) is recording, kind
+        assert connector.kw == {"marker": kind}
+
+
+def test_the_registration_builds_real_chat_connectors(isolated_hook):
+    from aragora.connectors.chat.slack import SlackConnector
+    from aragora.connectors.chat.teams import TeamsConnector
+    from aragora.connectors.factory_registration import register_evidence_connectors
+
+    register_evidence_connectors()
+    slack = hook.create_connector("slack_chat", bot_token="b", signing_secret="s")
+    assert type(slack) is SlackConnector
+    assert (slack.bot_token, slack.signing_secret) == ("b", "s")
+    teams = hook.create_connector("teams_chat", app_id="bot", app_password="p")
+    assert type(teams) is TeamsConnector
+    assert (teams.app_id, teams.app_password) == ("bot", "p")
+
+
 SEARCHES = [
     (tooling.web_search_fallback, {}, "web_search", {}),
     (tooling.arxiv_search, {}, "arxiv", {}),
@@ -291,6 +332,178 @@ async def test_code_reviewer_builds_github_through_the_hook(built):
     )
 
 
+class _Gatherer(SourceGatheringMixin):
+    def __init__(self, project_root):
+        self._project_root = project_root
+        self._prompt_builder = None
+        self._evidence_store_callback = None
+
+
+# Each debate evidence gatherer, with what it returns when it collects nothing.
+EVIDENCE_GATHERERS = {
+    "context.sources": (
+        lambda root: SourceFetcher(project_root=root).gather_evidence_context("needle"),
+        (None, None),
+    ),
+    "context_gatherer.sources": (
+        lambda root: _Gatherer(root).gather_evidence_context("needle"),
+        None,
+    ),
+    "context_strategies.evidence": (
+        lambda root: EvidenceStrategy(project_root=root).gather("needle"),
+        None,
+    ),
+}
+
+
+@pytest.fixture
+def collectors(monkeypatch):
+    """Replaces the evidence collector; the list holds every collector a gatherer creates."""
+    import aragora.evidence.collector as collector_module
+
+    created = []
+
+    class RecordingCollector:
+        def __init__(self, *args, **kwargs):
+            self.connectors = {}
+            self.enabled = None
+            created.append(self)
+
+        def add_connector(self, name, connector):
+            self.connectors[name] = connector
+
+        async def collect_evidence(self, task, enabled_connectors=None):
+            self.enabled = enabled_connectors
+            return SimpleNamespace(snippets=[])
+
+    monkeypatch.setattr(collector_module, "EvidenceCollector", RecordingCollector)
+    return created
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("gatherer", EVIDENCE_GATHERERS)
+async def test_debate_evidence_gathering_builds_its_connectors_through_the_hook(
+    built, collectors, gatherer, monkeypatch, tmp_path
+):
+    gather, empty = EVIDENCE_GATHERERS[gatherer]
+    monkeypatch.setenv("GITHUB_TOKEN", "t")
+    assert await gather(tmp_path) == empty
+    assert [(k, kw) for k, kw, _ in built] == [
+        ("web_search", {}),
+        ("github", {}),
+        ("local_docs", {"root_path": str(tmp_path / "docs"), "file_types": "docs"}),
+    ]
+    [collector] = collectors
+    assert collector.enabled == ["web", "github", "local_docs"]
+    assert collector.connectors == dict(zip(collector.enabled, (c for _, _, c in built)))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("gatherer", EVIDENCE_GATHERERS)
+async def test_debate_evidence_gathering_skips_web_search_without_duckduckgo_and_github_without_a_token(
+    isolated_hook, collectors, gatherer, monkeypatch, tmp_path
+):
+    gather, _ = EVIDENCE_GATHERERS[gatherer]
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    kinds = []
+
+    def factory(kind, **kwargs):
+        kinds.append(kind)
+        return None if kind == "web_search" else FakeConnector(kind, **kwargs)
+
+    isolated_hook.register_connector_factory(factory)
+    await gather(tmp_path)
+    assert kinds == ["web_search", "local_docs"]
+    assert collectors[0].enabled == ["local_docs"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("gatherer", EVIDENCE_GATHERERS)
+async def test_debate_evidence_gathering_without_a_factory_collects_nothing(
+    isolated_hook, collectors, gatherer, monkeypatch, tmp_path
+):
+    gather, empty = EVIDENCE_GATHERERS[gatherer]
+    monkeypatch.setenv("GITHUB_TOKEN", "t")
+    assert await gather(tmp_path) == empty
+    assert collectors[0].connectors == {}
+
+
+@pytest.fixture
+def chat_workspaces(monkeypatch):
+    slack = SimpleNamespace(access_token="token", signing_secret=None)
+    teams = SimpleNamespace(bot_id="bot", service_url=None)
+    monkeypatch.setattr(
+        "aragora.storage.slack_workspace_store.get_slack_workspace_store",
+        lambda: SimpleNamespace(get=lambda workspace_id: slack),
+    )
+    monkeypatch.setattr(
+        "aragora.storage.teams_workspace_store.get_teams_workspace_store",
+        lambda: SimpleNamespace(get=lambda workspace_id: teams),
+    )
+
+
+RECEIPT = {"debate_id": "debate-1", "task": "Test", "confidence": 0.9}
+
+
+@pytest.mark.asyncio
+async def test_receipt_delivery_builds_the_slack_connector_through_the_hook(built, chat_workspaces):
+    result = await create_receipt_delivery_hook(org_id="org")._send_to_slack(RECEIPT, "C1", "T1")
+    assert (result.success, result.message_id) == (True, "1.2")
+    assert [(k, kw) for k, kw, _ in built] == [
+        ("slack_chat", {"bot_token": "token", "signing_secret": ""})
+    ]
+    assert built[0][2].sent[0]["channel_id"] == "C1"
+
+
+@pytest.mark.asyncio
+async def test_receipt_delivery_sends_through_slack_with_the_workspace_bot_token(
+    isolated_hook, chat_workspaces, monkeypatch
+):
+    from aragora.connectors.chat.slack import SlackConnector
+    from aragora.connectors.factory_registration import register_evidence_connectors
+
+    monkeypatch.delenv("SLACK_BOT_TOKEN", raising=False)
+    senders = []
+
+    async def send_message(self, **kwargs):
+        senders.append(self)
+        return SimpleNamespace(timestamp="1.2")
+
+    monkeypatch.setattr(SlackConnector, "send_message", send_message)
+    register_evidence_connectors()
+    result = await create_receipt_delivery_hook(org_id="org")._send_to_slack(RECEIPT, "C1", "T1")
+    assert result.success is True
+    assert [type(s) for s in senders] == [SlackConnector]
+    assert senders[0].bot_token == "token"
+
+
+@pytest.mark.asyncio
+async def test_receipt_delivery_builds_the_teams_connector_through_the_hook(built, chat_workspaces):
+    result = await create_receipt_delivery_hook(org_id="org")._send_to_teams(RECEIPT, "19:c", "t1")
+    assert (result.success, result.message_id) == (True, "m-1")
+    assert [(k, kw) for k, kw, _ in built] == [
+        (
+            "teams_chat",
+            {
+                "app_id": "bot",
+                "app_password": "",
+                "service_url": "https://smba.trafficmanager.net/amer/",
+            },
+        )
+    ]
+    assert built[0][2].sent[0]["conversation_id"] == "19:c"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("platform", ["slack", "teams"])
+async def test_receipt_delivery_reports_an_unregistered_factory_as_a_failed_delivery(
+    isolated_hook, chat_workspaces, platform
+):
+    send = getattr(create_receipt_delivery_hook(org_id="org"), f"_send_to_{platform}")
+    result = await send(RECEIPT, "C1", "T1")
+    assert (result.success, result.error) == (False, f"delivery_failed:{platform}")
+
+
 def _run(script: str, *args: str) -> str:
     if sys.version_info < (3, 11):
         pytest.importorskip("tomli")
@@ -330,6 +543,16 @@ def test_an_agents_only_process_builds_the_github_connector():
     assert _run(script).split()[-2:] == ["aragora.connectors.github", "GitHubConnector"]
 
 
+def test_a_debate_only_process_builds_the_slack_chat_connector():
+    script = (
+        "import aragora.debate.hooks.receipt_delivery_hook\n"
+        "from aragora.runtime.connector_factory import create_connector\n"
+        "connector = create_connector('slack_chat', bot_token='b', signing_secret='s')\n"
+        "print(type(connector).__name__)\n"
+    )
+    assert _run(script).split()[-1] == "SlackConnector"
+
+
 def _runtime_imports(tree):
     """Absolute imports outside ``if TYPE_CHECKING:`` blocks."""
     type_only = set()
@@ -345,7 +568,7 @@ def _runtime_imports(tree):
             yield node.lineno, node.module
 
 
-@pytest.mark.parametrize("package", ["verticals", "agents"])
+@pytest.mark.parametrize("package", ["verticals", "agents", "debate"])
 def test_package_holds_no_runtime_import_of_connectors(package):
     offenders = [
         f"{path.relative_to(REPO_ROOT)}:{line}: {name}"
