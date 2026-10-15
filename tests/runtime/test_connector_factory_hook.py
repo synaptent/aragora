@@ -571,7 +571,8 @@ def _runtime_imports(tree):
 
 
 @pytest.mark.parametrize(
-    "package", ["verticals", "agents", "debate", "knowledge", "swarm", "ideacloud"]
+    "package",
+    ["verticals", "agents", "debate", "knowledge", "swarm", "ideacloud", "services", "workflow"],
 )
 def test_package_holds_no_runtime_import_of_connectors(package):
     offenders = [

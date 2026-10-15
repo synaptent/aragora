@@ -29,9 +29,19 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
+from aragora.exceptions import ConnectorError, ConnectorRateLimitError
 from aragora.workflow.step import BaseStep, WorkflowContext
 
 logger = logging.getLogger(__name__)
+
+_DEFAULT_RETRY_DELAY = 5.0
+
+
+def _retry_delay(error: ConnectorError) -> float:
+    """Seconds to wait before retrying after ``error``: its ``retry_after`` when set."""
+    if error.retry_after:
+        return error.retry_after
+    return 60.0 if isinstance(error, ConnectorRateLimitError) else _DEFAULT_RETRY_DELAY
 
 
 class ConnectorOperation(str, Enum):
@@ -394,12 +404,6 @@ class ConnectorStep(BaseStep):
         connector = self._connector_cache[cache_key]
 
         # Execute operation with retry
-        from aragora.connectors.exceptions import (
-            ConnectorError,
-            is_retryable_error,
-            get_retry_delay,
-        )
-
         last_error: Exception | None = None
         for attempt in range(max_retries + 1):
             try:
@@ -416,15 +420,15 @@ class ConnectorStep(BaseStep):
                 last_error = TimeoutError(f"Operation timed out after {timeout}s")
                 if not retry_on_error or attempt >= max_retries:
                     raise last_error
-                delay = get_retry_delay(last_error)
+                delay = _DEFAULT_RETRY_DELAY
                 logger.warning("[ConnectorStep] %s: Timeout, retrying in %ss...", self._name, delay)
                 await asyncio.sleep(delay)
 
             except ConnectorError as e:
                 last_error = e
-                if not retry_on_error or not is_retryable_error(e) or attempt >= max_retries:
+                if not retry_on_error or not e.is_retryable or attempt >= max_retries:
                     raise
-                delay = get_retry_delay(e)
+                delay = _retry_delay(e)
                 logger.warning("[ConnectorStep] %s: %s, retrying in %ss...", self._name, e, delay)
                 await asyncio.sleep(delay)
 

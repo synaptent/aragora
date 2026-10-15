@@ -2,15 +2,18 @@
 
 Reached through the ``aragora.connector_factories`` entry point in ``pyproject.toml`` on the
 first connector a lower package builds, so ``aragora.agents``, ``aragora.verticals``,
-``aragora.debate``, ``aragora.knowledge``, ``aragora.swarm`` and ``aragora.ideacloud`` never
-import the connectors.
+``aragora.debate``, ``aragora.knowledge``, ``aragora.swarm``, ``aragora.ideacloud``,
+``aragora.services`` and ``aragora.workflow`` never import the connectors.
 
 Kinds: ``web_search`` (a :class:`~aragora.connectors.web.WebConnector`, or None when
-duckduckgo-search is not installed), ``tax`` (the connector
+duckduckgo-search is not installed), ``web`` (a ``WebConnector`` for fetching pages, built
+whether or not search is available), ``tax`` (the connector
 :func:`~aragora.connectors.tax.resolve_tax_connector` picks for ``jurisdiction``),
 ``slack_chat`` and ``teams_chat`` (the Slack and Teams chat connectors), ``obsidian`` (see
-:func:`build_obsidian_connector`), ``feed_ingestor`` (see :func:`build_feed_ingestor`), and one
-kind per class in ``CONNECTOR_CLASSES``.
+:func:`build_obsidian_connector`), ``feed_ingestor`` (see :func:`build_feed_ingestor`),
+``gmail`` and ``outlook`` (the enterprise mail connectors), ``slack_enterprise`` (the
+enterprise Slack workspace connector), ``browser`` (the Playwright connector), and one kind
+per class in ``CONNECTOR_CLASSES``.
 """
 
 from __future__ import annotations
@@ -80,6 +83,26 @@ def build_connector(kind: str, /, **kwargs: Any) -> Any:
         from aragora.connectors import web
 
         return web.WebConnector(**kwargs) if web.DDGS_AVAILABLE else None
+    if kind == "web":
+        from aragora.connectors import web
+
+        return web.WebConnector(**kwargs)
+    if kind == "gmail":
+        from aragora.connectors.enterprise.communication import gmail
+
+        return gmail.GmailConnector(**kwargs)
+    if kind == "outlook":
+        from aragora.connectors.enterprise.communication import outlook
+
+        return outlook.OutlookConnector(**kwargs)
+    if kind == "slack_enterprise":
+        from aragora.connectors.enterprise.collaboration import slack as enterprise_slack
+
+        return enterprise_slack.SlackConnector(**kwargs)
+    if kind == "browser":
+        from aragora.connectors import browser
+
+        return browser.PlaywrightConnector(**kwargs)
     if kind == "tax":
         return connectors.resolve_tax_connector(**kwargs)
     if kind == "slack_chat":
