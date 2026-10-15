@@ -43,6 +43,7 @@ from aragora.debate.phases.feedback_knowledge import KnowledgeFeedback
 from aragora.debate.phases.feedback_memory import MemoryFeedback
 from aragora.debate.phases.feedback_persona import PersonaFeedback
 from aragora.debate.phases.training_emitter import TrainingEmitter
+from aragora.debate.nomic_backends import NomicBackendNotRegisteredError, nomic_backend
 from aragora.debate.pipeline_backends import pipeline_backend
 from aragora.debate.workflow_backends import WorkflowBackendNotRegisteredError, workflow_backend
 from aragora.protocols import (
@@ -570,7 +571,7 @@ class FeedbackPhase:
             return
 
         try:
-            from aragora.nomic.outcome_feedback import OutcomeFeedbackBridge
+            OutcomeFeedbackBridge = nomic_backend().outcome_feedback_bridge()
 
             bridge = OutcomeFeedbackBridge()
             queued = bridge.queue_improvement_suggestions()
@@ -580,7 +581,7 @@ class FeedbackPhase:
                     queued,
                     ctx.debate_id,
                 )
-        except (ImportError, OSError) as e:
+        except (ImportError, OSError, NomicBackendNotRegisteredError) as e:
             logger.debug("[outcome_feedback] OutcomeFeedbackBridge not available: %s", e)
         except (TypeError, ValueError, AttributeError, RuntimeError) as e:
             logger.debug("[outcome_feedback] Feedback queueing failed: %s", e)

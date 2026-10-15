@@ -266,6 +266,12 @@ workflow = "aragora.workflow.debate_registration:register_debate_workflow_backen
 [project.entry-points."aragora.debate_pipeline_backends"]
 pipeline = "aragora.pipeline.debate_registration:register_debate_pipeline_backend"
 
+# Run by aragora/debate/nomic_backends.py on the first nomic loop lookup that finds no
+# backend, so the debate engine tracks debate beads and GUPP hooks, applies the nomic debate
+# profile and feeds outcomes back to the nomic loop without importing aragora.nomic.
+[project.entry-points."aragora.debate_nomic_backends"]
+nomic = "aragora.nomic.debate_registration:register_debate_nomic_backend"
+
 # Run by aragora/notifications/email_senders.py on the first email sender a lower package
 # builds from an email config, so aragora.services sends invoices without importing
 # aragora.integrations.

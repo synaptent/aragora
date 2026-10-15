@@ -38,6 +38,7 @@ from aragora.debate.gauntlet_runners import (
     GauntletRunnerNotRegisteredError,
     create_gauntlet_runner,
 )
+from aragora.debate.nomic_backends import NomicBackendNotRegisteredError, nomic_backend
 from aragora.debate.pipeline_backends import PipelineBackendNotRegisteredError, pipeline_backend
 from aragora.debate.post_debate_config import PostDebateConfig, PostDebateResult
 from aragora.debate.post_debate_persistence import PostDebatePersistenceMixin
@@ -1186,7 +1187,7 @@ class PostDebateCoordinator(PostDebatePersistenceMixin):
     ) -> bool:
         """Step 7: Queue improvement suggestion for self-improvement pipeline."""
         try:
-            from aragora.nomic.improvement_queue import (
+            from aragora.learning.improvement_queue import (
                 ImprovementSuggestion,
                 get_improvement_queue,
             )
@@ -1607,7 +1608,7 @@ class PostDebateCoordinator(PostDebatePersistenceMixin):
         improvement goals for the Nomic Loop MetaPlanner.
         """
         try:
-            from aragora.nomic.outcome_feedback import OutcomeFeedbackBridge
+            OutcomeFeedbackBridge = nomic_backend().outcome_feedback_bridge()
 
             bridge = OutcomeFeedbackBridge()
             cycle_result = bridge.run_feedback_cycle()
@@ -1620,7 +1621,7 @@ class PostDebateCoordinator(PostDebatePersistenceMixin):
                     debate_id,
                 )
             return cycle_result
-        except ImportError:
+        except (ImportError, NomicBackendNotRegisteredError):
             logger.debug("OutcomeFeedbackBridge not available, skipping outcome feedback")
             return None
         except (ValueError, TypeError, AttributeError, RuntimeError, OSError) as e:
