@@ -133,7 +133,9 @@ class CRUDProtocol(Protocol):
     ) -> Any: ...
 
     # Mixin methods that call each other - included for type checking
-    async def store(self, request: IngestionRequest) -> IngestionResult: ...
+    async def store(
+        self, request: IngestionRequest, *, org_id: str | None = None
+    ) -> IngestionResult: ...
     async def get(self, node_id: str) -> KnowledgeItem | None: ...
     async def add(
         self,
@@ -143,6 +145,8 @@ class CRUDProtocol(Protocol):
         node_type: str = "fact",
         confidence: float = 0.7,
         tier: str = "medium",
+        *,
+        org_id: str | None = None,
     ) -> str: ...
 
 
@@ -156,12 +160,18 @@ else:
 class CRUDOperationsMixin(_CRUDMixinBase):
     """Mixin providing CRUD operations for KnowledgeMound."""
 
-    async def store(self, request: IngestionRequest) -> IngestionResult:
+    async def store(
+        self, request: IngestionRequest, *, org_id: str | None = None
+    ) -> IngestionResult:
         """
         Store a new knowledge item with full provenance tracking.
 
         Args:
-            request: Ingestion request with content and metadata
+            request: Ingestion request with content and metadata; an
+                organization stamp in ``request.metadata`` is dropped
+            org_id: The writer's authenticated organization, the only source
+                of the stored organization stamp; without it the item is
+                unstamped
 
         Returns:
             IngestionResult with node ID and status
@@ -198,8 +208,12 @@ class CRUDOperationsMixin(_CRUDMixinBase):
             node_id = f"kn_{uuid.uuid4().hex[:16]}"
             span.set_tag("node_id", node_id)
 
+            request.metadata = {
+                k: v for k, v in (request.metadata or {}).items() if k != ORG_STAMP_KEY
+            }
+            if org_id:
+                request.metadata[ORG_STAMP_KEY] = org_id
             content_hash = content_dedup_hash(request.content, request.metadata)[:32]
-            org_stamp = request.metadata.get(ORG_STAMP_KEY) if request.metadata else None
 
             # Check for duplicates if enabled
             if self.config.enable_deduplication:
@@ -251,7 +265,7 @@ class CRUDOperationsMixin(_CRUDMixinBase):
                         tenant_id=request.workspace_id,
                         domain=request.topics[0] if request.topics else "general",
                         importance=request.confidence,
-                        metadata={ORG_STAMP_KEY: org_stamp} if org_stamp else None,
+                        metadata={ORG_STAMP_KEY: org_id} if org_id else None,
                     )
                     span.add_event("semantic_indexed")
                 except (OSError, ConnectionError, TimeoutError, RuntimeError) as e:  # noqa: BLE001 - adapter isolation
@@ -464,6 +478,8 @@ class CRUDOperationsMixin(_CRUDMixinBase):
         node_type: str = "fact",
         confidence: float = 0.7,
         tier: str = "medium",
+        *,
+        org_id: str | None = None,
     ) -> str:
         """
         Simplified method to add content to the Knowledge Mound.
@@ -478,6 +494,7 @@ class CRUDOperationsMixin(_CRUDMixinBase):
             node_type: Type of knowledge node (default: "fact")
             confidence: Confidence score 0-1 (default: 0.7)
             tier: Memory tier (default: "medium")
+            org_id: The writer's authenticated organization (see ``store``)
 
         Returns:
             The created node ID
@@ -493,10 +510,10 @@ class CRUDOperationsMixin(_CRUDMixinBase):
             source_type=KnowledgeSource.EXTERNAL,
             metadata=metadata or {},
         )
-        result = await self.store(request)
+        result = await self.store(request, org_id=org_id)
         return result.node_id
 
-    async def add_node(self, node: Any, *, org_id: str | None = None) -> str:
+    async def add_node(self, node: Any) -> str:
         """
         Add a KnowledgeNode to the mound.
 
@@ -505,9 +522,6 @@ class CRUDOperationsMixin(_CRUDMixinBase):
 
         Args:
             node: KnowledgeNode with node_type, content, confidence, etc.
-            org_id: The writer's authenticated organization, stored as the
-                node's organization stamp. ``node.metadata`` never sets it;
-                without ``org_id`` the node is unstamped.
 
         Returns:
             The created node ID
@@ -519,16 +533,13 @@ class CRUDOperationsMixin(_CRUDMixinBase):
 
         # Convert tier to string if it's an enum
         tier_str = node.tier.value if hasattr(node.tier, "value") else str(node.tier)
-        metadata: dict[str, Any] = {
-            "provenance": node.provenance.to_dict() if node.provenance else None,
-            "node_type": node.node_type,
-        }
-        if org_id:
-            metadata[ORG_STAMP_KEY] = org_id
 
         return await self.add(
             content=node.content,
-            metadata=metadata,
+            metadata={
+                "provenance": node.provenance.to_dict() if node.provenance else None,
+                "node_type": node.node_type,
+            },
             workspace_id=node.workspace_id or self.workspace_id,
             node_type=node.node_type if isinstance(node.node_type, str) else node.node_type,
             confidence=node.confidence,

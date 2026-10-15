@@ -1110,6 +1110,8 @@ class DecisionRouter:
         query: str,
         workspace_id: str | None = None,
         max_items: int = 5,
+        *,
+        org_id: str | None = None,
     ) -> tuple[str, list[str]]:
         """
         Gather relevant knowledge context from Knowledge Mound for the debate.
@@ -1118,12 +1120,17 @@ class DecisionRouter:
             query: The decision question/content
             workspace_id: Optional workspace to scope the query
             max_items: Maximum knowledge items to include
+            org_id: Verified organization the Mound read is confined to
 
         Returns:
-            Tuple of (context_string, document_ids); empty, with a warning, when
-            the pipeline has no organization to confine the Mound read to.
+            Tuple of (context_string, document_ids); empty, with a warning and
+            without reading the Mound, when no ``org_id`` is given.
         """
-        from aragora.knowledge.fact_store import OrgScopeRequiredError
+        if not org_id:
+            # The request context carries no verified organization (tenant and
+            # workspace ids are caller- or platform-supplied), so fail closed.
+            logger.warning("Knowledge Mound context skipped: no verified organization")
+            return "", []
 
         try:
             from aragora.knowledge.pipeline import KnowledgePipeline, PipelineConfig
@@ -1132,6 +1139,7 @@ class DecisionRouter:
             config = PipelineConfig(
                 workspace_id=workspace_id or "default",
                 use_knowledge_mound=True,
+                org_id=org_id,
             )
             pipeline = KnowledgePipeline(config)
             await pipeline.start()
@@ -1175,11 +1183,6 @@ class DecisionRouter:
 
         except ImportError:
             logger.debug("Knowledge pipeline not available for context gathering")
-            return "", []
-        except OrgScopeRequiredError as e:
-            # No verified organization reaches this router, so the debate gets no
-            # organization's Mound items rather than every organization's.
-            logger.warning("Knowledge Mound context skipped: %s", e)
             return "", []
         except (ValueError, TypeError, KeyError, AttributeError, RuntimeError, OSError) as e:
             logger.warning("Failed to gather knowledge context: %s", e)

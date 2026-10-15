@@ -987,10 +987,9 @@ Include dates, numbers, names, and specific claims where possible."""
                     "file_size": document.file_size,
                     "chunk_count": len(chunks),
                     "tags": tags or base_metadata.get("tags") or [],
-                    MOUND_ORG_KEY: org_id,
                 },
             )
-            result = await self._knowledge_mound.store(doc_request)
+            result = await self._knowledge_mound.store(doc_request, org_id=org_id)
             if result.success:
                 synced += 1
 
@@ -1011,10 +1010,9 @@ Include dates, numbers, names, and specific claims where possible."""
                         "sequence": chunk.sequence,
                         "token_count": chunk.token_count,
                         "parent_node_id": result.node_id if result.success else None,
-                        MOUND_ORG_KEY: org_id,
                     },
                 )
-                chunk_result = await self._knowledge_mound.store(chunk_request)
+                chunk_result = await self._knowledge_mound.store(chunk_request, org_id=org_id)
                 if chunk_result.success:
                     synced += 1
 
@@ -1036,10 +1034,9 @@ Include dates, numbers, names, and specific claims where possible."""
                             fact.validation_status.value if fact.validation_status else "unverified"
                         ),
                         "source_documents": fact.source_documents,
-                        MOUND_ORG_KEY: org_id,
                     },
                 )
-                fact_result = await self._knowledge_mound.store(fact_request)
+                fact_result = await self._knowledge_mound.store(fact_request, org_id=org_id)
                 if fact_result.success:
                     synced += 1
 

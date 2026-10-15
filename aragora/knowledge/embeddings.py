@@ -435,11 +435,12 @@ class WeaviateEmbeddingService:
         logger.info("Deleted %s chunks for workspace %s", deleted, workspace_id)
         return deleted
 
-    async def delete_document_chunks(self, document_id: str) -> int:
-        """Delete all chunks for a document.
+    async def delete_document_chunks(self, document_id: str, workspace_id: str) -> int:
+        """Delete a document's chunks from one workspace (chunk namespace) only.
 
         Args:
             document_id: Document to delete chunks from
+            workspace_id: Chunk namespace to delete them from
 
         Returns:
             Number of chunks deleted
@@ -451,7 +452,9 @@ class WeaviateEmbeddingService:
             raise ConnectionError("Not connected to Weaviate")
 
         collection = self._client.collections.get(self.config.collection_name)
-        doc_filter = Filter.by_property("document_id").equal(document_id)
+        doc_filter = Filter.by_property("document_id").equal(document_id) & Filter.by_property(
+            "workspace_id"
+        ).equal(workspace_id)
 
         result = collection.data.delete_many(where=doc_filter)
         deleted = result.successful if hasattr(result, "successful") else 0
@@ -703,17 +706,21 @@ class InMemoryEmbeddingService:
                     self._by_document[doc_id].discard((workspace_id, chunk_id))
         return len(chunk_ids)
 
-    async def delete_document_chunks(self, document_id: str) -> int:
-        """Delete document chunks."""
-        chunk_keys = self._by_document.pop(document_id, set())
-        for ws_id, chunk_id in chunk_keys:
-            if self._chunks.pop((ws_id, chunk_id), None) is not None:
-                if ws_id in self._by_workspace:
-                    self._by_workspace[ws_id].discard(chunk_id)
+    async def delete_document_chunks(self, document_id: str, workspace_id: str) -> int:
+        """Delete a document's chunks from one chunk namespace only."""
+        keys = self._by_document.get(document_id, set())
+        chunk_ids = {chunk_id for ws_id, chunk_id in keys if ws_id == workspace_id}
+        keys -= {(workspace_id, chunk_id) for chunk_id in chunk_ids}
+        if not keys:
+            self._by_document.pop(document_id, None)
+        for chunk_id in chunk_ids:
+            if self._chunks.pop((workspace_id, chunk_id), None) is not None:
+                if workspace_id in self._by_workspace:
+                    self._by_workspace[workspace_id].discard(chunk_id)
                 # Remove from BM25 index
-                if ws_id in self._bm25_indices:
-                    self._bm25_indices[ws_id].remove_document(chunk_id)
-        return len(chunk_keys)
+                if workspace_id in self._bm25_indices:
+                    self._bm25_indices[workspace_id].remove_document(chunk_id)
+        return len(chunk_ids)
 
     def get_statistics(self, workspace_id: str | None = None) -> dict[str, Any]:
         """Get statistics."""

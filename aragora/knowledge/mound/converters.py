@@ -15,18 +15,6 @@ from aragora.knowledge.mound.types import (
     KnowledgeSource,
     RelationshipType,
 )
-from aragora.knowledge.mound_types import ORG_STAMP_KEY
-
-
-def _org_stamp(source: Any) -> dict[str, str]:
-    """The organization stamp of a record whose store kept its writer's authenticated org.
-
-    Only the record's own ``org_id`` field counts, never free-form payload
-    metadata, so a record without that field stays unstamped and
-    organization-filtered reads withhold it.
-    """
-    org_id = getattr(source, "org_id", None)
-    return {ORG_STAMP_KEY: org_id} if isinstance(org_id, str) and org_id else {}
 
 
 def node_to_item(node: Any) -> KnowledgeItem:
@@ -112,10 +100,7 @@ def vector_result_to_item(result: Any) -> KnowledgeItem:
         confidence=ConfidenceLevel.MEDIUM,
         created_at=datetime.now(),
         updated_at=datetime.now(),
-        metadata={
-            **{k: v for k, v in (result.metadata or {}).items() if k != ORG_STAMP_KEY},
-            **_org_stamp(result),
-        },
+        metadata=result.metadata or {},
         importance=getattr(result, "score", 0.5),
     )
 
@@ -134,7 +119,6 @@ def evidence_to_item(evidence: Any) -> KnowledgeItem:
             "source_url": getattr(evidence, "source_url", None),
             "debate_id": getattr(evidence, "debate_id", None),
             "agent_id": getattr(evidence, "agent_id", None),
-            **_org_stamp(evidence),
         },
         importance=getattr(evidence, "quality_score", 0.5),
     )
@@ -154,7 +138,6 @@ def critique_to_item(pattern: Any) -> KnowledgeItem:
         metadata={
             "success_count": getattr(pattern, "success_count", 0),
             "agent_name": getattr(pattern, "agent_name", None),
-            **_org_stamp(pattern),
         },
         importance=getattr(pattern, "success_rate", 0.5),
     )
