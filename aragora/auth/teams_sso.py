@@ -24,7 +24,7 @@ from __future__ import annotations
 import logging
 import os
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -59,7 +59,7 @@ class TeamsTokenInfo:
     aud: str | None = None  # Audience
     exp: int | None = None  # Expiration
     iat: int | None = None  # Issued at
-    raw_claims: dict[str, Any] = None
+    raw_claims: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.raw_claims is None:
@@ -104,7 +104,7 @@ class TeamsSSO:
     def _get_identity_bridge(self) -> Any:
         """Lazy-load the identity bridge."""
         if self._identity_bridge is None:
-            from aragora.connectors.chat.teams_identity import get_teams_identity_bridge
+            from aragora.auth.teams_identity import get_teams_identity_bridge
 
             self._identity_bridge = get_teams_identity_bridge()
         return self._identity_bridge
@@ -165,7 +165,7 @@ class TeamsSSO:
             return None
 
         # Extract more info and sync user
-        from aragora.connectors.chat.teams_identity import TeamsUserInfo
+        from aragora.auth.teams_identity import TeamsUserInfo
 
         teams_user = TeamsUserInfo(
             aad_object_id=aad_object_id,
