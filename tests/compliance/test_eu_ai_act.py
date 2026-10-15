@@ -1461,3 +1461,21 @@ class TestGeneratedOutputPins:
     def test_public_surface_is_unchanged(self) -> None:
         assert eu_ai_act.__all__ == _PUBLIC_ALL.split()
         assert [name for name in _MODULE_NAMES.split() if not hasattr(eu_ai_act, name)] == []
+
+
+def test_risk_submodule_is_a_tier4_authority_dependency_in_both_classifiers() -> None:
+    """eu_ai_act.py is an authority-closure member and imports the risk submodule
+    statically, so the submodule joins the closure. The fail-closed closure build
+    rejects any member classifying below Tier 4 and enforces per-member parity
+    between the canonical classifier and the merge-train mirror, so the exact
+    file path must be a dependency-prefix entry in both."""
+    from aragora.cli.commands import review_queue
+    from scripts import tier4_merge_train
+
+    path = "aragora/compliance/eu_ai_act_risk.py"
+    assert path in review_queue.CONTRACT_DRIFT_AUTHORITY_DEPENDENCY_PREFIXES
+    assert path in tier4_merge_train.CONTRACT_DRIFT_AUTHORITY_DEPENDENCY_PREFIXES
+    assert tier4_merge_train.matches_serialized_path(path) == path
+    tier, name, _reason = review_queue._classify_model_review_tier([path])
+    assert tier == 4
+    assert name == "tier_4_preapproval_required"

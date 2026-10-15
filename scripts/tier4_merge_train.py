@@ -460,6 +460,7 @@ CONTRACT_DRIFT_AUTHORITY_DEPENDENCY_PREFIXES: tuple[str, ...] = (
     "aragora/compliance/artifact_generator.py",
     "aragora/compliance/data_classification.py",
     "aragora/compliance/eu_ai_act.py",
+    "aragora/compliance/eu_ai_act_risk.py",
     "aragora/compliance/framework.py",
     "aragora/compliance/monitor.py",
     "aragora/compliance/phi_detectors.py",
