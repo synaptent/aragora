@@ -10,14 +10,23 @@ Covers:
 
 from __future__ import annotations
 
+import hashlib
+import itertools
 import json
 import os
 import tempfile
+import uuid
+from datetime import datetime
+from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
+from aragora.compliance import eu_ai_act
 from aragora.compliance.eu_ai_act import (
     ANNEX_III_CATEGORIES,
+    UNACCEPTABLE_KEYWORDS,
     Article10Artifact,
     Article11Artifact,
     Article12Artifact,
@@ -30,6 +39,7 @@ from aragora.compliance.eu_ai_act import (
     ComplianceArtifactGenerator,
     ConformityReport,
     ConformityReportGenerator,
+    EUAIActBundleGenerator,
     RiskClassification,
     RiskClassifier,
     RiskLevel,
@@ -1366,3 +1376,88 @@ class TestArticle49Artifact:
         gen = ComplianceArtifactGenerator(eu_representative="")
         art49 = gen._generate_art49(_MINIMAL_RECEIPT, "rcpt-test001", "2026-03-05T00:00:00Z")
         assert any("authorized representative" in n for n in art49.compliance_notes)
+
+
+# ---------------------------------------------------------------------------
+# Byte-level output pins (module refactors must not change generated artifacts)
+# ---------------------------------------------------------------------------
+
+_PIN_DESCRIPTIONS = [
+    "Social scoring of citizens by a public authority",
+    "CV screening for recruitment and hiring decisions",
+    "Customer support chatbot for retail orders",
+    "Spreadsheet formula suggestions",
+    *(category["keywords"][0] for category in ANNEX_III_CATEGORIES),
+]
+_PUBLIC_ALL = """RiskLevel RiskClassification RiskClassifier ANNEX_III_CATEGORIES ArticleMapping
+ConformityReport ConformityReportGenerator Article9Artifact Article10Artifact Article11Artifact
+Article12Artifact Article13Artifact Article14Artifact Article15Artifact Article43Artifact
+Article49Artifact ComplianceArtifactBundle ComplianceArtifactGenerator EUAIActBundleGenerator"""
+_MODULE_NAMES = (
+    f"{_PUBLIC_ALL} UNACCEPTABLE_KEYWORDS _high_risk_obligations _detect_human_oversight"
+)
+
+
+def _sort_art12_agents(articles: dict[str, Any]) -> dict[str, Any]:
+    # Article 12 builds its agent list from a set, so its order follows PYTHONHASHSEED.
+    art12 = articles["article_12_record_keeping"]
+    art12["input_record"]["agents_participating"].sort()
+    art12["technical_documentation"]["annex_iv_sec2_development"]["agents"].sort()
+    return articles
+
+
+class TestGeneratedOutputPins:
+    """Serialized EU AI Act artifacts stay byte-identical across refactors."""
+
+    PINS = {
+        "bundle_minimal": "4613001a6718c962fa1328b1e241bc21ef65c61af851c1709a1278697d6d519d",
+        "bundle_rich": "01af62521cf219cb037ef6261fc174cac1220e961533c986b01f534f0a3e4800",
+        "classify": "c7926306bba178f80ad1fbf7cb77fd996fc9b42d549a2dd2dc13d07f8c0b4b2b",
+        "report_json_minimal": "e62f0bd1e3adae5a209c5ed52c14822ba23c401a1231c8ca3094a577ee28738d",
+        "report_json_rich": "dd2acfe09592d11d13b229288e984c8dd8d3959f898156ab6307109d85def121",
+        "report_markdown_rich": "8fb1154c5b86cdceb6ddcfe306e8a1ae9d18c25244590e3d4c327f72280957bf",
+        "store_rich": "51e5e13516d287e3ef44572aff06b89e79ea1e10c38de93709db054fb1f294ad",
+    }
+
+    @pytest.fixture(autouse=True)
+    def _deterministic(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        counter = itertools.count(1)
+        frozen = datetime.fromisoformat("2026-08-02T09:30:00+00:00")
+
+        def uuid4() -> uuid.UUID:
+            return uuid.UUID(bytes=hashlib.sha256(str(next(counter)).encode()).digest()[:16])
+
+        monkeypatch.setattr(eu_ai_act, "uuid", SimpleNamespace(uuid4=uuid4))
+        monkeypatch.setattr(eu_ai_act, "datetime", SimpleNamespace(now=lambda tz=None: frozen))
+
+    @staticmethod
+    def _render(case: str, rich: dict, minimal: dict, db_path: Path) -> str:
+        receipt = rich if case.endswith("_rich") else minimal
+        if case == "classify":
+            classified = [RiskClassifier().classify(text).to_dict() for text in _PIN_DESCRIPTIONS]
+            data = [ANNEX_III_CATEGORIES, UNACCEPTABLE_KEYWORDS, classified]
+            return json.dumps(data, indent=2)
+        if case.startswith("report_"):
+            report = ConformityReportGenerator().generate(receipt)
+            return report.to_markdown() if "markdown" in case else report.to_json()
+        if case.startswith("bundle_"):
+            bundle = ComplianceArtifactGenerator().generate(receipt).to_dict()
+            return json.dumps(_sort_art12_agents(bundle), indent=2)
+        store = EUAIActBundleGenerator(db_path=str(db_path))
+        result = store.generate(receipt, scope="pin", articles=[9, 10, 11, 12, 13, 14, 15, 43, 49])
+        stored = store.get(result["bundle_id"])
+        assert stored is not None
+        for entry in (result, stored):
+            _sort_art12_agents(entry["articles"])
+        return json.dumps([result, stored], indent=2)
+
+    @pytest.mark.parametrize("case", sorted(PINS))
+    def test_output_is_byte_identical(
+        self, case: str, sample_receipt: dict, minimal_receipt: dict, tmp_path: Path
+    ) -> None:
+        text = self._render(case, sample_receipt, minimal_receipt, tmp_path / "bundles.db")
+        assert hashlib.sha256(text.encode("utf-8")).hexdigest() == self.PINS[case]
+
+    def test_public_surface_is_unchanged(self) -> None:
+        assert eu_ai_act.__all__ == _PUBLIC_ALL.split()
+        assert [name for name in _MODULE_NAMES.split() if not hasattr(eu_ai_act, name)] == []
