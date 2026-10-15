@@ -222,7 +222,7 @@ def _auth_user(role: str = "admin") -> MagicMock:
     user.is_authenticated = True
     user.user_id = "user-1"
     user.email = "user@example.com"
-    user.org_id = None
+    user.org_id = "org-1"
     user.role = role
     user.error_reason = None
     return user
@@ -313,8 +313,7 @@ class TestKMCheckpointDispatch:
     )
     def test_compare_post_dispatches_both_forms(self, path: str) -> None:
         handler = KMCheckpointHandler()
-        store = MagicMock()
-        store.compare_checkpoints = AsyncMock(return_value={"nodes_added": 1})
+        store = _checkpoint_store()
         instance, index = _make_dispatch_instance(
             {"_km_checkpoint_handler": handler}, method="POST"
         )
@@ -488,7 +487,7 @@ class TestKMCheckpointDispatch:
             ("GET", "/cp-1", "member", "get_checkpoint_metadata"),
             ("DELETE", "/cp-1", "admin", "delete_checkpoint"),
             ("GET", "/cp-1/compare", "member", "list_checkpoints"),
-            ("POST", "/cp-1/restore", "admin", "restore_checkpoint"),
+            ("POST", "/cp-1/restore", "admin", "get_checkpoint_metadata"),
         ],
     )
     def test_detail_routes_dispatch_both_forms(
@@ -497,8 +496,9 @@ class TestKMCheckpointDispatch:
         store = _checkpoint_store()
         handled, status, _ = _dispatch_checkpoint(method, prefix + suffix, _auth_user(role), store)
         assert handled is True
-        assert status == 200
+        assert status == (403 if suffix.endswith("/restore") else 200)
         getattr(store, store_method).assert_awaited_once()
+        store.restore_checkpoint.assert_not_called()
 
     @pytest.mark.parametrize(
         ("method", "path", "allow"),
@@ -608,6 +608,7 @@ _CHECKPOINT_STORE_METHODS = (
 def _checkpoint_store() -> MagicMock:
     meta = MagicMock(id="cp-1", description="", created_at="2026-10-14T00:00:00", tags=[])
     meta.configure_mock(name="cp-1", node_count=1, size_bytes=10, compressed=True, checksum="c")
+    meta.org_id = "org-1"
     restored = MagicMock(
         success=True, checkpoint_id="cp-1", nodes_restored=1, relationships_restored=0, errors=[]
     )
