@@ -1482,6 +1482,13 @@ class DecisionReceipt:
         # or empty block keeps the receipt byte-identical to pre-crux output.
         cruxes = crux_cards_from_metadata(metadata)
 
+        # Served models: attached by the runner only when some agent's answer
+        # did not come from the requested model. An absent or empty map stays
+        # None so the receipt and its hash are unchanged.
+        served_models = metadata.get("served_models")
+        if not (isinstance(served_models, dict) and served_models):
+            served_models = None
+
         # Determine verdict from consensus
         if zero_evidence:
             verdict = "NO_EVIDENCE"
@@ -1548,6 +1555,7 @@ class DecisionReceipt:
             cost_summary=cost_summary,
             settlement_metadata=settlement_metadata,
             cruxes=cruxes,
+            served_models=served_models,
             evidence_references=evidence_references or [],
             decision_payload=decision_payload,
             schema_version=receipt_schema_version(cruxes, evidence_references),

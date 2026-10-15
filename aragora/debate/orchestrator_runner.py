@@ -1758,6 +1758,47 @@ async def handle_debate_completion(
         except (RuntimeError, ValueError, TypeError, AttributeError, OSError) as e:
             logger.debug("Post-debate workflow fallback setup failed: %s", e)
 
+    # Collect the model each provider ACTUALLY answered with, whenever that
+    # was not the id we asked for. Two ways it happens, and the block names
+    # both: a provider answered with a DIFFERENT model (Anthropic's
+    # server-side refusal fallback, opt-in for Fable 5.1 / Opus 5), or
+    # the requested id never reached the provider at all because the agent's
+    # CLI takes no model flag -- recorded as UNKNOWN_CLI_DEFAULT_MODEL,
+    # "unknown (CLI default)", because a receipt must be able to say
+    # "unknown" rather than guess. Either way a receipt that attributes the
+    # decision to the requested id is wrong about which model made it.
+    #
+    # The claim is debate-wide, so it comes from each agent's debate-scoped
+    # per-call log (cleared at debate start) rather than from its last call:
+    # an agent whose round-1 proposal fell back and whose round-2 critique
+    # did not is two models' work, and reading the last call reported "no
+    # fallback" (finding C-P2). An empty dict here therefore means BOTH
+    # things: every agent's model reached its provider, and every provider
+    # answered as asked, on every call of this debate. Non-empty entries
+    # carry "calls"/"fallback_calls" when the source can count them --
+    # see collect_served_models and _served_models_from_log.
+    #
+    # This must run before the post-debate coordinator below is run or handed
+    # to a worker thread: the coordinator signs and persists the receipt.
+    if ctx.result and arena.agents:
+        served_models = collect_served_models(arena.agents)
+        if served_models:
+            metadata = getattr(ctx.result, "metadata", None)
+            if not isinstance(metadata, dict):
+                try:
+                    setattr(ctx.result, "metadata", {})
+                except (AttributeError, TypeError):
+                    metadata = None
+                else:
+                    metadata = getattr(ctx.result, "metadata", None)
+            if isinstance(metadata, dict):
+                metadata["served_models"] = served_models
+                logger.info(
+                    "served_models_attached debate_id=%s agents=%s",
+                    state.debate_id,
+                    len(served_models),
+                )
+
     # Run post-debate coordinator pipeline (default-on, opt-out via disable_post_debate_pipeline)
     from aragora.debate.post_debate_coordinator import DEFAULT_POST_DEBATE_CONFIG, PostDebateConfig
 
@@ -1972,44 +2013,6 @@ async def handle_debate_completion(
                     "thinking_traces_attached debate_id=%s agents=%s",
                     state.debate_id,
                     len(thinking_traces),
-                )
-
-    # Collect the model each provider ACTUALLY answered with, whenever that
-    # was not the id we asked for. Two ways it happens, and the block names
-    # both: a provider answered with a DIFFERENT model (Anthropic's
-    # server-side refusal fallback, opt-in for Fable 5.1 / Opus 5), or
-    # the requested id never reached the provider at all because the agent's
-    # CLI takes no model flag -- recorded as UNKNOWN_CLI_DEFAULT_MODEL,
-    # "unknown (CLI default)", because a receipt must be able to say
-    # "unknown" rather than guess. Either way a receipt that attributes the
-    # decision to the requested id is wrong about which model made it.
-    #
-    # The claim is debate-wide, so it comes from each agent's debate-scoped
-    # per-call log (cleared at debate start) rather than from its last call:
-    # an agent whose round-1 proposal fell back and whose round-2 critique
-    # did not is two models' work, and reading the last call reported "no
-    # fallback" (finding C-P2). An empty dict here therefore means BOTH
-    # things: every agent's model reached its provider, and every provider
-    # answered as asked, on every call of this debate. Non-empty entries
-    # carry "calls"/"fallback_calls" when the source can count them --
-    # see collect_served_models and _served_models_from_log.
-    if ctx.result and arena.agents:
-        served_models = collect_served_models(arena.agents)
-        if served_models:
-            metadata = getattr(ctx.result, "metadata", None)
-            if not isinstance(metadata, dict):
-                try:
-                    setattr(ctx.result, "metadata", {})
-                except (AttributeError, TypeError):
-                    metadata = None
-                else:
-                    metadata = getattr(ctx.result, "metadata", None)
-            if isinstance(metadata, dict):
-                metadata["served_models"] = served_models
-                logger.info(
-                    "served_models_attached debate_id=%s agents=%s",
-                    state.debate_id,
-                    len(served_models),
                 )
 
     # Queue for Supabase background sync

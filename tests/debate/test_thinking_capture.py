@@ -589,6 +589,102 @@ class TestDecisionReceiptServedModels:
         assert compute_receipt_artifact_hash(receipt.to_dict()) == receipt.artifact_hash
 
 
+class TestDebateReceiptCarriesServedModels:
+    """``DecisionReceipt.from_debate_result`` is how debate receipts are
+    signed and persisted (the post-debate coordinator calls it), so the
+    runner's ``metadata["served_models"]`` must survive the trip; otherwise a
+    signed receipt says nothing about a model substitution (finding R12-O1 on
+    #9989)."""
+
+    SERVED = {
+        "claude-1": {
+            "requested": "claude-fable-5-1",
+            "served": ["claude-opus-4-8", "claude-fable-5-1"],
+            "calls": 2,
+            "fallback_calls": 1,
+        }
+    }
+
+    @staticmethod
+    def _result(metadata: dict[str, Any]):
+        from aragora.core_types import DebateResult, Message
+
+        return DebateResult(
+            debate_id="d-served",
+            task="Should we adopt a monorepo?",
+            final_answer="Adopt a monorepo with per-package ownership.",
+            confidence=0.85,
+            consensus_reached=True,
+            rounds_used=2,
+            participants=["claude-1", "claude-2"],
+            messages=[
+                Message(
+                    role="proposal",
+                    agent="claude-1",
+                    content="Adopt a monorepo with per-package ownership.",
+                )
+            ],
+            winner="claude-1",
+            metadata=metadata,
+        )
+
+    def test_recorded_served_models_reach_the_receipt(self) -> None:
+        from aragora.gauntlet.receipt_models import DecisionReceipt
+
+        receipt = DecisionReceipt.from_debate_result(self._result({"served_models": self.SERVED}))
+
+        assert receipt.served_models == self.SERVED
+        assert receipt.to_dict()["served_models"] == self.SERVED
+
+    def test_the_receipt_hash_binds_the_copied_served_models(self) -> None:
+        from aragora.gauntlet.receipt_models import (
+            DecisionReceipt,
+            compute_receipt_artifact_hash,
+        )
+
+        receipt = DecisionReceipt.from_debate_result(self._result({"served_models": self.SERVED}))
+
+        assert receipt.verify_integrity() is True
+        assert compute_receipt_artifact_hash(receipt.to_dict()) == receipt.artifact_hash
+        unbound = {**receipt.to_dict(), "served_models": None}
+        assert compute_receipt_artifact_hash(unbound) != receipt.artifact_hash
+        receipt.served_models = None
+        assert receipt.verify_integrity() is False
+
+    def test_absent_or_empty_served_models_leave_the_receipt_unchanged(self) -> None:
+        """No entry and an empty map both mean "every agent answered as
+        asked": the receipt must carry no field and keep the hash recipe it
+        had before ``served_models`` existed."""
+        import hashlib
+        import json
+
+        from aragora.gauntlet.receipt_models import DecisionReceipt
+
+        fixed_id = "00000000-0000-4000-8000-000000000001"
+        receipts = []
+        for metadata in ({}, {"served_models": {}}, {"served_models": None}):
+            with patch("aragora.models.receipts.gauntlet.uuid.uuid4", return_value=fixed_id):
+                receipts.append(DecisionReceipt.from_debate_result(self._result(metadata)))
+
+        for receipt in receipts:
+            assert receipt.served_models is None
+            assert "served_models" not in receipt.to_dict()
+            legacy_material = json.dumps(
+                {
+                    "receipt_id": receipt.receipt_id,
+                    "gauntlet_id": receipt.gauntlet_id,
+                    "input_hash": receipt.input_hash,
+                    "risk_summary": receipt.risk_summary,
+                    "verdict": receipt.verdict,
+                    "confidence": receipt.confidence,
+                },
+                sort_keys=True,
+            )
+            assert receipt.artifact_hash == hashlib.sha256(legacy_material.encode()).hexdigest()
+            assert receipt.verify_integrity() is True
+        assert len({receipt.artifact_hash for receipt in receipts}) == 1
+
+
 class TestQuickstartServedModelExtraction:
     def test_extracts_from_result_metadata(self) -> None:
         from aragora.cli.commands.quickstart import _extract_served_models

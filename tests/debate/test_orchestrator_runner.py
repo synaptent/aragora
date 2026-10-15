@@ -1855,6 +1855,82 @@ class TestServedModelsReachTheResultMetadata:
         assert execution_state.ctx.result.metadata["pre_existing"] == "keep me"
         assert "served_models" in execution_state.ctx.result.metadata
 
+    @staticmethod
+    def _recording_coordinator(seen: list[object]):
+        """A PostDebateCoordinator stand-in that records the served_models the
+        receipt-producing pipeline would read, at the moment it runs."""
+
+        def _build(**_kwargs):
+            coordinator = MagicMock()
+
+            def _run(*, debate_result, **_run_kwargs):
+                seen.append((debate_result.metadata or {}).get("served_models"))
+                return SimpleNamespace(success=True, errors=[])
+
+            coordinator.run = MagicMock(side_effect=_run)
+            return coordinator
+
+        return _build
+
+    @pytest.mark.asyncio
+    async def test_served_models_precede_the_synchronous_post_debate_pipeline(
+        self, mock_arena, execution_state, monkeypatch
+    ):
+        """The coordinator signs and persists the receipt, so it must see the
+        substitution (finding R12-O2 on #9989)."""
+        mock_arena.agents = [self._agent("claude-1", "claude-fable-5-1", "claude-opus-4-8")]
+        mock_arena.disable_post_debate_pipeline = False
+        mock_arena.post_debate_config = None
+        execution_state.ctx.result.metadata = {}
+        monkeypatch.setenv("ARAGORA_SYNC_POST_DEBATE", "1")
+        seen: list[object] = []
+
+        with patch(
+            "aragora.debate.post_debate_coordinator.PostDebateCoordinator",
+            side_effect=self._recording_coordinator(seen),
+        ):
+            await handle_debate_completion(mock_arena, execution_state)
+
+        assert seen == [
+            {"claude-1": {"requested": "claude-fable-5-1", "served": ["claude-opus-4-8"]}}
+        ]
+
+    @pytest.mark.asyncio
+    async def test_served_models_precede_the_executor_post_debate_pipeline(
+        self, mock_arena, execution_state, monkeypatch
+    ):
+        """By default the pipeline is handed to a worker thread, which may start
+        it at once. Running the job at the instant of hand-off is the earliest
+        schedule a pool thread can produce, so the attachment must already be
+        in place by then."""
+        mock_arena.agents = [self._agent("claude-1", "claude-fable-5-1", "claude-opus-4-8")]
+        mock_arena.disable_post_debate_pipeline = False
+        mock_arena.post_debate_config = None
+        execution_state.ctx.result.metadata = {}
+        monkeypatch.delenv("ARAGORA_SYNC_POST_DEBATE", raising=False)
+        seen: list[object] = []
+        loop = asyncio.get_running_loop()
+
+        def _run_at_handoff(_executor, func, *args):
+            func(*args)
+            done = loop.create_future()
+            done.set_result(None)
+            return done
+
+        with (
+            patch(
+                "aragora.debate.post_debate_coordinator.PostDebateCoordinator",
+                side_effect=self._recording_coordinator(seen),
+            ),
+            patch.object(loop, "run_in_executor", side_effect=_run_at_handoff) as handoff,
+        ):
+            await handle_debate_completion(mock_arena, execution_state)
+
+        handoff.assert_called_once()
+        assert seen == [
+            {"claude-1": {"requested": "claude-fable-5-1", "served": ["claude-opus-4-8"]}}
+        ]
+
 
 class TestUnpinnedCLIAgentsAreNotAttributedAModel:
     """A CLI that never received ``self.model`` must not have its output
