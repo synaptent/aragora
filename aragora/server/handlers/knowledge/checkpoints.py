@@ -2,14 +2,15 @@
 Knowledge Mound Checkpoint HTTP Handler.
 
 Provides REST endpoints for managing KM checkpoints:
-- GET /api/km/checkpoints - List all checkpoints
+- GET /api/km/checkpoints - List checkpoints
 - POST /api/km/checkpoints - Create a checkpoint
 - GET /api/km/checkpoints/{id} - Get checkpoint details
 - DELETE /api/km/checkpoints/{id} - Delete a checkpoint
-- POST /api/km/checkpoints/{id}/restore - Restore from checkpoint
+- POST /api/km/checkpoints/{id}/restore - Refused: the restore target's owner cannot be proven
 - GET /api/km/checkpoints/{id}/compare - Compare with current state
 
 {id} is the km_ckpt_... ``id`` that create and list return; names are never resolved.
+Every route only sees checkpoints that recorded the caller's authenticated organization.
 """
 
 from __future__ import annotations
@@ -36,6 +37,7 @@ from aragora.server.handlers.base import (
     success_response,
     handle_errors,
 )
+from aragora.server.handlers.utils.auth import roles_from_user_context
 from aragora.server.handlers.utils.decorators import require_permission
 from aragora.server.handlers.utils.rate_limit import (
     RateLimiter,
@@ -143,6 +145,15 @@ def _match_route(request_path: str) -> tuple[str, str | None] | None:
     return None
 
 
+def _owned_by(checkpoint: Any, user: dict[str, Any] | None) -> bool:
+    """True only when the checkpoint recorded the caller's authenticated organization.
+
+    A checkpoint without a recorded organization is never owned by anyone.
+    """
+    org_id = (user or {}).get("org_id")
+    return bool(org_id) and getattr(checkpoint, "org_id", None) == org_id
+
+
 class KMCheckpointHandler(BaseHandler):
     """Handler for Knowledge Mound checkpoint management endpoints."""
 
@@ -217,7 +228,7 @@ class KMCheckpointHandler(BaseHandler):
             user_dict: dict[str, Any] = {
                 "user_id": getattr(user, "user_id", None),
                 "sub": getattr(user, "user_id", None),
-                "roles": getattr(user, "roles", set()),
+                "roles": roles_from_user_context(user),
                 "org_id": getattr(user, "org_id", None),
             }
             return user_dict, None
@@ -281,7 +292,7 @@ class KMCheckpointHandler(BaseHandler):
 
     @rate_limit(requests_per_minute=20)
     async def _list_checkpoints(self, handler: Any) -> HandlerResult:
-        """List all KM checkpoints.
+        """List the KM checkpoints recorded for the caller's organization.
 
         GET /api/km/checkpoints
 
@@ -305,7 +316,9 @@ class KMCheckpointHandler(BaseHandler):
             limit = min(max(1, limit), 100)
 
             all_checkpoints = await store.list_checkpoints()
-            checkpoints: list[KMCheckpointMetadata] = all_checkpoints[:limit]
+            checkpoints: list[KMCheckpointMetadata] = [
+                cp for cp in all_checkpoints if _owned_by(cp, user)
+            ][:limit]
 
             return success_response(
                 {
@@ -352,6 +365,10 @@ class KMCheckpointHandler(BaseHandler):
         if perm_err:
             return perm_err
 
+        org_id = (user or {}).get("org_id")
+        if not org_id:
+            return error_response("Creating a checkpoint requires an organization", status=403)
+
         start_time = time.perf_counter()
         success = False
 
@@ -375,6 +392,7 @@ class KMCheckpointHandler(BaseHandler):
                     description=description,
                     tags=tags,
                     return_metadata=True,
+                    org_id=org_id,
                 )
                 # create_checkpoint returns either a string (checkpoint ID) or KMCheckpointMetadata
                 if isinstance(result, str):
@@ -441,7 +459,7 @@ class KMCheckpointHandler(BaseHandler):
             # Use get_checkpoint_metadata which is the actual async method
             metadata = await store.get_checkpoint_metadata(name)
 
-            if metadata is None:
+            if metadata is None or not _owned_by(metadata, user):
                 return error_response(f"Checkpoint '{name}' not found", status=404)
 
             # Handle created_at which may be string or datetime
@@ -487,6 +505,9 @@ class KMCheckpointHandler(BaseHandler):
 
         try:
             store = self._get_checkpoint_store()
+            metadata = await store.get_checkpoint_metadata(name)
+            if metadata is None or not _owned_by(metadata, user):
+                return error_response(f"Checkpoint '{name}' not found", status=404)
 
             # delete_checkpoint is async in the actual implementation
             deleted = await store.delete_checkpoint(name)
@@ -504,13 +525,17 @@ class KMCheckpointHandler(BaseHandler):
 
     @rate_limit(requests_per_minute=3, limiter_name="km_checkpoint_restore")
     async def _restore_checkpoint(self, handler: Any, name: str) -> HandlerResult:
-        """Restore KM state from a checkpoint.
+        """Refuse to restore KM state from a checkpoint.
 
         POST /api/km/checkpoints/{id}/restore
 
         Body:
             strategy: "merge" (default) or "replace"
-            skip_duplicates: boolean (default: True)
+
+        A restore writes into the server mound's workspace. Neither that workspace
+        nor its KnowledgeNodes record an owning organization, so ownership of the
+        restore target cannot be proven and every restore is refused before any
+        write. A checkpoint not recorded for the caller's organization answers 404.
         """
         user, err = self._check_auth(handler)
         if err:
@@ -521,69 +546,21 @@ class KMCheckpointHandler(BaseHandler):
         if perm_err:
             return perm_err
 
-        start_time = time.perf_counter()
-        success = False
+        body = self.read_json_body(handler) or {}
+        if body.get("strategy", "merge") not in ("merge", "replace"):
+            return error_response("Invalid strategy. Use 'merge' or 'replace'", status=400)
 
         try:
-            body = self.read_json_body(handler) or {}
-            strategy = body.get("strategy", "merge")
-
-            if strategy not in ("merge", "replace"):
-                return error_response("Invalid strategy. Use 'merge' or 'replace'", status=400)
-
-            store = self._get_checkpoint_store()
-            # The actual restore_checkpoint has different signature - use clear_existing based on strategy
-            clear_existing = strategy == "replace"
-            result = await store.restore_checkpoint(
-                checkpoint_id=name,
-                clear_existing=clear_existing,
-            )
-
-            # RestoreResult has checkpoint_id, not checkpoint_name
-            # Map the fields appropriately
-            if not result.success and not result.nodes_restored:
-                return error_response(f"Checkpoint '{name}' not found", status=404)
-
-            success = True
-
-            from aragora.observability.metrics import record_checkpoint_restore_result
-
-            # The result is a RestoreResult dataclass with known fields
-            nodes_restored = result.nodes_restored
-            # RestoreResult doesn't have nodes_skipped, calculate from relationships
-            nodes_skipped = 0  # Not tracked in actual implementation
-            errors_list = result.errors
-
-            record_checkpoint_restore_result(
-                nodes_restored=nodes_restored,
-                nodes_skipped=nodes_skipped,
-                errors=len(errors_list),
-            )
-
-            return success_response(
-                {
-                    "checkpoint_id": result.checkpoint_id,
-                    "checkpoint_name": result.checkpoint_id,
-                    "strategy": strategy,
-                    "nodes_restored": nodes_restored,
-                    "relationships_restored": result.relationships_restored,
-                    "nodes_skipped": nodes_skipped,
-                    "errors": errors_list[:10],
-                    "error_count": len(errors_list),
-                }
-            )
-        except ValueError as e:
-            logger.warning("Invalid restore request: %s", e)
-            return error_response("Invalid request", status=400)
+            metadata = await self._get_checkpoint_store().get_checkpoint_metadata(name)
         except RuntimeError as e:
-            logger.error("Restore failed: %s", e)
-            return error_response("Failed to restore checkpoint", status=500)
-        finally:
-            latency = time.perf_counter() - start_time
-            latency_ms = latency * 1000
-            record_checkpoint_operation("restore", success, latency)
-            # Check SLO compliance
-            check_and_record_slo("km_checkpoint", latency_ms)
+            logger.error("Checkpoint store not available: %s", e)
+            return error_response("Checkpoint service unavailable", status=503)
+        if metadata is None or not _owned_by(metadata, user):
+            return error_response(f"Checkpoint '{name}' not found", status=404)
+
+        return error_response(
+            "Restore refused: ownership of the restore target cannot be proven", status=403
+        )
 
     @rate_limit(requests_per_minute=30)
     async def _compare_checkpoint(self, handler: Any, name: str) -> HandlerResult:
@@ -609,7 +586,7 @@ class KMCheckpointHandler(BaseHandler):
         try:
             store = self._get_checkpoint_store()
             # Get the list of checkpoints to find the most recent one for comparison
-            checkpoints = await store.list_checkpoints()
+            checkpoints = [cp for cp in await store.list_checkpoints() if _owned_by(cp, user)]
             if not checkpoints:
                 return error_response("No checkpoints available for comparison", status=404)
 
@@ -688,6 +665,10 @@ class KMCheckpointHandler(BaseHandler):
             validate_checkpoint_name(checkpoint_b)
 
             store = self._get_checkpoint_store()
+            for checkpoint_id in (checkpoint_a, checkpoint_b):
+                metadata = await store.get_checkpoint_metadata(checkpoint_id)
+                if metadata is None or not _owned_by(metadata, user):
+                    return error_response("One or both checkpoints not found", status=404)
             comparison = await store.compare_checkpoints(checkpoint_a, checkpoint_b)
 
             if comparison is None or comparison.get("error"):
