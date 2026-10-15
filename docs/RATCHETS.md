@@ -42,10 +42,18 @@ never fail the run.
 | `0` | No new findings. Prints `<tool>: 0 new findings (<n> baselined, <m> resolved)` plus a second line with both `len(findings)` (keys) and `sum(counts)` (occurrences) for the current run and the baseline. |
 | `1` | New findings. Each key is printed as `NEW <key>  (<path>:<line>: <message>)`, followed by the baseline path and both remedies (`--update`, `--update --allow-grow --reason "<why>"`). Also returned when `--update` refuses to grow the baseline. |
 | `2` | Baseline problem: corrupt JSON, wrong shape (missing `tool`/`findings`, wrong `version`), `tool` mismatch between the file and `--tool`, missing file without `--update`, unknown `--tool`; or an argparse usage error (e.g. `--allow-grow` without `--reason`). |
-| `3` | The tool failed to run (not found, `OSError`) or exited non-zero with **no parseable findings** (a usage error, a crash). This is never interpreted as "zero findings", and the baseline is never rewritten in this state, even with `--update`. |
+| `3` | The tool failed to run (not found, `OSError`), exited non-zero with **no parseable findings** (a usage error, a crash), or exited with a code outside its **clean and findings exit codes** however many findings parsed (a crash part-way leaves a truncated set). This is never interpreted as "zero findings", and the baseline is never rewritten in this state, even with `--update`. |
 
-A non-zero tool exit *with* parseable findings is the normal case (ruff and
-mypy exit 1 when they report something). For `--tool todo`, grep's exit 1 on
+Each tool has two exit-code sets: the clean codes (`clean_exit_codes` in the
+parser registry) and the findings codes (`FINDINGS_EXIT_CODES` in the runner),
+both taken from the tool's documentation and listed in the
+[Supported parsers](#supported-parsers) table. A findings code *with* parseable
+findings is the normal case (ruff and mypy exit 1 when they report something).
+Any other code fails the run with exit `3` even when findings parsed: ruff or
+eslint exiting 2 on a config error, grep exiting 2 on an unreadable file, or
+golangci-lint exiting 3 after partial JSON would otherwise pass as a subset of
+the baseline, and `--update` would shrink it from the crashed run. A findings
+code with **no** findings is still a crash. For `--tool todo`, grep's exit 1 on
 zero matches is a clean run with zero findings (exit 0), not a crash.
 
 ### Finding keys
@@ -135,16 +143,16 @@ The eight M1 parsers (`python scripts/ci/check_tool_baseline.py --help` lists
 the same names). The command column is what the runner expects to find on the
 tool's **stdout**; run it from `--cwd` so reported paths stay relative.
 
-| `--tool` | Command it expects (stdout) | Key form `<path>::<symbol>::<rule>` | Clean exit codes |
+| `--tool` | Command it expects (stdout) | Key form `<path>::<symbol>::<rule>` | Exit codes: clean / findings |
 |---|---|---|---|
-| `ruff` | `ruff check <paths> [--select ...] --output-format concise` | symbol = line-content hash; rule = ruff code (`F401`, `N806`) | `0` |
-| `vulture` | `vulture <paths> [--min-confidence N]` (text: `path:line: unused <kind> '<name>' (NN% confidence)`) | symbol = the reported name; rule = `unused-<kind>` (`unused-import`, `unused-function`, …); unnamed findings such as `unreachable code` hash the message | `0` (vulture exits `3` when it reports dead code; that is the normal case, not a crash) |
-| `deptry` | `deptry <root> --json-output /dev/stdout` (the human report goes to stderr) | symbol = module name; rule = `DEP001`..`DEP004`; `pyproject.toml` findings have no line | `0` |
-| `jscpd` | `sh -c 'jscpd --reporters json --output DIR --silent . >/dev/null; cat DIR/jscpd-report.json'` — the `json` reporter only writes `DIR/jscpd-report.json`, never stdout, so the wired command must `cat` it; scan `.` from `--cwd` so `firstFile.name` is relative | path = `firstFile.name`; symbol = hash of the duplicated `fragment`; rule = `clone`. A third copy of the same fragment raises the count | `0` (`1` only when over `--threshold`) |
-| `mypy` | `mypy [--ignore-missing-imports] <paths>` (text output; `error`/`warning` lines, notes ignored) | symbol = line-content hash; rule = `[code]` (`arg-type`, `return-value`) | `0` |
-| `eslint` | `eslint -f json <paths>` (`filePath` is absolute; the runner makes it relative to `--cwd`) | symbol = line-content hash; rule = `ruleId` (a fatal parse error with `ruleId: null` is `fatal`) | `0` |
-| `golangci-lint` | `golangci-lint run --output.json.path stdout --show-stats=false ./...` (v2 JSON schema: `{"Issues":[{"FromLinter","Text","SourceLines","Pos":{"Filename","Line"}}],"Report":…}`; without `--show-stats=false` a text stats block follows the JSON on stdout and only the first JSON object is read) | symbol = line-content hash (taken from `SourceLines[0]`, or read from the file when absent); rule = `FromLinter` (`errcheck`, `revive`) | `0` |
-| `todo` | `grep -rn --include='*.py' -E 'TODO\|FIXME' .` | symbol = matched-line hash; rule = the marker word (`TODO`, `FIXME`, `XXX`, `HACK`) | `0`, `1` (no matches) |
+| `ruff` | `ruff check <paths> [--select ...] --output-format concise` | symbol = line-content hash; rule = ruff code (`F401`, `N806`) | `0` / `1` (`2` = invalid configuration or options, internal error) |
+| `vulture` | `vulture <paths> [--min-confidence N]` (text: `path:line: unused <kind> '<name>' (NN% confidence)`) | symbol = the reported name; rule = `unused-<kind>` (`unused-import`, `unused-function`, …); unnamed findings such as `unreachable code` hash the message | `0` / `3` (vulture exits `3` when it reports dead code; `1` = invalid input, `2` = invalid arguments) |
+| `deptry` | `deptry <root> --json-output /dev/stdout` (the human report goes to stderr) | symbol = module name; rule = `DEP001`..`DEP004`; `pyproject.toml` findings have no line | `0` / `1` (`2` = usage error) |
+| `jscpd` | `sh -c 'jscpd --reporters json --output DIR --silent . >/dev/null; cat DIR/jscpd-report.json'` — the `json` reporter only writes `DIR/jscpd-report.json`, never stdout, so the wired command must `cat` it; scan `.` from `--cwd` so `firstFile.name` is relative | path = `firstFile.name`; symbol = hash of the duplicated `fragment`; rule = `clone`. A third copy of the same fragment raises the count | `0` / `1` (`1` only when over `--threshold` or with `--exitCode 1`; by default clones exit `0`) |
+| `mypy` | `mypy [--ignore-missing-imports] <paths>` (text output; `error`/`warning` lines, notes ignored) | symbol = line-content hash; rule = `[code]` (`arg-type`, `return-value`) | `0` / `1` (`2` = crash or fatal error) |
+| `eslint` | `eslint -f json <paths>` (`filePath` is absolute; the runner makes it relative to `--cwd`) | symbol = line-content hash; rule = `ruleId` (a fatal parse error with `ruleId: null` is `fatal`) | `0` / `1` (`2` = configuration problem or internal error) |
+| `golangci-lint` | `golangci-lint run --output.json.path stdout --show-stats=false ./...` (v2 JSON schema: `{"Issues":[{"FromLinter","Text","SourceLines","Pos":{"Filename","Line"}}],"Report":…}`; without `--show-stats=false` a text stats block follows the JSON on stdout and only the first JSON object is read) | symbol = line-content hash (taken from `SourceLines[0]`, or read from the file when absent); rule = `FromLinter` (`errcheck`, `revive`) | `0` / `1` (the default `--issues-exit-code`; `3` = failure, `4` = timeout, `5`+ other errors) |
+| `todo` | `grep -rn --include='*.py' -E 'TODO\|FIXME' .` | symbol = matched-line hash; rule = the marker word (`TODO`, `FIXME`, `XXX`, `HACK`) | `0`, `1` (no matches) / `0` (`2` = an error such as an unreadable file, even after matches) |
 
 Two key families follow from the table:
 
@@ -160,7 +168,9 @@ Two key families follow from the table:
 Every parser has a captured real-output fixture under
 `tests/ci/fixtures/tool_baseline/` and at least one test id naming it in
 `tests/ci/test_check_tool_baseline.py`; a later milestone that adds a parser
-(e.g. `knip`) must add both.
+(e.g. `knip`) must add both, plus its documented findings exit codes in
+`FINDINGS_EXIT_CODES` (without an entry the runner accepts only the clean
+codes).
 
 ## Contributor flow
 
@@ -273,21 +283,33 @@ Flow:
    restores the original lock and exits `4`; nothing is relocked without the
    cooldown.
 3. Runs plain `uv lock` from the original lock into a temp copy (the plain
-   resolution). It serves only the comparison in step 5 and is never kept.
+   resolution). It serves only the comparison in step 6 and is never kept.
 4. Copies the cooled-down lock back and re-runs plain `uv lock` on top of it:
    uv keeps the cooled-down pins as preferences and drops only the `[options]`
    tables, so the committed lock passes plain `uv lock --check`. The script then
    verifies that the final `uv.lock` carries no `exclude-newer` and pins exactly
    the cooled-down versions.
-5. Compares package versions between the two resolutions and prints
+5. Compares the final lock with the **original** lock in PEP 440 order (with
+   `python3`; a forked package is compared on its lowest and highest
+   version). The cutoff also filters versions the original lock already pins,
+   so a package released less than 7 days ago would roll back: typically a
+   lock-only (transitive) security bump from a
+   [manual security relock](#manual-security-relock), which nothing in
+   `pyproject.toml` protects. If any package of the original lock would get a
+   lower version, the script prints `downgraded: <name> <original> -> <cooled>`
+   for each, restores the original lock and exits `5`. A downgraded lock is
+   never kept.
+6. Compares package versions between the two resolutions and prints
    `held back: <name> <plain> -> <cooled>` for each difference.
 
 Exit codes: `0` when the two resolutions agree (lock regenerated); `2` when
 packages were held back (listed and reported; `uv.lock` holds the verified
 cooled-down resolution); `3` when `uv` is not on `PATH` (nothing touched); `4`
-when no resolution satisfies the cooldown (no unrestricted fallback); `1` on any
-other failure, including a final lock that drifted from the cooled-down
-resolution or bad usage. On `4` and `1` the original `uv.lock` is restored
+when no resolution satisfies the cooldown (no unrestricted fallback); `5` when
+the cooled-down resolution would downgrade a package of the original lock
+(listed as `downgraded:`); `1` on any other failure, including a final lock that
+drifted from the cooled-down resolution, a version the downgrade check cannot
+order, or bad usage. On `4`, `5` and `1` the original `uv.lock` is restored
 byte-for-byte. Temp copies live under `/tmp/aragora-readiness/`.
 
 #### Dependabot relock
@@ -298,7 +320,7 @@ relocks only through this script. It takes the helper from `origin/main`
 `$RUNNER_TEMP`), so the reviewed main copy runs even on a Dependabot branch cut
 before the helper existed, installs uv in the `pyproject.toml` range
 (`uv>=0.11.19,<0.12`), and writes the cutoff, the helper exit code and any
-`held back:` lines to the job summary. By helper exit code:
+`held back:` or `downgraded:` lines to the job summary. By helper exit code:
 
 - `0`: the regenerated lock is committed to the Dependabot branch.
 - `2`: the cooled-down lock is committed; the held-back packages are listed in
@@ -306,6 +328,10 @@ before the helper existed, installs uv in the `pyproject.toml` range
 - `4`: the job fails with an `::error::` that points here and commits nothing.
   Dependabot's own `cooldown` does not apply to security updates, so a security
   PR that needs a release younger than 7 days ends here; see the next section.
+- `5`: the job fails with an `::error::` that points here and commits nothing
+  (no `git add`, no push); the job summary lists each package with its original
+  and cooled-down version. The branch's lock already holds a release younger
+  than 7 days, usually from a manual security relock.
 - anything else: the job fails and commits nothing.
 
 There is no unrestricted fallback: the step never runs a bare `uv lock`. After a
@@ -321,7 +347,9 @@ on a local branch:
 bash scripts/ci/uv_lock_with_cooldown.sh --allow-package <name>
 ```
 
-Repeat `--allow-package` for each package the resolver names. Only the named
+Repeat `--allow-package` for each package the resolver names, and for each
+package a run lists as `downgraded:` (exit `5`: a package already in the lock
+whose locked release is younger than 7 days). Only the named
 packages may be newer than the cutoff (`--exclude-newer-package`); every other
 package, including any new dependency of a named one, keeps the 7-day cooldown,
 and the committed lock still carries no `exclude-newer`. Commit only `uv.lock`
@@ -333,9 +361,11 @@ and a reviewer of a workflow change rejects any `--allow-package` under
 `.github/`. The Dependabot relock job is not rerun for that PR; the human-made
 lock replaces it. A human push of the manually relocked lock to a Dependabot
 branch does re-trigger the job (its `uv.lock` path filter), which then fails
-with exit `4` until the lifted package is 7 days old, because the bumped
-manifest requires the version the cooldown excludes. That failure is expected:
-the job commits nothing and the human-made lock stands.
+until the lifted package is 7 days old: with exit `4` when the bumped manifest
+requires the version the cooldown excludes, and with exit `5` when the lifted
+package is lock-only (nothing in `pyproject.toml` pins it, so the cooled-down
+resolution would roll it back). That failure is expected: the job commits
+nothing and the human-made lock stands.
 
 ### Dependabot cooldown
 

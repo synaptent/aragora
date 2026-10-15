@@ -40,8 +40,10 @@ Exit codes
          remedies), or ``--update`` refused because the set grew.
     2 -- baseline problem (corrupt JSON, wrong shape, tool mismatch, missing
          file without ``--update``) or a usage error.
-    3 -- the tool failed to run (not found / OSError) or exited non-zero with
-         no parseable findings. The baseline is never rewritten in this case.
+    3 -- the tool failed to run (not found / OSError), exited non-zero with
+         no parseable findings, or exited with a code outside its clean and
+         findings exit codes however many findings parsed (a crash part-way
+         leaves a truncated set). The baseline is never rewritten in this case.
 """
 
 from __future__ import annotations
@@ -75,6 +77,20 @@ EXIT_OK = 0
 EXIT_NEW_FINDINGS = 1
 EXIT_BASELINE_ERROR = 2
 EXIT_TOOL_FAILED = 3
+
+# Exit codes each tool documents for "ran and reported findings", the companion
+# of the registry's ``ToolSpec.clean_exit_codes``. A parser missing here accepts
+# only its clean exit codes.
+FINDINGS_EXIT_CODES: dict[str, frozenset[int]] = {
+    "ruff": frozenset({1}),  # 2: invalid configuration/CLI options, internal error
+    "mypy": frozenset({1}),  # 2: crash or fatal/usage error
+    "todo": frozenset({0}),  # grep: 0 lines selected, 1 none (clean), 2 error
+    "vulture": frozenset({3}),  # 1: invalid input, 2: invalid arguments
+    "deptry": frozenset({1}),  # 2: usage error
+    "jscpd": frozenset({1}),  # over --threshold or --exitCode 1; default exits 0
+    "eslint": frozenset({1}),  # 2: configuration problem or internal error
+    "golangci-lint": frozenset({1}),  # --issues-exit-code; 3 failure, 4 timeout, ...
+}
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
@@ -240,16 +256,27 @@ def key_findings(findings: Sequence[Finding], spec: ToolSpec, cwd: Path) -> list
     return keyed
 
 
+def expected_exit_codes(spec: ToolSpec) -> frozenset[int]:
+    return spec.clean_exit_codes | FINDINGS_EXIT_CODES.get(spec.name, frozenset())
+
+
 def collect_findings(
     spec: ToolSpec, command: Sequence[str], cwd: Path
 ) -> tuple[list[Finding], int]:
     rc, stdout, stderr = run_tool(command, cwd)
     findings = key_findings(spec.parse(stdout), spec, cwd)
+    tail = "\n".join((stderr or stdout).strip().splitlines()[-8:])
+    detail = f"\n{tail}" if tail else ""
     if not findings and rc not in spec.clean_exit_codes:
-        tail = "\n".join((stderr or stdout).strip().splitlines()[-8:])
-        detail = f"\n{tail}" if tail else ""
         raise ToolFailed(
             f"tool exited {rc} with no parseable findings (tool failed to run?){detail}"
+        )
+    expected = expected_exit_codes(spec)
+    if rc not in expected:
+        raise ToolFailed(
+            f"tool exited {rc} after reporting {len(findings)} finding(s), outside its "
+            f"clean and findings exit codes {sorted(expected)}; the set may be "
+            f"truncated (tool crashed part-way?){detail}"
         )
     return findings, rc
 
@@ -300,8 +327,9 @@ def build_parser() -> argparse.ArgumentParser:
         epilog=(
             "exit codes: 0 no new findings; 1 new findings (or --update refused "
             "because the set grew); 2 baseline corrupt/mismatched/missing or usage "
-            "error; 3 tool failed to run or exited non-zero with no parseable "
-            "findings (baseline never rewritten). "
+            "error; 3 tool failed to run, exited non-zero with no parseable "
+            "findings, or exited with a code outside its clean and findings exit "
+            "codes however many findings parsed (baseline never rewritten). "
             f"Baselines live in {BASELINES_DIR}/<app>-<tool>[-<variant>].json."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,

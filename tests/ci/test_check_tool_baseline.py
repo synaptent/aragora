@@ -903,3 +903,145 @@ def test_runner_strips_ansi_colour_from_tool_output(fx: Path):
     assert _run("ruff", baseline, fx, _fake_tool(fx, coloured, rc=1), "--update") == 0
     keys = json.loads(baseline.read_text())["findings"]
     assert len(keys) == 3 and all("\x1b" not in k for k in keys)
+
+
+# --- exit codes outside a tool's clean and findings codes (exit 3) -------------
+
+# (tool, the exit code its docs give for "findings reported", an exit code its
+# docs give for an error such as bad configuration, bad input or a crash).
+_FINDINGS_AND_ERROR_CODES = [
+    ("ruff", 1, 2),
+    ("mypy", 1, 2),
+    ("todo", 0, 2),
+    ("vulture", 3, 1),
+    ("deptry", 1, 2),
+    ("jscpd", 1, 2),
+    ("eslint", 1, 2),
+    ("golangci-lint", 1, 3),
+]
+
+
+def _findings_output(fx: Path, tool: str) -> str:
+    if tool == "eslint":
+        _write_tree(fx, _JS_SOURCES)
+        return ESLINT_OUT.replace(ESLINT_CAPTURE_ROOT, str(fx))
+    if tool == "golangci-lint":
+        _write_tree(fx, _GO_SOURCES)
+        return GOLANGCI_OUT
+    return {
+        "ruff": RUFF_OUT,
+        "mypy": MYPY_OUT,
+        "todo": TODO_OUT,
+        "vulture": VULTURE_OUT,
+        "deptry": DEPTRY_OUT,
+        "jscpd": JSCPD_OUT,
+    }[tool]
+
+
+@pytest.mark.parametrize(
+    ("tool", "findings_rc", "error_rc"),
+    _FINDINGS_AND_ERROR_CODES,
+    ids=[case[0] for case in _FINDINGS_AND_ERROR_CODES],
+)
+def test_unexpected_exit_code_with_findings_fails_and_never_writes(
+    fx: Path, capsys, tool: str, findings_rc: int, error_rc: int
+):
+    out = _findings_output(fx, tool)
+    baseline = fx / f"{tool}.json"
+    assert _run(tool, baseline, fx, _fake_tool(fx, out, rc=findings_rc), "--update") == 0
+    before = baseline.read_bytes()
+    capsys.readouterr()
+    crashed = _fake_tool(fx, out, rc=error_rc, stderr="fatal: internal error\n")
+    assert _run(tool, baseline, fx, crashed) == 3
+    assert _run(tool, baseline, fx, crashed, "--update") == 3
+    assert _run(tool, baseline, fx, crashed, "--update", "--allow-grow", "--reason", "x") == 3
+    err = capsys.readouterr().err
+    assert f"tool exited {error_rc} after reporting" in err
+    assert "fatal: internal error" in err and "left untouched" in err
+    assert baseline.read_bytes() == before
+
+
+@pytest.mark.parametrize(
+    ("tool", "findings_rc", "error_rc"),
+    _FINDINGS_AND_ERROR_CODES,
+    ids=[case[0] for case in _FINDINGS_AND_ERROR_CODES],
+)
+def test_documented_findings_and_clean_exit_codes_with_findings_still_pass(
+    fx: Path, tool: str, findings_rc: int, error_rc: int
+):
+    out = _findings_output(fx, tool)
+    baseline = fx / f"{tool}.json"
+    assert _run(tool, baseline, fx, _fake_tool(fx, out, rc=findings_rc), "--update") == 0
+    assert _run(tool, baseline, fx, _fake_tool(fx, out, rc=findings_rc)) == 0
+    # A clean exit code with findings (ruff --exit-zero, eslint warnings only,
+    # jscpd's default --exitCode 0) is not a crash either.
+    for clean_rc in sorted(parsers.PARSERS[tool].clean_exit_codes):
+        assert _run(tool, baseline, fx, _fake_tool(fx, out, rc=clean_rc)) == 0
+
+
+@pytest.mark.parametrize(
+    ("tool", "full", "error_rc"),
+    [("ruff", RUFF_OUT, 2), ("todo", TODO_OUT, 2)],
+    ids=["ruff-config-error", "grep-unreadable-file"],
+)
+def test_partial_run_that_would_shrink_the_baseline_leaves_it_byte_identical(
+    fx: Path, tool: str, full: str, error_rc: int
+):
+    baseline = fx / f"{tool}.json"
+    findings_rc = 1 if tool == "ruff" else 0
+    assert _run(tool, baseline, fx, _fake_tool(fx, full, rc=findings_rc), "--update") == 0
+    before = baseline.read_bytes()
+    # The tool printed its first finding and then died: a strict subset.
+    partial = full.splitlines(keepends=True)[0]
+    crashed = _fake_tool(fx, partial, rc=error_rc, stderr="error: cannot read ./private\n")
+    assert _run(tool, baseline, fx, crashed, "--update") == 3
+    assert _run(tool, baseline, fx, crashed) == 3
+    assert baseline.read_bytes() == before
+
+
+def test_report_json_records_an_unexpected_exit_code_as_exit_3(fx: Path):
+    baseline = fx / "b.json"
+    report = fx / "report.json"
+    assert _run("ruff", baseline, fx, _fake_tool(fx, RUFF_OUT, rc=1), "--update") == 0
+    crashed = _fake_tool(fx, RUFF_OUT, rc=2)
+    assert _run("ruff", baseline, fx, crashed, "--report-json", str(report)) == 3
+    data = json.loads(report.read_text())
+    assert data["exit_code"] == 3
+    assert "tool exited 2 after reporting 3 finding(s)" in data["error"]
+
+
+def test_every_parser_declares_its_findings_exit_codes():
+    assert ctb.FINDINGS_EXIT_CODES == {
+        "ruff": frozenset({1}),
+        "mypy": frozenset({1}),
+        "todo": frozenset({0}),
+        "vulture": frozenset({3}),
+        "deptry": frozenset({1}),
+        "jscpd": frozenset({1}),
+        "eslint": frozenset({1}),
+        "golangci-lint": frozenset({1}),
+    }
+    assert set(ctb.FINDINGS_EXIT_CODES) == set(parsers.PARSERS)
+
+
+def test_parser_without_declared_findings_codes_accepts_only_clean_codes(fx: Path, monkeypatch):
+    def parse_faketool(stdout: str) -> list:
+        return [parsers.Finding(path="a.py", rule="X1", symbol="sym")] if stdout else []
+
+    spec = parsers.ToolSpec(
+        name="faketool", parse=parse_faketool, description="d", example_command="faketool ."
+    )
+    monkeypatch.setitem(ctb.PARSERS, "faketool", spec)
+    baseline = fx / "faketool.json"
+    assert _run("faketool", baseline, fx, _fake_tool(fx, "x\n", rc=0), "--update") == 0
+    before = baseline.read_bytes()
+    assert _run("faketool", baseline, fx, _fake_tool(fx, "x\n", rc=1)) == 3
+    assert _run("faketool", baseline, fx, _fake_tool(fx, "x\n", rc=1), "--update") == 3
+    assert baseline.read_bytes() == before
+
+
+def test_help_names_the_findings_exit_code_rule(capsys):
+    with pytest.raises(SystemExit):
+        ctb.main(["--help"])
+    out = capsys.readouterr().out
+    assert "outside its clean and findings exit codes" in out

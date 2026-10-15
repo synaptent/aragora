@@ -131,16 +131,24 @@ def clean_env() -> dict[str, str]:
     return {key: value for key, value in os.environ.items() if not key.startswith("UV_")}
 
 
-def make_project(tmp_path: Path, *, lock: bool = True, pyproject: bool = True) -> Path:
+def make_project(
+    tmp_path: Path,
+    *,
+    lock: bool = True,
+    pyproject: bool = True,
+    lock_packages: list[tuple[str, str]] = ORIGINAL,
+    dependencies: tuple[str, ...] = ("dep", "pkg"),
+) -> Path:
     project = tmp_path / "project"
     project.mkdir()
     if pyproject:
         (project / "pyproject.toml").write_text(
-            '[project]\nname = "fixture"\nversion = "0"\ndependencies = ["dep", "pkg"]\n',
+            '[project]\nname = "fixture"\nversion = "0"\n'
+            f"dependencies = {json.dumps(list(dependencies))}\n",
             encoding="utf-8",
         )
     if lock:
-        (project / "uv.lock").write_text(render_lock(ORIGINAL), encoding="utf-8")
+        (project / "uv.lock").write_text(render_lock(lock_packages), encoding="utf-8")
     return project
 
 
@@ -471,3 +479,167 @@ def test_gnu_date_branch_gives_rfc3339_cutoff(tmp_path: Path) -> None:
     assert "--version" in date_calls
     assert [line for line in date_calls if line.startswith("-u -d 7 days ago ")]
     assert calls[0]["argv"] == ["lock", "--exclude-newer", cutoff]
+
+
+# `sub` is a lock-only (transitive) package that an earlier manual security
+# relock lifted to a release younger than the cutoff. Nothing in pyproject.toml
+# requires it, so the cooled resolution succeeds with an older `sub`.
+RECENT_SUB = [*ORIGINAL, ("sub", "2.0")]
+PLAIN_SUB = [*PLAIN, ("sub", "2.0")]
+COOLED_SUB = [*COOLED, ("sub", "1.5")]
+
+
+def downgraded_lines(stdout: str) -> list[str]:
+    return [line for line in stdout.splitlines() if line.startswith("downgraded: ")]
+
+
+def test_lock_only_package_downgrade_exits_5_and_restores_the_original(tmp_path: Path) -> None:
+    project = make_project(tmp_path, lock_packages=RECENT_SUB)
+
+    proc, calls = run_helper(project, scenario={"plain": PLAIN_SUB, "cooled": COOLED_SUB})
+
+    assert proc.returncode == 5, (proc.stdout, proc.stderr)
+    assert downgraded_lines(proc.stdout) == ["downgraded: sub 2.0 -> 1.5"]
+    assert (
+        "error: the cooled-down resolution would downgrade 1 package(s) already in uv.lock "
+        "(listed as `downgraded: <name> <original> -> <cooled>`); original uv.lock restored; "
+        "nothing to commit (manual security relock: docs/RATCHETS.md)" in proc.stderr
+    )
+    assert "step failed" not in proc.stderr
+    assert "held back" not in proc.stdout
+    assert lock_text(project) == render_lock(RECENT_SUB)
+    assert sorted(path.name for path in project.iterdir()) == ["pyproject.toml", "uv.lock"]
+    assert kinds(calls) == ["cooled", "plain", "finalize"]
+
+
+def test_manifest_package_newer_than_the_cutoff_still_exits_4(tmp_path: Path) -> None:
+    recent = [("dep", "3.0"), ("pkg", "2.0")]
+    project = make_project(tmp_path, lock_packages=recent, dependencies=("dep", "pkg>=2.0"))
+
+    proc, calls = run_helper(
+        project, scenario={"fail": {"cooled": {"rc": 1, "stderr": NO_SOLUTION}}}
+    )
+
+    assert proc.returncode == 4, (proc.stdout, proc.stderr)
+    assert "error: no resolution satisfies the 7-day cooldown (exclude-newer " in proc.stderr
+    assert downgraded_lines(proc.stdout) == []
+    assert lock_text(project) == render_lock(recent)
+    assert kinds(calls) == ["cooled"]
+
+
+def test_allow_package_run_still_refuses_to_downgrade_other_packages(tmp_path: Path) -> None:
+    project = make_project(tmp_path, lock_packages=RECENT_SUB)
+
+    proc, calls = run_helper(
+        project, "--allow-package", "pkg", scenario={"plain": COOLED_SUB, "cooled": COOLED_SUB}
+    )
+
+    assert proc.returncode == 5, (proc.stdout, proc.stderr)
+    assert "cooldown lifted for: pkg" in proc.stdout.splitlines()
+    assert downgraded_lines(proc.stdout) == ["downgraded: sub 2.0 -> 1.5"]
+    assert lock_text(project) == render_lock(RECENT_SUB)
+    assert kinds(calls) == ["cooled", "plain", "finalize"]
+
+
+@pytest.mark.parametrize(
+    ("original", "cooled", "downgraded"),
+    [
+        ("2.0", "2.0rc1", True),
+        ("1.10", "1.9", True),
+        ("1.0.post1", "1.0", True),
+        ("1.0", "1.0.dev1", True),
+        ("1!1.0", "2.0", True),
+        ("1.0+local.2", "1.0+local.1", True),
+        ("1.9", "1.10", False),
+        ("2.0rc1", "2.0", False),
+        ("1.0", "1.0.post1", False),
+        ("2.0", "2.0.0", False),
+    ],
+    ids=[
+        "final-to-rc",
+        "numeric-not-lexical",
+        "post-to-final",
+        "final-to-dev",
+        "epoch",
+        "local",
+        "upgrade-numeric",
+        "rc-to-final",
+        "final-to-post",
+        "equal-trailing-zero",
+    ],
+)
+def test_downgrade_check_uses_pep440_order(
+    tmp_path: Path, original: str, cooled: str, downgraded: bool
+) -> None:
+    before = [("dep", "3.1"), ("sub", original)]
+    after = [("dep", "3.1"), ("sub", cooled)]
+    project = make_project(tmp_path, lock_packages=before, dependencies=("dep",))
+
+    proc, _ = run_helper(project, scenario={"plain": after, "cooled": after})
+
+    if downgraded:
+        assert proc.returncode == 5, (proc.stdout, proc.stderr)
+        assert downgraded_lines(proc.stdout) == [f"downgraded: sub {original} -> {cooled}"]
+        assert lock_text(project) == render_lock(before)
+    else:
+        assert proc.returncode == 0, (proc.stdout, proc.stderr)
+        assert downgraded_lines(proc.stdout) == []
+        assert lock_text(project) == render_lock(after)
+
+
+def test_forked_package_downgraded_on_one_fork_exits_5(tmp_path: Path) -> None:
+    before = [("dep", "3.1"), ("sub", "1.0"), ("sub", "2.0")]
+    after = [("dep", "3.1"), ("sub", "1.0"), ("sub", "1.5")]
+    project = make_project(tmp_path, lock_packages=before, dependencies=("dep",))
+
+    proc, _ = run_helper(project, scenario={"plain": after, "cooled": after})
+
+    assert proc.returncode == 5, (proc.stdout, proc.stderr)
+    assert downgraded_lines(proc.stdout) == ["downgraded: sub 1.0,2.0 -> 1.0,1.5"]
+    assert lock_text(project) == render_lock(before)
+
+
+def test_removed_and_added_packages_are_not_downgrades(tmp_path: Path) -> None:
+    before = [("dep", "3.0"), ("gone", "1.0")]
+    after = [("dep", "3.1"), ("new", "0.1")]
+    project = make_project(tmp_path, lock_packages=before, dependencies=("dep",))
+
+    proc, _ = run_helper(project, scenario={"plain": after, "cooled": after})
+
+    assert proc.returncode == 0, (proc.stdout, proc.stderr)
+    assert downgraded_lines(proc.stdout) == []
+    assert lock_text(project) == render_lock(after)
+
+
+def test_without_an_original_lock_there_is_nothing_to_downgrade(tmp_path: Path) -> None:
+    project = make_project(tmp_path, lock=False)
+
+    proc, _ = run_helper(project, scenario={"plain": COOLED})
+
+    assert proc.returncode == 0, (proc.stdout, proc.stderr)
+    assert downgraded_lines(proc.stdout) == []
+    assert lock_text(project) == render_lock(COOLED)
+
+
+def test_unorderable_version_change_fails_closed_with_exit_1(tmp_path: Path) -> None:
+    before = [("dep", "3.1"), ("sub", "not-a-version")]
+    after = [("dep", "3.1"), ("sub", "still-not-a-version")]
+    project = make_project(tmp_path, lock_packages=before, dependencies=("dep",))
+
+    proc, _ = run_helper(project, scenario={"plain": after, "cooled": after})
+
+    assert proc.returncode == 1, (proc.stdout, proc.stderr)
+    assert "cannot order version" in proc.stderr
+    assert "original uv.lock restored" in proc.stderr
+    assert lock_text(project) == render_lock(before)
+
+
+def test_help_documents_exit_5_for_downgrades(tmp_path: Path) -> None:
+    project = make_project(tmp_path)
+
+    proc, calls = run_helper(project, "--help")
+
+    assert proc.returncode == 0, proc.stderr
+    assert re.search(r"^\s+5\s+\S", proc.stdout, re.MULTILINE)
+    assert "downgraded: <name> <original> -> <cooled>" in proc.stdout
+    assert calls == []

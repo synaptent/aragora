@@ -35,7 +35,14 @@ Flow (every uv call runs with UV_EXCLUDE_NEWER unset):
      cooled-down pins as preferences and drops only the `[options]` tables;
      the final uv.lock must carry no exclude-newer and pin exactly the
      cooled-down versions
-  D. compare the package versions of the two temp copies; any package whose
+  D. compare the final lock with the ORIGINAL lock in PEP 440 order (python3).
+     The cutoff also filters versions the original lock already pins, so a
+     package released less than 7 days ago (for example a transitive security
+     bump from a manual security relock) would roll back. Every package of the
+     original lock whose version would go down is printed as
+     `downgraded: <name> <original> -> <cooled>`, the original uv.lock is
+     restored and the script exits 5: a downgraded lock is never kept
+  E. compare the package versions of the two temp copies; any package whose
      version differs was held back by the cooldown and is printed as
      `held back: <name> <plain> -> <cooled>`
 
@@ -46,8 +53,9 @@ Manual security relock (humans only, never in CI or a workflow):
      may be newer than the cutoff while every other package, including any new
      dependency of NAME, keeps the cooldown. Prints `cooldown lifted for: NAME`.
      Use it when a security fix needs a release younger than 7 days, for
-     example after the Dependabot relock failed with exit 4. See "Manual
-     security relock" in docs/RATCHETS.md for what the PR must state.
+     example after the Dependabot relock failed with exit 4 or 5. Name every
+     package a run lists as `downgraded:` too. See "Manual security relock"
+     in docs/RATCHETS.md for what the PR must state.
 
 Exit codes:
   0  cooled-down resolution equals the plain resolution; uv.lock is regenerated
@@ -56,9 +64,13 @@ Exit codes:
   3  `uv` is not on PATH (nothing is touched)
   4  no resolution satisfies the cooldown; the original uv.lock is restored
      byte-for-byte and nothing is relocked without the cooldown
+  5  the cooled-down resolution would give a package of the original lock a
+     lower version (each listed on stdout as
+     `downgraded: <name> <original> -> <cooled>`); the original uv.lock is
+     restored byte-for-byte
   1  pyproject.toml missing, a uv step failed, the final lock drifted from the
-     cooled-down resolution, or bad usage; the original uv.lock is restored
-     byte-for-byte
+     cooled-down resolution, the downgrade check could not order a version,
+     or bad usage; the original uv.lock is restored byte-for-byte
 
 Temp copies and any environment uv creates live under /tmp/aragora-readiness/.
 EOF
@@ -141,10 +153,11 @@ on_exit() {
             echo "error: step failed (exit ${rc}); original uv.lock restored" >&2
         fi
     fi
-    rm -f "${TMP}/original.lock" "${TMP}/plain.lock" "${TMP}/cooled.lock" "${TMP}/cooled.err"
+    rm -f "${TMP}/original.lock" "${TMP}/plain.lock" "${TMP}/cooled.lock" "${TMP}/cooled.err" \
+        "${TMP}/original.versions" "${TMP}/final.versions"
     rmdir "${TMP}" 2>/dev/null || true
     # A failing uv step may itself exit 2, which must not read as "held back";
-    # only the explicit no-solution branch sets FAIL_RC=4.
+    # only the explicit no-solution and downgrade branches set FAIL_RC (4, 5).
     if [[ "${DONE}" -eq 0 ]]; then
         exit "${FAIL_RC:-1}"
     fi
@@ -160,6 +173,74 @@ package_versions() {
         inpkg && /^name = / { gsub(/"/, "", $3); name = $3 }
         inpkg && /^version = / { gsub(/"/, "", $3); print name, $3 }
     ' "$1" | sort
+}
+
+# Reads two package_versions listings (original, final) and prints
+# "downgraded: <name> <original> -> <final>" for each package of the original
+# whose lowest or highest version went down in PEP 440 order (a forked name has
+# several versions). A changed version it cannot parse fails the run.
+find_downgrades() {
+    python3 -I - "$1" "$2" <<'PY'
+import re
+import sys
+
+VERSION = re.compile(
+    r"^v?(?:(\d+)!)?(\d+(?:\.\d+)*)"
+    r"(?:[-_.]?(a|b|c|rc|alpha|beta|pre|preview)[-_.]?(\d*))?"
+    r"(?:-(\d+)|[-_.]?(?:post|rev|r)[-_.]?(\d*))?"
+    r"(?:[-_.]?dev[-_.]?(\d*))?"
+    r"(?:\+([a-z0-9]+(?:[-_.][a-z0-9]+)*))?$",
+    re.IGNORECASE,
+)
+PRE_RANK = {"a": 0, "alpha": 0, "b": 1, "beta": 1, "c": 2, "rc": 2, "pre": 2, "preview": 2}
+
+
+def key(version):
+    match = VERSION.match(version)
+    if match is None:
+        sys.exit(f"error: cannot order version {version!r} for the downgrade check")
+    epoch, release, pre_l, pre_n, post_n1, post_n2, dev_n, local = match.groups()
+    parts = [int(p) for p in release.split(".")]
+    while len(parts) > 1 and parts[-1] == 0:
+        parts.pop()
+    has_post = post_n1 is not None or post_n2 is not None
+    has_dev = dev_n is not None
+    if pre_l is not None:
+        pre = (0, PRE_RANK[pre_l.lower()], int(pre_n or 0))
+    elif has_dev and not has_post:
+        pre = (-1, 0, 0)  # 1.0.dev1 sorts before 1.0a1
+    else:
+        pre = (1, 0, 0)
+    post = (1, int(post_n1 or post_n2 or 0)) if has_post else (0, 0)
+    dev = (0, int(dev_n or 0)) if has_dev else (1, 0)
+    if local:
+        segments = re.split(r"[-_.]", local.lower())
+        loc = (1, tuple((1, int(s), "") if s.isdigit() else (0, 0, s) for s in segments))
+    else:
+        loc = (0, ())
+    return (int(epoch or 0), tuple(parts), pre, post, dev, loc)
+
+
+def read(path):
+    versions = {}
+    with open(path, encoding="utf-8") as handle:
+        for line in handle:
+            name, _, version = line.strip().partition(" ")
+            if name and version:
+                versions.setdefault(name, []).append(version)
+    return versions
+
+
+original = read(sys.argv[1])
+final = read(sys.argv[2])
+for name in sorted(original):
+    if name not in final or sorted(original[name]) == sorted(final[name]):
+        continue
+    old = sorted(original[name], key=key)
+    new = sorted(final[name], key=key)
+    if key(new[0]) < key(old[0]) or key(new[-1]) < key(old[-1]):
+        print(f"downgraded: {name} {','.join(old)} -> {','.join(new)}")
+PY
 }
 
 # Step A: cooled-down resolution, the only resolution that can be kept.
@@ -192,7 +273,21 @@ if grep -q 'exclude-newer' uv.lock \
     exit 1
 fi
 
-# Step D: report packages whose version differs between the two resolutions.
+# Step D: no package of the original lock may end up at a lower version.
+if [[ "${HAD_LOCK}" -eq 1 ]]; then
+    package_versions "${TMP}/original.lock" >"${TMP}/original.versions"
+    package_versions uv.lock >"${TMP}/final.versions"
+    DOWNGRADED="$(find_downgrades "${TMP}/original.versions" "${TMP}/final.versions")"
+    if [[ -n "${DOWNGRADED}" ]]; then
+        restore_original
+        FAIL_RC=5
+        echo "${DOWNGRADED}"
+        echo "error: the cooled-down resolution would downgrade $(printf '%s\n' "${DOWNGRADED}" | wc -l | tr -d ' ') package(s) already in uv.lock (listed as \`downgraded: <name> <original> -> <cooled>\`); original uv.lock restored; nothing to commit (manual security relock: docs/RATCHETS.md)" >&2
+        exit 5
+    fi
+fi
+
+# Step E: report packages whose version differs between the two resolutions.
 HELD_BACK="$(
     awk '
         FNR == NR { plain[$1] = (plain[$1] == "" ? $2 : plain[$1] "," $2); next }

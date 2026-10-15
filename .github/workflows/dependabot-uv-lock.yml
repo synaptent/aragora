@@ -120,6 +120,7 @@ jobs:
           rc=0
           bash "${helper}" 2>&1 | tee "${log}" || rc=$?
           held="$(grep '^held back: ' "${log}" || true)"
+          downgraded="$(grep '^downgraded: ' "${log}" || true)"
           {
             echo "### uv.lock relock under the 7-day cooldown"
             grep '^exclude-newer cutoff: ' "${log}" || true
@@ -130,11 +131,19 @@ jobs:
               echo "${held}"
               echo '```'
             fi
+            if [[ -n "${downgraded}" ]]; then
+              echo
+              echo "Not committed: the cooled-down resolution would downgrade these packages (original -> cooled):"
+              echo '```'
+              echo "${downgraded}"
+              echo '```'
+            fi
           } >> "${GITHUB_STEP_SUMMARY}"
           case "${rc}" in
             0) ;;
             2) echo "::warning::the uv cooldown held back $(grep -c '^held back: ' "${log}") package(s); see the job summary" ;;
             4) echo "::error::no resolution satisfies the 7-day uv cooldown; uv.lock not refreshed (manual security relock: docs/RATCHETS.md)"; exit 1 ;;
+            5) echo "::error::the cooled-down resolution would downgrade $(grep -c '^downgraded: ' "${log}") package(s) already in uv.lock; uv.lock not refreshed (see the job summary; manual security relock: docs/RATCHETS.md)"; exit 1 ;;
             *) echo "::error::cooldown relock failed (helper exit ${rc}); uv.lock not refreshed"; exit 1 ;;
           esac
           unexpected="$(git diff --name-only | grep -vx 'uv.lock' || true)"

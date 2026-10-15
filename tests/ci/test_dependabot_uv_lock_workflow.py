@@ -25,6 +25,7 @@ from tests.ci.test_uv_lock_with_cooldown import (
     HELPER,
     NO_SOLUTION,
     ORIGINAL,
+    PLAIN,
     RFC3339_UTC,
     SYSTEM_PATH,
     clean_env,
@@ -449,3 +450,30 @@ def test_missing_helper_on_main_fails_before_any_uv_call(tmp_path: Path) -> None
     assert result.output == ""
     assert result.lock == render_lock(ORIGINAL)
     assert result.status == ""
+
+
+def test_helper_exit_5_fails_the_step_and_never_stages_the_downgrade(tmp_path: Path) -> None:
+    # `sub` is lock-only and already above the cutoff (an earlier manual
+    # security relock); the cooled resolution would roll it back to 1.5.
+    recent = [*ORIGINAL, ("sub", "2.0")]
+    repo = make_checkout(tmp_path, lock_packages=recent)
+
+    result = run_relock_step(
+        tmp_path, repo, plain=[*PLAIN, ("sub", "2.0")], cooled=[*COOLED, ("sub", "1.5")]
+    )
+
+    assert result.proc.returncode == 1, (result.proc.stdout, result.proc.stderr)
+    assert (
+        "::error::the cooled-down resolution would downgrade 1 package(s) already in uv.lock; "
+        "uv.lock not refreshed (see the job summary; manual security relock: docs/RATCHETS.md)"
+        in result.proc.stdout.splitlines()
+    )
+    assert "helper exit code: 5" in result.summary.splitlines()
+    assert "```\ndowngraded: sub 2.0 -> 1.5\n```\n" in result.summary
+    assert "held back" not in result.summary
+    # No `changed=true` output: the commit step (the only `git add`) cannot run.
+    assert result.output == ""
+    assert result.lock == render_lock(recent)
+    assert result.status == ""
+    assert git(repo, "diff", "--cached", "--name-only") == ""
+    assert [call["kind"] for call in result.uv_calls] == ["cooled", "plain", "finalize"]
