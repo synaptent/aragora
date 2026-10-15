@@ -16,7 +16,7 @@ import re
 from typing import TYPE_CHECKING, Any
 
 from aragora.debate.post_debate_config import PostDebateConfig
-from aragora.pipeline.execution_mode import ExecutionMode
+from aragora.types.execution_mode import ExecutionMode
 
 # The coordinator's logger name, so log filters and caplog assertions keyed on
 # "aragora.debate.post_debate_coordinator" still see records from these methods.

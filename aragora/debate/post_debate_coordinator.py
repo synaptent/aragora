@@ -40,8 +40,8 @@ from aragora.debate.gauntlet_runners import (
 )
 from aragora.debate.post_debate_config import PostDebateConfig, PostDebateResult
 from aragora.debate.post_debate_persistence import PostDebatePersistenceMixin
-from aragora.pipeline.backbone_contracts import BackboneStage, RunLedger, RunStageEvent
-from aragora.pipeline.execution_mode import ExecutionMode
+from aragora.types.backbone_contracts import BackboneStage, RunLedger, RunStageEvent
+from aragora.types.execution_mode import ExecutionMode
 
 logger = logging.getLogger(__name__)
 # Per-step timeout for async callables run from the sync coordinator.
@@ -417,7 +417,7 @@ class PostDebateCoordinator(PostDebatePersistenceMixin):
             return None
 
         try:
-            from aragora.pipeline.backbone_contracts import (
+            from aragora.types.backbone_contracts import (
                 DeliberationBundle,
                 IntakeBundle,
                 RunLedger,
@@ -576,7 +576,7 @@ class PostDebateCoordinator(PostDebatePersistenceMixin):
             return
 
         try:
-            from aragora.pipeline.decision_plan.core import ApprovalMode, PlanStatus
+            from aragora.types.decision_plans import ApprovalMode, PlanStatus
 
             if not isinstance(getattr(plan_obj, "metadata", None), dict):
                 setattr(plan_obj, "metadata", {})
