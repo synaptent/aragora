@@ -94,3 +94,27 @@ async def test_vector_hits_keep_the_stamp_their_index_stored(mound: Any) -> None
 
     assert [item.content for item in mound_items_for_org(items, "acme")] == ["acme plan"]
     assert mound_items_for_org(items, "beta") == []
+
+
+@pytest.mark.parametrize(
+    "replacement",
+    [{"org_id": "victim"}, {"topic": "q3", "org_id": None}, {"superseded_by": "kn_new"}],
+    ids=["changed", "removed", "whole-metadata"],
+)
+async def test_update_keeps_the_stamp_the_node_was_written_with(
+    mound: Any, replacement: dict[str, Any]
+) -> None:
+    node_id = await mound.add("acme plan", metadata={"topic": "q3"}, org_id="acme")
+
+    updated = await mound.update(node_id, {"metadata": replacement})
+
+    assert updated.metadata == {**replacement, "org_id": "acme"}
+    assert [i.content for i in mound_items_for_org([updated], "acme")] == ["acme plan"]
+
+
+async def test_update_never_stamps_an_unstamped_node(mound: Any) -> None:
+    node_id = await mound.add("bare plan")
+
+    updated = await mound.update(node_id, {"metadata": STAMP})
+
+    assert mound_items_for_org([updated], "acme") == []

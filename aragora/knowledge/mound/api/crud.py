@@ -391,7 +391,13 @@ class CRUDOperationsMixin(_CRUDMixinBase):
             if "topics" in updates:
                 updates["topics"] = validate_topics(updates["topics"])
             if "metadata" in updates:
-                updates["metadata"] = validate_metadata(updates["metadata"])
+                # The organization stamp is written only with the node, from a verified
+                # org_id: an update keeps the node's stamp and never adds one.
+                existing = getattr(await self._get_node(node_id), "metadata", None) or {}
+                metadata = validate_metadata(updates["metadata"])
+                updates["metadata"] = {k: v for k, v in metadata.items() if k != ORG_STAMP_KEY}
+                if existing.get(ORG_STAMP_KEY):
+                    updates["metadata"][ORG_STAMP_KEY] = existing[ORG_STAMP_KEY]
             span.add_event("validation_complete")
 
             updates["updated_at"] = datetime.now().isoformat()
