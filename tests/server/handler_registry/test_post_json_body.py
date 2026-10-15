@@ -523,7 +523,7 @@ def test_ml_route_caps_its_task_and_agents(registry_cls, body, expected):
         ("/api/v1/ml/score", {"text": "x" * 20000, "context": "x" * 20000}, "score"),
         (
             "/api/v1/ml/score-batch",
-            {"texts": _AT_TOTAL[:9], "contexts": [None, *_AT_TOTAL[:1]]},
+            {"texts": _AT_TOTAL[:9], "contexts": [None] * 8 + _AT_TOTAL[:1]},
             "score_batch",
         ),
         ("/api/v1/ml/consensus", {"responses": [["a", "x" * 19999]] * 10}, "predict"),
@@ -536,6 +536,41 @@ def test_ml_scoring_routes_accept_input_at_the_caps(registry_cls, path, body, me
 
     assert status == 200, payload
     getattr(component, method).assert_called_once()
+
+
+_ML_BODIES: dict[str, dict[str, Any]] = {
+    "score-batch": {"texts": ["a", "b"]},
+    "consensus": {"responses": [["a", "t"]]},
+    "route": {"task": "t", "available_agents": ["a"]},
+    "search": {"query": "q", "documents": ["d"]},
+}
+_INT = "must be an integer"
+
+
+@pytest.mark.parametrize(
+    ("route", "fields", "message"),
+    [
+        ("score-batch", {"contexts": ["c"]}, "contexts must match texts in length"),
+        ("score-batch", {"contexts": []}, "contexts must match texts in length"),
+        ("consensus", {"total_rounds": 0}, f"total_rounds {_INT} of at least 1"),
+        ("consensus", {"total_rounds": True}, f"total_rounds {_INT} of at least 1"),
+        ("consensus", {"current_round": "1"}, f"current_round {_INT} from 1 to 3"),
+        ("consensus", {"current_round": 3, "total_rounds": 2}, f"current_round {_INT} from 1 to 2"),
+        ("route", {"team_size": 0}, f"team_size {_INT} of at least 1"),
+        ("route", {"team_size": 2.0}, f"team_size {_INT} of at least 1"),
+        ("route", {"constraints": "x"}, "constraints must be an object"),
+        ("search", {"top_k": -1}, f"top_k {_INT} of at least 1"),
+        ("search", {"top_k": None}, f"top_k {_INT} of at least 1"),
+        ("search", {"threshold": 1.5}, "threshold must be a number from -1 to 1"),
+        ("search", {"threshold": False}, "threshold must be a number from -1 to 1"),
+    ],
+)
+def test_ml_routes_reject_malformed_fields_before_the_model(registry_cls, route, fields, message):
+    body = {**_ML_BODIES[route], **fields}
+    response, component = _post_ml_component(registry_cls, f"/api/v1/ml/{route}", body)
+
+    assert response == _rejected(message, "invalid_input")
+    assert component.method_calls == []
 
 
 @pytest.mark.parametrize(

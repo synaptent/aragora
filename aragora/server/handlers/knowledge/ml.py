@@ -245,6 +245,21 @@ def too_many_error(count: int, noun: str) -> HandlerResult | None:
     return None
 
 
+def _number_error(
+    data: dict, name: str, low: float, high: float = float("inf"), kind: Any = int
+) -> HandlerResult | None:
+    """The 400 for a field present in ``data`` that is not a ``kind`` from low to high.
+
+    An absent field passes; null, bools and non-finite numbers do not.
+    """
+    value = data.get(name, low)
+    if not isinstance(value, bool) and isinstance(value, kind) and low <= value <= high:
+        return None
+    noun = "an integer" if kind is int else "a number"
+    bound = f"of at least {low}" if high == float("inf") else f"from {low} to {high}"
+    return error_response(f"{name} must be {noun} {bound}", 400, code="invalid_input")
+
+
 def _clear_ml_components() -> None:
     """Clear cached ML components (useful for testing)."""
     with _ml_components_lock:
@@ -377,6 +392,11 @@ class MLHandler(BaseHandler):
 
         team_size = data.get("team_size", 3)
         constraints = data.get("constraints", {})
+        if constraints is not None and not isinstance(constraints, dict):
+            return error_response("constraints must be an object", 400, code="invalid_input")
+        input_error = _number_error(data, "team_size", 1)
+        if input_error is not None:
+            return input_error
 
         try:
             decision = router.route(
@@ -499,6 +519,8 @@ class MLHandler(BaseHandler):
         ) or too_many_error(len(contexts or []), "contexts per batch")
         if input_error is not None:
             return input_error
+        if contexts is not None and len(contexts) != len(texts):
+            return error_response("contexts must match texts in length", 400, code="invalid_input")
 
         try:
             scores = scorer.score_batch(texts, contexts=contexts)
@@ -582,6 +604,11 @@ class MLHandler(BaseHandler):
 
         current_round = data.get("current_round", 1)
         total_rounds = data.get("total_rounds", 3)
+        input_error = _number_error(data, "total_rounds", 1) or _number_error(
+            data, "current_round", 1, total_rounds
+        )
+        if input_error is not None:
+            return input_error
 
         try:
             prediction = predictor.predict(
@@ -771,6 +798,11 @@ class MLHandler(BaseHandler):
 
         top_k = data.get("top_k", 5)
         threshold = data.get("threshold", 0.0)
+        input_error = _number_error(data, "top_k", 1) or _number_error(
+            data, "threshold", -1, 1, (int, float)
+        )
+        if input_error is not None:
+            return input_error
 
         try:
             results = embeddings.search(
