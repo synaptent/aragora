@@ -485,9 +485,11 @@ class KMCheckpointStore:
         checkpoints = []
 
         for item in self.checkpoint_dir.iterdir():
+            if item.is_symlink() or item.resolve().parent != self.checkpoint_dir.resolve():
+                continue
             if item.is_dir() and item.name.startswith("km_ckpt_"):
-                metadata_file = item / "metadata.json"
-                if metadata_file.exists():
+                metadata_file = self._contained_metadata_file(item)
+                if metadata_file is not None:
                     try:
                         metadata_dict = json.loads(metadata_file.read_text())
                         checkpoints.append(KMCheckpointMetadata(**metadata_dict))
@@ -509,12 +511,22 @@ class KMCheckpointStore:
             )
         return path
 
+    @staticmethod
+    def _contained_metadata_file(entry: Path) -> Path | None:
+        """Return ``entry/metadata.json`` if it is a file that resolves directly inside ``entry``."""
+        metadata_file = entry / "metadata.json"
+        try:
+            inside = metadata_file.resolve().parent == entry.resolve()
+        except (OSError, RuntimeError):  # RuntimeError: symlink loop (Python < 3.13)
+            return None
+        return metadata_file if inside and metadata_file.is_file() else None
+
     async def get_checkpoint_metadata(self, checkpoint_id: str) -> KMCheckpointMetadata | None:
         """Get metadata for a specific checkpoint."""
         checkpoint_path = self._checkpoint_path(checkpoint_id)
-        metadata_file = checkpoint_path / "metadata.json"
+        metadata_file = self._contained_metadata_file(checkpoint_path)
 
-        if not metadata_file.exists():
+        if metadata_file is None:
             return None
 
         try:
