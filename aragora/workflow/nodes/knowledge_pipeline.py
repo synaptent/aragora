@@ -74,7 +74,7 @@ class KnowledgePipelineStep(BaseStep):
 
     def __init__(self, name: str, config: dict[str, Any] | None = None):
         super().__init__(name, config)
-        self._pipeline: Any | None = None
+        self._pipeline: Any = None
         self._documents_processed = 0
 
     async def execute(self, context: WorkflowContext) -> Any:
