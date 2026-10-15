@@ -455,3 +455,4 @@ import-and-call tests at both paths.
 | `aragora.cli.commands.review_queue_transport:GITHUB_TRANSPORT_ERROR_KIND` | `aragora.review.github_transport:GITHUB_TRANSPORT_ERROR_KIND` | #10603 | not before M4 seal |
 | `aragora.cli.commands.review_queue_transport:_gh_error_kind` | `aragora.review.github_transport:gh_error_kind` | #10603 | not before M4 seal |
 | `aragora.cli.commands.review_queue_transport:_is_github_transport_error` | `aragora.review.github_transport:is_github_transport_error` | #10603 | not before M4 seal |
+| `aragora.connectors.base:Evidence` | `aragora.reasoning.source_evidence:Evidence` | #10641 | not before M4 seal |
