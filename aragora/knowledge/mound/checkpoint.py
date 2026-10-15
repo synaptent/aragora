@@ -103,6 +103,9 @@ class KMCheckpointMetadata:
     # Tags for categorization/filtering
     tags: list[str] = field(default_factory=list)
 
+    # Authenticated organization of the creator; None when none was recorded.
+    org_id: str | None = None
+
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
@@ -205,6 +208,7 @@ class KMCheckpointStore:
         incremental: bool = False,
         parent_checkpoint_id: str | None = None,
         return_metadata: bool = False,
+        org_id: str | None = None,
     ) -> str | KMCheckpointMetadata:
         """
         Create a checkpoint of current KM state.
@@ -219,6 +223,8 @@ class KMCheckpointStore:
             incremental: Create incremental checkpoint (only changes)
             parent_checkpoint_id: Parent checkpoint for incremental
             return_metadata: If True, return KMCheckpointMetadata; otherwise return ID string
+            org_id: Authenticated organization of the creator, recorded in the metadata.
+                Pruning only removes older checkpoints with the same recorded org_id.
 
         Returns:
             Checkpoint ID (str) or KMCheckpointMetadata if return_metadata=True
@@ -303,6 +309,7 @@ class KMCheckpointStore:
             incremental=incremental,
             parent_checkpoint_id=parent_checkpoint_id,
             tags=tags or [],
+            org_id=org_id,
         )
 
         # Write checkpoint files
@@ -328,7 +335,7 @@ class KMCheckpointStore:
         )
 
         # Prune old checkpoints
-        await self._prune_old_checkpoints()
+        await self._prune_old_checkpoints(org_id)
 
         return metadata if return_metadata else checkpoint_id
 
@@ -761,9 +768,13 @@ class KMCheckpointStore:
             except (RuntimeError, ValueError, OSError, AttributeError) as e:
                 logger.warning("Failed to restore vectors: %s", e)
 
-    async def _prune_old_checkpoints(self) -> int:
-        """Prune old checkpoints beyond max_checkpoints."""
-        checkpoints = await self.list_checkpoints()
+    async def _prune_old_checkpoints(self, org_id: str | None = None) -> int:
+        """Prune the oldest checkpoints recorded for ``org_id`` beyond max_checkpoints.
+
+        Checkpoints recorded for any other organization (or for none, when
+        ``org_id`` is set) are never pruned.
+        """
+        checkpoints = [cp for cp in await self.list_checkpoints() if cp.org_id == org_id]
 
         if len(checkpoints) <= self.max_checkpoints:
             return 0

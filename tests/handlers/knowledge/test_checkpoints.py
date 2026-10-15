@@ -24,8 +24,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from aragora.billing.auth.context import UserAuthContext
 from aragora.knowledge.mound import checkpoint as checkpoint_module
 from aragora.rbac.models import AuthorizationContext
+from aragora.server.handlers.base import BaseHandler
 from aragora.server.handlers.knowledge.checkpoints import KMCheckpointHandler
 
 
@@ -66,6 +68,8 @@ class MockCheckpointMetadata:
     compressed: bool = False
     tags: list[str] = field(default_factory=list)
     checksum: str = "abc123"
+    # The conftest auto-auth user's organization, so handler ownership checks pass.
+    org_id: str | None = "test-org-001"
 
     def __post_init__(self):
         if not self.id:
@@ -116,6 +120,24 @@ class _MockHTTPHandler:
 # =============================================================================
 
 
+@pytest.fixture(autouse=True)
+def _owner_role(mock_auth_for_handler_tests, monkeypatch):
+    """Authenticate as the conftest user with the owner role.
+
+    The handler derives RBAC roles from ``UserAuthContext.role``, and RBAC v2
+    grants knowledge:write to owner but not to the conftest user's admin role.
+    """
+    owner = UserAuthContext(
+        authenticated=True,
+        user_id="test-user-001",
+        email="test@example.com",
+        org_id="test-org-001",
+        role="owner",
+        token_type="access",
+    )
+    monkeypatch.setattr(BaseHandler, "require_auth_or_error", lambda self, handler: (owner, None))
+
+
 @pytest.fixture
 def handler():
     """Create a KMCheckpointHandler with empty server context."""
@@ -128,7 +150,7 @@ def mock_store():
     store = AsyncMock()
     store.list_checkpoints = AsyncMock(return_value=[])
     store.create_checkpoint = AsyncMock(return_value="cp-id-1")
-    store.get_checkpoint_metadata = AsyncMock(return_value=None)
+    store.get_checkpoint_metadata = AsyncMock(return_value=MockCheckpointMetadata(name="test-cp"))
     store.delete_checkpoint = AsyncMock(return_value=True)
     store.restore_checkpoint = AsyncMock(return_value=MockRestoreResult(checkpoint_id="test-cp"))
     store.compare_checkpoints = AsyncMock(return_value={"added": 1, "removed": 0})
@@ -542,6 +564,7 @@ class TestCreateCheckpoint:
             description="",
             tags=[],
             return_metadata=True,
+            org_id="test-org-001",
         )
 
     @pytest.mark.asyncio
@@ -845,89 +868,29 @@ class TestDeleteCheckpoint:
 
 
 class TestRestoreCheckpoint:
-    """Tests for restoring from a checkpoint."""
+    """Restore is refused before the store is asked to restore anything."""
 
     @pytest.mark.asyncio
-    async def test_restore_with_merge_strategy(self, handler_with_store, mock_store):
-        restore_result = MockRestoreResult(
-            checkpoint_id="test-cp",
-            success=True,
-            nodes_restored=15,
-            relationships_restored=8,
-            errors=[],
-        )
-        mock_store.restore_checkpoint.return_value = restore_result
-        mock_handler = _MockHTTPHandler(
-            method="POST",
-            path="/api/v1/km/checkpoints/test-cp/restore",
-            body={"strategy": "merge"},
-        )
+    @pytest.mark.parametrize(
+        ("metadata", "status"),
+        [
+            (MockCheckpointMetadata(name="test-cp"), 403),
+            (MockCheckpointMetadata(name="test-cp", org_id="org-other"), 404),
+            (MockCheckpointMetadata(name="test-cp", org_id=None), 404),
+            (None, 404),
+        ],
+    )
+    async def test_restore_never_reaches_the_store(
+        self, handler_with_store, mock_store, metadata, status
+    ):
+        mock_store.get_checkpoint_metadata.return_value = metadata
+        path = "/api/v1/km/checkpoints/test-cp/restore"
+        mock_handler = _MockHTTPHandler(method="POST", path=path, body={"strategy": "replace"})
         result = await handler_with_store.handle_post(
-            path="/api/v1/km/checkpoints/test-cp/restore",
-            query_params={},
-            handler=mock_handler,
+            path=path, query_params={}, handler=mock_handler
         )
-        assert _status(result) == 200
-        body = _body(result)
-        data = body.get("data", body)
-        assert data["checkpoint_name"] == "test-cp"
-        assert data["strategy"] == "merge"
-        assert data["nodes_restored"] == 15
-        assert data["relationships_restored"] == 8
-        mock_store.restore_checkpoint.assert_called_once_with(
-            checkpoint_id="test-cp",
-            clear_existing=False,
-        )
-
-    @pytest.mark.asyncio
-    async def test_restore_with_replace_strategy(self, handler_with_store, mock_store):
-        restore_result = MockRestoreResult(
-            checkpoint_id="replace-cp",
-            success=True,
-            nodes_restored=20,
-            relationships_restored=10,
-        )
-        mock_store.restore_checkpoint.return_value = restore_result
-        mock_handler = _MockHTTPHandler(
-            method="POST",
-            path="/api/v1/km/checkpoints/replace-cp/restore",
-            body={"strategy": "replace"},
-        )
-        result = await handler_with_store.handle_post(
-            path="/api/v1/km/checkpoints/replace-cp/restore",
-            query_params={},
-            handler=mock_handler,
-        )
-        assert _status(result) == 200
-        mock_store.restore_checkpoint.assert_called_once_with(
-            checkpoint_id="replace-cp",
-            clear_existing=True,
-        )
-
-    @pytest.mark.asyncio
-    async def test_restore_default_strategy_is_merge(self, handler_with_store, mock_store):
-        restore_result = MockRestoreResult(
-            checkpoint_id="default-cp", success=True, nodes_restored=5
-        )
-        mock_store.restore_checkpoint.return_value = restore_result
-        mock_handler = _MockHTTPHandler(
-            method="POST",
-            path="/api/v1/km/checkpoints/default-cp/restore",
-            body={},
-        )
-        result = await handler_with_store.handle_post(
-            path="/api/v1/km/checkpoints/default-cp/restore",
-            query_params={},
-            handler=mock_handler,
-        )
-        assert _status(result) == 200
-        body = _body(result)
-        data = body.get("data", body)
-        assert data["strategy"] == "merge"
-        mock_store.restore_checkpoint.assert_called_once_with(
-            checkpoint_id="default-cp",
-            clear_existing=False,
-        )
+        assert _status(result) == status
+        mock_store.restore_checkpoint.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_restore_invalid_strategy_returns_400(self, handler_with_store, mock_store):
@@ -944,136 +907,6 @@ class TestRestoreCheckpoint:
         assert _status(result) == 400
         body = _body(result)
         assert "strategy" in body.get("error", body.get("message", "")).lower()
-
-    @pytest.mark.asyncio
-    async def test_restore_not_found_returns_404(self, handler_with_store, mock_store):
-        restore_result = MockRestoreResult(
-            checkpoint_id="ghost-cp",
-            success=False,
-            nodes_restored=0,
-        )
-        mock_store.restore_checkpoint.return_value = restore_result
-        mock_handler = _MockHTTPHandler(
-            method="POST",
-            path="/api/v1/km/checkpoints/ghost-cp/restore",
-            body={},
-        )
-        result = await handler_with_store.handle_post(
-            path="/api/v1/km/checkpoints/ghost-cp/restore",
-            query_params={},
-            handler=mock_handler,
-        )
-        assert _status(result) == 404
-
-    @pytest.mark.asyncio
-    async def test_restore_with_errors_returns_truncated_list(self, handler_with_store, mock_store):
-        errors = [f"error-{i}" for i in range(15)]
-        restore_result = MockRestoreResult(
-            checkpoint_id="err-cp",
-            success=True,
-            nodes_restored=100,
-            relationships_restored=50,
-            errors=errors,
-        )
-        mock_store.restore_checkpoint.return_value = restore_result
-        mock_handler = _MockHTTPHandler(
-            method="POST",
-            path="/api/v1/km/checkpoints/err-cp/restore",
-            body={"strategy": "merge"},
-        )
-        result = await handler_with_store.handle_post(
-            path="/api/v1/km/checkpoints/err-cp/restore",
-            query_params={},
-            handler=mock_handler,
-        )
-        assert _status(result) == 200
-        body = _body(result)
-        data = body.get("data", body)
-        assert len(data["errors"]) == 10  # truncated to 10
-        assert data["error_count"] == 15  # full count
-
-    @pytest.mark.asyncio
-    async def test_restore_value_error_returns_400(self, handler_with_store, mock_store):
-        mock_store.restore_checkpoint.side_effect = ValueError("bad data")
-        mock_handler = _MockHTTPHandler(
-            method="POST",
-            path="/api/v1/km/checkpoints/bad-cp/restore",
-            body={},
-        )
-        result = await handler_with_store.handle_post(
-            path="/api/v1/km/checkpoints/bad-cp/restore",
-            query_params={},
-            handler=mock_handler,
-        )
-        assert _status(result) == 400
-
-    @pytest.mark.asyncio
-    async def test_restore_runtime_error_returns_500(self, handler_with_store, mock_store):
-        mock_store.restore_checkpoint.side_effect = RuntimeError("engine broken")
-        mock_handler = _MockHTTPHandler(
-            method="POST",
-            path="/api/v1/km/checkpoints/fail-cp/restore",
-            body={},
-        )
-        result = await handler_with_store.handle_post(
-            path="/api/v1/km/checkpoints/fail-cp/restore",
-            query_params={},
-            handler=mock_handler,
-        )
-        assert _status(result) == 500
-
-    @pytest.mark.asyncio
-    @patch("aragora.server.handlers.knowledge.checkpoints.record_checkpoint_operation")
-    @patch("aragora.server.handlers.knowledge.checkpoints.check_and_record_slo")
-    async def test_restore_records_metrics(
-        self, mock_slo, mock_record, handler_with_store, mock_store
-    ):
-        restore_result = MockRestoreResult(checkpoint_id="met-cp", success=True, nodes_restored=5)
-        mock_store.restore_checkpoint.return_value = restore_result
-        mock_handler = _MockHTTPHandler(
-            method="POST",
-            path="/api/v1/km/checkpoints/met-cp/restore",
-            body={},
-        )
-        await handler_with_store.handle_post(
-            path="/api/v1/km/checkpoints/met-cp/restore",
-            query_params={},
-            handler=mock_handler,
-        )
-        mock_record.assert_called_once()
-        args = mock_record.call_args
-        assert args[0][0] == "restore"
-        assert args[0][1] is True
-        mock_slo.assert_called_once()
-
-    @pytest.mark.asyncio
-    @patch("aragora.observability.metrics.record_checkpoint_restore_result")
-    async def test_restore_records_restore_result_metrics(
-        self, mock_restore_record, handler_with_store, mock_store
-    ):
-        restore_result = MockRestoreResult(
-            checkpoint_id="res-cp",
-            success=True,
-            nodes_restored=12,
-            relationships_restored=4,
-            errors=["warn1", "warn2"],
-        )
-        mock_store.restore_checkpoint.return_value = restore_result
-        mock_handler = _MockHTTPHandler(
-            method="POST",
-            path="/api/v1/km/checkpoints/res-cp/restore",
-            body={},
-        )
-        await handler_with_store.handle_post(
-            path="/api/v1/km/checkpoints/res-cp/restore",
-            query_params={},
-            handler=mock_handler,
-        )
-        mock_restore_record.assert_called_once_with(
-            nodes_restored=12,
-            nodes_skipped=0,
-            errors=2,
-        )
 
 
 # =============================================================================
@@ -1435,8 +1268,6 @@ class TestHandlePostRouting:
 
     @pytest.mark.asyncio
     async def test_handle_post_routes_to_restore(self, handler_with_store, mock_store):
-        restore_result = MockRestoreResult(checkpoint_id="r-cp", success=True, nodes_restored=1)
-        mock_store.restore_checkpoint.return_value = restore_result
         mock_handler = _MockHTTPHandler(
             method="POST",
             path="/api/v1/km/checkpoints/r-cp/restore",
@@ -1447,7 +1278,8 @@ class TestHandlePostRouting:
             query_params={},
             handler=mock_handler,
         )
-        assert _status(result) == 200
+        assert _status(result) == 403
+        mock_store.get_checkpoint_metadata.assert_called_once_with("r-cp")
 
     @pytest.mark.asyncio
     async def test_handle_post_unknown_path_returns_404(self, handler_with_store, mock_store):
@@ -1760,10 +1592,8 @@ class TestEdgeCases:
         assert _status(result) == 400
 
     @pytest.mark.asyncio
-    async def test_restore_no_body_uses_defaults(self, handler_with_store, mock_store):
-        """POST restore with no body should use default merge strategy."""
-        restore_result = MockRestoreResult(checkpoint_id="nb-cp", success=True, nodes_restored=1)
-        mock_store.restore_checkpoint.return_value = restore_result
+    async def test_restore_no_body_is_refused(self, handler_with_store, mock_store):
+        """POST restore with no body reaches the refusal, not a 400."""
         mock_handler = _MockHTTPHandler(
             method="POST",
             path="/api/v1/km/checkpoints/nb-cp/restore",
@@ -1773,10 +1603,8 @@ class TestEdgeCases:
             query_params={},
             handler=mock_handler,
         )
-        assert _status(result) == 200
-        body = _body(result)
-        data = body.get("data", body)
-        assert data["strategy"] == "merge"
+        assert _status(result) == 403
+        mock_store.restore_checkpoint.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_checkpoint_name_with_special_chars(self, handler_with_store, mock_store):
@@ -1923,8 +1751,7 @@ class TestRealStoreIdContract:
         pair = {"checkpoint_a": ids[0], "checkpoint_b": ids[1]}
         assert _status(await _call(handler, "POST", f"{BASE}/compare", pair)) == 200
         restored = await _call(handler, "POST", f"{BASE}/{first}/restore", {})
-        assert _status(restored) == 200 and _data(restored)["checkpoint_id"] == first
-        assert store.mound.saved == ["node-1"]
+        assert _status(restored) == 403 and store.mound.saved == []
         assert _status(await _call(handler, "DELETE", f"{BASE}/{first}")) == 200
         assert _status(await _call(handler, "GET", f"{BASE}/{first}")) == 404
         listed = _data(await _call(handler, "GET", BASE))["checkpoints"]
@@ -1956,7 +1783,7 @@ class TestRealStoreIdContract:
 
     async def test_older_on_disk_names_stay_listable(self, real_store):
         handler, store = real_store
-        ckpt_id = await store.create_checkpoint(name="placeholder")
+        ckpt_id = await store.create_checkpoint(name="placeholder", org_id="test-org-001")
         meta = store.checkpoint_dir / ckpt_id / "metadata.json"
         meta.write_text(json.dumps({**json.loads(meta.read_text()), "name": "release.1"}))
         listed = _data(await _call(handler, "GET", BASE))["checkpoints"]
@@ -1979,7 +1806,7 @@ class TestRealStoreIdContract:
         assert _data(await _call(handler, "GET", f"{BASE}/{cid}"))["name"] == "kept"
         assert _data(await _call(handler, "GET", f"{BASE}/{cid}/compare"))["checkpoint"] == cid
         restored = await _call(handler, "POST", f"{BASE}/{cid}/restore", {})
-        assert _status(restored) == 200 and store.mound.saved == ["node-1"]
+        assert _status(restored) == 403 and store.mound.saved == []
         assert _status(await _call(handler, "DELETE", f"{BASE}/{cid}")) == 200
         assert _data(await _call(handler, "GET", BASE))["checkpoints"] == []
 
@@ -1994,6 +1821,7 @@ class TestRealStoreIdContract:
         (entry / linked).rename(outside / linked)
         (entry / linked).symlink_to(outside / linked)
         restored = await _call(handler, "POST", f"{BASE}/km_ckpt_link/restore", {})
-        assert _status(restored) == 404 and store.mound.saved == []
+        # A linked content file leaves owned metadata, so that case reaches the refusal.
+        assert _status(restored) == (404 if linked == "metadata.json" else 403)
         restored = await _call(handler, "POST", f"{BASE}/{cid}/restore", {})
-        assert _status(restored) == 200 and store.mound.saved == ["node-1"]
+        assert _status(restored) == 403 and store.mound.saved == []

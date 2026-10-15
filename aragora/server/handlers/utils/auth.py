@@ -95,7 +95,7 @@ async def get_auth_context(
             user_email=user_ctx.email,
             org_id=user_ctx.org_id,
             workspace_id=_extract_workspace_id(request),
-            roles={user_ctx.role} if user_ctx.role else {"member"},
+            roles=roles_from_user_context(user_ctx),
             permissions=_get_user_permissions(user_ctx),
         )
 
@@ -214,6 +214,14 @@ def _extract_workspace_id(request: Any, user_id: str | None = None) -> str | Non
         return workspace_id
 
 
+def roles_from_user_context(user_ctx: Any) -> set[str]:
+    """RBAC role set for an authenticated ``UserAuthContext``.
+
+    ``UserAuthContext`` carries a single ``role``; an empty role counts as member.
+    """
+    return {user_ctx.role} if user_ctx.role else {"member"}
+
+
 def _get_user_permissions(user_ctx: Any) -> set[str]:
     """Get permissions for a user based on their roles."""
     from aragora.rbac.checker import get_permission_checker
@@ -222,7 +230,7 @@ def _get_user_permissions(user_ctx: Any) -> set[str]:
         checker = get_permission_checker()
         # Get all permissions for user's roles
         permissions = set()
-        roles = {user_ctx.role} if user_ctx.role else {"member"}
+        roles = roles_from_user_context(user_ctx)
         for role in roles:
             role_perms = checker.get_role_permissions(role)
             permissions.update(role_perms)
