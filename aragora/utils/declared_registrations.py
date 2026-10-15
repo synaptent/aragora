@@ -7,6 +7,12 @@ still reaches the registration through an entry point declared in aragora's
 also reads it from that ``pyproject.toml``. On Python 3.10 without ``tomli``, the
 single-line string entries of the ``[project]`` table and of the group's entry-point
 table are read without a TOML library.
+
+A declared registration runs on the first lookup that misses, which can be after the
+application registered its own entries in other registries. The upper package it imports
+for the first time then runs its own import-time registrations, so a registry that a
+package init fills checks :func:`declared_registrations_running` and only fills what is
+missing.
 """
 
 from __future__ import annotations
@@ -41,6 +47,16 @@ _KEY_PART = re.compile(r"\"([^\"\\]*)\"|'([^']*)'|([A-Za-z0-9_-]+)")
 _STRING_ENTRY = re.compile(
     r"(\"[^\"\\]*\"|'[^']*'|[A-Za-z0-9_-]+)\s*=\s*(?:\"([^\"\\]*)\"|'([^']*)')\s*(?:#.*)?"
 )
+
+
+# Thread-local, so a registration another thread makes meanwhile still replaces. A depth,
+# not a flag: a declared registration can trigger another group's first lookup.
+_running = threading.local()
+
+
+def declared_registrations_running() -> bool:
+    """Whether this thread is running the declared registrations of any group."""
+    return getattr(_running, "depth", 0) > 0
 
 
 def _toml_module() -> ModuleType | None:
@@ -122,10 +138,14 @@ class DeclaredRegistrations:
             # name must not hide a declaration that only the source checkout carries yet, and no
             # registration runs twice.
             installed_targets = {entry_point.value for entry_point in installed}
-            self._run(
-                installed
-                + [ep for ep in self._source_declarations() if ep.value not in installed_targets]
-            )
+            declared = installed + [
+                ep for ep in self._source_declarations() if ep.value not in installed_targets
+            ]
+            _running.depth = getattr(_running, "depth", 0) + 1
+            try:
+                self._run(declared)
+            finally:
+                _running.depth -= 1
 
     def _source_declarations(self) -> list[importlib.metadata.EntryPoint]:
         # An editable install keeps the entry points it was installed with, so a source
@@ -160,4 +180,4 @@ class DeclaredRegistrations:
             self._run(rest)
 
 
-__all__ = ["DeclaredRegistrations", "SOURCE_PYPROJECT"]
+__all__ = ["DeclaredRegistrations", "SOURCE_PYPROJECT", "declared_registrations_running"]

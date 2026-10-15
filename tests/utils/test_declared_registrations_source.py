@@ -1,8 +1,12 @@
-"""Source-checkout declarations read with a TOML library and without one (Python 3.10 without tomli)."""
+"""Source-checkout declarations read with a TOML library and without one (Python 3.10 without
+tomli), and the thread-local marker that a declared registration is running."""
 
 from __future__ import annotations
 
+import importlib.metadata
 import sys
+import threading
+from types import SimpleNamespace
 
 import pytest
 
@@ -83,3 +87,69 @@ def test_without_a_toml_library_every_aragora_group_reads_the_same(monkeypatch):
 
     assert {group: _declared(group, SOURCE_PYPROJECT) for group in groups} == with_library
     assert all(with_library.values())
+
+
+def _running():
+    return declared_registrations.declared_registrations_running()
+
+
+def _declare(monkeypatch, registrations):
+    """Serve ``registrations`` (group -> registration callable) as installed entry points."""
+    monkeypatch.setattr(
+        importlib.metadata,
+        "entry_points",
+        lambda *, group: (
+            [
+                SimpleNamespace(
+                    name=group, value=f"tests.declared:{group}", load=lambda: registrations[group]
+                )
+            ]
+            if group in registrations
+            else []
+        ),
+    )
+
+
+def test_declared_registrations_running_spans_nested_loads_on_this_thread_only(
+    monkeypatch, tmp_path
+):
+    seen = []
+    outer = DeclaredRegistrations("demo.outer", source_pyproject=tmp_path / "missing.toml")
+    inner = DeclaredRegistrations("demo.inner", source_pyproject=tmp_path / "missing.toml")
+
+    def register_outer():
+        inner.load()
+        seen.append(("outer, after the inner load", _running()))
+        other = threading.Thread(target=lambda: seen.append(("another thread", _running())))
+        other.start()
+        other.join()
+
+    def register_inner():
+        seen.append(("inner", _running()))
+
+    _declare(monkeypatch, {"demo.outer": register_outer, "demo.inner": register_inner})
+
+    assert _running() is False
+    outer.load()
+    assert seen == [
+        ("inner", True),
+        ("outer, after the inner load", True),
+        ("another thread", False),
+    ]
+    assert _running() is False
+
+
+def test_declared_registrations_running_ends_when_a_registration_error_escapes(
+    monkeypatch, tmp_path
+):
+    class PluginBug(Exception):
+        pass
+
+    def broken():
+        raise PluginBug("plugin defect")
+
+    _declare(monkeypatch, {"demo.broken": broken})
+
+    with pytest.raises(PluginBug):
+        DeclaredRegistrations("demo.broken", source_pyproject=tmp_path / "missing.toml").load()
+    assert _running() is False

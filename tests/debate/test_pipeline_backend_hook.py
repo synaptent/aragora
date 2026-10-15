@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ast
 import importlib.metadata
+import json
 import logging
 import os
 import subprocess
@@ -301,6 +302,65 @@ def test_a_debate_only_process_reaches_the_pipeline_backend():
         "aragora.pipeline.debate_registration",
         "DecisionPipelineBackend",
     ]
+
+
+_INTEGRITY_BUILDER_SCRIPT = """\
+import json
+import sys
+
+from aragora.core import decision_route_hooks as hooks
+from aragora.debate.pipeline_backends import pipeline_backend
+from aragora.debate.post_debate_coordinator import PostDebateCoordinator  # noqa: F401
+
+
+async def application_builder(*args, **kwargs):
+    return {"source": "application"}
+
+
+async def replacement_builder(*args, **kwargs):
+    return {"source": "replacement"}
+
+
+mode = sys.argv[1]
+loaded_before = "aragora.pipeline" in sys.modules
+if mode != "nothing-registered":
+    hooks.register_decision_integrity_builder(application_builder)
+backend = pipeline_backend()
+if mode == "registered-again":
+    hooks.register_decision_integrity_builder(replacement_builder)
+# Read the registry itself: a getter miss would run the decision-route discovery, which
+# also installs the default builder and would hide a missing fill.
+builder = hooks._hooks.get(hooks.HOOK_DECISION_INTEGRITY)
+print(json.dumps([loaded_before, type(backend).__name__, builder and builder.__qualname__]))
+"""
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected_builder"),
+    [
+        ("registered-first", "application_builder"),
+        ("nothing-registered", "build_decision_integrity_payload"),
+        ("registered-again", "replacement_builder"),
+    ],
+)
+def test_the_first_backend_lookup_keeps_an_integrity_builder_registered_before_it(
+    mode, expected_builder
+):
+    if sys.version_info < (3, 11):
+        pytest.importorskip("tomli")
+    result = subprocess.run(
+        [sys.executable, "-c", _INTEGRITY_BUILDER_SCRIPT, mode],
+        capture_output=True,
+        text=True,
+        cwd=REPO_ROOT,
+        env={**os.environ, "PYTHONPATH": str(REPO_ROOT)},
+        timeout=120,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    loaded_before, backend, builder = json.loads(result.stdout.splitlines()[-1])
+    assert (loaded_before, backend) == (False, "DecisionPipelineBackend")
+    assert builder == expected_builder
 
 
 def _runtime_imports(tree):
