@@ -456,3 +456,7 @@ import-and-call tests at both paths.
 | `aragora.cli.commands.review_queue_transport:_gh_error_kind` | `aragora.review.github_transport:gh_error_kind` | #10603 | not before M4 seal |
 | `aragora.cli.commands.review_queue_transport:_is_github_transport_error` | `aragora.review.github_transport:is_github_transport_error` | #10603 | not before M4 seal |
 | `aragora.connectors.base:Evidence` | `aragora.reasoning.source_evidence:Evidence` | #10641 | not before M4 seal |
+| `aragora.connectors.chat.teams_identity:TEAMS_PROVIDER` | `aragora.auth.teams_identity:TEAMS_PROVIDER` | #10642 | not before M4 seal |
+| `aragora.connectors.chat.teams_identity:TeamsUserIdentityBridge` | `aragora.auth.teams_identity:TeamsUserIdentityBridge` | #10642 | not before M4 seal |
+| `aragora.connectors.chat.teams_identity:TeamsUserInfo` | `aragora.auth.teams_identity:TeamsUserInfo` | #10642 | not before M4 seal |
+| `aragora.connectors.chat.teams_identity:get_teams_identity_bridge` | `aragora.auth.teams_identity:get_teams_identity_bridge` | #10642 | not before M4 seal |
