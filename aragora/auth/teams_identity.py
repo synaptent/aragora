@@ -8,7 +8,7 @@ Aragora users, enabling:
 - User sync from Teams to Aragora
 
 Usage:
-    from aragora.connectors.chat.teams_identity import TeamsUserIdentityBridge
+    from aragora.auth.teams_identity import TeamsUserIdentityBridge
 
     bridge = TeamsUserIdentityBridge()
     user = await bridge.resolve_user(aad_object_id="...", tenant_id="...")
