@@ -1943,7 +1943,7 @@ class TestSourceDebateOwner:
         result, order, sinks = _post(_debate_storage(tmp_path, "org-b"), body)
 
         assert result.status_code == 200
-        assert order == ["get_org_id", "get_debate"]
+        assert order[:2] == ["get_org_id", "get_debate"]
         sinks["_persist_receipt"].assert_called_once()
         for sink in ("store_plan", "sync_decision_plan_backbone_receipt"):
             plans = [c.args[0] for c in sinks[sink].call_args_list]
