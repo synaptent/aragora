@@ -998,18 +998,22 @@ class TestLinkedCruxSignalFloor:
         assert crux.resolution_impact == 0.6
         assert crux.statement == _SIGNAL_STATEMENT
 
-    @pytest.mark.parametrize(
-        "scores",
-        [
-            {"load_bearing_score": 0.0, "uncertainty_score": 0.1, "resolution_impact": 0.2},
-            {"load_bearing_score": "high", "uncertainty_score": float("nan")},
-        ],
-        ids=["lower", "malformed"],
-    )
-    def test_lower_or_unusable_agent_scores_cannot_lower_the_floor(
-        self, monkeypatch: pytest.MonkeyPatch, scores: dict[str, Any]
+    def test_lower_agent_scores_cannot_lower_the_floor(
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         spec = _spec(monkeypatch)
+        scores = {"load_bearing_score": 0.0, "uncertainty_score": 0.1, "resolution_impact": 0.2}
+        crux = _crux(run_repair_debate(spec, [_PayloadAgent("agent-a", _mention(**scores))]))
+        assert crux.load_bearing_score == 0.7
+        assert crux.uncertainty_score == 0.5
+        assert crux.resolution_impact == 0.5
+        assert crux.statement == _SIGNAL_STATEMENT
+
+    def test_malformed_agent_scores_cannot_lower_the_floor(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        spec = _spec(monkeypatch)
+        scores = {"load_bearing_score": "high", "uncertainty_score": float("nan")}
         crux = _crux(run_repair_debate(spec, [_PayloadAgent("agent-a", _mention(**scores))]))
         assert crux.load_bearing_score == 0.7
         assert crux.uncertainty_score == 0.5
