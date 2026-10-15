@@ -103,7 +103,20 @@ async def test_symlink_that_resolves_outside_the_directory_is_rejected(store_and
         await store.get_checkpoint_metadata("km_ckpt_link")
     with pytest.raises(checkpoint_module.InvalidCheckpointNameError):
         await store.delete_checkpoint("km_ckpt_link")
+    assert await store.list_checkpoints() == []
     assert (outside / "metadata.json").exists()
+
+
+async def test_metadata_outside_the_entry_is_neither_read_nor_listed(store_and_outside) -> None:
+    store, outside = store_and_outside
+    linked, looped = store.checkpoint_dir / "km_ckpt_linked", store.checkpoint_dir / "km_ckpt_loop"
+    for entry in (linked, looped):
+        entry.mkdir()
+    (linked / "metadata.json").symlink_to(outside / "metadata.json")
+    (looped / "metadata.json").symlink_to(looped / "metadata.json")
+    assert await store.get_checkpoint_metadata("km_ckpt_linked") is None
+    assert await store.list_checkpoints() == []
+    assert await store.get_checkpoint_metadata("km_ckpt_loop") is None
 
 
 async def test_safe_missing_names_keep_not_found_results(store_and_outside) -> None:

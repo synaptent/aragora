@@ -1961,3 +1961,23 @@ class TestRealStoreIdContract:
         listed = _data(await _call(handler, "GET", BASE))["checkpoints"]
         assert [(c["id"], c["name"]) for c in listed] == [(ckpt_id, "release.1")]
         assert _data(await _call(handler, "GET", f"{BASE}/{ckpt_id}"))["name"] == "release.1"
+
+    async def test_links_hidden_and_real_entries_still_work(self, real_store, tmp_path_factory):
+        handler, store = real_store
+        cid = _data(await _call(handler, "POST", BASE, {"name": "kept"}))["id"]
+        outside = tmp_path_factory.mktemp("outside")
+        meta = json.loads((store.checkpoint_dir / cid / "metadata.json").read_text())
+        (outside / "metadata.json").write_text(json.dumps({**meta, "id": "km_ckpt_external"}))
+        (store.checkpoint_dir / "km_ckpt_dir_link").symlink_to(outside, target_is_directory=True)
+        meta_link = store.checkpoint_dir / "km_ckpt_meta_link"
+        meta_link.mkdir()
+        (meta_link / "metadata.json").symlink_to(outside / "metadata.json")
+        listed = _data(await _call(handler, "GET", BASE))["checkpoints"]
+        assert [c["id"] for c in listed] == [cid]
+        assert _status(await _call(handler, "GET", f"{BASE}/km_ckpt_meta_link")) == 404
+        assert _data(await _call(handler, "GET", f"{BASE}/{cid}"))["name"] == "kept"
+        assert _data(await _call(handler, "GET", f"{BASE}/{cid}/compare"))["checkpoint"] == cid
+        restored = await _call(handler, "POST", f"{BASE}/{cid}/restore", {})
+        assert _status(restored) == 200 and store.mound.saved == ["node-1"]
+        assert _status(await _call(handler, "DELETE", f"{BASE}/{cid}")) == 200
+        assert _data(await _call(handler, "GET", BASE))["checkpoints"] == []
