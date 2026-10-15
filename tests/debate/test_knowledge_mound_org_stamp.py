@@ -232,7 +232,8 @@ class TestRealSqliteMound:
             await ops.ingest_debate_outcome(
                 _result(id="d-none", final_answer="Anonymous run picks a leaky bucket"), env
             )
-            # Identical text from another organization deduplicates onto org-a's node.
+            # Identical text from another organization: content-only dedup merges it into
+            # org-a's node, org-keyed dedup keeps it apart; either way org-b never reads d-a.
             await ops.ingest_debate_outcome(
                 _result(id="d-b", final_answer="Org A picks a token bucket"), env, org_id="org-b"
             )
@@ -250,8 +251,8 @@ class TestRealSqliteMound:
 
             assert await visible("org-a", "ws-other") == ["d-a"]
             assert await visible("org-a", "default") == ["d-a"]
-            assert await visible("org-b", "default") == []
-            assert await visible("org-b", "ws-other") == []
+            assert await visible("org-b", "default") in ([], ["d-b"])
+            assert await visible("org-b", "ws-other") in ([], ["d-b"])
             assert await visible(None, "default") == []
 
             stored = (await mound.query("Debate Conclusion", limit=50)).items
@@ -259,13 +260,55 @@ class TestRealSqliteMound:
             await mound.close()
 
         by_debate = {i.metadata["debate_id"]: i.metadata for i in stored}
-        assert sorted(by_debate) == ["d-a", "d-none"]
+        assert sorted(set(by_debate) - {"d-b"}) == ["d-a", "d-none"]
         assert by_debate["d-a"][ORG_KEY] == "org-a"
         assert by_debate["d-a"][VISIBILITY_KEY] == "organization"
         # Unstamped outcomes keep main's shape. store() records no workspace_id in metadata,
         # so the default workspace rule returns them to no actor, exactly as before.
         assert ORG_KEY not in by_debate["d-none"]
         assert VISIBILITY_KEY not in by_debate["d-none"]
+
+    @pytest.mark.asyncio
+    async def test_federation_push_never_selects_org_stamped_outcomes(self, tmp_path, monkeypatch):
+        from aragora.knowledge.mound.ops.federation import FederatedRegion, SyncScope
+        from aragora.knowledge.mound.types import IngestionRequest, KnowledgeSource
+
+        mound = await _sqlite_mound(tmp_path, monkeypatch, "default")
+        try:
+            ops = KnowledgeMoundOperations(knowledge_mound=mound)
+            env = SimpleNamespace(task="Design a rate limiter")
+            await ops.ingest_debate_outcome(
+                _result(id="d-a", final_answer="Org A picks a token bucket"), env, org_id="org-a"
+            )
+            await mound.store(
+                IngestionRequest(
+                    content="Debate Conclusion: public runbook",
+                    source_type=KnowledgeSource.FACT,
+                    workspace_id="default",
+                    metadata={VISIBILITY_KEY: "public"},
+                )
+            )
+            stored = await mound.query("Debate Conclusion", workspace_id="default", limit=50)
+            # sync_to_region's own query("") is rejected by the stock facade before selection,
+            # so selection runs here over the real persisted rows.
+            monkeypatch.setattr(mound, "query", AsyncMock(return_value=stored))
+            region = FederatedRegion("r1", "https://r1.invalid", "k", sync_scope=SyncScope.FULL)
+            monkeypatch.setattr(mound, "_get_region_from_store", AsyncMock(return_value=region))
+            monkeypatch.setattr(mound, "_update_region_sync_status", AsyncMock())
+            push = AsyncMock(return_value=0)
+            monkeypatch.setattr(mound, "_push_to_region", push)
+
+            pushed = {}
+            for levels in (None, ["organization"]):
+                assert (await mound.sync_to_region("r1", visibility_levels=levels)).success
+                pushed[str(levels)] = [i["content"] for i in push.call_args.args[1]]
+        finally:
+            await mound.close()
+
+        assert pushed == {"None": ["Debate Conclusion: public runbook"], "['organization']": []}
+        # The stamp itself is untouched, so same-organization reads still find the outcome.
+        stamped = {i.metadata.get("debate_id"): i.metadata for i in stored.items}["d-a"]
+        assert stamped[ORG_KEY] == "org-a" and stamped[VISIBILITY_KEY] == "organization"
 
 
 def test_stamp_key_matches_the_key_org_filtered_reads_compare():
