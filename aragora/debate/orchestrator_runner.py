@@ -27,6 +27,7 @@ from aragora.debate.complexity_governor import (
     get_complexity_governor,
 )
 from aragora.debate.context import DebateContext
+from aragora.debate.pipeline_backends import pipeline_backend
 from aragora.events.debate_completion import (
     AgentActivity,
     DebateCompletedEvent,
@@ -2038,14 +2039,17 @@ async def _auto_execute_plan(
             ExecutionSafetyPolicy,
             evaluate_auto_execution_safety,
         )
-        from aragora.pipeline.decision_plan import DecisionPlanFactory
-        from aragora.pipeline.executor import PlanExecutor, get_plan, store_plan
         from aragora.types.decision_plans import ApprovalMode, RiskLevel
-        from aragora.pipeline.decision_integrity_utils import (
+
+        pipeline = pipeline_backend()
+        DecisionPlanFactory = pipeline.decision_plan_factory()
+        PlanExecutor = pipeline.plan_executor()
+        get_plan, store_plan = pipeline.plan_registry()
+        (
             ensure_decision_plan_backbone_run,
             execute_decision_plan_with_backbone,
             sync_decision_plan_backbone_receipt,
-        )
+        ) = pipeline.backbone_plan_runs()
 
         approval_mode_map = {
             "always": ApprovalMode.ALWAYS,

@@ -260,6 +260,12 @@ mcp = "aragora.mcp.harness_registration:register_harness_impl_mcp_config"
 [project.entry-points."aragora.debate_workflow_backends"]
 workflow = "aragora.workflow.debate_registration:register_debate_workflow_backend"
 
+# Run by aragora/debate/pipeline_backends.py on the first decision pipeline lookup that
+# finds no backend, so the debate engine builds, stores and executes decision plans
+# without importing aragora.pipeline.
+[project.entry-points."aragora.debate_pipeline_backends"]
+pipeline = "aragora.pipeline.debate_registration:register_debate_pipeline_backend"
+
 # Run by aragora/notifications/email_senders.py on the first email sender a lower package
 # builds from an email config, so aragora.services sends invoices without importing
 # aragora.integrations.

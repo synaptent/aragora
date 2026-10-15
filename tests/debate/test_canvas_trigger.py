@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from aragora.debate.pipeline_backends import pipeline_backend
 from aragora.debate.post_debate_coordinator import (
     PostDebateConfig,
     PostDebateCoordinator,
@@ -107,6 +108,8 @@ class TestCanvasTriggerStep:
     def test_trigger_canvas_graceful_on_import_error(self):
         config = PostDebateConfig(auto_trigger_canvas=True)
         coordinator = PostDebateCoordinator(config=config)
+        # The declared registrations run once per process; register before hiding a module.
+        pipeline_backend()
 
         with patch.dict("sys.modules", {"aragora.pipeline.idea_to_execution": None}):
             result = coordinator._step_trigger_canvas("d1", MagicMock(), "test")

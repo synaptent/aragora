@@ -43,6 +43,7 @@ from aragora.debate.phases.feedback_knowledge import KnowledgeFeedback
 from aragora.debate.phases.feedback_memory import MemoryFeedback
 from aragora.debate.phases.feedback_persona import PersonaFeedback
 from aragora.debate.phases.training_emitter import TrainingEmitter
+from aragora.debate.pipeline_backends import pipeline_backend
 from aragora.debate.workflow_backends import WorkflowBackendNotRegisteredError, workflow_backend
 from aragora.protocols import (
     BroadcastPipelineProtocol,
@@ -811,7 +812,7 @@ class FeedbackPhase:
             return
 
         try:
-            from aragora.pipeline.pr_generator import DecisionMemo
+            DecisionMemo = pipeline_backend().decision_memo()
 
             debate_id = getattr(result, "id", None) or getattr(ctx, "debate_id", "unknown")
             task = getattr(ctx.env, "task", "") if ctx.env else ""
