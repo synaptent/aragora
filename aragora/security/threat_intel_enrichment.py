@@ -253,14 +253,14 @@ class ThreatIntelEnrichment:
             return None
 
     def _create_cve_client(self) -> CVEClient | None:
-        """Create a CVEClient if dependencies available."""
-        try:
-            from aragora.analysis.codebase.cve_client import CVEClient
+        """Create a CVEClient through the registered factory if one is available."""
+        from aragora.security.cve_clients import CVEClientNotRegisteredError, create_cve_client
 
-            client = CVEClient()
+        try:
+            client = create_cve_client()
             logger.debug("[threat_intel] Created CVEClient")
             return client
-        except ImportError:
+        except (ImportError, CVEClientNotRegisteredError):
             logger.debug("[threat_intel] CVEClient not available")
             return None
         except (ValueError, TypeError, OSError) as e:

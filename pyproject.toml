@@ -268,7 +268,8 @@ pipeline = "aragora.pipeline.debate_registration:register_debate_pipeline_backen
 
 # Run by aragora/debate/nomic_backends.py on the first nomic loop lookup that finds no
 # backend, so the debate engine tracks debate beads and GUPP hooks, applies the nomic debate
-# profile and feeds outcomes back to the nomic loop without importing aragora.nomic.
+# profile, feeds outcomes back to the nomic loop and weighs nomic regressions in team
+# selection without importing aragora.nomic.
 [project.entry-points."aragora.debate_nomic_backends"]
 nomic = "aragora.nomic.debate_registration:register_debate_nomic_backend"
 
@@ -289,6 +290,12 @@ modes = "aragora.cli.mode_prompt_registration:register_mode_prompts"
 # medical, accounting, tax and SEC connectors without importing aragora.connectors.
 [project.entry-points."aragora.connector_factories"]
 connectors = "aragora.connectors.factory_registration:register_evidence_connectors"
+
+# Run by aragora/security/cve_clients.py on the first CVE client that threat intelligence
+# enrichment builds, so security debates look up CVEs in the NVD, OSV and GitHub advisory
+# databases without aragora.security importing aragora.analysis.
+[project.entry-points."aragora.security_cve_clients"]
+analysis = "aragora.analysis.codebase.cve_registration:register_security_cve_client"
 
 # -----------------------------------------------------------------------------
 # uv resolver constraints — security floors for the pip-audit security gate

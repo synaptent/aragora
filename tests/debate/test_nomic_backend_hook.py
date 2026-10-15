@@ -25,20 +25,12 @@ from aragora.debate.post_debate_config import PostDebateConfig
 from aragora.debate.post_debate_coordinator import PostDebateCoordinator
 from aragora.debate.protocol_resolver import resolve_default_protocol
 from aragora.debate.service import DebateOptions
+from aragora.debate.team_selector import TeamSelectionConfig, TeamSelector
 from aragora.protocols.debate import DebateProtocol
 from aragora.utils.declared_registrations import DeclaredRegistrations
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 NOMIC_REGISTRATION = ("nomic", "aragora.nomic.debate_registration:register_debate_nomic_backend")
-FLIPPED_MODULES = (
-    "aragora/debate/codebase_context.py",
-    "aragora/debate/execution_bridge.py",
-    "aragora/debate/orchestrator_hooks.py",
-    "aragora/debate/phases/feedback_phase.py",
-    "aragora/debate/post_debate_coordinator.py",
-    "aragora/debate/protocol_resolver.py",
-    "aragora/debate/service.py",
-)
 
 
 class FakeBead:
@@ -127,7 +119,11 @@ class FakeProfile:
 
 
 class FakeOutcomeTracker:
-    pass
+    regressions: list[dict] = []
+
+    @classmethod
+    def get_regression_history(cls, limit=10):
+        return cls.regressions[:limit]
 
 
 class RecordingBackend:
@@ -162,6 +158,9 @@ def isolated_hook(monkeypatch, tmp_path):
     FakeBead.created = []
     FakeBridge.calls = []
     FakeHookQueueRegistry.recovered = {}
+    FakeOutcomeTracker.regressions = [
+        {"cycle_id": "c1", "recommendation": "a1 caused a consensus regression"}
+    ]
     return hook
 
 
@@ -299,6 +298,18 @@ def test_the_feedback_and_profile_sites_use_the_backend(isolated_hook, monkeypat
     assert (options.rounds, options.consensus) == (7, "supermajority")
 
 
+def test_without_a_backend_the_team_selector_applies_no_regression_penalty(isolated_hook):
+    selector = TeamSelector(config=TeamSelectionConfig())
+    assert selector._compute_regression_penalty(SimpleNamespace(name="a1")) == 0.0
+
+
+def test_the_team_selector_reads_regressions_from_the_backend(isolated_hook):
+    hook.register_nomic_backend(RecordingBackend())
+    selector = TeamSelector(config=TeamSelectionConfig())
+    assert selector._compute_regression_penalty(SimpleNamespace(name="a1")) == pytest.approx(-0.1)
+    assert selector._compute_regression_penalty(SimpleNamespace(name="b2")) == 0.0
+
+
 def test_a_lookup_miss_runs_the_declared_registrations_once(isolated_hook, monkeypatch):
     calls = []
 
@@ -402,12 +413,11 @@ def _runtime_imports(tree):
             yield node.lineno, node.module
 
 
-@pytest.mark.parametrize("relative_path", FLIPPED_MODULES)
-def test_flipped_modules_hold_no_runtime_import_of_nomic(relative_path):
-    tree = ast.parse((REPO_ROOT / relative_path).read_text(encoding="utf-8"))
+def test_debate_holds_no_runtime_import_of_nomic():
     offenders = [
-        f"{relative_path}:{line}: {name}"
-        for line, name in _runtime_imports(tree)
+        f"{path.relative_to(REPO_ROOT)}:{line}: {name}"
+        for path in sorted((REPO_ROOT / "aragora" / "debate").rglob("*.py"))
+        for line, name in _runtime_imports(ast.parse(path.read_text(encoding="utf-8")))
         if name == "aragora.nomic" or name.startswith("aragora.nomic.")
     ]
     assert offenders == []
