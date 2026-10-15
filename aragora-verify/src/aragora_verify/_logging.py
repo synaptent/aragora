@@ -368,15 +368,20 @@ def _redact_item(key: Any, value: Any, active: frozenset[int]) -> tuple[Any, Any
 def _redact_fields(obj: tuple[Any, ...], active: frozenset[int]) -> tuple[Any, ...]:
     # A constructor may change what it is given, so none runs. A class with its own __new__ must
     # declare _fields, and a probe of sentinels must read and print each name at its own slot.
+    # Iteration or indexing that a class replaces can reorder the slots, so it is never called:
+    # slots are read through tuple, and such a class is masked whole.
+    values = list(tuple.__iter__(obj))
     with contextlib.suppress(Exception):
-        cls, marks = type(obj), [object() for _ in obj]
+        cls, marks = type(obj), [object() for _ in values]
+        below = cls.__mro__[: cls.__mro__.index(tuple)]
         owner = vars(next(c for c in cls.__mro__ if "_fields" in vars(c) or "__new__" in vars(c)))
         names, probe = list(owner["_fields"]), tuple.__new__(cls, marks)
         shown = ", ".join(f"{n}={m!r}" for n, m in zip(names, marks, strict=True))
-        if repr(probe) == f"{cls.__name__}({shown})":
+        reorders = any("__iter__" in vars(c) or "__getitem__" in vars(c) for c in below)
+        if not reorders and repr(probe) == f"{cls.__name__}({shown})":
             if all(getattr(probe, n) is m for n, m in zip(names, marks)):
-                return tuple.__new__(cls, [_redact_item(*p, active)[1] for p in zip(names, obj)])
-    return (_REDACTED,) * len(obj)
+                return tuple.__new__(cls, [_redact_item(*p, active)[1] for p in zip(names, values)])
+    return (_REDACTED,) * len(values)
 
 
 def _redact(obj: Any, active: frozenset[int]) -> Any:

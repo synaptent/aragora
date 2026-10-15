@@ -1836,6 +1836,11 @@ _same = lambda bases, attrs: (type("Odd", bases, attrs)._make(["LEAK-R4"] * 2), 
 _moved = [{"_fields": f} for f in [("user", "password"), ("user", "user"), ("user", 0), ("user",)]]
 _moved += [_swap := {"user": _Pair.password, "password": _Pair.user}, _swap | _moved[0]]
 _PAIRS += [_same(*a) for m in _moved for a in [((_Pair,), m), ((tuple,), vars(_Pair) | m)]]
+_iter = lambda self: _CALLS.append(0) or iter((self.user, self.password))
+_item = lambda self, i: _CALLS.append(0) or tuple.__getitem__(self, ~i)
+_PAIRS += [_odd(__iter__=_iter), _odd(__getitem__=_item), _odd(__iter__=_iter, __getitem__=_item)]
+_mid = type("Mid", (_Pair,), {"__iter__": _iter, "__getitem__": _item})
+_PAIRS += [(type("Leaf", (_mid,), {})._make(["LEAK-R5", "bob"]), "('***', '***')")]
 
 
 @pytest.mark.parametrize("text_format", _LEAKS)
