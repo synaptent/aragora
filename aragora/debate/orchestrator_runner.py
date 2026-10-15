@@ -35,7 +35,7 @@ from aragora.events.debate_completion import (
 )
 from aragora.logging_config import LogContext, get_logger as get_structured_logger
 from aragora.observability.tracing import add_span_attributes
-from aragora.pipeline.execution_mode import ExecutionMode as SafetyMode
+from aragora.types.execution_mode import ExecutionMode as SafetyMode
 from aragora.observability.metrics.debate_slo import (
     record_debate_completion_slo,
     update_debate_success_rate,
@@ -2039,9 +2039,8 @@ async def _auto_execute_plan(
             evaluate_auto_execution_safety,
         )
         from aragora.pipeline.decision_plan import DecisionPlanFactory
-        from aragora.pipeline.decision_plan.core import ApprovalMode
         from aragora.pipeline.executor import PlanExecutor, get_plan, store_plan
-        from aragora.pipeline.risk_register import RiskLevel
+        from aragora.types.decision_plans import ApprovalMode, RiskLevel
         from aragora.pipeline.decision_integrity_utils import (
             ensure_decision_plan_backbone_run,
             execute_decision_plan_with_backbone,

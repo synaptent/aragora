@@ -1202,11 +1202,9 @@ class HookHandlerRegistry:
                     return
 
                 # Import plan factory
-                from aragora.pipeline.decision_plan import (
-                    ApprovalMode,
-                    DecisionPlanFactory,
-                )
+                from aragora.pipeline.decision_plan import DecisionPlanFactory
                 from aragora.pipeline.executor import store_plan
+                from aragora.types.decision_plans import ApprovalMode
                 from aragora.server.decision_integrity_utils import (
                     ensure_decision_plan_backbone_run,
                     sync_decision_plan_backbone_receipt,
