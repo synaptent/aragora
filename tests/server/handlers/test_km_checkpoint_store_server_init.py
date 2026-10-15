@@ -65,7 +65,7 @@ def _user(role: str, *, authenticated: bool = True) -> _RoleSetUser:
 def server_mound(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[KnowledgeMound]:
     monkeypatch.setenv("ARAGORA_DATA_DIR", str(tmp_path / "data"))
     reset_km_checkpoint_store()
-    mound = KnowledgeMound(
+    mound = KnowledgeMound(  # type: ignore[abstract]
         config=MoundConfig(
             backend=MoundBackend.SQLITE,
             sqlite_path=str(tmp_path / "mound.db"),
