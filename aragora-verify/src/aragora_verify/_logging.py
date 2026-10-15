@@ -366,12 +366,16 @@ def _redact_item(key: Any, value: Any, active: frozenset[int]) -> tuple[Any, Any
 
 
 def _redact_fields(obj: tuple[Any, ...], active: frozenset[int]) -> tuple[Any, ...]:
-    # Fields are masked by name only if each name reads back its item and the type rebuilds them.
+    # A constructor may change what it is given, so none runs. A class with its own __new__ must
+    # declare _fields, and a probe of sentinels must read and print each name at its own slot.
     with contextlib.suppress(Exception):
-        pairs = list(zip(getattr(type(obj), "_fields"), obj, strict=True))
-        items = [_redact_item(name, value, active)[1] for name, value in pairs]
-        if all(getattr(obj, n) is v for n, v in pairs) and list(new := type(obj)(*items)) == items:
-            return new
+        cls, marks = type(obj), [object() for _ in obj]
+        owner = vars(next(c for c in cls.__mro__ if "_fields" in vars(c) or "__new__" in vars(c)))
+        names, probe = list(owner["_fields"]), tuple.__new__(cls, marks)
+        shown = ", ".join(f"{n}={m!r}" for n, m in zip(names, marks, strict=True))
+        if repr(probe) == f"{cls.__name__}({shown})":
+            if all(getattr(probe, n) is m for n, m in zip(names, marks)):
+                return tuple.__new__(cls, [_redact_item(*p, active)[1] for p in zip(names, obj)])
     return (_REDACTED,) * len(obj)
 
 

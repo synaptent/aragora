@@ -13,6 +13,7 @@ import time
 from collections import OrderedDict, namedtuple
 from datetime import datetime
 from types import SimpleNamespace
+from typing import NamedTuple
 
 import pytest
 
@@ -1826,6 +1827,15 @@ _PAIRS += [(namedtuple("Credentials", "password")("LEAK-R3"), "Credentials(passw
 _odd = lambda **attrs: (type("Odd", (_Pair,), attrs)._make(["LEAK-R3", "bob"]), "('***', '***')")
 _PAIRS += [_odd(_fields=f) for f in [(0, 1), ("password",), ("user", "password")]]
 _PAIRS += [_odd(__new__=f) for f in [lambda cls: cls, lambda *_: 1 / 0, lambda *_: _PAIRS[0][0]]]
+_PAIRS += [(NamedTuple("Key", [("token", str), ("n", int)])("LEAK-R4", 7), "Key(token='***', n=7)")]
+_CALLS, _env = [], lambda **attrs: type("Env", (namedtuple("Envelope", "options"),), attrs)({})
+_set = lambda _, options: _CALLS.append(options.update(password="LEAK-R4"))
+_PAIRS += [(_env(__new__=lambda c, o: _set(c, o) or tuple.__new__(c, [o])), "('***',)")]
+_PAIRS += [(_env(__init__=_set), "Env(options={'password': '***'})")]
+_same = lambda bases, attrs: (type("Odd", bases, attrs)._make(["LEAK-R4"] * 2), "('***', '***')")
+_moved = [{"_fields": f} for f in [("user", "password"), ("user", "user"), ("user", 0), ("user",)]]
+_moved += [_swap := {"user": _Pair.password, "password": _Pair.user}, _swap | _moved[0]]
+_PAIRS += [_same(*a) for m in _moved for a in [((_Pair,), m), ((tuple,), vars(_Pair) | m)]]
 
 
 @pytest.mark.parametrize("text_format", _LEAKS)
@@ -1846,6 +1856,13 @@ def test_namedtuple_fields_are_masked_by_name_or_the_tuple_is_masked_whole(pair,
     assert (repr(redact(pair)), repr(redact(nested)), nested) == (shown, inner, {"items": [pair]})
     line = JsonFormatter().format(record)
     assert json.loads(line)["pair"] == json.loads(line)["nested"]["items"][0] == list(redact(pair))
+
+
+@pytest.mark.parametrize("pair", [pair for pair, _ in _PAIRS])
+def test_redacting_a_namedtuple_never_runs_its_constructor_or_changes_it(pair):
+    before, record = (repr(pair), len(_CALLS)), logging.makeLogRecord({"pair": pair})
+    line = JsonFormatter().format(record) + TextFormatter("%(pair)s").format(record)
+    assert ("LEAK" in line + repr(redact(pair)), repr(pair), len(_CALLS)) == (False, *before)
 
 
 @pytest.mark.parametrize("field, shown", [("context", "{'api_key': '***'}"), ("api_token", "***")])
