@@ -224,6 +224,10 @@ def job_queue_health_status(handler: Any) -> HandlerResult:
 
     # Get queue stats from job store
     try:
+        # Imported first so the name is bound before the store can raise; an
+        # ImportError here is matched by the ImportError clause before the
+        # DistributedStateError clause is evaluated.
+        from aragora.storage.production_guards import DistributedStateError
         from aragora.storage.job_queue_store import get_job_store
 
         store = get_job_store()
@@ -264,6 +268,11 @@ def job_queue_health_status(handler: Any) -> HandlerResult:
     except (RuntimeError, ValueError, TypeError, KeyError, AttributeError) as e:
         logger.warning("Queue status error: %s: %s", type(e).__name__, e)
         errors.append("Queue status error")
+    except DistributedStateError as e:
+        # The guard's message names the store and its env overrides; keep it in
+        # the server log and report only the type.
+        logger.warning("Queue store refused by distributed-state guard: %s", e)
+        errors.append(f"Queue status error: {type(e).__name__}")
 
     # Calculate thresholds and warnings
     pending_count = queue_stats.get("pending", 0)
