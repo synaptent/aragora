@@ -450,9 +450,31 @@ async def test_receipt_delivery_builds_the_slack_connector_through_the_hook(buil
     result = await create_receipt_delivery_hook(org_id="org")._send_to_slack(RECEIPT, "C1", "T1")
     assert (result.success, result.message_id) == (True, "1.2")
     assert [(k, kw) for k, kw, _ in built] == [
-        ("slack_chat", {"token": "token", "signing_secret": ""})
+        ("slack_chat", {"bot_token": "token", "signing_secret": ""})
     ]
     assert built[0][2].sent[0]["channel_id"] == "C1"
+
+
+@pytest.mark.asyncio
+async def test_receipt_delivery_sends_through_slack_with_the_workspace_bot_token(
+    isolated_hook, chat_workspaces, monkeypatch
+):
+    from aragora.connectors.chat.slack import SlackConnector
+    from aragora.connectors.factory_registration import register_evidence_connectors
+
+    monkeypatch.delenv("SLACK_BOT_TOKEN", raising=False)
+    senders = []
+
+    async def send_message(self, **kwargs):
+        senders.append(self)
+        return SimpleNamespace(timestamp="1.2")
+
+    monkeypatch.setattr(SlackConnector, "send_message", send_message)
+    register_evidence_connectors()
+    result = await create_receipt_delivery_hook(org_id="org")._send_to_slack(RECEIPT, "C1", "T1")
+    assert result.success is True
+    assert [type(s) for s in senders] == [SlackConnector]
+    assert senders[0].bot_token == "token"
 
 
 @pytest.mark.asyncio

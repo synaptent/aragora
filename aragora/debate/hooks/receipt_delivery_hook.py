@@ -343,7 +343,7 @@ class ReceiptDeliveryHook:
 
             connector = create_connector(
                 "slack_chat",
-                token=workspace.access_token,
+                bot_token=workspace.access_token,
                 signing_secret=workspace.signing_secret or "",
             )
 
