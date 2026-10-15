@@ -27,9 +27,9 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any
+from typing import Any, Protocol, TypeGuard
 
-from aragora.exceptions import ConnectorError, ConnectorRateLimitError
+from aragora.exceptions import AragoraError
 from aragora.workflow.step import BaseStep, WorkflowContext
 
 logger = logging.getLogger(__name__)
@@ -37,11 +37,23 @@ logger = logging.getLogger(__name__)
 _DEFAULT_RETRY_DELAY = 5.0
 
 
-def _retry_delay(error: ConnectorError) -> float:
-    """Seconds to wait before retrying after ``error``: its ``retry_after`` when set."""
-    if error.retry_after:
-        return error.retry_after
-    return 60.0 if isinstance(error, ConnectorRateLimitError) else _DEFAULT_RETRY_DELAY
+class _ConnectorErrorLike(Protocol):
+    is_retryable: bool
+    retry_after: float | None
+
+
+def _is_connector_error(error: BaseException) -> TypeGuard[_ConnectorErrorLike]:
+    # Matched by its retry attributes, not by class: aragora.exceptions only re-exports
+    # ConnectorError when it is imported before aragora.connectors.
+    return hasattr(error, "is_retryable") and hasattr(error, "retry_after")
+
+
+def _retry_delay(error: _ConnectorErrorLike) -> float:
+    """Seconds to wait before retrying after ``error``: its ``retry_after`` when set.
+
+    Rate-limit errors always carry one (60 seconds unless the provider names another).
+    """
+    return error.retry_after or _DEFAULT_RETRY_DELAY
 
 
 class ConnectorOperation(str, Enum):
@@ -424,8 +436,10 @@ class ConnectorStep(BaseStep):
                 logger.warning("[ConnectorStep] %s: Timeout, retrying in %ss...", self._name, delay)
                 await asyncio.sleep(delay)
 
-            except ConnectorError as e:
+            except AragoraError as e:
                 last_error = e
+                if not _is_connector_error(e):
+                    raise
                 if not retry_on_error or not e.is_retryable or attempt >= max_retries:
                     raise
                 delay = _retry_delay(e)

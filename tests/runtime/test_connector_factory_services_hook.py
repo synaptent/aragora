@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from aragora.exceptions import ConnectorError, ConnectorRateLimitError
+from aragora.connectors.exceptions import ConnectorError, ConnectorRateLimitError
 from aragora.runtime import connector_factory as hook
 from aragora.services.cross_channel_context import create_context_service
 from aragora.services.email_actions import EmailActionsService
@@ -329,6 +329,31 @@ def test_a_services_only_process_builds_the_gmail_connector():
         "print(type(create_connector('gmail')).__name__)\n"
     )
     assert _run(script).split()[-1] == "GmailConnector"
+
+
+def test_the_connector_step_retries_when_the_connectors_package_loads_first():
+    # Importing aragora.connectors first leaves aragora.exceptions without its connector
+    # re-exports, so the step must not depend on them.
+    script = (
+        "import asyncio\n"
+        "from unittest.mock import AsyncMock, MagicMock\n"
+        "import aragora.connectors.exceptions as errors\n"
+        "from aragora.workflow.nodes import connector as node\n"
+        "from aragora.workflow.step import WorkflowContext\n"
+        "sleeps = []\n"
+        "async def fake_sleep(delay):\n"
+        "    sleeps.append(delay)\n"
+        "asyncio.sleep = fake_sleep\n"
+        "connector = MagicMock()\n"
+        "connector.search = AsyncMock(side_effect=[errors.ConnectorRateLimitError('slow'),\n"
+        "    errors.ConnectorError('busy', is_retryable=True, retry_after=2.5), ['ok']])\n"
+        "node.create_connector = AsyncMock(return_value=connector)\n"
+        "step = node.ConnectorStep(name='retry', config={'connector_type': 'github',\n"
+        "    'operation': 'search', 'credentials': {}})\n"
+        "ctx = WorkflowContext(workflow_id='wf', definition_id='def', inputs={}, state={})\n"
+        "print(asyncio.run(step.execute(ctx)), sleeps)\n"
+    )
+    assert _run(script).splitlines()[-1] == "['ok'] [60.0, 2.5]"
 
 
 def test_a_workflow_only_process_builds_the_playwright_connector():
