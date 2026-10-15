@@ -38,10 +38,15 @@ Flow (every uv call runs with UV_EXCLUDE_NEWER unset):
   D. compare the final lock with the ORIGINAL lock in PEP 440 order (python3).
      The cutoff also filters versions the original lock already pins, so a
      package released less than 7 days ago (for example a transitive security
-     bump from a manual security relock) would roll back. Every package of the
-     original lock whose version would go down is printed as
-     `downgraded: <name> <original> -> <cooled>`, the original uv.lock is
-     restored and the script exits 5: a downgraded lock is never kept
+     bump from a manual security relock) would roll back. Each [[package]]
+     entry of the original lock is compared with the final entry of the same
+     name and the same resolution-markers (its marker fork). A package whose
+     set of forks changed (forks added, removed, merged or re-partitioned)
+     passes only if every final version is >= every original version. Every
+     package that would go down is printed as
+     `downgraded: <name> <original> -> <cooled>` (a forked package lists its
+     versions fork by fork), the original uv.lock is restored and the script
+     exits 5: a downgraded lock is never kept
   E. compare the package versions of the two temp copies; any package whose
      version differs was held back by the cooldown and is printed as
      `held back: <name> <plain> -> <cooled>`
@@ -65,7 +70,8 @@ Exit codes:
   4  no resolution satisfies the cooldown; the original uv.lock is restored
      byte-for-byte and nothing is relocked without the cooldown
   5  the cooled-down resolution would give a package of the original lock a
-     lower version (each listed on stdout as
+     lower version in any marker fork, or re-partition its forks with a
+     version below an original one (each listed on stdout as
      `downgraded: <name> <original> -> <cooled>`); the original uv.lock is
      restored byte-for-byte
   1  pyproject.toml missing, a uv step failed, the final lock drifted from the
@@ -153,8 +159,7 @@ on_exit() {
             echo "error: step failed (exit ${rc}); original uv.lock restored" >&2
         fi
     fi
-    rm -f "${TMP}/original.lock" "${TMP}/plain.lock" "${TMP}/cooled.lock" "${TMP}/cooled.err" \
-        "${TMP}/original.versions" "${TMP}/final.versions"
+    rm -f "${TMP}/original.lock" "${TMP}/plain.lock" "${TMP}/cooled.lock" "${TMP}/cooled.err"
     rmdir "${TMP}" 2>/dev/null || true
     # A failing uv step may itself exit 2, which must not read as "held back";
     # only the explicit no-solution and downgrade branches set FAIL_RC (4, 5).
@@ -175,10 +180,13 @@ package_versions() {
     ' "$1" | sort
 }
 
-# Reads two package_versions listings (original, final) and prints
+# Reads two locks (original, final) and prints
 # "downgraded: <name> <original> -> <final>" for each package of the original
-# whose lowest or highest version went down in PEP 440 order (a forked name has
-# several versions). A changed version it cannot parse fails the run.
+# that the final lock lowers in PEP 440 order. Entries are matched on name and
+# resolution-markers, so every marker fork is checked, not only the lowest and
+# highest versions. When the set of forks differs (or a fork is ambiguous),
+# every final version must be >= every original version. A changed version it
+# cannot parse fails the run.
 find_downgrades() {
     python3 -I - "$1" "$2" <<'PY'
 import re
@@ -221,25 +229,82 @@ def key(version):
     return (int(epoch or 0), tuple(parts), pre, post, dev, loc)
 
 
-def read(path):
-    versions = {}
+STRING = re.compile(r'"(?:[^"\\]|\\.)*"')
+FIELD = re.compile(r"^(name|version|resolution-markers) = (.*)$")
+
+
+def blocks(path):
+    """Yield the name, version and resolution-markers of each [[package]] block."""
     with open(path, encoding="utf-8") as handle:
-        for line in handle:
-            name, _, version = line.strip().partition(" ")
-            if name and version:
-                versions.setdefault(name, []).append(version)
-    return versions
+        lines = iter(handle.read().splitlines())
+    entry = None
+    for line in lines:
+        if line.startswith("["):
+            if entry is not None:
+                yield entry
+            entry = {} if line.rstrip() == "[[package]]" else None
+            continue
+        match = FIELD.match(line)
+        if entry is None or match is None:
+            continue
+        field, value = match.groups()
+        if field != "resolution-markers":
+            entry[field] = value.strip().strip('"')
+            continue
+        # uv writes this array over several lines.
+        while STRING.sub("", value).count("[") > STRING.sub("", value).count("]"):
+            more = next(lines, None)
+            if more is None:
+                sys.exit(f"error: unterminated resolution-markers in {path} for the downgrade check")
+            value += more
+        entry["markers"] = STRING.findall(value)
+    if entry is not None:
+        yield entry
+
+
+def read(path):
+    """Map each package name to its (fork, version) entries; fork is the sorted
+    tuple of the entry's resolution-markers (empty when it does not fork)."""
+    packages = {}
+    for entry in blocks(path):
+        if entry.get("name") and entry.get("version"):
+            fork = tuple(sorted(entry.get("markers", ())))
+            packages.setdefault(entry["name"], []).append((fork, entry["version"]))
+    return packages
+
+
+def listing(entries):
+    return ",".join(version for _, version in entries)
 
 
 original = read(sys.argv[1])
 final = read(sys.argv[2])
 for name in sorted(original):
-    if name not in final or sorted(original[name]) == sorted(final[name]):
+    if name not in final:
         continue
-    old = sorted(original[name], key=key)
-    new = sorted(final[name], key=key)
-    if key(new[0]) < key(old[0]) or key(new[-1]) < key(old[-1]):
-        print(f"downgraded: {name} {','.join(old)} -> {','.join(new)}")
+    old = sorted(original[name])
+    new = sorted(final[name])
+    if old == new:
+        continue
+    old_forks = [fork for fork, _ in old]
+    new_forks = [fork for fork, _ in new]
+    if old_forks == new_forks and len(set(old_forks)) == len(old_forks):
+        # Same forks, one entry each: compare fork by fork.
+        lowered = [key(n) < key(o) for (_, o), (_, n) in zip(old, new) if o != n]
+        downgraded = any(lowered)
+    else:
+        # Forks added, removed, merged, re-partitioned or ambiguous.
+        downgraded = min(key(v) for _, v in new) < max(key(v) for _, v in old)
+        old = sorted(old, key=lambda item: key(item[1]))
+        new = sorted(new, key=lambda item: key(item[1]))
+        if downgraded and set(old_forks) != set(new_forks):
+            print(
+                f"note: {name} forks on other markers than in the original uv.lock; "
+                "it passes only if every cooled version is >= every original version",
+                file=sys.stderr,
+            )
+    if downgraded:
+        print(f"downgraded: {name} {listing(old)} -> {listing(new)}")
 PY
 }
 
@@ -275,9 +340,7 @@ fi
 
 # Step D: no package of the original lock may end up at a lower version.
 if [[ "${HAD_LOCK}" -eq 1 ]]; then
-    package_versions "${TMP}/original.lock" >"${TMP}/original.versions"
-    package_versions uv.lock >"${TMP}/final.versions"
-    DOWNGRADED="$(find_downgrades "${TMP}/original.versions" "${TMP}/final.versions")"
+    DOWNGRADED="$(find_downgrades "${TMP}/original.lock" uv.lock)"
     if [[ -n "${DOWNGRADED}" ]]; then
         restore_original
         FAIL_RC=5

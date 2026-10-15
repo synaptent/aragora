@@ -148,7 +148,7 @@ tool's **stdout**; run it from `--cwd` so reported paths stay relative.
 | `ruff` | `ruff check <paths> [--select ...] --output-format concise` | symbol = line-content hash; rule = ruff code (`F401`, `N806`) | `0` / `1` (`2` = invalid configuration or options, internal error) |
 | `vulture` | `vulture <paths> [--min-confidence N]` (text: `path:line: unused <kind> '<name>' (NN% confidence)`) | symbol = the reported name; rule = `unused-<kind>` (`unused-import`, `unused-function`, …); unnamed findings such as `unreachable code` hash the message | `0` / `3` (vulture exits `3` when it reports dead code; `1` = invalid input, `2` = invalid arguments) |
 | `deptry` | `deptry <root> --json-output /dev/stdout` (the human report goes to stderr) | symbol = module name; rule = `DEP001`..`DEP004`; `pyproject.toml` findings have no line | `0` / `1` (`2` = usage error) |
-| `jscpd` | `sh -c 'jscpd --reporters json --output DIR --silent . >/dev/null; cat DIR/jscpd-report.json'` — the `json` reporter only writes `DIR/jscpd-report.json`, never stdout, so the wired command must `cat` it; scan `.` from `--cwd` so `firstFile.name` is relative | path = `firstFile.name`; symbol = hash of the duplicated `fragment`; rule = `clone`. A third copy of the same fragment raises the count | `0` / `1` (`1` only when over `--threshold` or with `--exitCode 1`; by default clones exit `0`) |
+| `jscpd` | `sh -c 'jscpd --reporters json --output DIR --silent . >/dev/null; cat DIR/jscpd-report.json'` — the `json` reporter only writes `DIR/jscpd-report.json`, never stdout, so the wired command must `cat` it; scan `.` from `--cwd` so `firstFile.name` is relative | path = `firstFile.name`; symbol = hash of the duplicated `fragment`; rule = `clone`. A third copy of the same fragment raises the count | `0` / `1` (`1` only when over `--threshold` or with `--exit-code 1`; by default clones exit `0`) |
 | `mypy` | `mypy [--ignore-missing-imports] <paths>` (text output; `error`/`warning` lines, notes ignored) | symbol = line-content hash; rule = `[code]` (`arg-type`, `return-value`) | `0` / `1` (`2` = crash or fatal error) |
 | `eslint` | `eslint -f json <paths>` (`filePath` is absolute; the runner makes it relative to `--cwd`) | symbol = line-content hash; rule = `ruleId` (a fatal parse error with `ruleId: null` is `fatal`) | `0` / `1` (`2` = configuration problem or internal error) |
 | `golangci-lint` | `golangci-lint run --output.json.path stdout --show-stats=false ./...` (v2 JSON schema: `{"Issues":[{"FromLinter","Text","SourceLines","Pos":{"Filename","Line"}}],"Report":…}`; without `--show-stats=false` a text stats block follows the JSON on stdout and only the first JSON object is read) | symbol = line-content hash (taken from `SourceLines[0]`, or read from the file when absent); rule = `FromLinter` (`errcheck`, `revive`) | `0` / `1` (the default `--issues-exit-code`; `3` = failure, `4` = timeout, `5`+ other errors) |
@@ -290,15 +290,24 @@ Flow:
    verifies that the final `uv.lock` carries no `exclude-newer` and pins exactly
    the cooled-down versions.
 5. Compares the final lock with the **original** lock in PEP 440 order (with
-   `python3`; a forked package is compared on its lowest and highest
-   version). The cutoff also filters versions the original lock already pins,
+   `python3`). The cutoff also filters versions the original lock already pins,
    so a package released less than 7 days ago would roll back: typically a
    lock-only (transitive) security bump from a
    [manual security relock](#manual-security-relock), which nothing in
-   `pyproject.toml` protects. If any package of the original lock would get a
-   lower version, the script prints `downgraded: <name> <original> -> <cooled>`
-   for each, restores the original lock and exits `5`. A downgraded lock is
-   never kept.
+   `pyproject.toml` protects. The check works per marker fork: each
+   `[[package]]` entry of the original lock is compared with the final entry
+   of the same name and the same `resolution-markers`, so a package that forks
+   on markers (one version per Python range, for example) fails if any one
+   fork goes down, not only its lowest or highest version. When a package's
+   set of forks differs between the two locks (forks added, removed, merged
+   or re-partitioned onto other markers), it passes only if every final
+   version is `>=` every original version; a re-partitioned fork set can
+   therefore fail closed even when no single environment would get an older
+   release, and the script prints a `note:` naming the package. If any
+   package of the original lock would get a lower version, the script prints
+   `downgraded: <name> <original> -> <cooled>` for each (a forked package
+   lists its versions fork by fork), restores the original lock and exits
+   `5`. A downgraded lock is never kept.
 6. Compares package versions between the two resolutions and prints
    `held back: <name> <plain> -> <cooled>` for each difference.
 
@@ -306,11 +315,12 @@ Exit codes: `0` when the two resolutions agree (lock regenerated); `2` when
 packages were held back (listed and reported; `uv.lock` holds the verified
 cooled-down resolution); `3` when `uv` is not on `PATH` (nothing touched); `4`
 when no resolution satisfies the cooldown (no unrestricted fallback); `5` when
-the cooled-down resolution would downgrade a package of the original lock
-(listed as `downgraded:`); `1` on any other failure, including a final lock that
-drifted from the cooled-down resolution, a version the downgrade check cannot
-order, or bad usage. On `4`, `5` and `1` the original `uv.lock` is restored
-byte-for-byte. Temp copies live under `/tmp/aragora-readiness/`.
+the cooled-down resolution would downgrade a package of the original lock in
+any marker fork (listed as `downgraded:`); `1` on any other failure, including
+a final lock that drifted from the cooled-down resolution, a version the
+downgrade check cannot order, or bad usage. On `4`, `5` and `1` the original
+`uv.lock` is restored byte-for-byte. Temp copies live under
+`/tmp/aragora-readiness/`.
 
 #### Dependabot relock
 

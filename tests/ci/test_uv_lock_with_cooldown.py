@@ -15,8 +15,10 @@ import re
 import shutil
 import subprocess
 import sys
+from collections.abc import Sequence
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -38,8 +40,12 @@ NO_SOLUTION = (
 FETCH_FAILURE = "error: Failed to fetch: `https://pypi.org/simple/pkg/`\n"
 
 
-def render_lock(packages: list[tuple[str, str]], options: dict[str, object] | None = None) -> str:
-    """Render a minimal uv.lock; the fake ``uv`` embeds this exact function."""
+def render_lock(packages: Sequence[Sequence[Any]], options: dict[str, Any] | None = None) -> str:
+    """Render a minimal uv.lock; the fake ``uv`` embeds this exact function.
+
+    A package is ``(name, version)``, or ``(name, version, markers)`` for one
+    marker fork of a forked package (written as uv writes ``resolution-markers``).
+    """
     lines = ["version = 1", 'requires-python = ">=3.10"', ""]
     if options:
         lines += ["[options]", f'exclude-newer = "{options["exclude-newer"]}"', ""]
@@ -47,9 +53,25 @@ def render_lock(packages: list[tuple[str, str]], options: dict[str, object] | No
             lines.append("[options.exclude-newer-package]")
             lines += [f'{name} = "{stamp}"' for name, stamp in options["packages"]]
             lines.append("")
-    for name, version in packages:
-        lines += ["[[package]]", f'name = "{name}"', f'version = "{version}"', ""]
+    for name, version, *fork in packages:
+        lines += ["[[package]]", f'name = "{name}"', f'version = "{version}"']
+        if fork:
+            lines += ["resolution-markers = [", *[f'    "{m}",' for m in fork[0]], "]"]
+        lines.append("")
     return "\n".join(lines)
+
+
+def parse_lock(text: str) -> list[tuple[Any, ...]]:
+    """Read back the packages of a ``render_lock`` lock; the fake ``uv`` embeds this too."""
+    packages: list[tuple[Any, ...]] = []
+    for block in text.split("[[package]]\n")[1:]:
+        name = re.search(r'^name = "(.+)"$', block, re.MULTILINE)
+        version = re.search(r'^version = "(.+)"$', block, re.MULTILINE)
+        assert name and version, block
+        markers = re.findall(r'^    "(.+)",$', block, re.MULTILINE)
+        fork = (markers,) if "resolution-markers" in block else ()
+        packages.append((name.group(1), version.group(1), *fork))
+    return packages
 
 
 # Call kinds: "cooled" carries --exclude-newer; "finalize" is a plain call over
@@ -96,9 +118,9 @@ if kind == "cooled":
 elif kind == "plain":
     lock.write_text(render_lock(config["plain"]), encoding="utf-8")
 elif not config.get("keep_options"):
-    pinned = re.findall(r'^name = "(.+)"\nversion = "(.+)"$', existing, re.MULTILINE)
+    pinned = parse_lock(existing)
     if config.get("drift"):
-        pinned[0] = (pinned[0][0], pinned[0][1] + ".post1")
+        pinned[0] = (pinned[0][0], pinned[0][1] + ".post1", *pinned[0][2:])
     lock.write_text(render_lock(pinned), encoding="utf-8")
 """
 
@@ -106,7 +128,8 @@ elif not config.get("keep_options"):
 def write_fake_bin(bin_dir: Path) -> None:
     """Write the fake ``uv`` and a ``bash`` link to the selected bash into bin_dir."""
     bin_dir.mkdir(parents=True, exist_ok=True)
-    source = FAKE_UV.replace("__RENDER_LOCK__", inspect.getsource(render_lock))
+    embedded = inspect.getsource(render_lock) + "\n\n" + inspect.getsource(parse_lock)
+    source = FAKE_UV.replace("__RENDER_LOCK__", embedded)
     script = bin_dir / "fake_uv.py"
     script.write_text("from __future__ import annotations\n" + source, encoding="utf-8")
     uv = bin_dir / "uv"
@@ -136,7 +159,7 @@ def make_project(
     *,
     lock: bool = True,
     pyproject: bool = True,
-    lock_packages: list[tuple[str, str]] = ORIGINAL,
+    lock_packages: Sequence[Sequence[Any]] = ORIGINAL,
     dependencies: tuple[str, ...] = ("dep", "pkg"),
 ) -> Path:
     project = tmp_path / "project"
@@ -643,3 +666,207 @@ def test_help_documents_exit_5_for_downgrades(tmp_path: Path) -> None:
     assert re.search(r"^\s+5\s+\S", proc.stdout, re.MULTILINE)
     assert "downgraded: <name> <original> -> <cooled>" in proc.stdout
     assert calls == []
+
+
+# Marker forks of the lock-only package `sub`, as uv writes them when the
+# resolution forks on the Python version.
+PY_LT_311 = "python_full_version < '3.11'"
+PY_311 = "python_full_version == '3.11.*'"
+PY_GE_311 = "python_full_version >= '3.11'"
+PY_LT_312 = "python_full_version < '3.12'"
+PY_GE_312 = "python_full_version >= '3.12'"
+THREE_FORKS = [
+    ("dep", "3.1"),
+    ("sub", "1.0", [PY_LT_311]),
+    ("sub", "2.0.2", [PY_311]),
+    ("sub", "3.0", [PY_GE_312]),
+]
+MIDDLE_FORK_LOWERED = [
+    ("dep", "3.1"),
+    ("sub", "1.0", [PY_LT_311]),
+    ("sub", "2.0.1", [PY_311]),
+    ("sub", "3.0", [PY_GE_312]),
+]
+TWO_FORKS = [("dep", "3.1"), ("sub", "1.0", [PY_LT_311]), ("sub", "2.0", [PY_GE_311])]
+REPARTITION_NOTE = (
+    "note: sub forks on other markers than in the original uv.lock; "
+    "it passes only if every cooled version is >= every original version"
+)
+
+
+def run_fork_case(
+    tmp_path: Path,
+    before: Sequence[Sequence[Any]],
+    after: Sequence[Sequence[Any]],
+    *args: str,
+    plain: Sequence[Sequence[Any]] | None = None,
+) -> tuple[subprocess.CompletedProcess[str], list[dict[str, object]], bytes, Path]:
+    project = make_project(tmp_path, lock_packages=before, dependencies=("dep",))
+    original = (project / "uv.lock").read_bytes()
+    proc, calls = run_helper(
+        project, *args, scenario={"plain": after if plain is None else plain, "cooled": after}
+    )
+    return proc, calls, original, project
+
+
+def assert_fork_downgrade_refused(
+    proc: subprocess.CompletedProcess[str],
+    calls: list[dict[str, object]],
+    original: bytes,
+    project: Path,
+    line: str,
+) -> None:
+    assert proc.returncode == 5, (proc.stdout, proc.stderr)
+    assert downgraded_lines(proc.stdout) == [line]
+    assert "would downgrade 1 package(s) already in uv.lock" in proc.stderr
+    assert "original uv.lock restored" in proc.stderr
+    assert "held back" not in proc.stdout
+    assert (project / "uv.lock").read_bytes() == original
+    assert sorted(path.name for path in project.iterdir()) == ["pyproject.toml", "uv.lock"]
+    assert kinds(calls) == ["cooled", "plain", "finalize"]
+
+
+@pytest.mark.parametrize(
+    "plain_keeps_original", [False, True], ids=["plain-equals-cooled", "plain-keeps-original"]
+)
+def test_interior_fork_downgrade_exits_5_and_restores_the_original(
+    tmp_path: Path, plain_keeps_original: bool
+) -> None:
+    # Only the middle fork goes down; the lowest and highest versions stay equal.
+    proc, calls, original, project = run_fork_case(
+        tmp_path,
+        THREE_FORKS,
+        MIDDLE_FORK_LOWERED,
+        plain=THREE_FORKS if plain_keeps_original else None,
+    )
+
+    assert_fork_downgrade_refused(
+        proc, calls, original, project, "downgraded: sub 1.0,2.0.2,3.0 -> 1.0,2.0.1,3.0"
+    )
+
+
+def test_interior_fork_downgrade_exits_5_with_an_unrelated_allow_package(tmp_path: Path) -> None:
+    proc, calls, original, project = run_fork_case(
+        tmp_path,
+        THREE_FORKS,
+        MIDDLE_FORK_LOWERED,
+        "--allow-package",
+        "unrelated",
+        plain=THREE_FORKS,
+    )
+
+    assert "cooldown lifted for: unrelated" in proc.stdout.splitlines()
+    cooled_argv = calls[0]["argv"]
+    assert isinstance(cooled_argv, list)
+    assert cooled_argv[3] == "--exclude-newer-package"
+    assert cooled_argv[4].startswith("unrelated=")
+    assert_fork_downgrade_refused(
+        proc, calls, original, project, "downgraded: sub 1.0,2.0.2,3.0 -> 1.0,2.0.1,3.0"
+    )
+
+
+def test_versions_swapped_across_forks_exit_5(tmp_path: Path) -> None:
+    before = [("dep", "3.1"), ("sub", "1.0", [PY_LT_311]), ("sub", "3.0", [PY_GE_311])]
+    after = [("dep", "3.1"), ("sub", "3.0", [PY_LT_311]), ("sub", "1.0", [PY_GE_311])]
+
+    proc, calls, original, project = run_fork_case(tmp_path, before, after)
+
+    # Versions are listed fork by fork, so the swap stays visible.
+    assert_fork_downgrade_refused(
+        proc, calls, original, project, "downgraded: sub 1.0,3.0 -> 3.0,1.0"
+    )
+
+
+@pytest.mark.parametrize(
+    ("after", "line"),
+    [
+        (
+            [("dep", "3.1"), ("sub", "1.0", [PY_LT_312]), ("sub", "2.0", [PY_GE_312])],
+            "downgraded: sub 1.0,2.0 -> 1.0,2.0",
+        ),
+        (
+            [("dep", "3.1"), ("sub", "1.0", [PY_LT_312]), ("sub", "2.5", [PY_GE_312])],
+            "downgraded: sub 1.0,2.0 -> 1.0,2.5",
+        ),
+    ],
+    ids=["same-versions-on-new-markers", "higher-top-on-new-markers"],
+)
+def test_repartitioned_forks_with_a_lower_final_version_exit_5(
+    tmp_path: Path, after: list[tuple[Any, ...]], line: str
+) -> None:
+    # Python 3.11 moves from the 2.0 fork into the 1.0 fork.
+    proc, calls, original, project = run_fork_case(tmp_path, TWO_FORKS, after)
+
+    assert_fork_downgrade_refused(proc, calls, original, project, line)
+    assert REPARTITION_NOTE in proc.stderr.splitlines()
+
+
+@pytest.mark.parametrize(
+    "after",
+    [
+        [("dep", "3.1"), ("sub", "2.0", [PY_LT_312]), ("sub", "2.5", [PY_GE_312])],
+        [("dep", "3.1"), ("sub", "2.0")],
+        [
+            ("dep", "3.1"),
+            ("sub", "2.0", [PY_LT_311]),
+            ("sub", "2.1", [PY_311]),
+            ("sub", "3.0", [PY_GE_312]),
+        ],
+    ],
+    ids=["new-markers", "forks-merged", "fork-added"],
+)
+def test_repartitioned_forks_at_or_above_every_original_version_pass(
+    tmp_path: Path, after: list[tuple[Any, ...]]
+) -> None:
+    proc, _, _, project = run_fork_case(tmp_path, TWO_FORKS, after)
+
+    assert proc.returncode == 0, (proc.stdout, proc.stderr)
+    assert downgraded_lines(proc.stdout) == []
+    assert lock_text(project) == render_lock(after)
+
+
+@pytest.mark.parametrize(
+    ("after", "line"),
+    [
+        (
+            [("dep", "3.1"), ("sub", "1.0", [PY_LT_312]), ("sub", "3.0", [PY_GE_312])],
+            "downgraded: sub 1.0,2.0.2,3.0 -> 1.0,3.0",
+        ),
+        ([("dep", "3.1"), ("sub", "2.0.2")], "downgraded: sub 1.0,2.0.2,3.0 -> 2.0.2"),
+    ],
+    ids=["two-forks-into-the-lower", "all-forks-into-one"],
+)
+def test_forks_collapsing_to_a_lower_version_exit_5(
+    tmp_path: Path, after: list[tuple[Any, ...]], line: str
+) -> None:
+    proc, calls, original, project = run_fork_case(tmp_path, THREE_FORKS, after)
+
+    assert_fork_downgrade_refused(proc, calls, original, project, line)
+    assert REPARTITION_NOTE in proc.stderr.splitlines()
+
+
+def test_every_fork_raised_or_kept_passes(tmp_path: Path) -> None:
+    after = [
+        ("dep", "3.1"),
+        ("sub", "1.0", [PY_LT_311]),
+        ("sub", "2.0.3", [PY_311]),
+        ("sub", "3.1", [PY_GE_312]),
+    ]
+
+    proc, _, _, project = run_fork_case(tmp_path, THREE_FORKS, after)
+
+    assert proc.returncode == 0, (proc.stdout, proc.stderr)
+    assert downgraded_lines(proc.stdout) == []
+    assert lock_text(project) == render_lock(after)
+
+
+def test_unorderable_version_on_new_markers_fails_closed_with_exit_1(tmp_path: Path) -> None:
+    before = [("dep", "3.1"), ("sub", "1.0", [PY_LT_311]), ("sub", "not-a-version", [PY_GE_311])]
+    after = [("dep", "3.1"), ("sub", "1.0", [PY_LT_312]), ("sub", "not-a-version", [PY_GE_312])]
+
+    proc, _, original, project = run_fork_case(tmp_path, before, after)
+
+    assert proc.returncode == 1, (proc.stdout, proc.stderr)
+    assert "cannot order version" in proc.stderr
+    assert "original uv.lock restored" in proc.stderr
+    assert (project / "uv.lock").read_bytes() == original

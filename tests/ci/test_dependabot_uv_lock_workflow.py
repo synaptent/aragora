@@ -13,6 +13,7 @@ import os
 import re
 import shutil
 import subprocess
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -23,11 +24,13 @@ from tests.ci.test_uv_lock_with_cooldown import (
     COOLED,
     FETCH_FAILURE,
     HELPER,
+    MIDDLE_FORK_LOWERED,
     NO_SOLUTION,
     ORIGINAL,
     PLAIN,
     RFC3339_UTC,
     SYSTEM_PATH,
+    THREE_FORKS,
     clean_env,
     fake_uv_config,
     read_calls,
@@ -270,7 +273,7 @@ def make_checkout(
     tmp_path: Path,
     *,
     helper_on_main: bool = True,
-    lock_packages: list[tuple[str, str]] = ORIGINAL,
+    lock_packages: Sequence[Sequence[Any]] = ORIGINAL,
 ) -> Path:
     """A Dependabot branch checkout (fetch-depth 0) cut before the helper existed."""
     repo = tmp_path / "checkout"
@@ -474,6 +477,32 @@ def test_helper_exit_5_fails_the_step_and_never_stages_the_downgrade(tmp_path: P
     # No `changed=true` output: the commit step (the only `git add`) cannot run.
     assert result.output == ""
     assert result.lock == render_lock(recent)
+    assert result.status == ""
+    assert git(repo, "diff", "--cached", "--name-only") == ""
+    assert [call["kind"] for call in result.uv_calls] == ["cooled", "plain", "finalize"]
+
+
+def test_interior_fork_downgrade_fails_the_step_and_never_stages_it(tmp_path: Path) -> None:
+    # Only the middle marker fork of `sub` goes down (2.0.2 -> 2.0.1); its
+    # lowest and highest versions stay equal.
+    forks = [package for package in THREE_FORKS if package[0] == "sub"]
+    lowered = [package for package in MIDDLE_FORK_LOWERED if package[0] == "sub"]
+    repo = make_checkout(tmp_path, lock_packages=[*ORIGINAL, *forks])
+    committed = (repo / "uv.lock").read_bytes()
+
+    result = run_relock_step(tmp_path, repo, plain=[*PLAIN, *forks], cooled=[*COOLED, *lowered])
+
+    assert result.proc.returncode == 1, (result.proc.stdout, result.proc.stderr)
+    assert (
+        "::error::the cooled-down resolution would downgrade 1 package(s) already in uv.lock; "
+        "uv.lock not refreshed (see the job summary; manual security relock: docs/RATCHETS.md)"
+        in result.proc.stdout.splitlines()
+    )
+    assert "helper exit code: 5" in result.summary.splitlines()
+    assert "```\ndowngraded: sub 1.0,2.0.2,3.0 -> 1.0,2.0.1,3.0\n```\n" in result.summary
+    assert "held back" not in result.summary
+    assert result.output == ""
+    assert (repo / "uv.lock").read_bytes() == committed
     assert result.status == ""
     assert git(repo, "diff", "--cached", "--name-only") == ""
     assert [call["kind"] for call in result.uv_calls] == ["cooled", "plain", "finalize"]

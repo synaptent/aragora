@@ -87,7 +87,7 @@ FINDINGS_EXIT_CODES: dict[str, frozenset[int]] = {
     "todo": frozenset({0}),  # grep: 0 lines selected, 1 none (clean), 2 error
     "vulture": frozenset({3}),  # 1: invalid input, 2: invalid arguments
     "deptry": frozenset({1}),  # 2: usage error
-    "jscpd": frozenset({1}),  # over --threshold or --exitCode 1; default exits 0
+    "jscpd": frozenset({1}),  # over --threshold or --exit-code 1; default exits 0
     "eslint": frozenset({1}),  # 2: configuration problem or internal error
     "golangci-lint": frozenset({1}),  # --issues-exit-code; 3 failure, 4 timeout, ...
 }

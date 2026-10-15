@@ -974,7 +974,7 @@ def test_documented_findings_and_clean_exit_codes_with_findings_still_pass(
     assert _run(tool, baseline, fx, _fake_tool(fx, out, rc=findings_rc), "--update") == 0
     assert _run(tool, baseline, fx, _fake_tool(fx, out, rc=findings_rc)) == 0
     # A clean exit code with findings (ruff --exit-zero, eslint warnings only,
-    # jscpd's default --exitCode 0) is not a crash either.
+    # jscpd's default --exit-code 0) is not a crash either.
     for clean_rc in sorted(parsers.PARSERS[tool].clean_exit_codes):
         assert _run(tool, baseline, fx, _fake_tool(fx, out, rc=clean_rc)) == 0
 
