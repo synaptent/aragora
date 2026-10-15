@@ -35,8 +35,8 @@ async def _use_pipeline(workspace_id: str, org_id: str) -> Any:
 
 def _fresh_cache(monkeypatch: pytest.MonkeyPatch, pipeline_cls: type) -> None:
     # A fresh lock too: the module-level one can be left bound to another test's event loop.
-    for name, value in (("_pipelines", {}), ("_borrowers", {}), ("_evicted_in_use", {})):
-        monkeypatch.setattr(integration, name, value)
+    for name in ("_pipelines", "_borrowers", "_evicted_in_use"):
+        monkeypatch.setattr(integration, name, {})
     monkeypatch.setattr(integration, "_handed_out", weakref.WeakSet())
     monkeypatch.setattr(integration, "_pipeline_lock", asyncio.Lock())
     monkeypatch.setattr(integration, "_MAX_PIPELINES", 1)
