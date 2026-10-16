@@ -67,6 +67,15 @@ NEVER_OMITTED_COLLECTIONS = (
     "source_health",
     "next_legal_actions",
 )
+CANONICAL_SOURCE_DOCS = (
+    "docs/THESIS.md",
+    "docs/plans/ARAGORA_EVOLUTION_ROADMAP.md",
+    "docs/AGENT_FLYWHEEL_ARAGORA_NATIVE.md",
+    "docs/plans/2026-06-25-native-mission-orchestrator-spec.md",
+    "docs/architecture/nomic-context-builder-plan.md",
+)
+# Escapes keep this file ASCII; the text spans 2-, 3- and 4-byte UTF-8 sequences.
+NON_ASCII_TEXT = " caf\u00e9 \u2713 \U0001d11e"
 
 
 def _load(path: Path) -> dict[str, Any]:
@@ -74,7 +83,9 @@ def _load(path: Path) -> dict[str, Any]:
 
 
 def _canonical_bytes(document: dict[str, Any]) -> bytes:
-    return json.dumps(document, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return json.dumps(document, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode(
+        "utf-8"
+    )
 
 
 def _evidence_handles(document: dict[str, Any]) -> list[dict[str, Any]]:
@@ -217,6 +228,22 @@ def test_truncation_emitted_bytes_is_canonically_measured(fixture_name: str) -> 
     emitted_bytes = len(_canonical_bytes(document))
     assert document["truncation"]["emitted_bytes"] == emitted_bytes
     assert emitted_bytes <= document["truncation"]["budget_bytes"]
+
+
+def test_emitted_bytes_counts_non_ascii_text_as_unescaped_utf8(validator: Any) -> None:
+    document = _load(FIXTURE_DIR / "fresh_orientation.json")
+    ascii_bytes = document["truncation"]["emitted_bytes"]
+    document["facts"][0]["statement"] += NON_ASCII_TEXT
+    encoded = _canonical_bytes(document)
+
+    assert NON_ASCII_TEXT.encode("utf-8") in encoded
+    assert b"\\u" not in encoded
+    # 15 UTF-8 bytes; the \u-escaped form of the same text would add 30.
+    assert len(encoded) == ascii_bytes + len(NON_ASCII_TEXT.encode("utf-8")) == 5190
+
+    document["truncation"]["emitted_bytes"] = len(encoded)
+    assert len(_canonical_bytes(document)) == document["truncation"]["emitted_bytes"]
+    validator.validate(document)
 
 
 @pytest.mark.parametrize("fact_authority", AUTHORITY_PRECEDENCE)
@@ -460,6 +487,18 @@ def test_mission_projection_requires_an_evidence_handle(validator: Any) -> None:
         "aragoraz://synaptent/aragora/missions/m1",
         "\u04bbttps://example.invalid/a",
         " https://example.invalid/a",
+        # An allowed scheme in opaque, relative or authority-less form.
+        "https:javascript:alert(1)",
+        "HTTPS:javascript:alert(1)",
+        "aragora:../../secret",
+        "aragora:synaptent/aragora/missions/m1",
+        "https:/example.invalid/a",
+        "https:///example.invalid/a",
+        "aragora:///missions/m1",
+        "https://",
+        "aragora://",
+        "https://?q=1",
+        "https://#fragment",
     ],
 )
 def test_evidence_uris_must_be_portable(validator: Any, unusable_uri: str) -> None:
@@ -478,6 +517,7 @@ def test_evidence_uris_must_be_portable(validator: Any, unusable_uri: str) -> No
         "aragora://synaptent/aragora/missions/m1",
         "ARAGORA://synaptent/aragora/missions/m1",
         "aRaGoRa://synaptent/aragora/missions/m1",
+        "https://api.github.com",
     ],
 )
 def test_evidence_uris_accept_real_schemes(validator: Any, usable_uri: str) -> None:
@@ -842,16 +882,7 @@ def test_no_change_rejects_a_second_fingerprint(validator: Any) -> None:
         validator.validate(document)
 
 
-@pytest.mark.parametrize(
-    "doc_path",
-    [
-        "docs/THESIS.md",
-        "docs/plans/ARAGORA_EVOLUTION_ROADMAP.md",
-        "docs/AGENT_FLYWHEEL_ARAGORA_NATIVE.md",
-        "docs/plans/2026-06-25-native-mission-orchestrator-spec.md",
-        "docs/architecture/nomic-context-builder-plan.md",
-    ],
-)
+@pytest.mark.parametrize("doc_path", CANONICAL_SOURCE_DOCS)
 def test_canonical_sources_link_to_operating_loop(doc_path: str) -> None:
     assert "agent-operating-loop.md" in (ROOT / doc_path).read_text(encoding="utf-8")
 
@@ -868,7 +899,8 @@ def _infra_shard(workflow: dict[str, Any]) -> dict[str, Any]:
 
 
 @pytest.mark.parametrize(
-    "changed_path", ["tests/orientation/test_orientation_contract.py", SCHEMA_PATH_IN_REPO]
+    "changed_path",
+    ["tests/orientation/test_orientation_contract.py", SCHEMA_PATH_IN_REPO, *CANONICAL_SOURCE_DOCS],
 )
 def test_pull_request_ci_runs_this_suite_for_its_own_sources(changed_path: str) -> None:
     """A shard filter is inert unless the workflow trigger admits the same path."""

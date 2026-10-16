@@ -78,9 +78,12 @@ fresh match from a stale one, which is the only question the variant answers.
 
 Every derived record carries its lower-layer `basis_fingerprint`, evidence
 references, authority, freshness, invalidators, and bounded cost. Evidence
-handles use portable source URIs with the `https` or `aragora` scheme, matched
-case-insensitively; every other scheme, including `file:` and active content
-such as `javascript:`, `data:` and `vbscript:`, is rejected. Only source inputs
+handles use portable source URIs in authority form: the `https` or `aragora`
+scheme, matched case-insensitively, then `//` and a non-empty authority. Every
+other scheme, including `file:` and active content such as `javascript:`,
+`data:` and `vbscript:`, is rejected, and so are opaque or authority-less forms
+of the allowed schemes such as `https:javascript:alert(1)` or
+`aragora:../../secret`. Only source inputs
 and prepared-effect inputs receive deterministic fingerprints; model reasoning
 must never be presented as reproducible.
 
@@ -115,7 +118,8 @@ record from acquiring the authority of the live or durable state it summarizes.
   empties without declaring it, so keeping every blocker-bearing record is an
   emitter obligation that its own tests must cover.
   `truncation.emitted_bytes` is the exact byte length of the complete envelope
-  serialized as compact, key-sorted UTF-8 JSON. Because the field is counted
+  serialized as compact, key-sorted UTF-8 JSON, with non-ASCII characters
+  written as raw UTF-8 rather than `\u` escapes. Because the field is counted
   inside the envelope it measures, widening it can widen the envelope; where more
   than one value is self-consistent, the smallest one is canonical.
   `truncated` and `omitted` always agree: an untruncated envelope omits nothing.

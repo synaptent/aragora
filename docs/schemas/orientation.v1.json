@@ -119,9 +119,9 @@
       "properties": {
         "id": { "type": "string", "minLength": 1 },
         "uri": {
-          "description": "A portable absolute URI whose scheme is https or aragora, matched case-insensitively. Every other scheme (file:, javascript:, data:, vbscript: and the rest) is rejected, and so is whitespace anywhere in the value, so trimming cannot expose a different scheme.",
+          "description": "A portable absolute URI in authority form: the scheme https or aragora, matched case-insensitively, then // and a non-empty authority. Every other scheme (file:, javascript:, data:, vbscript: and the rest) is rejected, so are the opaque, relative and authority-less forms of the allowed schemes (https:javascript:alert(1), aragora:../../secret, https:///x), and so is whitespace anywhere in the value, so trimming cannot expose a different scheme.",
           "type": "string",
-          "pattern": "^(?:[Hh][Tt][Tt][Pp][Ss]|[Aa][Rr][Aa][Gg][Oo][Rr][Aa]):\\S*(?![\\s\\S])"
+          "pattern": "^(?:[Hh][Tt][Tt][Pp][Ss]|[Aa][Rr][Aa][Gg][Oo][Rr][Aa])://[^\\s/?#]\\S*(?![\\s\\S])"
         },
         "authority": { "$ref": "#/$defs/authority" },
         "fingerprint": { "$ref": "#/$defs/fingerprint" },
