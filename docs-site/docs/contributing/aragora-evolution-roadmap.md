@@ -9,6 +9,7 @@ description: Aragora Evolution Roadmap
 > **Current transition:** early `Teammate` -> reliable `Foreman`
 > **Planning rule:** preserve the maximalist vision; sequence through a narrow reliability wedge first.
 > **Concrete execution overlay:** [2026-04-18 3-Horizon Execution Roadmap](2026-04-18-3-horizon-roadmap.md) operationalizes this doc's outcome map into bounded 30/90/365-day deliverables.
+> **Agent-facing projection:** [Agent Operating Loop](https://github.com/synaptent/aragora/blob/main/docs/architecture/agent-operating-loop.md) composes roadmap, mission, work, and Nomic truth without creating a second control plane.
 
 ## Executive Thesis
 
