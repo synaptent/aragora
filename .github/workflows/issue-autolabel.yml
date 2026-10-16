@@ -1,0 +1,42 @@
+name: Issue Autolabel
+
+# Adds labels to new/edited issues from the keyword map in
+# .github/issue-labeler.json. Strictly additive; issues carrying
+# triage:protected are left untouched (scripts/issue_autolabel.py).
+
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  issues: write
+  contents: read
+
+concurrency:
+  group: issue-autolabel-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  autolabel:
+    name: Autolabel issue
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            .github/issue-labeler.json
+            scripts/issue_autolabel.py
+          sparse-checkout-cone-mode: false
+
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - name: Add labels from keyword map
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/issue_autolabel.py --event-path "$GITHUB_EVENT_PATH"

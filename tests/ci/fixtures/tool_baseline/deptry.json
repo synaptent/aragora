@@ -1,0 +1,26 @@
+[
+    {
+        "error": {
+            "code": "DEP003",
+            "message": "'yaml' imported but it is a transitive dependency"
+        },
+        "module": "yaml",
+        "location": {
+            "file": "pkg/mod.py",
+            "line": 3,
+            "column": 8
+        }
+    },
+    {
+        "error": {
+            "code": "DEP002",
+            "message": "'requests' defined as a dependency but not used in the codebase"
+        },
+        "module": "requests",
+        "location": {
+            "file": "pyproject.toml",
+            "line": null,
+            "column": null
+        }
+    }
+]
