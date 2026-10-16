@@ -10,9 +10,9 @@ table are read without a TOML library.
 
 A declared registration runs on the first lookup that misses, which can be after the
 application registered its own entries in other registries. The upper package it imports
-for the first time then runs its own import-time registrations, so a registry that a
-package init fills checks :func:`declared_registrations_running` and only fills what is
-missing.
+for the first time then runs its own import-time registrations. A registry that a package
+init fills can check :func:`declared_registrations_running` and then only fill what is
+missing; :mod:`aragora.core.decision_route_hooks` does.
 """
 
 from __future__ import annotations
