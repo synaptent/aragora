@@ -749,6 +749,83 @@ def test_openai_payload_explicit_max_tokens_respected() -> None:
     assert payload["max_completion_tokens"] == 2048
 
 
+def test_openai_reasoning_payload_omitted_max_tokens_uses_reasoning_default() -> None:
+    """No cap on the instance or a subclass: the reasoning-safe default applies."""
+    from aragora.agents.api_agents.openai import OpenAIAPIAgent
+    from aragora.models.catalog import spec_or_none
+
+    agent = OpenAIAPIAgent(name="o", model="gpt-6-astra", api_key="test-key")
+    assert "max_tokens" not in vars(agent)
+    spec = spec_or_none("gpt-6-astra")
+    assert spec is not None
+    payload = agent._build_payload([{"role": "user", "content": "hi"}])
+    assert payload["max_completion_tokens"] == min(spec.max_output_tokens, 16_000)
+
+
+def test_openai_reasoning_payload_keeps_explicit_max_tokens_4095() -> None:
+    from aragora.agents.api_agents.openai import OpenAIAPIAgent
+
+    agent = OpenAIAPIAgent(name="o", model="gpt-6-astra", api_key="test-key")
+    agent.max_tokens = 4095
+    payload = agent._build_payload([{"role": "user", "content": "hi"}])
+    assert payload["max_completion_tokens"] == 4095
+
+
+def test_openai_reasoning_payload_keeps_explicit_max_tokens_4096() -> None:
+    """An explicit cap equal to the inherited default is still the caller's cap.
+
+    Where the value is set decides, not the value itself: an explicit 4096
+    must not be read as "unset" and raised to the reasoning default.
+    """
+    from aragora.agents.api_agents.openai import OpenAIAPIAgent
+
+    agent = OpenAIAPIAgent(name="o", model="gpt-6-astra", api_key="test-key")
+    agent.max_tokens = 4096
+    payload = agent._build_payload([{"role": "user", "content": "hi"}])
+    assert payload["max_completion_tokens"] == 4096
+
+
+def test_openai_reasoning_payload_keeps_explicit_max_tokens_4097() -> None:
+    from aragora.agents.api_agents.openai import OpenAIAPIAgent
+
+    agent = OpenAIAPIAgent(name="o", model="gpt-6-astra", api_key="test-key")
+    agent.max_tokens = 4097
+    payload = agent._build_payload([{"role": "user", "content": "hi"}])
+    assert payload["max_completion_tokens"] == 4097
+
+
+def test_openai_reasoning_payload_keeps_subclass_max_tokens_4096() -> None:
+    """A subclass that pins the cap to 4096 has set it explicitly too."""
+    from aragora.agents.api_agents.openai import OpenAIAPIAgent
+
+    class _PinnedCapAgent(OpenAIAPIAgent):
+        max_tokens = 4096
+
+    agent = _PinnedCapAgent(name="o", model="gpt-6-astra", api_key="test-key")
+    payload = agent._build_payload([{"role": "user", "content": "hi"}])
+    assert payload["max_completion_tokens"] == 4096
+
+
+def test_openai_non_reasoning_payload_max_tokens_omitted_or_explicit_unchanged() -> None:
+    """Without reasoning_effort: 4096 when omitted, the caller's value otherwise."""
+    from aragora.agents.api_agents.openai import OpenAIAPIAgent
+
+    messages = [{"role": "user", "content": "hi"}]
+    omitted = OpenAIAPIAgent(name="o", model="some-openai-compatible-model", api_key="test-key")
+    explicit_default = OpenAIAPIAgent(
+        name="o", model="some-openai-compatible-model", api_key="test-key"
+    )
+    explicit_default.max_tokens = 4096
+    explicit_other = OpenAIAPIAgent(
+        name="o", model="some-openai-compatible-model", api_key="test-key"
+    )
+    explicit_other.max_tokens = 4097
+    for agent, expected in ((omitted, 4096), (explicit_default, 4096), (explicit_other, 4097)):
+        payload = agent._build_payload(messages)
+        assert "reasoning_effort" not in payload
+        assert payload["max_tokens"] == expected
+
+
 def test_openai_payload_uncataloged_reasoning_model_gets_flat_floor() -> None:
     """No catalog row + reasoning_effort being sent -> the flat 16k floor."""
     from aragora.agents.api_agents.openai import OpenAIAPIAgent

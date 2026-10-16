@@ -84,9 +84,9 @@ logger = logging.getLogger(__name__)
 # refresh): the cheap/bulk-route OpenAI sibling.
 DEFAULT_FALLBACK_MODEL = GPT56_TERRA_VIA_OPENROUTER
 
-# The historical flat output-token default this mixin has always shipped. Also
-# the sentinel for "the caller never asked for a specific cap": a subclass or
-# instance that sets any other value is honoured verbatim.
+# The historical flat output-token default this mixin has always shipped. A
+# subclass or instance that sets ``max_tokens`` itself (to any value, this one
+# included) is honoured verbatim; see ``_max_tokens_set_explicitly``.
 _INHERITED_DEFAULT_MAX_TOKENS = 4096
 # Default cap for a model that will be sent ``reasoning_effort`` and has no
 # explicit caller value: min(catalog max_output_tokens, this). Mirrors
@@ -204,6 +204,19 @@ class OpenAICompatibleMixin(QuotaFallbackMixin):
             return str(override)
         return reasoning_effort_default(self.model)
 
+    def _max_tokens_set_explicitly(self) -> bool:
+        """Whether ``max_tokens`` was set on the instance or by a subclass.
+
+        Decided by where the attribute lives, not by its value, so an explicit
+        cap equal to the inherited default is not mistaken for "unset".
+        """
+        if "max_tokens" in getattr(self, "__dict__", {}):
+            return True
+        for klass in type(self).__mro__:
+            if "max_tokens" in vars(klass):
+                return klass is not OpenAICompatibleMixin
+        return False
+
     def _resolve_max_tokens(self, *, effort: str | None) -> int:
         """Resolve the output-token cap for this request.
 
@@ -214,15 +227,15 @@ class OpenAICompatibleMixin(QuotaFallbackMixin):
         calls exhaust it on reasoning and come back ``finish_reason:
         "length"`` with empty ``content``. Resolution:
 
-        * Caller set an explicit cap (any value other than the inherited
-          default, set on the instance or by a subclass): respected verbatim.
+        * Caller set an explicit cap (on the instance or by a subclass, any
+          value including 4096): respected verbatim.
         * No explicit cap and this request sends ``reasoning_effort``:
           ``min(catalog max_output_tokens, 16_000)``, or a flat 16_000 when
           the id has no catalog row.
         * Otherwise: the inherited 4096, unchanged.
         """
         configured = getattr(self, "max_tokens", None)
-        if configured is not None and int(configured) != _INHERITED_DEFAULT_MAX_TOKENS:
+        if configured is not None and self._max_tokens_set_explicitly():
             return int(configured)
         if not effort:
             return _INHERITED_DEFAULT_MAX_TOKENS
