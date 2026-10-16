@@ -1,4 +1,4 @@
-"""Run registration callables declared under a package entry-point group, once.
+"""Run registration callables declared under a package entry-point group, once each.
 
 A lower package that exposes a hook cannot import the upper package that fills it.
 The upper package registers from its own init, and a process that never imports it
@@ -13,6 +13,10 @@ application registered its own entries in other registries. The upper package it
 for the first time then runs its own import-time registrations. A registry that a package
 init fills can check :func:`declared_registrations_running` and then only fill what is
 missing; :mod:`aragora.core.decision_route_hooks` does.
+
+A registration that raised ``ImportError`` runs again on the next lookup that misses,
+until it no longer raises it; every other registration runs once. One that raised it after
+registering some entries registers them again, so it must be safe to run twice.
 """
 
 from __future__ import annotations
@@ -110,42 +114,60 @@ def _read_project(text: str, group: str) -> tuple[Any, dict[str, Any]] | None:
 
 
 class DeclaredRegistrations:
-    """The registrations declared under one entry-point group, run at most once per process."""
+    """The registrations declared under one entry-point group.
+
+    Each runs once per process, except that a registration that raised ``ImportError`` runs
+    again on the next :meth:`load`, until it no longer does.
+    """
 
     def __init__(self, group: str, *, source_pyproject: Path = SOURCE_PYPROJECT) -> None:
         self.group = group
         self._source_pyproject = source_pyproject
         self._loaded = False
+        self._loading = False
+        self._retry: list[importlib.metadata.EntryPoint] = []
         self._lock = threading.RLock()
 
     @property
     def loaded(self) -> bool:
+        """Whether the first :meth:`load` has started; registrations that raised
+        ``ImportError`` can still be waiting for their retry."""
         return self._loaded
 
     def load(self) -> None:
-        """Run every declared registration callable; later calls do nothing."""
+        """Run every declared registration callable on the first call; a later call runs
+        only the registrations that raised ``ImportError`` the last time they ran."""
         with self._lock:
-            if self._loaded:
+            # A registration that uses the hook must not start another load.
+            if self._loading or (self._loaded and not self._retry):
                 return
-            # Set before loading: a registration that uses the hook must not start another load.
-            self._loaded = True
-            try:
-                installed = list(importlib.metadata.entry_points(group=self.group))
-            except _REGISTRATION_ERRORS as exc:
-                logger.warning("Reading the %s entry points failed: %s", self.group, exc)
-                installed = []
-            # Merged by target rather than by name: an unrelated plugin with the same entry-point
-            # name must not hide a declaration that only the source checkout carries yet, and no
-            # registration runs twice.
-            installed_targets = {entry_point.value for entry_point in installed}
-            declared = installed + [
-                ep for ep in self._source_declarations() if ep.value not in installed_targets
-            ]
+            retrying = self._loaded
+            if retrying:
+                declared, self._retry = self._retry, []
+            else:
+                self._loaded = True
+                declared = self._declarations()
+            self._loading = True
             _running.depth = getattr(_running, "depth", 0) + 1
             try:
-                self._run(declared)
+                self._run(declared, retrying)
             finally:
                 _running.depth -= 1
+                self._loading = False
+
+    def _declarations(self) -> list[importlib.metadata.EntryPoint]:
+        try:
+            installed = list(importlib.metadata.entry_points(group=self.group))
+        except _REGISTRATION_ERRORS as exc:
+            logger.warning("Reading the %s entry points failed: %s", self.group, exc)
+            installed = []
+        # Merged by target rather than by name: an unrelated plugin with the same entry-point
+        # name must not hide a declaration that only the source checkout carries yet, and no
+        # registration runs twice.
+        installed_targets = {entry_point.value for entry_point in installed}
+        return installed + [
+            ep for ep in self._source_declarations() if ep.value not in installed_targets
+        ]
 
     def _source_declarations(self) -> list[importlib.metadata.EntryPoint]:
         # An editable install keeps the entry points it was installed with, so a source
@@ -165,19 +187,32 @@ class DeclaredRegistrations:
             for name, value in declared.items()
         ]
 
-    def _run(self, entry_points: list[importlib.metadata.EntryPoint]) -> None:
+    def _run(self, entry_points: list[importlib.metadata.EntryPoint], retrying: bool) -> None:
         if not entry_points:
             return
         entry_point, rest = entry_points[0], entry_points[1:]
         try:
             entry_point.load()()
+        except ImportError as exc:
+            # Unlike the other errors, an import failure can clear later in the process (a
+            # module blocked or not importable yet), as it did for the lazy imports these
+            # registrations replace. Repeats log at debug level, so a missing optional
+            # dependency does not warn on every lookup.
+            self._retry.append(entry_point)
+            logger.log(
+                logging.DEBUG if retrying else logging.WARNING,
+                "Registration %s (%s) failed: %s",
+                entry_point.value,
+                self.group,
+                exc,
+            )
         except _REGISTRATION_ERRORS as exc:
             logger.warning("Registration %s (%s) failed: %s", entry_point.value, self.group, exc)
         finally:
             # The rest run even when an error of another type escapes, so one broken plugin
             # cannot keep aragora's own registration from running; that error still reaches
             # the caller afterwards.
-            self._run(rest)
+            self._run(rest, retrying)
 
 
 __all__ = ["DeclaredRegistrations", "SOURCE_PYPROJECT", "declared_registrations_running"]
