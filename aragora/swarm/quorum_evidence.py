@@ -603,11 +603,13 @@ _CODEX_APPROVAL_POLICY_CONFIG = 'approval_policy="never"'
 _CLAUDE_REVIEW_CHECKOUT_ENV = "ARAGORA_CLAUDE_REVIEW_CHECKOUT"
 _CLAUDE_REVIEW_EXPECTED_HEAD_ENV = "ARAGORA_CLAUDE_REVIEW_EXPECTED_HEAD"
 _EXPECTED_HEAD_HINT = f"--claude-review-expected-head / {_CLAUDE_REVIEW_EXPECTED_HEAD_ENV}"
+# An explicit mode: without one, the CLI can start a -p session in "auto" when a server-side
+# flag says so, and _attest_restricted_stream accepts only "default".
 _RESTRICTED_CLAUDE_ARGV = (
     "claude -p --safe-mode --restricted --tools Read,Grep,Glob --disallowedTools "
     "Bash,Edit,Write,NotebookEdit,WebFetch,WebSearch,Task,Agent,Skill --permission-prompts none "
-    "--disable-slash-commands --strict-mcp-config --mcp-config {mcp} --output-format stream-json "
-    "--verbose --include-hook-events"
+    "--permission-mode default --disable-slash-commands --strict-mcp-config --mcp-config {mcp} "
+    "--output-format stream-json --verbose --include-hook-events"
 ).split()
 _RESTRICTED_FILE_TOOLS = frozenset({"Read", "Grep", "Glob"})
 # The CLI lists this session-control tool even under --tools; it touches no files.
