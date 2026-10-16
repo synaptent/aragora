@@ -327,7 +327,7 @@ class TestTenantIsolation:
         pair = {"checkpoint_a": own, "checkpoint_b": own}
         assert server.request("POST", f"{COLLECTION}/compare", _user("owner"), body=pair)[1] == 200
         assert server.request("DELETE", f"{COLLECTION}/{own}", _user("owner"))[1] == 200
-        assert {p.name for p in store.checkpoint_dir.iterdir()} == {ids["foreign"], ids["legacy"]}
+        assert _entry_names(store) == {ids["foreign"], ids["legacy"]}
 
     def test_create_without_an_org_is_refused(self, two_orgs: Any) -> None:
         server, store, _ = two_orgs

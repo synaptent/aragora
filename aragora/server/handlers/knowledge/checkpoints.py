@@ -23,6 +23,7 @@ from aragora.billing.tier_gating import TierInsufficientError, TrialExpiredError
 from aragora.events.handler_events import emit_handler_event, CREATED
 from aragora.knowledge.mound.checkpoint import (
     CheckpointCapacityError,
+    CheckpointWriteError,
     InvalidCheckpointNameError,
     validate_checkpoint_name,
 )
@@ -121,6 +122,7 @@ _COLLECTION_PATH = "/api/v1/km/checkpoints"
 
 # Names no counts: the ceiling spans every organization's checkpoints.
 _STORAGE_FULL = "Checkpoint storage is full; no checkpoint was created"
+_WRITE_FAILED = "Checkpoint could not be written; no checkpoint was created"
 
 # Methods implemented per route shape; anything else answers 405 with Allow.
 _ALLOWED_METHODS: dict[str, tuple[str, ...]] = {
@@ -439,6 +441,11 @@ class KMCheckpointHandler(BaseHandler):
             return json_response(
                 {"error": {"code": "checkpoint_storage_full", "message": _STORAGE_FULL}},
                 status=507,
+            )
+        except CheckpointWriteError:
+            return json_response(
+                {"error": {"code": "checkpoint_write_failed", "message": _WRITE_FAILED}},
+                status=500,
             )
         except RuntimeError as e:
             logger.error("Checkpoint creation failed: %s", e)

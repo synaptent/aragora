@@ -1771,7 +1771,9 @@ class TestRealStoreIdContract:
             ("POST", f"{BASE}/compare", pair),
         ]:
             assert _status(await _call(handler, method, path, body)) == 404, (method, path)
-        assert [p.name for p in tmp_path.iterdir()] == [created["id"]]
+        lock = checkpoint_module.CAPACITY_LOCK_FILE
+        stored = [p.name for p in tmp_path.iterdir() if p.name != lock]
+        assert stored == [created["id"]]
 
     @pytest.mark.parametrize("name", ["../outside", "a%2Fb", "release.1", "x" * 129])
     async def test_invalid_create_names_get_400_and_persist_nothing(
