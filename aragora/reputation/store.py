@@ -277,8 +277,18 @@ class ReputationStore:
                 try:
                     payload = json.loads(raw)
                     delta = ReputationDelta.from_json(payload)
-                    store._deltas[delta.agent_id].append(delta)
-                    store._delta_by_id[delta.delta_id] = delta
+                    known_agent = delta.agent_id in store._deltas
+                    agent_deltas = store._deltas[delta.agent_id]
+                    agent_deltas.append(delta)
+                    try:
+                        store._delta_by_id[delta.delta_id] = delta
+                    except MemoryError:
+                        # Undo the append so a line skipped below leaves no half-inserted
+                        # delta (counted in _deltas but unknown to reverse_delta).
+                        agent_deltas.pop()
+                        if not known_agent:
+                            del store._deltas[delta.agent_id]
+                        raise
                 except (
                     KeyError,
                     TypeError,

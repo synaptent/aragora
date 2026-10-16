@@ -302,3 +302,69 @@ def test_memory_error_on_reversal_line_is_skipped_with_one_warning(
     assert _warnings(caplog) == [
         f"ReputationStore: skipping invalid reversal line 1 in {reversal_path}: {_OOM_MESSAGE}"
     ]
+
+
+class _IndexFailingOnStore(dict[str, ReputationDelta]):
+    """A ``_delta_by_id`` index whose insert of one chosen id fails like an allocation failure."""
+
+    def __init__(self, delta_id: str, raised: list[str]) -> None:
+        super().__init__()
+        self._delta_id = delta_id
+        self._raised = raised
+
+    def __setitem__(self, key: str, value: ReputationDelta) -> None:
+        if key == self._delta_id:
+            self._raised.append(key)
+            raise MemoryError(_OOM_MESSAGE)
+        super().__setitem__(key, value)
+
+
+@pytest.mark.parametrize(
+    "oom_agent",
+    [
+        pytest.param("alice", id="agent-with-earlier-delta"),
+        pytest.param("carol", id="agent-without-earlier-delta"),
+    ],
+)
+def test_memory_error_while_indexing_a_delta_leaves_no_partial_insert(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+    oom_agent: str,
+) -> None:
+    """A MemoryError after the per-agent append but before the id index is stored skips the whole line."""
+    ledger = tmp_path / "ledger.jsonl"
+    _write(
+        ledger,
+        [
+            _line(_DELTA, delta_id="d-a"),
+            _line(_DELTA, delta_id="d-oom", agent_id=oom_agent),
+            _line(_DELTA, delta_id="d-b", agent_id="bob", delta=-0.25),
+        ],
+    )
+    reversal_path = tmp_path / "ledger.reversals.jsonl"
+    _write(
+        reversal_path,
+        [_line(_REVERSAL, original_delta_id="d-b", agent_id="bob", counter_delta=0.25)],
+    )
+    raised: list[str] = []
+
+    class _Store(ReputationStore):
+        def __init__(self, path: Path | None = None) -> None:
+            super().__init__(path)
+            self._delta_by_id = _IndexFailingOnStore("d-oom", raised)
+
+    with caplog.at_level(logging.WARNING, logger=_STORE_LOGGER):
+        store = _Store.load_from_file(ledger)
+
+    assert raised == ["d-oom"]
+    assert len(store) == 2
+    assert store.agent_ids() == ["alice", "bob"]
+    assert [d.delta_id for d in store.deltas_for("alice")] == ["d-a"]
+    assert [d.delta_id for d in store.deltas_for("bob")] == ["d-b"]
+    assert sorted(store._delta_by_id) == ["d-a", "d-b"]
+    assert [r.original_delta_id for r in store.reversals_for("bob")] == ["d-b"]
+    assert store.get_score("alice", apply_decay=False) == pytest.approx(0.5)
+    assert store.get_score("bob", apply_decay=False) == pytest.approx(0.0)
+    assert _warnings(caplog) == [
+        f"ReputationStore: skipping invalid line 2 in {ledger}: {_OOM_MESSAGE}"
+    ]
