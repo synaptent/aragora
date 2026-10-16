@@ -27,8 +27,8 @@ if TYPE_CHECKING:
     from aragora.debate.orchestrator import Arena as ArenaClass
     from aragora.debate.protocol import DebateProtocol as DebateProtocolClass
     from aragora.core import Environment as EnvironmentClass
+    from aragora.protocols import LegacyEventEmitterProtocol
     from aragora.server.stream.emitter import SyncEventEmitter
-    from aragora.types.protocols import EventEmitterProtocol
 
     # Consensus type from DebateProtocol
     ConsensusType = Literal[
@@ -547,7 +547,7 @@ def execute_debate_thread(
             agents,
             protocol,
             event_hooks=hooks,
-            event_emitter=cast("EventEmitterProtocol", emitter),
+            event_emitter=cast("LegacyEventEmitterProtocol", emitter),
             loop_id=debate_id,
             trending_topic=trending_topic,
             user_id=user_id,
