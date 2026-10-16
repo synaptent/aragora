@@ -16,8 +16,8 @@ _GIT = ["git", "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsig
 VALIDATED_ARGV = (  # claude_argv of the validated restricted-reviewer bootstrap
     "claude -p --safe-mode --restricted --tools Read,Grep,Glob --disallowedTools "
     "Bash,Edit,Write,NotebookEdit,WebFetch,WebSearch,Task,Agent,Skill --permission-prompts none "
-    "--disable-slash-commands --strict-mcp-config --mcp-config {mcp} --output-format stream-json "
-    "--verbose --include-hook-events"
+    "--permission-mode default --disable-slash-commands --strict-mcp-config --mcp-config {mcp} "
+    "--output-format stream-json --verbose --include-hook-events"
 ).split()
 NEVER = {"--bare", "--model", "--settings", "--add-dir", "--worktree", "bypassPermissions"}
 NEVER |= {"--dangerously-skip-permissions", "--allow-dangerously-skip-permissions"}
@@ -146,6 +146,14 @@ def test_restricted_review_pins_argv_cwd_env_and_composes(monkeypatch, checkout,
     assert body.replace(result.harness, "H") == default.replace("the Aragora Claude reviewer", "H")
 
 
+def test_restricted_argv_pins_default_permission_mode(tmp_path):
+    # Without an explicit mode the CLI may start a -p session in "auto" (a server-side flag);
+    # the init attestation accepts only "default", so the argv must name it.
+    argv = qe._claude_reviewer_command(tmp_path / "mcp.json", restricted=True)
+    assert argv.count("--permission-mode") == 1
+    assert argv[argv.index("--permission-mode") + 1] == "default"
+
+
 @pytest.mark.parametrize(
     "breaker",
     [
@@ -181,6 +189,7 @@ def test_precheck_fails_closed_before_any_claude_call(monkeypatch, checkout, bre
         (1, {"mcp_servers": [{"name": "srv", "status": "connected"}]}),
         (1, {"model": "claude-fable-5"}),
         (1, {"permissionMode": "bypassPermissions"}),
+        (1, {"permissionMode": "auto"}),
         (1, {"permissionMode": ...}),
         (1, {"tools": ["Read", "x" * 5000]}),
         (1, {"extra": [HOOK]}),
