@@ -6,7 +6,7 @@ Provides REST endpoints for managing KM checkpoints:
 - POST /api/km/checkpoints - Create a checkpoint
 - GET /api/km/checkpoints/{id} - Get checkpoint details
 - DELETE /api/km/checkpoints/{id} - Delete a checkpoint
-- POST /api/km/checkpoints/{id}/restore - Refused: the restore target's owner cannot be proven
+- POST /api/km/checkpoints/{id}/restore - Not implemented (501): the target's owner is unprovable
 - GET /api/km/checkpoints/{id}/compare - Compare with current state
 
 {id} is the km_ckpt_... ``id`` that create and list return; names are never resolved.
@@ -22,6 +22,8 @@ from typing import TYPE_CHECKING, Any, Protocol
 from aragora.billing.tier_gating import TierInsufficientError, TrialExpiredError, require_tier
 from aragora.events.handler_events import emit_handler_event, CREATED
 from aragora.knowledge.mound.checkpoint import (
+    CheckpointCapacityError,
+    CheckpointWriteError,
     InvalidCheckpointNameError,
     validate_checkpoint_name,
 )
@@ -43,6 +45,7 @@ from aragora.server.handlers.utils.rate_limit import (
     RateLimiter,
     rate_limit,
 )
+from aragora.server.handlers.utils.responses import not_implemented_response
 from aragora.server.versioning.compat import strip_version_prefix
 from aragora.observability.metrics import (
     record_checkpoint_operation,
@@ -116,6 +119,10 @@ _checkpoint_limiter = RateLimiter(requests_per_minute=20)
 _checkpoint_write_limiter = RateLimiter(requests_per_minute=5)
 
 _COLLECTION_PATH = "/api/v1/km/checkpoints"
+
+# Names no counts: the ceiling spans every organization's checkpoints.
+_STORAGE_FULL = "Checkpoint storage is full; no checkpoint was created"
+_WRITE_FAILED = "Checkpoint could not be written; no checkpoint was created"
 
 # Methods implemented per route shape; anything else answers 405 with Allow.
 _ALLOWED_METHODS: dict[str, tuple[str, ...]] = {
@@ -429,6 +436,17 @@ class KMCheckpointHandler(BaseHandler):
             return error_response("Invalid request", status=400)
         except FileExistsError:
             return error_response("Checkpoint with this name already exists", status=409)
+        except CheckpointCapacityError:
+            # json_response, not error_response: 5xx messages are replaced in production.
+            return json_response(
+                {"error": {"code": "checkpoint_storage_full", "message": _STORAGE_FULL}},
+                status=507,
+            )
+        except CheckpointWriteError:
+            return json_response(
+                {"error": {"code": "checkpoint_write_failed", "message": _WRITE_FAILED}},
+                status=500,
+            )
         except RuntimeError as e:
             logger.error("Checkpoint creation failed: %s", e)
             return error_response("Failed to create checkpoint", status=500)
@@ -525,7 +543,7 @@ class KMCheckpointHandler(BaseHandler):
 
     @rate_limit(requests_per_minute=3, limiter_name="km_checkpoint_restore")
     async def _restore_checkpoint(self, handler: Any, name: str) -> HandlerResult:
-        """Refuse to restore KM state from a checkpoint.
+        """Answer 501: restoring KM state from a checkpoint is not implemented.
 
         POST /api/km/checkpoints/{id}/restore
 
@@ -534,8 +552,9 @@ class KMCheckpointHandler(BaseHandler):
 
         A restore writes into the server mound's workspace. Neither that workspace
         nor its KnowledgeNodes record an owning organization, so ownership of the
-        restore target cannot be proven and every restore is refused before any
-        write. A checkpoint not recorded for the caller's organization answers 404.
+        restore target cannot be proven and every restore is refused with 501
+        before any write. A checkpoint not recorded for the caller's organization
+        answers 404.
         """
         user, err = self._check_auth(handler)
         if err:
@@ -558,8 +577,8 @@ class KMCheckpointHandler(BaseHandler):
         if metadata is None or not _owned_by(metadata, user):
             return error_response(f"Checkpoint '{name}' not found", status=404)
 
-        return error_response(
-            "Restore refused: ownership of the restore target cannot be proven", status=403
+        return not_implemented_response(
+            "Checkpoint restore is not implemented: ownership of the restore target cannot be proven"
         )
 
     @rate_limit(requests_per_minute=30)

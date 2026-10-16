@@ -3,6 +3,27 @@
 from aragora.server.openapi.helpers import _ok_response, STANDARD_ERRORS
 
 _ID_DESCRIPTION = "Checkpoint id (km_ckpt_...) returned by create or list; names are not accepted"
+
+
+def _error_envelope(description: str, code: str) -> dict:
+    """A response carrying ``{"error": {"code": <code>, "message": ...}}``."""
+    error = {
+        "type": "object",
+        "properties": {
+            "code": {"type": "string", "enum": [code]},
+            "message": {"type": "string"},
+        },
+    }
+    return {
+        "description": description,
+        "content": {
+            "application/json": {
+                "schema": {"type": "object", "properties": {"error": error}},
+            },
+        },
+    }
+
+
 CHECKPOINT_ENDPOINTS = {
     "/api/km/checkpoints": {
         "get": {
@@ -74,6 +95,11 @@ CHECKPOINT_ENDPOINTS = {
                         },
                     },
                 },
+                "507": _error_envelope(
+                    "Checkpoint storage is full: the create would exceed the server-wide "
+                    "checkpoint ceiling. Nothing is written.",
+                    "checkpoint_storage_full",
+                ),
             },
         },
     },
@@ -130,9 +156,14 @@ CHECKPOINT_ENDPOINTS = {
     "/api/km/checkpoints/{checkpoint_name}/restore": {
         "post": {
             "tags": ["Knowledge Mound"],
-            "summary": "Restore checkpoint",
+            "summary": "Restore checkpoint (not implemented)",
             "operationId": "createKmCheckpointsRestore",
-            "description": "Restore Knowledge Mound state from a checkpoint.",
+            "description": (
+                "Not implemented. After the authentication, permission, strategy and "
+                "ownership checks, every request is answered 501 before anything is "
+                "written: the server's Knowledge Mound workspace records no owning "
+                "organization, so the owner of the restore target cannot be proven."
+            ),
             "security": [{"bearerAuth": []}],
             "parameters": [
                 {
@@ -167,10 +198,12 @@ CHECKPOINT_ENDPOINTS = {
                 },
             },
             "responses": {
-                "200": _ok_response("Restore result", "RestoreResult"),
+                "200": {"description": "Never returned while restore is not implemented"},
                 "400": STANDARD_ERRORS["400"],
                 "401": STANDARD_ERRORS["401"],
+                "403": STANDARD_ERRORS["403"],
                 "404": STANDARD_ERRORS["404"],
+                "501": _error_envelope("Restore is not implemented", "not_implemented"),
             },
         },
     },

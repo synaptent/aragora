@@ -6,6 +6,20 @@ This document tracks breaking changes specific to the Aragora TypeScript SDK. Fo
 
 ## Version 2.x
 
+### Unreleased (2026-10-16)
+
+#### Breaking Changes
+
+`checkpoints.restoreKM(name)` now returns `Promise<never>` instead of
+`Promise<{ restored: boolean }>`. The server does not implement
+`POST /api/v1/km/checkpoints/{id}/restore`: after its authentication, permission
+and ownership checks it answers 501 (`not_implemented`) without writing anything,
+so the promise always rejects. Code that reads `.restored` no longer compiles.
+
+| Changed Method | Route | Migration |
+|----------------|-------|-----------|
+| `checkpoints.restoreKM` | `POST /api/v1/km/checkpoints/{id}/restore` | No served replacement |
+
 ### Unreleased (2026-10-03)
 
 #### Breaking Changes

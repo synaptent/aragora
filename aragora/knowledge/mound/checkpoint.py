@@ -28,13 +28,18 @@ Usage:
 
 from __future__ import annotations
 
+import contextlib
+import errno
 import gzip
 import hashlib
 import json
 import logging
+import os
 import re
 import shutil
+import threading
 import time
+from collections.abc import Iterator
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from pathlib import Path
@@ -49,9 +54,46 @@ logger = logging.getLogger(__name__)
 # are rejected without decoding.
 _CHECKPOINT_NAME_RE = re.compile(r"[A-Za-z0-9_-]{1,128}")
 
+CAPACITY_LOCK_FILE = ".capacity.lock"
+_NO_SPACE_ERRNOS = frozenset({errno.ENOSPC, getattr(errno, "EDQUOT", errno.ENOSPC)})
+_unlocked_warning_logged = False
+
+
+@contextlib.contextmanager
+def _directory_lock(directory: Path) -> Iterator[None]:
+    """Hold an exclusive flock on ``directory/.capacity.lock`` for every process using it.
+
+    Same lock-file flock pattern as ``aragora.swarm.campaign.locked_manifest_path``.
+    flock is not reliable on NFS shared across hosts. Without fcntl only the caller's
+    in-process lock applies.
+    """
+    global _unlocked_warning_logged
+    with open(directory / CAPACITY_LOCK_FILE, "a+", encoding="utf-8") as handle:
+        try:
+            import fcntl
+        except ImportError:  # pragma: no cover - non-POSIX
+            if not _unlocked_warning_logged:
+                _unlocked_warning_logged = True
+                logger.warning("fcntl unavailable: the KM checkpoint ceiling holds per process")
+            yield
+            return
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
 
 class InvalidCheckpointNameError(ValueError):
     """A checkpoint name is not a single safe segment inside the checkpoint directory."""
+
+
+class CheckpointCapacityError(RuntimeError):
+    """A create would leave more checkpoints stored than the store's global ceiling."""
+
+
+class CheckpointWriteError(OSError):
+    """A checkpoint could not be written for a reason other than lack of space."""
 
 
 def validate_checkpoint_name(name: object) -> str:
@@ -172,6 +214,7 @@ class KMCheckpointStore:
         checkpoint_dir: str | None = None,
         compress: bool = True,
         max_checkpoints: int = 10,
+        max_total_checkpoints: int = 100,
     ):
         """
         Initialize checkpoint store.
@@ -180,11 +223,19 @@ class KMCheckpointStore:
             mound: KnowledgeMound instance to checkpoint
             checkpoint_dir: Directory for checkpoint storage
             compress: Whether to gzip compress checkpoints
-            max_checkpoints: Maximum checkpoints to keep (oldest are pruned)
+            max_checkpoints: Maximum checkpoints kept per recorded org_id (oldest are pruned)
+            max_total_checkpoints: Maximum checkpoint directories stored across all
+                organizations, including legacy ones without an org_id and ones with
+                unreadable metadata. Every process sharing ``checkpoint_dir`` enforces it
+                under one directory lock. A create that would exceed it after its own
+                organization's pruning is refused and writes nothing; other organizations'
+                checkpoints are never pruned to make room.
         """
         self.mound = mound
         self.compress = compress
         self.max_checkpoints = max_checkpoints
+        self.max_total_checkpoints = max_total_checkpoints
+        self._write_lock = threading.Lock()
 
         # Set checkpoint directory
         if checkpoint_dir:
@@ -228,6 +279,13 @@ class KMCheckpointStore:
 
         Returns:
             Checkpoint ID (str) or KMCheckpointMetadata if return_metadata=True
+
+        Raises:
+            CheckpointCapacityError: The create would exceed ``max_total_checkpoints``,
+                even after deleting this organization's oldest checkpoints, or the disk
+                is full; nothing is written.
+            CheckpointWriteError: The checkpoint could not be written; nothing is left.
+            FileExistsError: The generated id is already stored; that entry is untouched.
         """
         if name is not None:
             validate_checkpoint_name(name)
@@ -312,17 +370,24 @@ class KMCheckpointStore:
             org_id=org_id,
         )
 
-        # Write checkpoint files
-        checkpoint_path = self.checkpoint_dir / checkpoint_id
-        checkpoint_path.mkdir(parents=True, exist_ok=True)
+        metadata_json = json.dumps(metadata.to_dict(), indent=2)
 
-        # Write metadata
-        metadata_file = checkpoint_path / "metadata.json"
-        metadata_file.write_text(json.dumps(metadata.to_dict(), indent=2))
-
-        # Write content
-        content_file = checkpoint_path / f"content{extension}"
-        content_file.write_bytes(content_bytes)
+        # Both locks span the capacity check and the write, so no two creates in this
+        # or any other process sharing the directory pass against the same count.
+        # Nothing inside them awaits.
+        with self._write_lock, _directory_lock(self.checkpoint_dir):
+            self._check_capacity(org_id)
+            try:
+                self._write_entry(
+                    checkpoint_id, f"content{extension}", content_bytes, metadata_json
+                )
+            except FileExistsError:
+                raise
+            except OSError as e:
+                logger.error("Failed to write KM checkpoint %s: %s", checkpoint_id, e)
+                if e.errno in _NO_SPACE_ERRNOS:
+                    raise CheckpointCapacityError("Checkpoint storage is full") from e
+                raise CheckpointWriteError("Checkpoint could not be written") from e
 
         duration_ms = int((time.time() - start_time) * 1000)
         logger.info(
@@ -333,9 +398,6 @@ class KMCheckpointStore:
             len(content_bytes),
             duration_ms,
         )
-
-        # Prune old checkpoints
-        await self._prune_old_checkpoints(org_id)
 
         return metadata if return_metadata else checkpoint_id
 
@@ -493,6 +555,67 @@ class KMCheckpointStore:
 
     async def list_checkpoints(self) -> list[KMCheckpointMetadata]:
         """List all available checkpoints."""
+        return self._stored_checkpoints()
+
+    def _check_capacity(self, org_id: str | None) -> None:
+        """Make room for one more checkpoint of ``org_id`` or raise ``CheckpointCapacityError``.
+
+        Callers hold both locks. Only ``org_id``'s oldest checkpoints beyond
+        ``max_checkpoints - 1`` are deleted, and none when deleting them all would still
+        leave no room. The count is then re-read from disk, so a failed deletion still
+        counts and the create is refused.
+        """
+        keep = max(self.max_checkpoints - 1, 0)
+        excess = len([cp for cp in self._stored_checkpoints() if cp.org_id == org_id][keep:])
+        if self._entry_count() - excess < self.max_total_checkpoints:
+            self._delete_oldest(org_id, keep)
+            if self._entry_count() < self.max_total_checkpoints:
+                return
+        logger.warning(
+            "Refusing KM checkpoint create: ceiling %s reached", self.max_total_checkpoints
+        )
+        raise CheckpointCapacityError("Checkpoint storage is full")
+
+    def _delete_oldest(self, org_id: str | None, keep: int) -> int:
+        """Delete ``org_id``'s checkpoints beyond the newest ``keep``; return how many went."""
+        deleted = 0
+        for cp in [cp for cp in self._stored_checkpoints() if cp.org_id == org_id][keep:]:
+            try:
+                deleted += self._remove_entry(self._checkpoint_path(cp.id))
+            except InvalidCheckpointNameError:
+                logger.warning("Skipping checkpoint with unsafe id in metadata: %r", cp.id)
+        return deleted
+
+    def _entry_count(self) -> int:
+        """Count checkpoint directories, including ones whose metadata is missing or unreadable."""
+        return sum(
+            1
+            for item in self.checkpoint_dir.iterdir()
+            if item.name.startswith("km_ckpt_") and not item.is_symlink() and item.is_dir()
+        )
+
+    def _write_entry(
+        self, checkpoint_id: str, content_name: str, content: bytes, metadata_json: str
+    ) -> None:
+        """Write the content, then publish ``metadata.json`` atomically.
+
+        A new directory is required, so an id collision raises FileExistsError and leaves
+        the existing entry alone. On any other failure the new directory is removed.
+        """
+        path = self.checkpoint_dir / checkpoint_id
+        path.mkdir()
+        committed = False
+        try:
+            (path / content_name).write_bytes(content)
+            staged = path / "metadata.json.tmp"
+            staged.write_text(metadata_json)
+            os.replace(staged, path / "metadata.json")
+            committed = True
+        finally:
+            if not committed:
+                shutil.rmtree(path, ignore_errors=True)
+
+    def _stored_checkpoints(self) -> list[KMCheckpointMetadata]:
         checkpoints = []
 
         for item in self.checkpoint_dir.iterdir():
@@ -553,17 +676,23 @@ class KMCheckpointStore:
 
     async def delete_checkpoint(self, checkpoint_id: str) -> bool:
         """Delete a checkpoint."""
-        checkpoint_path = self._checkpoint_path(checkpoint_id)
+        return self._remove_entry(self._checkpoint_path(checkpoint_id))
 
+    @staticmethod
+    def _remove_entry(checkpoint_path: Path) -> bool:
         if not checkpoint_path.exists():
             return False
 
         try:
+            # Content first: if the rest fails, metadata.json keeps the entry listed and
+            # owned, so a later delete or rotation retries it.
+            for name in ("content.json.gz", "content.json"):
+                (checkpoint_path / name).unlink(missing_ok=True)
             shutil.rmtree(checkpoint_path)
-            logger.info("Deleted KM checkpoint: %s", checkpoint_id)
+            logger.info("Deleted KM checkpoint: %s", checkpoint_path.name)
             return True
-        except (OSError, PermissionError) as e:
-            logger.error("Failed to delete checkpoint %s: %s", checkpoint_id, e)
+        except OSError as e:
+            logger.error("Failed to delete checkpoint %s: %s", checkpoint_path.name, e)
             return False
 
     async def compare_checkpoints(
@@ -772,23 +901,12 @@ class KMCheckpointStore:
         """Prune the oldest checkpoints recorded for ``org_id`` beyond max_checkpoints.
 
         Checkpoints recorded for any other organization (or for none, when
-        ``org_id`` is set) are never pruned.
+        ``org_id`` is set) are never pruned. Creates already rotate under the
+        same locks, so this is only needed to shrink a store after lowering
+        ``max_checkpoints``.
         """
-        checkpoints = [cp for cp in await self.list_checkpoints() if cp.org_id == org_id]
-
-        if len(checkpoints) <= self.max_checkpoints:
-            return 0
-
-        # Delete oldest checkpoints
-        to_delete = checkpoints[self.max_checkpoints :]
-        deleted = 0
-
-        for ckpt in to_delete:
-            try:
-                if await self.delete_checkpoint(ckpt.id):
-                    deleted += 1
-            except InvalidCheckpointNameError:
-                logger.warning("Skipping checkpoint with unsafe id in metadata: %r", ckpt.id)
+        with self._write_lock, _directory_lock(self.checkpoint_dir):
+            deleted = self._delete_oldest(org_id, self.max_checkpoints)
 
         if deleted > 0:
             logger.info("Pruned %s old KM checkpoints", deleted)
@@ -832,6 +950,7 @@ def reset_km_checkpoint_store() -> None:
 
 
 __all__ = [
+    "CheckpointCapacityError",
     "InvalidCheckpointNameError",
     "KMCheckpointStore",
     "KMCheckpointMetadata",

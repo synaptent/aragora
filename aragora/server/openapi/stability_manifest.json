@@ -1622,7 +1622,6 @@
     "POST /api/v1/integrations/{param}/sync",
     "POST /api/v1/integrations/{param}/test",
     "POST /api/v1/km/checkpoints",
-    "POST /api/v1/km/checkpoints/{param}/restore",
     "POST /api/v1/knowledge/facts",
     "POST /api/v1/knowledge/facts/relations",
     "POST /api/v1/knowledge/facts/{param}/verify",

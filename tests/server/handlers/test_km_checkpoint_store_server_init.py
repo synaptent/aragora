@@ -11,10 +11,16 @@ tier lookup, the registry subset, the route index and a spy on store restores.
 from __future__ import annotations
 
 import asyncio
+import errno
 import io
 import json
+import os
+import subprocess
+import sys
+import threading
 from collections.abc import Iterator
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -22,6 +28,7 @@ import pytest
 
 from aragora.billing.auth.context import UserAuthContext
 from aragora.knowledge.mound import KnowledgeMound
+from aragora.knowledge.mound import checkpoint as checkpoint_module
 from aragora.knowledge.mound.checkpoint import (
     KMCheckpointStore,
     get_km_checkpoint_store,
@@ -309,7 +316,7 @@ class TestTenantIsolation:
             _, status, body = server.request(
                 "POST", path, _user("owner"), body={"strategy": strategy}
             )
-        assert status == 403, body
+        assert status == 501 and body["error"]["code"] == "not_implemented", body
         assert _state(store) == before and not restore.called
 
     def test_own_checkpoint_compares_and_deletes_within_the_org(self, two_orgs: Any) -> None:
@@ -320,7 +327,7 @@ class TestTenantIsolation:
         pair = {"checkpoint_a": own, "checkpoint_b": own}
         assert server.request("POST", f"{COLLECTION}/compare", _user("owner"), body=pair)[1] == 200
         assert server.request("DELETE", f"{COLLECTION}/{own}", _user("owner"))[1] == 200
-        assert {p.name for p in store.checkpoint_dir.iterdir()} == {ids["foreign"], ids["legacy"]}
+        assert _entry_names(store) == {ids["foreign"], ids["legacy"]}
 
     def test_create_without_an_org_is_refused(self, two_orgs: Any) -> None:
         server, store, _ = two_orgs
@@ -339,3 +346,193 @@ class TestTenantIsolation:
         newest = asyncio.run(store.create_checkpoint(org_id=ORG))
         listed = {cp.id for cp in asyncio.run(store.list_checkpoints())}
         assert listed == {kept[0], kept[1], newest}
+
+
+class TestGlobalCheckpointCeiling:
+    """Total stored checkpoints, legacy ones included, stay at or below the store ceiling."""
+
+    def test_default_ceiling_bounds_every_org_together(
+        self, server_mound: KnowledgeMound, tmp_path: Path
+    ) -> None:
+        store = KMCheckpointStore(server_mound, str(tmp_path / "default"))
+        assert store.max_total_checkpoints == 100
+        assert store.max_checkpoints <= store.max_total_checkpoints
+
+    @pytest.mark.parametrize("org", [ORG, "org-new"])
+    def test_create_over_the_ceiling_is_refused_before_any_write(
+        self, server_mound: KnowledgeMound, tmp_path: Path, org: str
+    ) -> None:
+        store = KMCheckpointStore(
+            server_mound, str(tmp_path / "ceiling"), max_checkpoints=5, max_total_checkpoints=2
+        )
+        # The legacy checkpoint is counted, not owned: without it this create would fit.
+        for existing in (OTHER_ORG, None):
+            asyncio.run(store.create_checkpoint(org_id=existing))
+        before = _state(store)
+        with pytest.raises(checkpoint_module.CheckpointCapacityError):
+            asyncio.run(store.create_checkpoint(name="cp-over", org_id=org))
+        assert _state(store) == before
+
+    def test_org_at_its_cap_still_rotates_at_the_ceiling(
+        self, server_mound: KnowledgeMound, tmp_path: Path
+    ) -> None:
+        store = KMCheckpointStore(
+            server_mound, str(tmp_path / "rotate"), max_checkpoints=1, max_total_checkpoints=3
+        )
+        kept = [asyncio.run(store.create_checkpoint(org_id=org)) for org in (OTHER_ORG, None)]
+        asyncio.run(store.create_checkpoint(org_id=ORG))
+        newest = asyncio.run(store.create_checkpoint(org_id=ORG))
+        listed = {cp.id for cp in asyncio.run(store.list_checkpoints())}
+        assert listed == {kept[0], kept[1], newest}
+
+    @pytest.mark.parametrize("org", [ORG, "org-new"])
+    def test_http_create_over_the_ceiling_gets_507(self, two_orgs: Any, org: str) -> None:
+        server, store, _ = two_orgs
+        store.max_total_checkpoints = 3
+        before = _state(store)
+        _, status, body = server.request(
+            "POST", COLLECTION, _user("owner", org=org), body={"name": "cp-over"}
+        )
+        assert status == 507, body
+        assert body["error"]["code"] == "checkpoint_storage_full", body
+        # Other organizations' checkpoint counts are not disclosed.
+        assert not any(ch.isdigit() for ch in body["error"]["message"]), body
+        assert _state(store) == before
+
+    def test_undeletable_oldest_own_checkpoint_at_a_full_store_gets_507(
+        self, two_orgs: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        server, store, ids = two_orgs
+        store.max_checkpoints, store.max_total_checkpoints = 1, 3
+        _fail_rmtree_of(monkeypatch, store.checkpoint_dir / ids["own"])
+        before = _entry_names(store)
+        _, status, body = server.request(
+            "POST", COLLECTION, _user("owner"), body={"name": "cp-next"}
+        )
+        assert status == 507 and body["error"]["code"] == "checkpoint_storage_full", body
+        assert _entry_names(store) == before
+        # Still counted and still owned, so the next create retries the deletion.
+        own = [cp.id for cp in asyncio.run(store.list_checkpoints()) if cp.org_id == ORG]
+        assert own == [ids["own"]]
+
+    def test_repeated_failed_deletions_do_not_ratchet(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        store = KMCheckpointStore(
+            _bare_mound(), str(tmp_path / "stuck"), max_checkpoints=1, max_total_checkpoints=2
+        )
+        stuck = str(asyncio.run(store.create_checkpoint(org_id=ORG)))
+        asyncio.run(store.create_checkpoint(org_id=OTHER_ORG))
+        _fail_rmtree_of(monkeypatch, store.checkpoint_dir / stuck)
+        for _ in range(3):
+            with pytest.raises(checkpoint_module.CheckpointCapacityError):
+                asyncio.run(store.create_checkpoint(org_id=ORG))
+            assert len(_entry_names(store)) == 2 and stuck in _entry_names(store)
+
+    @pytest.mark.parametrize(
+        ("err", "status", "code"),
+        [
+            (errno.ENOSPC, 507, "checkpoint_storage_full"),
+            (errno.EIO, 500, "checkpoint_write_failed"),
+        ],
+    )
+    def test_failed_content_write_leaves_no_partial_entry(
+        self, two_orgs: Any, monkeypatch: pytest.MonkeyPatch, err: int, status: int, code: str
+    ) -> None:
+        server, store, _ = two_orgs
+        write_bytes = Path.write_bytes
+
+        def failing_write(path: Path, data: Any) -> int:
+            if path.name.startswith("content"):
+                raise OSError(err, os.strerror(err), str(path))
+            return write_bytes(path, data)
+
+        monkeypatch.setattr(Path, "write_bytes", failing_write)
+        before = _state(store)
+        _, got, body = server.request("POST", COLLECTION, _user("owner"), body={"name": "cp-x"})
+        assert got == status and body["error"]["code"] == code, body
+        assert _state(store) == before
+
+    def test_second_process_on_the_same_directory_waits_and_is_refused(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        directory = str(tmp_path / "shared")
+        first = KMCheckpointStore(_bare_mound(), directory, max_total_checkpoints=2)
+        asyncio.run(first.create_checkpoint(org_id=OTHER_ORG))
+        paused, release = threading.Event(), threading.Event()
+        check = first._check_capacity
+
+        def pause_after_check(org_id: str | None) -> None:
+            check(org_id)
+            paused.set()
+            release.wait(60)
+
+        monkeypatch.setattr(first, "_check_capacity", pause_after_check)
+        writer = threading.Thread(target=asyncio.run, args=(first.create_checkpoint(org_id=ORG),))
+        writer.start()
+        assert paused.wait(60)
+        root = str(Path(checkpoint_module.__file__).parents[3])
+        env = {
+            **os.environ,
+            "PYTHONPATH": os.pathsep.join([root, os.environ.get("PYTHONPATH", "")]),
+        }
+        second = subprocess.Popen(
+            [sys.executable, "-c", _SECOND_WRITER, directory],
+            stdout=subprocess.PIPE,
+            text=True,
+            env=env,
+        )
+        try:
+            assert second.stdout is not None and second.stdout.readline().strip() == "ready"
+            try:
+                second.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                pass
+            waited = second.poll() is None
+        finally:
+            release.set()
+            writer.join(60)
+            out, _ = second.communicate(timeout=120)
+        assert waited, "the second process passed its check while the first held the lock"
+        assert out.strip() == "refused" and len(_entry_names(first)) == 2
+
+
+_SECOND_WRITER = """
+import asyncio, sys
+from types import SimpleNamespace
+from aragora.knowledge.mound.checkpoint import CheckpointCapacityError, KMCheckpointStore
+
+config = SimpleNamespace(
+    backend="sqlite", enable_staleness_detection=False, enable_culture_accumulator=False
+)
+mound = SimpleNamespace(workspace_id="ws", config=config)
+store = KMCheckpointStore(mound, sys.argv[1], max_total_checkpoints=2)
+print("ready", flush=True)
+try:
+    asyncio.run(store.create_checkpoint(org_id="org-b"))
+    print("created")
+except CheckpointCapacityError:
+    print("refused")
+"""
+
+
+def _bare_mound() -> Any:
+    config = SimpleNamespace(
+        backend="sqlite", enable_staleness_detection=False, enable_culture_accumulator=False
+    )
+    return SimpleNamespace(workspace_id="ws", config=config)
+
+
+def _entry_names(store: KMCheckpointStore) -> set[str]:
+    return {p.name for p in store.checkpoint_dir.iterdir() if p.name.startswith("km_ckpt_")}
+
+
+def _fail_rmtree_of(monkeypatch: pytest.MonkeyPatch, entry: Path) -> None:
+    rmtree = checkpoint_module.shutil.rmtree
+
+    def failing_rmtree(path: Any, *args: Any, **kwargs: Any) -> None:
+        if Path(path) == entry:
+            raise PermissionError(errno.EACCES, "Permission denied", str(path))
+        rmtree(path, *args, **kwargs)
+
+    monkeypatch.setattr(checkpoint_module.shutil, "rmtree", failing_rmtree)

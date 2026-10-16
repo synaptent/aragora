@@ -185,9 +185,12 @@ export class CheckpointsAPI {
   }
 
   /**
-   * Restore a Knowledge Mound checkpoint.
+   * Request a Knowledge Mound checkpoint restore, which the server does not implement.
+   *
+   * After its authentication, permission and ownership checks the server answers
+   * 501 (`not_implemented`) without writing anything, so the promise always rejects.
    */
-  async restoreKM(name: string): Promise<{ restored: boolean }> {
+  async restoreKM(name: string): Promise<never> {
     return this.client.request('POST', `/api/v1/km/checkpoints/${name}/restore`);
   }
 
