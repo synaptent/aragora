@@ -604,7 +604,7 @@ const DOCSITE_EXCLUDE = {
 // Pages under docs-site/docs/ that no DOC_MAP source writes, and that a DOC_MAP destination
 // must not overwrite. All are edited by hand except contributing/capability-matrix.md, which
 // scripts/generate_capability_matrix.py renders from the capability YAML. Category index pages
-// come from createIndexFile() instead.
+// come from createIndexFile() for each INDEX_CATEGORIES entry instead.
 const DOCSITE_HAND_MAINTAINED = [
   'api-reference/agents/list.md',
   'api-reference/agents/overview.md',
@@ -636,6 +636,32 @@ const DOCSITE_HAND_MAINTAINED = [
   'getting-started/introduction.md',
   'guides/inbox-guide.md',
   'security/compliance.md',
+];
+
+// Each entry gets a generated <path>/index.md, written after every DOC_MAP page.
+const INDEX_CATEGORIES = [
+  { path: 'getting-started', title: 'Getting Started', desc: 'Learn how to get started with Aragora' },
+  { path: 'core-concepts', title: 'Core Concepts', desc: 'Understand the key concepts of Aragora' },
+  { path: 'guides', title: 'Guides', desc: 'Step-by-step guides for common tasks' },
+  { path: 'api', title: 'API Reference', desc: 'Complete API documentation' },
+  { path: 'deployment', title: 'Deployment', desc: 'Deploy Aragora in production' },
+  { path: 'operations', title: 'Operations', desc: 'Runbooks and operational procedures' },
+  { path: 'enterprise', title: 'Enterprise', desc: 'Enterprise features and compliance' },
+  { path: 'security', title: 'Security & Compliance', desc: 'Security, authentication, and compliance' },
+  { path: 'admin', title: 'Administration', desc: 'Administrative features and management' },
+  { path: 'advanced', title: 'Advanced Topics', desc: 'Advanced features and internals' },
+  { path: 'analysis', title: 'Analysis & Metrics', desc: 'Performance analysis and benchmarks' },
+  { path: 'contributing', title: 'Contributing', desc: 'How to contribute to Aragora' },
+  {
+    path: 'specs',
+    title: 'Specifications',
+    desc: 'Design and governance specifications for receipts, quorum policy, and related protocols',
+  },
+  {
+    path: 'reference',
+    title: 'Reference',
+    desc: 'Technical reference material covering configuration, environment variables, error codes, and other detailed references',
+  },
 ];
 
 // Add frontmatter to markdown files
@@ -1104,6 +1130,9 @@ function sourceMapProblems() {
     if (DOCSITE_HAND_MAINTAINED.includes(dest)) {
       problems.push(`destination ${dest} of '${src}' would overwrite a hand-maintained page`);
     }
+    if (INDEX_CATEGORIES.some((category) => `${category.path}/index.md` === dest)) {
+      problems.push(`destination ${dest} of '${src}' would be overwritten by a generated category index`);
+    }
     owners.set(dest, src);
   }
   for (const src of REPO_SOURCE_LINK_ONLY) {
@@ -1230,32 +1259,7 @@ function syncDocs() {
   // Create index files for each category
   console.log('\\n📁 Creating category index files...\\n');
 
-  const categories = [
-    { path: 'getting-started', title: 'Getting Started', desc: 'Learn how to get started with Aragora' },
-    { path: 'core-concepts', title: 'Core Concepts', desc: 'Understand the key concepts of Aragora' },
-    { path: 'guides', title: 'Guides', desc: 'Step-by-step guides for common tasks' },
-    { path: 'api', title: 'API Reference', desc: 'Complete API documentation' },
-    { path: 'deployment', title: 'Deployment', desc: 'Deploy Aragora in production' },
-    { path: 'operations', title: 'Operations', desc: 'Runbooks and operational procedures' },
-    { path: 'enterprise', title: 'Enterprise', desc: 'Enterprise features and compliance' },
-    { path: 'security', title: 'Security & Compliance', desc: 'Security, authentication, and compliance' },
-    { path: 'admin', title: 'Administration', desc: 'Administrative features and management' },
-    { path: 'advanced', title: 'Advanced Topics', desc: 'Advanced features and internals' },
-    { path: 'analysis', title: 'Analysis & Metrics', desc: 'Performance analysis and benchmarks' },
-    { path: 'contributing', title: 'Contributing', desc: 'How to contribute to Aragora' },
-    {
-      path: 'specs',
-      title: 'Specifications',
-      desc: 'Design and governance specifications for receipts, quorum policy, and related protocols',
-    },
-    {
-      path: 'reference',
-      title: 'Reference',
-      desc: 'Technical reference material covering configuration, environment variables, error codes, and other detailed references',
-    },
-  ];
-
-  for (const cat of categories) {
+  for (const cat of INDEX_CATEGORIES) {
     const items =
       cat.path === 'specs'
         ? docsSpecsItems()

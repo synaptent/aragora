@@ -302,7 +302,7 @@ def test_docs_site_sync_fails_closed_when_a_doc_map_source_is_missing() -> None:
         )
 
 
-def test_docs_site_sync_rejects_excluded_keys_and_hand_maintained_destinations() -> None:
+def test_docs_site_sync_rejects_excluded_keys_and_reserved_destinations() -> None:
     excluded = next(iter(_docsite_exclude_entries()))
     _run_sync_with_edited_script(
         _replace_once(
@@ -313,7 +313,13 @@ def test_docs_site_sync_rejects_excluded_keys_and_hand_maintained_destinations()
     )
     _run_sync_with_edited_script(
         _replace_once(r"'getting-started/overview\.md',", "'getting-started/installation.md',"),
-        "destination getting-started/installation.md of 'docs/guides/GETTING_STARTED.md'",
+        "destination getting-started/installation.md of 'docs/guides/GETTING_STARTED.md'"
+        " would overwrite a hand-maintained page",
+    )
+    _run_sync_with_edited_script(
+        _replace_once(r"'getting-started/overview\.md',", "'getting-started/index.md',"),
+        "destination getting-started/index.md of 'docs/guides/GETTING_STARTED.md'"
+        " would be overwritten by a generated category index",
     )
 
 
@@ -350,7 +356,7 @@ def test_every_root_and_curated_doc_is_published_or_excluded_with_a_reason() -> 
 
 def test_every_docs_site_page_has_a_source_or_is_hand_maintained() -> None:
     content = SYNC_SCRIPT.read_text(encoding="utf-8")
-    categories = re.search(r"const categories = \[(.*?)\n  \];", content, re.DOTALL)
+    categories = re.search(r"const INDEX_CATEGORIES = \[(.*?)\n\];", content, re.DOTALL)
     assert categories
     generated_indexes = {
         f"{name}/index.md" for name in re.findall(r"path: '([^']+)'", categories.group(1))
