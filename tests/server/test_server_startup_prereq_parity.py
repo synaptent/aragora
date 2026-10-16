@@ -21,11 +21,18 @@ the same checks with the same outcome:
    path's storage-backend check. A static check pins that every production
    sqlite ``secrets.conf`` block in that workflow sets the flag and matches
    the recipe probed here.
+5. With real component initialization, the production storage guard refuses
+   that recipe's SQLite job and governance stores. With the flag set, both
+   paths finish startup and skip the steps that need those stores; without
+   it, the sequential path degrades during startup validation and the
+   parallel path finishes startup with the same steps skipped.
 
 Each probe drives the real ``UnifiedServer.start`` on an instance built
 without ``__init__`` and replaces the component-initialization entry points
 (``parallel_init`` and ``_init_all_components``) and the post-startup handler
 initialization with canaries, so no component starts and no port is bound.
+The item 5 probe keeps the real component initialization and stops only at
+the post-startup canary.
 
 Subprocess conventions follow ``tests/server/test_server_startup_auth_failfast.py``:
 cold interpreter, inherited env minus ``ARAGORA_*``, AWS neutralization.
@@ -120,6 +127,91 @@ except RuntimeError as exc:
     sys.exit(5)
 print("SERVER_RETURNED_UNEXPECTEDLY")
 sys.exit(7)
+"""
+
+# Same harness with the real component initialization; reports the outcome and
+# the startup status of the steps that open the job and governance stores.
+_FULL_BOOT_PROBE = """
+import asyncio
+import json
+import os
+from pathlib import Path
+from types import SimpleNamespace
+
+os.environ["ARAGORA_ENV"] = "development"
+
+import aragora.server.startup as startup_mod
+import aragora.server.unified_server as us
+from aragora.server import degraded_mode
+
+os.environ["ARAGORA_ENV"] = os.environ.pop("PROBE_TARGET_ENV")
+use_parallel_init = os.environ.pop("PROBE_PARALLEL_INIT") == "true"
+_STATUS_KEYS = (
+    "durable_jobs_recovered",
+    "gauntlet_worker",
+    "testfixer_worker",
+    "approval_gate_recovery",
+)
+report = {"reached_component_init": False}
+
+
+class PassedStartupSequence(Exception):
+    pass
+
+
+def _post_startup_canary(*args, **kwargs):
+    raise PassedStartupSequence
+
+
+real_component_init = startup_mod._init_all_components
+real_parallel_init = startup_mod.parallel_init
+real_sequence = startup_mod.run_startup_sequence
+
+
+def _record(status):
+    report["status"] = {key: status.get(key) for key in _STATUS_KEYS}
+    return status
+
+
+async def _component_init(*args, **kwargs):
+    report["reached_component_init"] = True
+    return await real_component_init(*args, **kwargs)
+
+
+async def _parallel_init(*args, **kwargs):
+    report["reached_component_init"] = True
+    return _record(await real_parallel_init(*args, **kwargs))
+
+
+async def _sequence(*args, **kwargs):
+    return _record(await real_sequence(*args, **kwargs))
+
+
+startup_mod._init_all_components = _component_init
+startup_mod.parallel_init = _parallel_init
+startup_mod.run_startup_sequence = _sequence
+us.UnifiedHandler._init_handlers = staticmethod(_post_startup_canary)
+
+server = object.__new__(us.UnifiedServer)
+server.nomic_dir = Path(os.environ["ARAGORA_DATA_DIR"])
+server.stream_server = SimpleNamespace(emitter=None)
+
+try:
+    asyncio.run(server.start(use_parallel_init=use_parallel_init))
+    report["outcome"] = "returned"
+except PassedStartupSequence:
+    state = degraded_mode.get_degraded_state()
+    report["outcome"] = "passed_startup_sequence"
+    report["degraded"] = bool(state.is_degraded)
+    report["degraded_code"] = (
+        state.error_code.value if state.is_degraded and state.error_code else None
+    )
+except Exception as exc:
+    report["outcome"] = "raised"
+    report["error"] = f"{type(exc).__module__}.{type(exc).__name__}: {exc}"
+print("BOOT_REPORT=" + json.dumps(report, sort_keys=True), flush=True)
+# Workers and schedulers started by component init can keep the process alive.
+os._exit(0)
 """
 
 _PATHS = pytest.mark.parametrize("parallel_init", [True, False], ids=["parallel", "sequential"])
@@ -219,9 +311,9 @@ def _deploy_secure_secrets_conf_blocks() -> list[tuple[str, dict[str, str]]]:
     return blocks
 
 
-def _run_probe(env: dict[str, str]) -> subprocess.CompletedProcess[str]:
+def _run_probe(env: dict[str, str], script: str = _BOOT_PROBE) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, "-c", _BOOT_PROBE],
+        [sys.executable, "-c", script],
         cwd=REPO_ROOT,
         env=env,
         capture_output=True,
@@ -318,6 +410,65 @@ class TestStartupPrereqParity:
             "the sequential path's storage-backend check, and reach component init; "
             f"{_describe(proc)}"
         )
+
+
+def _full_boot_report(*, parallel_init: bool, data_dir: Path, recipe: dict[str, str]) -> dict:
+    env = _probe_env("production", parallel_init=parallel_init, data_dir=data_dir, extra=recipe)
+    # require_distributed_store waives the storage guard whenever
+    # PYTEST_CURRENT_TEST is set, and the probe would inherit it from pytest.
+    env = {
+        k: v for k, v in env.items() if k != "PYTEST_CURRENT_TEST" and not k.startswith("SUPABASE_")
+    }
+    proc = _run_probe(env, script=_FULL_BOOT_PROBE)
+    match = re.search(r"^BOOT_REPORT=(.*)$", proc.stdout, re.MULTILINE)
+    assert proc.returncode == 0 and match, _describe(proc)
+    return json.loads(match.group(1))
+
+
+_STORE_STEPS_SKIPPED = {"durable_jobs_recovered": 0, "gauntlet_worker": False}
+_SEQUENTIAL_ONLY_STORE_STEPS_SKIPPED = {"testfixer_worker": False, "approval_gate_recovery": 0}
+_DEPLOY_SECURE_WITHOUT_FLAG = {
+    k: v for k, v in _DEPLOY_SECURE_PRODUCTION.items() if k != "ARAGORA_ALLOW_SQLITE_FALLBACK"
+}
+
+
+class TestDeploySecureRecipeFullBoot:
+    """Cold-process boots of the deploy-secure recipe with real component init."""
+
+    @_PATHS
+    def test_flagged_recipe_completes_with_store_backed_steps_skipped(
+        self, parallel_init: bool, tmp_path: Path
+    ):
+        report = _full_boot_report(
+            parallel_init=parallel_init, data_dir=tmp_path, recipe=_DEPLOY_SECURE_PRODUCTION
+        )
+        assert report["outcome"] == "passed_startup_sequence", report
+        assert report["reached_component_init"] is True, report
+        assert report["degraded"] is False, report
+        expected = dict(_STORE_STEPS_SKIPPED)
+        if not parallel_init:
+            expected.update(_SEQUENTIAL_ONLY_STORE_STEPS_SKIPPED)
+        assert {k: report["status"][k] for k in expected} == expected, report
+
+    def test_unflagged_recipe_sequential_boot_degrades_before_component_init(self, tmp_path: Path):
+        report = _full_boot_report(
+            parallel_init=False, data_dir=tmp_path, recipe=_DEPLOY_SECURE_WITHOUT_FLAG
+        )
+        assert report["outcome"] == "passed_startup_sequence", report
+        assert report["reached_component_init"] is False, report
+        assert report["degraded"] is True, report
+        assert report["degraded_code"] == "DATABASE_UNAVAILABLE", report
+
+    def test_unflagged_recipe_parallel_boot_completes_with_store_backed_steps_skipped(
+        self, tmp_path: Path
+    ):
+        report = _full_boot_report(
+            parallel_init=True, data_dir=tmp_path, recipe=_DEPLOY_SECURE_WITHOUT_FLAG
+        )
+        assert report["outcome"] == "passed_startup_sequence", report
+        assert report["degraded"] is False, report
+        status = {k: report["status"][k] for k in _STORE_STEPS_SKIPPED}
+        assert status == _STORE_STEPS_SKIPPED, report
 
 
 def test_deploy_secure_production_sqlite_blocks_set_sqlite_fallback_flag():
