@@ -128,6 +128,48 @@ HANDLERS_AVAILABLE = all(
 )
 
 
+def _json_post_body(handler: Any, request_handler: Any) -> Any:
+    """The JSON object body for a HANDLE_POST_JSON_BODY handler, or the error response.
+
+    A body already buffered on the request (``handler.body`` or ``handler.request.body``,
+    which read_json_body reads first) is read as is. Otherwise only Content-Length frames
+    the body: http.server does not decode Transfer-Encoding, and without Content-Length
+    a request body ends only when the client closes the connection, so both answer 411
+    before anything is read from the socket. Content-Length 0 means no body.
+    """
+    from aragora.server.handlers.utils.responses import error_response
+
+    if not any(
+        isinstance(buffered, (str, bytes, bytearray))
+        for buffered in (
+            getattr(request_handler, "body", None),
+            getattr(getattr(request_handler, "request", None), "body", None),
+        )
+    ):
+        headers = getattr(request_handler, "headers", None) or {}
+        length = headers.get("Content-Length")
+        if length is None or headers.get("Transfer-Encoding") is not None:
+            return error_response(
+                "Content-Length is required and Transfer-Encoding is not supported",
+                411,
+                code="length_required",
+            )
+        length = str(length).strip()
+        # isascii: str.isdigit also accepts digits such as superscript two that int() rejects.
+        if not (length.isascii() and length.isdigit()):
+            return error_response(
+                "Content-Length must be a non-negative integer",
+                400,
+                code="invalid_content_length",
+            )
+        if int(length) == 0:
+            return {}
+    body = handler.read_json_body(request_handler)
+    if body is None:
+        return error_response("Request body must be a JSON object", 400, code="invalid_json_body")
+    return body
+
+
 class HandlerRegistryMixin:
     """
     Mixin providing modular HTTP handler initialization and routing.
@@ -501,8 +543,20 @@ class HandlerRegistryMixin:
             # then fall through to generic handle() if it returns None.
             # This handles the case where BaseHandler defines stub methods that
             # return None, while the handler routes all methods via handle().
-            result = None
-            if method == "POST" and hasattr(handler, "handle_post"):
+            result: Any = None
+            if (
+                method == "POST"
+                and hasattr(handler, "handle_post")
+                and getattr(handler, "HANDLE_POST_JSON_BODY", False)
+            ):
+                # These handlers take the parsed JSON body, not the query dict, as
+                # handle_post's second argument.
+                body = _json_post_body(handler, self)
+                if isinstance(body, dict):
+                    result = handler.handle_post(dispatch_path, body, self)
+                else:
+                    result = body
+            elif method == "POST" and hasattr(handler, "handle_post"):
                 result = handler.handle_post(dispatch_path, query_dict, self)
             elif method == "DELETE" and hasattr(handler, "handle_delete"):
                 result = handler.handle_delete(dispatch_path, query_dict, self)

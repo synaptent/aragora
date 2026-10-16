@@ -18,6 +18,7 @@ Tests cover:
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import numpy as np
@@ -370,6 +371,56 @@ class TestLocalEmbeddingServiceEmbedBatch:
 
         call_kwargs = service_with_mock_model._model.encode.call_args[1]
         assert call_kwargs["batch_size"] == 16
+
+
+class TestLocalEmbeddingServiceExceedsMaxSeqLength:
+    """Tests for LocalEmbeddingService.exceeds_max_seq_length()."""
+
+    @staticmethod
+    def _service(max_seq_length: int | None, tokenizer: object | None) -> LocalEmbeddingService:
+        service = LocalEmbeddingService()
+        service._model = MagicMock(max_seq_length=max_seq_length, tokenizer=tokenizer)
+        return service
+
+    @staticmethod
+    def _word_tokenizer(texts: list[str], **kwargs: object) -> dict[str, list[list[int]]]:
+        # One id per word plus the two special tokens the model adds.
+        return {"input_ids": [[0] * (len(text.split()) + 2) for text in texts]}
+
+    def test_flags_texts_longer_than_the_model_window(self):
+        service = self._service(4, self._word_tokenizer)
+        assert service.exceeds_max_seq_length(["one two", "one two three"]) == [False, True]
+
+    def test_counts_the_special_tokens(self):
+        tokenizer = MagicMock(side_effect=self._word_tokenizer)
+        service = self._service(4, tokenizer)
+        service.exceeds_max_seq_length(["one two"])
+        assert tokenizer.call_args.kwargs["add_special_tokens"] is True
+
+    def test_never_tokenizes_more_than_one_token_past_the_window(self):
+        def bounded_tokenizer(texts: list[str], **kwargs: Any) -> dict[str, list[list[int]]]:
+            encoded = self._word_tokenizer(texts)["input_ids"]
+            if kwargs.get("truncation"):
+                encoded = [ids[: kwargs["max_length"]] for ids in encoded]
+            return {"input_ids": encoded}
+
+        tokenizer = MagicMock(side_effect=bounded_tokenizer)
+        service = self._service(4, tokenizer)
+
+        flags = service.exceeds_max_seq_length(["one two", "word " * 100_000])
+
+        assert flags == [False, True]
+        assert tokenizer.call_args.kwargs["truncation"] is True
+        assert tokenizer.call_args.kwargs["max_length"] == 5
+
+    @pytest.mark.parametrize(
+        ("max_seq_length", "tokenizer"),
+        [(None, _word_tokenizer), (4, None)],
+        ids=["no-window", "no-tokenizer"],
+    )
+    def test_reports_no_truncation_when_the_model_cannot_tell(self, max_seq_length, tokenizer):
+        service = self._service(max_seq_length, tokenizer)
+        assert service.exceeds_max_seq_length(["one two three four five"]) == [False]
 
 
 # =============================================================================

@@ -33,6 +33,15 @@ __all__ = [
     "MLCircuitBreaker",
     "get_ml_circuit_breaker_status",
     "get_local_embedding_service",
+    "embeddings_unavailable_response",
+    "texts_exceed_model_window",
+    "MAX_EMBED_TEXT_BYTES",
+    "MAX_EMBED_TOTAL_BYTES",
+    "MAX_ML_TEXT_BYTES",
+    "MAX_ML_ITEMS",
+    "embed_input_error",
+    "text_input_error",
+    "too_many_error",
     "_clear_ml_components",
 ]
 
@@ -154,13 +163,101 @@ def get_local_embedding_service() -> Any:
     try:
         # LocalEmbeddingService loads its model lazily; reading the dimension loads it.
         _ = service.dimension
-    except (ImportError, RuntimeError, OSError, ValueError) as e:
+    except (ImportError, RuntimeError, OSError, ValueError, AttributeError) as e:
         # Not recorded on the shared "embeddings" breaker: /api/v1/ml/search and
         # /api/v1/ml/models take its half-open probes without reporting an outcome,
         # so a breaker opened by load failures could stay half-open after recovery.
         logger.warning("Local embedding model not available: %s", e)
         return None
     return service
+
+
+def embeddings_unavailable_response() -> HandlerResult:
+    """The 503 both embed routes answer when the local model cannot load.
+
+    Built directly rather than with error_response, which replaces every 5xx
+    message with 'Internal server error' in production.
+    """
+    return json_response(
+        {"error": {"message": "ML embeddings not available", "code": "service_unavailable"}},
+        status=503,
+    )
+
+
+def texts_exceed_model_window(service: Any, texts: list[str]) -> bool | None:
+    """Whether the model cut any of ``texts`` to its window, or None if it cannot tell."""
+    check = getattr(service, "exceeds_max_seq_length", None)
+    if not callable(check):
+        return None
+    try:
+        return any(check(texts))
+    except (ImportError, RuntimeError, OSError, ValueError, TypeError, KeyError) as e:
+        logger.debug("Could not tell whether texts exceed the model window: %s", e)
+        return None
+
+
+# A request bound, not a model limit: sentence-transformers truncates every text to
+# the model's max_seq_length (256 word pieces for all-MiniLM-L6-v2), so no length
+# fails. 2,000 bytes still fits a full window of English prose.
+MAX_EMBED_TEXT_BYTES = 2000
+# 100 texts at the per-text cap, the most /api/v1/ml/embed and embed-batch accept.
+# /api/v1/ml/search takes up to 1,000 documents, so this total is what bounds its work.
+MAX_EMBED_TOTAL_BYTES = 100 * MAX_EMBED_TEXT_BYTES
+# Scoring, consensus and routing read whole debate responses, so their per-text cap is
+# a long response rather than one embedding window. They share the total cap above.
+MAX_ML_TEXT_BYTES = 10 * MAX_EMBED_TEXT_BYTES
+MAX_ML_ITEMS = 100
+
+
+def text_input_error(
+    groups: list[Any], what: str, max_text_bytes: int = MAX_ML_TEXT_BYTES
+) -> HandlerResult | None:
+    """The 400 for text lists that do not hold strings or exceed the byte caps together."""
+    if not all(isinstance(g, list) and all(isinstance(t, str) for t in g) for g in groups):
+        return error_response(f"{what} must be strings", 400, code="invalid_input")
+    # A lone surrogate (a JSON "\ud800" escape) is counted here and left to the model
+    # call to reject, as before.
+    sizes = [len(t.encode("utf-8", "surrogatepass")) for g in groups for t in g]
+    if sizes and max(sizes) > max_text_bytes:
+        return error_response(
+            f"Each text may be at most {max_text_bytes} bytes of UTF-8",
+            400,
+            code="input_too_large",
+        )
+    if sum(sizes) > MAX_EMBED_TOTAL_BYTES:
+        return error_response(
+            f"Texts may total at most {MAX_EMBED_TOTAL_BYTES} bytes of UTF-8",
+            400,
+            code="input_too_large",
+        )
+    return None
+
+
+def embed_input_error(texts: Any) -> HandlerResult | None:
+    """The 400 for texts to embed that are not a list of strings or exceed the byte caps."""
+    return text_input_error([texts], "Texts to embed", MAX_EMBED_TEXT_BYTES)
+
+
+def too_many_error(count: int, noun: str) -> HandlerResult | None:
+    """The 400 for a list of more than MAX_ML_ITEMS items."""
+    if count > MAX_ML_ITEMS:
+        return error_response(f"At most {MAX_ML_ITEMS} {noun}", 400, code="input_too_large")
+    return None
+
+
+def _number_error(
+    data: dict, name: str, low: float, high: float = float("inf"), kind: Any = int
+) -> HandlerResult | None:
+    """The 400 for a field present in ``data`` that is not a ``kind`` from low to high.
+
+    An absent field passes; null, bools and non-finite numbers do not.
+    """
+    value = data.get(name, low)
+    if not isinstance(value, bool) and isinstance(value, kind) and low <= value <= high:
+        return None
+    noun = "an integer" if kind is int else "a number"
+    bound = f"of at least {low}" if high == float("inf") else f"from {low} to {high}"
+    return error_response(f"{name} must be {noun} {bound}", 400, code="invalid_input")
 
 
 def _clear_ml_components() -> None:
@@ -183,6 +280,8 @@ class MLHandler(BaseHandler):
     def __init__(self, ctx: dict | None = None):
         """Initialize handler with optional context."""
         self.ctx = ctx or {}
+
+    HANDLE_POST_JSON_BODY = True
 
     ROUTES = [
         "/api/v1/ml/route",
@@ -285,9 +384,19 @@ class MLHandler(BaseHandler):
         available_agents = data.get("available_agents", [])
         if not available_agents:
             return error_response("available_agents is required", 400)
+        input_error = text_input_error(
+            [[task], available_agents], "The task and available_agents"
+        ) or too_many_error(len(available_agents), "available_agents")
+        if input_error is not None:
+            return input_error
 
         team_size = data.get("team_size", 3)
         constraints = data.get("constraints", {})
+        if constraints is not None and not isinstance(constraints, dict):
+            return error_response("constraints must be an object", 400, code="invalid_input")
+        input_error = _number_error(data, "team_size", 1)
+        if input_error is not None:
+            return input_error
 
         try:
             decision = router.route(
@@ -345,6 +454,11 @@ class MLHandler(BaseHandler):
             return error_response("text is required", 400)
 
         context = data.get("context")
+        input_error = text_input_error(
+            [[text] if context is None else [text, context]], "Texts to score"
+        )
+        if input_error is not None:
+            return input_error
 
         try:
             score = scorer.score(text, context=context)
@@ -398,6 +512,15 @@ class MLHandler(BaseHandler):
             return error_response("Maximum 100 texts per batch", 400)
 
         contexts = data.get("contexts")
+        # The scorer takes a null context for a text without one.
+        given = [c for c in contexts if c is not None] if isinstance(contexts, list) else contexts
+        input_error = text_input_error(
+            [texts] if contexts is None else [texts, given], "Texts to score"
+        ) or too_many_error(len(contexts or []), "contexts per batch")
+        if input_error is not None:
+            return input_error
+        if contexts is not None and len(contexts) != len(texts):
+            return error_response("contexts must match texts in length", 400, code="invalid_input")
 
         try:
             scores = scorer.score_batch(texts, contexts=contexts)
@@ -458,13 +581,34 @@ class MLHandler(BaseHandler):
         responses = data.get("responses", [])
         if not responses:
             return error_response("responses is required", 400)
+        if not isinstance(responses, list) or not all(
+            isinstance(r, list) and len(r) == 2 and all(isinstance(s, str) for s in r)
+            for r in responses
+        ):
+            return error_response(
+                "Each response must be an [agent, text] pair of strings",
+                400,
+                code="invalid_input",
+            )
+
+        context = data.get("context")
+        input_error = too_many_error(len(responses), "responses") or text_input_error(
+            [[s for r in responses for s in r], [] if context is None else [context]],
+            "The context and responses",
+        )
+        if input_error is not None:
+            return input_error
 
         # Convert to expected format
         response_tuples = [tuple(r) for r in responses]
 
-        context = data.get("context")
         current_round = data.get("current_round", 1)
         total_rounds = data.get("total_rounds", 3)
+        input_error = _number_error(data, "total_rounds", 1) or _number_error(
+            data, "current_round", 1, total_rounds
+        )
+        if input_error is not None:
+            return input_error
 
         try:
             prediction = predictor.predict(
@@ -571,12 +715,13 @@ class MLHandler(BaseHandler):
         Response:
             {
                 "embeddings": [[0.1, 0.2, ...], ...],
-                "dimension": 384
+                "dimension": 384,
+                "truncated": false  // present when the model can tell
             }
         """
         embeddings = get_local_embedding_service()
         if not embeddings:
-            return error_response("ML embeddings not available", 503)
+            return embeddings_unavailable_response()
 
         text = data.get("text")
         texts = data.get("texts", [])
@@ -585,20 +730,26 @@ class MLHandler(BaseHandler):
             return error_response("text or texts is required", 400)
 
         try:
+            if not text and len(texts) > 100:
+                return error_response("Maximum 100 texts per batch", 400)
+            input_error = embed_input_error([text] if text else texts)
+            if input_error is not None:
+                return input_error
             if text:
                 result = [embeddings.embed(text)]
+                truncated = texts_exceed_model_window(embeddings, [text])
             else:
-                if len(texts) > 100:
-                    return error_response("Maximum 100 texts per batch", 400)
                 result = embeddings.embed_batch(texts)
+                truncated = texts_exceed_model_window(embeddings, texts)
 
-            return json_response(
-                {
-                    "embeddings": result,
-                    "dimension": len(result[0]) if result else 0,
-                    "count": len(result),
-                }
-            )
+            response: dict[str, Any] = {
+                "embeddings": result,
+                "dimension": len(result[0]) if result else 0,
+                "count": len(result),
+            }
+            if truncated is not None:
+                response["truncated"] = truncated
+            return json_response(response)
 
         except (ValueError, KeyError, TypeError) as e:
             logger.warning("Invalid ML embedding request: %s", e)
@@ -626,9 +777,9 @@ class MLHandler(BaseHandler):
                 ]
             }
         """
-        embeddings = _get_ml_component("embeddings")
+        embeddings = get_local_embedding_service()
         if not embeddings:
-            return error_response("ML embeddings not available", 503)
+            return embeddings_unavailable_response()
 
         query = data.get("query", "")
         documents = data.get("documents", [])
@@ -639,9 +790,19 @@ class MLHandler(BaseHandler):
             return error_response("documents is required", 400)
         if len(documents) > 1000:
             return error_response("Maximum 1000 documents", 400)
+        input_error = embed_input_error(
+            [query, *documents] if isinstance(documents, list) else documents
+        )
+        if input_error is not None:
+            return input_error
 
         top_k = data.get("top_k", 5)
         threshold = data.get("threshold", 0.0)
+        input_error = _number_error(data, "top_k", 1) or _number_error(
+            data, "threshold", -1, 1, (int, float)
+        )
+        if input_error is not None:
+            return input_error
 
         try:
             results = embeddings.search(
