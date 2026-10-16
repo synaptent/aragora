@@ -23,7 +23,7 @@ TYPE_PROTOCOLS_SHIM = "aragora.type_protocols"
 
 SHIM_FILES = frozenset({"aragora/types/protocols.py", "aragora/type_protocols.py"})
 
-PENDING_TYPES_PROTOCOLS_IMPORTERS = frozenset({"aragora/server/stream/debate_executor.py"})
+PENDING_TYPES_PROTOCOLS_IMPORTERS: frozenset[str] = frozenset()
 
 PENDING_TYPE_PROTOCOLS_IMPORTERS: frozenset[str] = frozenset()
 
@@ -37,6 +37,7 @@ MIGRATED_LEGACY_EMITTER_MODULES = (
     "aragora/memory/continuum/coordinator.py",
     "aragora/memory/continuum/core.py",
     "aragora/memory/continuum/singleton.py",
+    "aragora/server/stream/debate_executor.py",
 )
 
 _BARE_EMITTER_NAME = re.compile(r"\bEventEmitterProtocol\b")
