@@ -874,7 +874,7 @@ class TestRestoreCheckpoint:
     @pytest.mark.parametrize(
         ("metadata", "status"),
         [
-            (MockCheckpointMetadata(name="test-cp"), 403),
+            (MockCheckpointMetadata(name="test-cp"), 501),
             (MockCheckpointMetadata(name="test-cp", org_id="org-other"), 404),
             (MockCheckpointMetadata(name="test-cp", org_id=None), 404),
             (None, 404),
@@ -890,6 +890,8 @@ class TestRestoreCheckpoint:
             path=path, query_params={}, handler=mock_handler
         )
         assert _status(result) == status
+        if status == 501:
+            assert _body(result)["error"]["code"] == "not_implemented"
         mock_store.restore_checkpoint.assert_not_called()
 
     @pytest.mark.asyncio
@@ -1278,7 +1280,7 @@ class TestHandlePostRouting:
             query_params={},
             handler=mock_handler,
         )
-        assert _status(result) == 403
+        assert _status(result) == 501
         mock_store.get_checkpoint_metadata.assert_called_once_with("r-cp")
 
     @pytest.mark.asyncio
@@ -1603,7 +1605,7 @@ class TestEdgeCases:
             query_params={},
             handler=mock_handler,
         )
-        assert _status(result) == 403
+        assert _status(result) == 501
         mock_store.restore_checkpoint.assert_not_called()
 
     @pytest.mark.asyncio
@@ -1751,7 +1753,7 @@ class TestRealStoreIdContract:
         pair = {"checkpoint_a": ids[0], "checkpoint_b": ids[1]}
         assert _status(await _call(handler, "POST", f"{BASE}/compare", pair)) == 200
         restored = await _call(handler, "POST", f"{BASE}/{first}/restore", {})
-        assert _status(restored) == 403 and store.mound.saved == []
+        assert _status(restored) == 501 and store.mound.saved == []
         assert _status(await _call(handler, "DELETE", f"{BASE}/{first}")) == 200
         assert _status(await _call(handler, "GET", f"{BASE}/{first}")) == 404
         listed = _data(await _call(handler, "GET", BASE))["checkpoints"]
@@ -1806,7 +1808,7 @@ class TestRealStoreIdContract:
         assert _data(await _call(handler, "GET", f"{BASE}/{cid}"))["name"] == "kept"
         assert _data(await _call(handler, "GET", f"{BASE}/{cid}/compare"))["checkpoint"] == cid
         restored = await _call(handler, "POST", f"{BASE}/{cid}/restore", {})
-        assert _status(restored) == 403 and store.mound.saved == []
+        assert _status(restored) == 501 and store.mound.saved == []
         assert _status(await _call(handler, "DELETE", f"{BASE}/{cid}")) == 200
         assert _data(await _call(handler, "GET", BASE))["checkpoints"] == []
 
@@ -1822,6 +1824,6 @@ class TestRealStoreIdContract:
         (entry / linked).symlink_to(outside / linked)
         restored = await _call(handler, "POST", f"{BASE}/km_ckpt_link/restore", {})
         # A linked content file leaves owned metadata, so that case reaches the refusal.
-        assert _status(restored) == (404 if linked == "metadata.json" else 403)
+        assert _status(restored) == (404 if linked == "metadata.json" else 501)
         restored = await _call(handler, "POST", f"{BASE}/{cid}/restore", {})
-        assert _status(restored) == 403 and store.mound.saved == []
+        assert _status(restored) == 501 and store.mound.saved == []

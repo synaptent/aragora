@@ -496,7 +496,7 @@ class TestKMCheckpointDispatch:
         store = _checkpoint_store()
         handled, status, _ = _dispatch_checkpoint(method, prefix + suffix, _auth_user(role), store)
         assert handled is True
-        assert status == (403 if suffix.endswith("/restore") else 200)
+        assert status == (501 if suffix.endswith("/restore") else 200)
         getattr(store, store_method).assert_awaited_once()
         store.restore_checkpoint.assert_not_called()
 

@@ -22,6 +22,7 @@ import pytest
 
 from aragora.billing.auth.context import UserAuthContext
 from aragora.knowledge.mound import KnowledgeMound
+from aragora.knowledge.mound import checkpoint as checkpoint_module
 from aragora.knowledge.mound.checkpoint import (
     KMCheckpointStore,
     get_km_checkpoint_store,
@@ -309,7 +310,7 @@ class TestTenantIsolation:
             _, status, body = server.request(
                 "POST", path, _user("owner"), body={"strategy": strategy}
             )
-        assert status == 403, body
+        assert status == 501 and body["error"]["code"] == "not_implemented", body
         assert _state(store) == before and not restore.called
 
     def test_own_checkpoint_compares_and_deletes_within_the_org(self, two_orgs: Any) -> None:
@@ -339,3 +340,55 @@ class TestTenantIsolation:
         newest = asyncio.run(store.create_checkpoint(org_id=ORG))
         listed = {cp.id for cp in asyncio.run(store.list_checkpoints())}
         assert listed == {kept[0], kept[1], newest}
+
+
+class TestGlobalCheckpointCeiling:
+    """Total stored checkpoints, legacy ones included, stay at or below the store ceiling."""
+
+    def test_default_ceiling_bounds_every_org_together(
+        self, server_mound: KnowledgeMound, tmp_path: Path
+    ) -> None:
+        store = KMCheckpointStore(server_mound, str(tmp_path / "default"))
+        assert store.max_total_checkpoints == 100
+        assert store.max_checkpoints <= store.max_total_checkpoints
+
+    @pytest.mark.parametrize("org", [ORG, "org-new"])
+    def test_create_over_the_ceiling_is_refused_before_any_write(
+        self, server_mound: KnowledgeMound, tmp_path: Path, org: str
+    ) -> None:
+        store = KMCheckpointStore(
+            server_mound, str(tmp_path / "ceiling"), max_checkpoints=5, max_total_checkpoints=2
+        )
+        # The legacy checkpoint is counted, not owned: without it this create would fit.
+        for existing in (OTHER_ORG, None):
+            asyncio.run(store.create_checkpoint(org_id=existing))
+        before = _state(store)
+        with pytest.raises(checkpoint_module.CheckpointCapacityError):
+            asyncio.run(store.create_checkpoint(name="cp-over", org_id=org))
+        assert _state(store) == before
+
+    def test_org_at_its_cap_still_rotates_at_the_ceiling(
+        self, server_mound: KnowledgeMound, tmp_path: Path
+    ) -> None:
+        store = KMCheckpointStore(
+            server_mound, str(tmp_path / "rotate"), max_checkpoints=1, max_total_checkpoints=3
+        )
+        kept = [asyncio.run(store.create_checkpoint(org_id=org)) for org in (OTHER_ORG, None)]
+        asyncio.run(store.create_checkpoint(org_id=ORG))
+        newest = asyncio.run(store.create_checkpoint(org_id=ORG))
+        listed = {cp.id for cp in asyncio.run(store.list_checkpoints())}
+        assert listed == {kept[0], kept[1], newest}
+
+    @pytest.mark.parametrize("org", [ORG, "org-new"])
+    def test_http_create_over_the_ceiling_gets_507(self, two_orgs: Any, org: str) -> None:
+        server, store, _ = two_orgs
+        store.max_total_checkpoints = 3
+        before = _state(store)
+        _, status, body = server.request(
+            "POST", COLLECTION, _user("owner", org=org), body={"name": "cp-over"}
+        )
+        assert status == 507, body
+        assert body["error"]["code"] == "checkpoint_storage_full", body
+        # Other organizations' checkpoint counts are not disclosed.
+        assert not any(ch.isdigit() for ch in body["error"]["message"]), body
+        assert _state(store) == before

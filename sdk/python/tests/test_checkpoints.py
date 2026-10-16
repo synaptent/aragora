@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from aragora_sdk.client import AragoraAsyncClient, AragoraClient
+from aragora_sdk.exceptions import ServerError
 
 
 class TestCheckpointsList:
@@ -264,10 +265,13 @@ class TestKMCheckpoints:
         assert result["additions"] == 5
 
     def test_restore_km(self, client: AragoraClient, mock_request) -> None:
-        """Restore KM checkpoint."""
-        mock_request.return_value = {"restored": True}
+        """The server answers restore with 501, which surfaces as ServerError."""
+        mock_request.side_effect = ServerError(
+            "Checkpoint restore is not implemented", status_code=501, error_code="not_implemented"
+        )
 
-        result = client.checkpoints.restore_km("backup_2024_01")
+        with pytest.raises(ServerError) as excinfo:
+            client.checkpoints.restore_km("backup_2024_01")
 
         mock_request.assert_called_once_with(
             "POST",
@@ -276,7 +280,8 @@ class TestKMCheckpoints:
             json=None,
             headers=None,
         )
-        assert result["restored"] is True
+        assert excinfo.value.status_code == 501
+        assert "501" in (client.checkpoints.restore_km.__doc__ or "")
 
     def test_delete_km(self, client: AragoraClient, mock_request) -> None:
         """Delete KM checkpoint."""
