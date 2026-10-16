@@ -276,13 +276,18 @@ class CheckpointsAPI:
 
     def restore_km(self, name: str) -> dict[str, Any]:
         """
-        Restore a Knowledge Mound checkpoint.
+        Request a Knowledge Mound checkpoint restore, which the server does not implement.
+
+        After its authentication, permission and ownership checks the server answers
+        501 (error code ``not_implemented``) without writing anything, so this call
+        never returns a result.
 
         Args:
-            name: The checkpoint name to restore.
+            name: The checkpoint id to restore.
 
-        Returns:
-            Dict with restored status.
+        Raises:
+            ServerError: With ``status_code`` 501 while restore is not implemented.
+            NotFoundError: The checkpoint is not recorded for the caller's organization.
         """
         return self._client._request("POST", f"/api/v1/km/checkpoints/{name}/restore")
 
@@ -433,7 +438,11 @@ class AsyncCheckpointsAPI:
         )
 
     async def restore_km(self, name: str) -> dict[str, Any]:
-        """Restore a Knowledge Mound checkpoint."""
+        """Request a Knowledge Mound checkpoint restore, which the server does not implement.
+
+        Raises ServerError with ``status_code`` 501 (error code ``not_implemented``);
+        nothing is written. See ``CheckpointsAPI.restore_km``.
+        """
         return await self._client._request("POST", f"/api/v1/km/checkpoints/{name}/restore")
 
     async def delete_km(self, name: str) -> dict[str, Any]:

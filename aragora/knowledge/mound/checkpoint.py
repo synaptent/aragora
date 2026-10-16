@@ -34,6 +34,7 @@ import json
 import logging
 import re
 import shutil
+import threading
 import time
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
@@ -52,6 +53,10 @@ _CHECKPOINT_NAME_RE = re.compile(r"[A-Za-z0-9_-]{1,128}")
 
 class InvalidCheckpointNameError(ValueError):
     """A checkpoint name is not a single safe segment inside the checkpoint directory."""
+
+
+class CheckpointCapacityError(RuntimeError):
+    """A create would leave more checkpoints stored than the store's global ceiling."""
 
 
 def validate_checkpoint_name(name: object) -> str:
@@ -172,6 +177,7 @@ class KMCheckpointStore:
         checkpoint_dir: str | None = None,
         compress: bool = True,
         max_checkpoints: int = 10,
+        max_total_checkpoints: int = 100,
     ):
         """
         Initialize checkpoint store.
@@ -180,11 +186,17 @@ class KMCheckpointStore:
             mound: KnowledgeMound instance to checkpoint
             checkpoint_dir: Directory for checkpoint storage
             compress: Whether to gzip compress checkpoints
-            max_checkpoints: Maximum checkpoints to keep (oldest are pruned)
+            max_checkpoints: Maximum checkpoints kept per recorded org_id (oldest are pruned)
+            max_total_checkpoints: Maximum checkpoints stored across all organizations,
+                including legacy ones without an org_id. A create that would exceed it
+                after its own organization's pruning is refused before anything is
+                written; other organizations' checkpoints are never pruned to make room.
         """
         self.mound = mound
         self.compress = compress
         self.max_checkpoints = max_checkpoints
+        self.max_total_checkpoints = max_total_checkpoints
+        self._write_lock = threading.Lock()
 
         # Set checkpoint directory
         if checkpoint_dir:
@@ -228,6 +240,10 @@ class KMCheckpointStore:
 
         Returns:
             Checkpoint ID (str) or KMCheckpointMetadata if return_metadata=True
+
+        Raises:
+            CheckpointCapacityError: The create would exceed ``max_total_checkpoints``;
+                nothing is written.
         """
         if name is not None:
             validate_checkpoint_name(name)
@@ -312,17 +328,22 @@ class KMCheckpointStore:
             org_id=org_id,
         )
 
-        # Write checkpoint files
-        checkpoint_path = self.checkpoint_dir / checkpoint_id
-        checkpoint_path.mkdir(parents=True, exist_ok=True)
+        # One lock spans the capacity check and the write, so concurrent creates in this
+        # process cannot both pass against the same count. Nothing inside it awaits.
+        with self._write_lock:
+            self._check_capacity(org_id)
 
-        # Write metadata
-        metadata_file = checkpoint_path / "metadata.json"
-        metadata_file.write_text(json.dumps(metadata.to_dict(), indent=2))
+            # Write checkpoint files
+            checkpoint_path = self.checkpoint_dir / checkpoint_id
+            checkpoint_path.mkdir(parents=True, exist_ok=True)
 
-        # Write content
-        content_file = checkpoint_path / f"content{extension}"
-        content_file.write_bytes(content_bytes)
+            # Write metadata
+            metadata_file = checkpoint_path / "metadata.json"
+            metadata_file.write_text(json.dumps(metadata.to_dict(), indent=2))
+
+            # Write content
+            content_file = checkpoint_path / f"content{extension}"
+            content_file.write_bytes(content_bytes)
 
         duration_ms = int((time.time() - start_time) * 1000)
         logger.info(
@@ -493,6 +514,27 @@ class KMCheckpointStore:
 
     async def list_checkpoints(self) -> list[KMCheckpointMetadata]:
         """List all available checkpoints."""
+        return self._stored_checkpoints()
+
+    def _check_capacity(self, org_id: str | None) -> None:
+        """Refuse a create for ``org_id`` that would leave more than the ceiling stored.
+
+        Every stored checkpoint counts, whatever organization it records (or none).
+        The new checkpoint's own organization is then pruned to ``max_checkpoints``,
+        so an organization already at its cap replaces its oldest checkpoint.
+        """
+        stored = self._stored_checkpoints()
+        own = sum(1 for cp in stored if cp.org_id == org_id)
+        after = len(stored) + 1 - max(0, own + 1 - self.max_checkpoints)
+        if after > self.max_total_checkpoints:
+            logger.warning(
+                "Refusing KM checkpoint create: %s stored, ceiling %s",
+                len(stored),
+                self.max_total_checkpoints,
+            )
+            raise CheckpointCapacityError("Checkpoint storage is full")
+
+    def _stored_checkpoints(self) -> list[KMCheckpointMetadata]:
         checkpoints = []
 
         for item in self.checkpoint_dir.iterdir():
@@ -832,6 +874,7 @@ def reset_km_checkpoint_store() -> None:
 
 
 __all__ = [
+    "CheckpointCapacityError",
     "InvalidCheckpointNameError",
     "KMCheckpointStore",
     "KMCheckpointMetadata",

@@ -20826,9 +20826,8 @@ paths:
               properties:
                 name:
                   type: string
-                  description: Checkpoint name (must be unique)
-                  minLength: 1
-                  maxLength: 256
+                  description: Checkpoint label, not an identifier
+                  pattern: ^[A-Za-z0-9_-]{1,128}$
                 description:
                   type: string
                   description: Optional checkpoint description
@@ -20883,6 +20882,23 @@ paths:
                 properties:
                   error:
                     type: string
+        '507':
+          description: 'Checkpoint storage is full: the create would exceed the server-wide checkpoint ceiling. Nothing is
+            written.'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                        - checkpoint_storage_full
+                      message:
+                        type: string
       deprecated: true
       x-aragora-stability: deprecated
   /api/km/checkpoints/compare:
@@ -20905,10 +20921,10 @@ paths:
               properties:
                 checkpoint_a:
                   type: string
-                  description: First checkpoint name
+                  description: First checkpoint id
                 checkpoint_b:
                   type: string
-                  description: Second checkpoint name
+                  description: Second checkpoint id
       responses:
         '200':
           description: Comparison between two checkpoints
@@ -21013,12 +21029,13 @@ paths:
       tags:
       - Knowledge Mound
       summary: Get checkpoint
-      description: Get checkpoint metadata by name.
+      description: Get checkpoint metadata by id.
       security:
       - bearerAuth: []
       parameters:
       - name: checkpoint_name
         in: path
+        description: Checkpoint id (km_ckpt_...) returned by create or list; names are not accepted
         required: true
         schema:
           type: string
@@ -21081,12 +21098,13 @@ paths:
       tags:
       - Knowledge Mound
       summary: Delete checkpoint
-      description: Delete a checkpoint by name.
+      description: Delete a checkpoint by id.
       security:
       - bearerAuth: []
       parameters:
       - name: checkpoint_name
         in: path
+        description: Checkpoint id (km_ckpt_...) returned by create or list; names are not accepted
         required: true
         schema:
           type: string
@@ -21120,6 +21138,7 @@ paths:
       parameters:
       - name: checkpoint_name
         in: path
+        description: Checkpoint id (km_ckpt_...) returned by create or list; names are not accepted
         required: true
         schema:
           type: string
@@ -21265,13 +21284,16 @@ paths:
     post:
       tags:
       - Knowledge Mound
-      summary: Restore checkpoint
-      description: Restore Knowledge Mound state from a checkpoint.
+      summary: Restore checkpoint (not implemented)
+      description: 'Not implemented. After the authentication, permission, strategy and ownership checks, every request is
+        answered 501 before anything is written: the server''s Knowledge Mound workspace records no owning organization, so
+        the owner of the restore target cannot be proven.'
       security:
       - bearerAuth: []
       parameters:
       - name: checkpoint_name
         in: path
+        description: Checkpoint id (km_ckpt_...) returned by create or list; names are not accepted
         required: true
         schema:
           type: string
@@ -21295,7 +21317,9 @@ paths:
                   description: Skip nodes that already exist
       responses:
         '200':
-          description: Restore result
+          description: Never returned while restore is not implemented
+        '400':
+          description: Bad request - Invalid input or malformed JSON
           headers: &id129
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
@@ -21306,13 +21330,6 @@ paths:
               description: Server processing time in milliseconds
               schema:
                 type: integer
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RestoreResult'
-        '400':
-          description: Bad request - Invalid input or malformed JSON
-          headers: *id129
           content:
             application/json:
               schema:
@@ -21358,6 +21375,28 @@ paths:
                     error: Invalid or expired authentication token
                     code: INVALID_TOKEN
                     trace_id: req_abc123xyz
+        '403':
+          description: Forbidden - Insufficient permissions for this operation
+          headers: *id129
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                insufficient_permissions:
+                  summary: Insufficient permissions
+                  value:
+                    error: You do not have permission to access this resource
+                    code: FORBIDDEN
+                    required_role: admin
+                    trace_id: req_abc123xyz
+                resource_owner:
+                  summary: Not resource owner
+                  value:
+                    error: You do not have permission to modify this debate
+                    code: NOT_OWNER
+                    resource_type: debate
+                    trace_id: req_abc123xyz
         '404':
           description: Not found - The requested resource does not exist
           headers: *id129
@@ -21374,6 +21413,22 @@ paths:
                     resource_type: debate
                     resource_id: deb_abc123
                     trace_id: req_abc123xyz
+        '501':
+          description: Restore is not implemented
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                        - not_implemented
+                      message:
+                        type: string
       deprecated: true
       x-aragora-stability: deprecated
   /api/laboratory/cross-pollinations/suggest:
@@ -96306,9 +96361,8 @@ paths:
               properties:
                 name:
                   type: string
-                  description: Checkpoint name (must be unique)
-                  minLength: 1
-                  maxLength: 256
+                  description: Checkpoint label, not an identifier
+                  pattern: ^[A-Za-z0-9_-]{1,128}$
                 description:
                   type: string
                   description: Optional checkpoint description
@@ -96363,6 +96417,23 @@ paths:
                 properties:
                   error:
                     type: string
+        '507':
+          description: 'Checkpoint storage is full: the create would exceed the server-wide checkpoint ceiling. Nothing is
+            written.'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                        - checkpoint_storage_full
+                      message:
+                        type: string
       x-aragora-stability: stable
   /api/v1/km/checkpoints/compare:
     post:
@@ -96385,10 +96456,10 @@ paths:
               properties:
                 checkpoint_a:
                   type: string
-                  description: First checkpoint name
+                  description: First checkpoint id
                 checkpoint_b:
                   type: string
-                  description: Second checkpoint name
+                  description: Second checkpoint id
       responses:
         '200':
           description: Comparison between two checkpoints
@@ -96493,12 +96564,13 @@ paths:
       - Knowledge Mound
       summary: Get checkpoint
       operationId: getKmCheckpoint
-      description: Get checkpoint metadata by name.
+      description: Get checkpoint metadata by id.
       security:
       - bearerAuth: []
       parameters:
       - name: checkpoint_name
         in: path
+        description: Checkpoint id (km_ckpt_...) returned by create or list; names are not accepted
         required: true
         schema:
           type: string
@@ -96561,12 +96633,13 @@ paths:
       - Knowledge Mound
       summary: Delete checkpoint
       operationId: deleteKmCheckpoint
-      description: Delete a checkpoint by name.
+      description: Delete a checkpoint by id.
       security:
       - bearerAuth: []
       parameters:
       - name: checkpoint_name
         in: path
+        description: Checkpoint id (km_ckpt_...) returned by create or list; names are not accepted
         required: true
         schema:
           type: string
@@ -96600,6 +96673,7 @@ paths:
       parameters:
       - name: checkpoint_name
         in: path
+        description: Checkpoint id (km_ckpt_...) returned by create or list; names are not accepted
         required: true
         schema:
           type: string
@@ -96744,14 +96818,17 @@ paths:
     post:
       tags:
       - Knowledge Mound
-      summary: Restore checkpoint
+      summary: Restore checkpoint (not implemented)
       operationId: createKmCheckpointsRestore
-      description: Restore Knowledge Mound state from a checkpoint.
+      description: 'Not implemented. After the authentication, permission, strategy and ownership checks, every request is
+        answered 501 before anything is written: the server''s Knowledge Mound workspace records no owning organization, so
+        the owner of the restore target cannot be proven.'
       security:
       - bearerAuth: []
       parameters:
       - name: checkpoint_name
         in: path
+        description: Checkpoint id (km_ckpt_...) returned by create or list; names are not accepted
         required: true
         schema:
           type: string
@@ -96775,7 +96852,9 @@ paths:
                   description: Skip nodes that already exist
       responses:
         '200':
-          description: Restore result
+          description: Never returned while restore is not implemented
+        '400':
+          description: Bad request - Invalid input or malformed JSON
           headers: &id751
             X-Request-ID:
               description: Unique request identifier for tracing and debugging
@@ -96786,13 +96865,6 @@ paths:
               description: Server processing time in milliseconds
               schema:
                 type: integer
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RestoreResult'
-        '400':
-          description: Bad request - Invalid input or malformed JSON
-          headers: *id751
           content:
             application/json:
               schema:
@@ -96838,6 +96910,28 @@ paths:
                     error: Invalid or expired authentication token
                     code: INVALID_TOKEN
                     trace_id: req_abc123xyz
+        '403':
+          description: Forbidden - Insufficient permissions for this operation
+          headers: *id751
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                insufficient_permissions:
+                  summary: Insufficient permissions
+                  value:
+                    error: You do not have permission to access this resource
+                    code: FORBIDDEN
+                    required_role: admin
+                    trace_id: req_abc123xyz
+                resource_owner:
+                  summary: Not resource owner
+                  value:
+                    error: You do not have permission to modify this debate
+                    code: NOT_OWNER
+                    resource_type: debate
+                    trace_id: req_abc123xyz
         '404':
           description: Not found - The requested resource does not exist
           headers: *id751
@@ -96854,7 +96948,23 @@ paths:
                     resource_type: debate
                     resource_id: deb_abc123
                     trace_id: req_abc123xyz
-      x-aragora-stability: stable
+        '501':
+          description: Restore is not implemented
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum:
+                        - not_implemented
+                      message:
+                        type: string
+      x-aragora-stability: experimental
   /api/v1/knowledge/adapters:
     get:
       summary: Autogenerated placeholder (spec pending)

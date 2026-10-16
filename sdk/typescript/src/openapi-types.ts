@@ -9165,7 +9165,7 @@ export interface paths {
         /**
          * Get checkpoint
          * @deprecated
-         * @description Get checkpoint metadata by name.
+         * @description Get checkpoint metadata by id.
          */
         get: operations["getKmCheckpointsBycheckpointname"];
         put?: never;
@@ -9173,7 +9173,7 @@ export interface paths {
         /**
          * Delete checkpoint
          * @deprecated
-         * @description Delete a checkpoint by name.
+         * @description Delete a checkpoint by id.
          */
         delete: operations["deleteKmCheckpointsBycheckpointname"];
         options?: never;
@@ -9233,9 +9233,9 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Restore checkpoint
+         * Restore checkpoint (not implemented)
          * @deprecated
-         * @description Restore Knowledge Mound state from a checkpoint.
+         * @description Not implemented. After the authentication, permission, strategy and ownership checks, every request is answered 501 before anything is written: the server's Knowledge Mound workspace records no owning organization, so the owner of the restore target cannot be proven.
          */
         post: operations["createKmCheckpointsBycheckpointnameRestore"];
         delete?: never;
@@ -41107,14 +41107,14 @@ export interface paths {
         };
         /**
          * Get checkpoint
-         * @description Get checkpoint metadata by name.
+         * @description Get checkpoint metadata by id.
          */
         get: operations["getKmCheckpoint"];
         put?: never;
         post?: never;
         /**
          * Delete checkpoint
-         * @description Delete a checkpoint by name.
+         * @description Delete a checkpoint by id.
          */
         delete: operations["deleteKmCheckpoint"];
         options?: never;
@@ -41172,8 +41172,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Restore checkpoint
-         * @description Restore Knowledge Mound state from a checkpoint.
+         * Restore checkpoint (not implemented)
+         * @description Not implemented. After the authentication, permission, strategy and ownership checks, every request is answered 501 before anything is written: the server's Knowledge Mound workspace records no owning organization, so the owner of the restore target cannot be proven.
          */
         post: operations["createKmCheckpointsRestore"];
         delete?: never;
@@ -81066,7 +81066,7 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    /** @description Checkpoint name (must be unique) */
+                    /** @description Checkpoint label, not an identifier */
                     name: string;
                     /** @description Optional checkpoint description */
                     description?: string;
@@ -81126,6 +81126,21 @@ export interface operations {
                     };
                 };
             };
+            /** @description Checkpoint storage is full: the create would exceed the server-wide checkpoint ceiling. Nothing is written. */
+            507: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error?: {
+                            /** @enum {string} */
+                            code?: "checkpoint_storage_full";
+                            message?: string;
+                        };
+                    };
+                };
+            };
         };
     };
     createKmCheckpointsCompare: {
@@ -81138,9 +81153,9 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    /** @description First checkpoint name */
+                    /** @description First checkpoint id */
                     checkpoint_a: string;
-                    /** @description Second checkpoint name */
+                    /** @description Second checkpoint id */
                     checkpoint_b: string;
                 };
             };
@@ -81210,7 +81225,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Name of the checkpoint */
+                /** @description Checkpoint id (km_ckpt_...) returned by create or list; names are not accepted */
                 checkpoint_name: string;
             };
             cookie?: never;
@@ -81263,7 +81278,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Name of the checkpoint */
+                /** @description Checkpoint id (km_ckpt_...) returned by create or list; names are not accepted */
                 checkpoint_name: string;
             };
             cookie?: never;
@@ -81321,7 +81336,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Name of the checkpoint */
+                /** @description Checkpoint id (km_ckpt_...) returned by create or list; names are not accepted */
                 checkpoint_name: string;
             };
             cookie?: never;
@@ -81427,7 +81442,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Name of the checkpoint */
+                /** @description Checkpoint id (km_ckpt_...) returned by create or list; names are not accepted */
                 checkpoint_name: string;
             };
             cookie?: never;
@@ -81450,18 +81465,12 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Restore result */
+            /** @description Never returned while restore is not implemented */
             200: {
                 headers: {
-                    /** @description Unique request identifier for tracing and debugging */
-                    "X-Request-ID"?: string;
-                    /** @description Server processing time in milliseconds */
-                    "X-Response-Time"?: number;
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["RestoreResult"];
-                };
+                content?: never;
             };
             /** @description Bad request - Invalid input or malformed JSON */
             400: {
@@ -81489,6 +81498,19 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description Forbidden - Insufficient permissions for this operation */
+            403: {
+                headers: {
+                    /** @description Unique request identifier for tracing and debugging */
+                    "X-Request-ID"?: string;
+                    /** @description Server processing time in milliseconds */
+                    "X-Response-Time"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Not found - The requested resource does not exist */
             404: {
                 headers: {
@@ -81500,6 +81522,21 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Restore is not implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error?: {
+                            /** @enum {string} */
+                            code?: "not_implemented";
+                            message?: string;
+                        };
+                    };
                 };
             };
         };
@@ -145455,7 +145492,7 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    /** @description Checkpoint name (must be unique) */
+                    /** @description Checkpoint label, not an identifier */
                     name: string;
                     /** @description Optional checkpoint description */
                     description?: string;
@@ -145515,6 +145552,21 @@ export interface operations {
                     };
                 };
             };
+            /** @description Checkpoint storage is full: the create would exceed the server-wide checkpoint ceiling. Nothing is written. */
+            507: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error?: {
+                            /** @enum {string} */
+                            code?: "checkpoint_storage_full";
+                            message?: string;
+                        };
+                    };
+                };
+            };
         };
     };
     createKmCheckpointsCompare1: {
@@ -145527,9 +145579,9 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    /** @description First checkpoint name */
+                    /** @description First checkpoint id */
                     checkpoint_a: string;
-                    /** @description Second checkpoint name */
+                    /** @description Second checkpoint id */
                     checkpoint_b: string;
                 };
             };
@@ -145599,7 +145651,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Name of the checkpoint */
+                /** @description Checkpoint id (km_ckpt_...) returned by create or list; names are not accepted */
                 checkpoint_name: string;
             };
             cookie?: never;
@@ -145652,7 +145704,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Name of the checkpoint */
+                /** @description Checkpoint id (km_ckpt_...) returned by create or list; names are not accepted */
                 checkpoint_name: string;
             };
             cookie?: never;
@@ -145710,7 +145762,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Name of the checkpoint */
+                /** @description Checkpoint id (km_ckpt_...) returned by create or list; names are not accepted */
                 checkpoint_name: string;
             };
             cookie?: never;
@@ -145816,7 +145868,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Name of the checkpoint */
+                /** @description Checkpoint id (km_ckpt_...) returned by create or list; names are not accepted */
                 checkpoint_name: string;
             };
             cookie?: never;
@@ -145839,18 +145891,12 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Restore result */
+            /** @description Never returned while restore is not implemented */
             200: {
                 headers: {
-                    /** @description Unique request identifier for tracing and debugging */
-                    "X-Request-ID"?: string;
-                    /** @description Server processing time in milliseconds */
-                    "X-Response-Time"?: number;
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["RestoreResult"];
-                };
+                content?: never;
             };
             /** @description Bad request - Invalid input or malformed JSON */
             400: {
@@ -145878,6 +145924,19 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description Forbidden - Insufficient permissions for this operation */
+            403: {
+                headers: {
+                    /** @description Unique request identifier for tracing and debugging */
+                    "X-Request-ID"?: string;
+                    /** @description Server processing time in milliseconds */
+                    "X-Response-Time"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Not found - The requested resource does not exist */
             404: {
                 headers: {
@@ -145889,6 +145948,21 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Restore is not implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error?: {
+                            /** @enum {string} */
+                            code?: "not_implemented";
+                            message?: string;
+                        };
+                    };
                 };
             };
         };
