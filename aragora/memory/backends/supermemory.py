@@ -62,7 +62,7 @@ class SupermemoryBackend:
     - Privacy filtering before external sync
 
     Example:
-        from aragora.connectors.supermemory import SupermemoryConfig
+        from aragora.memory.supermemory import SupermemoryConfig
         from aragora.memory.backends.supermemory import SupermemoryBackend
 
         config = SupermemoryConfig.from_env()
@@ -111,7 +111,7 @@ class SupermemoryBackend:
     def _ensure_client(self) -> Any:
         """Lazily initialize the Supermemory client."""
         if self._client is None and self.config is not None:
-            from aragora.connectors.supermemory import SupermemoryClient
+            from aragora.memory.supermemory import SupermemoryClient
 
             self._client = SupermemoryClient(self.config)
         return self._client

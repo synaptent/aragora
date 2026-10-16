@@ -265,7 +265,7 @@ class ArenaKnowledgeManager:
 
         if self.supermemory_adapter is None:
             try:
-                from aragora.connectors.supermemory import (
+                from aragora.memory.supermemory import (
                     SupermemoryConfig,
                 )
                 from aragora.knowledge.mound.adapters import SupermemoryAdapter

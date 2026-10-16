@@ -523,4 +523,4 @@ kubectl scale deployment aragora --replicas=3 -n aragora
 - [ENVIRONMENT.md](../getting-started/environment) - Complete environment variable reference
 - [DEPLOYMENT.md](../deployment/overview) - Kubernetes and Docker deployment guides
 - [SECURITY.md](../security/overview) - Security architecture and practices
-- [SCALING.md](./scaling) - Scaling guidelines and capacity planning
+- [SCALING.md](../deployment/scaling) - Scaling guidelines and capacity planning

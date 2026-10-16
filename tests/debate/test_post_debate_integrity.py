@@ -15,6 +15,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from aragora.debate.pipeline_backends import pipeline_backend
 from aragora.debate.post_debate_coordinator import (
     PostDebateConfig,
     PostDebateCoordinator,
@@ -237,6 +238,8 @@ class TestCoordinatorIntegrityStep:
             auto_build_integrity_package=True,
         )
         coordinator = PostDebateCoordinator(config=config)
+        # The declared registrations run once per process; register before hiding a module.
+        pipeline_backend()
 
         with patch.dict("sys.modules", {"aragora.pipeline.decision_integrity": None}):
             result = coordinator.run(

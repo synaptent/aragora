@@ -35,6 +35,8 @@ from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
+from aragora.runtime.connector_factory import create_connector
+
 if TYPE_CHECKING:
     from aragora.connectors.enterprise.communication.gmail import GmailConnector
     from aragora.connectors.enterprise.communication.models import EmailMessage
@@ -268,11 +270,9 @@ class MultiInboxManager:
         Returns:
             Connected InboxAccount
         """
-        from aragora.connectors.enterprise.communication.gmail import GmailConnector
-
         async with self._accounts_lock:
             # Create connector
-            connector: GmailConnector = GmailConnector()
+            connector: GmailConnector = create_connector("gmail")
 
             # Authenticate
             success = await connector.authenticate(refresh_token=refresh_token)

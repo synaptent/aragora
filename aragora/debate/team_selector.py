@@ -14,6 +14,11 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol
 
 from aragora.debate.team_selector_history import TeamSelectorHistoryMixin
+from aragora.debate.template_registry_hooks import (
+    TemplateRegistryNotRegisteredError,
+    create_template_registry,
+)
+from aragora.types.agent_status import AgentStatus
 
 if TYPE_CHECKING:
     from aragora.agents.cv import AgentCV, CVBuilder
@@ -255,18 +260,8 @@ class TeamSelector(TeamSelectorHistoryMixin):
         self.performance_adapter = performance_adapter
         self.feedback_loop = feedback_loop
         self.continuum_memory = continuum_memory
-        # Control Plane AgentRegistry for health/availability checks
-        if control_plane_registry is None:
-            try:
-                from aragora.control_plane.registry import AgentRegistry
-
-                control_plane_registry = AgentRegistry()
-                logger.debug("Auto-detected AgentRegistry as default control plane registry")
-            except (ImportError, RuntimeError, TypeError, OSError, ValueError):
-                logger.debug(
-                    "AgentRegistry not available for auto-detection, "
-                    "proceeding without health filtering"
-                )
+        # Control Plane AgentRegistry for health/availability checks; the control plane
+        # supplies it (aragora.control_plane.arena_bridge).
         self.control_plane_registry = control_plane_registry
         # Marketplace registry for template-based team selection
         self.marketplace_registry = marketplace_registry
@@ -1219,15 +1214,17 @@ class TeamSelector(TeamSelectorHistoryMixin):
     def _compute_regression_penalty(self, agent: Any, domain: str | None = None) -> float:
         """Penalize agents that participated in recent Nomic Loop regressions.
 
-        Queries NomicOutcomeTracker for recent regression history and applies
-        a penalty scaled by regression count and recency.
+        Queries the nomic loop's outcome tracker for recent regression history
+        and applies a penalty scaled by regression count and recency. Without a
+        registered nomic backend there is no history and no penalty.
 
         Returns:
             Penalty from 0.0 (no regressions) to -0.5 (many recent regressions).
         """
         try:
-            from aragora.nomic.outcome_tracker import NomicOutcomeTracker
+            from aragora.debate.nomic_backends import nomic_backend
 
+            NomicOutcomeTracker = nomic_backend().outcome_tracker()
             regressions = NomicOutcomeTracker.get_regression_history(limit=5)
             if not regressions:
                 return 0.0
@@ -1289,8 +1286,6 @@ class TeamSelector(TeamSelectorHistoryMixin):
             0.0 for OFFLINE/FAILED/unknown agents.
         """
         try:
-            from aragora.control_plane.registry import AgentStatus
-
             agent_name = getattr(agent, "name", str(agent))
             # AgentRegistry.get() may be sync or async; handle both
             registry = self.control_plane_registry
@@ -1771,11 +1766,14 @@ class TeamSelector(TeamSelectorHistoryMixin):
         Looks up ``template_name`` in the marketplace registry and extracts the
         set of agent/role identifiers that the template prescribes.
 
-        - For :class:`~aragora.marketplace.models.DebateTemplate`: returns the
-          ``role`` value from each entry in ``agent_roles``.
-        - For :class:`~aragora.marketplace.models.AgentTemplate`: returns a
-          single-element list containing the ``agent_type``.
+        - For a template with an ``agent_roles`` list (a marketplace
+          ``DebateTemplate``): returns the ``role`` value from each entry.
+        - For a template with a string ``agent_type`` (a marketplace
+          ``AgentTemplate``): returns a single-element list containing it.
         - If the template is not found, logs a warning and returns ``[]``.
+
+        Without an injected ``marketplace_registry``, the registry comes from
+        :func:`aragora.debate.template_registry_hooks.create_template_registry`.
 
         Args:
             template_name: The ``metadata.id`` of the marketplace template to
@@ -1788,15 +1786,20 @@ class TeamSelector(TeamSelectorHistoryMixin):
             return []
 
         # Resolve the registry to use: prefer the one injected at construction
-        # time, but fall back to constructing a default TemplateRegistry so the
-        # method works even without explicit injection.
+        # time, but fall back to the registered default so the method works even
+        # without explicit injection.
         registry = self.marketplace_registry
         if registry is None:
             try:
-                from aragora.marketplace.registry import TemplateRegistry
-
-                registry = TemplateRegistry()
-            except (ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:
+                registry = create_template_registry()
+            except (
+                TemplateRegistryNotRegisteredError,
+                ImportError,
+                OSError,
+                RuntimeError,
+                TypeError,
+                ValueError,
+            ) as exc:
                 logger.warning(
                     "select_from_template: could not initialise TemplateRegistry: %s", exc
                 )
@@ -1818,19 +1821,19 @@ class TeamSelector(TeamSelectorHistoryMixin):
             return []
 
         try:
-            from aragora.marketplace.models import DebateTemplate, AgentTemplate
-
-            if isinstance(template, DebateTemplate):
+            agent_roles = getattr(template, "agent_roles", None)
+            if isinstance(agent_roles, list):
                 # Extract the 'role' key from each agent_roles entry
                 roles: list[str] = []
-                for entry in template.agent_roles:
+                for entry in agent_roles:
                     role = entry.get("role") if isinstance(entry, dict) else str(entry)
                     if role:
                         roles.append(role)
                 return roles
 
-            if isinstance(template, AgentTemplate):
-                return [template.agent_type]
+            agent_type = getattr(template, "agent_type", None)
+            if isinstance(agent_type, str):
+                return [agent_type]
 
             # WorkflowTemplate or unknown type — return empty list
             logger.warning(

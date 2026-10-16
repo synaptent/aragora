@@ -494,7 +494,7 @@ class SharingNotifier:
                 notification_type=notification_type,
             )
 
-            from aragora.integrations.email import EmailRecipient
+            from aragora.notifications.email_recipient import EmailRecipient
 
             recipient = EmailRecipient(email=to_email)
             success = await email._send_email(recipient, subject, html_body, text_body)

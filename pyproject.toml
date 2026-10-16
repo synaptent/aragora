@@ -191,9 +191,112 @@ analytics = "aragora.analytics.debate_events:subscribe_debate_analytics"
 [project.entry-points."aragora.workspace_stores"]
 stores = "aragora.stores.debate_registration:register_debate_workspace_stores"
 
+# Run by aragora/debate/template_registry_hooks.py on the first template lookup that
+# finds no registry factory, so team selection reads marketplace templates without
+# importing aragora.marketplace.
+[project.entry-points."aragora.debate_template_registries"]
+marketplace = "aragora.marketplace.debate_registration:register_debate_template_registry"
+
+# Run by aragora/agents/scheduler_protocol.py on the first distributed adapter that finds
+# no scheduler registered, so a process that only imports aragora.agents still builds
+# the control plane's task scheduler.
+[project.entry-points."aragora.distributed_schedulers"]
+control_plane = "aragora.control_plane.scheduler_registration:register_distributed_scheduler"
+
+# Run by aragora/debate/extensions.py, through aragora/events/task_events.py, before a
+# debate notification with no configured dispatcher, so a process that only runs debates
+# still falls back to the control plane's default notification dispatcher.
+[project.entry-points."aragora.task_event_dispatchers"]
+control_plane = "aragora.control_plane.event_registry:register_task_event_dispatcher"
+
+# Run by aragora/rbac/security_notifier.py the first time break-glass access needs to
+# alert the security team and nothing registered a sender, so a process that only
+# imports aragora.rbac still notifies through the control plane.
+[project.entry-points."aragora.security_notifiers"]
+control_plane = "aragora.control_plane.security_registration:register_rbac_security_notifier"
+
 # Lets aragora/tenancy/record_scope.py reach the server without importing it.
 [project.entry-points."aragora.tenancy_bindings"]
 server = "aragora.server.tenancy_bindings:register_tenancy_bindings"
+
+# Run by aragora/events/approval_requests.py on the first approval request that finds
+# no notifier, so workflows, pipelines and computer use still reach the chat approval
+# notifier without importing aragora.approvals.
+[project.entry-points."aragora.approval_notifiers"]
+approvals = "aragora.approvals.notifier_registration:register_chat_approval_notifier"
+
+# Run by aragora/stores/gateway_store_hook.py on the first canonical gateway store lookup
+# that finds no factory, so aragora.stores builds the gateway store without importing
+# aragora.gateway.
+[project.entry-points."aragora.gateway_stores"]
+gateway = "aragora.gateway.store_registration:register_canonical_gateway_store"
+
+# Run by aragora/events/chat_connectors.py on the first chat connector lookup that finds
+# none registered, so pipeline progress reaches chat channels without importing
+# aragora.connectors.
+[project.entry-points."aragora.chat_connector_lookups"]
+chat = "aragora.connectors.chat.lookup_registration:register_chat_connector_lookup_from_registry"
+
+# Run by aragora/debate/decision_plan_bridges.py on the first post-debate bridge lookup
+# that finds no factory, so the debate engine routes decision plans to Jira, Linear or n8n
+# without importing aragora.integrations.
+[project.entry-points."aragora.decision_plan_bridges"]
+integrations = "aragora.integrations.decision_bridge_registration:register_decision_bridge"
+
+# Run by aragora/debate/gauntlet_runners.py on the first post-debate gauntlet lookup that
+# finds no factory, so the debate engine stress-tests decisions without importing
+# aragora.gauntlet.
+[project.entry-points."aragora.debate_gauntlet_runners"]
+gauntlet = "aragora.gauntlet.debate_registration:register_debate_gauntlet_runner"
+
+# Run by aragora/harnesses/mcp_config.py on the Claude Code harness's first MCP config
+# request that finds no generator, so the harness attaches Aragora's MCP server without
+# importing aragora.mcp.
+[project.entry-points."aragora.harness_mcp_configs"]
+mcp = "aragora.mcp.harness_registration:register_harness_impl_mcp_config"
+
+# Run by aragora/debate/workflow_backends.py on the first post-debate workflow lookup that
+# finds no backend, so the debate engine runs post-debate workflows without importing
+# aragora.workflow.
+[project.entry-points."aragora.debate_workflow_backends"]
+workflow = "aragora.workflow.debate_registration:register_debate_workflow_backend"
+
+# Run by aragora/debate/pipeline_backends.py on the first decision pipeline lookup that
+# finds no backend, so the debate engine builds, stores and executes decision plans
+# without importing aragora.pipeline.
+[project.entry-points."aragora.debate_pipeline_backends"]
+pipeline = "aragora.pipeline.debate_registration:register_debate_pipeline_backend"
+
+# Run by aragora/debate/nomic_backends.py on the first nomic loop lookup that finds no
+# backend, so the debate engine tracks debate beads and GUPP hooks, applies the nomic debate
+# profile, feeds outcomes back to the nomic loop and weighs nomic regressions in team
+# selection without importing aragora.nomic.
+[project.entry-points."aragora.debate_nomic_backends"]
+nomic = "aragora.nomic.debate_registration:register_debate_nomic_backend"
+
+# Run by aragora/notifications/email_senders.py on the first email sender a lower package
+# builds from an email config, so aragora.services sends invoices without importing
+# aragora.integrations.
+[project.entry-points."aragora.email_senders"]
+integrations = "aragora.integrations.email_sender_registration:register_email_sender"
+
+# Run by aragora/debate/mode_prompts.py on the first mode prompt lookup that finds no
+# provider, so debate prompts include the active operational mode's system prompt without
+# the debate engine importing aragora.modes.
+[project.entry-points."aragora.debate_mode_prompts"]
+modes = "aragora.cli.mode_prompt_registration:register_mode_prompts"
+
+# Run by aragora/runtime/connector_factory.py on the first connector a lower package builds,
+# so vertical specialists and the code reviewer reach the web, GitHub, research, legal,
+# medical, accounting, tax and SEC connectors without importing aragora.connectors.
+[project.entry-points."aragora.connector_factories"]
+connectors = "aragora.connectors.factory_registration:register_evidence_connectors"
+
+# Run by aragora/security/cve_clients.py on the first CVE client that threat intelligence
+# enrichment builds, so security debates look up CVEs in the NVD, OSV and GitHub advisory
+# databases without aragora.security importing aragora.analysis.
+[project.entry-points."aragora.security_cve_clients"]
+analysis = "aragora.analysis.codebase.cve_registration:register_security_cve_client"
 
 # -----------------------------------------------------------------------------
 # uv resolver constraints — security floors for the pip-audit security gate
@@ -267,7 +370,7 @@ ignore = ["E402", "E501", "E731", "E741", "E712", "C401", "C405", "C408", "C416"
 "aragora/training/tinker_client.py" = ["T201", "BLE001"]
 "aragora/debate/breakpoints.py" = ["T201", "BLE001"]
 "aragora/nomic/gates.py" = ["T201", "BLE001"]
-"aragora/nomic/approval.py" = ["T201", "BLE001"]
+"aragora/agents/change_approval.py" = ["T201", "BLE001"]
 "aragora/nomic/scope_guard.py" = ["T201", "BLE001"]
 "aragora/server/__main__.py" = ["T201", "BLE001"]
 "aragora/server/startup/health_check.py" = ["T201", "BLE001"]
@@ -443,7 +546,7 @@ ignore = ["E402", "E501", "E731", "E741", "E712", "C401", "C405", "C408", "C416"
 "aragora/storage/*.py" = ["BLE001", "G004"]
 "aragora/connectors/blockchain/connector.py" = ["BLE001", "G004"]
 "aragora/connectors/enterprise/database/*.py" = ["BLE001", "G004"]
-"aragora/connectors/supermemory/*.py" = ["BLE001", "G004"]
+"aragora/memory/supermemory/*.py" = ["BLE001", "G004"]
 "aragora/knowledge/mound/api/*.py" = ["BLE001", "G004"]
 "aragora/knowledge/mound/core.py" = ["BLE001", "G004"]
 "aragora/knowledge/mound/checkpoint.py" = ["BLE001", "G004"]

@@ -10,35 +10,14 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
+from aragora.review.github_transport import (
+    GITHUB_TRANSPORT_BLOCKED_STATUS as GITHUB_TRANSPORT_BLOCKED_STATUS,
+    GITHUB_TRANSPORT_ERROR_KIND as GITHUB_TRANSPORT_ERROR_KIND,
+    gh_error_kind as _gh_error_kind,
+    is_github_transport_error as _is_github_transport_error,
+)
 
 GH_COMMAND_TIMEOUT_SECONDS = 30
-GITHUB_TRANSPORT_ERROR_KIND = "github_transport"
-GITHUB_TRANSPORT_BLOCKED_STATUS = "transport_blocked"
-_GITHUB_TRANSPORT_ERROR_MARKERS = (
-    "api rate limit already exceeded",
-    "check your internet connection",
-    "client.timeout exceeded",
-    "command timed out",
-    "connection refused",
-    "connection reset",
-    "connection timed out",
-    "context deadline exceeded",
-    "could not resolve host",
-    "error connecting",
-    "failed to start",
-    "http 502",
-    "http 503",
-    "http 504",
-    "i/o timeout",
-    "net/http",
-    "no such host",
-    "operation timed out",
-    "rate limit exceeded",
-    "temporary failure in name resolution",
-    "timeout awaiting response headers",
-    "timed out after",
-    "tls handshake timeout",
-)
 
 
 class _GhError(RuntimeError):
@@ -99,18 +78,6 @@ def _gh_json(args: list[str]) -> Any:
         return json.loads(out)
     except json.JSONDecodeError as exc:
         raise _GhError(f"gh {' '.join(args)} returned malformed JSON: {exc}") from exc
-
-
-def _gh_error_kind(error: object) -> str:
-    """Return a stable machine-readable kind for GitHub helper failures."""
-    text = str(error or "").lower()
-    if any(marker in text for marker in _GITHUB_TRANSPORT_ERROR_MARKERS):
-        return GITHUB_TRANSPORT_ERROR_KIND
-    return "github_error"
-
-
-def _is_github_transport_error(error: object) -> bool:
-    return _gh_error_kind(error) == GITHUB_TRANSPORT_ERROR_KIND
 
 
 def _gh_json_with_transport_retries(

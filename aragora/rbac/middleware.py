@@ -262,6 +262,9 @@ DEFAULT_ROUTE_PERMISSIONS = [
         "DELETE",
         "analytics.configure",
     ),
+    # Connecting a platform stores its credentials; this must precede the versioned
+    # analytics POST rule below, which needs only analytics.read.
+    RoutePermission(r"^/api/(?:v1/)?analytics/connect$", "POST", "analytics.configure"),
     # Training
     RoutePermission(r"^/api/(?:v1/)?training", "GET", "training.read"),
     RoutePermission(r"^/api/(?:v1/)?training/export", "POST", "training.create"),

@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from aragora.memory.continuum import ContinuumMemory
     from aragora.memory.store import CritiqueStore
     from aragora.debate.embeddings import DebateEmbeddingsDatabase
-    from aragora.spectate.stream import SpectatorStream
+    from aragora.events.spectate.stream import SpectatorStream
 
 from aragora.memory.continuum import MemoryTier
 from aragora.memory.tier_analytics import TierAnalyticsTracker

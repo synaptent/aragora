@@ -317,6 +317,6 @@ spec:
 
 ## See Also
 
-- [Incident Response Runbook](./incident-response)
+- [Incident Response Runbook](./incident-response-procedures)
 - [Monitoring Setup Runbook](./monitoring-setup)
 - [Deployment Decision Matrix](../deployment/decision-matrix)

@@ -13,97 +13,12 @@ const fs = require('fs');
 const path = require('path');
 
 // Source and destination directories
-const SOURCE_DIR = path.join(__dirname, '../../docs');
+const REPO_ROOT = path.join(__dirname, '../..');
+const SOURCE_DIR = path.join(REPO_ROOT, 'docs');
 const DEST_DIR = path.join(__dirname, '../docs');
 
-function walkMarkdownFiles(dir) {
-  const entries = fs.readdirSync(dir, { withFileTypes: true });
-  const files = [];
-  for (const entry of entries) {
-    if (entry.name === '.git' || entry.name === 'node_modules') {
-      continue;
-    }
-    const fullPath = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...walkMarkdownFiles(fullPath));
-      continue;
-    }
-    if (entry.isFile() && entry.name.endsWith('.md')) {
-      files.push(fullPath);
-    }
-  }
-  return files;
-}
-
-function buildSourceIndex(rootDir) {
-  const index = new Map();
-  for (const fullPath of walkMarkdownFiles(rootDir)) {
-    const rel = path.relative(rootDir, fullPath).replace(/\\/g, '/');
-    const base = path.basename(rel);
-    if (!index.has(base)) {
-      index.set(base, []);
-    }
-    index.get(base).push(rel);
-  }
-  return index;
-}
-
-const SOURCE_INDEX = buildSourceIndex(SOURCE_DIR);
-
-function resolveSourcePath(srcRelPath) {
-  const directPath = path.join(SOURCE_DIR, srcRelPath);
-  if (fs.existsSync(directPath)) {
-    return { srcPath: directPath, resolvedFrom: srcRelPath };
-  }
-
-  const normalized = srcRelPath.replace(/\\/g, '/');
-  const base = path.basename(normalized);
-  const candidates = SOURCE_INDEX.get(base) || [];
-  if (candidates.length === 0) {
-    return null;
-  }
-
-  const srcParts = normalized.split('/').slice(0, -1).filter(p => p !== '.' && p !== '..');
-  let filtered = candidates;
-  if (srcParts.length > 0) {
-    const hinted = candidates.filter(candidate => {
-      const candidateParts = candidate.split('/');
-      return srcParts.every(part => candidateParts.includes(part));
-    });
-    if (hinted.length > 0) {
-      filtered = hinted;
-    }
-  }
-
-  // Prefer non-deprecated docs when multiple matches exist.
-  const nonDeprecated = filtered.filter(
-    candidate => !candidate.startsWith('deprecated/') && !candidate.includes('/deprecated/')
-  );
-  if (nonDeprecated.length === 1) {
-    return {
-      srcPath: path.join(SOURCE_DIR, nonDeprecated[0]),
-      resolvedFrom: nonDeprecated[0],
-    };
-  }
-  if (nonDeprecated.length > 0) {
-    filtered = nonDeprecated;
-  }
-
-  if (filtered.length === 1) {
-    return { srcPath: path.join(SOURCE_DIR, filtered[0]), resolvedFrom: filtered[0] };
-  }
-
-  // As a final fallback, pick exact-case basename match with shortest path.
-  const exactCase = filtered.filter(candidate => path.basename(candidate) === base);
-  if (exactCase.length > 0) {
-    exactCase.sort((a, b) => a.length - b.length || a.localeCompare(b));
-    return { srcPath: path.join(SOURCE_DIR, exactCase[0]), resolvedFrom: exactCase[0] };
-  }
-
-  return null;
-}
-
-// Document mapping: source -> destination with category organization
+// Document mapping: source -> destination with category organization. Keys are literal
+// docs/<path> sources (or exact paths relative to docs/); a key that does not exist fails the sync.
 const DOC_MAP = {
   // `docs-site/docs/enterprise/positioning.md` is intentionally hand-maintained
   // as a redirect-style stub after archiving `docs/status/COMMERCIAL_POSITIONING.md`.
@@ -113,120 +28,120 @@ const DOC_MAP = {
   // =========================================================================
   'guides/GETTING_STARTED.md': 'getting-started/overview.md',
   'quickstart.md': 'getting-started/quickstart.md',
-  'CONFIGURATION.md': 'getting-started/configuration.md',
-  'ENVIRONMENT.md': 'getting-started/environment.md',
+  'docs/reference/CONFIGURATION.md': 'getting-started/configuration.md',
+  'docs/reference/ENVIRONMENT.md': 'getting-started/environment.md',
 
   // =========================================================================
   // Core Concepts
   // =========================================================================
-  'DEBATE_PHASES.md': 'core-concepts/debates.md',
-  'DEBATE_INTERNALS.md': 'core-concepts/debate-internals.md',
-  'AGENTS.md': 'core-concepts/agents.md',
-  'AGENT_DEVELOPMENT.md': 'core-concepts/agent-development.md',
-  'AGENT_SELECTION.md': 'core-concepts/agent-selection.md',
+  'docs/debate/DEBATE_PHASES.md': 'core-concepts/debates.md',
+  'docs/debate/DEBATE_INTERNALS.md': 'core-concepts/debate-internals.md',
+  'docs/debate/AGENTS.md': 'core-concepts/agents.md',
+  'docs/debate/AGENT_DEVELOPMENT.md': 'core-concepts/agent-development.md',
+  'docs/debate/AGENT_SELECTION.md': 'core-concepts/agent-selection.md',
   'algorithms/CONSENSUS.md': 'core-concepts/consensus.md',
-  'MEMORY_TIERS.md': 'core-concepts/memory.md',
-  'MEMORY.md': 'core-concepts/memory-overview.md',
-  'MEMORY_STRATEGY.md': 'core-concepts/memory-strategy.md',
-  'KNOWLEDGE_MOUND.md': 'core-concepts/knowledge-mound.md',
-  'ARCHITECTURE.md': 'core-concepts/architecture.md',
-  'REASONING.md': 'core-concepts/reasoning.md',
-  'WORKFLOW_ENGINE.md': 'core-concepts/workflow-engine.md',
+  'docs/knowledge/MEMORY_TIERS.md': 'core-concepts/memory.md',
+  'docs/knowledge/MEMORY.md': 'core-concepts/memory-overview.md',
+  'docs/knowledge/MEMORY_STRATEGY.md': 'core-concepts/memory-strategy.md',
+  'docs/knowledge/KNOWLEDGE_MOUND.md': 'core-concepts/knowledge-mound.md',
+  'docs/architecture/ARCHITECTURE.md': 'core-concepts/architecture.md',
+  'docs/workflow/REASONING.md': 'core-concepts/reasoning.md',
+  'docs/workflow/WORKFLOW_ENGINE.md': 'core-concepts/workflow-engine.md',
 
   // =========================================================================
   // Guides
   // =========================================================================
   'receipts/VERIFY_IN_60_SECONDS.md': 'guides/verify-in-60-seconds.md',
   'SDK_GUIDE.md': 'guides/sdk.md',
-  'SDK_QUICKSTART.md': 'guides/sdk-quickstart.md',
+  'docs/guides/SDK_QUICKSTART.md': 'guides/sdk-quickstart.md',
   'guides/PYTHON_SDK_MIGRATION.md': 'guides/python-sdk-migration.md',
   'api/API_REFERENCE_CURATED.md': 'api-reference/index.md',
-  'API_QUICK_START.md': 'guides/api-quickstart.md',
-  'API_USAGE.md': 'guides/api-usage.md',
-  'WORKFLOWS.md': 'guides/workflows.md',
+  'docs/api/API_QUICK_START.md': 'guides/api-quickstart.md',
+  'docs/api/API_USAGE.md': 'guides/api-usage.md',
+  'docs/workflow/WORKFLOWS.md': 'guides/workflows.md',
   'workflow/SKILLS.md': 'guides/skills.md',
-  'TEMPLATES.md': 'guides/templates.md',
-  'INTEGRATIONS.md': 'guides/integrations.md',
-  'DOCUMENTS.md': 'guides/documents.md',
-  'CHANNELS.md': 'guides/channels.md',
-  'BOT_INTEGRATIONS.md': 'guides/bot-integrations.md',
-  'CUSTOM_AGENTS.md': 'guides/custom-agents.md',
-  'CHAT_CONNECTOR_GUIDE.md': 'guides/chat-connector.md',
-  'CONNECTORS.md': 'guides/connectors.md',
+  'docs/workflow/TEMPLATES.md': 'guides/templates.md',
+  'docs/integrations/INTEGRATIONS.md': 'guides/integrations.md',
+  'docs/reference/DOCUMENTS.md': 'guides/documents.md',
+  'docs/integrations/CHANNELS.md': 'guides/channels.md',
+  'docs/integrations/BOT_INTEGRATIONS.md': 'guides/bot-integrations.md',
+  'docs/guides/CUSTOM_AGENTS.md': 'guides/custom-agents.md',
+  'docs/guides/CHAT_CONNECTOR_GUIDE.md': 'guides/chat-connector.md',
+  'docs/integrations/CONNECTORS.md': 'guides/connectors.md',
   'connectors/CONNECTOR_CATALOG.md': 'guides/connector-catalog.md',
-  'CONNECTORS_SETUP.md': 'guides/connectors-setup.md',
-  'CONNECTOR_TROUBLESHOOTING.md': 'guides/connector-troubleshooting.md',
+  'docs/guides/CONNECTORS_SETUP.md': 'guides/connectors-setup.md',
+  'docs/guides/CONNECTOR_TROUBLESHOOTING.md': 'guides/connector-troubleshooting.md',
   'integrations/HOOKS.md': 'guides/hooks.md',
-  'ACCOUNTING.md': 'guides/accounting.md',
-  'EVIDENCE.md': 'guides/evidence.md',
-  'EVIDENCE_API_GUIDE.md': 'api/evidence.md',
-  'GRAPH_DEBATES.md': 'guides/graph-debates.md',
-  'MATRIX_DEBATES.md': 'guides/matrix-debates.md',
-  'GAUNTLET.md': 'guides/gauntlet.md',
-  'GAUNTLET_ARCHITECTURE.md': 'guides/gauntlet-architecture.md',
-  'PROBE_STRATEGIES.md': 'guides/probe-strategies.md',
-  'HARNESSES_GUIDE.md': 'guides/harnesses.md',
-  'MODES_GUIDE.md': 'guides/modes.md',
-  'MODES_REFERENCE.md': 'guides/modes-reference.md',
-  'USER_ONBOARDING.md': 'guides/user-onboarding.md',
-  'AUTOMATION_INTEGRATIONS.md': 'guides/automation.md',
-  'EMAIL_PRIORITIZATION.md': 'guides/email-prioritization.md',
-  'SHARED_INBOX.md': 'guides/shared-inbox.md',
-  'COST_VISIBILITY.md': 'guides/cost-visibility.md',
-  'CODING_ASSISTANCE.md': 'guides/coding-assistance.md',
-  'BROADCAST.md': 'guides/broadcast.md',
-  'PULSE.md': 'guides/pulse.md',
-  'WEBSOCKET_EVENTS.md': 'guides/websocket-events.md',
-  'SDK_TYPESCRIPT.md': 'guides/sdk-typescript.md',
-  'SDK_PARITY.md': 'guides/sdk-parity.md',
-  'SDK_CONSOLIDATION.md': 'guides/sdk-consolidation.md',
-  'LIBRARY_USAGE.md': 'guides/library-usage.md',
-  'PLUGIN_GUIDE.md': 'guides/plugin-guide.md',
-  'GITHUB_ACTION_SETUP.md': 'guides/github-action-setup.md',
+  'docs/reference/ACCOUNTING.md': 'guides/accounting.md',
+  'docs/debate/EVIDENCE.md': 'guides/evidence.md',
+  'docs/api/EVIDENCE_API_GUIDE.md': 'api/evidence.md',
+  'docs/debate/GRAPH_DEBATES.md': 'guides/graph-debates.md',
+  'docs/debate/MATRIX_DEBATES.md': 'guides/matrix-debates.md',
+  'docs/debate/GAUNTLET.md': 'guides/gauntlet.md',
+  'docs/architecture/GAUNTLET_ARCHITECTURE.md': 'guides/gauntlet-architecture.md',
+  'docs/debate/PROBE_STRATEGIES.md': 'guides/probe-strategies.md',
+  'docs/guides/HARNESSES_GUIDE.md': 'guides/harnesses.md',
+  'docs/guides/MODES_GUIDE.md': 'guides/modes.md',
+  'docs/workflow/MODES_REFERENCE.md': 'guides/modes-reference.md',
+  'docs/guides/USER_ONBOARDING.md': 'guides/user-onboarding.md',
+  'docs/integrations/AUTOMATION_INTEGRATIONS.md': 'guides/automation.md',
+  'docs/integrations/EMAIL_PRIORITIZATION.md': 'guides/email-prioritization.md',
+  'docs/guides/SHARED_INBOX.md': 'guides/shared-inbox.md',
+  'docs/observability/COST_VISIBILITY.md': 'guides/cost-visibility.md',
+  'docs/architecture/CODING_ASSISTANCE.md': 'guides/coding-assistance.md',
+  'docs/integrations/BROADCAST.md': 'guides/broadcast.md',
+  'docs/resilience/PULSE.md': 'guides/pulse.md',
+  'docs/streaming/WEBSOCKET_EVENTS.md': 'guides/websocket-events.md',
+  'docs/guides/SDK_TYPESCRIPT.md': 'guides/sdk-typescript.md',
+  'docs/guides/SDK_PARITY.md': 'guides/sdk-parity.md',
+  'docs/guides/SDK_CONSOLIDATION.md': 'guides/sdk-consolidation.md',
+  'docs/reference/LIBRARY_USAGE.md': 'guides/library-usage.md',
+  'docs/guides/PLUGIN_GUIDE.md': 'guides/plugin-guide.md',
+  'docs/guides/GITHUB_ACTION_SETUP.md': 'guides/github-action-setup.md',
   'guides/github-actions-review.md': 'guides/github-actions-review.md',
 
   // =========================================================================
   // API Reference
   // =========================================================================
-  'API_REFERENCE.md': 'api/reference.md',
+  'docs/api/API_REFERENCE.md': 'api/reference.md',
   'API_ENDPOINTS.md': 'api/endpoints.md',
-  'API_EXAMPLES.md': 'api/examples.md',
-  'API_VERSIONING.md': 'api/versioning.md',
-  'API_RATE_LIMITS.md': 'api/rate-limits.md',
-  'API_STABILITY.md': 'api/stability.md',
-  'API_DISCOVERY.md': 'api/discovery.md',
+  'docs/api/API_EXAMPLES.md': 'api/examples.md',
+  'docs/api/API_VERSIONING.md': 'api/versioning.md',
+  'docs/api/API_RATE_LIMITS.md': 'api/rate-limits.md',
+  'docs/api/API_STABILITY.md': 'api/stability.md',
+  'docs/api/API_DISCOVERY.md': 'api/discovery.md',
   'api/SUPPORTED_SURFACE.md': 'api/supported-surface.md',
   'reference/CLI_REFERENCE.md': 'api/cli.md',
-  'GITHUB_PR_REVIEW.md': 'api/github-pr-review.md',
+  'docs/integrations/GITHUB_PR_REVIEW.md': 'api/github-pr-review.md',
   'api/WEBHOOKS.md': 'api/webhooks.md',
 
   // =========================================================================
   // Deployment
   // =========================================================================
   'DEPLOYMENT.md': 'deployment/overview.md',
-  'SECURITY_DEPLOYMENT.md': 'deployment/security.md',
-  'SCALING.md': 'deployment/scaling.md',
-  'CAPACITY_PLANNING.md': 'deployment/capacity-planning.md',
-  'REDIS_HA.md': 'deployment/redis-ha.md',
-  'KUBERNETES.md': 'deployment/kubernetes.md',
-  'STREAMING_DEPLOYMENT.md': 'deployment/streaming.md',
+  'docs/deployment/SECURITY_DEPLOYMENT.md': 'deployment/security.md',
+  'docs/deployment/SCALING.md': 'deployment/scaling.md',
+  'docs/deployment/CAPACITY_PLANNING.md': 'deployment/capacity-planning.md',
+  'docs/deployment/REDIS_HA.md': 'deployment/redis-ha.md',
+  'docs/deployment/KUBERNETES.md': 'deployment/kubernetes.md',
+  'docs/deployment/STREAMING_DEPLOYMENT.md': 'deployment/streaming.md',
   'deployment/ASYNC_GATEWAY.md': 'deployment/async-gateway.md',
   'deployment/CONTAINER_VOLUMES.md': 'deployment/container-volumes.md',
-  'PRODUCTION_DEPLOYMENT.md': 'deployment/production-deployment.md',
-  'DATABASE_SETUP.md': 'deployment/database-setup.md',
-  'DATABASE.md': 'deployment/database.md',
-  'DATABASE_SCHEMA.md': 'deployment/database-schema.md',
+  'docs/deployment/PRODUCTION_DEPLOYMENT.md': 'deployment/production-deployment.md',
+  'docs/guides/DATABASE_SETUP.md': 'deployment/database-setup.md',
+  'docs/reference/DATABASE.md': 'deployment/database.md',
+  'docs/reference/DATABASE_SCHEMA.md': 'deployment/database-schema.md',
   'deployment/DISASTER_RECOVERY.md': 'deployment/disaster-recovery.md',
   'deployment/POSTGRES_HA.md': 'deployment/postgres-ha.md',
-  'RBAC_MATRIX.md': 'deployment/RBAC_MATRIX.md',
-  'DR_DRILL_PROCEDURES.md': 'deployment/dr-drills.md',
-  'OBSERVABILITY.md': 'deployment/observability.md',
+  'docs/enterprise/RBAC_MATRIX.md': 'deployment/RBAC_MATRIX.md',
+  'docs/deployment/DR_DRILL_PROCEDURES.md': 'deployment/dr-drills.md',
+  'docs/observability/OBSERVABILITY.md': 'deployment/observability.md',
   'observability/WATCHDOG.md': 'operations/watchdog.md',
-  'OBSERVABILITY_SETUP.md': 'deployment/observability-setup.md',
+  'docs/guides/OBSERVABILITY_SETUP.md': 'deployment/observability-setup.md',
   'guides/MONITORING_SETUP.md': 'guides/monitoring-setup.md',
   'deployment/DEPLOYMENT_DECISION_MATRIX.md': 'deployment/decision-matrix.md',
-  'TLS.md': 'deployment/tls.md',
-  'SECRETS_MIGRATION.md': 'deployment/secrets-migration.md',
+  'docs/deployment/TLS.md': 'deployment/tls.md',
+  'docs/enterprise/SECRETS_MIGRATION.md': 'deployment/secrets-migration.md',
 
   // =========================================================================
   // Operations / Runbooks
@@ -241,84 +156,84 @@ const DOC_MAP = {
   'runbooks/RUNBOOK_POSTGRESQL_MIGRATION.md': 'operations/runbook-postgresql-migration.md',
   'runbooks/redis-failover.md': 'operations/redis-failover.md',
   'runbooks/database-migration.md': 'operations/database-migration.md',
-  'runbooks/incident-response.md': 'operations/incident-response.md',
+  'runbooks/incident-response.md': 'operations/incident-response-procedures.md',
   'runbooks/scaling.md': 'operations/scaling.md',
   'runbooks/monitoring-setup.md': 'operations/monitoring-setup.md',
   'runbooks/DISASTER_RECOVERY.md': 'operations/disaster-recovery-runbook.md',
-  'ALERT_RUNBOOKS.md': 'operations/alert-runbooks.md',
-  'RUNBOOK.md': 'operations/runbook.md',
-  'PRODUCTION_RUNBOOK.md': 'operations/production-runbook.md',
-  'RUNBOOK_METRICS.md': 'operations/runbook-metrics.md',
-  'INCIDENT_RESPONSE.md': 'operations/incident-response.md',
-  'INCIDENT_RESPONSE_PLAYBOOKS.md': 'operations/incident-response-playbooks.md',
-  'INCIDENT_COMMUNICATION.md': 'operations/incident-communication.md',
+  'docs/deployment/ALERT_RUNBOOKS.md': 'operations/alert-runbooks.md',
+  'docs/ops/RUNBOOK.md': 'operations/runbook.md',
+  'docs/deployment/PRODUCTION_RUNBOOK.md': 'operations/production-runbook.md',
+  'docs/deployment/RUNBOOK_METRICS.md': 'operations/runbook-metrics.md',
+  'docs/runbooks/INCIDENT_RESPONSE.md': 'operations/incident-response.md',
+  'docs/deployment/INCIDENT_RESPONSE_PLAYBOOKS.md': 'operations/incident-response-playbooks.md',
+  'docs/deployment/INCIDENT_COMMUNICATION.md': 'operations/incident-communication.md',
 
   // =========================================================================
   // Enterprise
   // =========================================================================
-  'GOVERNANCE.md': 'enterprise/governance.md',
-  'CONTROL_PLANE.md': 'enterprise/control-plane-overview.md',
-  'CONTROL_PLANE_GUIDE.md': 'enterprise/control-plane.md',
+  'docs/enterprise/GOVERNANCE.md': 'enterprise/governance.md',
+  'docs/reference/CONTROL_PLANE.md': 'enterprise/control-plane-overview.md',
+  'docs/guides/CONTROL_PLANE_GUIDE.md': 'enterprise/control-plane.md',
   'ENTERPRISE_FEATURES.md': 'enterprise/features.md',
-  'ENTERPRISE_SUPPORT.md': 'enterprise/support.md',
+  'docs/enterprise/ENTERPRISE_SUPPORT.md': 'enterprise/support.md',
   'enterprise/DISASTER_RECOVERY.md': 'enterprise/disaster-recovery.md',
   'COMMERCIAL_OVERVIEW.md': 'enterprise/commercial-overview.md',
   'WHY_ARAGORA.md': 'enterprise/why-aragora.md',
-  'PRICING.md': 'enterprise/pricing.md',
-  'BILLING.md': 'enterprise/billing.md',
-  'BILLING_UNITS.md': 'enterprise/billing-units.md',
-  'SSO_SETUP.md': 'enterprise/sso.md',
-  'STRIPE_SETUP.md': 'enterprise/stripe-setup.md',
-  'SLA.md': 'enterprise/sla.md',
+  'docs/strategy/PRICING.md': 'enterprise/pricing.md',
+  'docs/reference/BILLING.md': 'enterprise/billing.md',
+  'docs/reference/BILLING_UNITS.md': 'enterprise/billing-units.md',
+  'docs/enterprise/SSO_SETUP.md': 'enterprise/sso.md',
+  'docs/guides/STRIPE_SETUP.md': 'enterprise/stripe-setup.md',
+  'docs/reference/SLA.md': 'enterprise/sla.md',
 
   // =========================================================================
   // Security & Compliance
   // =========================================================================
-  'SECURITY.md': 'security/overview.md',
-  'AUTH_GUIDE.md': 'security/authentication.md',
-  'COMPLIANCE.md': 'enterprise/compliance.md',
-  'COMPLIANCE_PRESETS.md': 'security/compliance-presets.md',
-  'DATA_CLASSIFICATION.md': 'security/data-classification.md',
-  'DATA_RESIDENCY.md': 'security/data-residency.md',
-  'PRIVACY_POLICY.md': 'security/privacy-policy.md',
-  'BREACH_NOTIFICATION_SLA.md': 'security/breach-notification.md',
-  'CI_CD_SECURITY.md': 'security/ci-cd.md',
-  'REMOTE_WORK_SECURITY.md': 'security/remote-work.md',
-  'DSAR_WORKFLOW.md': 'security/dsar.md',
-  'SECURITY_RUNTIME.md': 'security/runtime.md',
-  'SECURITY_PATTERNS.md': 'security/patterns.md',
-  'OAUTH_GUIDE.md': 'security/oauth-guide.md',
-  'OAUTH_SETUP.md': 'security/oauth-setup.md',
-  'SESSION_MANAGEMENT.md': 'security/session-management.md',
+  'docs/enterprise/SECURITY.md': 'security/overview.md',
+  'docs/guides/AUTH_GUIDE.md': 'security/authentication.md',
+  'docs/enterprise/COMPLIANCE.md': 'enterprise/compliance.md',
+  'docs/enterprise/COMPLIANCE_PRESETS.md': 'security/compliance-presets.md',
+  'docs/compliance/DATA_CLASSIFICATION.md': 'security/data-classification.md',
+  'docs/enterprise/DATA_RESIDENCY.md': 'security/data-residency.md',
+  'docs/enterprise/PRIVACY_POLICY.md': 'security/privacy-policy.md',
+  'docs/enterprise/BREACH_NOTIFICATION_SLA.md': 'security/breach-notification.md',
+  'docs/enterprise/CI_CD_SECURITY.md': 'security/ci-cd.md',
+  'docs/enterprise/REMOTE_WORK_SECURITY.md': 'security/remote-work.md',
+  'docs/enterprise/DSAR_WORKFLOW.md': 'security/dsar.md',
+  'docs/enterprise/SECURITY_RUNTIME.md': 'security/runtime.md',
+  'docs/enterprise/SECURITY_PATTERNS.md': 'security/patterns.md',
+  'docs/enterprise/OAUTH_GUIDE.md': 'security/oauth-guide.md',
+  'docs/enterprise/OAUTH_SETUP.md': 'security/oauth-setup.md',
+  'docs/enterprise/SESSION_MANAGEMENT.md': 'security/session-management.md',
   'compliance/EU_AI_ACT_GUIDE.md': 'security/eu-ai-act-guide.md',
 
   // =========================================================================
   // Admin & Management
   // =========================================================================
-  'ADMIN.md': 'admin/overview.md',
-  'A_B_TESTING.md': 'admin/ab-testing.md',
-  'NOMIC_LOOP.md': 'admin/nomic-loop.md',
+  'docs/reference/ADMIN.md': 'admin/overview.md',
+  'docs/testing/A_B_TESTING.md': 'admin/ab-testing.md',
+  'docs/workflow/NOMIC_LOOP.md': 'admin/nomic-loop.md',
 
   // =========================================================================
   // Advanced Topics
   // =========================================================================
-  'RLM_GUIDE.md': 'advanced/rlm.md',
-  'RLM_USER_GUIDE.md': 'advanced/rlm-user.md',
-  'RLM_DEVELOPER_GUIDE.md': 'advanced/rlm-developer.md',
-  'INTEGRATION_RLM.md': 'advanced/rlm-integration.md',
-  'CROSS_POLLINATION.md': 'advanced/cross-pollination.md',
-  'CROSS_FUNCTIONAL_FEATURES.md': 'advanced/cross-functional.md',
-  'TRICKSTER.md': 'advanced/trickster.md',
-  'FORMAL_VERIFICATION.md': 'advanced/formal-verification.md',
+  'docs/guides/RLM_GUIDE.md': 'advanced/rlm.md',
+  'docs/guides/RLM_USER_GUIDE.md': 'advanced/rlm-user.md',
+  'docs/guides/RLM_DEVELOPER_GUIDE.md': 'advanced/rlm-developer.md',
+  'docs/integrations/INTEGRATION_RLM.md': 'advanced/rlm-integration.md',
+  'docs/integrations/CROSS_POLLINATION.md': 'advanced/cross-pollination.md',
+  'docs/architecture/CROSS_FUNCTIONAL_FEATURES.md': 'advanced/cross-functional.md',
+  'docs/debate/TRICKSTER.md': 'advanced/trickster.md',
+  'docs/workflow/FORMAL_VERIFICATION.md': 'advanced/formal-verification.md',
   'resilience/RESILIENCE.md': 'advanced/resilience.md',
   'status/PROPULSION.md': 'advanced/propulsion.md',
 
   // =========================================================================
   // Analysis & Metrics
   // =========================================================================
-  'ANALYSIS.md': 'analysis/overview.md',
-  'CODEBASE_ANALYSIS.md': 'analysis/codebase.md',
-  'BENCHMARK_RESULTS.md': 'analysis/benchmarks.md',
+  'docs/architecture/ANALYSIS.md': 'analysis/overview.md',
+  'docs/architecture/CODEBASE_ANALYSIS.md': 'analysis/codebase.md',
+  'docs/testing/BENCHMARK_RESULTS.md': 'analysis/benchmarks.md',
   'case-studies/README.md': 'analysis/case-studies/index.md',
   'case-studies/architecture-stress-test.md': 'analysis/case-studies/architecture-stress-test.md',
   'case-studies/gdpr-compliance-audit.md': 'analysis/case-studies/gdpr-compliance-audit.md',
@@ -349,20 +264,20 @@ const DOC_MAP = {
   // =========================================================================
   // Contributing
   // =========================================================================
-  'CONTRIBUTING.md': 'contributing/guide.md',
+  'docs/guides/CONTRIBUTING.md': 'contributing/guide.md',
   'NEXT_STEPS.md': 'contributing/next-steps.md',
-  'FIRST_CONTRIBUTION.md': 'contributing/first-contribution.md',
+  'docs/guides/FIRST_CONTRIBUTION.md': 'contributing/first-contribution.md',
   'INDEX.md': 'contributing/documentation-index.md',
-  'COLD_REVIEWER_GUIDE.md': 'contributing/cold-reviewer-guide.md',
-  'INBOX_GUIDE.md': 'contributing/INBOX_GUIDE.md',
-  'DEPRECATION_POLICY.md': 'contributing/deprecation.md',
+  'docs/guides/COLD_REVIEWER_GUIDE.md': 'contributing/cold-reviewer-guide.md',
+  'docs/guides/INBOX_GUIDE.md': 'contributing/INBOX_GUIDE.md',
+  'docs/reference/DEPRECATION_POLICY.md': 'contributing/deprecation.md',
   'STATUS.md': 'contributing/status.md',
-  'DEPENDENCIES.md': 'contributing/dependencies.md',
-  'FRONTEND_DEVELOPMENT.md': 'contributing/frontend-development.md',
-  'FRONTEND_ROUTES.md': 'contributing/frontend-routes.md',
-  'HANDLER_DEVELOPMENT.md': 'contributing/handler-development.md',
-  'TESTING.md': 'contributing/testing.md',
-  'HANDLERS.md': 'contributing/handlers.md',
+  'docs/reference/DEPENDENCIES.md': 'contributing/dependencies.md',
+  'docs/debate/FRONTEND_DEVELOPMENT.md': 'contributing/frontend-development.md',
+  'docs/guides/FRONTEND_ROUTES.md': 'contributing/frontend-routes.md',
+  'docs/debate/HANDLER_DEVELOPMENT.md': 'contributing/handler-development.md',
+  'docs/testing/TESTING.md': 'contributing/testing.md',
+  'docs/reference/HANDLERS.md': 'contributing/handlers.md',
   'status/FEATURE_DISCOVERY.md': 'contributing/feature-discovery.md',
   'FEATURE_GAP_LIST.md': 'contributing/feature-gap-list.md',
   'status/ACTIVE_EXECUTION_ISSUES.md': 'contributing/active-execution-issues.md',
@@ -377,9 +292,7 @@ const DOC_MAP = {
   'status/TW03_RESCUE_PRODUCTIZATION_STATUS.md':
     'contributing/tw03-rescue-productization-status.md',
   'CANONICAL_GOALS.md': 'contributing/canonical-goals.md',
-  '../CLAUDE.md': 'contributing/claude.md',
   'EXTENDED_README.md': 'contributing/extended-readme.md',
-  '../ROADMAP.md': 'contributing/roadmap.md',
   'plans/ARAGORA_EVOLUTION_ROADMAP.md': 'contributing/aragora-evolution-roadmap.md',
   'plans/PMF_DOGFOOD_EXECUTION_PLAN.md': 'contributing/pmf-dogfood-execution-plan.md',
   'plans/2026-03-26-pmf-14-day-execution-plan.md':
@@ -432,14 +345,16 @@ const DOC_MAP = {
   // docs/reference/** technical reference material, mirrored as its own
   // `reference/` category (parallel to Specifications above). Several files
   // in this directory intentionally have no entry here because they already
-  // resolve through a pre-existing DOC_MAP entry elsewhere -- see
+  // are published by a pre-existing DOC_MAP entry elsewhere -- see
   // ACCOUNTING.md, ADMIN.md, BILLING.md, BILLING_UNITS.md, CONTROL_PLANE.md,
   // DATABASE.md, DATABASE_SCHEMA.md, DEPENDENCIES.md, DEPRECATION_POLICY.md,
-  // DOCUMENTS.md, ENVIRONMENT.md, HANDLERS.md, and LIBRARY_USAGE.md above
-  // (resolveSourcePath()'s basename fallback), plus reference/CLI_REFERENCE.md
-  // under API Reference. Adding a second reference/ entry for those would
-  // publish the same content at two docs-site URLs.
+  // DOCUMENTS.md, ENVIRONMENT.md, HANDLERS.md, LIBRARY_USAGE.md and SLA.md
+  // above, plus reference/CLI_REFERENCE.md under API Reference. Adding a
+  // second reference/ entry for those would publish the same content at two
+  // docs-site URLs.
   // =========================================================================
+  // Hand-written CLI guide; the generated command catalog is api/cli.md.
+  'docs/CLI_REFERENCE.md': 'reference/cli-reference.md',
   'reference/BINDINGS.md': 'reference/bindings.md',
   'reference/BREAKING_CHANGES.md': 'reference/breaking-changes.md',
   'reference/CANONICAL_STORES.md': 'reference/canonical-stores.md',
@@ -465,40 +380,53 @@ const DOC_MAP = {
   // Additional Missing Files (commonly referenced)
   // =========================================================================
   // Core
-  'TROUBLESHOOTING.md': 'operations/troubleshooting.md',
-  'QUEUE.md': 'guides/queue.md',
-  'RATE_LIMITING.md': 'deployment/rate-limiting.md',
-  'SECRETS_MANAGEMENT.md': 'deployment/secrets-management.md',
-  'MEMORY_ANALYTICS.md': 'core-concepts/memory-analytics.md',
+  'docs/guides/TROUBLESHOOTING.md': 'operations/troubleshooting.md',
+  'docs/resilience/QUEUE.md': 'guides/queue.md',
+  'docs/api/RATE_LIMITING.md': 'deployment/rate-limiting.md',
+  'docs/enterprise/SECRETS_MANAGEMENT.md': 'deployment/secrets-management.md',
+  'docs/knowledge/MEMORY_ANALYTICS.md': 'core-concepts/memory-analytics.md',
 
   // API
-  'MCP_INTEGRATION.md': 'guides/mcp-integration.md',
-  'MCP_ADVANCED.md': 'guides/mcp-advanced.md',
+  'docs/integrations/MCP_INTEGRATION.md': 'guides/mcp-integration.md',
+  'docs/integrations/MCP_ADVANCED.md': 'guides/mcp-advanced.md',
 
   // Operations
-  'PERFORMANCE_TARGETS.md': 'operations/performance-targets.md',
-  'PRODUCTION_READINESS.md': 'operations/production-readiness.md',
+  'docs/deployment/PERFORMANCE_TARGETS.md': 'operations/performance-targets.md',
+  'docs/deployment/PRODUCTION_READINESS.md': 'operations/production-readiness.md',
 
   // Advanced
-  'GENESIS.md': 'advanced/genesis.md',
-  'EVOLUTION_PATTERNS.md': 'advanced/evolution-patterns.md',
+  'docs/workflow/GENESIS.md': 'advanced/genesis.md',
+  'docs/workflow/EVOLUTION_PATTERNS.md': 'advanced/evolution-patterns.md',
 
   // Admin
 
   // Security
 
   // Integration / Enterprise
-  'POSTGRESQL_MIGRATION.md': 'deployment/postgresql-migration.md',
+  'docs/status/POSTGRESQL_MIGRATION.md': 'deployment/postgresql-migration.md',
 
   // Algorithms
   'algorithms/CONVERGENCE.md': 'core-concepts/convergence-algorithm.md',
   'algorithms/ELO_CALIBRATION.md': 'core-concepts/elo-calibration.md',
 
   // Documents
-  'FEATURES.md': 'guides/features.md',
-  'VERTICALS.md': 'guides/verticals.md',
-  'OPERATIONS.md': 'operations/overview.md',
+  'docs/status/FEATURES.md': 'guides/features.md',
+  'docs/status/VERTICALS.md': 'guides/verticals.md',
+  'docs/operations/OPERATIONS.md': 'operations/overview.md',
 };
+
+// Repository files outside docs/ that are published as pages (repo-relative source -> destination).
+// Pages under docs/ link to them as '../CLAUDE.md' and '../ROADMAP.md'.
+const REPO_SOURCE_MAP = {
+  'CLAUDE.md': 'contributing/claude.md',
+  'ROADMAP.md': 'contributing/roadmap.md',
+};
+
+// Repository files outside docs/ that are link targets only: REPO_MARKDOWN_LINKS rewrites links to
+// them, and they are never published as pages of their own.
+const REPO_SOURCE_LINK_ONLY = [
+  'aragora/gauntlet/README.md',
+];
 
 // Add frontmatter to markdown files
 function addFrontmatter(content, title, description, slug) {
@@ -760,19 +688,29 @@ const PUBLIC_DOC_CONTENT_OVERRIDES = {
     '',
   ].join('\n'),
 };
+// Every published page as { src (repo-relative), rel (relative to docs/), dest }. Links inside
+// docs/ are written relative to docs/, so the lookups use `rel` (CLAUDE.md -> ../CLAUDE.md).
+// DOC_MAP keys not yet spelled docs/<path> are exact paths relative to docs/.
+const PUBLISHED_SOURCES = [
+  ...Object.entries(DOC_MAP).map(([key, dest]) => [key.startsWith('docs/') ? key : `docs/${key}`, dest]),
+  ...Object.entries(REPO_SOURCE_MAP),
+].map(([src, dest]) => ({
+  src,
+  rel: path.relative(SOURCE_DIR, path.join(REPO_ROOT, src)).replace(/\\/g, '/'),
+  dest,
+}));
+const PUBLISHED_PAGES = new Set(PUBLISHED_SOURCES.map(({ dest }) => dest.replace(/\.md$/, '')));
 const basenameCounts = new Map();
-for (const src of Object.keys(DOC_MAP)) {
-  const srcName = path.basename(src.replace(/^\.\//, '').replace(/^\//, ''));
+for (const { rel } of PUBLISHED_SOURCES) {
+  const srcName = path.basename(rel);
   basenameCounts.set(srcName, (basenameCounts.get(srcName) || 0) + 1);
 }
-for (const [src, dest] of Object.entries(DOC_MAP)) {
-  // Normalize source path variations
-  const srcBase = src.replace(/^\.\//, '').replace(/^\//, '');
-  const srcName = path.basename(srcBase);
+for (const { rel, dest } of PUBLISHED_SOURCES) {
+  const srcName = path.basename(rel);
 
   // Store both with and without .md extension
-  REVERSE_LOOKUP[srcBase] = dest;
-  REVERSE_LOOKUP[srcBase.replace('.md', '')] = dest.replace('.md', '');
+  REVERSE_LOOKUP[rel] = dest;
+  REVERSE_LOOKUP[rel.replace('.md', '')] = dest.replace('.md', '');
 
   if (basenameCounts.get(srcName) === 1) {
     BASENAME_LOOKUP[srcName] = dest;
@@ -878,8 +816,14 @@ function fixContent(content, destPath, relSrcPath) {
   content = content.replace(
     /\]\(((?:\.\.\/|\.\/)?)([A-Za-z0-9_./-]+)(#[^)]+)?\)(?!\.md)/g,
     (match, prefix, filePath, anchor) => {
-      const normalized = filePath.replace(/^\.\.\//, '').replace(/^\.\//, '');
       const rawTarget = `${prefix}${filePath}`;
+      // Links rewritten by the pass above already name a published page; resolving their
+      // slug again by basename would send e.g. operations/incident-response to the page of
+      // runbooks/incident-response.md.
+      if (PUBLISHED_PAGES.has(path.posix.normalize(path.posix.join(currentDir, rawTarget)))) {
+        return match;
+      }
+      const normalized = filePath.replace(/^\.\.\//, '').replace(/^\.\//, '');
       const newPath =
         resolveLinkDestination(normalized, relSrcPath, rawTarget) ||
         resolveLinkDestination(normalized + '.md', relSrcPath, `${rawTarget}.md`);
@@ -918,15 +862,48 @@ function injectConnectorCatalogBanner(content, relSrcPath) {
   return banner + content;
 }
 
-// Process a single file
-function processFile(srcRelPath, destPath) {
-  const resolved = resolveSourcePath(srcRelPath);
-  if (!resolved) {
-    console.log(`  Skipping (not found): ${srcRelPath}`);
-    return false;
+// A source must exist with exactly this spelling (fs.existsSync alone is case-insensitive on macOS).
+function sourceExists(src) {
+  let current = REPO_ROOT;
+  for (const part of src.split('/')) {
+    if (!fs.existsSync(current) || !fs.readdirSync(current).includes(part)) {
+      return false;
+    }
+    current = path.join(current, part);
   }
+  return fs.statSync(current).isFile();
+}
 
-  const srcPath = resolved.srcPath;
+// Every key must name an existing file and every destination must be unique. Nothing guesses a
+// source from its basename, so a moved or renamed file fails here instead of publishing another page.
+function sourceMapProblems() {
+  const problems = [];
+  const owners = new Map();
+  for (const key of Object.keys(DOC_MAP)) {
+    if (!key.endsWith('.md') || key.startsWith('../') || key.startsWith('/')) {
+      problems.push(`DOC_MAP key '${key}' is not a literal docs/<path>.md source`);
+    }
+  }
+  for (const { src, dest } of PUBLISHED_SOURCES) {
+    if (!sourceExists(src)) {
+      problems.push(`source '${src}' (-> ${dest}) does not exist`);
+    }
+    if (owners.has(dest)) {
+      problems.push(`destination ${dest} is claimed by both '${owners.get(dest)}' and '${src}'`);
+    }
+    owners.set(dest, src);
+  }
+  for (const src of REPO_SOURCE_LINK_ONLY) {
+    if (!REPO_MARKDOWN_LINKS[`../${src}`] || src in REPO_SOURCE_MAP) {
+      problems.push(`REPO_SOURCE_LINK_ONLY entry '${src}' needs a REPO_MARKDOWN_LINKS alias and no page`);
+    }
+  }
+  return problems;
+}
+
+// Process a single file
+function processFile(src, destPath) {
+  const srcPath = path.join(REPO_ROOT, src);
   let content = fs.readFileSync(srcPath, 'utf8');
   const relSrcPath = path.relative(SOURCE_DIR, srcPath);
   const normalizedRelSrcPath = relSrcPath.replace(/\\/g, '/');
@@ -956,14 +933,7 @@ function processFile(srcRelPath, destPath) {
   }
 
   fs.writeFileSync(destPath, content);
-  const sourceNote =
-    resolved.resolvedFrom && resolved.resolvedFrom !== srcRelPath
-      ? ` (${srcRelPath} -> ${resolved.resolvedFrom})`
-      : '';
-  console.log(
-    `  ✓ ${path.basename(srcPath)} -> ${destPath.replace(DEST_DIR + '/', '')}${sourceNote}`
-  );
-  return true;
+  console.log(`  ✓ ${src} -> ${relDestPath}`);
 }
 
 // Create index file for a category
@@ -997,12 +967,10 @@ Explore the documentation in this section to learn more.${itemsList}
 }
 
 function docsSpecsItems() {
-  return Object.entries(DOC_MAP)
-    .filter(([src, dest]) => src.startsWith('specs/') && dest.startsWith('specs/'))
-    .map(([src, dest]) => {
-      const resolved = resolveSourcePath(src);
-      const content = resolved ? fs.readFileSync(resolved.srcPath, 'utf8') : '';
-      const title = content ? extractTitle(content) : path.basename(dest, '.md');
+  return PUBLISHED_SOURCES
+    .filter(({ src, dest }) => src.startsWith('docs/specs/') && dest.startsWith('specs/'))
+    .map(({ src, dest }) => {
+      const title = extractTitle(fs.readFileSync(path.join(REPO_ROOT, src), 'utf8'));
       return {
         title,
         path: `./${path.basename(dest, '.md')}`,
@@ -1012,12 +980,10 @@ function docsSpecsItems() {
 }
 
 function docsReferenceItems() {
-  return Object.entries(DOC_MAP)
-    .filter(([src, dest]) => src.startsWith('reference/') && dest.startsWith('reference/'))
-    .map(([src, dest]) => {
-      const resolved = resolveSourcePath(src);
-      const content = resolved ? fs.readFileSync(resolved.srcPath, 'utf8') : '';
-      const title = content ? extractTitle(content) : path.basename(dest, '.md');
+  return PUBLISHED_SOURCES
+    .filter(({ src, dest }) => src.startsWith('docs/reference/') && dest.startsWith('reference/'))
+    .map(({ src, dest }) => {
+      const title = extractTitle(fs.readFileSync(path.join(REPO_ROOT, src), 'utf8'));
       return {
         title,
         path: `./${path.basename(dest, '.md')}`,
@@ -1030,22 +996,22 @@ function docsReferenceItems() {
 function syncDocs() {
   console.log('\\n📚 Syncing documentation...\\n');
 
+  const problems = sourceMapProblems();
+  if (problems.length > 0) {
+    for (const problem of problems) {
+      console.error(`  ✗ ${problem}`);
+    }
+    console.error('\nSync aborted before writing any page: fix the source maps above.');
+    process.exit(1);
+  }
+
   // Ensure destination directory exists
   if (!fs.existsSync(DEST_DIR)) {
     fs.mkdirSync(DEST_DIR, { recursive: true });
   }
 
-  let synced = 0;
-  let skipped = 0;
-
-  // Process each mapped file
-  for (const [src, dest] of Object.entries(DOC_MAP)) {
-    const destPath = path.join(DEST_DIR, dest);
-    if (processFile(src, destPath)) {
-      synced++;
-    } else {
-      skipped++;
-    }
+  for (const { src, dest } of PUBLISHED_SOURCES) {
+    processFile(src, path.join(DEST_DIR, dest));
   }
 
   // Create index files for each category
@@ -1086,7 +1052,7 @@ function syncDocs() {
     createIndexFile(cat.path, cat.title, cat.desc, items);
   }
 
-  console.log(`\\n✅ Done! Synced ${synced} files, skipped ${skipped} (not found)\\n`);
+  console.log(`\\n✅ Done! Synced ${PUBLISHED_SOURCES.length} files\\n`);
 }
 
 // Run sync

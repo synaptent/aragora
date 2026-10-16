@@ -23,6 +23,7 @@ from typing import Any
 
 from aragora.ideacloud.graph.node import IdeaNode, _generate_id, _now_iso
 from aragora.ideacloud.ingestion.base import BaseIdeaIngestor
+from aragora.runtime.connector_factory import ConnectorFactoryNotRegisteredError, create_connector
 
 logger = logging.getLogger(__name__)
 
@@ -106,31 +107,27 @@ class RSSFeedIngestor(BaseIdeaIngestor):
 
         all_nodes: list[IdeaNode] = []
 
+        sources = [
+            {
+                "url": feed_config.url,
+                "name": feed_config.name,
+                "category": feed_config.category,
+                "priority": feed_config.priority,
+                "max_entries": feed_config.max_entries,
+            }
+            for feed_config in self.feeds
+            if feed_config.enabled
+        ]
         try:
-            from aragora.connectors.feeds import FeedEntry, FeedIngestor, FeedSource
-        except ImportError:
+            feed_ingestor = create_connector("feed_ingestor", sources=sources)
+        except (ImportError, ConnectorFactoryNotRegisteredError):
             logger.warning(
                 "aragora.connectors.feeds not available; falling back to stub RSS parsing"
             )
             return await self._fallback_ingest()
 
-        feed_ingestor = FeedIngestor()
-
-        for feed_config in self.feeds:
-            if not feed_config.enabled:
-                continue
-
-            feed_source = FeedSource(
-                url=feed_config.url,
-                name=feed_config.name,
-                category=feed_config.category,
-                priority=feed_config.priority,
-                max_entries=feed_config.max_entries,
-            )
-            feed_ingestor.add_source(feed_source)
-
         try:
-            entries: list[FeedEntry] = await feed_ingestor.fetch_all()
+            entries = await feed_ingestor.fetch_all()
         except Exception as exc:
             logger.error("Failed to fetch feeds: %s", exc)
             return []

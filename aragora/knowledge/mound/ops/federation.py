@@ -718,7 +718,7 @@ class KnowledgeFederationMixin:
     ) -> None:
         """Register region with CrossWorkspaceCoordinator."""
         try:
-            from aragora.coordination.cross_workspace import (
+            from aragora.tenancy.cross_workspace import (
                 CrossWorkspaceCoordinator,
                 FederatedWorkspace,
                 FederationMode as CoordinatorFederationMode,
@@ -756,7 +756,7 @@ class KnowledgeFederationMixin:
     ) -> int:
         """Push items to remote region via coordinator."""
         try:
-            from aragora.coordination.cross_workspace import (
+            from aragora.tenancy.cross_workspace import (
                 CrossWorkspaceCoordinator,
                 CrossWorkspaceOperation,
             )
@@ -787,7 +787,7 @@ class KnowledgeFederationMixin:
     ) -> list[dict[str, Any]]:
         """Fetch items from remote region via coordinator."""
         try:
-            from aragora.coordination.cross_workspace import (
+            from aragora.tenancy.cross_workspace import (
                 CrossWorkspaceCoordinator,
                 CrossWorkspaceOperation,
             )

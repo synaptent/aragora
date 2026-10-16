@@ -364,7 +364,7 @@ def _policy_validate(args: argparse.Namespace) -> int:
         return 1
 
     try:
-        from aragora.gateway.openclaw_policy import OpenClawPolicy
+        from aragora.compat.openclaw_policy import OpenClawPolicy
 
         policy = OpenClawPolicy(policy_file=str(policy_path))
         rules = policy.get_rules()

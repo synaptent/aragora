@@ -45,6 +45,9 @@ from datetime import datetime
 from typing import Any
 from collections.abc import Callable
 
+from aragora.debate.pipeline_backends import pipeline_backend
+from aragora.debate.workflow_backends import WorkflowBackendNotRegisteredError, workflow_backend
+
 logger = logging.getLogger(__name__)
 
 
@@ -261,20 +264,10 @@ class ExecutionBridge:
             )
 
         try:
-            from aragora.workflow.triggers import ReceiptWorkflowTrigger
-
-            trigger = ReceiptWorkflowTrigger()
             template = rule.config.get("workflow_template", "default")
-
-            # Register the rule's condition as a trigger
-            trigger.register_rule(
-                name=rule.name,
-                condition=rule.condition,
-                workflow_template=template,
+            matched = workflow_backend().receipt_rule_matches(
+                rule.name, rule.condition, template, context
             )
-
-            results = trigger.evaluate(context)
-            matched = len(results) > 0
 
             return ActionResult(
                 rule_name=rule.name,
@@ -282,7 +275,7 @@ class ExecutionBridge:
                 success=matched,
                 detail=f"Workflow '{template}' {'triggered' if matched else 'not matched'}",
             )
-        except ImportError:
+        except (ImportError, WorkflowBackendNotRegisteredError):
             return ActionResult(
                 rule_name=rule.name,
                 action_type=ActionType.WORKFLOW,
@@ -379,7 +372,7 @@ class ExecutionBridge:
             )
 
         try:
-            from aragora.nomic.improvement_queue import (
+            from aragora.learning.improvement_queue import (
                 ImprovementSuggestion,
                 get_improvement_queue,
             )
@@ -471,8 +464,9 @@ class ExecutionBridge:
             )
 
         try:
-            from aragora.pipeline.executor import PlanExecutor
-            from aragora.pipeline.decision_plan.factory import DecisionPlanFactory
+            pipeline = pipeline_backend()
+            PlanExecutor = pipeline.plan_executor()
+            DecisionPlanFactory = pipeline.decision_plan_factory()
 
             plan = DecisionPlanFactory.from_debate_result(
                 debate_result,

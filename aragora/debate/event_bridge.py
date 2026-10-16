@@ -88,7 +88,7 @@ class EventEmitterBridge:
         }
         if self.spectator:
             try:
-                from aragora.spectate.ws_bridge import bind_spectate_context
+                from aragora.events.spectate.ws_bridge import bind_spectate_context
 
                 with bind_spectate_context(
                     debate_id=kwargs.get("debate_id") or self.loop_id or None,

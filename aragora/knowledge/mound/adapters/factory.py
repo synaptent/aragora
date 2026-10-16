@@ -27,6 +27,8 @@ from dataclasses import dataclass, field
 from typing import Any, TYPE_CHECKING
 from collections.abc import Callable
 
+from aragora.runtime.connector_factory import ConnectorFactoryNotRegisteredError, create_connector
+
 if TYPE_CHECKING:
     from aragora.knowledge.mound.bidirectional_coordinator import BidirectionalCoordinator
 
@@ -904,17 +906,11 @@ class AdapterFactory:
                 connector = deps.get("obsidian_connector")
                 if connector is None:
                     try:
-                        from aragora.connectors.knowledge.obsidian import (
-                            ObsidianConfig,
-                            ObsidianConnector,
-                        )
-
-                        config = ObsidianConfig.from_env()
-                        if config is None:
-                            return None
-                        connector = ObsidianConnector(config)
+                        connector = create_connector("obsidian")
                     except (RuntimeError, ValueError, TypeError, AttributeError) as e:  # noqa: BLE001 - adapter isolation
                         logger.debug("Obsidian connector init failed: %s", e)
+                        return None
+                    if connector is None:
                         return None
 
                 adapter = adapter_class(
@@ -965,7 +961,7 @@ class AdapterFactory:
                     event_callback=self._event_callback,
                 )
             elif spec.name == "supermemory":
-                from aragora.connectors.supermemory import SupermemoryConfig, SupermemoryClient
+                from aragora.memory.supermemory import SupermemoryConfig, SupermemoryClient
 
                 supermemory_config = SupermemoryConfig.from_env()
                 if supermemory_config is None:
@@ -999,19 +995,13 @@ class AdapterFactory:
                 )
             elif spec.name == "claude_mem":
                 try:
-                    from aragora.connectors.memory.claude_mem import (
-                        ClaudeMemConnector,
-                        ClaudeMemConfig,
-                    )
-
-                    cm_config = ClaudeMemConfig.from_env()
-                    connector = ClaudeMemConnector(cm_config)
+                    connector = create_connector("claude_mem")
                     adapter = adapter_class(
                         connector=connector,
-                        project=cm_config.project,
+                        project=connector.config.project,
                         event_callback=self._event_callback,
                     )
-                except (ImportError, OSError, ValueError) as e:
+                except (ImportError, OSError, ValueError, ConnectorFactoryNotRegisteredError) as e:
                     logger.debug("claude-mem connector init failed: %s", e)
                     return None
             elif spec.name == "rlm_context":
@@ -1090,7 +1080,7 @@ class AdapterFactory:
                 elif spec.name == "outcome":
                     return adapter_class(mound=deps.get("mound"))
                 elif spec.name == "supermemory":
-                    from aragora.connectors.supermemory import SupermemoryConfig, SupermemoryClient
+                    from aragora.memory.supermemory import SupermemoryConfig, SupermemoryClient
 
                     supermemory_config = SupermemoryConfig.from_env()
                     if supermemory_config is None:
@@ -1113,18 +1103,17 @@ class AdapterFactory:
                     return adapter_class(mound=deps.get("mound"))
                 elif spec.name == "claude_mem":
                     try:
-                        from aragora.connectors.memory.claude_mem import (
-                            ClaudeMemConnector,
-                            ClaudeMemConfig,
-                        )
-
-                        cm_config = ClaudeMemConfig.from_env()
-                        connector = ClaudeMemConnector(cm_config)
+                        connector = create_connector("claude_mem")
                         return adapter_class(
                             connector=connector,
-                            project=cm_config.project,
+                            project=connector.config.project,
                         )
-                    except (ImportError, OSError, ValueError) as e:
+                    except (
+                        ImportError,
+                        OSError,
+                        ValueError,
+                        ConnectorFactoryNotRegisteredError,
+                    ) as e:
                         logger.debug("claude-mem connector init failed: %s", e)
                         return None
                 elif spec.name == "rlm_context":
