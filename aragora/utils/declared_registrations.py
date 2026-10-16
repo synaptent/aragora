@@ -15,7 +15,8 @@ init fills can check :func:`declared_registrations_running` and then only fill w
 missing; :mod:`aragora.core.decision_route_hooks` does.
 
 A registration that raised ``ImportError`` runs again on the next lookup that misses,
-until it no longer raises it; every other registration runs once.
+until it no longer raises it; every other registration runs once. One that raised it after
+registering some entries registers them again, so it must be safe to run twice.
 """
 
 from __future__ import annotations
@@ -129,6 +130,8 @@ class DeclaredRegistrations:
 
     @property
     def loaded(self) -> bool:
+        """Whether the first :meth:`load` has started; registrations that raised
+        ``ImportError`` can still be waiting for their retry."""
         return self._loaded
 
     def load(self) -> None:
