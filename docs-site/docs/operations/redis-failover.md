@@ -340,6 +340,6 @@ kubectl logs -f deployment/aragora-api -n aragora | grep -i redis
 
 ## See Also
 
-- [Incident Response Runbook](./incident-response)
+- [Incident Response Runbook](./incident-response-procedures)
 - [Scaling Runbook](./scaling)
 - [Monitoring Setup Runbook](./monitoring-setup)
