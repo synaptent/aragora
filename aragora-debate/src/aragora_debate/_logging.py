@@ -56,6 +56,9 @@ _BRACKET = (
 )
 # Up to seven backslashes: a key quoted inside a JSON or repr string, up to three deep.
 _KEY_QUOTE = r"""(?<!\\)\\{0,7}["']"""
+# Whitespace in a name/value pair, also as the \n, \r or \t that a JSON or repr string
+# writes for a line break, carriage return or tab, up to three strings deep.
+_PAIR_SPACE = r"(?:\s|\\{1,7}[nrt])*"
 # key=value, key: value, a quoted key as in JSON or a repr, and a quoted name before a
 # comma (a header tuple's first item or a HAR "name" field). A key starts at a word
 # boundary and its secret word is found by a lookahead, so a long word takes linear
@@ -70,7 +73,7 @@ _ASSIGNMENT = re.compile(
     rf"|(?<![\w.-])(?=[\w.-]*?{_SECRET_KEY})[\w.-]+"
     r"(?:(?<=authorization)[ \t]+(?:header|value|field|credentials?))?"
     rf"(?P<tq>{_KEY_QUOTE})?)"
-    r"(?P<sep>\s*[=:]\s*|(?(kq)(?P<pair>\s*,\s*)|(?!)))"
+    rf"(?P<sep>\s*[=:]\s*|(?(kq)(?P<pair>{_PAIR_SPACE},{_PAIR_SPACE})|(?!)))"
     rf"(?:[bBuU]?(?P<dq>{_DQ})|[bBuU]?(?P<sq>{_SQ})|(?P<br>{_BRACKET})"
     rf"|(?:(?:Bearer|Basic)\s+)?{_BARE})?",
     re.IGNORECASE,
@@ -107,9 +110,11 @@ _ADJACENT_LITERAL = re.compile(rf"[ \t]*\r?\n[ \t]*[bBuU]?(?:{_DQ}|{_SQ})")
 # A quoted name before a comma is a name/value pair only as a tuple's first item, as the
 # first item of a list inside a list or tuple (a list of pairs), or as a HAR "name" or
 # "header" field; a list on its own, ['api_key', 'model'], is a list of names. The
-# lookbehind leaves room for the line breaks and indentation of indented JSON.
+# lookbehind leaves room for the line breaks, escaped or not, and the indentation of
+# indented JSON.
 _PAIR_CONTEXT = re.compile(
-    r"""(?:\(\s*[bBuU]?|[\[(,]\s*\[\s*[bBuU]?|(?<![\w-])(?:name|header)\\{0,7}["']\s*:\s*)\Z""",
+    rf"""(?:\({_PAIR_SPACE}[bBuU]?|[\[(,]{_PAIR_SPACE}\[{_PAIR_SPACE}[bBuU]?"""
+    rf"""|(?<![\w-])(?:name|header)\\{{0,7}}["']{_PAIR_SPACE}:{_PAIR_SPACE})\Z""",
     re.IGNORECASE,
 )
 _PAIR_LOOKBEHIND = 64

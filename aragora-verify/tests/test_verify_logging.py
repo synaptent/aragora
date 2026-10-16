@@ -801,6 +801,198 @@ def test_a_list_of_names_inside_a_list_reads_as_a_pair_and_is_masked(path):
     assert _render_through(path, names)[1] == names
 
 
+# Pair text that repr() or json.dumps() wrote into one more string, or that an exception
+# holds: its line breaks, carriage returns and tabs are escaped as \n, \r and \t.
+_ESCAPED_SHAPES = {
+    "pair-list": lambda name, value: [[name, value]],
+    "pair-lists": lambda name, value: [["Accept", "*/*"], [name, value]],
+    "pair-lists-in-an-object": lambda name, value: {"headers": [["Accept", "*/*"], [name, value]]},
+    "har-entries": lambda name, value: [
+        {"name": "Accept", "value": "*/*"},
+        {"name": name, "value": value},
+    ],
+    "har-log": lambda name, value: {
+        "log": {"entries": [{"request": {"headers": [{"name": name, "value": value}]}}]}
+    },
+    "header-objects": lambda name, value: [{"header": name, "value": value}],
+}
+_ESCAPING = {
+    "repr": repr,
+    "json-string": json.dumps,
+    "exception-repr": lambda text: repr(ValueError(text)),
+    "exception-args": lambda text: str(ValueError("upstream failed", text)),
+}
+
+
+def _escaped_pair_text(shape, indent, wrap, name, value):
+    return _ESCAPING[wrap](json.dumps(_ESCAPED_SHAPES[shape](name, value), indent=indent))
+
+
+@pytest.mark.parametrize("path", _LOG_PATHS)
+@pytest.mark.parametrize("name", ["Authorization", "X-Api-Key", "access_token"])
+@pytest.mark.parametrize("wrap", list(_ESCAPING))
+@pytest.mark.parametrize("indent", [2, 4])
+@pytest.mark.parametrize("shape", list(_ESCAPED_SHAPES))
+def test_indented_pair_text_escaped_into_a_string_masks_the_value(shape, indent, wrap, name, path):
+    text = _escaped_pair_text(shape, indent, wrap, name, "SECRET-ESC-1")
+    masked = _assert_never_leaks(text, path)
+    # The text up to the name stays; the value and the rest of the line are masked.
+    kept = text.index(name) + len(name)
+    assert masked[:kept] == text[:kept]
+    assert masked.endswith("***")
+
+
+# What every path prints for escaped pair text: the mask runs from the value, or from a
+# HAR or header object's "value" field, to the end of the line, past the escaped line
+# breaks and the string's closing quote. Up to three escape levels are read.
+_ESCAPED_PAIR_TEXTS = {
+    "repr-pair-list-indent-2": (
+        repr(json.dumps([["X-Api-Key", "SECRET-E-1"]], indent=2)),
+        '"SECRET-E-1"',
+    ),
+    "json-string-pair-lists-indent-4": (
+        json.dumps(
+            json.dumps({"headers": [["Accept", "*/*"], ["X-Api-Key", "SECRET-E-2"]]}, indent=4)
+        ),
+        '\\"SECRET-E-2',
+    ),
+    "exception-repr-header-objects-indent-4": (
+        repr(ValueError(json.dumps([{"header": "X-Api-Key", "value": "SECRET-E-3"}], indent=4))),
+        '"value"',
+    ),
+    "exception-args-har-entries-indent-2": (
+        str(
+            ValueError(
+                "upstream failed",
+                json.dumps([{"name": "access_token", "value": "SECRET-E-4"}], indent=2),
+            )
+        ),
+        '"value"',
+    ),
+    "tuple-one-item-per-line": (repr('(\n    "X-Api-Key",\n    "SECRET-E-5",\n)'), '"SECRET-E-5"'),
+    "comma-first": (repr('[\n  [\n    "X-Api-Key"\n    , "SECRET-E-6"\n  ]\n]'), '"SECRET-E-6"'),
+    "tabs-around-the-name-colon": (
+        repr('{"name"\t:\t"X-Api-Key",\t"value"\t:\t"SECRET-E-7"}'),
+        '"value"',
+    ),
+    "crlf-line-breaks": (
+        repr('[\r\n  [\r\n    "X-Api-Key",\r\n    "SECRET-E-8"\r\n  ]\r\n]'),
+        '"SECRET-E-8"',
+    ),
+    "tab-indent": (repr(json.dumps([["X-Api-Key", "SECRET-E-9"]], indent="\t")), '"SECRET-E-9"'),
+    "repr-of-a-repr": (
+        repr(repr(json.dumps([["X-Api-Key", "SECRET-E-10"]], indent=2))),
+        '"SECRET-E-10"',
+    ),
+    "three-json-strings": (
+        json.dumps(json.dumps(json.dumps(json.dumps([["X-Api-Key", "SECRET-E-11"]], indent=4)))),
+        "\\" * 7 + '"SECRET-E-11',
+    ),
+}
+
+
+@pytest.mark.parametrize("path", _LOG_PATHS)
+@pytest.mark.parametrize(
+    ("text", "start"), _ESCAPED_PAIR_TEXTS.values(), ids=list(_ESCAPED_PAIR_TEXTS)
+)
+def test_escaped_pair_text_is_masked_from_the_value_to_the_line_end(text, start, path):
+    assert _assert_never_leaks(text, path) == _masked_from(text, start, "")
+
+
+# A caller may log the text, or an exception holding it, as an argument: with %s, with
+# %r, or as one of several exception arguments.
+_ESCAPED_CALLS = {
+    "repr-argument": lambda raw: ("upstream said %s", repr(raw)),
+    "json-string-argument": lambda raw: ("upstream said %s", json.dumps(raw)),
+    "exception-%r": lambda raw: ("upstream said %r", ValueError(raw)),
+    "exception-args-%s": lambda raw: ("upstream said %s", ValueError("upstream failed", raw)),
+    "unescaped-argument": lambda raw: ("upstream said %s", raw),
+}
+
+
+@pytest.mark.parametrize("call", list(_ESCAPED_CALLS))
+@pytest.mark.parametrize("indent", [2, 4])
+@pytest.mark.parametrize("shape", list(_ESCAPED_SHAPES))
+def test_json_percent_and_brace_lines_never_print_an_escaped_pair_value(shape, indent, call):
+    raw = json.dumps(_ESCAPED_SHAPES[shape]("X-Api-Key", "SECRET-ESC-2"), indent=indent)
+    msg, argument = _ESCAPED_CALLS[call](raw)
+    before = repr(argument)
+    record = logging.makeLogRecord({"msg": msg, "args": (argument,), "payload": argument})
+    lines = [
+        JsonFormatter().format(record),
+        TextFormatter("%(message)s %(payload)s").format(record),
+        TextFormatter("{message} {payload}", style="{").format(record),
+    ]
+    assert [line for line in lines if "SECRET-" in line or "X-Api-Key" not in line] == []
+    assert repr(argument) == before
+
+
+@pytest.mark.parametrize("wrap", list(_ESCAPING))
+@pytest.mark.parametrize("indent", [2, 4])
+@pytest.mark.parametrize("shape", list(_ESCAPED_SHAPES))
+def test_escaped_pair_text_nested_in_objects_is_masked_in_place(shape, indent, wrap):
+    text = _escaped_pair_text(shape, indent, wrap, "X-Api-Key", "SECRET-ESC-3")
+    nested = {"request": [(text,), {"body": text}], "n": 1}
+    before = repr(nested)
+    masked = redact(nested)
+    assert masked == {"request": [(redact(text),), {"body": redact(text)}], "n": 1}
+    assert "SECRET-" not in repr(masked)
+    assert repr(nested) == before
+
+
+@pytest.mark.parametrize("path", _LOG_PATHS)
+@pytest.mark.parametrize("wrap", list(_ESCAPING))
+@pytest.mark.parametrize("indent", [2, 4])
+@pytest.mark.parametrize("shape", list(_ESCAPED_SHAPES))
+def test_escaped_pair_text_for_other_names_stays_unchanged(shape, indent, wrap, path):
+    text = _escaped_pair_text(shape, indent, wrap, "Content-Type", "application/json")
+    assert _render_through(path, text)[1] == text
+
+
+@pytest.mark.parametrize("path", _LOG_PATHS)
+@pytest.mark.parametrize("wrap", list(_ESCAPING))
+def test_escaped_lists_of_names_read_as_they_do_unescaped(wrap, path):
+    # The over-masking above holds with escaped line breaks too, and a list on its own
+    # still reads as a list of names.
+    inside = _ESCAPING[wrap](json.dumps([["api_key", "model"]], indent=2))
+    masked = _render_through(path, inside)[1]
+    kept = inside.index("api_key") + len("api_key")
+    assert (masked[:kept], masked.endswith("***"), "model" in masked) == (
+        inside[:kept],
+        True,
+        False,
+    )
+    alone = _ESCAPING[wrap](json.dumps(["api_key", "model"], indent=2))
+    assert _render_through(path, alone)[1] == alone
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        '[["X-Api-Key"' + "\\n" * 50_000 + ', "SECRET-LIN-9"]]',
+        "[\\n" * 33_000 + '"X-Api-Key", "SECRET-LIN-10"',
+        ("[\\n  " * 12 + '["X-Api-Key",\\n "SECRET-LIN-11"]]\n') * 1_000,
+        ("\\" * 9 + "n[") * 10_000 + '[["X-Api-Key", "SECRET-LIN-12"]]',
+        ('{\\n "name":\\t\\n' + "\\t" * 20 + '"X-Api-Key",\\n') * 1_500,
+        ('[["X-Api-Key"' + "\\r\\n" * 30) * 1_000,
+    ],
+    ids=[
+        "escaped-line-breaks-before-the-comma",
+        "escaped-line-breaks-and-brackets",
+        "escaped-pair-list-lines",
+        "backslash-runs-and-brackets",
+        "escaped-name-fields",
+        "names-then-escaped-line-breaks",
+    ],
+)
+def test_escaped_whitespace_and_bracket_runs_take_linear_time(text):
+    started = time.perf_counter()
+    masked = redact(text)
+    assert time.perf_counter() - started < 1
+    # A count keeps a failure report from diffing the whole text.
+    assert masked.count("SECRET-") == 0
+
+
 def _har_log(value):
     entry = {"name": "x-api-key", "value": value}
     return {"log": {"entries": [{"request": {"headers": [entry]}}]}}

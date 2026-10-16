@@ -311,7 +311,10 @@ tuple, a name/value list inside a list or tuple, a two-argument exception, an
 `OrderedDict` repr, or a HAR entry or `header` object with the name first
 (`('Authorization', '…')`, `[["X-Api-Key", "…"]]`,
 `{"name": "Authorization", "value": "…"}`, `{"header": "X-Api-Key", "value": "…"}`,
-also with spaces, tabs or JSON indentation in between), or after Authorization
+also with spaces, tabs or JSON indentation in between, written as is or inside up
+to three levels of repr or JSON strings that escape its line breaks and tabs as
+`\n`, `\r` or `\t`, such as `repr(json.dumps(pairs, indent=2))` or an exception
+holding that text), or after Authorization
 phrasing (`Authorization header: …`,
 `Authorization value = …`, or an Authorization word followed on its line by a
 scheme such as `Bearer …`, with no `=` or `:` in between). An unquoted value
@@ -330,7 +333,8 @@ with a quoted value that closes its container (`{"Authorization": "…", "n": 1}
 masks just that string. Where a value's end is uncertain, the rest of its line
 is masked: after a backslash-escaped key quote (a JSON string inside another, or
 `%r` of a string holding both quote kinds), a header tuple or HAR name/value
-pair, a bracket that does not close within one level, a quoted or bracketed
+pair (inside a repr or JSON string, past its escaped line breaks and closing
+quote), a bracket that does not close within one level, a quoted or bracketed
 value that runs on into more text (`'x'y`, `(x)y`), a value that opens with an
 escaped quote (a repr inside a JSON string), an unquoted value that ends in
 another secret name and its separator, or a value that runs into an
@@ -406,7 +410,14 @@ These forms still leave a secret visible; avoid logging them:
   `['api_key', 'model']` does. Logged as an object, it is masked.
 - In text, a pair whose outer bracket, or whose `name` or `header` field,
   starts more than 64 characters before the name, as in deeply indented JSON
-  (a list of pairs seven objects deep at `indent=4`, fourteen at `indent=2`).
+  (a list of pairs seven objects deep at `indent=4`, fourteen at `indent=2`;
+  with its line breaks escaped, six at `indent=4`, and fourteen, thirteen or
+  twelve at `indent=2` for one, two or three levels of escaping).
+- Text escaped so many times that more than seven backslashes stand before a
+  quoted name or before the `n`, `r` or `t` of an escaped line break or tab,
+  such as indented JSON of a list of pairs escaped four times by `repr()` or
+  `json.dumps()`, or JSON text escaped four times when `json.dumps()` comes
+  first: names and pairs are read through three levels of escaping.
 - `Cookie` and `Set-Cookie` pairs in text (`[('Cookie', 'sid=…')]`): only
   structured pairs count those names.
 - Pairs whose name holds no secret word (`('X-Session-Id', '…')`), and
