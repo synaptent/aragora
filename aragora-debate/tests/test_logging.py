@@ -722,6 +722,24 @@ _PAIR_PRODUCERS = {
     "har-indent": lambda name, value: json.dumps(
         {"headers": [{"name": name, "value": value}]}, indent=2
     ),
+    "pair-lists-json": lambda name, value: json.dumps([["Accept", "*/*"], [name, value]]),
+    "pair-lists-str": lambda name, value: str([[name, value]]),
+    "pair-lists-indent-2": lambda name, value: json.dumps([[name, value]], indent=2),
+    "pair-lists-indent-4": lambda name, value: json.dumps({"headers": [[name, value]]}, indent=4),
+    "header-object": lambda name, value: json.dumps({"header": name, "value": value}),
+    "header-object-indent-4": lambda name, value: json.dumps(
+        [{"header": name, "value": value}], indent=4
+    ),
+    "har-wide-spaces": lambda name, value: json.dumps(
+        {"name": name, "value": value}, separators=(",      ", "      :      ")
+    ),
+    "har-tabs": lambda name, value: json.dumps(
+        {"name": name, "value": value}, separators=(",\t", ":\t")
+    ),
+    "har-indent-4": lambda name, value: json.dumps(
+        {"log": {"entries": [{"request": {"headers": [{"name": name, "value": value}]}}]}},
+        indent=4,
+    ),
 }
 
 
@@ -736,6 +754,211 @@ def test_header_tuples_ordered_dicts_and_har_entries_mask_the_value(producer, na
     # The name stays; the value and the rest of its line are masked.
     assert name.lower() in masked.lower()
     assert "***" in masked
+
+
+@pytest.mark.parametrize("path", _LOG_PATHS)
+@pytest.mark.parametrize(
+    "name", ["Authorization", "Proxy-Authorization", "X-Api-Key", "access_token"]
+)
+@pytest.mark.parametrize("producer", list(_PAIR_PRODUCERS))
+def test_header_pairs_without_an_auth_scheme_mask_the_value(producer, name, path):
+    masked = _assert_never_leaks(_PAIR_PRODUCERS[producer](name, "SECRET-PAIR-3"), path)
+    assert name.lower() in masked.lower()
+    assert "***" in masked
+
+
+def _masked_from(text, start, tail):
+    """text up to start, then *** and the tail that stays."""
+    return text[: text.index(start)] + "***" + tail
+
+
+_INDENTED_PAIRS = json.dumps(
+    {"headers": [["Accept", "*/*"], ["X-Api-Key", "SECRET-T-4"]]}, indent=4
+)
+_INDENTED_HEADER = json.dumps([{"header": "X-Api-Key", "value": "SECRET-T-5"}], indent=4)
+_INDENTED_HAR = json.dumps({"headers": [{"name": "X-Api-Key", "value": "SECRET-T-6"}]}, indent=4)
+# What every path prints for the reviewers' examples and the other pair text shapes.
+_PAIR_TEXTS = {
+    "claude-json-pair-list": ('[["X-Api-Key", "abc123"]]', '[["X-Api-Key", ***'),
+    "claude-str-pair-list": (str([["X-Api-Key", "abc123"]]), "[['X-Api-Key', ***"),
+    "claude-header-object": (
+        '{"header": "X-Api-Key", "value": "abc"}',
+        '{"header": "X-Api-Key", ***',
+    ),
+    "openai-header-tuples": (
+        str([("Authorization", "Bearer CREDENTIAL123")]),
+        "[('Authorization', ***",
+    ),
+    "openai-har-entry": (
+        str({"name": "Authorization", "value": "Bearer CREDENTIAL456"}),
+        "{'name': 'Authorization', ***",
+    ),
+    "headers-items-json": (
+        json.dumps(list({"Accept": "*/*", "X-Api-Key": "SECRET-T-1"}.items())),
+        '[["Accept", "*/*"], ["X-Api-Key", ***',
+    ),
+    "list-in-a-tuple": (str((["X-Api-Key", "SECRET-T-7"],)), "(['X-Api-Key', ***"),
+    "authorization-without-scheme": (
+        json.dumps([["Authorization", "CREDENTIAL789"]]),
+        '[["Authorization", ***',
+    ),
+    "har-authorization-without-scheme": (
+        json.dumps({"name": "authorization", "value": "SECRET-T-2"}),
+        '{"name": "authorization", ***',
+    ),
+    "har-wide-spaces": (
+        '{"name"      :      "X-Api-Key", "value": "abc123"}',
+        '{"name"      :      "X-Api-Key", ***',
+    ),
+    "har-tabs": ('{"name":\t"X-Api-Key",\t"value":\t"SECRET-T-8"}', '{"name":\t"X-Api-Key",\t***'),
+    "pair-list-tabs": ('[[\t"X-Api-Key",\t"SECRET-T-3"]]', '[[\t"X-Api-Key",\t***'),
+    "pair-list-spaces": (
+        '[    [    "X-Api-Key",    "SECRET-T-9"]]',
+        '[    [    "X-Api-Key",    ***',
+    ),
+    "pair-list-indent-2": (
+        json.dumps([["X-Api-Key", "SECRET-T-10"]], indent=2),
+        '[\n  [\n    "X-Api-Key",\n    ***\n]',
+    ),
+    "pair-list-indent-4": (_INDENTED_PAIRS, _masked_from(_INDENTED_PAIRS, '"SECRET-T-4"', "\n}")),
+    # A HAR entry written one field per line is masked from its value field.
+    "header-object-indent-4": (_INDENTED_HEADER, _masked_from(_INDENTED_HEADER, '"value"', "\n]")),
+    "har-indent-4": (_INDENTED_HAR, _masked_from(_INDENTED_HAR, '"value"', "\n}")),
+}
+
+
+@pytest.mark.parametrize("path", _LOG_PATHS)
+@pytest.mark.parametrize(("text", "expected"), _PAIR_TEXTS.values(), ids=list(_PAIR_TEXTS))
+def test_pair_lists_header_objects_and_spaced_har_text_mask_the_value(text, expected, path):
+    assert _assert_never_leaks(text, path) == expected
+
+
+@pytest.mark.parametrize("path", _LOG_PATHS)
+def test_a_list_of_names_inside_a_list_reads_as_a_pair_and_is_masked(path):
+    # Fail-safe over-masking: a two-item list inside a list or tuple that starts with a
+    # secret name is masked as a name/value pair. A list on its own reads as names.
+    assert _render_through(path, str([["api_key", "model"]]))[1] == "[['api_key', ***"
+    names = "missing ['api_key', 'model']"
+    assert _render_through(path, names)[1] == names
+
+
+def _har_log(value):
+    entry = {"name": "x-api-key", "value": value}
+    return {"log": {"entries": [{"request": {"headers": [entry]}}]}}
+
+
+_Header = namedtuple("Header", "name value")
+_SECRETS = ("SECRET-", "CREDENTIAL", "abc123")
+# Structured header pairs and HAR entries, and what redact() returns for them.
+_STRUCTURED_PAIRS = {
+    "B1-openai-header-tuples": (
+        [("Authorization", "Bearer CREDENTIAL123")],
+        [("Authorization", "***")],
+    ),
+    "B2-header-tuples": ([("X-Api-Key", "abc123")], [("X-Api-Key", "***")]),
+    "B3-pair-lists": ([["X-Api-Key", "abc123"]], [["X-Api-Key", "***"]]),
+    "B4-openai-har-entry": (
+        {"name": "Authorization", "value": "Bearer CREDENTIAL456"},
+        {"name": "Authorization", "value": "***"},
+    ),
+    "B5-har-entry": (
+        {"name": "X-Api-Key", "value": "abc123"},
+        {"name": "X-Api-Key", "value": "***"},
+    ),
+    "B6-har-entries": (
+        [{"name": "X-Api-Key", "value": "abc123"}],
+        [{"name": "X-Api-Key", "value": "***"}],
+    ),
+    "header-object": (
+        {"header": "X-Api-Key", "value": "SECRET-S-1"},
+        {"header": "X-Api-Key", "value": "***"},
+    ),
+    "headers-items": (
+        list({"Accept": "*/*", "Proxy-Authorization": "Basic SECRET-S-2"}.items()),
+        [("Accept", "*/*"), ("Proxy-Authorization", "***")],
+    ),
+    "authorization-without-scheme": (
+        (("authorization", "SECRET-S-3"),),
+        (("authorization", "***"),),
+    ),
+    "cookies": (
+        [("Cookie", "sid=SECRET-S-4"), ["Set-Cookie", "sid=SECRET-S-5; HttpOnly"]],
+        [("Cookie", "***"), ["Set-Cookie", "***"]],
+    ),
+    "field-names-in-any-case": (
+        {"Name": "set-cookie", "VALUE": "sid=SECRET-S-6", "comment": "kept"},
+        {"Name": "set-cookie", "VALUE": "***", "comment": "kept"},
+    ),
+    "har-log": (_har_log("SECRET-S-7"), _har_log("***")),
+    "raw-header-bytes": ([(b"authorization", b"Bearer SECRET-S-8")], [(b"authorization", "***")]),
+    "namedtuple": (_Header("X-Api-Key", "SECRET-S-9"), _Header("X-Api-Key", "***")),
+    "over-masked-names": (["api_key", "model"], ["api_key", "***"]),
+}
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"), _STRUCTURED_PAIRS.values(), ids=list(_STRUCTURED_PAIRS)
+)
+def test_structured_header_pairs_and_har_entries_mask_the_value_everywhere(value, expected):
+    before, nested = repr(value), {"request": [({"headers": value},)]}
+    assert (redact(value), redact(nested)) == (expected, {"request": [({"headers": expected},)]})
+    assert type(redact(value)) is type(expected)
+    record = logging.makeLogRecord({"msg": "got %s", "args": (value,), "h": value, "n": nested})
+    lines = [TextFormatter(f, style=f[0]).format(record) for f in ("%(h)s %(n)s", "{h} {n}")]
+    message = TextFormatter("%(message)s").format(record)
+    assert [*lines, message] == [redact(f"{expected} {redact(nested)}")] * 2 + [
+        redact(f"got {expected}")
+    ]
+    data = json.loads(line := JsonFormatter().format(record))
+    shown = json.loads(json.dumps(expected, default=repr))
+    assert (data["h"], data["n"]["request"][0][0]["headers"]) == (shown, shown)
+    assert not any(secret in "".join([*lines, message, line]) for secret in _SECRETS)
+    assert repr(value) == before
+
+
+# Pairs whose first item or name field is not a secret name.
+_OTHER_PAIRS = {
+    "content-type-pair": ["Content-Type", "application/json"],
+    "accept-har-entry": {"name": "Accept", "value": "text/html"},
+    "accept-header-object": {"header": "Accept", "value": "text/html"},
+    "header-tuples": [("Content-Type", "application/json"), ("Accept", "*/*")],
+}
+# Shapes that are not pairs; their text still reads as one, as a tuple or a "name" field
+# whose first item is a secret name does.
+_NOT_PAIRS = {
+    "three-items": ("api_key", "model", "n"),
+    "bytes-name-str-value": (b"authorization", "ok"),
+    "name-without-value-field": {"name": "token", "data": "kept"},
+}
+
+
+@pytest.mark.parametrize(
+    "value", [*_OTHER_PAIRS.values(), *_NOT_PAIRS.values()], ids=[*_OTHER_PAIRS, *_NOT_PAIRS]
+)
+def test_structured_pairs_for_other_names_stay_unchanged(value):
+    record = logging.makeLogRecord({"msg": "got %s", "args": (value,), "h": value})
+    assert (redact(value), redact({"n": [value]})) == (value, {"n": [value]})
+    assert json.loads(JsonFormatter().format(record))["h"] == json.loads(
+        json.dumps(value, default=repr)
+    )
+    if value in _OTHER_PAIRS.values():
+        assert TextFormatter("%(h)s %(message)s").format(record) == f"{value} got {value}"
+
+
+@pytest.mark.parametrize("path", _LOG_PATHS)
+@pytest.mark.parametrize(
+    "value", [_OTHER_PAIRS["content-type-pair"], _OTHER_PAIRS["accept-har-entry"]]
+)
+@pytest.mark.parametrize("render", [str, json.dumps, lambda v: json.dumps(v, indent=4)])
+def test_pair_text_for_other_names_stays_unchanged(render, value, path):
+    text = render([value])
+    assert _render_through(path, text)[1] == text
+
+
+def test_two_message_arguments_are_not_a_name_value_pair():
+    record = logging.makeLogRecord({"msg": "rotated %s for %s", "args": ("api_key", "alice")})
+    assert TextFormatter("%(message)s").format(record) == "rotated api_key for alice"
+    assert json.loads(JsonFormatter().format(record))["msg"] == "rotated api_key for alice"
 
 
 @pytest.mark.parametrize("path", _LOG_PATHS)
@@ -901,6 +1124,10 @@ def test_hand_written_har_layouts_mask_the_value_and_stay_stable(text, path):
         '"name": "Authorization", ' + ", " * 20_000,
         ' "name": "Authorization",\n' + " ]\nx\n" * 20_000 + '"value": "SECRET-LIN-4"',
         '"name": "Authorization",\n' + ']\n"value": "SECRET-LIN-5",\n' * 10_000,
+        '[["X-Api-Key", "SECRET-LIN-6"]]\n' * 8_000,
+        '{"header": "X-Api-Key",\n' * 8_000 + '"value": "SECRET-LIN-7"',
+        ("[" + " " * 60 + '["X-Api-Key", "SECRET-LIN-8"]\n') * 4_000,
+        '{"name":' + " " * 60 + '"X-Api-Key", ' + "[ " * 20_000,
     ],
     ids=[
         "entries-at-indent-0",
@@ -911,6 +1138,10 @@ def test_hand_written_har_layouts_mask_the_value_and_stay_stable(text, path):
         "long-name-line",
         "indented-closer-lines",
         "closer-then-value-lines",
+        "pair-list-lines",
+        "header-field-lines",
+        "spaced-pair-list-lines",
+        "spaced-name-then-open-brackets",
     ],
 )
 def test_har_entry_scans_take_linear_time(text):

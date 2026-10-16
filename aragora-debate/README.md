@@ -307,9 +307,12 @@ in the name: as a key in nested mappings and sequences, or in a message as a
 `key=value` or `key: value` assignment (quoted keys and values as in JSON or
 Python reprs, keys with dots, spaces or colons such as
 `http.request.header.authorization`, and Bearer/Basic values), as a header
-tuple, a two-argument exception, an `OrderedDict` repr or a HAR entry with the
-name first (`('Authorization', '…')`, `{"name": "Authorization", "value": "…"}`),
-or after Authorization phrasing (`Authorization header: …`,
+tuple, a name/value list inside a list or tuple, a two-argument exception, an
+`OrderedDict` repr, or a HAR entry or `header` object with the name first
+(`('Authorization', '…')`, `[["X-Api-Key", "…"]]`,
+`{"name": "Authorization", "value": "…"}`, `{"header": "X-Api-Key", "value": "…"}`,
+also with spaces, tabs or JSON indentation in between), or after Authorization
+phrasing (`Authorization header: …`,
 `Authorization value = …`, or an Authorization word followed on its line by a
 scheme such as `Bearer …`, with no `=` or `:` in between). An unquoted value
 ends at whitespace, or at a `,` `;` `}` `]` that is followed by whitespace, a
@@ -344,16 +347,32 @@ text, with no `{` or `}` in between, is masked with it, and the mask goes on
 from there. A bracket that ends its line without closing within one level
 (`json.dumps(..., indent=0)` of a list whose strings hold escaped quotes) also
 masks the lines after it, up to the line where its closing bracket starts at
-the key's indentation, or to the end of the text. Log objects rather than their
-repr to keep their other fields readable: mappings are redacted field by field.
-Sets and bytes keep their type; bytes that are not UTF-8 are masked whole.
+the key's indentation, or to the end of the text.
+
+Objects passed to `redact()`, as `%`-arguments or as extras are redacted item by
+item, and a name/value pair is recognised by its shape: a two-item list or tuple whose first
+item is a string naming a secret, or a mapping whose `name` or `header` field (in
+any case) names one, has its second item or its `value` field masked at any depth
+(`list(headers.items())` becomes `[('Accept', '*/*'), ('X-Api-Key', '***')]`, a
+HAR header `{'name': 'Authorization', 'value': '***'}`). For these structured
+pairs `Cookie` and `Set-Cookie` count as secret names too, and a bytes name counts
+when its value is bytes (raw headers). Log objects rather than their repr: JSON
+extras keep their other fields readable, while the text formatter redacts its
+whole line, so the rest of a text line after a masked pair is masked as in a
+message. Sets and bytes keep their type; bytes that are not UTF-8 are masked whole.
 
 Matching fails closed, so it over-masks: labels such as `token_count: 5` are
 masked, keys such as `authorization_token` or `Authorization.value` get
 Authorization handling, and the rest of the line is masked after the uncertain
 forms above and after an Authorization phrase with a scheme
 (`Invalid Authorization header format - expected 'Bearer <token>'` loses
-`Bearer <token>'`). Mapping keys JSON cannot encode become strings with their values
+`Bearer <token>'`). A two-item list whose first item is a secret name is taken for
+a name/value pair even when it lists names: as an object `['api_key', 'model']`
+becomes `['api_key', '***']`, and in text a list inside a list or tuple,
+`[['api_key', 'model']]`, becomes `[['api_key', ***`, while a list on its own in
+text (`missing ['api_key', 'model']`) stays readable. A mapping whose `name` field
+holds a secret word has its `value` masked (`{'name': 'token_count', 'value': '***'}`).
+Mapping keys JSON cannot encode become strings with their values
 masked, and a container that contains itself is logged as `<cycle>`. When the
 arguments do not fit the format string or cannot be converted, the message
 template is logged with an `[unformattable log arguments: …]` note instead of
@@ -380,7 +399,25 @@ These forms still leave a secret visible; avoid logging them:
 - pprint output that wraps a value onto the next string literal
   (`'password: '` followed by `'…'` on the next line).
 - HAR entries serialized with the value before the name
-  (`{"value": "…", "name": "Authorization"}`).
+  (`{"value": "…", "name": "Authorization"}`); logged as an object, such an
+  entry is masked.
+- In text, a two-item list that is not inside another list or tuple
+  (`["X-Api-Key", "…"]`): it reads as a list of names, as
+  `['api_key', 'model']` does. Logged as an object, it is masked.
+- In text, a pair whose outer bracket, or whose `name` or `header` field,
+  starts more than 64 characters before the name, as in deeply indented JSON
+  (a list of pairs seven objects deep at `indent=4`, fourteen at `indent=2`).
+- `Cookie` and `Set-Cookie` pairs in text (`[('Cookie', 'sid=…')]`): only
+  structured pairs count those names.
+- Pairs whose name holds no secret word (`('X-Session-Id', '…')`), and
+  mappings that hold the header name under a key other than `name` or `header`.
+- A HAR entry or `header` object whose name is bytes
+  (`{'name': b'X-Api-Key', 'value': b'…'}`).
+- As objects in `redact()` and JSON extras: a list or tuple of another length
+  whose first item names a secret (`('X-Api-Key', '…', 'v2')`), a bytes name
+  with a str value (`(b'X-Api-Key', '…')`), and a name/value mapping that holds
+  the value under a key other than `value`. Text output (the text formatter and
+  `%`-arguments) masks these tuples and mappings with the rest of the line.
 - Secret values nested more than one container level across lines, such as
   `json.dumps(..., indent=0)` of nested lists under a secret key.
 - Credentials logged with no name at all (`calling upstream with Bearer …`):

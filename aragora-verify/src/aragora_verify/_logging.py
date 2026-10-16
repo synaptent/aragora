@@ -8,8 +8,9 @@ failure yields one JSON line with the redacted template and format_error.
 
 Redaction is name-based and takes linear time. A value is masked when it
 follows a secret name (api key, token, secret, password, authorization) as a
-mapping key, an assignment, a header tuple, a HAR entry or Authorization
-phrasing; where its end is uncertain, the rest of the line is masked.
+mapping key, an assignment, a header name/value pair, a HAR entry or
+Authorization phrasing; where its end is uncertain, the rest of the line is
+masked. In structured values a Cookie or Set-Cookie header name counts too.
 Credentials logged with no name at all are not recognised.
 """
 
@@ -103,12 +104,15 @@ _KEY_ENDS_VALUE = re.compile(
 _SEPARATOR_NEXT = re.compile(r"[ \t]*[=:]")
 # pprint wraps a long string into adjacent literals on the following lines.
 _ADJACENT_LITERAL = re.compile(rf"[ \t]*\r?\n[ \t]*[bBuU]?(?:{_DQ}|{_SQ})")
-# A quoted name before a comma is a name/value pair only as a tuple's first item or
-# as a HAR "name" field; ['api_key', 'model'] is a list of names.
+# A quoted name before a comma is a name/value pair only as a tuple's first item, as the
+# first item of a list inside a list or tuple (a list of pairs), or as a HAR "name" or
+# "header" field; a list on its own, ['api_key', 'model'], is a list of names. The
+# lookbehind leaves room for the line breaks and indentation of indented JSON.
 _PAIR_CONTEXT = re.compile(
-    r"""(?:\(\s*[bBuU]?|(?<![\w-])name\\{0,7}["']\s*:\s*)\Z""", re.IGNORECASE
+    r"""(?:\(\s*[bBuU]?|[\[(,]\s*\[\s*[bBuU]?|(?<![\w-])(?:name|header)\\{0,7}["']\s*:\s*)\Z""",
+    re.IGNORECASE,
 )
-_PAIR_LOOKBEHIND = 16
+_PAIR_LOOKBEHIND = 64
 # A pair goes on below its name's line when that line ends in a comma or an opening
 # bracket, or the next line starts with a comma: a HAR entry written one field per
 # line (json.dumps(..., indent=0), pprint or comma-first), whose value field may follow
@@ -140,6 +144,13 @@ _AUTH_NAME = re.compile("authorization", re.IGNORECASE)
 _AUTH_NAME_NEXT = re.compile(r"""\\{0,7}["']?[\w-]*authorization""", re.IGNORECASE)
 _REDACTED = "***"
 _CYCLE = "<cycle>"
+# In a structured value, a secret name (or a Cookie or Set-Cookie header name) as the first
+# item of a two-item list or tuple, or as the "name" or "header" field of a mapping with a
+# "value" field (a HAR header), names the secret in the second item or the value field. In a
+# list or tuple a bytes name counts when the value is bytes too, as raw headers hold them.
+_PAIR_NAME = re.compile(rf"{_SECRET_KEY}|cookie", re.IGNORECASE)
+_RAW_NAME = re.compile(_PAIR_NAME.pattern.encode(), re.IGNORECASE)
+_NAME_FIELDS = frozenset({"name", "header"})
 _MAPPING_FIELD = re.compile(
     r"%(?:%|\((?P<key>[^)]+)\)[#0 +\-]*\d*(?:\.\d+)?[hlL]?[diouxXeEfFgGcrsa])"
 )
@@ -365,6 +376,40 @@ def _redact_item(key: Any, value: Any, active: frozenset[int]) -> tuple[Any, Any
     return _redact(str(key), active), _REDACTED
 
 
+def _names_secret(name: Any, value: Any) -> bool:
+    if isinstance(name, str):
+        return _PAIR_NAME.search(name) is not None
+    raw = isinstance(name, (bytes, bytearray)) and isinstance(value, (bytes, bytearray))
+    return raw and _RAW_NAME.search(name) is not None
+
+
+def _pair_masked(values: list[Any], masked: list[Any]) -> list[Any]:
+    """The redacted items, with the second masked when the first of two names a secret."""
+    if len(values) == 2 and _names_secret(*values):
+        masked[1] = _REDACTED
+    return masked
+
+
+def _redact_items(obj: list[Any] | tuple[Any, ...], active: frozenset[int]) -> list[Any]:
+    # One pass over obj: list(obj) would also call a subclass's __len__.
+    values = [value for value in obj]
+    return _pair_masked(values, [_redact(value, active) for value in values])
+
+
+def _field(key: Any) -> str | None:
+    # str.lower, so that a str subclass's own lower() is never called.
+    return str.lower(key) if isinstance(key, str) else None
+
+
+def _redact_mapping(obj: Mapping[Any, Any], active: frozenset[int]) -> dict[Any, Any]:
+    items = list(obj.items())
+    entry = any(_field(key) in _NAME_FIELDS and _names_secret(name, None) for key, name in items)
+    return dict(
+        (key, _REDACTED) if entry and _field(key) == "value" else _redact_item(key, value, active)
+        for key, value in items
+    )
+
+
 def _redact_fields(obj: tuple[Any, ...], active: frozenset[int]) -> tuple[Any, ...]:
     # A constructor may change what it is given, so none runs. A class with its own __new__ must
     # declare _fields, and a probe of sentinels must read and print each name at its own slot.
@@ -380,7 +425,8 @@ def _redact_fields(obj: tuple[Any, ...], active: frozenset[int]) -> tuple[Any, .
         reorders = any("__iter__" in vars(c) or "__getitem__" in vars(c) for c in below)
         if not reorders and repr(probe) == f"{cls.__name__}({shown})":
             if all(getattr(probe, n) is m for n, m in zip(names, marks)):
-                return tuple.__new__(cls, [_redact_item(*p, active)[1] for p in zip(names, values)])
+                fields = [_redact_item(*p, active)[1] for p in zip(names, values)]
+                return tuple.__new__(cls, _pair_masked(values, fields))
     return (_REDACTED,) * len(values)
 
 
@@ -390,12 +436,12 @@ def _redact(obj: Any, active: frozenset[int]) -> Any:
             return _CYCLE
         active = active | {id(obj)}
     if isinstance(obj, Mapping):
-        return dict(_redact_item(key, value, active) for key, value in obj.items())
+        return _redact_mapping(obj, active)
     if isinstance(obj, list):
-        return [_redact(value, active) for value in obj]
+        return _redact_items(obj, active)
     if isinstance(obj, tuple):
         named = hasattr(type(obj), "_fields")
-        return _redact_fields(obj, active) if named else tuple(_redact(v, active) for v in obj)
+        return _redact_fields(obj, active) if named else tuple(_redact_items(obj, active))
     if isinstance(obj, (set, frozenset)):
         items = (_redact(value, active) for value in obj)
         return frozenset(items) if isinstance(obj, frozenset) else set(items)
@@ -418,12 +464,18 @@ def redact(obj: Any) -> Any:
     container that contains itself is replaced by "<cycle>" where it recurs.
     Sets, frozensets, bytes and bytearrays keep their type; bytes are masked as
     UTF-8 text, and bytes that are not UTF-8 are masked whole.
+    A two-item list or tuple whose first item names a secret (a str secret name,
+    Cookie and Set-Cookie included, or such a bytes name with a bytes value), and
+    a mapping whose "name" or "header" field, in any case, holds such a str name,
+    have their second item or "value" field masked at any depth;
+    ["api_key", "model"] is masked the same way.
     An Authorization value (under any key containing "authorization", or after
     Authorization phrasing and a scheme) is masked to the end of its line, folded
     continuation lines included, also inside a JSON or repr string; only a quoted
     key with a quoted value that closes its container masks just that string.
-    The rest of the line is masked too after an escaped key quote, a header
-    tuple or HAR name/value pair, an unbalanced bracket, or a value that runs
+    The rest of the line is masked too after an escaped key quote, a name/value
+    pair in text (a tuple, a list inside a list or tuple, or a HAR "name" or
+    "header" field), an unbalanced bracket, or a value that runs
     into an Authorization name, and a secret value that crosses that line end
     is masked to the end of its own line. A HAR entry written one field per line
     is masked from its name, its other fields included, up to an unindented line
@@ -451,7 +503,9 @@ def _message(record: logging.LogRecord) -> tuple[str, str | None]:
             ),
             record.msg,
         )
-    safe.args = redact(record.args)
+    # Two arguments are not a name/value pair, so each one is redacted on its own.
+    args = record.args
+    safe.args = tuple(map(redact, args)) if type(args) is tuple else redact(args)
     try:
         return str(redact(safe.getMessage())), None
     except Exception as exc:  # noqa: BLE001 - any argument's str() may raise anything
