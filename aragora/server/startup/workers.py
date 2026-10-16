@@ -44,6 +44,20 @@ def get_testfixer_task_worker():
     return _testfixer_task_worker
 
 
+def sqlite_fallback_skips_store_refusal(refused_store: str, step_store: str) -> bool:
+    """Whether a startup step may skip, rather than abort on, a storage-guard refusal.
+
+    True only when the production storage guard refused ``step_store`` itself and
+    ARAGORA_ALLOW_SQLITE_FALLBACK is explicitly enabled, parsed as
+    ``validate_storage_backend`` (startup/validation.py) and
+    ``create_persistent_store`` (storage/connection_factory.py) parse it. The guard
+    keeps refusing the store at runtime; only the startup step is skipped.
+    """
+    if refused_store != step_store:
+        return False
+    return os.environ.get("ARAGORA_ALLOW_SQLITE_FALLBACK", "").lower() in ("true", "1")
+
+
 def init_slo_webhooks() -> bool:
     """Initialize SLO violation webhook notifications.
 
@@ -148,6 +162,9 @@ async def init_durable_job_queue_recovery() -> int:
         return 0
 
     try:
+        # Bound before anything can raise; an ImportError matches the ImportError
+        # clause before the DistributedStateError clause is evaluated.
+        from aragora.storage.production_guards import DistributedStateError
         from aragora.server.workers.gauntlet_worker import recover_interrupted_gauntlets
 
         recovered = await recover_interrupted_gauntlets()
@@ -159,6 +176,15 @@ async def init_durable_job_queue_recovery() -> int:
         logger.debug("Durable job queue recovery not available: %s", e)
     except (RuntimeError, OSError, ValueError, TypeError) as e:
         logger.warning("Failed to recover durable job queue: %s", e)
+    except DistributedStateError as e:
+        if not sqlite_fallback_skips_store_refusal(e.store_name, "job_queue_store"):
+            raise
+        logger.warning(
+            "Durable job queue recovery skipped: storage guard refused %s "
+            "(ARAGORA_ALLOW_SQLITE_FALLBACK is set): %s",
+            e.store_name,
+            e.reason,
+        )
 
     return 0
 
@@ -187,6 +213,7 @@ async def init_gauntlet_worker() -> bool:
         return False
 
     try:
+        from aragora.storage.production_guards import DistributedStateError
         from aragora.server.workers.gauntlet_worker import GauntletWorker
 
         max_concurrent = int(os.environ.get("ARAGORA_GAUNTLET_WORKERS", "3"))
@@ -211,6 +238,15 @@ async def init_gauntlet_worker() -> bool:
         logger.debug("Gauntlet worker not available: %s", e)
     except (RuntimeError, OSError, ValueError, TypeError) as e:
         logger.warning("Failed to start gauntlet worker: %s", e)
+    except DistributedStateError as e:
+        if not sqlite_fallback_skips_store_refusal(e.store_name, "job_queue_store"):
+            raise
+        logger.warning(
+            "Gauntlet worker not started: storage guard refused %s "
+            "(ARAGORA_ALLOW_SQLITE_FALLBACK is set): %s",
+            e.store_name,
+            e.reason,
+        )
 
     return False
 
@@ -312,6 +348,7 @@ async def init_testfixer_worker() -> bool:
         logger.debug("TestFixer worker not started (ARAGORA_TESTFIXER_WORKER disabled)")
         return False
     try:
+        from aragora.storage.production_guards import DistributedStateError
         from aragora.nomic.testfixer.queue_worker import TestFixerWorker
 
         worker = TestFixerWorker()
@@ -331,6 +368,15 @@ async def init_testfixer_worker() -> bool:
         logger.debug("TestFixer worker not available: %s", e)
     except (RuntimeError, OSError, ValueError, TypeError) as e:
         logger.warning("Failed to start TestFixer worker: %s", e)
+    except DistributedStateError as e:
+        if not sqlite_fallback_skips_store_refusal(e.store_name, "job_queue_store"):
+            raise
+        logger.warning(
+            "TestFixer worker not started: storage guard refused %s "
+            "(ARAGORA_ALLOW_SQLITE_FALLBACK is set): %s",
+            e.store_name,
+            e.reason,
+        )
     return False
 
 
