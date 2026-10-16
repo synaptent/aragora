@@ -148,7 +148,10 @@ def legacy_db(tmp_path: Path, users: dict[str, Any]) -> str:
     a, b, orphan = users["user_a"], users["user_b"], users["user_orphan"]
     conn = sqlite3.connect(db_path)
     conn.executescript(LEGACY_SCHEMA)
-    for plan_id in ("plan-a", "plan-b", "plan-meta", "plan-mixed", "plan-orphan"):
+    # The org PlanExecutor records, equal to the scheduler's only org.
+    _plan(conn, "plan-a", {"org_id": users["org_a"]})
+    _plan(conn, "plan-b", {"org_id": users["org_b"]})
+    for plan_id in ("plan-meta", "plan-mixed", "plan-orphan"):
         _plan(conn, plan_id)
     # Request-controlled plan metadata is never treated as proof of ownership.
     _plan(conn, "plan-lonely", {"user_id": a, "owner_id": a})
@@ -173,34 +176,6 @@ def legacy_db(tmp_path: Path, users: dict[str, Any]) -> str:
     conn.commit()
     conn.close()
     return db_path
-
-
-EXPECTED = {
-    "plan_executions": {
-        "exec-proven": ("org_a", "user_a", "backfilled"),
-        "exec-mixed": ("org_a", "user_a", "backfilled"),
-        "exec-orphan": (None, None, "unknown"),
-        "exec-ghost": (None, None, "unknown"),
-        "exec-nouser": (None, None, "unknown"),
-        "exec-nometa": (None, None, "unknown"),
-    },
-    "backbone_runs": {
-        "run-proven": ("org_b", "user_b", "backfilled"),
-        "run-meta": ("org_a", "user_a", "backfilled"),
-        "run-mixed": ("org_b", "user_b", "backfilled"),
-        "run-orphan": (None, None, "unknown"),
-        "run-nouser": (None, None, "unknown"),
-        "run-conflict": (None, None, "unknown"),
-    },
-    "plans": {
-        "plan-a": ("org_a", None, "backfilled"),
-        "plan-b": ("org_b", None, "backfilled"),
-        "plan-meta": ("org_a", None, "backfilled"),
-        "plan-mixed": (None, None, "unknown"),
-        "plan-orphan": (None, None, "unknown"),
-        "plan-lonely": (None, None, "unknown"),
-    },
-}
 
 
 def _rows(db_path: str, table: str) -> dict[str, dict[str, Any]]:
@@ -283,30 +258,69 @@ def test_legacy_db_gets_ownership_columns_and_indexes(legacy_db: str, users: dic
 # ---------------------------------------------------------------------------
 
 
-def test_backfill_sets_only_proven_ownership(
+def test_backfill_marks_every_legacy_row_unknown(
     legacy_db: str, users: dict, caplog: pytest.LogCaptureFixture
 ) -> None:
     caplog.set_level(logging.INFO, logger="aragora.pipeline.plan_ownership")
 
     PlanStore(db_path=legacy_db, org_membership_resolver=_resolver(users["store"]))
 
-    for table, expected_rows in EXPECTED.items():
-        rows = _rows(legacy_db, table)
-        assert set(rows) == set(expected_rows), table
-        for record_id, (org_key, user_key, source) in expected_rows.items():
-            row = rows[record_id]
-            actual = (row["org_id"], row["created_by"], row["ownership_source"])
-            expected = (
-                users[org_key] if org_key else None,
-                users[user_key] if user_key else None,
-                source,
-            )
-            assert actual == expected, (table, record_id)
+    for table in OWNED_TABLES:
+        rows = _rows(legacy_db, table).values()
+        owners = {(r["org_id"], r["created_by"], r["ownership_source"]) for r in rows}
+        assert owners == {(None, None, "unknown")}, table
+        assert len(rows) == 6, table
 
     messages = [r.getMessage() for r in caplog.records if "ownership backfill" in r.getMessage()]
-    assert "plans.db ownership backfill: table=plans backfilled=3 unknown=3" in messages
-    assert "plans.db ownership backfill: table=plan_executions backfilled=2 unknown=4" in messages
-    assert "plans.db ownership backfill: table=backbone_runs backfilled=3 unknown=3" in messages
+    for table in OWNED_TABLES:
+        assert f"plans.db ownership backfill: table={table} backfilled=0 unknown=6" in messages
+
+
+@pytest.mark.parametrize(
+    ("recorded", "scheduler", "run_scheduler", "membership"),
+    [
+        pytest.param("org_a", "user_a", "user_a", None, id="recorded-org-is-schedulers-org"),
+        pytest.param("org_a", "user_a", "user_a", "moved", id="scheduler-moved-to-org-b"),
+        pytest.param(None, "user_a", "user_a", None, id="no-recorded-org"),
+        pytest.param("org_a", None, None, None, id="no-scheduler"),
+        pytest.param("org_a", "user_a", "user_a", "several", id="scheduler-in-two-orgs"),
+        pytest.param("org_a", "user_a", "user_b", None, id="run-scheduled-from-org-b"),
+        pytest.param("org_b", "user_a", "user_a", None, id="recorded-org-disagrees"),
+    ],
+)
+def test_legacy_plan_and_its_linked_records_stay_unknown_to_every_org(
+    tmp_path: Path, users: dict, recorded, scheduler, run_scheduler, membership
+) -> None:
+    db_path = str(tmp_path / "linked.db")
+    conn = sqlite3.connect(db_path)
+    conn.executescript(LEGACY_SCHEMA)
+    _plan(conn, "plan-x", {"org_id": users[recorded]} if recorded else {})
+    _execution(conn, "exec-x", "plan-x", {"scheduled_by": users.get(scheduler)})
+    _run(conn, "run-x", "plan-x", intake_user=users.get(run_scheduler))
+    conn.commit()
+    conn.close()
+    if membership == "moved":
+        users["store"].remove_user_from_org(users["user_a"])
+        users["store"].add_user_to_org(users["user_a"], users["org_b"])
+    both = frozenset({users["org_a"], users["org_b"]})
+    resolver = (lambda _user: both) if membership == "several" else _resolver(users["store"])
+
+    store = PlanStore(db_path=db_path, org_membership_resolver=resolver)
+
+    for table, record_id in zip(OWNED_TABLES, ("plan-x", "exec-x", "run-x")):
+        row = _rows(db_path, table)[record_id]
+        assert (row["org_id"], row["created_by"], row["ownership_source"]) == (
+            None,
+            None,
+            "unknown",
+        ), table
+    for org in (users["org_a"], users["org_b"]):
+        assert store.get_for_org("plan-x", org) is None
+        assert store.get_execution_record_for_org("exec-x", org) is None
+        assert store.get_run_for_org("run-x", org) is None
+        assert store.list_for_org(org) == []
+        assert store.list_execution_records_for_org(org) == []
+        assert store.list_runs_for_org(org) == []
 
 
 def test_backfill_never_changes_non_ownership_columns(legacy_db: str, users: dict) -> None:
@@ -329,7 +343,7 @@ def test_second_schema_setup_changes_nothing(legacy_db: str, users: dict) -> Non
     after_first = _snapshot(legacy_db)
     assert _schema_version(legacy_db) == 1
 
-    # A rerun would now prove the orphan's rows; a once-only backfill must not rerun.
+    # Membership changes after the backfill must not make it run again.
     users["store"].add_user_to_org(users["user_orphan"], users["org_a"])
     PlanStore(db_path=legacy_db, org_membership_resolver=_resolver(users["store"]))
 
@@ -354,7 +368,7 @@ def test_backfill_is_deferred_while_the_user_store_is_unavailable(
         ), table
 
     PlanStore(db_path=legacy_db, org_membership_resolver=_resolver(users["store"]))
-    assert _rows(legacy_db, "plans")["plan-b"]["org_id"] == users["org_b"]
+    assert _rows(legacy_db, "plans")["plan-b"]["ownership_source"] == "unknown"
     assert _schema_version(legacy_db) == 1
 
 
@@ -370,7 +384,7 @@ def test_backfill_is_deferred_while_the_store_places_no_recorded_user_in_an_org(
         assert owners == {(None, None)}, table
 
     PlanStore(db_path=legacy_db, org_membership_resolver=_resolver(users["store"]))
-    assert _rows(legacy_db, "plans")["plan-b"]["org_id"] == users["org_b"]
+    assert _rows(legacy_db, "plans")["plan-b"]["ownership_source"] == "unknown"
     assert _rows(legacy_db, "plan_executions")["exec-ghost"]["ownership_source"] == "unknown"
     assert _schema_version(legacy_db) == 1
 

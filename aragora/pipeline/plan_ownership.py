@@ -4,30 +4,28 @@
 ``created_by`` and ``ownership_source``:
 
 * ``created``: written when the record was created by an authenticated user.
-* ``backfilled``: proven by the one-time migration below.
+* ``backfilled``: assigned by earlier builds of the one-time migration below;
+  it no longer assigns any.
 * ``unknown``: the migration could not prove an owner.
 * NULL (with a NULL ``org_id``): created without an owner and not yet assigned.
 
 A NULL ``org_id`` is invisible to every org, whatever the source says.
 
 The backfill runs once, as version 1 of the ``plan_store`` schema module in
-``_schema_versions``. A row is proven only by a server-recorded user id whose
-user belongs to exactly one org in the user store:
+``_schema_versions``. A row could only be proven by an org the server recorded
+on it when it was written, matching the single current org of its recorded
+scheduler. Rows written before ownership existed record none: plan metadata
+(including its ``org_id``) is request-controlled, and executions and runs
+record only the scheduler's user id. A scheduler's current org alone proves
+nothing, since the scheduler may have changed orgs, so the backfill marks every
+row with no ownership yet ``unknown`` and writes no other column.
 
-* execution: ``metadata_json.scheduled_by``;
-* backbone run: intake ``origin_metadata.scheduled_by`` and
-  ``metadata_json.scheduled_by``;
-* plan: the user ids of its linked executions and runs (``plan_id``, or the
-  server-set ``metadata.backbone_run_id``). Plan metadata itself is
-  request-controlled and never counts.
-
-Every recorded user must resolve to the same single org; anything else is
-``unknown``. ``created_by`` is backfilled for executions and runs (their
-scheduler created them) but never for plans. Only the three ownership columns
-of rows with no ownership yet are written. If the user store cannot be
-consulted, or places none of the recorded users in any org (an empty store, or
-not the one those users signed in to), the backfill writes nothing, records no
-version and is retried on the next schema setup.
+The recorded schedulers are looked up first: execution
+``metadata_json.scheduled_by``, and run intake
+``origin_metadata.scheduled_by`` and ``metadata_json.scheduled_by``. If the
+user store cannot be consulted, or places none of them in any org (an empty
+store, or not the one those users signed in to), the backfill writes nothing,
+records no version and is retried on the next schema setup.
 """
 
 from __future__ import annotations
@@ -86,94 +84,39 @@ def migrate_plan_store_schema(
 def backfill_ownership(
     conn: sqlite3.Connection, resolve_org_ids: OrgMembershipResolver
 ) -> dict[str, dict[str, int]]:
-    """Assign proven owners to unowned rows and mark the rest ``unknown``.
+    """Mark every unowned row ``unknown``.
 
-    Every decision is made before the first write, so a
+    The recorded schedulers are looked up before the first write, so a
     ``MembershipLookupError`` from ``resolve_org_ids``, or one raised because
     no recorded user resolves to any org, leaves the database untouched.
     Returns backfilled/unknown counts per table.
     """
-    users_of: dict[str, dict[str, list[str]]] = {table: {} for table in OWNED_TABLES}
-    linked_users: dict[str, list[str]] = {}
-
-    for row in _select(conn, "SELECT execution_id, plan_id, metadata_json FROM plan_executions"):
-        users = _user_ids([_json_object(row["metadata_json"]).get("scheduled_by")])
-        users_of["plan_executions"][row["execution_id"]] = users
-        if row["plan_id"]:
-            linked_users.setdefault(row["plan_id"], []).extend(users)
-
-    run_users = users_of["backbone_runs"]
-    for row in _select(
-        conn, "SELECT run_id, plan_id, intake_bundle_json, metadata_json FROM backbone_runs"
-    ):
+    recorded: list[Any] = []
+    for row in _select(conn, "SELECT metadata_json FROM plan_executions"):
+        recorded.append(_json_object(row["metadata_json"]).get("scheduled_by"))
+    for row in _select(conn, "SELECT intake_bundle_json, metadata_json FROM backbone_runs"):
         origin = _json_object(row["intake_bundle_json"]).get("origin_metadata")
-        run_users[row["run_id"]] = _user_ids(
-            [
-                origin.get("scheduled_by") if isinstance(origin, dict) else None,
-                _json_object(row["metadata_json"]).get("scheduled_by"),
-            ]
-        )
-        if row["plan_id"]:
-            linked_users.setdefault(row["plan_id"], []).extend(run_users[row["run_id"]])
+        recorded.append(origin.get("scheduled_by") if isinstance(origin, dict) else None)
+        recorded.append(_json_object(row["metadata_json"]).get("scheduled_by"))
 
-    for row in _select(conn, "SELECT id, metadata_json FROM plans"):
-        linked_run = _json_object(row["metadata_json"]).get("backbone_run_id")
-        users_of["plans"][row["id"]] = _user_ids(
-            [
-                *linked_users.get(row["id"], []),
-                *(run_users.get(linked_run, []) if isinstance(linked_run, str) else []),
-            ]
-        )
-
-    recorded = {user for users in users_of.values() for ids in users.values() for user in ids}
-    cache = {user_id: frozenset(resolve_org_ids(user_id)) for user_id in sorted(recorded)}
-    if recorded and not any(cache.values()):
-        # Finalizing here would mark every legacy row unknown for good, though
-        # the right store may only be unreachable from this process for now.
+    # The backfill is recorded once, so it is only finalized against a user
+    # store that knows at least one of the recorded schedulers.
+    user_ids = sorted(_user_ids(recorded))
+    memberships = [frozenset(resolve_org_ids(user_id)) for user_id in user_ids]
+    if user_ids and not any(memberships):
         raise MembershipLookupError("the user store places none of the recorded users in an org")
 
-    def proven_org(user_ids: list[str]) -> str | None:
-        orgs: set[str] = set()
-        for user_id in user_ids:
-            if len(cache[user_id]) != 1:
-                return None
-            orgs |= cache[user_id]
-        return orgs.pop() if len(orgs) == 1 else None
-
-    decisions: dict[str, list[tuple[str, str | None, str | None]]] = {}
-    for table, key in OWNED_TABLES.items():
-        query = f"SELECT {key} FROM {table} WHERE {UNASSIGNED_CLAUSE}"  # noqa: S608 -- table/key from OWNED_TABLES
-        pending = [row[0] for row in conn.execute(query)]
-        decisions[table] = []
-        for record_id in pending:
-            users = users_of[table].get(record_id, [])
-            org_id = proven_org(users)
-            # The scheduler of an execution or run created it; a plan's
-            # creator is not recorded anywhere, only who later scheduled it.
-            created_by = users[0] if org_id and table != "plans" else None
-            decisions[table].append((record_id, org_id, created_by))
-
     counts: dict[str, dict[str, int]] = {}
-    for table, rows in decisions.items():
-        key = OWNED_TABLES[table]
-        backfilled = unknown = 0
-        for record_id, org_id, created_by in rows:
-            source = OWNERSHIP_BACKFILLED if org_id else OWNERSHIP_UNKNOWN
-            cursor = conn.execute(
-                f"UPDATE {table} SET org_id = ?, created_by = ?, ownership_source = ? "  # noqa: S608 -- table/key from OWNED_TABLES
-                f"WHERE {key} = ? AND {UNASSIGNED_CLAUSE}",
-                (org_id, created_by, source, record_id),
-            )
-            if org_id:
-                backfilled += cursor.rowcount
-            else:
-                unknown += cursor.rowcount
-        counts[table] = {"backfilled": backfilled, "unknown": unknown}
+    for table in OWNED_TABLES:
+        cursor = conn.execute(
+            f"UPDATE {table} SET ownership_source = ? WHERE {UNASSIGNED_CLAUSE}",  # noqa: S608 -- table from OWNED_TABLES
+            (OWNERSHIP_UNKNOWN,),
+        )
+        counts[table] = {"backfilled": 0, "unknown": cursor.rowcount}
         logger.info(
-            "plans.db ownership backfill: table=%s backfilled=%d unknown=%d",
+            "plans.db ownership backfill: table=%s backfilled=0 unknown=%d",
             table,
-            backfilled,
-            unknown,
+            cursor.rowcount,
         )
     return counts
 
