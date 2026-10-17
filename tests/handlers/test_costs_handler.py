@@ -1789,10 +1789,18 @@ class TestEstimateCost:
 
     @pytest.mark.asyncio
     async def test_estimate_unknown_provider_uses_default(self, handler):
+        # The $2/$8 default is reached when the MODEL has no priced row
+        # anywhere, not merely when the provider label is unrecognised: a
+        # spelling has one price and the caller's label is not information
+        # about it. Omitting "model" exercised the default "claude-opus-4",
+        # which HAS a real $5/$25 row, so this assertion had been failing on
+        # main; naming an uncataloged model tests what the name claims
+        # (2026-09-05 wave-2 re-review).
         body = {
             "tokens_input": 1_000_000,
             "tokens_output": 1_000_000,
             "provider": "unknown_provider",
+            "model": "totally-unknown-model-v0",
         }
         request = _make_request("POST", "/api/v1/costs/estimate", body=body)
 

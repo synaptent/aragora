@@ -144,7 +144,8 @@ class TestAnthropicAgentInit:
     def test_default_model(self, api_key):
         """Should use default model."""
         agent = AnthropicAPIAgent(api_key=api_key)
-        assert agent.model == "claude-opus-5"
+        # frontier-model-refresh, 2026-09-04: claude-opus-5 is superseded.
+        assert agent.model == "claude-fable-5-1"
 
     def test_custom_model(self, agent):
         """Should accept custom model."""
@@ -208,43 +209,57 @@ class TestAnthropicAgentInit:
 
 
 class TestOpenRouterModelMapping:
-    """Tests for OpenRouter model mapping."""
+    """Tests for OpenRouter model mapping.
+
+    AnthropicAPIAgent no longer carries a static OPENROUTER_MODEL_MAP:
+    get_fallback_model() resolves the current model through the catalog
+    and upgrade map instead (frontier-model-refresh, 2026-09-04), so every
+    legacy Claude spelling upgrades. TIER is preserved (finding C-P3 on
+    #9989): Fable and Opus spellings reach the Fable flagship, Sonnet
+    spellings the Sonnet row, Haiku spellings the Haiku row -- a caller
+    pinned to a cheap Claude SKU must not fall back onto $10/$50.
+    """
+
+    @staticmethod
+    def _fallback_model(model: str) -> str:
+        return AnthropicAPIAgent(api_key="test-key", model=model).get_fallback_model()
 
     def test_opus_48_mapping(self):
-        """Should map current Claude Opus to OpenRouter format."""
-        mapping = AnthropicAPIAgent.OPENROUTER_MODEL_MAP
-        assert "claude-opus-4-8" in mapping
-        assert mapping["claude-opus-4-8"] == "anthropic/claude-opus-5"
-        assert mapping["claude-opus-4-7"] == "anthropic/claude-opus-5"
+        """A still-served Claude id keeps its own identity; a legacy
+        spelling of the same family upgrades to the frontier."""
+        assert self._fallback_model("claude-opus-4-8") == "anthropic/claude-opus-4.8"
+        assert self._fallback_model("claude-opus-4-7") == "anthropic/claude-fable-5.1"
 
     def test_sonnet_46_mapping(self):
-        """Should map claude-sonnet-4-6 to OpenRouter format."""
-        mapping = AnthropicAPIAgent.OPENROUTER_MODEL_MAP
-        assert "claude-sonnet-4-6" in mapping
-        assert mapping["claude-sonnet-4-6"] == "anthropic/claude-opus-5"
+        """A Sonnet spelling stays on the Sonnet tier, not the flagship."""
+        assert self._fallback_model("claude-sonnet-4-6") == "anthropic/claude-sonnet-5"
 
     def test_legacy_opus_45_mapping(self):
-        """Should still map legacy claude-opus-4-5 to OpenRouter format."""
-        mapping = AnthropicAPIAgent.OPENROUTER_MODEL_MAP
-        assert "claude-opus-4-5-20251101" in mapping
+        """Should still map legacy claude-opus-4-5 to the current frontier."""
+        assert self._fallback_model("claude-opus-4-5-20251101") == "anthropic/claude-fable-5.1"
 
     def test_sonnet_35_mapping(self):
-        """Should map claude-3.5-sonnet to OpenRouter format."""
-        mapping = AnthropicAPIAgent.OPENROUTER_MODEL_MAP
-        assert "claude-3-5-sonnet-20241022" in mapping
-        assert mapping["claude-3-5-sonnet-20241022"] == "anthropic/claude-opus-5"
+        """Even a three-generations-old Sonnet keeps the Sonnet tier."""
+        assert self._fallback_model("claude-3-5-sonnet-20241022") == "anthropic/claude-sonnet-5"
 
     def test_opus_3_mapping(self):
-        """Should map claude-3-opus to OpenRouter format."""
-        mapping = AnthropicAPIAgent.OPENROUTER_MODEL_MAP
-        assert "claude-3-opus-20240229" in mapping
-        assert mapping["claude-3-opus-20240229"] == "anthropic/claude-opus-5"
+        """Should map claude-3-opus to the current frontier."""
+        assert self._fallback_model("claude-3-opus-20240229") == "anthropic/claude-fable-5.1"
 
     def test_haiku_mapping(self):
-        """Should map claude-3-haiku to OpenRouter format."""
-        mapping = AnthropicAPIAgent.OPENROUTER_MODEL_MAP
-        assert "claude-3-haiku-20240307" in mapping
-        assert mapping["claude-3-haiku-20240307"] == "anthropic/claude-opus-5"
+        """A Haiku spelling reaches the value-tier Haiku row."""
+        assert self._fallback_model("claude-3-haiku-20240307") == "anthropic/claude-haiku-4.5"
+        assert self._fallback_model("claude-3-5-haiku-20241022") == "anthropic/claude-haiku-4.5"
+
+    def test_tier_preserving_targets_are_cheaper_than_the_flagship(self):
+        """The point of the tier rule: a value spelling must not over-pay."""
+        from aragora.models.catalog import CATALOG
+
+        flagship = CATALOG["claude-fable-5-1"]
+        for canonical_id in ("claude-sonnet-5", "claude-haiku-4-5-20251001"):
+            spec = CATALOG[canonical_id]
+            assert spec.input_per_mtok < flagship.input_per_mtok
+            assert spec.output_per_mtok < flagship.output_per_mtok
 
 
 # =============================================================================
@@ -318,7 +333,9 @@ class TestFallbackAgent:
                 model="claude-3-opus-20240229",
             )
             fallback = agent._get_cached_fallback_agent()
-        assert fallback.model == "anthropic/claude-opus-5"
+        # frontier-model-refresh, 2026-09-04: claude-3-opus-20240229 (a
+        # legacy Claude spelling) now upgrades to Fable 5.1.
+        assert fallback.model == "anthropic/claude-fable-5.1"
 
     def test_fallback_inherits_role(self, api_key):
         """Should inherit role for fallback."""

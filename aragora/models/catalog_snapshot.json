@@ -18,6 +18,17 @@
       "input_per_mtok": 10.0,
       "output_per_mtok": 50.0
     },
+    "anthropic/claude-fable-5.1": {
+      "context_length": 1000000,
+      "created": 1788285838,
+      "input_per_mtok": 10.0,
+      "output_per_mtok": 50.0
+    },
+    "anthropic/claude-haiku-4.5": {
+      "context_length": 200000,
+      "input_per_mtok": 1.0,
+      "output_per_mtok": 5.0
+    },
     "anthropic/claude-opus-4.8": {
       "context_length": 1000000,
       "input_per_mtok": 5.0,
@@ -28,15 +39,63 @@
       "input_per_mtok": 5.0,
       "output_per_mtok": 25.0
     },
+    "anthropic/claude-sonnet-5": {
+      "context_length": 1000000,
+      "input_per_mtok": 2.0,
+      "output_per_mtok": 10.0
+    },
     "cohere/command-a": {
       "context_length": 256000,
       "input_per_mtok": 2.5,
       "output_per_mtok": 10.0
     },
+    "deepseek/deepseek-v4-pro-0813": {
+      "context_length": 1048576,
+      "created": 1786549364,
+      "input_per_mtok": 1.1207,
+      "output_per_mtok": 3.362
+    },
+    "google/gemini-3.1-pro-preview": {
+      "context_length": 1048576,
+      "created": 1771509627,
+      "input_per_mtok": 2.0,
+      "output_per_mtok": 12.0
+    },
+    "google/gemini-3.8-flash": {
+      "context_length": 1048576,
+      "created": 1788362056,
+      "input_per_mtok": 0.75,
+      "output_per_mtok": 3.75
+    },
+    "meta/muse-spark-1.3": {
+      "context_length": 1048576,
+      "created": 1788378359,
+      "input_per_mtok": 1.25,
+      "output_per_mtok": 4.25
+    },
+    "minimax/minimax-m3": {
+      "context_length": 1048576,
+      "created": 1780245374,
+      "input_per_mtok": 0.3,
+      "output_per_mtok": 1.2
+    },
+    "mistralai/mistral-large-2512": {
+      "context_length": 262144,
+      "created": 1764624472,
+      "input_per_mtok": 0.5,
+      "output_per_mtok": 1.5
+    },
+    "mistralai/mistral-medium-3-5": {
+      "context_length": 262144,
+      "created": 1777570439,
+      "input_per_mtok": 1.5,
+      "output_per_mtok": 7.5
+    },
     "moonshotai/kimi-k2.7-code": {
       "context_length": 262144,
-      "input_per_mtok": 0.71,
-      "output_per_mtok": 3.5
+      "created": 1781266361,
+      "input_per_mtok": 0.66,
+      "output_per_mtok": 3.4
     },
     "moonshotai/kimi-k3": {
       "context_length": 1048576,
@@ -53,6 +112,18 @@
       "input_per_mtok": 5.0,
       "output_per_mtok": 30.0
     },
+    "openai/gpt-5.6-terra": {
+      "context_length": 1050000,
+      "created": 1783590857,
+      "input_per_mtok": 2.0,
+      "output_per_mtok": 12.0
+    },
+    "openai/gpt-6-astra": {
+      "context_length": 1050000,
+      "created": 1788552838,
+      "input_per_mtok": 10.0,
+      "output_per_mtok": 50.0
+    },
     "perplexity/sonar-reasoning-pro": {
       "context_length": 128000,
       "input_per_mtok": 2.0,
@@ -63,8 +134,9 @@
       "input_per_mtok": 1.475,
       "output_per_mtok": 4.425
     },
-    "qwen/qwen3.8-max": {
-      "context_length": 1000000,
+    "qwen/qwen3.8-2.4t-a95b": {
+      "context_length": 1048576,
+      "created": 1786551702,
       "input_per_mtok": 2.0,
       "output_per_mtok": 6.0
     },
@@ -77,7 +149,27 @@
       "context_length": 500000,
       "input_per_mtok": 2.0,
       "output_per_mtok": 6.0
+    },
+    "x-ai/grok-4.6": {
+      "context_length": 500000,
+      "created": 1786548957,
+      "input_per_mtok": 2.0,
+      "output_per_mtok": 6.0
+    },
+    "z-ai/glm-5.2": {
+      "context_length": 1048576,
+      "created": 1781631930,
+      "input_per_mtok": 0.966,
+      "output_per_mtok": 3.036
     }
   },
+  "partial_captures": [
+    {
+      "captured_at": "2026-09-05T20:39:45Z",
+      "ids": [
+        "anthropic/claude-sonnet-5"
+      ]
+    }
+  ],
   "source": "https://openrouter.ai/api/v1/models"
 }

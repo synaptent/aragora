@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from aragora.models.pricing_mirror import input_cost_per_1k_rows
 from aragora.rbac.decorators import require_permission
 from aragora.server.versioning.compat import strip_version_prefix
 
@@ -38,8 +39,17 @@ logger = logging.getLogger(__name__)
 # Rate limiter: 30 requests per minute (cached data)
 _recommend_limiter = RateLimiter(requests_per_minute=30)
 
-# Cost estimates by agent type (USD per 1K tokens, approximate)
-_AGENT_COST_ESTIMATES: dict[str, float] = {
+# Cost estimates by agent type (USD per 1K INPUT tokens).
+#
+# The hand-written rows are the historical per-FAMILY labels the ELO
+# leaderboard actually reports agents under ("claude", "gpt4", "gemini",
+# ...) and are kept verbatim, including their position: ``_estimated_cost``
+# falls back to PREFIX matching in iteration order, so a name like
+# "claude-3-opus" must still reach the "claude" row. The generated rows are
+# appended after them, one per spelling of every active catalog row, so an
+# agent reported under its full frontier model id gets its real rate instead
+# of ``None`` (2026-09-04 controller ruling, wave 3).
+_LEGACY_AGENT_COST_ESTIMATES: dict[str, float] = {
     "claude": 0.015,
     "gpt4": 0.03,
     "gpt-4": 0.03,
@@ -51,6 +61,11 @@ _AGENT_COST_ESTIMATES: dict[str, float] = {
     "mistral": 0.004,
     "llama": 0.001,
     "qwen": 0.001,
+}
+
+_AGENT_COST_ESTIMATES: dict[str, float] = {
+    **_LEGACY_AGENT_COST_ESTIMATES,
+    **input_cost_per_1k_rows(),
 }
 
 

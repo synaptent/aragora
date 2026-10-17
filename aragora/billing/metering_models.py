@@ -14,6 +14,8 @@ from enum import Enum
 from typing import Any
 from uuid import uuid4
 
+from aragora.models.pricing_mirror import metering_rows
+
 
 # ---------------------------------------------------------------------------
 # Enums
@@ -47,7 +49,7 @@ class UsageType(Enum):
 
 # Provider pricing per 1M tokens (as of Jan 2026)
 # Aligned with aragora.billing.usage.PROVIDER_PRICING
-MODEL_PRICING: dict[str, dict[str, Decimal]] = {
+_LEGACY_MODEL_PRICING: dict[str, dict[str, Decimal]] = {
     "anthropic": {
         "claude-fable-5": Decimal("10.00"),  # catalog / live capture 2026-07-16
         "claude-fable-5-output": Decimal("50.00"),
@@ -109,8 +111,16 @@ MODEL_PRICING: dict[str, dict[str, Decimal]] = {
     "deepseek": {
         "deepseek-v4-pro": Decimal("1.74"),
         "deepseek-v4-pro-output": Decimal("3.48"),
-        "deepseek-v3": Decimal("0.14"),
-        "deepseek-v3-output": Decimal("0.28"),
+        # NOTE: "deepseek-v3"/"deepseek-v3-output" were here at 0.14/0.28
+        # while aragora/billing/usage.py's shared table priced the same
+        # spelling at 0.28/0.42 (DeepSeek's current list price). Because
+        # this table is passed to calculate_token_cost as ``extra_prices``,
+        # the losing rate won on the tenant-billing path only, so one
+        # spelling billed two ways depending on which caller priced it
+        # (2026-09-05 merge-gate addendum on #9989). Removed; the shared
+        # table's 0.28/0.42 is the rate, and calculate_token_cost now
+        # refuses to let extra_prices restate a spelling the shared table
+        # already prices at all.
         "default": Decimal("1.74"),
         "default-output": Decimal("3.48"),
     },
@@ -125,8 +135,10 @@ MODEL_PRICING: dict[str, dict[str, Decimal]] = {
         "default-output": Decimal("10.00"),
     },
     "mistral": {
-        "mistral-large": Decimal("2.00"),
-        "mistral-large-output": Decimal("6.00"),
+        # Live catalog 2026-09-04 (frontier-model-refresh): mistral-large is
+        # $0.50/$1.50 per MTok, not the pre-refresh $2.00/$6.00 legacy price.
+        "mistral-large": Decimal("0.50"),
+        "mistral-large-output": Decimal("1.50"),
         "codestral": Decimal("0.20"),
         "codestral-output": Decimal("0.60"),
         "default": Decimal("2.00"),
@@ -155,8 +167,8 @@ MODEL_PRICING: dict[str, dict[str, Decimal]] = {
         "qwen/qwen3.7-max-output": Decimal("4.425"),
         "moonshotai/kimi-k3": Decimal("3.00"),
         "moonshotai/kimi-k3-output": Decimal("15.00"),
-        "moonshotai/kimi-k2.7-code": Decimal("0.71"),
-        "moonshotai/kimi-k2.7-code-output": Decimal("3.50"),
+        "moonshotai/kimi-k2.7-code": Decimal("0.66"),
+        "moonshotai/kimi-k2.7-code-output": Decimal("3.40"),
         "google/gemini-3.5-flash": Decimal("1.50"),
         "google/gemini-3.5-flash-output": Decimal("9.00"),
         "anthropic/claude-opus-5": Decimal("5.00"),
@@ -179,6 +191,32 @@ MODEL_PRICING: dict[str, dict[str, Decimal]] = {
         "default-output": Decimal("8.00"),
     },
 }
+
+# Catalog-generated rows win on a key collision with the legacy hand-written
+# dict above (aragora.models.pricing_mirror is the single source of truth
+# for catalog-known models); hand rows for models the catalog doesn't know
+# about (including the per-provider "default"/"default-output" fallback
+# rows) are preserved unchanged.
+MODEL_PRICING: dict[str, dict[str, Decimal]] = {
+    prov: {**_LEGACY_MODEL_PRICING.get(prov, {}), **rows}
+    for prov, rows in {
+        **{p: {} for p in _LEGACY_MODEL_PRICING},
+        **metering_rows(),
+    }.items()
+}
+
+# The catalog covers several providers (ai21, alibaba, cohere, moonshot,
+# perplexity) the legacy dict above never had a bucket for, so those
+# buckets come out of the merge above with no "default"/"default-output"
+# entry. UsageMeter._calculate_token_cost() already falls back to the
+# same $2.00/$8.00 constants for an unrecognized model in a recognized
+# bucket -- this just makes that fallback an explicit, queryable row
+# instead of a hardcoded literal, so every provider bucket satisfies the
+# same invariant the hand-written buckets always have.
+for _rows in MODEL_PRICING.values():
+    _rows.setdefault("default", Decimal("2.00"))
+    _rows.setdefault("default-output", Decimal("8.00"))
+del _rows
 
 # Tier-based usage caps (monthly)
 TIER_USAGE_CAPS: dict[str, dict[str, int]] = {

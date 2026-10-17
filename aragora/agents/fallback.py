@@ -31,6 +31,9 @@ from typing import TYPE_CHECKING, Any, cast
 from collections.abc import Callable
 
 from aragora.core_types import AgentRole
+from aragora.config.model_pins import OPUS_5_VIA_OPENROUTER
+from aragora.models.catalog import spec_or_none
+from aragora.models.upgrade_map import resolve_model_id
 from aragora.observability.metrics.agent import (
     record_fallback_activation,
     record_fallback_success,
@@ -57,6 +60,11 @@ logger = logging.getLogger(__name__)
 
 _session_cb_module: Any = None
 _session_cb_import_attempted = False
+
+# Subclasses already warned that their ``OPENROUTER_MODEL_MAP`` is dead code.
+# Keyed by qualified class name so the warning fires once per subclass rather
+# than once per agent instance or once per fallback activation.
+_WARNED_STRANDED_MODEL_MAPS: set[str] = set()
 
 
 def _get_session_cb():
@@ -117,17 +125,33 @@ class QuotaFallbackMixin:
         - role: str - Agent role (optional, defaults to "proposer")
         - system_prompt: str - System prompt (optional)
 
+    Fallback target resolution (``get_fallback_model``) is catalog-driven as
+    of the frontier-model-refresh (2026-09-04): ``self.model`` is normalised
+    through ``resolve_model_id`` (upgrading any legacy or retired spelling)
+    and the resulting catalog row's ``openrouter_id`` is used. A subclass
+    therefore does NOT need a hand-written model map -- every legacy
+    spelling of its family upgrades, not just a hand-enumerated subset, and
+    tier is preserved WHERE THE PROVIDER HAS AN ACTIVE VALUE ROW: a
+    value-tier spelling -- "flash"/"mini"/"haiku"/"sonnet", and the whole
+    GPT-4 line -- resolves to that value row rather than over-paying for
+    the flagship. A family whose catalog rows are all flagship-class has
+    nowhere cheaper to land, so its legacy spellings resolve to the
+    flagship by construction -- the absence of a cheaper row, not a tier
+    decision. Finding C-P3 on #9989 caught this docstring claiming tier
+    preservation unconditionally while every Anthropic legacy spelling,
+    Haiku and Sonnet included, went to the $10/$50 flagship; the round-4
+    re-review caught the same thing on OpenAI, where gpt-4o ($2.50/$10)
+    resolved to the $10/$50 Astra while its own gpt-4o-mini sibling
+    resolved to Terra. Both families now target their value rows.
+
     Class attributes that can be overridden:
-        - OPENROUTER_MODEL_MAP: dict[str, str] - Maps provider models to OpenRouter models
-        - DEFAULT_FALLBACK_MODEL: str - Default model if no mapping found
+        - DEFAULT_FALLBACK_MODEL: str - target used only when ``self.model``
+          has no catalog row at all. Set it to your provider's frontier so
+          an uncatalogued spelling stays inside its own family.
 
     Usage:
         class MyAgent(APIAgent, QuotaFallbackMixin):
-            OPENROUTER_MODEL_MAP = {
-                "gpt-4o": "openai/gpt-5.4",
-                "gpt-4": "openai/gpt-4",
-            }
-            DEFAULT_FALLBACK_MODEL = "openai/gpt-5.4"
+            DEFAULT_FALLBACK_MODEL = GPT6_ASTRA_VIA_OPENROUTER
 
             async def generate(self, prompt, context):
                 # ... make API call ...
@@ -138,9 +162,12 @@ class QuotaFallbackMixin:
                     raise RuntimeError("Quota exceeded and fallback unavailable")
     """
 
-    # Override these in subclasses for provider-specific model mappings
+    # Retained only for backwards compatibility with third-party subclasses
+    # that still define one: get_fallback_model() no longer reads it, and a
+    # subclass that still populates it is warned once (see
+    # _warn_once_if_model_map_is_stranded).
     OPENROUTER_MODEL_MAP: dict[str, str] = {}
-    DEFAULT_FALLBACK_MODEL: str = "anthropic/claude-opus-5"
+    DEFAULT_FALLBACK_MODEL: str = OPUS_5_VIA_OPENROUTER
 
     # Instance-level cached fallback agent (set by _get_cached_fallback_agent)
     _fallback_agent: OpenRouterAgent | None = None
@@ -214,14 +241,54 @@ class QuotaFallbackMixin:
 
     # ------------------------------------------------------------------
 
-    def get_fallback_model(self) -> str:
-        """Get the OpenRouter model for fallback based on current model.
+    def _warn_once_if_model_map_is_stranded(self) -> None:
+        """Warn a subclass whose ``OPENROUTER_MODEL_MAP`` is no longer read.
 
-        Uses the class's OPENROUTER_MODEL_MAP to find a matching model,
-        falling back to DEFAULT_FALLBACK_MODEL if no match is found.
+        Before the catalog-first refresh (frontier-model-refresh,
+        2026-09-04) that map chose the fallback target. ``get_fallback_model``
+        now resolves through the catalog and never reads it, so a subclass
+        that still populates one has silently lost its mapping. No in-repo
+        subclass does; an out-of-tree one would get no signal at all, which
+        is the whole finding (C-P3 on #9989).
+
+        Once per class, keyed by qualified name: this runs on every fallback
+        activation, and a per-call warning would drown the log line that
+        matters. Read from the INSTANCE so a per-instance override is caught
+        too, but keyed by class so many agents of one type warn once.
         """
+        model_map = getattr(self, "OPENROUTER_MODEL_MAP", None)
+        if not model_map:
+            return
+        cls = type(self)
+        key = f"{cls.__module__}.{cls.__qualname__}"
+        if key in _WARNED_STRANDED_MODEL_MAPS:
+            return
+        _WARNED_STRANDED_MODEL_MAPS.add(key)
+        logger.warning(
+            "%s defines a non-empty OPENROUTER_MODEL_MAP (%d entries), which is ignored "
+            "since the catalog-first refresh; see get_fallback_model. Fallback targets now "
+            "come from the model catalog: add or correct the catalog row for your model, "
+            "or set DEFAULT_FALLBACK_MODEL for one that has no row.",
+            key,
+            len(model_map),
+        )
+
+    def get_fallback_model(self) -> str:
+        """OpenRouter fallback target for the current model.
+
+        Resolves ``self.model`` to its canonical catalog row (upgrading any
+        legacy/retired spelling to its frontier first via
+        ``resolve_model_id()``) and returns that row's OpenRouter-format
+        id, falling back to ``DEFAULT_FALLBACK_MODEL`` when the model has
+        no catalog row (frontier-model-refresh, 2026-09-04: generalizes
+        what was previously a per-agent hand-maintained
+        ``OPENROUTER_MODEL_MAP`` -- every subclass now upgrades every
+        legacy/retired spelling, not just a hand-enumerated subset).
+        """
+        self._warn_once_if_model_map_is_stranded()
         model = getattr(self, "model", "")
-        return self.OPENROUTER_MODEL_MAP.get(model, self.DEFAULT_FALLBACK_MODEL)
+        spec = spec_or_none(resolve_model_id(model))
+        return spec.openrouter_id if spec is not None else self.DEFAULT_FALLBACK_MODEL
 
     def is_quota_error(self, status_code: int, error_text: str) -> bool:
         """Check if an error indicates quota/rate limit issues or timeouts.

@@ -233,23 +233,30 @@ class UsageMeter:
 
         Returns:
             Tuple of (input_cost, output_cost)
+
+        Delegates to ``aragora.billing.usage.calculate_token_cost`` so there
+        is ONE pricing implementation in the repo (2026-09-05 wave-2
+        re-review). This method used to be a second, independent one: a flat
+        lookup in ``MODEL_PRICING`` keyed on the caller's provider LABEL,
+        which meant the path that actually bills tenants could not price a
+        documented long-context tier at all, and quoted the $2/$8 default for
+        any label that did not match the model's own bucket even when the
+        model had a real, reachable rate.
+
+        The split into a pair is preserved by costing the input half on its
+        own and taking the output half by subtraction, so the two always sum
+        to the canonical total and the input half carries any tier.
         """
+        from aragora.billing.usage import calculate_token_cost
+
         provider_lower = provider.lower()
-        provider_prices = MODEL_PRICING.get(provider_lower, MODEL_PRICING["openrouter"])
-
-        # Get input price
-        input_key = model if model in provider_prices else "default"
-        input_price = provider_prices.get(input_key, Decimal("2.00"))
-
-        # Get output price
-        output_key = f"{model}-output" if f"{model}-output" in provider_prices else "default-output"
-        output_price = provider_prices.get(output_key, Decimal("8.00"))
-
-        # Calculate costs (prices are per 1M tokens)
-        input_cost = (Decimal(input_tokens) / Decimal("1000000")) * input_price
-        output_cost = (Decimal(output_tokens) / Decimal("1000000")) * output_price
-
-        return input_cost, output_cost
+        input_cost = calculate_token_cost(
+            provider_lower, model, input_tokens, 0, extra_prices=MODEL_PRICING
+        )
+        total_cost = calculate_token_cost(
+            provider_lower, model, input_tokens, output_tokens, extra_prices=MODEL_PRICING
+        )
+        return input_cost, total_cost - input_cost
 
     async def record_token_usage(
         self,

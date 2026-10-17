@@ -36,9 +36,22 @@ from enum import Enum
 from typing import Any
 from collections.abc import Callable
 
+from aragora.models.pricing_mirror import per_1k_rows
 
-# Model pricing (approximate, per 1K tokens)
-MODEL_PRICING: dict[str, dict[str, float]] = {
+
+# Model pricing, USD per 1K tokens.
+#
+# The hand-written rows below are HISTORICAL and stay exactly as they were:
+# a workflow record or a test that names ``gpt-4o`` must keep pricing at
+# gpt-4o's rate, and the family labels ("claude", "gemini", "grok", ...) are
+# what ``ResourceTracker.add_tokens`` actually receives as ``agent_type``.
+# What they did NOT have was a row for any CURRENT frontier model, so every
+# live call fell through to the ``default`` estimate (2026-09-04 controller
+# ruling, wave 3). ``per_1k_rows()`` adds one row per spelling of every
+# active catalog row; the catalog wins a key collision because it is the
+# more recently verified rate (the same convention the five phase-2 pricing
+# tables use).
+_LEGACY_MODEL_PRICING: dict[str, dict[str, float]] = {
     # Anthropic
     "claude-3-opus": {"input": 0.015, "output": 0.075},
     "claude-3-sonnet": {"input": 0.003, "output": 0.015},
@@ -79,6 +92,8 @@ MODEL_PRICING: dict[str, dict[str, float]] = {
     # Default fallback
     "default": {"input": 0.003, "output": 0.015},
 }
+
+MODEL_PRICING: dict[str, dict[str, float]] = {**_LEGACY_MODEL_PRICING, **per_1k_rows()}
 
 
 class ResourceExhaustedError(Exception):

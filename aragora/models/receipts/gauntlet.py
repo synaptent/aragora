@@ -477,6 +477,22 @@ class DecisionReceipt:
     # Maps agent name -> thinking trace string produced during the debate
     thinking_traces: dict[str, str] | None = None
 
+    # Models the providers ACTUALLY answered with, when that differed from
+    # the id the debate asked for (optional). Maps agent name ->
+    # {"requested": <id>, "served": [<distinct ids the server echoed>],
+    # "calls": <n>, "fallback_calls": <m>} -- the claim is debate-wide, so it
+    # carries every model that answered any call plus how many of them were
+    # swaps, not just whichever model answered last (finding C-P2 on #9989).
+    # "calls"/"fallback_calls" are absent for a source that cannot count them
+    # (an unpinned CLI agent, a third-party agent exposing only its last
+    # served model). Anthropic's server-side refusal fallback -- opt-in for
+    # Fable 5.1 / Opus 5 -- can legitimately answer a request with
+    # a different model, and a receipt that attributes the decision to the
+    # requested id is then wrong about which model made it. Additive: None
+    # means "not recorded" and serialization omits the key entirely, so
+    # receipts written before this field stay byte-identical.
+    served_models: dict[str, dict[str, Any]] | None = None
+
     # Knowledge Mound operations performed during this debate (optional)
     # Tracks queries, retrievals, and injection counts for cross-debate visibility
     km_operations: dict[str, Any] | None = None
@@ -533,12 +549,14 @@ class DecisionReceipt:
 
         Delegates to :func:`compute_receipt_artifact_hash` — the single
         canonical recipe shared with ``aragora verify`` — so producer and
-        verifier cannot drift. Crux cards are audit-bearing content: when
-        present they are bound into the integrity material, and receipts
-        stamped 1.2 additionally bind ``schema_version`` (a 1.2→1.1 downgrade
-        breaks ``verify_integrity()``). Pre-crux receipts and pre-stamp
-        #9414-era crux receipts (schema 1.1) hash exactly as before, so
-        existing stored hashes keep verifying.
+        verifier cannot drift. Crux cards and ``served_models`` are both
+        audit-bearing content: when present they are bound into the integrity
+        material, and receipts stamped 1.2 additionally bind
+        ``schema_version`` (a 1.2→1.1 downgrade breaks
+        ``verify_integrity()``). Pre-crux receipts, pre-stamp #9414-era crux
+        receipts (schema 1.1), and every receipt written before
+        ``served_models`` existed hash exactly as before, so existing stored
+        hashes keep verifying.
         """
         return compute_receipt_artifact_hash(
             {
@@ -548,6 +566,7 @@ class DecisionReceipt:
                 "risk_summary": self.risk_summary,
                 "verdict": self.verdict,
                 "confidence": self.confidence,
+                "served_models": self.served_models,
                 "cruxes": self.cruxes,
                 "evidence_references": self.evidence_references,
                 "decision_payload_hash": self.decision_payload_hash,
@@ -1463,6 +1482,13 @@ class DecisionReceipt:
         # or empty block keeps the receipt byte-identical to pre-crux output.
         cruxes = crux_cards_from_metadata(metadata)
 
+        # Served models: attached by the runner only when some agent's answer
+        # did not come from the requested model. An absent or empty map stays
+        # None so the receipt and its hash are unchanged.
+        served_models = metadata.get("served_models")
+        if not (isinstance(served_models, dict) and served_models):
+            served_models = None
+
         # Determine verdict from consensus
         if zero_evidence:
             verdict = "NO_EVIDENCE"
@@ -1529,6 +1555,7 @@ class DecisionReceipt:
             cost_summary=cost_summary,
             settlement_metadata=settlement_metadata,
             cruxes=cruxes,
+            served_models=served_models,
             evidence_references=evidence_references or [],
             decision_payload=decision_payload,
             schema_version=receipt_schema_version(cruxes, evidence_references),
@@ -2061,6 +2088,10 @@ class DecisionReceipt:
             "artifact_hash": self.artifact_hash,
             "config_used": self.config_used,
         }
+        # Additive served-model block: omit the key when not recorded so
+        # receipts written before this field stay byte-identical.
+        if self.served_models is not None:
+            data["served_models"] = self.served_models
         # Additive crux-cards block: omit the key when not recorded so
         # flag-off receipts stay byte-identical (#8227).
         if self.cruxes is not None:
@@ -2121,6 +2152,11 @@ class DecisionReceipt:
             settlement_metadata=data.get("settlement_metadata"),
             settlement_status=data.get("settlement_status"),
             explainability=data.get("explainability"),
+            # Round-trip both explainability side-channels. thinking_traces
+            # was emitted by to_dict() but never read back here, so a
+            # serialize/deserialize cycle silently dropped it.
+            thinking_traces=data.get("thinking_traces"),
+            served_models=data.get("served_models"),
             cruxes=data.get("cruxes"),
             evidence_references=data.get("evidence_references", []) or [],
             decision_payload=data.get("decision_payload"),

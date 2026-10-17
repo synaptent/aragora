@@ -12,6 +12,7 @@ from enum import Enum
 from typing import Any, cast
 from uuid import uuid4
 
+from aragora.models.pricing_mirror import context_window_rows
 from aragora.utils.datetime_helpers import parse_timestamp, utc_now
 
 
@@ -295,7 +296,23 @@ class IngestedDocument:
 
 
 # Token limits for common models
-MODEL_TOKEN_LIMITS = {
+# Context-window limits per model spelling.
+#
+# The hand-written rows are HISTORICAL and stay: they are the only source
+# for spellings the catalog no longer carries a row for at all
+# ("gpt-3.5-turbo", "codestral"), and ``get_model_token_limit`` falls back
+# to SUBSTRING matching in dict-iteration order, so their position is load
+# bearing ("gpt-4o-mini" must still reach the "gpt-4o" row). What they
+# lacked was a row for any current frontier model, so a live call got the
+# 128K fallback -- and, worse, the sweep's duplicate-key collapse had left
+# gpt-4's 8,192-token limit sitting under the live model's key, silently
+# truncating its context (2026-09-04 controller ruling, wave 3).
+#
+# ``context_window_rows()`` adds one row per spelling of every active
+# catalog row; the catalog wins a key collision because ``context_window``
+# is the field it is authoritative for. "default" is re-stated LAST so the
+# substring fallback reaches it only after every real model.
+_LEGACY_MODEL_TOKEN_LIMITS = {
     # Anthropic
     "claude-3-opus": 200_000,
     "claude-3-sonnet": 200_000,
@@ -308,7 +325,6 @@ MODEL_TOKEN_LIMITS = {
     "gpt-4": 8_192,
     "gpt-3.5-turbo": 16_385,
     # Google
-    "gemini-3.1-pro-preview": 1_000_000,  # 1M tokens
     "gemini-3-pro": 1_000_000,
     "gemini-2.0-pro": 1_000_000,
     "gemini-1.5-pro": 1_000_000,
@@ -316,6 +332,11 @@ MODEL_TOKEN_LIMITS = {
     # Mistral
     "mistral-large": 128_000,
     "codestral": 32_000,
+}
+
+MODEL_TOKEN_LIMITS: dict[str, int] = {
+    **_LEGACY_MODEL_TOKEN_LIMITS,
+    **context_window_rows(),
     # Default fallback
     "default": 8_192,
 }

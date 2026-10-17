@@ -526,6 +526,25 @@ class TestProviderInference:
 
         assert _infer_provider("custom-agent-xyz") == "unknown"
 
+    def test_retired_agent_types_are_not_inferred(self):
+        """C-P3 (#9989 merge-gate, round 2): the frontier refresh removed the
+        ``yi`` and ``qwen-3.5`` registrations (both models are off the live
+        OpenRouter catalog), but this map still described them, so diagnostics
+        reported a provider for an agent type the server rejects at
+        construction. They now fall through to "unknown" like any other
+        unregistered name; ``qwen`` itself is unaffected."""
+        from aragora.server.handlers.debates.diagnostics import (
+            _AGENT_PROVIDER_MAP,
+            _infer_provider,
+        )
+
+        assert "yi" not in _AGENT_PROVIDER_MAP
+        assert "qwen-3.5" not in _AGENT_PROVIDER_MAP
+        assert _infer_provider("yi") == "unknown"
+        assert _infer_provider("yi-large") == "unknown"
+        assert _infer_provider("qwen-3.5") == "openrouter"  # prefix "qwen"
+        assert _infer_provider("qwen") == "openrouter"
+
     def test_case_insensitive(self):
         """Test provider inference is case insensitive."""
         from aragora.server.handlers.debates.diagnostics import _infer_provider
@@ -618,3 +637,65 @@ class TestEdgeCases:
         data = _parse_response(result)
 
         assert data["duration_seconds"] == 99.5
+
+
+class TestCatalogDerivedProviderMap:
+    """``_AGENT_PROVIDER_MAP`` gained a row per active catalog spelling
+    (2026-09-04 wave-3 ruling): a debate naming an agent by its current
+    frontier model id used to report provider "unknown"."""
+
+    def test_every_active_catalog_spelling_resolves_to_a_known_provider(self):
+        from aragora.models.catalog import CATALOG
+        from aragora.server.handlers.debates.diagnostics import (
+            _PROVIDER_API_KEY_MAP,
+            _infer_provider,
+        )
+
+        for spec in CATALOG.values():
+            if spec.retired:
+                continue
+            for spelling in spec.all_ids():
+                provider = _infer_provider(spelling)
+                assert provider != "unknown", spelling
+                assert provider in _PROVIDER_API_KEY_MAP, (spelling, provider)
+
+    def test_families_reached_only_through_openrouter_report_openrouter(self):
+        """The map's whole output is a credential hint, so a provider with
+        no direct Aragora credential must name the key that actually
+        authenticates the call -- the convention the hand-written deepseek /
+        llama / qwen / kimi rows already used."""
+        from aragora.server.handlers.debates.diagnostics import _infer_provider
+
+        assert _infer_provider("kimi-k3") == "openrouter"
+        assert _infer_provider("sonar-reasoning-pro") == "openrouter"
+        assert _infer_provider("minimax-m3") == "openrouter"
+        assert _infer_provider("deepseek-v4-pro-0813") == "openrouter"
+
+    def test_native_providers_keep_their_own_key(self):
+        from aragora.server.handlers.debates.diagnostics import _infer_provider
+
+        assert _infer_provider("gpt-6-astra") == "openai"
+        assert _infer_provider("claude-fable-5-1") == "anthropic"
+        assert _infer_provider("gemini-3.1-pro-preview") == "google"
+        assert _infer_provider("grok-4.6") == "xai"
+        assert _infer_provider("mistral-medium-2604") == "mistral"
+
+    def test_hand_written_rows_keep_their_value_and_their_position(self):
+        """``_infer_provider`` falls back to PREFIX matching in dict
+        iteration order, so a generated full-model-id row must never come
+        before the family label it starts with."""
+        from aragora.server.handlers.debates.diagnostics import (
+            _AGENT_PROVIDER_MAP,
+            _LEGACY_AGENT_PROVIDER_MAP,
+        )
+
+        keys = list(_AGENT_PROVIDER_MAP)
+        assert keys[: len(_LEGACY_AGENT_PROVIDER_MAP)] == list(_LEGACY_AGENT_PROVIDER_MAP)
+        for name, provider in _LEGACY_AGENT_PROVIDER_MAP.items():
+            assert _AGENT_PROVIDER_MAP[name] == provider
+
+    def test_unknown_names_are_still_unknown(self):
+        from aragora.server.handlers.debates.diagnostics import _infer_provider
+
+        assert _infer_provider("custom-agent-xyz") == "unknown"
+        assert _infer_provider("yi") == "unknown"

@@ -380,7 +380,12 @@ class TestAgentFallbackChain:
     """Test agent fallback chain activation."""
 
     def test_fallback_model_mapping(self):
-        """Fallback model is correctly mapped."""
+        """get_fallback_model() resolves the current model through the
+        catalog/upgrade map (frontier-model-refresh, 2026-09-04 review fix
+        round 1, item 3), not the (vestigial) OPENROUTER_MODEL_MAP class
+        attribute: "gpt-4o" is a legacy OpenAI spelling that upgrades to
+        the current frontier; a truly unresolvable model falls back to
+        DEFAULT_FALLBACK_MODEL."""
 
         class TestAgent(QuotaFallbackMixin):
             OPENROUTER_MODEL_MAP = {
@@ -391,7 +396,11 @@ class TestAgentFallbackChain:
 
         agent = TestAgent()
         agent.model = "gpt-4o"
-        assert agent.get_fallback_model() == "openai/gpt-4o"
+        # Terra, not Astra: the GPT-4 line is value-tier by price
+        # (gpt-4o listed at $2.50/$10), so it preserves tier rather than
+        # over-paying for the $10/$50 flagship -- round-4 re-review of
+        # finding C-P3 on #9989.
+        assert agent.get_fallback_model() == "openai/gpt-5.6-terra"
 
         agent.model = "unknown-model"
         assert agent.get_fallback_model() == "meta-llama/llama-3"

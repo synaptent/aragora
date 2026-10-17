@@ -1,0 +1,863 @@
+"""Request-shape hardening: catalog-driven Anthropic/OpenAI payload flags.
+
+Task 7 (frontier-model-refresh, 2026-09-04): request shapes must be derived
+from ``aragora.models.catalog`` flags (``supports_sampling_params``,
+``thinking_default_on``, ``forced_tool_choice_allowed``, ``max_tokens_param``,
+``reasoning_effort_default``) instead of hand-maintained per-provider
+conditionals, so a new frontier row is enough to correct the wire shape.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+from aragora.models import compat
+
+
+def test_flags_come_from_catalog() -> None:
+    assert compat.rejects_sampling_params("gpt-6-astra") is True
+    assert compat.rejects_sampling_params("claude-fable-5-1") is True
+    assert compat.rejects_sampling_params("gemini-3.8-flash") is False
+    assert compat.rejects_sampling_params("claude-newfamily-9") is False  # unknown -> conservative
+    assert compat.thinks_by_default("claude-fable-5-1") is True
+    assert compat.allows_forced_tool_choice("claude-fable-5-1") is False
+    assert compat.max_tokens_param("gpt-6-astra") == "max_completion_tokens"
+    assert compat.max_tokens_param("gemini-3.8-flash") == "max_tokens"
+    assert compat.reasoning_effort_default("gpt-6-astra") == "high"
+
+
+def test_anthropic_payload_for_fable_51() -> None:
+    from aragora.agents.api_agents.anthropic import AnthropicAPIAgent
+
+    agent = AnthropicAPIAgent(
+        name="a", model="claude-fable-5-1", temperature=0.2, top_p=0.9, api_key="test-key"
+    )
+    payload = agent._build_payload("hello", max_tokens=32000)
+    assert "temperature" not in payload and "top_p" not in payload
+    assert "thinking" not in payload or payload["thinking"] == {"type": "adaptive"}
+    assert payload["max_tokens"] == 32000
+    assert payload.get("tool_choice", {"type": "auto"}).get("type") in ("auto", "none")
+
+
+def test_anthropic_payload_default_max_tokens_non_streaming() -> None:
+    from aragora.agents.api_agents.anthropic import AnthropicAPIAgent
+
+    agent = AnthropicAPIAgent(name="a", model="claude-fable-5-1", api_key="test-key")
+    payload = agent._build_payload("hello")
+    # min(catalog max_output_tokens=128_000, 16_000) for non-streaming.
+    assert payload["max_tokens"] == 16000
+
+
+def test_anthropic_payload_default_max_tokens_streaming() -> None:
+    from aragora.agents.api_agents.anthropic import AnthropicAPIAgent
+
+    agent = AnthropicAPIAgent(name="a", model="claude-fable-5-1", api_key="test-key")
+    payload = agent._build_payload("hello", stream=True)
+    # min(catalog max_output_tokens=128_000, 64_000) for streaming.
+    assert payload["max_tokens"] == 64000
+
+
+def test_anthropic_stream_max_tokens_setting_lowers_the_streamed_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``generate_stream`` takes no caller max_tokens, so the streamed default
+    IS the per-call output ceiling. ``ARAGORA_ANTHROPIC_STREAM_MAX_TOKENS`` is
+    the operator's knob for it (finding C-P3 on #9989)."""
+    from aragora.agents.api_agents.anthropic import AnthropicAPIAgent
+    from aragora.config.settings import get_settings
+
+    monkeypatch.setenv("ARAGORA_ANTHROPIC_STREAM_MAX_TOKENS", "8000")
+    get_settings.cache_clear()
+    try:
+        agent = AnthropicAPIAgent(name="a", model="claude-fable-5-1", api_key="test-key")
+        assert agent._build_payload("hello", stream=True)["max_tokens"] == 8000
+        # Non-streaming keeps its own 16k default -- the knob is stream-only.
+        assert agent._build_payload("hello")["max_tokens"] == 16_000
+    finally:
+        get_settings.cache_clear()
+
+
+def test_anthropic_stream_max_tokens_setting_still_capped_by_the_catalog(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Configuring more output than the model can emit changes nothing."""
+    from aragora.agents.api_agents.anthropic import AnthropicAPIAgent
+    from aragora.config.settings import get_settings
+
+    monkeypatch.setenv("ARAGORA_ANTHROPIC_STREAM_MAX_TOKENS", "900000")
+    get_settings.cache_clear()
+    try:
+        agent = AnthropicAPIAgent(name="a", model="claude-fable-5-1", api_key="test-key")
+        assert agent._build_payload("hello", stream=True)["max_tokens"] == 128_000
+    finally:
+        get_settings.cache_clear()
+
+
+def test_anthropic_stream_max_tokens_setting_does_not_override_an_explicit_value(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """It is a DEFAULT, not a policy ceiling: a caller that names a value
+    still gets it (capped only by the catalog)."""
+    from aragora.agents.api_agents.anthropic import AnthropicAPIAgent
+    from aragora.config.settings import get_settings
+
+    monkeypatch.setenv("ARAGORA_ANTHROPIC_STREAM_MAX_TOKENS", "8000")
+    get_settings.cache_clear()
+    try:
+        agent = AnthropicAPIAgent(name="a", model="claude-fable-5-1", api_key="test-key")
+        payload = agent._build_payload("hello", max_tokens=32_000, stream=True)
+        assert payload["max_tokens"] == 32_000
+    finally:
+        get_settings.cache_clear()
+
+
+def test_anthropic_stream_cap_falls_back_to_64k_when_settings_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A stub or unimportable config must not silently shrink every streamed
+    answer -- the shipped default stands."""
+    import builtins
+
+    from aragora.agents.api_agents.anthropic import AnthropicAPIAgent
+
+    agent = AnthropicAPIAgent(name="a", model="claude-fable-5-1", api_key="test-key")
+    real_import = builtins.__import__
+
+    def _blow_up(name: str, *args: object, **kwargs: object) -> object:
+        if name == "aragora.config":
+            raise ImportError("simulated config import failure")
+        return real_import(name, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(builtins, "__import__", _blow_up)
+    assert agent._stream_max_tokens_cap() == 64_000
+
+
+def test_anthropic_payload_caller_value_capped_at_catalog_max() -> None:
+    from aragora.agents.api_agents.anthropic import AnthropicAPIAgent
+
+    agent = AnthropicAPIAgent(name="a", model="claude-fable-5-1", api_key="test-key")
+    payload = agent._build_payload("hello", max_tokens=999_000)
+    assert payload["max_tokens"] == 128_000
+
+
+def test_anthropic_payload_unknown_model_keeps_4096_default() -> None:
+    from aragora.agents.api_agents.anthropic import AnthropicAPIAgent
+
+    agent = AnthropicAPIAgent(name="a", model="claude-newfamily-9", api_key="test-key")
+    payload = agent._build_payload("hello")
+    assert payload["max_tokens"] == 4096
+
+
+_REFUSAL_FALLBACK_ENV = "ARAGORA_ANTHROPIC_REFUSAL_FALLBACK"
+_REFUSAL_FALLBACK_BETA = "server-side-fallback-2026-07-01"
+_REFUSAL_FALLBACK_MODELS = ("claude-fable-5-1", "claude-opus-5")
+_TRACE_HEADERS = frozenset({"traceparent", "tracestate"})
+
+
+@pytest.fixture
+def refusal_fallback_default(monkeypatch: pytest.MonkeyPatch):
+    """Settings as shipped: the opt-in env var is unset and the agent targets
+    the official endpoint."""
+    from aragora.config.settings import get_settings
+
+    monkeypatch.delenv(_REFUSAL_FALLBACK_ENV, raising=False)
+    monkeypatch.delenv("ANTHROPIC_BASE_URL", raising=False)
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
+@pytest.fixture
+def refusal_fallback_opted_in(monkeypatch: pytest.MonkeyPatch):
+    """The operator opted in with ``ARAGORA_ANTHROPIC_REFUSAL_FALLBACK=true``."""
+    from aragora.config.settings import get_settings
+
+    monkeypatch.setenv(_REFUSAL_FALLBACK_ENV, "true")
+    monkeypatch.delenv("ANTHROPIC_BASE_URL", raising=False)
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
+def _wire_session(*, stream: bool, model: str):
+    """An aiohttp session fake whose ``post`` records the request the agent
+    actually sends, answering with a minimal success for either path."""
+    from unittest.mock import MagicMock
+
+    from tests.utils.aiohttp_mocks import make_mock_client_session, make_mock_response
+
+    if stream:
+
+        async def iter_any():
+            yield (
+                b'data: {"type": "content_block_delta", '
+                b'"delta": {"type": "text_delta", "text": "ok"}}\n\n'
+            )
+
+        content = MagicMock()
+        content.iter_any = iter_any
+        response = make_mock_response(content=content)
+    else:
+        response = make_mock_response(
+            json_data={
+                "model": model,
+                "content": [{"type": "text", "text": "ok"}],
+                "usage": {"input_tokens": 1, "output_tokens": 1},
+            }
+        )
+    return make_mock_client_session(response)
+
+
+async def _sent_request(model: str, *, stream: bool) -> tuple[dict, dict]:
+    """Drive ``generate``/``generate_stream`` through the HTTP fake and return
+    the ``(json, headers)`` the agent posted."""
+    from unittest.mock import patch
+
+    from aragora.agents.api_agents.anthropic import AnthropicAPIAgent
+
+    agent = AnthropicAPIAgent(name="a", model=model, api_key="test-key")
+    session = _wire_session(stream=stream, model=model)
+    with patch(
+        "aragora.agents.api_agents.anthropic.create_client_session",
+        return_value=session,
+    ):
+        if stream:
+            chunks = [c async for c in agent.generate_stream("hello")]
+            assert chunks == ["ok"]
+        else:
+            assert await agent.generate("hello") == "ok"
+    assert session.post.call_count == 1
+    kwargs = session.post.call_args.kwargs
+    return kwargs["json"], kwargs["headers"]
+
+
+def test_anthropic_refusal_fallback_setting_defaults_off(
+    refusal_fallback_default: None,
+) -> None:
+    from aragora.config.settings import AgentSettings, get_settings
+
+    assert AgentSettings.model_fields["anthropic_refusal_fallback"].default is False
+    assert AgentSettings().anthropic_refusal_fallback is False
+    assert get_settings().agent.anthropic_refusal_fallback is False
+
+
+@pytest.mark.parametrize("model", _REFUSAL_FALLBACK_MODELS)
+@pytest.mark.parametrize("stream", [False, True])
+def test_anthropic_refusal_fallback_off_by_default_in_payload_and_headers(
+    refusal_fallback_default: None, model: str, stream: bool
+) -> None:
+    from aragora.agents.api_agents.anthropic import AnthropicAPIAgent
+
+    agent = AnthropicAPIAgent(name="a", model=model, api_key="test-key")
+    assert agent._supports_refusal_fallback() is True
+    assert agent._refusal_fallback_enabled() is False
+    assert "fallbacks" not in agent._build_payload("hello", stream=stream)
+    assert "anthropic-beta" not in agent._request_headers()
+    # Web search still gets its own beta, and only that one.
+    assert agent._request_headers(use_web_search=True)["anthropic-beta"] == (
+        "web-search-2025-03-05"
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("model", _REFUSAL_FALLBACK_MODELS)
+@pytest.mark.parametrize("stream", [False, True])
+async def test_anthropic_default_request_on_the_wire_has_no_refusal_fallback(
+    refusal_fallback_default: None, model: str, stream: bool
+) -> None:
+    sent_json, sent_headers = await _sent_request(model, stream=stream)
+    assert sent_json["model"] == model
+    assert "fallbacks" not in sent_json
+    assert "anthropic-beta" not in sent_headers
+    assert all(_REFUSAL_FALLBACK_BETA not in str(v) for v in sent_headers.values())
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("model", _REFUSAL_FALLBACK_MODELS)
+@pytest.mark.parametrize("stream", [False, True])
+async def test_anthropic_refusal_fallback_opt_in_restores_exact_body_field_and_header(
+    monkeypatch: pytest.MonkeyPatch, model: str, stream: bool
+) -> None:
+    """Opting in adds exactly the scalar ``"fallbacks": "default"`` body field
+    and the matching 07-01 beta header, and changes nothing else on the wire."""
+    from aragora.config.settings import get_settings
+
+    monkeypatch.delenv("ANTHROPIC_BASE_URL", raising=False)
+    monkeypatch.delenv(_REFUSAL_FALLBACK_ENV, raising=False)
+    get_settings.cache_clear()
+    try:
+        off_json, off_headers = await _sent_request(model, stream=stream)
+        monkeypatch.setenv(_REFUSAL_FALLBACK_ENV, "true")
+        get_settings.cache_clear()
+        on_json, on_headers = await _sent_request(model, stream=stream)
+    finally:
+        get_settings.cache_clear()
+
+    assert on_json["fallbacks"] == "default"
+    assert on_headers["anthropic-beta"] == _REFUSAL_FALLBACK_BETA
+    assert {k: v for k, v in on_json.items() if k != "fallbacks"} == off_json
+
+    def _stable(headers: dict) -> dict:
+        return {k: v for k, v in headers.items() if k not in _TRACE_HEADERS}
+
+    assert {k: v for k, v in _stable(on_headers).items() if k != "anthropic-beta"} == _stable(
+        off_headers
+    )
+
+
+@pytest.mark.parametrize("model", _REFUSAL_FALLBACK_MODELS)
+def test_anthropic_refusal_fallback_opt_in_through_the_setting_object(
+    refusal_fallback_default: None, model: str
+) -> None:
+    """Enabling the setting itself (not only its env var) opts in."""
+    from aragora.agents.api_agents.anthropic import AnthropicAPIAgent
+    from aragora.config.settings import get_settings
+
+    get_settings().agent.anthropic_refusal_fallback = True
+    agent = AnthropicAPIAgent(name="a", model=model, api_key="test-key")
+    assert agent._build_payload("hello")["fallbacks"] == "default"
+    assert agent._request_headers()["anthropic-beta"] == _REFUSAL_FALLBACK_BETA
+
+
+@pytest.mark.parametrize("error", [ImportError, AttributeError, TypeError, ValueError])
+def test_anthropic_refusal_fallback_stays_off_when_settings_unavailable(
+    refusal_fallback_default: None, monkeypatch: pytest.MonkeyPatch, error: type
+) -> None:
+    import aragora.config as config_pkg
+    from aragora.agents.api_agents.anthropic import AnthropicAPIAgent
+
+    def _unavailable():
+        raise error("settings unavailable")
+
+    agent = AnthropicAPIAgent(name="a", model="claude-fable-5-1", api_key="test-key")
+    monkeypatch.setattr(config_pkg, "get_settings", _unavailable)
+    assert agent._refusal_fallback_enabled() is False
+    assert "fallbacks" not in agent._build_payload("hello")
+    assert "anthropic-beta" not in agent._request_headers()
+
+
+def test_anthropic_malformed_setting_still_counts_as_a_provider_failure(
+    refusal_fallback_default: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A malformed ``ARAGORA_*`` value makes ``get_settings()`` raise
+    pydantic's ``ValidationError`` (a ``ValueError``). Header building runs
+    before ``generate``'s ``try``, so the refusal-fallback gate must not let
+    that error escape there: it has to surface from the session layer inside
+    the ``try``, where the circuit breaker and the provider-call metric
+    record it, as they do for a model without the gate. ``generate_stream``
+    keeps no such accounting; it must still raise the same error and send
+    nothing.
+    """
+    import asyncio
+    from unittest.mock import MagicMock
+
+    from pydantic import ValidationError
+
+    import aragora.agents.api_agents.anthropic as anthropic_mod
+    import aragora.agents.api_agents.common as common_mod
+    from aragora.agents.api_agents.anthropic import AnthropicAPIAgent
+    from aragora.config.settings import get_settings
+
+    agent = AnthropicAPIAgent(
+        name="malformed-setting", model="claude-fable-5-1", api_key="test-key"
+    )
+    agent.enable_web_search = False
+    breaker = agent._circuit_breaker
+    assert breaker is not None
+    failures_before = breaker.failures
+
+    monkeypatch.delenv("ARAGORA_MONTHLY_BUDGET_USD", raising=False)
+    monkeypatch.setenv("ARAGORA_STREAM_BUFFER_SIZE", "not-an-int")
+    get_settings.cache_clear()
+    # Without a pooled connector, create_client_session must read the settings.
+    monkeypatch.setattr(common_mod._pool_state, "connector", None)
+    provider_call = MagicMock()
+    monkeypatch.setattr(anthropic_mod, "record_provider_call", provider_call)
+    client_session = MagicMock()
+    monkeypatch.setattr(common_mod.aiohttp, "ClientSession", client_session)
+
+    with pytest.raises(ValidationError):
+        asyncio.run(agent.generate("hello"))
+
+    assert breaker.failures - failures_before == 1
+    provider_call.assert_called_once()
+    assert provider_call.call_args.kwargs["provider"] == "anthropic"
+    assert provider_call.call_args.kwargs["success"] is False
+    assert provider_call.call_args.kwargs["error_type"] is anthropic_mod.ErrorType.UNKNOWN
+
+    async def _consume() -> None:
+        async for _ in agent.generate_stream("hello"):
+            pass
+
+    with pytest.raises(ValidationError):
+        asyncio.run(_consume())
+    client_session.assert_not_called()
+
+
+def test_anthropic_refusal_fallback_payload_and_headers(refusal_fallback_opted_in: None) -> None:
+    from aragora.agents.api_agents.anthropic import AnthropicAPIAgent
+
+    agent = AnthropicAPIAgent(name="a", model="claude-fable-5-1", api_key="test-key")
+    payload = agent._build_payload("hello")
+    assert payload.get("fallbacks") == "default"
+    headers = agent._request_headers()
+    assert "server-side-fallback-2026-07-01" in headers.get("anthropic-beta", "")
+
+
+def test_anthropic_refusal_fallback_disabled_by_setting(monkeypatch: pytest.MonkeyPatch) -> None:
+    from aragora.agents.api_agents.anthropic import AnthropicAPIAgent
+
+    monkeypatch.setenv("ARAGORA_ANTHROPIC_REFUSAL_FALLBACK", "false")
+    from aragora.config.settings import get_settings
+
+    get_settings.cache_clear()
+    try:
+        agent = AnthropicAPIAgent(name="a", model="claude-fable-5-1", api_key="test-key")
+        payload = agent._build_payload("hello")
+        assert "fallbacks" not in payload
+        headers = agent._request_headers()
+        assert "server-side-fallback-2026-07-01" not in headers.get("anthropic-beta", "")
+    finally:
+        get_settings.cache_clear()
+
+
+def test_anthropic_refusal_fallback_beta_pairing_rule(refusal_fallback_opted_in: None) -> None:
+    """The payload form and the beta header must stay paired.
+
+    2026-09-05 merge-gate ruling on finding C-P3 of #9989: the refusal
+    fallback beta has two request shapes and mixing them is a 400 --
+    the SCALAR ``"fallbacks": "default"`` pairs with the 2026-07-01 beta,
+    the ARRAY ``"fallbacks": [{"model": ...}]`` with the 2026-06-01 beta.
+    Aragora ships the scalar form only, so the payload must never carry the
+    array form with the 07-01 header, and the header must never be the
+    06-01 one while the payload is scalar.
+    """
+    from aragora.agents.api_agents import anthropic as anthropic_mod
+    from aragora.agents.api_agents.anthropic import AnthropicAPIAgent
+
+    array_beta = "server-side-fallback-2026-06-01"
+    assert anthropic_mod._REFUSAL_FALLBACK_BETA == "server-side-fallback-2026-07-01"
+    assert anthropic_mod._REFUSAL_FALLBACK_PAYLOAD_VALUE == "default"
+
+    for model in sorted(anthropic_mod._REFUSAL_FALLBACK_MODEL_IDS):
+        agent = AnthropicAPIAgent(name="a", model=model, api_key="test-key")
+        for stream in (False, True):
+            payload = agent._build_payload("hello", stream=stream)
+            fallbacks = payload["fallbacks"]
+            # Scalar form, never the array form.
+            assert isinstance(fallbacks, str), f"{model}: array form sent with the 07-01 header"
+            assert not isinstance(fallbacks, (list, tuple))
+            assert fallbacks == "default"
+        for use_web_search in (False, True):
+            beta = agent._request_headers(use_web_search=use_web_search)["anthropic-beta"]
+            betas = {v.strip() for v in beta.split(",")}
+            assert "server-side-fallback-2026-07-01" in betas
+            # The array-form beta must never accompany the scalar payload.
+            assert array_beta not in betas, f"{model}: 06-01 beta sent with the scalar form"
+
+
+def test_anthropic_refusal_fallback_only_on_the_official_endpoint(
+    refusal_fallback_opted_in: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A BYOK/LiteLLM/VibeProxy gateway gets neither the beta nor the body field.
+
+    The ``server-side-fallback-*`` beta header and the ``"fallbacks"`` body
+    field are an api.anthropic.com request extension. Sending them to a
+    third-party gateway that does not implement it can fail the whole
+    request (findings O-P3 and C-P3 on #9989).
+    """
+    from aragora.agents.api_agents.anthropic import AnthropicAPIAgent
+
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "http://localhost:8318")
+    agent = AnthropicAPIAgent(name="a", model="claude-fable-5-1", api_key="test-key")
+    assert agent.base_url == "http://localhost:8318/v1"
+    payload = agent._build_payload("hello")
+    assert "fallbacks" not in payload
+    assert "server-side-fallback-2026-07-01" not in agent._request_headers().get(
+        "anthropic-beta", ""
+    )
+    # The model itself still qualifies -- only the endpoint disqualifies it.
+    assert agent._supports_refusal_fallback() is True
+    assert agent._refusal_fallback_enabled() is False
+
+
+def test_anthropic_refusal_fallback_on_official_endpoint_spelled_without_v1(
+    refusal_fallback_opted_in: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The gate compares the RESOLVED url, so a /v1-less spelling of the
+    official endpoint still counts as official and keeps the fallback."""
+    from aragora.agents.api_agents.anthropic import AnthropicAPIAgent
+
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com")
+    agent = AnthropicAPIAgent(name="a", model="claude-fable-5-1", api_key="test-key")
+    payload = agent._build_payload("hello")
+    assert payload.get("fallbacks") == "default"
+    assert "server-side-fallback-2026-07-01" in agent._request_headers()["anthropic-beta"]
+
+
+def test_is_official_anthropic_endpoint_branches() -> None:
+    from aragora.agents.api_agents.anthropic import _is_official_anthropic_endpoint
+
+    assert _is_official_anthropic_endpoint(None) is True
+    assert _is_official_anthropic_endpoint("") is True
+    assert _is_official_anthropic_endpoint("https://api.anthropic.com/v1") is True
+    assert _is_official_anthropic_endpoint("https://api.anthropic.com/v1/") is True
+    assert _is_official_anthropic_endpoint("https://api.anthropic.com") is True
+    assert _is_official_anthropic_endpoint("http://localhost:8318") is False
+    assert _is_official_anthropic_endpoint("https://litellm.internal/v1") is False
+    assert _is_official_anthropic_endpoint("https://api.anthropic.com.evil.test/v1") is False
+
+
+def test_anthropic_refusal_fallback_not_applied_to_other_models(
+    refusal_fallback_opted_in: None,
+) -> None:
+    from aragora.agents.api_agents.anthropic import AnthropicAPIAgent
+
+    agent = AnthropicAPIAgent(name="a", model="claude-opus-4-8", api_key="test-key")
+    payload = agent._build_payload("hello")
+    assert "fallbacks" not in payload
+
+
+def test_anthropic_stop_reason_refusal_raises_structured_error() -> None:
+    import asyncio
+
+    from unittest.mock import patch
+
+    from aragora.agents.api_agents.anthropic import AnthropicAPIAgent
+    from aragora.agents.errors.exceptions import AgentAPIError
+    from tests.utils.aiohttp_mocks import make_mock_client_session, make_mock_response
+
+    agent = AnthropicAPIAgent(name="a", model="claude-fable-5-1", api_key="test-key")
+
+    # The helpers pin __aexit__ falsy; a bare AsyncMock there would tell the
+    # `async with` protocol to suppress the raise and return None instead.
+    mock_response = make_mock_response(
+        status=200,
+        json_data={
+            "content": [],
+            "stop_reason": "refusal",
+            "stop_details": {"category": "cyber"},
+            "usage": {"input_tokens": 1, "output_tokens": 0},
+        },
+    )
+    mock_session = make_mock_client_session(mock_response)
+
+    with patch("aiohttp.ClientSession", return_value=mock_session):
+        with pytest.raises(AgentAPIError) as excinfo:
+            asyncio.run(agent.generate("hello"))
+
+    assert getattr(excinfo.value, "reason", None) == "refusal"
+    assert getattr(excinfo.value, "category", None) == "cyber"
+
+
+def test_anthropic_refusal_records_exactly_one_breaker_failure() -> None:
+    """A refusal must cost the breaker one failure, not two.
+
+    The refusal branch records the failure itself. If the raised error were
+    ``recoverable=True`` (the default for a ``status_code=None``
+    ``AgentAPIError``), ``@handle_agent_errors`` would not short-circuit on
+    ``if not e.recoverable: raise`` and would fall through to its own
+    ``circuit_breaker.record_failure()`` — so a couple of cyber-classifier
+    refusals could trip the breaker and take the primary Anthropic path out
+    of service, which is exactly what the refusal fallback exists to survive.
+    """
+    import asyncio
+
+    from unittest.mock import patch
+
+    from aragora.agents.api_agents.anthropic import AnthropicAPIAgent
+    from aragora.agents.errors.exceptions import AgentAPIError
+    from tests.utils.aiohttp_mocks import make_mock_client_session, make_mock_response
+
+    agent = AnthropicAPIAgent(name="a", model="claude-fable-5-1", api_key="test-key")
+    breaker = agent._circuit_breaker
+    assert breaker is not None
+    before = breaker.failures
+
+    mock_response = make_mock_response(
+        status=200,
+        json_data={
+            "content": [],
+            "stop_reason": "refusal",
+            "stop_details": {"category": "cyber"},
+            "usage": {"input_tokens": 1, "output_tokens": 0},
+        },
+    )
+    mock_session = make_mock_client_session(mock_response)
+
+    with patch("aiohttp.ClientSession", return_value=mock_session):
+        with pytest.raises(AgentAPIError) as excinfo:
+            asyncio.run(agent.generate("hello"))
+
+    assert excinfo.value.recoverable is False, "a refusal is terminal, never retryable"
+    assert breaker.failures - before == 1
+
+
+def test_sse_parser_captures_message_delta_stop_info() -> None:
+    """Parser unit test: a "message_delta" event populates stop_reason/
+    stop_details on the parser object while text-chunk extraction is
+    unaffected (message_delta itself yields no content)."""
+    import asyncio
+
+    from aragora.agents.api_agents.common import create_anthropic_sse_parser
+    from tests.agents.api_agents.conftest import MockStreamResponse
+
+    chunks = [
+        b'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,'
+        b'"delta":{"type":"text_delta","text":"Hi"}}\n\n',
+        b'event: message_delta\ndata: {"type":"message_delta","delta":'
+        b'{"stop_reason":"refusal","stop_sequence":null},"stop_details":'
+        b'{"category":"cyber"},"usage":{"output_tokens":1}}\n\n',
+    ]
+    mock_response = MockStreamResponse(status=200, chunks=chunks)
+
+    async def _consume() -> tuple[object, list[str]]:
+        parser = create_anthropic_sse_parser()
+        collected = [c async for c in parser.parse_stream(mock_response.content, "test")]
+        return parser, collected
+
+    parser, collected = asyncio.run(_consume())
+
+    assert collected == ["Hi"], "message_delta must not itself yield content"
+    assert parser.stop_reason == "refusal"
+    assert parser.stop_details == {"category": "cyber"}
+
+
+def test_anthropic_stream_refusal_raises_after_yielding_partial_text() -> None:
+    """A streamed refusal (stop_reason on a message_delta event, not a
+    single JSON body) must raise the same structured AgentAPIError generate()
+    raises, after any text already streamed."""
+    import asyncio
+    from unittest.mock import patch
+
+    from aragora.agents.api_agents.anthropic import AnthropicAPIAgent
+    from aragora.agents.errors.exceptions import AgentAPIError
+    from tests.agents.api_agents.conftest import MockStreamResponse
+    from tests.utils.aiohttp_mocks import make_mock_client_session
+
+    agent = AnthropicAPIAgent(name="a", model="claude-fable-5-1", api_key="test-key")
+    agent.enable_web_search = False
+
+    chunks = [
+        b'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,'
+        b'"delta":{"type":"text_delta","text":"Hello"}}\n\n',
+        b'event: message_delta\ndata: {"type":"message_delta","delta":'
+        b'{"stop_reason":"refusal","stop_sequence":null},"stop_details":'
+        b'{"category":"cyber"},"usage":{"output_tokens":1}}\n\n',
+        b'event: message_stop\ndata: {"type":"message_stop"}\n\n',
+    ]
+    mock_response = MockStreamResponse(status=200, chunks=chunks)
+
+    yielded: list[str] = []
+
+    async def _consume() -> None:
+        async for chunk in agent.generate_stream("hello"):
+            yielded.append(chunk)
+
+    mock_session = make_mock_client_session(mock_response)
+
+    with patch(
+        "aragora.agents.api_agents.anthropic.create_client_session",
+        return_value=mock_session,
+    ):
+        with pytest.raises(AgentAPIError) as excinfo:
+            asyncio.run(_consume())
+
+    assert yielded == ["Hello"], "text streamed before the refusal must stay yielded"
+    assert excinfo.value.reason == "refusal"
+    assert excinfo.value.category == "cyber"
+
+
+def test_anthropic_stream_end_turn_yields_full_text_without_error() -> None:
+    """A normal (non-refusal) stream must not raise and must yield all text."""
+    import asyncio
+    from unittest.mock import patch
+
+    from aragora.agents.api_agents.anthropic import AnthropicAPIAgent
+    from tests.agents.api_agents.conftest import MockStreamResponse
+    from tests.utils.aiohttp_mocks import make_mock_client_session
+
+    agent = AnthropicAPIAgent(name="a", model="claude-fable-5-1", api_key="test-key")
+    agent.enable_web_search = False
+
+    chunks = [
+        b'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,'
+        b'"delta":{"type":"text_delta","text":"Hello"}}\n\n',
+        b'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,'
+        b'"delta":{"type":"text_delta","text":" world"}}\n\n',
+        b'event: message_delta\ndata: {"type":"message_delta","delta":'
+        b'{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":2}}\n\n',
+        b'event: message_stop\ndata: {"type":"message_stop"}\n\n',
+    ]
+    mock_response = MockStreamResponse(status=200, chunks=chunks)
+
+    yielded: list[str] = []
+
+    async def _consume() -> None:
+        async for chunk in agent.generate_stream("hello"):
+            yielded.append(chunk)
+
+    mock_session = make_mock_client_session(mock_response)
+
+    with patch(
+        "aragora.agents.api_agents.anthropic.create_client_session",
+        return_value=mock_session,
+    ):
+        asyncio.run(_consume())
+
+    assert "".join(yielded) == "Hello world"
+
+
+def test_openai_payload_for_astra() -> None:
+    from aragora.agents.api_agents.openai import OpenAIAPIAgent
+
+    agent = OpenAIAPIAgent(name="o", model="gpt-6-astra", temperature=0.3, api_key="test-key")
+    payload = agent._build_payload([{"role": "user", "content": "hi"}])
+    assert "max_completion_tokens" in payload and "max_tokens" not in payload
+    assert "temperature" not in payload
+    assert payload["reasoning_effort"] == "high"
+
+
+def test_openai_payload_default_max_tokens_is_reasoning_safe() -> None:
+    """A reasoning model with no explicit cap must not inherit the flat 4096.
+
+    On OpenAI reasoning models the reasoning tokens are billed and capped
+    inside ``max_completion_tokens``; at ``reasoning_effort: "high"`` a 4096
+    total budget routinely returns ``finish_reason: "length"`` with empty
+    ``content``. Mirrors the Anthropic builder's ``_resolve_max_tokens``.
+    """
+    from aragora.agents.api_agents.openai import OpenAIAPIAgent
+    from aragora.models.catalog import spec_or_none
+
+    agent = OpenAIAPIAgent(name="o", model="gpt-6-astra", api_key="test-key")
+    payload = agent._build_payload([{"role": "user", "content": "hi"}])
+    assert payload["max_completion_tokens"] >= 16_000
+    spec = spec_or_none("gpt-6-astra")
+    assert spec is not None
+    assert payload["max_completion_tokens"] == min(spec.max_output_tokens, 16_000)
+
+
+def test_openai_payload_explicit_max_tokens_respected() -> None:
+    """An explicit caller cap wins over the reasoning-safe default."""
+    from aragora.agents.api_agents.openai import OpenAIAPIAgent
+
+    agent = OpenAIAPIAgent(name="o", model="gpt-6-astra", api_key="test-key")
+    agent.max_tokens = 2048
+    payload = agent._build_payload([{"role": "user", "content": "hi"}])
+    assert payload["max_completion_tokens"] == 2048
+
+
+def test_openai_reasoning_payload_omitted_max_tokens_uses_reasoning_default() -> None:
+    """No cap on the instance or a subclass: the reasoning-safe default applies."""
+    from aragora.agents.api_agents.openai import OpenAIAPIAgent
+    from aragora.models.catalog import spec_or_none
+
+    agent = OpenAIAPIAgent(name="o", model="gpt-6-astra", api_key="test-key")
+    assert "max_tokens" not in vars(agent)
+    spec = spec_or_none("gpt-6-astra")
+    assert spec is not None
+    payload = agent._build_payload([{"role": "user", "content": "hi"}])
+    assert payload["max_completion_tokens"] == min(spec.max_output_tokens, 16_000)
+
+
+def test_openai_reasoning_payload_keeps_explicit_max_tokens_4095() -> None:
+    from aragora.agents.api_agents.openai import OpenAIAPIAgent
+
+    agent = OpenAIAPIAgent(name="o", model="gpt-6-astra", api_key="test-key")
+    agent.max_tokens = 4095
+    payload = agent._build_payload([{"role": "user", "content": "hi"}])
+    assert payload["max_completion_tokens"] == 4095
+
+
+def test_openai_reasoning_payload_keeps_explicit_max_tokens_4096() -> None:
+    """An explicit cap equal to the inherited default is still the caller's cap.
+
+    Where the value is set decides, not the value itself: an explicit 4096
+    must not be read as "unset" and raised to the reasoning default.
+    """
+    from aragora.agents.api_agents.openai import OpenAIAPIAgent
+
+    agent = OpenAIAPIAgent(name="o", model="gpt-6-astra", api_key="test-key")
+    agent.max_tokens = 4096
+    payload = agent._build_payload([{"role": "user", "content": "hi"}])
+    assert payload["max_completion_tokens"] == 4096
+
+
+def test_openai_reasoning_payload_keeps_explicit_max_tokens_4097() -> None:
+    from aragora.agents.api_agents.openai import OpenAIAPIAgent
+
+    agent = OpenAIAPIAgent(name="o", model="gpt-6-astra", api_key="test-key")
+    agent.max_tokens = 4097
+    payload = agent._build_payload([{"role": "user", "content": "hi"}])
+    assert payload["max_completion_tokens"] == 4097
+
+
+def test_openai_reasoning_payload_keeps_subclass_max_tokens_4096() -> None:
+    """A subclass that pins the cap to 4096 has set it explicitly too."""
+    from aragora.agents.api_agents.openai import OpenAIAPIAgent
+
+    class _PinnedCapAgent(OpenAIAPIAgent):
+        max_tokens = 4096
+
+    agent = _PinnedCapAgent(name="o", model="gpt-6-astra", api_key="test-key")
+    payload = agent._build_payload([{"role": "user", "content": "hi"}])
+    assert payload["max_completion_tokens"] == 4096
+
+
+def test_openai_non_reasoning_payload_max_tokens_omitted_or_explicit_unchanged() -> None:
+    """Without reasoning_effort: 4096 when omitted, the caller's value otherwise."""
+    from aragora.agents.api_agents.openai import OpenAIAPIAgent
+
+    messages = [{"role": "user", "content": "hi"}]
+    omitted = OpenAIAPIAgent(name="o", model="some-openai-compatible-model", api_key="test-key")
+    explicit_default = OpenAIAPIAgent(
+        name="o", model="some-openai-compatible-model", api_key="test-key"
+    )
+    explicit_default.max_tokens = 4096
+    explicit_other = OpenAIAPIAgent(
+        name="o", model="some-openai-compatible-model", api_key="test-key"
+    )
+    explicit_other.max_tokens = 4097
+    for agent, expected in ((omitted, 4096), (explicit_default, 4096), (explicit_other, 4097)):
+        payload = agent._build_payload(messages)
+        assert "reasoning_effort" not in payload
+        assert payload["max_tokens"] == expected
+
+
+def test_openai_payload_uncataloged_reasoning_model_gets_flat_floor() -> None:
+    """No catalog row + reasoning_effort being sent -> the flat 16k floor."""
+    from aragora.agents.api_agents.openai import OpenAIAPIAgent
+    from aragora.models.catalog import spec_or_none
+
+    agent = OpenAIAPIAgent(
+        name="o", model="brand-new-reasoner", reasoning_effort="high", api_key="test-key"
+    )
+    assert spec_or_none("brand-new-reasoner") is None
+    payload = agent._build_payload([{"role": "user", "content": "hi"}])
+    assert payload["max_tokens"] == 16_000
+
+
+def test_openai_payload_for_non_reasoning_model_unchanged() -> None:
+    from aragora.agents.api_agents.openai import OpenAIAPIAgent
+
+    agent = OpenAIAPIAgent(
+        name="o", model="some-openai-compatible-model", temperature=0.3, api_key="test-key"
+    )
+    payload = agent._build_payload([{"role": "user", "content": "hi"}])
+    assert (
+        payload["max_tokens"] == 4096
+        and payload["temperature"] == 0.3
+        and "reasoning_effort" not in payload
+    )
+
+
+def test_openai_reasoning_effort_override() -> None:
+    from aragora.agents.api_agents.openai import OpenAIAPIAgent
+
+    agent = OpenAIAPIAgent(
+        name="o", model="gpt-6-astra", reasoning_effort="xhigh", api_key="test-key"
+    )
+    payload = agent._build_payload([{"role": "user", "content": "hi"}])
+    assert payload["reasoning_effort"] == "xhigh"

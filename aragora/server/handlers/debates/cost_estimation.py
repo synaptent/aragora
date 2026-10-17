@@ -10,6 +10,8 @@ from decimal import Decimal
 from typing import Any
 
 from aragora.billing.usage import PROVIDER_PRICING, calculate_token_cost
+from aragora.config.model_pins import FABLE_51_DIRECT, GEMINI_31_PRO_DIRECT, GPT6_ASTRA_DIRECT
+from aragora.models.catalog import CATALOG, ModelSpec
 from aragora.server.handlers.base import HandlerResult, error_response, json_response
 
 logger = logging.getLogger(__name__)
@@ -19,8 +21,15 @@ AVG_INPUT_TOKENS_PER_ROUND = 2000  # system prompt + context + prior messages
 AVG_OUTPUT_TOKENS_PER_ROUND = 800  # agent response
 SYSTEM_PROMPT_TOKENS = 500  # one-time system prompt overhead per agent
 
-# Model -> (provider, model_key) mapping for cost lookup
-MODEL_PROVIDER_MAP: dict[str, tuple[str, str]] = {
+# Legacy hand-maintained model -> (provider, model_key) rows. Kept verbatim
+# (not regenerated from the catalog) so callers/receipts already pinning
+# these exact spellings keep resolving to the exact provider/model_key pair
+# they always have -- several of these model_key spellings (e.g.
+# "claude-opus-4.8", "gpt-4o", "gemini-pro") are the real keys billing's
+# PROVIDER_PRICING tables index on, which the catalog's canonical ids don't
+# always match (frontier-model-refresh, 2026-09-04: Task 6 handles
+# migrating PROVIDER_PRICING itself; this table is not touched here).
+_LEGACY_MODEL_PROVIDER_MAP: dict[str, tuple[str, str]] = {
     "claude-fable-5": ("anthropic", "claude-fable-5"),
     "anthropic/claude-fable-5": ("anthropic", "claude-fable-5"),
     "claude-opus-5": ("anthropic", "claude-opus-5"),
@@ -44,8 +53,51 @@ MODEL_PROVIDER_MAP: dict[str, tuple[str, str]] = {
     "deepseek-v3": ("deepseek", "deepseek-v3"),
 }
 
-# Default models when none specified
-DEFAULT_MODELS = ["claude-opus-5", "gpt-4o", "gemini-pro"]
+
+def _pricing_provider(spec: ModelSpec) -> str:
+    """Billing provider label for a catalog row: the same billing provider
+    the legacy rows above used for that FAMILY, not necessarily the
+    catalog's own ``provider`` field.
+
+    ``ModelSpec.provider`` records how a row is *reached* (e.g.
+    deepseek-v4-pro-0813's ``provider`` is "openrouter" because that is its
+    only modeled transport), which is not always the same thing as which
+    billing family it belongs to -- the legacy "deepseek-v4-pro" row above
+    was always billed as "deepseek", and deepseek-v4-pro-0813 is the same
+    family. So this keys off ``spec.family`` (the pretraining-lineage
+    grouping) instead: when the family itself names a PROVIDER_PRICING
+    bucket, use it; otherwise fall back to "openrouter", which has a
+    documented default-rate bucket.
+
+    Every family a catalog row carries now names a real bucket:
+    ``aragora.models.pricing_mirror._bucketed`` emits each row under its
+    family as well as its provider (2026-09-05 merge-gate fix wave, finding
+    O-P2c on #9989). Before that, the family bucket existed only for the
+    families the LEGACY hand-written table happened to name, so
+    ``deepseek-v4-pro-0813`` resolved to the "deepseek" bucket and then
+    silently fell back to the $2/$8 default because the catalog rate had
+    been emitted under "openrouter" instead. The "openrouter" fallback
+    below is retained for a row with no ``family`` at all.
+    """
+    return spec.family if spec.family in PROVIDER_PRICING else "openrouter"
+
+
+# Model -> (provider, model_key) mapping for cost lookup. Built from every
+# catalog spelling (canonical/direct/openrouter/alias) so any current or
+# legacy/retired model resolves to a real provider, then the legacy rows
+# above are layered on top unchanged so old receipts still resolve exactly
+# as they always have (frontier-model-refresh, 2026-09-04).
+MODEL_PROVIDER_MAP: dict[str, tuple[str, str]] = {
+    **{
+        spelling: (_pricing_provider(spec), spec.canonical_id)
+        for spec in CATALOG.values()
+        for spelling in spec.all_ids()
+    },
+    **_LEGACY_MODEL_PROVIDER_MAP,
+}
+
+# Default models when none specified.
+DEFAULT_MODELS = [FABLE_51_DIRECT, GPT6_ASTRA_DIRECT, GEMINI_31_PRO_DIRECT]
 
 
 def estimate_debate_cost(
@@ -83,17 +135,18 @@ def estimate_debate_cost(
 
         cost = calculate_token_cost(provider, model_key, input_tokens, output_tokens)
 
-        # Decompose into input/output cost for the breakdown
-        provider_prices = PROVIDER_PRICING.get(provider, PROVIDER_PRICING["openrouter"])
-        input_key = model_key if model_key in provider_prices else "default"
-        output_key = (
-            f"{model_key}-output" if f"{model_key}-output" in provider_prices else "default-output"
-        )
-        input_price = provider_prices.get(input_key, Decimal("2.00"))
-        output_price = provider_prices.get(output_key, Decimal("8.00"))
-
-        input_cost = (Decimal(input_tokens) / Decimal("1000000")) * input_price
-        output_cost = (Decimal(output_tokens) / Decimal("1000000")) * output_price
+        # Decompose into input/output cost for the breakdown. The two halves
+        # MUST sum to the subtotal, so both come from the same tier-aware
+        # pricer the subtotal did. Reading the flat PROVIDER_PRICING rows
+        # directly ignored the long-context tier: a 150-round debate on
+        # gpt-6-astra (past its 272k threshold) reported subtotal 15.01
+        # against an input+output of 9.005 -- a user-facing breakdown that
+        # contradicted its own total (finding O-P2 on #9989). Deriving the
+        # output half by subtraction makes the identity hold by construction
+        # for every model, tiered or flat, exactly as the wave-3 fix to
+        # aragora/server/fastapi/routes/costs.py does.
+        input_cost = calculate_token_cost(provider, model_key, input_tokens, 0)
+        output_cost = cost - input_cost
 
         breakdown.append(
             {

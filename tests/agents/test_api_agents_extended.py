@@ -266,16 +266,24 @@ class TestAnthropicFallback:
                     mock_fallback.generate.assert_called_once()
 
     def test_anthropic_fallback_model_mapping(self, anthropic_agent):
-        """Test that Anthropic models are mapped correctly to OpenRouter."""
-        # Test various model mappings
-        assert "claude-opus-4-5-20251101" in AnthropicAPIAgent.OPENROUTER_MODEL_MAP
-        assert "claude-sonnet-4-20250514" in AnthropicAPIAgent.OPENROUTER_MODEL_MAP
+        """Test that Anthropic models resolve to the current frontier via
+        OpenRouter (frontier-model-refresh, 2026-09-04). AnthropicAPIAgent no
+        longer carries a static OPENROUTER_MODEL_MAP: get_fallback_model()
+        resolves the current model through the catalog and upgrade map
+        instead, so legacy spellings not previously hand-enumerated (e.g.
+        "claude-opus-4-5-20251101") upgrade too -- and the target preserves
+        TIER, so a Sonnet spelling lands on the Sonnet row rather than the
+        $10/$50 flagship (finding C-P3 on #9989)."""
+        for legacy_model in ("claude-opus-4-5-20251101", "claude-opus-4-7"):
+            agent = AnthropicAPIAgent(api_key="test-key", model=legacy_model)
+            assert agent.get_fallback_model() == "anthropic/claude-fable-5.1"
+        for legacy_sonnet in ("claude-sonnet-4-20250514", "claude-sonnet-4-6"):
+            agent = AnthropicAPIAgent(api_key="test-key", model=legacy_sonnet)
+            assert agent.get_fallback_model() == "anthropic/claude-sonnet-5"
 
-        # Default should map to sonnet
-        assert (
-            AnthropicAPIAgent.OPENROUTER_MODEL_MAP.get("unknown", "anthropic/claude-sonnet-4")
-            == "anthropic/claude-sonnet-4"
-        )
+        # A genuinely unknown model falls back to DEFAULT_FALLBACK_MODEL.
+        unknown_agent = AnthropicAPIAgent(api_key="test-key", model="unknown-model-xyz")
+        assert unknown_agent.get_fallback_model() == AnthropicAPIAgent.DEFAULT_FALLBACK_MODEL
 
     def test_fallback_preserves_system_prompt(self, anthropic_agent):
         """Test that system prompt is preserved in fallback agent."""
@@ -405,10 +413,18 @@ class TestOpenAIFallback:
                     assert result == "Fallback response"
 
     def test_openai_fallback_model_mapping(self, openai_agent):
-        """Test that OpenAI models are mapped correctly to OpenRouter."""
-        assert "gpt-4o" in OpenAIAPIAgent.OPENROUTER_MODEL_MAP
-        assert OpenAIAPIAgent.OPENROUTER_MODEL_MAP["gpt-4o"] == "openai/gpt-5.5"
-        assert "gpt-4o-mini" in OpenAIAPIAgent.OPENROUTER_MODEL_MAP
+        """Test that OpenAI models resolve to the current frontier via
+        OpenRouter (frontier-model-refresh, 2026-09-04 review fix round 1,
+        item 3). OpenAIAPIAgent no longer carries a static
+        OPENROUTER_MODEL_MAP: get_fallback_model() (QuotaFallbackMixin)
+        resolves the current model through the catalog and upgrade map."""
+        flagship_agent = OpenAIAPIAgent(api_key="test-key", model="gpt-5.5")
+        assert flagship_agent.get_fallback_model() == "openai/gpt-6-astra"
+        # The GPT-4 line is value tier by price, so it lands with the mini
+        # SKUs on Terra (round-4 re-review of finding C-P3 on #9989).
+        for value_model in ("gpt-4o", "gpt-4o-mini"):
+            value_agent = OpenAIAPIAgent(api_key="test-key", model=value_model)
+            assert value_agent.get_fallback_model() == "openai/gpt-5.6-terra"
 
     def test_openai_quota_keyword_detection(self, openai_agent):
         """Test OpenAI quota error detection."""
@@ -475,14 +491,20 @@ class TestGeminiFallback:
 
                     assert result == "Fallback response"
 
-    def test_gemini_fallback_model_mapping(self, gemini_agent):
-        """Test that Gemini models are mapped correctly to OpenRouter."""
-        assert "gemini-3.1-pro-preview" in GeminiAgent.OPENROUTER_MODEL_MAP
-        assert (
-            GeminiAgent.OPENROUTER_MODEL_MAP["gemini-3.1-pro-preview"]
-            == "google/gemini-3.1-pro-preview"
-        )
-        assert "gemini-1.5-pro" in GeminiAgent.OPENROUTER_MODEL_MAP
+    def test_gemini_fallback_model_mapping(self):
+        """Gemini models resolve to an OpenRouter slug through the catalog.
+
+        The hand-written OPENROUTER_MODEL_MAP is gone (frontier-model-
+        refresh, 2026-09-04); assert the behaviour it used to provide
+        rather than the dict's contents.
+        """
+        for model in ("gemini-3.1-pro-preview", "gemini-1.5-pro"):
+            agent = GeminiAgent(api_key="test-key", model=model)
+            assert agent.get_fallback_model() == "google/gemini-3.1-pro-preview", model
+        # The catalog is tier-aware where the old hand map was not: a flash
+        # spelling upgrades to the flash tier rather than over-paying for Pro.
+        agent = GeminiAgent(api_key="test-key", model="gemini-2.0-flash")
+        assert agent.get_fallback_model() == "google/gemini-3.8-flash"
 
     def test_gemini_quota_keyword_detection(self, gemini_agent):
         """Test Gemini quota error detection."""
