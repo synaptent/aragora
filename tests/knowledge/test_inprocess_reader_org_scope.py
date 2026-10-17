@@ -280,9 +280,7 @@ class TestQueryEngineChunkScope:
 def default_db(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[Path]:
     """Point the integration's default fact store at a temporary database.
 
-    The module's asyncio lock binds to the first event loop that waits on it,
-    so each test gets a fresh one; one worker keeps queued jobs from
-    contending for it from several threads at once.
+    One worker runs queued jobs in order.
     """
     db_path = tmp_path / "knowledge.db"
     executor = ThreadPoolExecutor(max_workers=1)
@@ -290,7 +288,6 @@ def default_db(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[Path
     monkeypatch.setattr(integration, "_should_use_knowledge_mound", lambda: False)
     monkeypatch.setattr(integration, "_should_use_weaviate", lambda: False)
     monkeypatch.setattr(integration, "_pipelines", {})
-    monkeypatch.setattr(integration, "_pipeline_lock", asyncio.Lock())
     monkeypatch.setattr(integration, "_executor", executor)
     yield db_path
     executor.shutdown(wait=True)
