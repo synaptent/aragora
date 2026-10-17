@@ -13,6 +13,9 @@ from aragora.pipeline.execution_mode import ExecutionMode
 from aragora.pipeline.plan_store import PlanStore
 from aragora.server.fastapi import create_app
 from aragora.server.fastapi.dependencies.auth import require_authenticated
+from aragora.tenancy.record_scope import OrgScope, require_org_scope_fastapi
+
+_ORG = "org-1"
 
 
 def _make_run(
@@ -61,12 +64,15 @@ def _override_auth(client: TestClient, permissions: set[str]) -> None:
 
     auth_ctx = AuthorizationContext(
         user_id="user-1",
-        org_id="org-1",
+        org_id=_ORG,
         workspace_id="ws-1",
         roles={"admin"},
         permissions=permissions,
     )
     client.app.dependency_overrides[require_authenticated] = lambda: auth_ctx
+    client.app.dependency_overrides[require_org_scope_fastapi] = lambda: OrgScope(
+        org_id=_ORG, user_id="user-1", role="admin"
+    )
 
 
 def test_list_runs_route_requires_auth(client) -> None:
@@ -85,8 +91,11 @@ def test_list_runs_route_is_registered(client) -> None:
             receipt_id="receipt-fastapi",
             safety_mode=ExecutionMode.INTERACTIVE.value,
             stage_events=[RunStageEvent.create(BackboneStage.PLAN, status="completed")],
-        )
+        ),
+        org_id=_ORG,
     )
+    plan_store.create_run(_make_run("run-other-org", status="plan_ready"), org_id="org-2")
+    plan_store.create_run(_make_run("run-unowned", status="plan_ready"))
 
     _override_auth(client, {"orchestration:read"})
     response = client.get("/api/runs")
@@ -127,7 +136,8 @@ def test_get_run_route_is_registered(client) -> None:
             "run-fastapi-detail",
             status="execution_started",
             stage_events=[RunStageEvent.create(BackboneStage.EXECUTION, status="running")],
-        )
+        ),
+        org_id=_ORG,
     )
 
     _override_auth(client, {"orchestration:read"})
@@ -152,6 +162,43 @@ def test_get_run_route_is_registered(client) -> None:
             "created_at": None,
         }
     }
+
+
+def test_get_run_route_hides_other_org_and_unowned_runs(client) -> None:
+    plan_store = client.app.state.context["plan_store"]
+    plan_store.create_run(_make_run("run-other-org", status="plan_ready"), org_id="org-2")
+    plan_store.create_run(_make_run("run-unowned", status="plan_ready"))
+
+    _override_auth(client, {"orchestration:read"})
+    missing = client.get("/api/runs/run-missing")
+    other = client.get("/api/runs/run-other-org")
+    unowned = client.get("/api/runs/run-unowned")
+    client.app.dependency_overrides.clear()
+
+    assert missing.status_code == other.status_code == unowned.status_code == 404
+    assert other.json() == unowned.json() == missing.json()
+    assert missing.json()["code"] == "not_found"
+
+
+def test_runs_routes_require_org(client, monkeypatch: pytest.MonkeyPatch) -> None:
+    from aragora.rbac.models import AuthorizationContext
+
+    no_org = AuthorizationContext(
+        user_id="user-1", org_id=None, roles={"admin"}, permissions={"orchestration:read"}
+    )
+
+    async def _no_org_auth_context(request: Any) -> AuthorizationContext:
+        return no_org
+
+    monkeypatch.setattr(
+        "aragora.server.fastapi.dependencies.auth.get_auth_context", _no_org_auth_context
+    )
+    client.app.dependency_overrides[require_authenticated] = lambda: no_org
+    response = client.get("/api/runs")
+    client.app.dependency_overrides.clear()
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "org_required"
 
 
 def test_runs_routes_are_exposed_in_openapi(client) -> None:

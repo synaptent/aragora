@@ -65,7 +65,7 @@ print(__version__)  # "2.11.1"
 
 ### v2.x.x -> v2.11.1 (Minor Upgrade; Patch from v2.11.0)
 
-No server API breaking changes between v2.x releases. Behavioral changes are listed per release in the [Breaking Change Summary](#breaking-change-summary): v2.10.0 never mints a `DecisionReceipt` verdict from zero evidence (#9306), and v2.11.0 changes Gauntlet CLI exit codes, receipt-export authentication, agent-name validation and some SDK retry/stream behavior. v2.10.0 reached PyPI on 2026-09-25, so an upgrade from 2.9.x picks up both sets. SDK consumers should also read `sdk/python/BREAKING_CHANGES.md` and `sdk/typescript/BREAKING_CHANGES.md`: both SDKs removed methods whose routes no server dispatched. Standard upgrade:
+The CHANGELOG records no server route removal from v2.0.0 through v2.11.1, but some responses change. Behavioral changes are listed per release in the [Breaking Change Summary](#breaking-change-summary): v2.10.0 never mints a `DecisionReceipt` verdict from zero evidence (#9306), and v2.11.0 changes Gauntlet CLI exit codes, receipt-export authentication, agent-name validation and some SDK retry/stream behavior. v2.10.0 reached PyPI on 2026-09-25, so an upgrade from 2.9.x picks up both sets. SDK consumers should also read `sdk/python/BREAKING_CHANGES.md` and `sdk/typescript/BREAKING_CHANGES.md`: both SDKs removed methods whose routes no server dispatched. Standard upgrade:
 
 ```bash
 pip install --upgrade aragora==2.11.1

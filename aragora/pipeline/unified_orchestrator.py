@@ -180,7 +180,12 @@ class UnifiedOrchestrator:
             self._backbone_runtime = BackboneRuntime()
         return self._backbone_runtime
 
-    def _create_backbone_run(self, result: OrchestratorResult, cfg: OrchestratorConfig) -> None:
+    def _create_backbone_run(
+        self,
+        result: OrchestratorResult,
+        cfg: OrchestratorConfig,
+        owner: tuple[str | None, str | None] | None = None,
+    ) -> None:
         intake = IntakeBundle(
             source_kind="unified_orchestrator",
             raw_intent=result.prompt,
@@ -208,7 +213,8 @@ class UnifiedOrchestrator:
                 details={"prompt_length": len(result.prompt), "domain": cfg.domain or "general"},
             )
         )
-        self.backbone_runtime.create_run(run)
+        org_id, created_by = owner or (None, None)
+        self.backbone_runtime.create_run(run, org_id=org_id, created_by=created_by)
 
     def _append_backbone_event(
         self,
@@ -313,6 +319,8 @@ class UnifiedOrchestrator:
         config: OrchestratorConfig | None = None,
         agents: list[Any] | None = None,
         approval_callback: Any | None = None,
+        *,
+        owner: tuple[str | None, str | None] | None = None,
     ) -> OrchestratorResult:
         """Execute the full pipeline from prompt to outcome.
 
@@ -322,6 +330,9 @@ class UnifiedOrchestrator:
             agents: Pre-selected agents for debate (optional).
             approval_callback: Called when human approval is needed.
                 Signature: async (stage: str, artifact: Any) -> bool
+            owner: ``(org_id, created_by)`` of the authenticated caller, recorded
+                on the backbone run. Without it the run has no owner and org-scoped
+                run reads do not return it.
 
         Returns:
             OrchestratorResult with outputs from each stage.
@@ -330,7 +341,7 @@ class UnifiedOrchestrator:
         result = OrchestratorResult(run_id=str(uuid.uuid4()), prompt=prompt)
         start = time.monotonic()
         try:
-            self._create_backbone_run(result, cfg)
+            self._create_backbone_run(result, cfg, owner)
         except Exception:  # noqa: BLE001 — injected backbone_runtime
             logger.debug("Backbone run initialization failed", exc_info=True)
 

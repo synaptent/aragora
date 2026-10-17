@@ -1,6 +1,7 @@
 """Runs endpoints (FastAPI).
 
-Provides read-only access to persisted backbone run ledgers:
+Provides read-only access to persisted backbone run ledgers owned by the
+caller's org:
 - GET /api/runs
 - GET /api/runs/{run_id}
 """
@@ -15,6 +16,11 @@ from pydantic import BaseModel, Field
 from aragora.rbac.models import AuthorizationContext
 from aragora.server.handlers.governance.runs import handle_run_detail, handle_runs_list
 from aragora.server.fastapi.dependencies.auth import require_permission
+from aragora.tenancy.record_scope import (
+    OrgScope,
+    record_not_found_error,
+    require_org_scope_fastapi,
+)
 
 router = APIRouter(prefix="/api", tags=["Runs"])
 _RUNS_READ_PERMISSION = "orchestration:read"
@@ -92,13 +98,15 @@ async def list_runs(
     limit: int = Query(50, ge=1, le=100, description="Maximum results to return"),
     offset: int = Query(0, ge=0, description="Number of results to skip"),
     auth: AuthorizationContext = Depends(require_permission(_RUNS_READ_PERMISSION)),
+    scope: OrgScope = Depends(require_org_scope_fastapi),
     store: Any = Depends(get_runs_store),
 ) -> RunListResponse:
-    """List persisted backbone runs. Requires `orchestration:read`."""
+    """List the caller org's persisted backbone runs. Requires `orchestration:read`."""
     del auth, request  # request is kept for route signature parity with other route modules
     payload = _unwrap_handler_result(
         handle_runs_list(
             {"status": status, "limit": limit, "offset": offset},
+            org_id=scope.org_id,
             store=store,
         )
     )
@@ -109,11 +117,15 @@ async def list_runs(
 async def get_run(
     run_id: str,
     auth: AuthorizationContext = Depends(require_permission(_RUNS_READ_PERMISSION)),
+    scope: OrgScope = Depends(require_org_scope_fastapi),
     store: Any = Depends(get_runs_store),
 ) -> RunDetailResponse:
-    """Fetch one persisted backbone run. Requires `orchestration:read`."""
+    """Fetch one persisted backbone run of the caller's org. Requires `orchestration:read`."""
     del auth
-    payload = _unwrap_handler_result(handle_run_detail(run_id, store=store))
+    result = handle_run_detail(run_id, org_id=scope.org_id, store=store)
+    if getattr(result, "status_code", 200) == 404:
+        raise record_not_found_error("Run")
+    payload = _unwrap_handler_result(result)
     return RunDetailResponse(**payload)
 
 

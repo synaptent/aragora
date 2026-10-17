@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from aragora.billing.auth.context import UserAuthContext
+from aragora.pipeline.plan_store import PlanStore
+from aragora.pipeline.unified_orchestrator import UnifiedOrchestrator
 from aragora.server.handlers.canvas_pipeline import CanvasPipelineHandler, _pipeline_objects
 
 
@@ -125,3 +129,35 @@ class TestFromBraindumpUnifiedOrchestrator:
             assert body["ideas_parsed"] == 1
             assert body["unified_orchestrator"]["succeeded"] is False
             assert "orchestrator unavailable" in body["unified_orchestrator"]["errors"][0]
+
+    @pytest.mark.parametrize("org_id", ["org-a", None])
+    async def test_route_records_the_callers_org_on_the_backbone_run(
+        self, handler: CanvasPipelineHandler, monkeypatch, tmp_path, org_id
+    ):
+        store = PlanStore(db_path=str(tmp_path / "runs.db"))
+        monkeypatch.setattr("aragora.pipeline.plan_store.get_plan_store", lambda: store)
+        user = UserAuthContext(authenticated=True, user_id="user-a1", org_id=org_id)
+        monkeypatch.setattr("aragora.billing.jwt_auth.extract_user_from_request", lambda *a: user)
+        # Without research/debate components: only the owner reaching the run is under test.
+        bare = UnifiedOrchestrator.run
+        monkeypatch.setattr(
+            UnifiedOrchestrator, "run", lambda s, *a, **k: bare(UnifiedOrchestrator(), *a, **k)
+        )
+        body = {"text": "raw brain dump", "use_unified_orchestrator": True, "org_id": "org-b"}
+
+        with (
+            patch("aragora.pipeline.brain_dump_parser.BrainDumpParser") as MockParser,
+            patch("aragora.pipeline.idea_to_execution.IdeaToExecutionPipeline") as MockPipeline,
+            patch("aragora.server.handlers.canvas_pipeline._get_store"),
+            patch("aragora.knowledge.mound.get_knowledge_mound", side_effect=RuntimeError),
+        ):
+            MockParser.return_value.parse.return_value = ["idea 1"]
+            MockPipeline.return_value.from_ideas.return_value = _mock_pipeline_result()
+            request = SimpleNamespace(headers={}, _body=json.dumps(body).encode())
+            path = "/api/v1/canvas/pipeline/from-braindump"
+            result = await handler.handle_post(path, {}, request)
+
+        run_id = _body(result)["unified_orchestrator"]["run_id"]
+        assert store.get_run(run_id) is not None
+        assert [r.run_id for r in store.list_runs_for_org("org-a")] == ([run_id] if org_id else [])
+        assert store.list_runs_for_org("org-b") == []

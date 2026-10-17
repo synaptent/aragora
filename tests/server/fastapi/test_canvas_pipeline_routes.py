@@ -195,6 +195,26 @@ class TestPipelineCreation:
         mock_orchestrator.assert_awaited_once()
         mock_from_brain_dump.assert_awaited_once()
 
+    async def test_from_braindump_runs_the_orchestrator_as_the_callers_org(
+        self, mock_pipeline_store, sample_pipeline_result
+    ):
+        from aragora.rbac.models import AuthorizationContext
+        from aragora.server.fastapi.routes import canvas_pipeline as routes
+
+        handler_cls = "aragora.server.handlers.canvas_pipeline.CanvasPipelineHandler"
+        pipeline_cls = "aragora.pipeline.idea_to_execution.IdeaToExecutionPipeline"
+        orchestrate = AsyncMock(return_value=({"enabled": True, "run_id": "run-a"}, ""))
+        brain_dump = AsyncMock(return_value=sample_pipeline_result)
+        with (
+            patch(f"{handler_cls}._run_unified_orchestrator", new=orchestrate),
+            patch(f"{pipeline_cls}.from_brain_dump", new=brain_dump),
+        ):
+            body = routes.FromBraindumpRequest(text="Improve it", use_unified_orchestrator=True)
+            auth = AuthorizationContext(user_id="user-a1", org_id="org-a")
+            await routes.create_from_braindump(body, auth=auth)
+
+        assert orchestrate.await_args.kwargs["owner"] == ("org-a", "user-a1")
+
     @pytest.mark.usefixtures("_bypass_auth")
     def test_from_debate_requires_cartographer_data(self, client):
         """from-debate requires cartographer_data field."""

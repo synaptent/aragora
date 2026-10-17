@@ -13,6 +13,7 @@ Tests the ImplementationOperationsMixin which provides:
 from __future__ import annotations
 
 import json
+import sqlite3
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -21,6 +22,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from aragora.billing.auth.context import UserAuthContext
 from aragora.pipeline.backbone_errors import BackbonePersistenceError, FAIL_CLOSED_BACKBONE_MESSAGE
 from aragora.pipeline.execution_mode import ExecutionMode
 from aragora.server.handlers.debates.implementation import (
@@ -29,6 +31,9 @@ from aragora.server.handlers.debates.implementation import (
     _persist_plan,
     _persist_receipt,
 )
+from aragora.tenancy.record_scope import not_found_body
+
+pytestmark = pytest.mark.usefixtures("caller_owns_source_debate")
 
 
 # =============================================================================
@@ -515,7 +520,7 @@ class TestCreateDecisionIntegrityPlanOnly:
         ):
             handler._create_decision_integrity(None, "debate-001")
 
-        mock_persist_plan.assert_called_once_with(mock_package.plan, "debate-001")
+        mock_persist_plan.assert_called_once_with(mock_package.plan, "debate-001", (None, None))
 
     def test_custom_payload_options(self, handler, mock_storage, mock_package):
         """Payload options are forwarded to build_decision_integrity_package."""
@@ -939,6 +944,130 @@ class TestWorkflowBackbone:
         assert status == 503
         assert body["error"] == FAIL_CLOSED_BACKBONE_MESSAGE
 
+    def test_execute_workflow_refused_execution_returns_plan_not_found(
+        self, handler, mock_storage, mock_package
+    ):
+        handler._body = {"execution_mode": "workflow_execute"}
+
+        from aragora.pipeline.decision_plan import ApprovalMode, DecisionPlan, PlanStatus
+        from aragora.pipeline.decision_plan.core import ApprovalRecord
+        from aragora.pipeline.execution_ownership import (
+            EXECUTION_SCHEDULER_NOT_MEMBER,
+            ExecutionNotAuthorizedError,
+        )
+
+        plan = DecisionPlan(
+            debate_id="debate-001",
+            task="Should we use microservices?",
+            approval_mode=ApprovalMode.NEVER,
+            status=PlanStatus.APPROVED,
+            approval_record=ApprovalRecord(approved=True, approver_id="system"),
+        )
+
+        with (
+            patch("aragora.server.handlers.debates.implementation.run_async") as mock_run,
+            patch(
+                "aragora.server.handlers.debates.implementation._persist_receipt",
+                return_value=None,
+            ),
+            patch(
+                "aragora.pipeline.decision_plan.DecisionPlanFactory.from_debate_result",
+                return_value=plan,
+            ),
+            patch(
+                "aragora.server.handlers.debates.implementation.ensure_decision_plan_backbone_run",
+                return_value="run-workflow-refused",
+            ),
+            patch(
+                "aragora.server.handlers.debates.implementation.sync_decision_plan_backbone_receipt",
+                return_value=True,
+            ),
+            patch.dict("os.environ", {"ARAGORA_ENABLE_IMPLEMENTATION_EXECUTION": "1"}),
+        ):
+            mock_run.side_effect = [
+                mock_package,
+                ExecutionNotAuthorizedError(EXECUTION_SCHEDULER_NOT_MEMBER, "not a member"),
+            ]
+            result = handler._create_decision_integrity(None, "debate-001")
+
+        body, status = parse_result(result)
+        assert status == 404
+        assert body == not_found_body("Plan")
+
+    @pytest.mark.parametrize(
+        ("org_id", "expected_owner"),
+        [("org-a", ("org-a", "user-1")), (None, (None, None))],
+    )
+    def test_workflow_plan_is_stored_with_the_caller_as_owner(
+        self, handler, mock_storage, mock_package, org_id, expected_owner
+    ):
+        handler._body = {"execution_mode": "workflow"}
+        handler.get_current_user = lambda h: MagicMock(org_id=org_id, user_id="user-1")
+
+        from aragora.pipeline.decision_plan import ApprovalMode, DecisionPlan
+
+        plan = DecisionPlan(debate_id="debate-001", task="t", approval_mode=ApprovalMode.NEVER)
+        stored_owners = []
+
+        with (
+            patch("aragora.server.handlers.debates.implementation.run_async") as mock_run,
+            patch(
+                "aragora.server.handlers.debates.implementation._persist_receipt",
+                return_value=None,
+            ),
+            patch(
+                "aragora.pipeline.decision_plan.DecisionPlanFactory.from_debate_result",
+                return_value=plan,
+            ),
+            patch(
+                "aragora.server.handlers.debates.implementation.ensure_decision_plan_backbone_run",
+                return_value="run-workflow-owner",
+            ),
+            patch(
+                "aragora.server.handlers.debates.implementation.sync_decision_plan_backbone_receipt",
+                return_value=True,
+            ),
+            patch(
+                "aragora.pipeline.executor.store_plan",
+                side_effect=lambda p: stored_owners.append((p.org_id, p.created_by)),
+            ),
+        ):
+            mock_run.side_effect = [mock_package]
+            result = handler._create_decision_integrity(None, "debate-001")
+
+        assert parse_result(result)[1] == 200
+        assert stored_owners == [expected_owner]
+
+    @pytest.mark.parametrize("body", [{}, {"execution_engine": "computer_use"}])
+    def test_non_workflow_plan_is_stored_with_the_caller_as_owner(
+        self, handler, mock_storage, mock_package, body
+    ):
+        handler._body = body
+        handler.get_current_user = lambda h: MagicMock(org_id="org-a", user_id="user-1")
+
+        from aragora.pipeline.decision_plan import DecisionPlan
+
+        stored_owners = []
+        impl = "aragora.server.handlers.debates.implementation"
+        with (
+            patch(f"{impl}.run_async", return_value=mock_package),
+            patch(f"{impl}._persist_receipt", return_value=None),
+            patch(
+                "aragora.pipeline.decision_plan.DecisionPlanFactory.from_implement_plan",
+                side_effect=lambda *a, **k: DecisionPlan(debate_id="debate-001", task="t"),
+            ),
+            patch(f"{impl}.ensure_decision_plan_backbone_run", return_value="run-owner"),
+            patch(f"{impl}.sync_decision_plan_backbone_receipt", return_value=True),
+            patch(
+                "aragora.pipeline.executor.store_plan",
+                side_effect=lambda p: stored_owners.append((p.org_id, p.created_by)),
+            ),
+        ):
+            result = handler._create_decision_integrity(None, "debate-001")
+
+        assert parse_result(result)[1] == 200
+        assert stored_owners == [("org-a", "user-1")]
+
 
 # =============================================================================
 # Tests for execute mode
@@ -1125,6 +1254,7 @@ class TestExecuteMode:
     ):
         """Approved computer-use execution queues through the backbone wrapper."""
         handler._body = {"execution_mode": "execute", "execution_engine": "computer_use"}
+        handler.get_current_user = lambda h: MagicMock(org_id="org-a", user_id="user-1")
 
         from aragora.autonomous.loop_enhancement import ApprovalStatus
 
@@ -1200,6 +1330,8 @@ class TestExecuteMode:
         assert body["execution"]["progress"]["total_steps"] >= 0
         assert mock_executor_cls.called is True
         assert mock_execute.call_args.kwargs["safety_mode"] == ExecutionMode.INTERACTIVE
+        plan, kw = mock_execute.call_args.args[0], mock_execute.call_args.kwargs
+        assert (kw.get("org_id"), kw.get("created_by"), plan.org_id) == ("org-a", "user-1", "org-a")
 
     def test_execute_approved_computer_use_backbone_failure_returns_503(
         self, handler, mock_storage, mock_package, mock_approval_request
@@ -1716,3 +1848,103 @@ class TestEndpointIntegration:
 
         assert result is not None
         assert result.status_code == 405
+
+
+# =============================================================================
+# Source debate ownership, against a real SQLite DebateStorage
+# =============================================================================
+
+MODES = [{}, {"execution_engine": "computer_use"}, {"execution_mode": "workflow"}]
+ORG_B_USER = UserAuthContext(authenticated=True, user_id="user-b", org_id="org-b")
+
+
+def _debate_storage(tmp_path, owner, saved=True):
+    from aragora.storage.debate_storage import DebateStorage
+
+    storage = DebateStorage(str(tmp_path / "debates.db"))
+    if saved:
+        storage.save_dict({"id": "debate-a", "task": "Org A question", "status": "done"}, owner)
+    return storage
+
+
+def _post(storage, body, caller=ORG_B_USER):
+    """POST decision-integrity for debate-a; returns (result, storage call order, sinks)."""
+    from aragora.pipeline.decision_plan import ApprovalMode, DecisionPlan
+
+    order = MagicMock()
+    for name in ("get_org_id", "get_debate"):
+        if hasattr(storage, name):
+            order.attach_mock(MagicMock(wraps=getattr(storage, name)), name)
+            setattr(storage, name, getattr(order, name))
+    package = MagicMock(context_snapshot=None, **{"to_dict.return_value": {"debate_id": "a"}})
+    sinks = {
+        "run_async": MagicMock(side_effect=lambda coro: coro.close() or package),
+        "_persist_receipt": MagicMock(return_value="r-1"),
+        "ensure_decision_plan_backbone_run": MagicMock(return_value="run-1"),
+        "sync_decision_plan_backbone_receipt": MagicMock(return_value=True),
+        "execute_decision_plan_with_backbone": MagicMock(),
+    }
+    store_plan = MagicMock()
+
+    def new_plan(*args, **kwargs):
+        return DecisionPlan(debate_id="debate-a", task="t", approval_mode=ApprovalMode.NEVER)
+
+    factory = "aragora.pipeline.decision_plan.DecisionPlanFactory"
+    h = MockDebatesHandler(ctx={"storage": storage}, storage=storage, body=dict(body))
+    h.get_current_user = lambda handler: caller if caller.is_authenticated else None
+    with (
+        patch.multiple("aragora.server.handlers.debates.implementation", **sinks),
+        patch("aragora.pipeline.executor.store_plan", store_plan),
+        patch(f"{factory}.from_implement_plan", side_effect=new_plan),
+        patch(f"{factory}.from_debate_result", side_effect=new_plan),
+        patch("aragora.billing.jwt_auth.extract_user_from_request", return_value=caller),
+    ):
+        result = h._create_decision_integrity(None, "debate-a")
+    return result, [c[0] for c in order.mock_calls], {**sinks, "store_plan": store_plan}
+
+
+class TestSourceDebateOwner:
+    """Only a debate recorded as the caller org's is read and packaged; others look missing."""
+
+    @pytest.fixture
+    def caller_owns_source_debate(self):
+        """Run the real owner check instead of the module-wide stand-in."""
+
+    @pytest.mark.parametrize("body", MODES)
+    @pytest.mark.parametrize(
+        "case", ["other_org", "unowned", "missing", "lookup_error", "no_owner_lookup"]
+    )
+    def test_refused_with_the_missing_debate_404_and_nothing_built(self, tmp_path, case, body):
+        owner = {"other_org": "org-a", "unowned": None}.get(case, "org-b")
+        storage = _debate_storage(tmp_path, owner, saved=case != "missing")
+        if case == "lookup_error":
+            storage.get_org_id = MagicMock(side_effect=sqlite3.OperationalError("locked"))
+        if case == "no_owner_lookup":
+            storage = MagicMock(spec=["get_debate"], get_debate=storage.get_debate)
+
+        result, order, sinks = _post(storage, body)
+
+        assert (result.status_code, json.loads(result.body)) == (404, not_found_body("Debate"))
+        assert "get_debate" not in order
+        assert {name: sink.call_count for name, sink in sinks.items()} == dict.fromkeys(sinks, 0)
+
+    @pytest.mark.parametrize(
+        ("caller", "status"),
+        [(UserAuthContext(authenticated=True, user_id="user-c"), 403), (UserAuthContext(), 401)],
+    )
+    def test_caller_without_an_org_is_refused_before_any_read(self, tmp_path, caller, status):
+        result, order, sinks = _post(_debate_storage(tmp_path, "org-b"), {}, caller)
+
+        assert (result.status_code, order) == (status, [])
+        assert not any(sink.called for sink in sinks.values())
+
+    @pytest.mark.parametrize("body", MODES)
+    def test_same_org_debate_is_packaged_with_caller_owned_plans(self, tmp_path, body):
+        result, order, sinks = _post(_debate_storage(tmp_path, "org-b"), body)
+
+        assert result.status_code == 200
+        assert order[:2] == ["get_org_id", "get_debate"]
+        sinks["_persist_receipt"].assert_called_once()
+        for sink in ("store_plan", "sync_decision_plan_backbone_receipt"):
+            plans = [c.args[0] for c in sinks[sink].call_args_list]
+            assert plans and {(p.org_id, p.created_by) for p in plans} == {("org-b", "user-b")}

@@ -498,6 +498,7 @@ class CanvasPipelineHandler:
         self,
         prompt: str,
         request_data: dict[str, Any],
+        owner: tuple[str | None, str | None] | None = None,
     ) -> tuple[dict[str, Any], str]:
         """Run UnifiedOrchestrator and return summary + context hint."""
         from aragora.debate.provider_diversity import ProviderDiversityFilter
@@ -572,7 +573,7 @@ class CanvasPipelineHandler:
             knowledge_mound=km,
         )
 
-        result = await orchestrator.run(prompt, config=config)
+        result = await orchestrator.run(prompt, config=config, owner=owner)
 
         context_block = ""
         if result.extended_input is not None and hasattr(result.extended_input, "to_context_block"):
@@ -703,6 +704,15 @@ class CanvasPipelineHandler:
             logger.debug("Permission check unavailable: %s", e)
             return None
 
+    @staticmethod
+    def _caller_owner(handler: Any) -> tuple[str | None, str | None]:
+        """Return the authenticated caller's ``(org_id, user_id)``, never the payload's."""
+        from aragora.billing.jwt_auth import extract_user_from_request
+        from aragora.pipeline.execution_ownership import resolve_execution_owner
+
+        user_ctx = extract_user_from_request(handler, None)
+        return resolve_execution_owner(user_ctx if user_ctx.is_authenticated else None)
+
     @handle_errors("canvas pipeline operation")
     def handle_post(self, path: str, query_params: dict[str, Any], handler: Any) -> Any:
         """Dispatch POST requests to the appropriate handler method."""
@@ -710,7 +720,9 @@ class CanvasPipelineHandler:
         route_map = {
             "/from-debate": self.handle_from_debate,
             "/from-ideas": self.handle_from_ideas,
-            "/from-braindump": self.handle_from_braindump,
+            "/from-braindump": lambda body: self.handle_from_braindump(
+                body, owner=self._caller_owner(handler)
+            ),
             "/from-template": self.handle_from_template,
             "/pipeline/demo": self.handle_demo,
             "/pipeline/advance": self.handle_advance,
@@ -1024,7 +1036,11 @@ class CanvasPipelineHandler:
             return error_response("Pipeline execution failed", 500)
 
     @handle_errors("brain dump parsing")
-    async def handle_from_braindump(self, request_data: dict[str, Any]) -> HandlerResult:
+    async def handle_from_braindump(
+        self,
+        request_data: dict[str, Any],
+        owner: tuple[str | None, str | None] | None = None,
+    ) -> HandlerResult:
         """POST /api/v1/canvas/pipeline/from-braindump
 
         Parse unstructured brain dump text into ideas, then run the pipeline.
@@ -1055,6 +1071,7 @@ class CanvasPipelineHandler:
                 orchestrator_summary, context_block = await self._run_unified_orchestrator(
                     text,
                     request_data,
+                    owner=owner,
                 )
                 if context_block:
                     parser_input = f"{text}\n\n{context_block}"

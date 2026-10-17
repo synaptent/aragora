@@ -30,6 +30,8 @@ from aragora.pipeline.decision_integrity import (
     capture_context_snapshot,
 )
 
+pytestmark = pytest.mark.usefixtures("caller_owns_source_debate")
+
 
 # ---------------------------------------------------------------------------
 # Fixtures

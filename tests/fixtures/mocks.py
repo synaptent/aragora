@@ -1,8 +1,23 @@
 """Mock object fixtures for storage, ELO, agents, and environment (pytest plugin)."""
 
-from unittest.mock import Mock
+from collections.abc import Iterator
+from unittest.mock import Mock, patch
 
 import pytest
+
+
+@pytest.fixture
+def caller_owns_source_debate() -> Iterator[None]:
+    """Let decision-integrity route tests act as an org member who owns the debate."""
+    from aragora.tenancy.record_scope import OrgScope
+
+    scope = OrgScope(org_id="org-test", user_id="test-user", role="member")
+    with patch.multiple(
+        "aragora.server.handlers.debates.implementation",
+        require_org_scope=Mock(return_value=(scope, None)),
+        _source_debate_owned=Mock(return_value=True),
+    ):
+        yield
 
 
 @pytest.fixture

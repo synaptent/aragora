@@ -312,8 +312,9 @@ class AuthChecksMixin:
             "/api/v1/consensus/active",
             "/api/pipeline/plans",
             "/api/v1/pipeline/plans",
-            "/api/plans",
-            "/api/v1/plans",
+            # LOCKED: plans are org-owned records
+            # "/api/plans",
+            # "/api/v1/plans",
             # Metrics (public dashboard monitoring)
             "/api/metrics",
             "/api/v1/metrics",
@@ -411,8 +412,9 @@ class AuthChecksMixin:
         # "/api/v1/metrics/",
         "/api/breakpoints/",  # Public breakpoints status
         "/api/v1/breakpoints/",  # Public breakpoints status (v1)
-        "/api/plans/",  # Public decision plans
-        "/api/v1/plans/",  # Public decision plans (v1)
+        # LOCKED: plans are org-owned records
+        # "/api/plans/",
+        # "/api/v1/plans/",
         # LOCKED: leaks server paths
         # "/api/nomic/",
         # "/api/v1/nomic/",

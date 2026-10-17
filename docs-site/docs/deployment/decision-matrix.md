@@ -356,5 +356,5 @@ az containerapp create \
 
 - [Scaling Runbook](../operations/scaling)
 - [Database Migration Runbook](../operations/database-migration)
-- [Incident Response Runbook](../operations/incident-response)
+- [Incident Response Runbook](../operations/incident-response-procedures)
 - [Monitoring Setup Runbook](../operations/monitoring-setup)

@@ -25,6 +25,38 @@ from aragora.pipeline.decision_plan.core import (
 from aragora.pipeline.plan_store import PlanStore
 from aragora.server.handlers.plans import PlansHandler
 
+TEST_ORG = "test-org-001"
+NOT_FOUND_BODY = {"error": "Plan not found", "code": "not_found"}
+
+
+def _owned_plan(**kwargs: Any) -> DecisionPlan:
+    kwargs.setdefault("org_id", TEST_ORG)
+    kwargs.setdefault("created_by", "test-user-001")
+    return DecisionPlan(**kwargs)
+
+
+@pytest.fixture(autouse=True)
+def _org_scoped_user(request, monkeypatch):
+    """Authenticate requests as test-user-001 of test-org-001 unless marked no_auto_auth."""
+    if request.node.get_closest_marker("no_auto_auth"):
+        yield None
+        return
+    from aragora.billing.auth.context import UserAuthContext
+
+    user = UserAuthContext(
+        authenticated=True,
+        user_id="test-user-001",
+        email="test@example.com",
+        org_id=TEST_ORG,
+        role="admin",
+        token_type="access",
+    )
+    monkeypatch.setattr(
+        "aragora.billing.jwt_auth.extract_user_from_request",
+        lambda handler, user_store=None: user,
+    )
+    yield user
+
 
 @pytest.fixture
 def tmp_store(tmp_path: Path) -> PlanStore:
@@ -133,8 +165,8 @@ class TestListPlans:
     def test_list_with_plans(
         self, handler: PlansHandler, tmp_store: PlanStore, mock_handler: MagicMock
     ) -> None:
-        tmp_store.create(DecisionPlan(id="dp-1", debate_id="d1", task="Task 1"))
-        tmp_store.create(DecisionPlan(id="dp-2", debate_id="d2", task="Task 2"))
+        tmp_store.create(_owned_plan(id="dp-1", debate_id="d1", task="Task 1"))
+        tmp_store.create(_owned_plan(id="dp-2", debate_id="d2", task="Task 2"))
 
         with patch("aragora.server.handlers.plans._get_plan_store", return_value=tmp_store):
             result = handler.handle("/api/v1/plans", {}, mock_handler)
@@ -148,10 +180,10 @@ class TestListPlans:
         self, handler: PlansHandler, tmp_store: PlanStore, mock_handler: MagicMock
     ) -> None:
         tmp_store.create(
-            DecisionPlan(id="dp-a", debate_id="d1", task="T", status=PlanStatus.APPROVED)
+            _owned_plan(id="dp-a", debate_id="d1", task="T", status=PlanStatus.APPROVED)
         )
         tmp_store.create(
-            DecisionPlan(id="dp-b", debate_id="d2", task="T", status=PlanStatus.AWAITING_APPROVAL)
+            _owned_plan(id="dp-b", debate_id="d2", task="T", status=PlanStatus.AWAITING_APPROVAL)
         )
 
         with patch("aragora.server.handlers.plans._get_plan_store", return_value=tmp_store):
@@ -173,8 +205,8 @@ class TestListPlans:
     def test_list_filter_by_debate_id(
         self, handler: PlansHandler, tmp_store: PlanStore, mock_handler: MagicMock
     ) -> None:
-        tmp_store.create(DecisionPlan(id="dp-x", debate_id="target", task="T"))
-        tmp_store.create(DecisionPlan(id="dp-y", debate_id="other", task="T"))
+        tmp_store.create(_owned_plan(id="dp-x", debate_id="target", task="T"))
+        tmp_store.create(_owned_plan(id="dp-y", debate_id="other", task="T"))
 
         with patch("aragora.server.handlers.plans._get_plan_store", return_value=tmp_store):
             result = handler.handle("/api/v1/plans", {"debate_id": "target"}, mock_handler)
@@ -191,7 +223,7 @@ class TestGetPlan:
         self, handler: PlansHandler, tmp_store: PlanStore, mock_handler: MagicMock
     ) -> None:
         tmp_store.create(
-            DecisionPlan(
+            _owned_plan(
                 id="dp-detail",
                 debate_id="d-detail",
                 task="Detailed plan",
@@ -298,7 +330,7 @@ class TestApprovePlan:
 
     def test_approve_plan(self, handler: PlansHandler, tmp_store: PlanStore) -> None:
         tmp_store.create(
-            DecisionPlan(
+            _owned_plan(
                 id="dp-approve-me",
                 debate_id="d1",
                 task="T",
@@ -347,7 +379,7 @@ class TestApprovePlan:
 
     def test_approve_already_approved(self, handler: PlansHandler, tmp_store: PlanStore) -> None:
         tmp_store.create(
-            DecisionPlan(
+            _owned_plan(
                 id="dp-done",
                 debate_id="d1",
                 task="T",
@@ -374,7 +406,7 @@ class TestApprovePlan:
         from aragora.server.handlers.base import error_response
 
         tmp_store.create(
-            DecisionPlan(
+            _owned_plan(
                 id="dp-perm",
                 debate_id="d1",
                 task="T",
@@ -400,7 +432,7 @@ class TestRejectPlan:
 
     def test_reject_plan(self, handler: PlansHandler, tmp_store: PlanStore) -> None:
         tmp_store.create(
-            DecisionPlan(
+            _owned_plan(
                 id="dp-reject-me",
                 debate_id="d1",
                 task="T",
@@ -433,7 +465,7 @@ class TestRejectPlan:
 
     def test_reject_requires_reason(self, handler: PlansHandler, tmp_store: PlanStore) -> None:
         tmp_store.create(
-            DecisionPlan(
+            _owned_plan(
                 id="dp-no-reason",
                 debate_id="d1",
                 task="T",
@@ -481,7 +513,7 @@ class TestExecuteEndpoint:
 
     def test_execute_approved_plan(self, handler: PlansHandler, tmp_store: PlanStore) -> None:
         tmp_store.create(
-            DecisionPlan(
+            _owned_plan(
                 id="dp-exec",
                 debate_id="d1",
                 task="T",
@@ -542,7 +574,7 @@ class TestExecuteEndpoint:
 
     def test_execute_unapproved_plan(self, handler: PlansHandler, tmp_store: PlanStore) -> None:
         tmp_store.create(
-            DecisionPlan(
+            _owned_plan(
                 id="dp-pending",
                 debate_id="d1",
                 task="T",
@@ -567,7 +599,7 @@ class TestExecuteEndpoint:
 
     def test_execute_already_executing(self, handler: PlansHandler, tmp_store: PlanStore) -> None:
         tmp_store.create(
-            DecisionPlan(
+            _owned_plan(
                 id="dp-running",
                 debate_id="d1",
                 task="T",
@@ -592,7 +624,7 @@ class TestExecuteEndpoint:
 
     def test_execute_completed_plan(self, handler: PlansHandler, tmp_store: PlanStore) -> None:
         tmp_store.create(
-            DecisionPlan(
+            _owned_plan(
                 id="dp-done",
                 debate_id="d1",
                 task="T",
@@ -617,7 +649,7 @@ class TestExecuteEndpoint:
 
     def test_execute_with_custom_mode(self, handler: PlansHandler, tmp_store: PlanStore) -> None:
         tmp_store.create(
-            DecisionPlan(
+            _owned_plan(
                 id="dp-hybrid",
                 debate_id="d1",
                 task="T",
@@ -680,7 +712,7 @@ class TestApproveAutoExecute:
 
     def test_approve_with_auto_execute(self, handler: PlansHandler, tmp_store: PlanStore) -> None:
         tmp_store.create(
-            DecisionPlan(
+            _owned_plan(
                 id="dp-auto-exec",
                 debate_id="d1",
                 task="T",
@@ -726,7 +758,7 @@ class TestApproveAutoExecute:
         self, handler: PlansHandler, tmp_store: PlanStore
     ) -> None:
         tmp_store.create(
-            DecisionPlan(
+            _owned_plan(
                 id="dp-no-exec",
                 debate_id="d1",
                 task="T",
@@ -790,3 +822,69 @@ class TestRBACPermissions:
         from aragora.rbac.models import ResourceType
 
         assert ResourceType.PLANS.value == "plans"
+
+
+class TestOrgIsolation:
+    """A real PlanStore only exposes the caller org's plans."""
+
+    def test_list_excludes_other_org_and_unowned_plans(
+        self, handler: PlansHandler, tmp_store: PlanStore, mock_handler: MagicMock
+    ) -> None:
+        tmp_store.create(_owned_plan(id="dp-mine", debate_id="d1", task="Mine"))
+        tmp_store.create(_owned_plan(id="dp-theirs", debate_id="d1", task="T", org_id="org-x"))
+        tmp_store.create(_owned_plan(id="dp-nobody", debate_id="d1", task="T", org_id=None))
+
+        with patch("aragora.server.handlers.plans._get_plan_store", return_value=tmp_store):
+            result = handler.handle("/api/v1/plans", {}, mock_handler)
+
+        data = json.loads(result.body)
+        assert data["total"] == 1
+        assert [p["id"] for p in data["plans"]] == ["dp-mine"]
+
+    @pytest.mark.parametrize("owner", ["org-x", None])
+    def test_get_and_approve_foreign_plan_match_missing(
+        self, handler: PlansHandler, tmp_store: PlanStore, mock_handler: MagicMock, owner
+    ) -> None:
+        tmp_store.create(
+            _owned_plan(
+                id="dp-foreign",
+                debate_id="d1",
+                task="T",
+                status=PlanStatus.AWAITING_APPROVAL,
+                org_id=owner,
+            )
+        )
+
+        with patch("aragora.server.handlers.plans._get_plan_store", return_value=tmp_store):
+            got = handler.handle("/api/v1/plans/dp-foreign", {}, mock_handler)
+            missing = handler.handle("/api/v1/plans/dp-ghost", {}, mock_handler)
+            approved = handler.handle_post(
+                "/api/v1/plans/dp-foreign/approve", {}, _make_mock_handler_with_body({})
+            )
+
+        for result in (got, missing, approved):
+            assert result.status_code == 404
+            assert json.loads(result.body) == NOT_FOUND_BODY
+        assert tmp_store.get("dp-foreign").status == PlanStatus.AWAITING_APPROVAL
+
+    def test_created_plan_is_owned_by_caller(
+        self, handler: PlansHandler, tmp_store: PlanStore
+    ) -> None:
+        mock = _make_mock_handler_with_body({"debate_id": "d-own", "task": "Own"})
+
+        with patch("aragora.server.handlers.plans._get_plan_store", return_value=tmp_store):
+            result = handler.handle_post("/api/v1/plans", {}, mock)
+
+        stored = tmp_store.get(json.loads(result.body)["id"])
+        assert stored.org_id == TEST_ORG
+        assert stored.created_by == "test-user-001"
+
+    @pytest.mark.no_auto_auth
+    def test_anonymous_list_is_unauthorized(
+        self, handler: PlansHandler, tmp_store: PlanStore, mock_handler: MagicMock
+    ) -> None:
+        with patch("aragora.server.handlers.plans._get_plan_store", return_value=tmp_store):
+            result = handler.handle("/api/v1/plans", {}, mock_handler)
+
+        assert result.status_code == 401
+        assert json.loads(result.body)["code"] == "auth_required"

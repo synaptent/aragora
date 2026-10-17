@@ -29,6 +29,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import concurrent.futures
+import functools
 import inspect
 import json
 import logging
@@ -602,11 +603,13 @@ _CODEX_APPROVAL_POLICY_CONFIG = 'approval_policy="never"'
 _CLAUDE_REVIEW_CHECKOUT_ENV = "ARAGORA_CLAUDE_REVIEW_CHECKOUT"
 _CLAUDE_REVIEW_EXPECTED_HEAD_ENV = "ARAGORA_CLAUDE_REVIEW_EXPECTED_HEAD"
 _EXPECTED_HEAD_HINT = f"--claude-review-expected-head / {_CLAUDE_REVIEW_EXPECTED_HEAD_ENV}"
+# An explicit mode: without one, the CLI can start a -p session in "auto" when a server-side
+# flag says so, and _attest_restricted_stream accepts only "default".
 _RESTRICTED_CLAUDE_ARGV = (
     "claude -p --safe-mode --restricted --tools Read,Grep,Glob --disallowedTools "
     "Bash,Edit,Write,NotebookEdit,WebFetch,WebSearch,Task,Agent,Skill --permission-prompts none "
-    "--disable-slash-commands --strict-mcp-config --mcp-config {mcp} --output-format stream-json "
-    "--verbose --include-hook-events"
+    "--permission-mode default --disable-slash-commands --strict-mcp-config --mcp-config {mcp} "
+    "--output-format stream-json --verbose --include-hook-events"
 ).split()
 _RESTRICTED_FILE_TOOLS = frozenset({"Read", "Grep", "Glob"})
 # The CLI lists this session-control tool even under --tools; it touches no files.
@@ -1044,6 +1047,7 @@ class CollectOutcome:
     # access) so a security-relevant gate decision stays deterministic within a
     # single settlement flow even if the process env mutates mid-run.
     tiered_gate: bool = field(default_factory=tiered_merge_gate_enabled)
+    deprioritized_paths: list[str] = field(default_factory=list)
 
     @property
     def counting_families(self) -> list[str]:
@@ -1169,6 +1173,8 @@ class CollectOutcome:
         }
         if self.adjudication is not None:
             payload["adjudication"] = dict(self.adjudication)
+        if self.deprioritized_paths:
+            payload["deprioritized_paths"] = list(self.deprioritized_paths)
         return payload
 
 
@@ -1620,6 +1626,14 @@ def _normalize_preserving_truncation(
     return normalized
 
 
+def _checked_deprioritized_paths(paths: Sequence[str] | None) -> tuple[str, ...]:
+    # splitlines() rejects "" and every line boundary (\r, \x85, \u2028, ...), so no
+    # name can add a line to an evidence comment's disclosure block.
+    if bad := [path for path in paths or () if path.splitlines() != [path]]:
+        raise ValueError(f"deprioritized paths must be non-empty single-line names: {bad}")
+    return tuple(paths or ())
+
+
 def compose_evidence_comment(
     *,
     family: str,
@@ -1631,6 +1645,7 @@ def compose_evidence_comment(
     grounded: bool = True,
     prompt_grounded: bool = False,
     normalized_reviewer_text: str | None = None,
+    deprioritized_paths: Sequence[str] = (),
 ) -> str:
     """Compose an evidence comment the quorum parsers recognize and count.
 
@@ -1670,6 +1685,9 @@ def compose_evidence_comment(
             f"{_REVIEWER_HARNESS_LABEL}: {harness_label}\n"
             f"{_TRANSPORT_GROUNDING_LABEL}: {PROXY_GROUNDING_DISCLOSURE}\n"
         )
+    # No identity or transport parser reads a "Diff budget" label, so counting is unchanged.
+    named = ", ".join(_checked_deprioritized_paths(deprioritized_paths))
+    budget = f"Diff budget: operator-named paths given their diff share last: {named}\n"
     body = _neutralize_reviewer_text(
         _normalize_preserving_truncation(
             reviewer_text, family=family, precomputed=normalized_reviewer_text
@@ -1682,6 +1700,7 @@ def compose_evidence_comment(
         f"Head: {short} ({head_sha}){committed}.\n"
         f"PR: #{pr}.\n"
         f"Model family: {fam}\n"
+        f"{budget if named else ''}"
         f"{transport_disclosure}\n"
         f"{body}\n\n"
         f"dogfood: yes\n"
@@ -1708,7 +1727,41 @@ def _split_unified_diff(diff: str) -> list[str]:
     return segments
 
 
-def _bound_diff_body(diff: str, max_chars: int) -> tuple[str, bool]:
+def _water_fill(lengths: Sequence[int], budget: int) -> list[int]:
+    """Share ``budget`` smallest first, each item's unused share flowing to the rest."""
+    allocations = [0] * len(lengths)
+    remaining_files = len(lengths)
+    for index in sorted(range(len(lengths)), key=lambda i: lengths[i]):
+        take = min(lengths[index], budget // remaining_files)
+        allocations[index] = take
+        budget -= take
+        remaining_files -= 1
+    return allocations
+
+
+def _deprioritized_allocations(segments: list[str], named: set[str], max_chars: int) -> list[int]:
+    # Header lines and one truncation marker per file are reserved up front and the
+    # parts join with no separator, so every header survives and max_chars holds.
+    heads = [len(segment.split("\n", 1)[0]) for segment in segments]
+    budget = max_chars - sum(heads) - len(_PER_FILE_TRUNCATION_MARKER) * len(segments)
+    if budget < 0:
+        raise ValueError("too many changed files to deprioritize paths within the diff cap")
+    allocations = list(heads)
+    for want_named in (False, True):
+        # A segment holds one ``diff --git`` header, so its file list is its path.
+        group = [
+            i for i, s in enumerate(segments) if (_file_list_from_diff(s) in named) is want_named
+        ]
+        extra = _water_fill([len(segments[i]) - heads[i] for i in group], budget)
+        for index, take in zip(group, extra):
+            allocations[index] += take
+        budget -= sum(extra)
+    return allocations
+
+
+def _bound_diff_body(
+    diff: str, max_chars: int, *, deprioritize_paths: Sequence[str] = ()
+) -> tuple[str, bool]:
     """Bound a unified diff to ``max_chars`` without dropping whole files.
 
     A naive ``diff[:max_chars]`` keeps only the files that sort before the budget
@@ -1717,21 +1770,27 @@ def _bound_diff_body(diff: str, max_chars: int) -> tuple[str, bool]:
     absent. Instead the budget is shared across files (smallest first, each
     file's unused budget flowing to the rest) so every changed file contributes
     at least a hunk. Returns ``(text, truncated)``.
+
+    ``deprioritize_paths`` (operator-named changed paths, such as generated files;
+    a renamed file by its new path) split what is left after the other files share
+    the budget by the same rule, so a named file may keep only its header line; a
+    named path missing from the diff raises ``ValueError``.
     """
+    named = set(deprioritize_paths)
+    if named:
+        present = {_file_list_from_diff(s) for s in _split_unified_diff(diff)}
+        missing = [path for path in deprioritize_paths if path not in present]
+        if missing:
+            raise ValueError("deprioritized path(s) not in the PR diff: " + ", ".join(missing))
     if len(diff) <= max_chars:
         return diff, False
     segments = _split_unified_diff(diff)
-    if len(segments) <= 1:
+    if named:
+        allocations = _deprioritized_allocations(segments, named, max_chars)
+    elif len(segments) <= 1:
         return diff[:max_chars].rstrip() + _PER_FILE_TRUNCATION_MARKER, True
-    allocations = [0] * len(segments)
-    remaining_budget = max_chars
-    remaining_files = len(segments)
-    for index in sorted(range(len(segments)), key=lambda i: len(segments[i])):
-        share = remaining_budget // remaining_files if remaining_files else 0
-        take = min(len(segments[index]), share)
-        allocations[index] = take
-        remaining_budget -= take
-        remaining_files -= 1
+    else:
+        allocations = _water_fill([len(segment) for segment in segments], max_chars)
     truncated = False
     parts: list[str] = []
     for segment, budget in zip(segments, allocations):
@@ -1939,6 +1998,7 @@ def build_review_prompt(
     diff_text: str,
     name_status: str = "",
     full_files: str = "",
+    deprioritize_paths: Sequence[str] = (),
 ) -> BuiltReviewPrompt:
     """Adversarial review prompt grounded on the exact head.
 
@@ -1952,13 +2012,17 @@ def build_review_prompt(
     diff = diff_text.strip()
     file_list = name_status.strip() or _file_list_from_diff(diff)
     file_count = sum(1 for line in file_list.splitlines() if line.strip())
-    bounded, truncated = _bound_diff_body(diff, _MAX_DIFF_CHARS)
+    bounded, truncated = _bound_diff_body(
+        diff, _MAX_DIFF_CHARS, deprioritize_paths=deprioritize_paths
+    )
     short = head_sha[:7]
     body_header = f"=== DIFF (head {short}) ==="
     if truncated:
+        named = ", ".join(deprioritize_paths)
+        named_note = f"; operator-named paths given their diff share last: {named}" if named else ""
         body_header = (
             f"=== DIFF (head {short}; some hunks omitted for length - the CHANGED FILES "
-            "list above is complete, so treat every listed path as present) ==="
+            f"list above is complete, so treat every listed path as present{named_note}) ==="
         )
     return BuiltReviewPrompt(
         "You are an adversarial senior reviewer giving an independent model review. "
@@ -2944,7 +3008,9 @@ def _fetch_name_status(repo: str, pr: int) -> str:
     return proc.stdout or ""
 
 
-def default_prompt_builder(repo: str, pr: int, ctx: dict[str, Any]) -> str:
+def default_prompt_builder(
+    repo: str, pr: int, ctx: dict[str, Any], *, deprioritize_paths: Sequence[str] = ()
+) -> str:
     head_sha = str(ctx.get("head_sha") or "")
     proc = merge_quorum_io.run(
         ["gh", "pr", "diff", str(pr), "--repo", repo],
@@ -3008,6 +3074,7 @@ def default_prompt_builder(repo: str, pr: int, ctx: dict[str, Any]) -> str:
         diff_text=diff_text,
         name_status=name_status,
         full_files=full_files,
+        deprioritize_paths=deprioritize_paths,
     )
 
 
@@ -3204,8 +3271,17 @@ def collect_evidence(
     quorum_reconciler: Callable[[str, int], dict[str, Any] | None] | None = None,
     env: dict[str, str] | None = None,
     overall_timeout_seconds: float | None = None,
+    deprioritized_paths: Sequence[str] = (),
 ) -> CollectOutcome:
     """Run reviewers, validate evidence, and post only when tier-gating allows."""
+    deprioritized_paths = _checked_deprioritized_paths(deprioritized_paths)
+    if deprioritized_paths:
+        # A custom builder cannot show that its prompt used the paths the record names.
+        if prompt_builder is not default_prompt_builder:
+            raise ValueError("deprioritized_paths need the default prompt builder")
+        prompt_builder = functools.partial(
+            default_prompt_builder, deprioritize_paths=deprioritized_paths
+        )
     overall_timeout_seconds = _positive_timeout_seconds(
         overall_timeout_seconds, "overall_timeout_seconds"
     )
@@ -3233,6 +3309,7 @@ def collect_evidence(
         action=action,
         action_reason=action_reason,
         overall_timeout_seconds=overall_timeout_seconds,
+        deprioritized_paths=list(deprioritized_paths),
     )
 
     prompt = prompt_builder(repo, pr, ctx)
@@ -3320,6 +3397,7 @@ def collect_evidence(
             grounded=result.grounded,
             prompt_grounded=prompt_grounded,
             normalized_reviewer_text=result.normalized_text,
+            deprioritized_paths=deprioritized_paths,
         )
         lint = linter(pr, head_sha, head_committed_at, author, body, env or {})
         outcome.items.append(
@@ -4218,6 +4296,7 @@ def run_collect_cli(
     printer: Callable[[str], None] = print,
     claude_review_checkout: str | None = None,
     claude_review_expected_head: str | None = None,
+    deprioritize_paths: Sequence[str] | None = None,
 ) -> int:
     """Shared entry point for the script and ``review-queue collect-evidence``.
 
@@ -4237,6 +4316,9 @@ def run_collect_cli(
     tier and conflicts loudly with ``apply`` (exit 1 before any collection
     work, for the kwarg and the environment variable alike) instead of
     silently overriding it.
+
+    ``deprioritize_paths`` binds the default prompt builder (see :func:`_bound_diff_body`)
+    and is recorded in the outcome and comments; nothing else changes.
     """
     fams = tuple(families) if families else DEFAULT_FAMILIES
     resolved_author = author or resolve_author()
@@ -4246,6 +4328,12 @@ def run_collect_cli(
                 f"--never-post (or {_NEVER_POST_ENV}=1) conflicts with --apply: the "
                 "never-post control forbids posting at any tier; drop --apply or "
                 "clear the control"
+            )
+        named_paths = _checked_deprioritized_paths(deprioritize_paths)
+        if named_paths and prepared_json is not None:
+            raise ValueError(
+                "--deprioritize-path does not apply to --prepared-json: a prepared "
+                "artifact already holds its reviewers' output"
             )
         overall_timeout_seconds = _positive_timeout_seconds(
             overall_timeout_seconds, "overall_timeout_seconds"
@@ -4270,6 +4358,7 @@ def run_collect_cli(
                     env=merge_quorum_io.aragora_env(),
                     quorum_reconciler=default_quorum_reconciler if apply else None,
                     overall_timeout_seconds=overall_timeout_seconds,
+                    deprioritized_paths=named_paths,
                 )
             else:
                 outcome = apply_prepared_evidence(

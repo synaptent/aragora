@@ -398,6 +398,45 @@ def test_a_debate_only_process_reaches_the_nomic_backend():
     ]
 
 
+def test_a_lookup_after_the_nomic_import_failed_reaches_the_nomic_backend():
+    if sys.version_info < (3, 11):
+        pytest.importorskip("tomli")
+    # aragora.nomic's package init imports aragora.nomic.beads, so blocking it makes the
+    # declared registration raise ImportError on the first lookup.
+    script = (
+        "import sys\n"
+        "from aragora.debate.nomic_backends import NomicBackendNotRegisteredError, nomic_backend\n"
+        "assert 'aragora.nomic' not in sys.modules, 'preloaded'\n"
+        "sys.modules['aragora.nomic.beads'] = None\n"
+        "try:\n"
+        "    nomic_backend()\n"
+        "except NomicBackendNotRegisteredError:\n"
+        "    first = 'not_registered'\n"
+        "else:\n"
+        "    first = 'resolved'\n"
+        "del sys.modules['aragora.nomic.beads']\n"
+        "backend = nomic_backend()\n"
+        "print(first, type(backend).__module__, type(backend).__name__,"
+        " backend.bead_classes()[0].__module__)\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        cwd=REPO_ROOT,
+        env={**os.environ, "PYTHONPATH": str(REPO_ROOT)},
+        timeout=120,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.split()[-4:] == [
+        "not_registered",
+        "aragora.nomic.debate_registration",
+        "NomicDebateBackend",
+        "aragora.nomic.beads",
+    ]
+
+
 def _runtime_imports(tree):
     """Absolute imports outside ``if TYPE_CHECKING:`` blocks."""
     type_only = set()

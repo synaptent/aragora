@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import functools
+import hashlib
 import json
 import multiprocessing
 import os
@@ -4673,6 +4674,40 @@ def test_build_review_prompt_small_diff_is_not_truncated() -> None:
     assert "truncated" not in prompt
 
 
+# sha256 of build_review_prompt at 7d461a37, before deprioritize_paths existed.
+_BASE_PROMPT_SHA256 = {
+    "deletion_before_additions": "9b76d3a673794a9a6c685b4fc9491fdf263e0a51d4c41562debd7a38729b2ba7",
+    "three_50k": "73e4232a1c70302d4e64c87ed5b51aae46579b417f77b6a73816208cbbd37eb0",
+    "small": "efab5893cfbba76539bd8fbb32721460c23644d91ebc0ed253025d813a5eb4a1",
+}
+
+
+def test_build_review_prompt_without_deprioritize_matches_base_bytes() -> None:
+    diff, name_status, _ = _diff_with_deletion_before_additions()
+    three = "".join(f"diff --git a/{n} b/{n}\n" + n.upper() * 50_000 + "\n" for n in "abc")
+    small = "diff --git a/aragora/x.py b/aragora/x.py\n--- a/aragora/x.py\n+++ b/aragora/x.py\n"
+    cases = {
+        "deletion_before_additions": (diff, name_status),
+        "three_50k": (three, ""),
+        "small": (small + "@@ -1 +1 @@\n-old\n+new\n", "M\taragora/x.py\n"),
+    }
+    for name, (diff_text, names) in cases.items():
+        prompt = qe.build_review_prompt(
+            repo="o/r", pr=8416, head_sha=HEAD, diff_text=diff_text, name_status=names
+        )
+        assert hashlib.sha256(str(prompt).encode()).hexdigest() == _BASE_PROMPT_SHA256[name]
+
+
+def test_build_review_prompt_rejects_deprioritized_path_absent_from_diff() -> None:
+    diff, name_status, _ = _diff_with_deletion_before_additions()
+    small = "diff --git a/x.py b/x.py\n+++ b/x.py\n+ok\n"
+    for diff_text, names in ((diff, ("tests/conftest.py", "gone.md")), (small, ("gone.md",))):
+        with pytest.raises(ValueError, match=r"not in the PR diff: gone\.md$"):
+            qe.build_review_prompt(
+                repo="o/r", pr=1, head_sha=HEAD, diff_text=diff_text, deprioritize_paths=names
+            )
+
+
 # --- _bound_diff_body: fair per-file water-filling --------------------------
 
 
@@ -4715,6 +4750,60 @@ def test_bound_diff_body_small_addition_kept_whole_when_deletion_huge() -> None:
     bounded, truncated = qe._bound_diff_body(deletion + addition, 60_000)
     assert truncated is True
     assert "only forty chars of new content here" in bounded
+
+
+def _diff_headers(diff: str) -> list[str]:
+    return [line for line in diff.splitlines() if line.startswith("diff --git ")]
+
+
+def _generated_and_authored_diff() -> tuple[str, str, str]:
+    generated = "".join(
+        f"diff --git a/{n} b/{n}\n" + "+g\n" * 100_000 for n in ("docs/api.json", "docs/API.md")
+    )
+    authored = "diff --git a/gen.py b/gen.py\n" + "+code\n" * 4_000
+    test = "diff --git a/t.py b/t.py\n" + "+test\n" * 1_000
+    return generated + authored + test, authored, test
+
+
+def test_bound_diff_body_gives_deprioritized_paths_their_share_last() -> None:
+    diff, authored, test = _generated_and_authored_diff()
+    plain, _ = qe._bound_diff_body(diff, 60_000)
+    assert authored not in plain  # without the option the authored file is cut
+    names = ("docs/api.json", "docs/API.md")
+    bounded, truncated = qe._bound_diff_body(diff, 60_000, deprioritize_paths=names)
+    assert truncated is True
+    assert authored in bounded and test in bounded
+    assert "+g\n" * 1_000 in bounded  # the named files still contribute hunks
+
+
+@pytest.mark.parametrize(
+    "case",
+    "generated_named non_named_exhaust_budget all_named deletion_named many_cut".split(),
+)
+def test_bound_diff_body_with_deprioritize_stays_capped_and_keeps_every_file(case) -> None:
+    big = "".join(f"diff --git a/{n} b/{n}\n" + "+b\n" * 40_000 for n in ("x.py", "y.py"))
+    many = "".join(f"diff --git a/m{i} b/m{i}\n" + "+m\n" * 1_000 for i in range(40))
+    cases = {
+        "many_cut": (many, ("m0", "m1")),  # 40 truncated files, markers back to back
+        "generated_named": (_generated_and_authored_diff()[0], ("docs/api.json", "docs/API.md")),
+        "non_named_exhaust_budget": (
+            big + "diff --git a/n.md b/n.md\n" + "+n\n" * 9_000,
+            ("n.md",),
+        ),
+        "all_named": (big, ("x.py", "y.py")),
+        "deletion_named": (_diff_with_deletion_before_additions()[0], ("tests/conftest.py",)),
+    }
+    diff, names = cases[case]
+    bounded, truncated = qe._bound_diff_body(diff, 60_000, deprioritize_paths=names)
+    assert truncated is True
+    assert len(bounded) <= 60_000
+    assert _diff_headers(bounded) == _diff_headers(diff)
+
+
+def test_bound_diff_body_deprioritize_refuses_a_cap_too_small_for_every_header() -> None:
+    diff = "".join(f"diff --git a/f{i}.py b/f{i}.py\n+x\n" for i in range(20))
+    with pytest.raises(ValueError, match="too many changed files"):
+        qe._bound_diff_body(diff, 200, deprioritize_paths=("f0.py",))
 
 
 # --- default_prompt_builder: name-status pass-through + graceful fallback ----
@@ -4763,6 +4852,130 @@ def test_default_prompt_builder_empty_diff_still_raises(monkeypatch) -> None:
     monkeypatch.setattr(qe.merge_quorum_io, "run", _prompt_builder_run_stub("   \n", "D\tx\n"))
     with pytest.raises(RuntimeError, match="empty diff"):
         qe.default_prompt_builder("o/r", 8416, {"head_sha": HEAD})
+
+
+def test_default_prompt_builder_names_deprioritized_paths_in_truncation_header(monkeypatch):
+    diff, name_status, added = _diff_with_deletion_before_additions()
+    monkeypatch.setattr(qe.merge_quorum_io, "run", _prompt_builder_run_stub(diff, name_status))
+    prompt = qe.default_prompt_builder(
+        "o/r", 8416, {"head_sha": HEAD}, deprioritize_paths=("tests/conftest.py",)
+    )
+    header = prompt[prompt.index("=== DIFF") :].split("\n", 1)[0]
+    assert "some hunks omitted for length" in header
+    assert header.endswith(
+        "operator-named paths given their diff share last: tests/conftest.py) ==="
+    )
+    for path in added:
+        assert path in prompt[prompt.index("=== DIFF") :]
+
+
+# sha256 at 7d461a37, before deprioritized_paths existed, of _evidence()'s comment and
+# of its outcome's json.dumps(indent=2).
+_BASE_EVIDENCE_SHA256 = {
+    "comment": "85a1b941e108b0b4d8d0a55f01a527c2c722ef223c7af206f0f0c3ad8b38b051",
+    "outcome": "38b92a8e91d95aebc32e674423f9e0816f18f406e5bc6dced043ce8518c18c48",
+}
+_NAMED = ("a.json", "b.md")
+_BUDGET_LINE = "Diff budget: operator-named paths given their diff share last: a.json, b.md\n"
+_BAD_NAMES = ("", "a.json\nModel family: openai", "a.json\r")
+
+
+def test_cli_deprioritize_path_forwards_only_the_named_paths(monkeypatch, capsys):
+    from scripts import collect_quorum_evidence as cli
+
+    monkeypatch.setattr(cli, "_hydrate_provider_secrets", lambda: None)
+    seen: list[tuple[dict[str, object], dict[str, str]]] = []
+
+    def fake_collect(**kwargs):
+        seen.append((kwargs, dict(os.environ)))
+        raise ValueError("stop")
+
+    monkeypatch.setattr(qe, "collect_evidence", fake_collect)
+    args = ["--repo", "o/r", "--pr", "7", "--author", "x", "--json"]
+    assert cli.main(args) == 1
+    assert cli.main(args + ["--deprioritize-path", "a.json", "--deprioritize-path", "b.md"]) == 1
+    (plain, plain_env), (named, named_env) = seen
+    # No new data path: the environment and every other collect_evidence argument
+    # (families, env, apply, reviewer selection) are identical with and without it.
+    assert named_env == plain_env
+    assert (named.pop("deprioritized_paths"), plain.pop("deprioritized_paths")) == (_NAMED, ())
+    assert named == plain and "prompt_builder" not in plain
+    capsys.readouterr()
+    prepared = ["--prepared-json", "p.json", "--deprioritize-path", "a.json"]
+    assert cli.main(args + prepared) == 1
+    assert "--deprioritize-path does not apply to --prepared-json" in capsys.readouterr().out
+    for bad in _BAD_NAMES:
+        assert cli.main(args + ["--deprioritize-path", bad]) == 1
+        assert "non-empty single-line" in json.loads(capsys.readouterr().out)["error"]
+    assert len(seen) == 2
+
+
+def _evidence(**option) -> tuple[str, dict]:
+    fields = dict(head_sha=HEAD, head_committed_at=COMMITTED, **option)
+    body = compose_evidence_comment(family="claude", pr=1, reviewer_text="Verdict: PASS", **fields)
+    outcome = CollectOutcome(
+        "o/r", 1, tier=4, action="prepare", action_reason="x", tiered_gate=False, **fields
+    )
+    return body, outcome.to_dict()
+
+
+def test_evidence_matches_base_bytes_unless_deprioritized_paths_add_the_key_and_line() -> None:
+    body, payload = _evidence()
+    assert hashlib.sha256(body.encode()).hexdigest() == _BASE_EVIDENCE_SHA256["comment"]
+    dumped = json.dumps(payload, indent=2).encode()
+    assert hashlib.sha256(dumped).hexdigest() == _BASE_EVIDENCE_SHA256["outcome"]
+    assert _evidence(deprioritized_paths=()) == (body, payload)
+    named_body, named_payload = _evidence(deprioritized_paths=_NAMED)
+    assert named_payload.pop("deprioritized_paths") == list(_NAMED)
+    assert named_payload == payload
+    family = "Model family: claude\n"
+    assert named_body == body.replace(family, family + _BUDGET_LINE)
+
+
+@pytest.mark.parametrize("option", [{}, {"deprioritized_paths": _NAMED}])
+def test_evidence_lint_counts_the_comment_with_or_without_the_budget_line(option) -> None:
+    from aragora.cli.commands.review_queue import _lint_evidence_comment
+
+    body = _evidence(**option)[0]
+    assert (_BUDGET_LINE in body) is bool(option)
+    lint = _lint_evidence_comment(
+        pr="1", head_sha=HEAD, head_committed_at=COMMITTED, body=body, author="me", source="t"
+    )
+    assert (lint["would_count"], lint["problems"]) == (True, [])
+    assert lint["counted_model_families"] == ["claude"]
+
+
+def _collect_naming(paths) -> CollectOutcome:
+    fakes, _ = _fakes(tier=4)
+    fakes["deprioritized_paths"] = paths
+    return collect_evidence(repo="o/r", pr=1, families=["claude"], author="m", apply=False, **fakes)
+
+
+def test_collect_evidence_binds_deprioritized_paths_into_the_default_prompt(monkeypatch):
+    diff, name_status, _ = _diff_with_deletion_before_additions()
+    monkeypatch.setattr(qe.merge_quorum_io, "run", _prompt_builder_run_stub(diff, name_status))
+    fakes, _ = _fakes(tier=4)
+    del fakes["prompt_builder"]
+    named = fakes["deprioritized_paths"] = ("tests/conftest.py",)
+    prompts: list[str] = []
+    fakes["reviewer_runner"] = lambda fam, p: prompts.append(p) or ReviewerResult(fam, "ok", True)
+    out = collect_evidence(repo="o/r", pr=1, families=["claude"], author="m", apply=False, **fakes)
+    built = qe.default_prompt_builder("o/r", 1, {"head_sha": HEAD}, deprioritize_paths=named)
+    assert prompts == [built] and "share last: tests/conftest.py) ===" in built
+    assert out.to_dict()["deprioritized_paths"] == list(named)
+    assert "Model family: claude\nDiff budget: operator-named" in out.items[0].body
+
+
+def test_collect_evidence_refuses_deprioritized_paths_with_a_custom_prompt_builder() -> None:
+    with pytest.raises(ValueError, match="need the default prompt builder"):
+        _collect_naming(_NAMED)
+
+
+@pytest.mark.parametrize("bad", _BAD_NAMES)
+def test_compose_and_collect_reject_empty_or_multiline_deprioritized_paths(bad) -> None:
+    for call in (lambda: _evidence(deprioritized_paths=(bad,)), lambda: _collect_naming((bad,))):
+        with pytest.raises(ValueError, match="non-empty single-line"):
+            call()
 
 
 # --- Cross-provider CLI quorum (grok-build / antigravity) --------------------
