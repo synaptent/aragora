@@ -117,6 +117,11 @@ class DecisionCache:
     def _compute_hash(self, request: Any) -> str:
         """Compute a hash for the request to use as cache key."""
         key_parts = []
+        # A result can carry the verified organization's Knowledge Mound context, so
+        # an entry or in-flight wait is never shared across verified organizations.
+        verified_org_id = getattr(request, "verified_org_id", None)
+        if verified_org_id:
+            key_parts.append(f"verified_org:{verified_org_id}")
 
         if self.config.include_content:
             content = getattr(request, "content", "")
