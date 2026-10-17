@@ -241,6 +241,18 @@ class TestUnifiedOrchestrator:
         assert any(event.stage == BackboneStage.PLAN.value for event in run.stage_events)
 
     @pytest.mark.asyncio
+    async def test_backbone_run_records_the_given_owner_and_defaults_to_none(
+        self, isolated_plan_store
+    ):
+        orch = UnifiedOrchestrator()
+        owned = await orch.run("Build a ledger", owner=("org-a", "user-a1"))
+        internal = await orch.run("Build a ledger")
+
+        assert [r.run_id for r in isolated_plan_store.list_runs_for_org("org-a")] == [owned.run_id]
+        assert isolated_plan_store.get_run_for_org(internal.run_id, "org-a") is None
+        assert isolated_plan_store.get_run(internal.run_id) is not None
+
+    @pytest.mark.asyncio
     async def test_execution_gate_blocks_tainted_plan(self, isolated_plan_store):
         plan = FakeDecisionPlan(
             metadata={

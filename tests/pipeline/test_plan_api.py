@@ -822,3 +822,69 @@ class TestRBACPermissions:
         from aragora.rbac.models import ResourceType
 
         assert ResourceType.PLANS.value == "plans"
+
+
+class TestOrgIsolation:
+    """A real PlanStore only exposes the caller org's plans."""
+
+    def test_list_excludes_other_org_and_unowned_plans(
+        self, handler: PlansHandler, tmp_store: PlanStore, mock_handler: MagicMock
+    ) -> None:
+        tmp_store.create(_owned_plan(id="dp-mine", debate_id="d1", task="Mine"))
+        tmp_store.create(_owned_plan(id="dp-theirs", debate_id="d1", task="T", org_id="org-x"))
+        tmp_store.create(_owned_plan(id="dp-nobody", debate_id="d1", task="T", org_id=None))
+
+        with patch("aragora.server.handlers.plans._get_plan_store", return_value=tmp_store):
+            result = handler.handle("/api/v1/plans", {}, mock_handler)
+
+        data = json.loads(result.body)
+        assert data["total"] == 1
+        assert [p["id"] for p in data["plans"]] == ["dp-mine"]
+
+    @pytest.mark.parametrize("owner", ["org-x", None])
+    def test_get_and_approve_foreign_plan_match_missing(
+        self, handler: PlansHandler, tmp_store: PlanStore, mock_handler: MagicMock, owner
+    ) -> None:
+        tmp_store.create(
+            _owned_plan(
+                id="dp-foreign",
+                debate_id="d1",
+                task="T",
+                status=PlanStatus.AWAITING_APPROVAL,
+                org_id=owner,
+            )
+        )
+
+        with patch("aragora.server.handlers.plans._get_plan_store", return_value=tmp_store):
+            got = handler.handle("/api/v1/plans/dp-foreign", {}, mock_handler)
+            missing = handler.handle("/api/v1/plans/dp-ghost", {}, mock_handler)
+            approved = handler.handle_post(
+                "/api/v1/plans/dp-foreign/approve", {}, _make_mock_handler_with_body({})
+            )
+
+        for result in (got, missing, approved):
+            assert result.status_code == 404
+            assert json.loads(result.body) == NOT_FOUND_BODY
+        assert tmp_store.get("dp-foreign").status == PlanStatus.AWAITING_APPROVAL
+
+    def test_created_plan_is_owned_by_caller(
+        self, handler: PlansHandler, tmp_store: PlanStore
+    ) -> None:
+        mock = _make_mock_handler_with_body({"debate_id": "d-own", "task": "Own"})
+
+        with patch("aragora.server.handlers.plans._get_plan_store", return_value=tmp_store):
+            result = handler.handle_post("/api/v1/plans", {}, mock)
+
+        stored = tmp_store.get(json.loads(result.body)["id"])
+        assert stored.org_id == TEST_ORG
+        assert stored.created_by == "test-user-001"
+
+    @pytest.mark.no_auto_auth
+    def test_anonymous_list_is_unauthorized(
+        self, handler: PlansHandler, tmp_store: PlanStore, mock_handler: MagicMock
+    ) -> None:
+        with patch("aragora.server.handlers.plans._get_plan_store", return_value=tmp_store):
+            result = handler.handle("/api/v1/plans", {}, mock_handler)
+
+        assert result.status_code == 401
+        assert json.loads(result.body)["code"] == "auth_required"

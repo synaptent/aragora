@@ -66,6 +66,7 @@ from aragora.pipeline.backbone_errors import (
     FAIL_CLOSED_BACKBONE_MESSAGE,
 )
 from aragora.pipeline.execution_mode import ExecutionMode as SafetyMode
+from aragora.pipeline.execution_ownership import resolve_execution_owner
 from aragora.rbac.models import AuthorizationContext
 from aragora.server.handlers.canvas.canvas_pipeline import attach_unified_live_state
 
@@ -562,6 +563,7 @@ async def create_from_braindump(
                 ) = await CanvasPipelineHandler()._run_unified_orchestrator(
                     body.text,
                     body.model_dump(exclude_none=True),
+                    owner=resolve_execution_owner(auth),
                 )
                 if context_block:
                     brain_dump_text = f"{body.text}\n\n{context_block}"

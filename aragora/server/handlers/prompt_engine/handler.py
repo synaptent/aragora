@@ -383,6 +383,11 @@ class PromptEngineHandler(SecureHandler):
         plan_request, plan_error = self._normalize_decision_plan_request(handler, data)
         if plan_error:
             return plan_error
+        org_id, created_by = (
+            plan_request["owner"]
+            if plan_request
+            else resolve_execution_owner(self.get_current_user(handler))
+        )
 
         context = data.get("context")
         store = get_plan_store()
@@ -428,7 +433,7 @@ class PromptEngineHandler(SecureHandler):
             )
         )
         try:
-            runtime.create_run(run)
+            runtime.create_run(run, org_id=org_id, created_by=created_by)
             ensure_backbone_persisted(
                 runtime.get_run(run_id) is not None,
                 f"Failed to persist prompt-engine backbone run {run_id}",
