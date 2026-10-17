@@ -19,6 +19,31 @@ from aragora.export.decision_receipt import (
     ReceiptFinding,
     ReceiptVerification,
 )
+from tests.utils.weasyprint_isolation import refuse_in_process_render, run_weasyprint_child
+
+
+@pytest.fixture(autouse=True)
+def _no_in_process_weasyprint_render(monkeypatch):
+    refuse_in_process_render(monkeypatch)
+
+
+_TO_PDF_CHILD = """
+import json, sys
+from aragora.export.decision_receipt import DecisionReceipt
+receipt = DecisionReceipt.from_json(sys.stdin.read())
+sys.stdout.buffer.write(receipt.to_pdf(**json.loads(sys.argv[1])))
+"""
+
+
+def _to_pdf_in_child(receipt: DecisionReceipt, **kwargs: bool) -> bytes:
+    """``receipt.to_pdf(**kwargs)`` rendered outside the pytest process.
+
+    The child uses real WeasyPrint where it is installed and the text fallback
+    elsewhere; see tests/utils/weasyprint_isolation.py for why.
+    """
+    return run_weasyprint_child(
+        _TO_PDF_CHILD, stdin=receipt.to_json().encode(), args=[json.dumps(kwargs)]
+    ).stdout
 
 
 def _has_weasyprint() -> bool:
@@ -662,7 +687,7 @@ class TestDecisionReceiptPDF:
 
     def test_to_pdf_basic(self, receipt_for_pdf: DecisionReceipt):
         """Test basic PDF generation."""
-        pdf_bytes = receipt_for_pdf.to_pdf()
+        pdf_bytes = _to_pdf_in_child(receipt_for_pdf)
 
         # PDF should be valid bytes starting with PDF header
         assert isinstance(pdf_bytes, bytes)
@@ -671,8 +696,8 @@ class TestDecisionReceiptPDF:
 
     def test_to_pdf_with_header_footer(self, receipt_for_pdf: DecisionReceipt):
         """Test PDF generation with header/footer."""
-        pdf_with = receipt_for_pdf.to_pdf(include_header_footer=True)
-        pdf_without = receipt_for_pdf.to_pdf(include_header_footer=False)
+        pdf_with = _to_pdf_in_child(receipt_for_pdf, include_header_footer=True)
+        pdf_without = _to_pdf_in_child(receipt_for_pdf, include_header_footer=False)
 
         # Both should be valid PDFs
         assert pdf_with[:4] == b"%PDF"
@@ -694,7 +719,7 @@ class TestDecisionReceiptPDF:
                 verdict=verdict,
                 confidence=0.7,
             )
-            pdf_bytes = receipt.to_pdf()
+            pdf_bytes = _to_pdf_in_child(receipt)
             assert pdf_bytes[:4] == b"%PDF", f"Failed for verdict: {verdict}"
 
     def test_to_pdf_falls_back_without_weasyprint(self, receipt_for_pdf: DecisionReceipt):

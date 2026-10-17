@@ -27,6 +27,12 @@ from aragora.server.handlers.utils.receipt_delivery_history import (
     get_receipt_delivery_history_store,
 )
 from aragora.storage.receipt_store import StoredReceipt
+from tests.utils.weasyprint_isolation import hide_weasyprint, refuse_in_process_render
+
+
+@pytest.fixture(autouse=True)
+def _no_in_process_weasyprint_render(monkeypatch):
+    refuse_in_process_render(monkeypatch)
 
 
 @pytest.fixture
@@ -1197,9 +1203,11 @@ class TestBatchExport:
         assert "<!DOCTYPE html>" in data["items"][0]["content"]
 
     def test_batch_export_pdf_defaults_to_zip_bundle(
-        self, client, mock_receipt_store, sample_receipt_dict
+        self, client, mock_receipt_store, sample_receipt_dict, monkeypatch
     ):
         """PDF batch export should produce the default ZIP download bundle."""
+        # The bundle is under test, not the renderer: pin the text-fallback PDF.
+        hide_weasyprint(monkeypatch)
         mock_receipt_store.get.return_value = sample_receipt_dict
 
         response = client.post(

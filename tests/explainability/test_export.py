@@ -12,6 +12,7 @@ Tests cover:
 from __future__ import annotations
 
 import json
+import sys
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -29,11 +30,17 @@ from aragora.explainability.export import (
     export_decision_markdown,
     export_decision_pdf,
 )
+from tests.utils.weasyprint_isolation import hide_weasyprint, refuse_in_process_render
 
 
 # ===========================================================================
 # Fixtures
 # ===========================================================================
+
+
+@pytest.fixture(autouse=True)
+def _no_in_process_weasyprint_render(monkeypatch):
+    refuse_in_process_render(monkeypatch)
 
 
 @pytest.fixture
@@ -238,10 +245,15 @@ class TestExportDecisionPDF:
             result = export_mod.export_decision_pdf(minimal_decision)
             assert result == b"%PDF-1.4 mock content"
 
-    def test_graceful_on_weasyprint_error(self, minimal_decision):
-        result = export_decision_pdf(minimal_decision)
-        # Should return None (weasyprint likely not installed in test env)
-        assert result is None or isinstance(result, bytes)
+    def test_graceful_on_weasyprint_error(self, minimal_decision, monkeypatch):
+        # WeasyPrint imports, but its native libraries fail at render time
+        mock_wp = MagicMock()
+        mock_wp.HTML.return_value.write_pdf.side_effect = OSError(
+            "cannot load library 'libpango-1.0-0'"
+        )
+        monkeypatch.setitem(sys.modules, "weasyprint", mock_wp)
+
+        assert export_decision_pdf(minimal_decision) is None
 
 
 # ===========================================================================
@@ -313,15 +325,14 @@ class TestExportEndpoint:
             assert result.status_code == 200
             assert result.content_type == "text/markdown"
 
-    async def test_export_pdf_fallback_to_html(self, handler, full_decision):
+    async def test_export_pdf_fallback_to_html(self, handler, full_decision, monkeypatch):
+        hide_weasyprint(monkeypatch)
         with patch.object(handler, "_get_or_build_decision", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = full_decision
             result = await handler._handle_export("debate-xyz", {"format": "pdf"})
-            # Should fallback to HTML since weasyprint likely not installed
             assert result.status_code == 200
-            assert result.content_type in ("text/html", "application/pdf")
-            if result.content_type == "text/html":
-                assert result.headers.get("X-PDF-Fallback") == "true"
+            assert result.content_type == "text/html"
+            assert result.headers.get("X-PDF-Fallback") == "true"
 
     async def test_export_not_found(self, handler):
         with patch.object(handler, "_get_or_build_decision", new_callable=AsyncMock) as mock_get:
