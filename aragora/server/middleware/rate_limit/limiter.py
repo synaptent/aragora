@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .base import (
+    CLIENT_IP_HEADERS,
     DEFAULT_RATE_LIMIT,
     IP_RATE_LIMIT,
     _extract_client_ip,
@@ -425,13 +426,9 @@ class RateLimiter:
             if isinstance(addr, tuple) and len(addr) >= 1:
                 remote_ip = str(addr[0])
 
-        # Get headers for XFF extraction
         headers = {}
         if hasattr(handler, "headers"):
-            headers = {
-                "X-Forwarded-For": handler.headers.get("X-Forwarded-For", ""),
-                "X-Real-IP": handler.headers.get("X-Real-IP", ""),
-            }
+            headers = {name: handler.headers.get(name, "") for name in CLIENT_IP_HEADERS}
 
         if remote_ip == "anonymous" and headers:
             forwarded = headers.get("X-Forwarded-For", "")
