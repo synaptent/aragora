@@ -1058,3 +1058,134 @@ class TestLinkedCruxSignalFloor:
         )
         assert crux.statement == ""
         assert [c.crux_id for c in result.receipt.cruxes] == ["crux.other", _LINKED_CRUX]
+
+
+# ---------------------------------------------------------------------------
+# Crux candidates are captured when each evaluation returns
+# ---------------------------------------------------------------------------
+
+
+def _candidate(crux_id: str, score: float) -> dict[str, Any]:
+    return {"crux_id": crux_id, "statement": f"Concern {crux_id}", "load_bearing_score": score}
+
+
+class _SharedListAgent:
+    """Refills a list it shares with other agents and returns that list."""
+
+    def __init__(
+        self, name: str, shared: list, candidate: dict[str, Any], *, supports: bool
+    ) -> None:
+        self.name = name
+        self.shared = shared
+        self.candidate = candidate
+        self.supports = supports
+
+    def evaluate(self, spec, context):
+        self.shared.clear()
+        self.shared.append(dict(self.candidate))
+        return {"supports_repair": self.supports, "crux_candidates": self.shared}
+
+
+class _SharedCandidateAgent:
+    """Rewrites in place a candidate dict, and a dict nested in it, shared with other agents."""
+
+    def __init__(self, name: str, shared: dict[str, Any], candidate: dict[str, Any]) -> None:
+        self.name = name
+        self.shared = shared
+        self.candidate = candidate
+
+    def evaluate(self, spec, context):
+        self.shared.update(self.candidate)
+        self.shared["detail"]["source"] = self.name
+        return {"supports_repair": True, "crux_candidates": [self.shared]}
+
+
+class _ReusedBufferAgent:
+    """One agent object listed several times; every call refills the same list."""
+
+    name = "agent-reused"
+
+    def __init__(self, candidates: list[dict[str, Any]]) -> None:
+        self.buffer: list = []
+        self.pending = list(candidates)
+
+    def evaluate(self, spec, context):
+        self.buffer.clear()
+        self.buffer.append(self.pending.pop(0))
+        return {"supports_repair": True, "crux_candidates": self.buffer}
+
+
+class TestCapturedCruxSnapshot:
+    def test_shared_candidate_list_keeps_each_agents_cruxes(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        spec = _spec(monkeypatch)
+        shared: list = []
+        result = run_repair_debate(
+            spec,
+            [
+                _SharedListAgent("agent-a", shared, _candidate("crux.a", 0.9), supports=True),
+                _SharedListAgent("agent-b", shared, _candidate("crux.b", 0.1), supports=False),
+            ],
+        )
+        fresh = run_repair_debate(
+            spec,
+            [
+                _PayloadAgent(
+                    "agent-a",
+                    {"supports_repair": True, "crux_candidates": [_candidate("crux.a", 0.9)]},
+                ),
+                _PayloadAgent(
+                    "agent-b",
+                    {"supports_repair": False, "crux_candidates": [_candidate("crux.b", 0.1)]},
+                ),
+            ],
+        )
+        assert [c.to_dict() for c in result.receipt.cruxes] == [
+            c.to_dict() for c in fresh.receipt.cruxes
+        ]
+        crux_a = _crux(result, "crux.a")
+        assert (crux_a.load_bearing_score, crux_a.contesting_agents) == (0.9, ["agent-a"])
+        assert result.agent_evaluations == fresh.agent_evaluations
+        assert result.consensus_reached is fresh.consensus_reached
+        assert result.recommended_action == fresh.recommended_action
+
+    def test_shared_nested_candidate_dicts_keep_each_agents_cruxes(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        spec = _spec(monkeypatch)
+        shared: dict[str, Any] = {"detail": {}}
+        result = run_repair_debate(
+            spec,
+            [
+                _SharedCandidateAgent("agent-a", shared, _candidate("crux.a", 0.9)),
+                _SharedCandidateAgent("agent-b", shared, _candidate("crux.b", 0.1)),
+            ],
+        )
+        assert [c.crux_id for c in result.receipt.cruxes] == ["crux.a", "crux.b", _LINKED_CRUX]
+        crux_a = _crux(result, "crux.a")
+        assert (crux_a.statement, crux_a.load_bearing_score, crux_a.contesting_agents) == (
+            "Concern crux.a",
+            0.9,
+            ["agent-a"],
+        )
+        assert _crux(result, "crux.b").contesting_agents == ["agent-b"]
+        captured = [ev["crux_candidates"] for ev in result.agent_evaluations]
+        assert captured == [
+            [{**_candidate("crux.a", 0.9), "detail": {"source": "agent-a"}}],
+            [{**_candidate("crux.b", 0.1), "detail": {"source": "agent-b"}}],
+        ]
+
+    def test_reused_agent_keeps_each_calls_cruxes(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        spec = _spec(monkeypatch)
+        agent = _ReusedBufferAgent([_candidate("crux.a", 0.9), _candidate("crux.b", 0.1)])
+        result = run_repair_debate(spec, [agent, agent])
+        assert [c.crux_id for c in result.receipt.cruxes] == ["crux.a", "crux.b", _LINKED_CRUX]
+        crux_a = _crux(result, "crux.a")
+        assert (crux_a.load_bearing_score, crux_a.contesting_agents) == (0.9, ["agent-reused"])
+        assert [ev["crux_candidates"] for ev in result.agent_evaluations] == [
+            [_candidate("crux.a", 0.9)],
+            [_candidate("crux.b", 0.1)],
+        ]
+        assert result.receipt.agents == ["agent-reused", "agent-reused"]
+        assert result.consensus_reached is True

@@ -18,6 +18,12 @@ Invariants:
   agent supplies a non-empty one.
 - A crux candidate whose ``crux_id`` is empty or whose ``__str__`` raises is
   skipped as absent; a statement whose ``__str__`` raises counts as empty.
+- Each evaluation is snapshotted as soon as its agent's ``evaluate`` returns:
+  crux ids and statements are read as ``str``, scores as bounded floats, and
+  the payload exposed in ``agent_evaluations`` is copied at that point. An
+  agent that shares or reuses a mutable list or candidate dict with a later
+  agent therefore cannot change the cruxes or evaluations already captured
+  for an earlier one.
 - ``agent_evaluations`` is a strict-JSON deep copy of the agents' payloads:
   non-finite floats, integers too long to print, cycles and nesting deeper
   than 64 levels become ``None``; mapping keys and other non-JSON values
@@ -173,12 +179,19 @@ def run_repair_debate(
     )
 
     evaluations: list[dict[str, Any]] = []
+    captured_cruxes: list[tuple[str, list[tuple[str, dict[str, Any]]]]] = []
+    exposed: list[dict[str, Any]] = []
     for agent in agents:
         ev = dict(agent.evaluate(copy.deepcopy(snapshot), _agent_context(snapshot)))
         ev["agent"] = _safe_str(agent.name)
+        # dict() copies only the top level. Agents may share or reuse nested
+        # buffers that a later evaluate() rewrites, so everything read from
+        # nested values is snapshotted before the next agent runs.
+        captured_cruxes.append((ev["agent"], _snapshot_crux_candidates(ev.get("crux_candidates"))))
+        exposed.append(_json_safe(ev))
         evaluations.append(ev)
 
-    crux_entries = _collect_crux_entries(snapshot, evaluations)
+    crux_entries = _collect_crux_entries(snapshot, captured_cruxes)
 
     support_count = sum(1 for ev in evaluations if ev.get("supports_repair") is True)
     consensus = support_count > len(evaluations) / 2
@@ -189,7 +202,7 @@ def run_repair_debate(
     return RepairDebateResult(
         spec_id=snapshot.spec_id,
         receipt=receipt,
-        agent_evaluations=evaluations,
+        agent_evaluations=exposed,
         consensus_reached=consensus,
         recommended_action=recommended_action,
     )
@@ -211,12 +224,42 @@ def _agent_context(spec: RepairSpec) -> dict[str, Any]:
     }
 
 
+def _snapshot_crux_candidates(candidates: Any) -> list[tuple[str, dict[str, Any]]]:
+    """Read one agent's ``crux_candidates`` into values that later mutation cannot reach.
+
+    Returns ``(crux_id, fields)`` pairs in candidate order. ``fields`` holds the
+    statement as ``str`` and each score as a float in [0, 1] or ``None``, read
+    exactly as the merge reads them. A non-list value counts as no candidates;
+    non-dict candidates and candidates with an empty or unprintable
+    ``crux_id`` are skipped.
+    """
+    candidates = candidates or []
+    if not isinstance(candidates, list):
+        return []
+    captured: list[tuple[str, dict[str, Any]]] = []
+    for cand in list(candidates):
+        if not isinstance(cand, dict):
+            continue
+        cid = _safe_str(cand.get("crux_id") or "", unprintable="")
+        if not cid:
+            continue
+        fields: dict[str, Any] = {
+            "statement": _safe_str(cand.get("statement") or "", unprintable="")
+        }
+        for key in _SIGNAL_CRUX_SCORES:
+            fields[key] = _usable_score(cand.get(key))
+        captured.append((cid, fields))
+    return captured
+
+
 def _collect_crux_entries(
     spec: RepairSpec,
-    evaluations: list[dict[str, Any]],
+    captured: list[tuple[str, list[tuple[str, dict[str, Any]]]]],
 ) -> list[CruxEntry]:
     """Build the ordered, deduplicated list of :class:`CruxEntry` objects.
 
+    *captured* holds ``(agent name, candidates)`` per evaluation, as returned
+    by :func:`_snapshot_crux_candidates` when that evaluation was captured.
     Agent-named entries are sorted by ``crux_id``; spec-linked cruxes that no
     agent named follow in spec order. A crux named by several agents is merged
     so that its content does not depend on agent order: each score is the
@@ -228,17 +271,9 @@ def _collect_crux_entries(
     """
     named: dict[str, list[tuple[Any, dict[str, Any]]]] = {}
 
-    for ev in evaluations:
-        candidates = ev.get("crux_candidates") or []
-        if not isinstance(candidates, list):
-            continue
-        for cand in candidates:
-            if not isinstance(cand, dict):
-                continue
-            cid = _safe_str(cand.get("crux_id") or "", unprintable="")
-            if not cid:
-                continue
-            named.setdefault(cid, []).append((ev["agent"], cand))
+    for agent, candidates in captured:
+        for cid, fields in candidates:
+            named.setdefault(cid, []).append((agent, fields))
 
     linked_ids = set(spec.linked_crux_ids)
     crux_entries = [
