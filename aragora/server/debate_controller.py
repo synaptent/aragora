@@ -509,6 +509,9 @@ class DebateRequest:
     enable_interventions: bool | None = None  # Enable intervention queue
     comparison_config: dict | None = None  # Candidate lineups for best-result selection
     quality_pipeline: dict | None = None  # Post-consensus quality pipeline config
+    # Authenticated org, set by the HTTP entry point after parsing; from_dict
+    # never reads it so a request body cannot choose the Knowledge Mound stamp.
+    org_id: str | None = None
 
     def __post_init__(self):
         if self.auto_select_config is None:
@@ -1093,6 +1096,7 @@ class DebateController:
             enable_interventions=request.enable_interventions,
             comparison_config=request.comparison_config,
             quality_pipeline=request.quality_pipeline,
+            org_id=request.org_id,
         )
 
         # Admission control: reject if at capacity

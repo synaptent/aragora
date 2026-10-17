@@ -1480,7 +1480,9 @@ class TestHandleDebateCompletion:
         coordinator = MagicMock()
         coordinator.run = MagicMock(return_value=None)
 
-        def _build_coordinator(*, config, settlement_tracker=None, knowledge_mound=None):
+        def _build_coordinator(
+            *, config, settlement_tracker=None, knowledge_mound=None, org_id=None
+        ):
             captured["config"] = config
             return coordinator
 
@@ -1492,6 +1494,31 @@ class TestHandleDebateCompletion:
 
         assert captured["config"].execution_mode == ExecutionMode.INTERACTIVE
         assert captured["config"].auto_execute_plan is True
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("knowledge_org_id", ["org-a", None])
+    async def test_post_debate_coordinator_receives_knowledge_org_id(
+        self, mock_arena, execution_state, monkeypatch, knowledge_org_id
+    ):
+        """The coordinator stamps outcomes with the authenticated org, not the billing org."""
+        mock_arena.disable_post_debate_pipeline = False
+        mock_arena.knowledge_org_id = knowledge_org_id
+        monkeypatch.setenv("ARAGORA_SYNC_POST_DEBATE", "1")
+        captured: dict[str, object] = {}
+        coordinator = MagicMock()
+        coordinator.run = MagicMock(return_value=None)
+
+        def _build_coordinator(**kwargs):
+            captured.update(kwargs)
+            return coordinator
+
+        with patch(
+            "aragora.debate.post_debate_coordinator.PostDebateCoordinator",
+            side_effect=_build_coordinator,
+        ):
+            await handle_debate_completion(mock_arena, execution_state)
+
+        assert captured["org_id"] == knowledge_org_id
 
     @pytest.mark.asyncio
     async def test_records_debate_analytics_agent_activity(self, mock_arena, execution_state):

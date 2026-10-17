@@ -305,6 +305,11 @@ class CreateOperationsMixin:
             logger.warning("Handler error: %s", e)
             return error_response("Invalid request", 400)
 
+        user = self.get_current_user(handler)
+        user_org = getattr(user, "org_id", None)
+        if user is not None and user.is_authenticated and isinstance(user_org, str) and user_org:
+            request.org_id = user_org
+
         # Get debate controller and start debate
         try:
             controller = handler._get_debate_controller()

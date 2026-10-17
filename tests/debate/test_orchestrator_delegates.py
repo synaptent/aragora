@@ -197,7 +197,9 @@ class TestKnowledgeMoundDelegates:
 
         await arena._ingest_debate_outcome(mock_result)
 
-        arena._km_manager.ingest_outcome.assert_called_once_with(mock_result, arena.env)
+        arena._km_manager.ingest_outcome.assert_called_once_with(
+            mock_result, arena.env, org_id=None
+        )
 
 
 # =============================================================================

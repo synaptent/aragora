@@ -508,6 +508,43 @@ class TestCreateDebate:
         response = client.post("/api/v2/debates", json={"question": "Review this selection"})
         assert response.status_code == 401
 
+    @pytest.mark.parametrize("auth_org, expected", [("org-a", "org-a"), (None, None)])
+    def test_create_stamps_only_the_authenticated_org(self, client, auth_org, expected):
+        """auth.org_id wins over a forged body; a context without an org stays unstamped."""
+        from aragora.rbac.models import AuthorizationContext
+        from aragora.server.debate_controller import DebateResponse
+        from aragora.server.fastapi.dependencies.auth import require_authenticated
+
+        client.app.dependency_overrides[require_authenticated] = lambda: AuthorizationContext(
+            user_id="user-1",
+            org_id=auth_org,
+            roles={"admin"},
+            permissions={"debates:create"},
+        )
+        mock_controller = MagicMock()
+        mock_controller.start_debate.return_value = DebateResponse(
+            success=True, debate_id="adhoc_org1", status="created"
+        )
+
+        with patch(
+            "aragora.server.fastapi.routes.debates._get_debate_controller",
+            return_value=mock_controller,
+        ):
+            response = client.post(
+                "/api/v2/debates",
+                json={
+                    "question": "Rate limiter?",
+                    "org_id": "evil",
+                    "metadata": {"org_id": "evil"},
+                },
+            )
+
+        client.app.dependency_overrides.clear()
+
+        assert response.status_code == 200
+        debate_request = mock_controller.start_debate.call_args.args[0]
+        assert debate_request.org_id == expected
+
     def test_creates_debate_for_browser_extension_contract(self, client):
         """Create debate passes extension payload through to the controller."""
         from aragora.server.debate_controller import DebateResponse
