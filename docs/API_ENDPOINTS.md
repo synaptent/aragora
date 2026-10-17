@@ -134,6 +134,7 @@ This document describes the HTTP API endpoints provided by the Aragora server.
 - [DecisionExplain (decisions/explain.py)](#decisionexplain-decisionsexplainpy)
 - [Explainability (decisions/explainability.py)](#explainability-decisionsexplainabilitypy)
 - [Pipeline (decisions/pipeline.py)](#pipeline-decisionspipelinepy)
+- [Plans (decisions/plans.py)](#plans-decisionsplanspy)
 - [Receipts (decisions/receipts.py)](#receipts-decisionsreceiptspy)
 - [Playground (demo/playground.py)](#playground-demoplaygroundpy)
 - [EmailDebate (email/email_debate.py)](#emaildebate-emailemail_debatepy)
@@ -247,7 +248,6 @@ This document describes the HTTP API endpoints provided by the Aragora server.
 - [Decomposition (pipeline/decomposition.py)](#decomposition-pipelinedecompositionpy)
 - [PipelineExecute (pipeline/execute.py)](#pipelineexecute-pipelineexecutepy)
 - [Pipeline Graph (pipeline/pipeline_graph.py)](#pipeline-graph-pipelinepipeline_graphpy)
-- [PlanManagement (pipeline/plans.py)](#planmanagement-pipelineplanspy)
 - [ProvenanceExplorer (pipeline/provenance_explorer.py)](#provenanceexplorer-pipelineprovenance_explorerpy)
 - [Receipts (pipeline/receipts.py)](#receipts-pipelinereceiptspy)
 - [PipelineTransitions (pipeline/transitions.py)](#pipelinetransitions-pipelinetransitionspy)
@@ -4844,11 +4844,11 @@ Handler for unified decision-making API endpoints.
 
 ### `GET` `/api/v1/decisions`
 
-List recent decisions
+List the caller org's recent decisions
 
 ### `POST` `/api/v1/decisions`
 
-List recent decisions
+List the caller org's recent decisions
 
 ### `GET` `/api/v1/decisions/*`
 
@@ -4939,6 +4939,20 @@ Execute approved plan
 ### `POST` `/api/v1/decisions/plans/*/outcome` ❔
 
 Get the execution outcome for a completed plan
+
+---
+
+## Plans (decisions/plans.py)
+
+Handler for decision plan CRUD and approval workflows.
+
+### `POST` `/api/v1/plans` ❔
+
+List the caller org's plans with optional filters and pagination
+
+### `PUT` `/api/v1/plans` ❔
+
+List the caller org's plans with optional filters and pagination
 
 ---
 
@@ -10373,16 +10387,6 @@ Integrity hash
 ### `POST` `/api/v1/pipeline/graph/{id}/node/{nid}/reassign` ❔
 
 Reassign agent on node
-
----
-
-## PlanManagement (pipeline/plans.py)
-
-Handler for decision plan management endpoints.
-
-### `PUT` `/api/v1/plans` ❔
-
-Get plans from context or in-memory store
 
 ---
 
