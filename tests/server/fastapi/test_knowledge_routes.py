@@ -15,13 +15,23 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
+from aragora.rbac.models import AuthorizationContext
 from aragora.server.fastapi import create_app
+from aragora.server.fastapi.dependencies.auth import require_authenticated
 
 
 @pytest.fixture
 def app():
-    """Create a test FastAPI app."""
-    return create_app()
+    """Create a test FastAPI app whose caller is an org-1 user with knowledge access."""
+    app = create_app()
+    app.dependency_overrides[require_authenticated] = lambda: AuthorizationContext(
+        user_id="user-1",
+        org_id="org-1",
+        workspace_id="ws-1",
+        roles={"admin"},
+        permissions={"knowledge:read", "knowledge:write"},
+    )
+    return app
 
 
 @pytest.fixture
@@ -70,7 +80,7 @@ def sample_knowledge_item():
         "created_at": "2026-02-15T10:00:00",
         "updated_at": "2026-02-15T10:05:00",
         "tags": ["architecture", "performance"],
-        "metadata": {"debate_id": "debate-001"},
+        "metadata": {"debate_id": "debate-001", "org_id": "org-1"},
         "debate_id": "debate-001",
         "adapter": "debate",
     }
@@ -120,13 +130,14 @@ class TestSearchKnowledge:
         assert len(data["items"]) == 1
         assert data["items"][0]["relevance_score"] == 0.92
 
-    def test_search_with_limit(self, client, mock_km):
-        """Search passes limit parameter."""
-        mock_km.search.return_value = []
+    def test_search_with_limit(self, client, mock_km, sample_knowledge_item):
+        """Search reads a fixed candidate window, then trims the org's items to limit."""
+        mock_km.search.return_value = [sample_knowledge_item] * 3
 
-        response = client.get("/api/v2/knowledge/search?query=test&limit=5")
+        response = client.get("/api/v2/knowledge/search?query=test&limit=2")
         assert response.status_code == 200
-        mock_km.search.assert_called_once_with("test", limit=5)
+        assert len(response.json()["items"]) == 2
+        mock_km.search.assert_called_once_with("test", limit=100)
 
     def test_search_with_content_type_filter(self, client, mock_km):
         """Search passes content_type filter."""
@@ -134,7 +145,7 @@ class TestSearchKnowledge:
 
         response = client.get("/api/v2/knowledge/search?query=test&content_type=url")
         assert response.status_code == 200
-        mock_km.search.assert_called_once_with("test", limit=20, content_type="url")
+        mock_km.search.assert_called_once_with("test", limit=100, content_type="url")
 
     def test_search_with_source_filter(self, client, mock_km):
         """Search passes source filter."""
@@ -142,7 +153,7 @@ class TestSearchKnowledge:
 
         response = client.get("/api/v2/knowledge/search?query=test&source=debate")
         assert response.status_code == 200
-        mock_km.search.assert_called_once_with("test", limit=20, source="debate")
+        mock_km.search.assert_called_once_with("test", limit=100, source="debate")
 
     def test_search_limit_validation(self, client):
         """Search limit must be between 1 and 100."""
@@ -353,6 +364,7 @@ class TestIngestKnowledgeItem:
 
     def test_ingest_requires_auth(self, client):
         """Ingest without auth returns 401."""
+        client.app.dependency_overrides.clear()
         response = client.post(
             "/api/v2/knowledge/items",
             json={
@@ -587,6 +599,7 @@ class TestStalenessAnalysis:
                         "title": "Old item",
                         "stale": True,
                         "age_days": 45.0,
+                        "metadata": {"org_id": "org-1"},
                     },
                 ],
             }
@@ -676,6 +689,7 @@ class TestDeleteKnowledgeItem:
 
     def test_delete_requires_auth(self, client):
         """Delete without auth returns 401."""
+        client.app.dependency_overrides.clear()
         response = client.delete("/api/v2/knowledge/ki_abc123def456")
         assert response.status_code == 401
 
