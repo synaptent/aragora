@@ -118,6 +118,7 @@ from .receipt_adapter import (
 from .crux_receipt_adapter import (
     CruxReceiptAdapter,
     CruxIngestionResult,
+    CruxSetIngestionResult,
 )
 from .executable_claim_adapter import (
     ExecutableClaimAdapter,
@@ -286,6 +287,7 @@ __all__ = [
     # CruxReceipt adapter (DIC-16: crux-finder runs → Knowledge Mound)
     "CruxReceiptAdapter",
     "CruxIngestionResult",
+    "CruxSetIngestionResult",
     # ExecutableClaim adapter (DIC-16: claim verification results → Knowledge Mound)
     "ExecutableClaimAdapter",
     "ClaimIngestionResult",
