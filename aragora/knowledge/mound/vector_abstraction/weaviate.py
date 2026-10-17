@@ -250,17 +250,16 @@ class WeaviateVectorStore(BaseVectorStore):
     ) -> list[str]:
         """Batch upsert multiple vectors.
 
-        Items without an ``id`` (missing or ``None``) get a client-generated
-        UUID4, which is sent to Weaviate and returned in its position.
+        Items without an ``id`` (missing, ``None`` or empty) get a
+        client-generated UUID4, which is sent to Weaviate and returned in its
+        position.
         """
         collection = self._get_collection()
         ids: list[str] = []
 
         with collection.batch.dynamic() as batch:
             for item in items:
-                item_id = item.get("id")
-                if item_id is None:
-                    item_id = str(uuid_lib.uuid4())
+                item_id = item.get("id") or str(uuid_lib.uuid4())
                 properties = {
                     "content": item["content"],
                     "namespace": namespace or "",

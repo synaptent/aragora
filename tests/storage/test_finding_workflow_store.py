@@ -4,11 +4,14 @@ Tests for FindingWorkflowStore backends.
 Tests all three backends: InMemory, SQLite, and Redis (with fallback).
 """
 
+import json
 import os
+import sqlite3
 import tempfile
 import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -512,6 +515,98 @@ class TestSQLiteFindingWorkflowStore:
 
         investigating = await sqlite_store.list_by_state("investigating")
         assert len(investigating) == 1
+
+
+PLUS_FIVE_THIRTY = timezone(timedelta(hours=5, minutes=30))
+
+TEMPORAL_MATRIX_INPUTS = [
+    pytest.param(datetime(2026, 3, 1, 7, 30, tzinfo=MINUS_FIVE), id="offset-datetime"),
+    pytest.param("2026-03-01T07:30:00-05:00", id="offset-iso"),
+    pytest.param("2026-03-01T12:30:00Z", id="z-suffix"),
+    pytest.param("2026-03-01T12:30:00", id="naive"),
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("raw", TEMPORAL_MATRIX_INPUTS)
+async def test_temporal_matrix_backend_parity_due_date(tmp_path, sample_workflow, raw):
+    db_path = tmp_path / "temporal_matrix.db"
+    memory = InMemoryFindingWorkflowStore()
+    sqlite_store = SQLiteFindingWorkflowStore(db_path)
+    record = {**sample_workflow, "due_date": raw}
+
+    await memory.save(record)
+    await sqlite_store.save(record)
+
+    from_memory = await memory.get(record["finding_id"])
+    from_sqlite = await sqlite_store.get(record["finding_id"])
+    assert from_memory["due_date"] == CANONICAL
+    assert from_sqlite == from_memory
+    assert record["due_date"] is raw
+    with sqlite3.connect(db_path) as conn:
+        (column,) = conn.execute(
+            "SELECT due_date FROM finding_workflows WHERE finding_id = ?",
+            (record["finding_id"],),
+        ).fetchone()
+    assert column == CANONICAL
+
+
+@pytest.mark.asyncio
+async def test_temporal_matrix_sqlite_list_overdue_compares_instants(tmp_path, sample_workflow):
+    store = SQLiteFindingWorkflowStore(tmp_path / "temporal_matrix.db")
+    now = datetime.now(timezone.utc)
+    future_at_minus_five = (now + timedelta(hours=1)).astimezone(MINUS_FIVE).isoformat()
+    past_at_plus_five_thirty = (now - timedelta(hours=1)).astimezone(PLUS_FIVE_THIRTY).isoformat()
+    # As raw text both values sort on the wrong side of now.
+    assert future_at_minus_five < now.isoformat() < past_at_plus_five_thirty
+
+    for finding_id, due_date in (
+        ("future-minus-five", future_at_minus_five),
+        ("past-plus-five-thirty", past_at_plus_five_thirty),
+    ):
+        await store.save(
+            {
+                **sample_workflow,
+                "finding_id": finding_id,
+                "current_state": "investigating",
+                "due_date": due_date,
+            }
+        )
+
+    overdue = await store.list_overdue()
+
+    assert [wf["finding_id"] for wf in overdue] == ["past-plus-five-thirty"]
+
+
+@pytest.mark.asyncio
+async def test_sqlite_save_rejects_invalid_due_date_and_keeps_row(tmp_path, sample_workflow):
+    store = SQLiteFindingWorkflowStore(tmp_path / "invalid.db")
+    await store.save(sample_workflow)
+
+    with pytest.raises(ValueError, match="due_date"):
+        await store.save({**sample_workflow, "current_state": "triaging", "due_date": "garbage"})
+
+    stored = await store.get("finding-123")
+    assert stored["current_state"] == "open"
+    assert stored["due_date"] is None
+
+
+@pytest.mark.asyncio
+async def test_redis_save_writes_canonical_due_date_to_both_copies(
+    monkeypatch, tmp_path, sample_workflow
+):
+    monkeypatch.delenv("ARAGORA_REDIS_URL", raising=False)
+    store = RedisFindingWorkflowStore(fallback_db_path=tmp_path / "fallback.db")
+    client = MagicMock()
+    store._redis_client = client
+    store._using_fallback = False
+
+    await store.save({**sample_workflow, "due_date": "2026-03-01T07:30:00-05:00"})
+
+    redis_json = client.pipeline.return_value.set.call_args.args[1]
+    assert json.loads(redis_json)["due_date"] == CANONICAL
+    fallback = await store._fallback.get("finding-123")
+    assert fallback["due_date"] == CANONICAL
 
 
 @pytest.mark.skipif(not REDIS_AVAILABLE, reason="Redis not available (set REDIS_URL)")

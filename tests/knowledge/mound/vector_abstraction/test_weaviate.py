@@ -497,8 +497,9 @@ class TestWeaviateUpsert:
         [
             {"embedding": [0.1], "content": "no id key"},
             {"id": None, "embedding": [0.1], "content": "explicit None id"},
+            {"id": "", "embedding": [0.1], "content": "empty-string id"},
         ],
-        ids=["missing-key", "none-value"],
+        ids=["missing-key", "none-value", "empty-string"],
     )
     async def test_upsert_batch_generates_uuid_for_id_less_item(
         self, config, mock_weaviate_env, item
