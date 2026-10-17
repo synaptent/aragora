@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 import weakref
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -27,19 +28,27 @@ logger = logging.getLogger(__name__)
 # Pipelines keyed by (org_id, workspace_id): workspace ids are not unique across
 # organizations, so two orgs must never share a pipeline. A None org is the
 # unscoped pipeline, whose fact reads and writes fail closed. Insertion order is
-# recency: get_pipeline re-inserts on every hit and, at _MAX_PIPELINES, a new
-# key drops the least recently used pipeline that holds no in-memory index (it
-# is rebuilt on its next request); when every cached pipeline holds one, the new
-# key gets CacheCapacityError instead. A dropped pipeline that a caller of this
-# module is still using is stopped only when that last caller returns it. A
-# pipeline get_pipeline ever returned is never stopped on eviction: its callers
-# have no way to return it.
+# recency: a hit re-inserts. A new key for an organization that already has
+# _MAX_PIPELINES_PER_ORG pipelines, or for a full cache, drops the least
+# recently used pipeline in that scope that holds no in-memory index (it is
+# rebuilt on its next request); when every one holds one, the new key gets
+# CacheCapacityError, so one organization can only exhaust its own share. A
+# dropped pipeline that a caller of this module is still using is stopped only
+# when that last caller returns it. A pipeline get_pipeline returned is never
+# stopped on eviction; while its holder keeps it, the key's next miss re-adopts
+# it, so its index is never split.
 _pipelines: dict[tuple[str | None, str], KnowledgePipeline] = {}
 _MAX_PIPELINES = 64
-_pipeline_lock = asyncio.Lock()
+_MAX_PIPELINES_PER_ORG = 8
+# A threading lock, never held across an await: the sync wrappers run each call
+# on its own event loop in an executor thread, which an asyncio.Lock cannot exclude.
+_pipeline_lock = threading.Lock()
 _borrowers: dict[int, int] = {}
 _evicted_in_use: dict[int, KnowledgePipeline] = {}
 _handed_out: weakref.WeakSet[KnowledgePipeline] = weakref.WeakSet()
+_orphans: weakref.WeakValueDictionary[tuple[str | None, str], KnowledgePipeline] = (
+    weakref.WeakValueDictionary()
+)
 
 # Thread pool for running async code from sync context
 _executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="knowledge-")
@@ -99,63 +108,96 @@ async def get_pipeline(
         Initialized KnowledgePipeline. The bounded cache may later drop it, but
         never stops it, so the caller can keep using it.
     """
-    return await _checkout_pipeline(workspace_id, org_id, borrow=False)
+    pipeline, idle = await _checkout_pipeline(workspace_id, org_id, borrow=False)
+    for evicted in idle:
+        await _stop_evicted(evicted)
+    return pipeline
 
 
 async def _checkout_pipeline(
     workspace_id: str, org_id: str | None, *, borrow: bool
-) -> KnowledgePipeline:
+) -> tuple[KnowledgePipeline, list[KnowledgePipeline]]:
+    # Returns the pipeline and the pipelines the caller must stop. Every await
+    # happens outside the lock, and nothing is counted before the last one.
     org_id = org_id or None
     key = (org_id, workspace_id)
-    async with _pipeline_lock:
-        pipeline = _pipelines.pop(key, None)
-        if pipeline is None:
-            await _make_room()
-            config = PipelineConfig(
-                workspace_id=workspace_id,
-                org_id=org_id,
-                use_weaviate=_should_use_weaviate(),
-                extract_facts=True,
-                use_knowledge_mound=_should_use_knowledge_mound(),
-            )
-            pipeline = KnowledgePipeline(config)
-            await pipeline.start()
-            logger.info("Knowledge pipeline initialized for workspace %s", workspace_id)
-        _pipelines[key] = pipeline
-        # Counted last, with no await after it, so a failure or cancellation
-        # above never leaves a borrow that no caller will return.
-        if borrow:
-            _borrowers[id(pipeline)] = _borrowers.get(id(pipeline), 0) + 1
-        else:
-            _handed_out.add(pipeline)
-    return pipeline
+    with _pipeline_lock:
+        pipeline = _pipelines.pop(key, None) or _orphans.get(key)
+        if pipeline is not None:
+            return pipeline, _keep(key, pipeline, borrow)
+        _victim_key(org_id)  # refuse before starting a pipeline that cannot be kept
+    fresh = KnowledgePipeline(
+        PipelineConfig(
+            workspace_id=workspace_id,
+            org_id=org_id,
+            use_weaviate=_should_use_weaviate(),
+            extract_facts=True,
+            use_knowledge_mound=_should_use_knowledge_mound(),
+        )
+    )
+    await fresh.start()
+    logger.info("Knowledge pipeline initialized for workspace %s", workspace_id)
+    try:
+        with _pipeline_lock:
+            # Another thread may have cached or re-adopted this key meanwhile.
+            pipeline = _pipelines.pop(key, None) or _orphans.get(key) or fresh
+            idle = _keep(key, pipeline, borrow)
+    except CacheCapacityError:
+        await _stop_evicted(fresh)
+        raise
+    return pipeline, idle if pipeline is fresh else [*idle, fresh]
 
 
-async def _make_room() -> None:
-    while len(_pipelines) >= _MAX_PIPELINES:
-        key = next((k for k, p in _pipelines.items() if not _holds_memory(p)), None)
-        if key is None:
-            raise CacheCapacityError(len(_pipelines), _MAX_PIPELINES)
-        evicted = _pipelines.pop(key)
+def _keep(
+    key: tuple[str | None, str], pipeline: KnowledgePipeline, borrow: bool
+) -> list[KnowledgePipeline]:
+    # Caller holds _pipeline_lock and has popped key from _pipelines.
+    victim_key = _victim_key(key[0])
+    idle: list[KnowledgePipeline] = []
+    if victim_key is not None:
+        evicted = _pipelines.pop(victim_key)
         if evicted in _handed_out:
-            continue
-        if _borrowers.get(id(evicted)):
+            _orphans[victim_key] = evicted
+        elif _borrowers.get(id(evicted)):
             _evicted_in_use[id(evicted)] = evicted
         else:
-            await _stop_evicted(evicted)
+            idle.append(evicted)
+    _orphans.pop(key, None)
+    _pipelines[key] = pipeline
+    if borrow:
+        _borrowers[id(pipeline)] = _borrowers.get(id(pipeline), 0) + 1
+    else:
+        _handed_out.add(pipeline)
+    return idle
+
+
+def _victim_key(org_id: str | None) -> tuple[str | None, str] | None:
+    # The key to drop before org_id adds one, None if there is room, or
+    # CacheCapacityError if every candidate holds an in-memory index.
+    own = [k for k in _pipelines if k[0] == org_id]
+    if len(own) >= _MAX_PIPELINES_PER_ORG:
+        scope, limit = own, _MAX_PIPELINES_PER_ORG
+    elif len(_pipelines) >= _MAX_PIPELINES:
+        scope, limit = list(_pipelines), _MAX_PIPELINES
+    else:
+        return None
+    for k in scope:
+        if not _holds_memory(_pipelines[k]):
+            return k
+    raise CacheCapacityError(len(scope), limit)
 
 
 def _holds_memory(pipeline: KnowledgePipeline) -> bool:
     # An in-memory embedding service is the only copy of its chunks and BM25
-    # index; a holder or borrower may still be adding to an empty one.
+    # index; a borrower may still be adding to an empty one.
     service = getattr(pipeline, "_embedding_service", None)
     if not isinstance(service, InMemoryEmbeddingService):
         return False
-    return bool(service._chunks) or pipeline in _handed_out or id(pipeline) in _borrowers
+    return bool(service._chunks) or id(pipeline) in _borrowers
 
 
 async def _return_pipeline(pipeline: KnowledgePipeline) -> None:
-    async with _pipeline_lock:
+    with _pipeline_lock:
         remaining = _borrowers.pop(id(pipeline), 1) - 1
         if remaining > 0:
             _borrowers[id(pipeline)] = remaining
@@ -169,8 +211,10 @@ async def _return_pipeline(pipeline: KnowledgePipeline) -> None:
 async def _borrowed_pipeline(
     workspace_id: str, *, org_id: str | None
 ) -> AsyncIterator[KnowledgePipeline]:
-    pipeline = await _checkout_pipeline(workspace_id, org_id, borrow=True)
+    pipeline, idle = await _checkout_pipeline(workspace_id, org_id, borrow=True)
     try:
+        for evicted in idle:
+            await _stop_evicted(evicted)
         yield pipeline
     finally:
         await _return_pipeline(pipeline)
@@ -619,21 +663,23 @@ def get_all_jobs(
 
 async def shutdown_pipeline() -> None:
     """Shutdown the knowledge pipeline gracefully."""
-    async with _pipeline_lock:
-        if _pipelines:
-            for (_, workspace_id), pipeline in list(_pipelines.items()):
-                try:
-                    await pipeline.stop()
-                    logger.info(
-                        "Knowledge pipeline shutdown complete for workspace %s", workspace_id
-                    )
-                except (OSError, RuntimeError) as e:
-                    logger.warning(
-                        "Failed to shutdown pipeline for workspace %s: %s", workspace_id, e
-                    )
-            _pipelines.clear()
+    with _pipeline_lock:
+        cached = list(_pipelines.items())
+        _pipelines.clear()
+    for (_, workspace_id), pipeline in cached:
+        try:
+            await pipeline.stop()
+            logger.info("Knowledge pipeline shutdown complete for workspace %s", workspace_id)
+        except (OSError, RuntimeError) as e:
+            logger.warning("Failed to shutdown pipeline for workspace %s: %s", workspace_id, e)
 
     _executor.shutdown(wait=True)
+
+
+def _ingestion_skipped(error: CacheCapacityError) -> dict[str, Any]:
+    # Ingestion is optional for upload handlers: a full cache skips it and keeps the upload.
+    logger.warning("Knowledge ingestion skipped, pipeline cache full: %s", error)
+    return {"knowledge_processing": {"success": False, "status": "skipped", "error": str(error)}}
 
 
 # Convenience function for document handlers
@@ -685,15 +731,18 @@ def process_uploaded_document(
             }
         }
     else:
-        result = process_document_sync(
-            content=content,
-            filename=filename,
-            workspace_id=workspace_id,
-            document_id=document_id,
-            tags=tags,
-            metadata=metadata,
-            org_id=org_id,
-        )
+        try:
+            result = process_document_sync(
+                content=content,
+                filename=filename,
+                workspace_id=workspace_id,
+                document_id=document_id,
+                tags=tags,
+                metadata=metadata,
+                org_id=org_id,
+            )
+        except CacheCapacityError as e:
+            return _ingestion_skipped(e)
         return {
             "knowledge_processing": {
                 "success": result.success,
@@ -737,15 +786,18 @@ def process_uploaded_text(
                 "status": "queued",
             }
         }
-    result = process_text_sync(
-        text=text,
-        filename=filename,
-        workspace_id=workspace_id,
-        document_id=document_id,
-        tags=tags,
-        metadata=metadata,
-        org_id=org_id,
-    )
+    try:
+        result = process_text_sync(
+            text=text,
+            filename=filename,
+            workspace_id=workspace_id,
+            document_id=document_id,
+            tags=tags,
+            metadata=metadata,
+            org_id=org_id,
+        )
+    except CacheCapacityError as e:
+        return _ingestion_skipped(e)
     return {
         "knowledge_processing": {
             "success": result.success,
