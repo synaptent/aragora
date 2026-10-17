@@ -40,6 +40,12 @@ class MatchesStatsHandler(BaseHandler):
         if strip_version_prefix(path.split("?")[0]) != _STATS_PATH:
             return None
 
+        # The registry falls back to handle() when no handle_<method> hook
+        # answers, so without this guard POST/PUT/PATCH/DELETE return stats.
+        method = getattr(handler, "command", None)
+        if isinstance(method, str) and method.upper() != "GET":
+            return error_response("Method not allowed", 405, headers={"Allow": "GET"})
+
         elo = self.get_elo_system()
         if elo is None:
             return error_response("Match statistics unavailable: ELO system not configured", 503)
