@@ -407,7 +407,8 @@ def _field(key: Any) -> str | None:
 
 
 def _redact_mapping(obj: Mapping[Any, Any], active: frozenset[int]) -> dict[Any, Any]:
-    items = list(obj.items())
+    # One pass over obj.items(): list() would also ask it for its length.
+    items = [(key, value) for key, value in obj.items()]
     entry = any(_field(key) in _NAME_FIELDS and _names_secret(name, None) for key, name in items)
     return dict(
         (key, _REDACTED) if entry and _field(key) == "value" else _redact_item(key, value, active)

@@ -1112,6 +1112,81 @@ def test_two_message_arguments_are_not_a_name_value_pair():
     assert json.loads(JsonFormatter().format(record))["msg"] == "rotated api_key for alice"
 
 
+# HAR entries and header objects, for a mapping whose items() result is caller code.
+_LENGTH_FIELDS = {
+    "har-entry": {"name": "X-Api-Key", "value": "SECRET-LEN-1"},
+    "header-object": {"header": "Authorization", "value": "Bearer SECRET-LEN-2"},
+    "other-har-entry": {"name": "Accept", "value": "text/html"},
+    "other-header-object": {"header": "Accept", "value": "text/html"},
+}
+
+
+def _length_checked(fields, kind):
+    """A mapping whose items() result records a request for its length and changes the mapping."""
+    calls = []
+
+    def asked(name):
+        calls.append(name)
+        dict.__setitem__(entry, "value", "changed by a length request")
+
+    class Snapshot(list):
+        def __len__(self):
+            asked("__len__")
+            return list.__len__(self)
+
+        def __length_hint__(self):
+            asked("__length_hint__")
+            return list.__len__(self)
+
+    class Pairs:
+        def __init__(self, pairs):
+            self.pairs = iter(pairs)
+
+        def __iter__(self):
+            return self
+
+        def __next__(self):
+            return next(self.pairs)
+
+        def __length_hint__(self):
+            asked("__length_hint__")
+            return 2
+
+    class Entry(dict):
+        def items(self):
+            pairs = dict.items(self)
+            if kind == "generator":
+                return (pair for pair in pairs)
+            return Snapshot(pairs) if kind == "list-subclass" else Pairs(pairs)
+
+    entry = Entry(fields)
+    return entry, calls
+
+
+def _logged(value):
+    return logging.makeLogRecord({"msg": "ok", "payload": value})
+
+
+_SURFACES = {
+    "redact": redact,
+    "nested-redact": lambda value: redact({"headers": [value], "n": 1}),
+    "json-extra": lambda value: json.loads(JsonFormatter().format(_logged(value)))["payload"],
+    "percent-text": lambda value: TextFormatter("%(payload)s").format(_logged(value)),
+    "brace-text": lambda value: TextFormatter("{payload}", style="{").format(_logged(value)),
+}
+
+
+@pytest.mark.parametrize("kind", ["list-subclass", "iterator", "generator"])
+@pytest.mark.parametrize("surface", list(_SURFACES))
+@pytest.mark.parametrize("fields", _LENGTH_FIELDS.values(), ids=list(_LENGTH_FIELDS))
+def test_redacting_a_mapping_never_asks_its_items_for_a_length(fields, surface, kind):
+    entry, calls = _length_checked(fields, kind)
+    shown = _SURFACES[surface](entry)
+    assert (calls, dict.copy(entry)) == ([], fields)
+    assert shown == _SURFACES[surface](dict(fields))
+    assert "SECRET-" not in str(shown)
+
+
 @pytest.mark.parametrize("path", _LOG_PATHS)
 @pytest.mark.parametrize(
     "name", ["Authorization", "Proxy-Authorization", "X-Api-Key", "access_token"]
