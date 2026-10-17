@@ -585,6 +585,7 @@ class DecisionRouter:
                 knowledge_context, document_ids = await self._gather_knowledge_context(
                     query=request.content,
                     workspace_id=request.context.workspace_id,
+                    org_id=request.verified_org_id,
                 )
 
             # Merge explicit document IDs from request/context metadata
@@ -1110,6 +1111,8 @@ class DecisionRouter:
         query: str,
         workspace_id: str | None = None,
         max_items: int = 5,
+        *,
+        org_id: str | None = None,
     ) -> tuple[str, list[str]]:
         """
         Gather relevant knowledge context from Knowledge Mound for the debate.
@@ -1118,10 +1121,18 @@ class DecisionRouter:
             query: The decision question/content
             workspace_id: Optional workspace to scope the query
             max_items: Maximum knowledge items to include
+            org_id: Verified organization the Mound read is confined to
 
         Returns:
-            Tuple of (context_string, document_ids)
+            Tuple of (context_string, document_ids); empty, with a warning and
+            without reading the Mound, when no ``org_id`` is given.
         """
+        if not org_id:
+            # The request context carries no verified organization (tenant and
+            # workspace ids are caller- or platform-supplied), so fail closed.
+            logger.warning("Knowledge Mound context skipped: no verified organization")
+            return "", []
+
         try:
             from aragora.knowledge.pipeline import KnowledgePipeline, PipelineConfig
 
@@ -1129,6 +1140,7 @@ class DecisionRouter:
             config = PipelineConfig(
                 workspace_id=workspace_id or "default",
                 use_knowledge_mound=True,
+                org_id=org_id,
             )
             pipeline = KnowledgePipeline(config)
             await pipeline.start()

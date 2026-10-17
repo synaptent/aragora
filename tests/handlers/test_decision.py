@@ -132,6 +132,10 @@ class _MockDecisionRequest:
         self.request_id = request_id
         self.content = content
         self.context = _MockDecisionContext()
+        self.verified_org_id = None
+
+    def bind_verified_org(self, scope):
+        self.verified_org_id = scope.org_id
 
     @classmethod
     def from_http(cls, body, headers):
