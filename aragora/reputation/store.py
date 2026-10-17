@@ -11,9 +11,14 @@ after it is added to the in-memory index.  The store can be rebuilt from
 that file at startup via :meth:`ReputationStore.load_from_file`.
 
 Decay: when a :class:`~aragora.reputation.types.ReputationDelta` was
-created with a ``decay_half_life_days`` value, :meth:`get_score` applies
-exponential decay so that older deltas contribute less.  Callers that
-want raw un-decayed sums can pass ``apply_decay=False``.
+created with a ``decay_half_life_days`` value, :meth:`get_score` and
+:meth:`domain_score` apply exponential decay so that older deltas
+contribute less.  Callers that want raw un-decayed sums can pass
+``apply_decay=False``.
+
+Per-domain slices: AGT-05 forbids a single aggregate score for dispatch
+decisions, so :meth:`domain_score` and :meth:`domain_scores` expose the
+same decay-weighted sum restricted to one or more reputation domains.
 
 Gating: the store is always constructable, but :func:`store_enabled`
 checks ``ARAGORA_REPUTATION_FLOW_ENABLED`` so callers that respect the
@@ -34,6 +39,7 @@ import logging
 import math
 import os
 from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -170,14 +176,71 @@ class ReputationStore:
         exponential time-decay.  Agents with no recorded deltas return 0.0.
         The score is unbounded; callers normalise it for dispatch-eligibility.
         """
-        deltas = self._deltas.get(agent_id, [])
-        live = [d for d in deltas if d.delta_id not in self._reversals]
-        if not live:
+        return self._weighted_sum(self._live_deltas(agent_id), apply_decay=apply_decay)
+
+    def domain_score(
+        self,
+        agent_id: str,
+        domains: str | Iterable[str],
+        *,
+        apply_decay: bool = True,
+        now: datetime | None = None,
+    ) -> float:
+        """Return the running score for *agent_id* restricted to *domains*.
+
+        *domains* is a single domain code or any iterable of codes (see the
+        ``DOMAIN_*`` constants in :mod:`aragora.reputation.types`).  Only
+        non-reversed deltas whose ``domain`` is in that set contribute.
+        Decay semantics match :meth:`get_score`; *now* overrides the clock
+        used for decay (defaults to the current UTC time).  Agents with no
+        matching deltas return 0.0.
+        """
+        wanted = self._normalize_domains(domains)
+        live = [d for d in self._live_deltas(agent_id) if d.domain in wanted]
+        return self._weighted_sum(live, apply_decay=apply_decay, now=now)
+
+    def domain_scores(
+        self,
+        agent_id: str,
+        *,
+        apply_decay: bool = True,
+        now: datetime | None = None,
+    ) -> dict[str, float]:
+        """Return ``{domain: score}`` for every domain *agent_id* has live deltas in.
+
+        Reversed deltas are excluded, so a domain whose only deltas were all
+        reversed is absent from the result.  Keys are sorted.
+        """
+        by_domain: dict[str, list[ReputationDelta]] = defaultdict(list)
+        for d in self._live_deltas(agent_id):
+            by_domain[d.domain].append(d)
+        return {
+            domain: self._weighted_sum(by_domain[domain], apply_decay=apply_decay, now=now)
+            for domain in sorted(by_domain)
+        }
+
+    def _live_deltas(self, agent_id: str) -> list[ReputationDelta]:
+        return [d for d in self._deltas.get(agent_id, []) if d.delta_id not in self._reversals]
+
+    @staticmethod
+    def _normalize_domains(domains: str | Iterable[str]) -> frozenset[str]:
+        if isinstance(domains, str):
+            return frozenset({domains})
+        return frozenset(str(d) for d in domains)
+
+    @staticmethod
+    def _weighted_sum(
+        deltas: list[ReputationDelta],
+        *,
+        apply_decay: bool,
+        now: datetime | None = None,
+    ) -> float:
+        if not deltas:
             return 0.0
         if not apply_decay:
-            return sum(d.delta for d in live)
-        now = datetime.now(tz=UTC)
-        return sum(d.delta * _decay_weight(d, now) for d in live)
+            return sum(d.delta for d in deltas)
+        clock = now if now is not None else datetime.now(tz=UTC)
+        return sum(d.delta * _decay_weight(d, clock) for d in deltas)
 
     def agent_ids(self) -> list[str]:
         """Return sorted list of agent IDs that have at least one delta."""
