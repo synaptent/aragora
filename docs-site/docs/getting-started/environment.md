@@ -507,7 +507,7 @@ explicitly if you need consistent pooling across subsystems.
 | `ARAGORA_API_URL` | Optional | API base URL for CLI/SDK clients | `http://localhost:8080` |
 | `ARAGORA_ENV` | Recommended | `development` or `production` | `development` |
 | `ARAGORA_ENVIRONMENT` | Optional | Alias used by billing/auth | `development` |
-| `ARAGORA_API_TOKEN` | Optional | Enable token auth | Disabled |
+| `ARAGORA_API_TOKEN` | Optional | Enable token auth; strict production/staging requires this value in managed custody | Disabled |
 | `ARAGORA_TOKEN_TTL` | Optional | Token lifetime (seconds) | `3600` |
 | `ARAGORA_WS_MAX_MESSAGE_SIZE` | Optional | Max WebSocket message size | `65536` |
 | `ARAGORA_WS_HEARTBEAT` | Optional | WebSocket heartbeat interval (seconds) | `30` |
@@ -1336,8 +1336,9 @@ See [BOT_INTEGRATIONS.md](../guides/bot-integrations) for detailed setup guides.
 | `ARAGORA_ENCRYPTION_REQUIRED` | Optional | Fail if encryption unavailable | `false` (auto `true` in production) |
 | `ARAGORA_AUDIT_SIGNING_KEY` | Optional | Key for signing audit log entries | - |
 | `ARAGORA_METRICS_TOKEN` | Optional | Auth token for metrics endpoint | - |
+| `ARAGORA_SECRETS_DIR` | Optional | Absolute directory containing protected managed-secret files | - |
 | `ARAGORA_SECRET_NAME` | Optional | AWS Secrets Manager secret name | - |
-| `ARAGORA_USE_SECRETS_MANAGER` | Optional | Enable AWS Secrets Manager loading | `false` locally, auto in prod/staging/AWS runtimes |
+| `ARAGORA_USE_SECRETS_MANAGER` | Optional | Enable AWS Secrets Manager loading | `false`; auto-enabled only in detected AWS-managed runtimes |
 | `ARAGORA_SECRETS_STRICT` | Optional | Block critical-secret env fallback | `false` locally, auto in prod/staging |
 | `ARAGORA_ALLOW_UNVERIFIED_WEBHOOKS` | Optional | Allow unverified webhooks (dev only) | `false` |
 
@@ -1345,14 +1346,19 @@ See [BOT_INTEGRATIONS.md](../guides/bot-integrations) for detailed setup guides.
 - `ARAGORA_ENCRYPTION_REQUIRED` is automatically enabled when `ARAGORA_ENV=production`
 - `ARAGORA_ALLOW_UNVERIFIED_WEBHOOKS` should **never** be set in production - webhooks will fail-closed if verification is unavailable
 - Webhook verification requires: Slack (signing secret), Discord (PyNaCl + public key), Teams/Google Chat (PyJWT)
-- Secrets Manager is auto-enabled in production/staging or AWS-managed runtimes.
-  For local development, set `ARAGORA_USE_SECRETS_MANAGER=true` to opt in.
+- Secrets Manager is auto-enabled only in detected AWS-managed runtimes; production or staging names alone do not trigger AWS.
+  Existing production/staging deployments that rely on AWS custody must set `ARAGORA_USE_SECRETS_MANAGER=true` explicitly before upgrading, or configure `ARAGORA_SECRETS_DIR`. Startup refuses to run in strict mode when neither is configured, and names both fixes.
   `ARAGORA_SECRET_NAME` still falls back to `aragora/production` when Secrets Manager is enabled.
+- Mounted secret paths must resolve to owner-readable regular files with mode `0400` or `0600`; symlinks, hard links, and platform-default `0444`/`0644` modes are rejected.
+  A rejected file fails reads of its own name only. That name does not fall back to Secrets Manager or the environment, other mounted names keep working, and startup and `secrets health` name the rejected file.
+  A problem with the directory itself (relative, missing, symlinked, peer-writable or untrusted-owner) fails every secret read.
+- Graceful startup degradation (`ARAGORA_STRICT_STARTUP` unset) does not cover unusable secret custody. When configured custody cannot be read safely, `aragora` and `python -m aragora.server` stop with exit status 1 and one line, `aragora: secret custody is unusable: <reason>`, which never contains a secret value.
+- `ARAGORA_ENV` or `ARAGORA_ENVIRONMENT` values `production`, `prod`, `staging`, and `stage` enable strict custody and mandatory managed `ARAGORA_API_TOKEN` authentication.
 - Strict mode treats provider keys (`OPENAI_API_KEY`, `XAI_API_KEY`, `ANTHROPIC_API_KEY`, ...) as
-  critical secrets that must come from Secrets Manager. A local server that takes its keys from the
-  shell (for example a VibeProxy-routed development server) should set
-  `ARAGORA_USE_SECRETS_MANAGER=false ARAGORA_SECRETS_STRICT=false` explicitly so an inherited
-  environment cannot switch either on.
+  critical secrets that must come from managed custody (`ARAGORA_SECRETS_DIR` or Secrets Manager).
+  A local server that takes its keys from the shell (for example a VibeProxy-routed development
+  server) should set `ARAGORA_USE_SECRETS_MANAGER=false ARAGORA_SECRETS_STRICT=false` explicitly
+  so an inherited environment cannot switch either on.
 - Use `python3 -m aragora.cli.main secrets health --json` to verify source status without printing secret values.
 
 ### ODR Receipt Signing

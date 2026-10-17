@@ -295,10 +295,18 @@ class QuotaFallbackMixin:
         Returns:
             OpenRouterAgent instance if OPENROUTER_API_KEY is set, None otherwise
         """
+        from aragora.config.secrets import SecretSourceError
+
         try:
             from aragora.config import get_api_key
 
             openrouter_key = get_api_key("OPENROUTER_API_KEY", required=False)
+        except SecretSourceError:
+            logger.warning(
+                "[%s] OPENROUTER_API_KEY was rejected by secret custody, fallback disabled",
+                getattr(self, "name", "fallback"),
+            )
+            return None
         except (ImportError, KeyError, OSError) as e:
             # ImportError: config module not available
             # KeyError: API key not in config

@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 from collections.abc import Callable
 
-from aragora.config import get_api_key
+from aragora.config import get_provider_key, select_provider_key
 from aragora.nomic.task_decomposer_debate import TaskDecomposerDebateMixin
 from aragora.nomic.task_decomposer_grounding import TaskDecomposerGroundingMixin
 from aragora.nomic.task_decomposer_models import (  # noqa: F401 -- model names re-exported
@@ -42,6 +42,8 @@ if TYPE_CHECKING:
     from aragora.core import DebateResult
 
 logger = logging.getLogger(__name__)
+
+_LLM_EXTRACTION_CONSUMER = "Task decomposition LLM extraction"
 
 
 @dataclass
@@ -1341,6 +1343,12 @@ class TaskDecomposer(
             constraints=constraints,
         )
 
+        # A rejected Anthropic key leaves extraction without an LLM; it must not
+        # move on to OpenRouter.
+        anthropic = select_provider_key("ANTHROPIC_API_KEY", consumer=_LLM_EXTRACTION_CONSUMER)
+        if anthropic is not None and anthropic.rejected:
+            return []
+
         # Try Anthropic first
         text = self._call_anthropic(prompt)
         if text is None:
@@ -1419,7 +1427,7 @@ class TaskDecomposer(
 
     def _call_anthropic(self, prompt: str) -> str | None:
         """Try calling the Anthropic API directly. Returns response text or None."""
-        api_key = get_api_key("ANTHROPIC_API_KEY", required=False) or ""
+        api_key = get_provider_key("ANTHROPIC_API_KEY", consumer=_LLM_EXTRACTION_CONSUMER)
         if not api_key:
             logger.debug("ANTHROPIC_API_KEY not set; skipping Anthropic provider")
             return None
@@ -1461,7 +1469,7 @@ class TaskDecomposer(
 
     def _call_openrouter(self, prompt: str) -> str | None:
         """Try calling OpenRouter as fallback. Returns response text or None."""
-        api_key = get_api_key("OPENROUTER_API_KEY", required=False) or ""
+        api_key = get_provider_key("OPENROUTER_API_KEY", consumer=_LLM_EXTRACTION_CONSUMER)
         if not api_key:
             logger.debug("OPENROUTER_API_KEY not set; skipping OpenRouter fallback")
             return None

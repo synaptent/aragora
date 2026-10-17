@@ -57,7 +57,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Protocol, runtime_checkable
 
-from aragora.config import get_api_key
+from aragora.config import select_provider_key
 from aragora.models.compat import first_text_block
 
 logger = logging.getLogger(__name__)
@@ -406,6 +406,10 @@ class LeanBackend:
 
         # Try DeepSeek-Prover first if configured
         if self._translation_model in (TranslationModel.AUTO, TranslationModel.DEEPSEEK_PROVER):
+            if self._deepseek_translator is None:
+                openrouter = select_provider_key("OPENROUTER_API_KEY", consumer="Lean translation")
+                if openrouter is not None and openrouter.rejected:
+                    return None
             translator = self._get_deepseek_translator()
             if translator:
                 result = await translator.translate(claim, context)
@@ -421,9 +425,13 @@ class LeanBackend:
                     return None
 
         # Fall back to Claude/OpenAI
-        api_key = get_api_key("ANTHROPIC_API_KEY", "OPENAI_API_KEY", required=False)
-        if not api_key:
+        selected = select_provider_key(
+            "ANTHROPIC_API_KEY", "OPENAI_API_KEY", consumer="Lean translation"
+        )
+        if selected is None or selected.value is None:
             return None
+        anthropic_key = selected.value if selected.name == "ANTHROPIC_API_KEY" else None
+        openai_key = selected.value if selected.name == "OPENAI_API_KEY" else None
 
         # Create translation prompt
         prompt = f"""Translate the following natural language claim into a Lean 4 theorem with proof.
@@ -448,9 +456,6 @@ theorem claim_1 : ∀ n : Nat, n + 0 = n := by simp
 ```"""
 
         try:
-            anthropic_key = get_api_key("ANTHROPIC_API_KEY", required=False)
-            openai_key = get_api_key("OPENAI_API_KEY", required=False)
-
             if anthropic_key:
                 url = "https://api.anthropic.com/v1/messages"
                 headers = {
@@ -686,10 +691,14 @@ theorem claim_1 : ∀ n : Nat, n + 0 = n := by simp
         """
         from aragora.observability.http_client_pool import get_http_pool
 
-        api_key = get_api_key("ANTHROPIC_API_KEY", "OPENAI_API_KEY", required=False)
-        if not api_key:
+        selected = select_provider_key(
+            "ANTHROPIC_API_KEY", "OPENAI_API_KEY", consumer="Lean semantic verification"
+        )
+        if selected is None or selected.value is None:
             # Can't verify without LLM - return low confidence
             return False, 0.3, "No LLM available to verify semantic match"
+        anthropic_key = selected.value if selected.name == "ANTHROPIC_API_KEY" else None
+        openai_key = selected.value if selected.name == "OPENAI_API_KEY" else None
 
         prompt = f"""Analyze whether this Lean 4 theorem actually proves the given natural language claim.
 
@@ -720,9 +729,6 @@ Examples of MATCHING:
 - Claim about prime divisibility and theorem proves corresponding property"""
 
         try:
-            anthropic_key = get_api_key("ANTHROPIC_API_KEY", required=False)
-            openai_key = get_api_key("OPENAI_API_KEY", required=False)
-
             if anthropic_key:
                 url = "https://api.anthropic.com/v1/messages"
                 headers = {

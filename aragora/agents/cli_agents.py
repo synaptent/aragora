@@ -35,6 +35,7 @@ from aragora.agents.errors import (
 from aragora.agents.registry import AgentRegistry
 from aragora.config import get_api_key
 from aragora.config.model_pins import GEMINI_31_PRO_VIA_OPENROUTER
+from aragora.config.secrets import SecretSourceError
 from aragora.core import Agent, Critique, Message
 from aragora.core_types import AgentRole
 from aragora.resilience import BaseCircuitBreaker, get_v2_circuit_breaker as get_circuit_breaker
@@ -341,7 +342,14 @@ class CLIAgent(CritiqueMixin, Agent):
             return None
 
         if self._fallback_agent is None:
-            api_key = get_api_key("OPENROUTER_API_KEY", required=False)
+            try:
+                api_key = get_api_key("OPENROUTER_API_KEY", required=False)
+            except SecretSourceError:
+                logger.warning(
+                    "[%s] OPENROUTER_API_KEY was rejected by secret custody, fallback disabled",
+                    self.name,
+                )
+                return None
             if not api_key:
                 logger.warning(
                     "[%s] No OPENROUTER_API_KEY set, fallback disabled - rate limit errors will not have a fallback",
