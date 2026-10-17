@@ -377,6 +377,7 @@ class ViahTrendPoint:
     viah: float | None
     merged_autonomous_prs: int
     agent_hours: float
+    rescues_required: int = 0
 
 
 @dataclass(frozen=True)
@@ -404,6 +405,7 @@ class ViahTrend:
                     "viah": p.viah,
                     "merged_autonomous_prs": p.merged_autonomous_prs,
                     "agent_hours": p.agent_hours,
+                    "rescues_required": p.rescues_required,
                 }
                 for p in self.points
             ],
@@ -484,6 +486,7 @@ def rolling_viah_trend(
                 viah=report.viah,
                 merged_autonomous_prs=report.merged_autonomous_prs,
                 agent_hours=report.agent_hours,
+                rescues_required=report.rescues_required,
             )
         )
 
