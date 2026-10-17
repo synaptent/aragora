@@ -35,6 +35,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Callable
 
+from aragora.connectors.prediction_markets.stake_caps import StabilityRecord, StakeCapSchedule
+
 logger = logging.getLogger(__name__)
 
 MANIFOLD_API_BASE = "https://api.manifold.markets/v0"
@@ -323,12 +325,18 @@ class ManifoldBetAdapter(ManifoldAdapter):
     Gated behind ARAGORA_MANIFOLD_WRITE_ENABLED (default off).
     Enforces per-market (50 mana), per-day (1 000 mana), and
     liquidity-fraction (5%) caps before each API call.
+
+    With ``cap_schedule`` set, the per-market cap comes from
+    :class:`StakeCapSchedule` (50 → 200 mana after 30 stable days, itself
+    gated behind ARAGORA_MANIFOLD_CAP_GRADUATION_ENABLED); unset, unchanged.
     """
 
     api_key: str = ""
     per_market_cap_mana: int = DEFAULT_PER_MARKET_CAP_MANA
     per_day_cap_mana: int = DEFAULT_PER_DAY_CAP_MANA
     liquidity_fraction_cap: float = DEFAULT_LIQUIDITY_FRACTION_CAP
+    cap_schedule: StakeCapSchedule | None = None
+    stability_record: StabilityRecord = field(default_factory=StabilityRecord)
     _market_stakes: dict[str, int] = field(default_factory=dict)
     _daily_stakes: dict[str, int] = field(default_factory=dict)
 
@@ -356,6 +364,11 @@ class ManifoldBetAdapter(ManifoldAdapter):
         except json.JSONDecodeError as exc:
             raise ManifoldError(f"manifold POST {path} returned non-JSON: {exc}") from exc
 
+    def _effective_per_market_cap(self, *, now: datetime | None = None) -> int:
+        if self.cap_schedule is None:
+            return self.per_market_cap_mana
+        return self.cap_schedule.effective_per_market_cap(self.stability_record, now=now)
+
     def _enforce_caps(
         self,
         market_id: str,
@@ -365,11 +378,12 @@ class ManifoldBetAdapter(ManifoldAdapter):
         now: datetime | None = None,
     ) -> None:
         market_staked = self._market_stakes.get(market_id, 0)
-        if market_staked + stake_mana > self.per_market_cap_mana:
+        per_market_cap = self._effective_per_market_cap(now=now)
+        if market_staked + stake_mana > per_market_cap:
             raise ManifoldError(
                 f"per-market cap exceeded for {market_id}: "
                 f"already_staked={market_staked}, requested={stake_mana}, "
-                f"cap={self.per_market_cap_mana}"
+                f"cap={per_market_cap}"
             )
         today = (now or datetime.now(tz=UTC)).date().isoformat()
         day_staked = self._daily_stakes.get(today, 0)
@@ -411,29 +425,36 @@ class ManifoldBetAdapter(ManifoldAdapter):
             raise ManifoldError(f"outcome must be 'YES' or 'NO': {outcome!r}")
 
         market = self.fetch_market(market_id)
-        self._enforce_caps(
-            market_id,
-            stake_mana,
-            market_liquidity=market.total_liquidity,
-            now=now,
-        )
+        try:
+            self._enforce_caps(
+                market_id,
+                stake_mana,
+                market_liquidity=market.total_liquidity,
+                now=now,
+            )
 
-        payload = self._post(
-            "bet",
-            {
-                "contractId": market_id,
-                "amount": stake_mana,
-                "outcome": outcome,
-            },
-        )
+            payload = self._post(
+                "bet",
+                {
+                    "contractId": market_id,
+                    "amount": stake_mana,
+                    "outcome": outcome,
+                },
+            )
 
-        bet_id = str(payload.get("id") or payload.get("betId") or "").strip()
-        if not bet_id:
-            raise ManifoldError(f"manifold bet response missing 'id' / 'betId': {payload!r}")
+            bet_id = str(payload.get("id") or payload.get("betId") or "").strip()
+            if not bet_id:
+                raise ManifoldError(f"manifold bet response missing 'id' / 'betId': {payload!r}")
+        except ManifoldError:
+            # Cap violations and write failures count against stability
+            # for cap graduation; caller-side validation errors above do not.
+            self.stability_record.record_incident(now=now)
+            raise
 
         today = (now or datetime.now(tz=UTC)).date().isoformat()
         self._market_stakes[market_id] = self._market_stakes.get(market_id, 0) + stake_mana
         self._daily_stakes[today] = self._daily_stakes.get(today, 0) + stake_mana
+        self.stability_record.record_bet(now=now)
 
         return ManifoldBetResult(
             bet_id=bet_id,
