@@ -34,6 +34,7 @@ from aragora.pipeline.backbone_errors import (
 from aragora.pipeline.backbone_runtime import BackboneRuntime
 from aragora.pipeline.decision_plan.factory import normalize_execution_mode
 from aragora.pipeline.execution_mode import ExecutionMode as SafetyMode
+from aragora.pipeline.execution_ownership import resolve_execution_owner
 from aragora.pipeline.executor import ExecutionMode as ExecutorExecutionMode
 
 from ..base import (
@@ -340,7 +341,7 @@ class PromptEngineHandler(SecureHandler):
                 400,
             )
 
-        _, perm_err = self.require_permission_or_error(handler, "plans:write")
+        user, perm_err = self.require_permission_or_error(handler, "plans:write")
         if perm_err:
             return None, perm_err
         if schedule_requested:
@@ -359,6 +360,7 @@ class PromptEngineHandler(SecureHandler):
                 "task": str(plan_data.get("task", "") or "").strip() or None,
                 "metadata": metadata,
                 "implementation_profile": implementation_profile,
+                "owner": resolve_execution_owner(user),
             },
             None,
         )
@@ -381,6 +383,11 @@ class PromptEngineHandler(SecureHandler):
         plan_request, plan_error = self._normalize_decision_plan_request(handler, data)
         if plan_error:
             return plan_error
+        org_id, created_by = (
+            plan_request["owner"]
+            if plan_request
+            else resolve_execution_owner(self.get_current_user(handler))
+        )
 
         context = data.get("context")
         store = get_plan_store()
@@ -426,7 +433,7 @@ class PromptEngineHandler(SecureHandler):
             )
         )
         try:
-            runtime.create_run(run)
+            runtime.create_run(run, org_id=org_id, created_by=created_by)
             ensure_backbone_persisted(
                 runtime.get_run(run_id) is not None,
                 f"Failed to persist prompt-engine backbone run {run_id}",
