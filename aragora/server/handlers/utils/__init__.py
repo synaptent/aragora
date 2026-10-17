@@ -61,7 +61,7 @@ from .params import (
     get_string_param,
     parse_query_params,
 )
-from .rate_limit import RateLimiter, get_client_ip, rate_limit
+from .rate_limit import RateLimiter, get_client_ip, get_exact_client_ip, rate_limit
 from .aiohttp_responses import web_error_response
 from .responses import (
     HandlerResult,
@@ -112,6 +112,7 @@ __all__ = [
     "RateLimiter",
     "rate_limit",
     "get_client_ip",
+    "get_exact_client_ip",
     # Parameter extraction
     "parse_query_params",
     "get_int_param",

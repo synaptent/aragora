@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .base import (
+    CLIENT_IP_HEADERS,
     BURST_MULTIPLIER,
     DEFAULT_RATE_LIMIT,
     _extract_client_ip,
@@ -272,10 +273,7 @@ def _extract_tenant_id(handler: Any) -> str:
 
     headers = {}
     if hasattr(handler, "headers"):
-        headers = {
-            "X-Forwarded-For": handler.headers.get("X-Forwarded-For", ""),
-            "X-Real-IP": handler.headers.get("X-Real-IP", ""),
-        }
+        headers = {name: handler.headers.get(name, "") for name in CLIENT_IP_HEADERS}
 
     return sanitize_rate_limit_key_component(_extract_client_ip(headers, remote_ip))
 

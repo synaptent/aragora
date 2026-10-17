@@ -933,9 +933,9 @@ class TestRateLimitBypassAttempts:
         # Remote address IS a trusted proxy (localhost)
         remote_addr = "127.0.0.1"
 
-        # Should extract first IP from XFF chain
+        # Should extract the rightmost untrusted hop; earlier hops are client-supplied
         result = _extract_client_ip(headers, remote_addr, trust_xff_from_proxies=True)
-        assert result == "1.2.3.4"
+        assert result == "5.6.7.8"
 
     def test_xff_header_empty_values(self):
         """Verify handling of empty or malformed X-Forwarded-For."""
@@ -956,9 +956,9 @@ class TestRateLimitBypassAttempts:
         from aragora.server.middleware.rate_limit import _extract_client_ip
 
         # XFF with invalid IP
-        headers = {"X-Forwarded-For": "not-an-ip, 1.2.3.4"}
+        headers = {"X-Forwarded-For": "1.2.3.4, not-an-ip"}
         result = _extract_client_ip(headers, "127.0.0.1", trust_xff_from_proxies=True)
-        # Should still return the first entry (even if invalid) as a string key
+        # Should still return the rightmost untrusted entry (even if invalid) as a string key
         assert "not-an-ip" in result or result == "127.0.0.1"
 
     def test_ip_normalization_ipv6(self):

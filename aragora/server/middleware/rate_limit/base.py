@@ -34,27 +34,61 @@ TRUSTED_PROXIES_RAW = os.environ.get(
 TRUSTED_PROXIES: frozenset[str] = frozenset(
     p.strip() for p in TRUSTED_PROXIES_RAW.split(",") if p.strip()
 )
-_TRUSTED_PROXY_IPS: set[str] = set()
-_TRUSTED_PROXY_NETS: list[ipaddress._BaseNetwork] = []
+# Peers whose CF-Connecting-IP / True-Client-IP headers are believed. Empty by
+# default: only the operator knows which peer is Cloudflare's edge or tunnel.
+CLOUDFLARE_TRUSTED_PROXIES: frozenset[str] = frozenset(
+    p.strip()
+    for p in os.environ.get("ARAGORA_CLOUDFLARE_TRUSTED_PROXIES", "").split(",")
+    if p.strip()
+)
+# No forwarded header is safe behind every proxy, so the operator picks one (forwarded_client_ip).
+TRUSTED_PROXY_HEADER = (
+    os.environ.get("ARAGORA_TRUSTED_PROXY_HEADER", "").strip().lower() or "x-forwarded-for"
+)
+if TRUSTED_PROXY_HEADER not in ("x-forwarded-for", "x-real-ip"):
+    logger.warning(
+        "Unknown ARAGORA_TRUSTED_PROXY_HEADER value %r (expected x-forwarded-for or "
+        "x-real-ip); no forwarded client-IP header is believed, so every request is "
+        "keyed on its direct peer address.",
+        TRUSTED_PROXY_HEADER,
+    )
 
-for entry in TRUSTED_PROXIES:
-    if entry == "localhost":
-        _TRUSTED_PROXY_IPS.update({"127.0.0.1", "::1"})
-        continue
-    try:
-        if "/" in entry:
-            _TRUSTED_PROXY_NETS.append(ipaddress.ip_network(entry, strict=False))
-        else:
-            _TRUSTED_PROXY_IPS.add(str(ipaddress.ip_address(entry)))
-    except ValueError:
-        logger.debug("Ignoring invalid trusted proxy entry: %s", entry)
+
+def _unmap(
+    addr: ipaddress.IPv4Address | ipaddress.IPv6Address,
+) -> ipaddress.IPv4Address | ipaddress.IPv6Address:
+    if type(addr) is ipaddress.IPv6Address and addr.ipv4_mapped is not None:
+        return addr.ipv4_mapped
+    return addr
 
 
-def _normalize_ip(ip_value: str) -> str:
+def _parse_proxy_entries(entries) -> tuple[set[str], list[ipaddress._BaseNetwork]]:
+    ips: set[str] = set()
+    nets: list[ipaddress._BaseNetwork] = []
+    for entry in entries:
+        if entry == "localhost":
+            ips.update({"127.0.0.1", "::1"})
+            continue
+        try:
+            if "/" in entry:
+                nets.append(ipaddress.ip_network(entry, strict=False))
+            else:
+                ips.add(str(_unmap(ipaddress.ip_address(entry))))
+        except ValueError:
+            logger.debug("Ignoring invalid trusted proxy entry: %s", entry)
+    return ips, nets
+
+
+_TRUSTED_PROXY_IPS, _TRUSTED_PROXY_NETS = _parse_proxy_entries(TRUSTED_PROXIES)
+_CLOUDFLARE_PROXY_IPS, _CLOUDFLARE_PROXY_NETS = _parse_proxy_entries(CLOUDFLARE_TRUSTED_PROXIES)
+
+
+def _normalize_ip(ip_value: str, *, group_ipv6: bool = True) -> str:
     """Normalize IP addresses for consistent rate limiting.
 
-    - IPv4: Used as-is after validation
+    - IPv4 (and IPv4-mapped IPv6): the IPv4 address after validation
     - IPv6: Normalized to standard form, with /64 prefix grouping for fairness
+      (``group_ipv6=False`` keeps the exact address, for audit records)
     - Invalid: Returns original string (will be treated as unique key)
     """
     if not ip_value:
@@ -70,8 +104,8 @@ def _normalize_ip(ip_value: str) -> str:
         return str(ip_value).strip()
 
     try:
-        addr = ipaddress.ip_address(ip_value.strip())
-        if type(addr) is ipaddress.IPv6Address:
+        addr = _unmap(ipaddress.ip_address(ip_value.strip()))
+        if group_ipv6 and type(addr) is ipaddress.IPv6Address:
             # Group by /64 prefix for IPv6 (standard allocation size)
             network = ipaddress.ip_network(f"{addr}/64", strict=False)
             return str(network.network_address)
@@ -80,8 +114,32 @@ def _normalize_ip(ip_value: str) -> str:
         return ip_value.strip()
 
 
+def is_trusted_proxy_address(ip: str) -> bool:
+    """Check an exact peer address against the parsed ARAGORA_TRUSTED_PROXIES set.
+
+    Matches listed IPs and CIDR ranges (``localhost`` is listed as 127.0.0.1
+    and ::1). An IPv4-mapped IPv6 address such as ``::ffff:127.0.0.1`` is
+    checked as its IPv4 address. Unlike ``_normalize_ip``, IPv6 addresses are
+    not grouped by /64 here, so a listed ``::1`` matches.
+    """
+    return _address_listed(ip, _TRUSTED_PROXY_IPS, _TRUSTED_PROXY_NETS)
+
+
+def is_cloudflare_trusted_proxy_address(ip: str) -> bool:
+    """Check a peer against ARAGORA_CLOUDFLARE_TRUSTED_PROXIES (same entry syntax)."""
+    return _address_listed(ip, _CLOUDFLARE_PROXY_IPS, _CLOUDFLARE_PROXY_NETS)
+
+
+def _address_listed(ip: str, ips: set[str], nets: list[ipaddress._BaseNetwork]) -> bool:
+    try:
+        addr = _unmap(ipaddress.ip_address(str(ip).strip()))
+    except ValueError:
+        return False
+    return str(addr) in ips or any(addr in net for net in nets)
+
+
 def _is_trusted_proxy(ip: str) -> bool:
-    """Check if IP is a trusted proxy for XFF header processing.
+    """Check if a raw peer address is a trusted proxy for XFF header processing.
 
     Uses pre-parsed IP sets and networks for efficient lookup.
     Supports both individual IPs and CIDR ranges.
@@ -89,20 +147,78 @@ def _is_trusted_proxy(ip: str) -> bool:
     if not ip:
         return False
 
-    normalized = _normalize_ip(ip)
-    if normalized in _TRUSTED_PROXY_IPS:
-        return True
+    return is_trusted_proxy_address(ip)
 
-    if _TRUSTED_PROXY_NETS:
-        try:
-            addr = ipaddress.ip_address(normalized)
-            for net in _TRUSTED_PROXY_NETS:
-                if addr in net:
-                    return True
-        except ValueError:
-            logger.debug("Could not parse IP address for trusted proxy check: %s", normalized)
 
-    return False
+def header_value(headers, name: str) -> str:
+    value = headers.get(name) or headers.get(name.lower())
+    return value.strip() if type(value) is str else ""
+
+
+# The request headers forwarded_client_ip reads; middleware callers copy these.
+CLIENT_IP_HEADERS = ("X-Forwarded-For", "X-Real-IP", "CF-RAY", "CF-Connecting-IP", "True-Client-IP")
+_cf_ray_warning_logged = False
+
+
+def _cloudflare_client_ip(headers, remote_addr: str) -> str:
+    global _cf_ray_warning_logged
+    if not header_value(headers, "CF-RAY"):
+        return ""
+    if is_cloudflare_trusted_proxy_address(remote_addr):
+        return header_value(headers, "CF-Connecting-IP") or header_value(headers, "True-Client-IP")
+    if not _cf_ray_warning_logged:
+        _cf_ray_warning_logged = True
+        logger.warning(
+            "Ignoring Cloudflare client-IP headers from peer %s, which is not listed in "
+            "ARAGORA_CLOUDFLARE_TRUSTED_PROXIES; if Cloudflare fronts this server, list "
+            "that peer there so clients are keyed on CF-Connecting-IP. Logged once.",
+            remote_addr,
+        )
+    return ""
+
+
+def forwarded_client_ip(headers, remote_addr: str) -> str:
+    """Return the raw client address for a request arriving from ``remote_addr``.
+
+    A request carrying CF-RAY from a peer in ARAGORA_CLOUDFLARE_TRUSTED_PROXIES
+    is keyed on CF-Connecting-IP, else True-Client-IP, in every mode; CF-RAY
+    from any other peer is ignored (logged once per process).
+
+    Otherwise a peer in ARAGORA_TRUSTED_PROXIES is believed for the header named by
+    ARAGORA_TRUSTED_PROXY_HEADER:
+
+    - ``x-forwarded-for`` (default): the rightmost X-Forwarded-For hop that is
+      not itself a trusted proxy. Hops to the left of that one were written by
+      the client, so they are never used. X-Real-IP is believed only when
+      X-Forwarded-For is absent or empty, because proxies that append to
+      X-Forwarded-For often pass a client's X-Real-IP through.
+    - ``x-real-ip``: X-Real-IP only; X-Forwarded-For is never read, because a
+      proxy that sets X-Real-IP may pass a client's X-Forwarded-For through.
+      Without X-Real-IP the peer is the client.
+    - any other value: no forwarded header is believed (warned at import).
+
+    Any other peer is the client. Callers key the result with ``_normalize_ip``.
+    """
+    cf_ip = _cloudflare_client_ip(headers, remote_addr)
+    if cf_ip:
+        return cf_ip
+    if not is_trusted_proxy_address(remote_addr):
+        return remote_addr
+
+    if TRUSTED_PROXY_HEADER == "x-real-ip":
+        return header_value(headers, "X-Real-IP") or remote_addr
+    if TRUSTED_PROXY_HEADER != "x-forwarded-for":
+        return remote_addr
+
+    hops = [h.strip() for h in header_value(headers, "X-Forwarded-For").split(",") if h.strip()]
+    if not hops:
+        return header_value(headers, "X-Real-IP") or remote_addr
+
+    for hop in reversed(hops):
+        if not is_trusted_proxy_address(hop):
+            return hop
+
+    return remote_addr
 
 
 def _extract_client_ip(
@@ -112,35 +228,15 @@ def _extract_client_ip(
 ) -> str:
     """Extract real client IP from request headers.
 
-    Priority:
-    1. X-Real-IP (if from trusted proxy)
-    2. X-Forwarded-For leftmost non-trusted IP (if from trusted proxy)
-    3. Direct connection IP (remote_addr)
+    The client ``forwarded_client_ip`` chooses: the Cloudflare headers from a
+    peer in ARAGORA_CLOUDFLARE_TRUSTED_PROXIES, the header chosen by
+    ARAGORA_TRUSTED_PROXY_HEADER from a trusted proxy, otherwise the direct
+    connection IP. Callers pass the CLIENT_IP_HEADERS of the request.
     """
-    remote_ip = _normalize_ip(remote_addr)
+    if not trust_xff_from_proxies or not remote_addr:
+        return _normalize_ip(remote_addr)
 
-    if not trust_xff_from_proxies:
-        return remote_ip
-
-    if not _is_trusted_proxy(remote_ip):
-        return remote_ip
-
-    # Check X-Real-IP first (simpler, less prone to spoofing)
-    x_real_ip = headers.get("X-Real-IP", "").strip()
-    if x_real_ip:
-        return _normalize_ip(x_real_ip)
-
-    # Parse X-Forwarded-For: client, proxy1, proxy2, ...
-    xff = headers.get("X-Forwarded-For", "")
-    if xff:
-        parts = [p.strip() for p in xff.split(",") if p.strip()]
-        # Find leftmost non-trusted IP (the real client)
-        for ip in parts:
-            normalized = _normalize_ip(ip)
-            if not _is_trusted_proxy(normalized):
-                return normalized
-
-    return remote_ip
+    return _normalize_ip(forwarded_client_ip(headers, remote_addr))
 
 
 def sanitize_rate_limit_key_component(value: str) -> str:
@@ -208,7 +304,14 @@ __all__ = [
     "IP_RATE_LIMIT",
     "BURST_MULTIPLIER",
     "TRUSTED_PROXIES",
+    "CLOUDFLARE_TRUSTED_PROXIES",
+    "TRUSTED_PROXY_HEADER",
+    "CLIENT_IP_HEADERS",
     "_normalize_ip",
+    "is_trusted_proxy_address",
+    "is_cloudflare_trusted_proxy_address",
+    "forwarded_client_ip",
+    "header_value",
     "_is_trusted_proxy",
     "_extract_client_ip",
     "sanitize_rate_limit_key_component",

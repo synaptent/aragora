@@ -548,7 +548,9 @@ second server on the same host, move all of them, for example
 
 | Variable | Required | Description | Default |
 |----------|----------|-------------|---------|
-| `ARAGORA_TRUSTED_PROXIES` | Optional | Comma-separated proxy IPs for client IP resolution | `127.0.0.1,::1,localhost` |
+| `ARAGORA_TRUSTED_PROXIES` | Optional | Comma-separated IPs, CIDR ranges or `localhost` of every proxy hop in front of the API (add Cloudflare's published ranges when Cloudflare fronts a listed proxy); a listed peer is believed for the header named by `ARAGORA_TRUSTED_PROXY_HEADER` | `127.0.0.1,::1,localhost` |
+| `ARAGORA_TRUSTED_PROXY_HEADER` | Optional | `x-forwarded-for`: the rightmost `X-Forwarded-For` hop that is not a listed proxy (`X-Real-IP` only when `X-Forwarded-For` is absent); `x-real-ip`: `X-Real-IP` only, never `X-Forwarded-For`. Any other value logs a warning and believes neither | `x-forwarded-for` |
+| `ARAGORA_CLOUDFLARE_TRUSTED_PROXIES` | Optional | Peers (same syntax) whose `CF-Connecting-IP` / `True-Client-IP` are believed; set for Cloudflare Tunnel or direct Cloudflare traffic | (empty) |
 | `ARAGORA_WS_CONN_RATE` | Optional | WS connections per IP per minute | `30` |
 | `ARAGORA_WS_MAX_PER_IP` | Optional | Max concurrent WS connections per IP | `10` |
 | `ARAGORA_WS_MSG_RATE` | Optional | WS messages per second per connection | `10` |
