@@ -27,6 +27,7 @@ __all__ = [
     "all_responses_are_failures",
     "compliance_generator",
     "detect_provider",
+    "provider_detector",
     "receipt_exporters",
     "register_compliance_generator",
     "register_exporters",
@@ -159,6 +160,12 @@ def receipt_exporters() -> ReceiptExporterAdapter:
 
 def compliance_generator(**kwargs: Any) -> Any:
     return _adapter(COMPLIANCE)(**kwargs)
+
+
+def provider_detector() -> ProviderDetectorAdapter:
+    """The registered provider detector itself, not a call through it."""
+    adapter: ProviderDetectorAdapter = _adapter(PROVIDER_DETECTION)
+    return adapter
 
 
 def detect_provider(model: str) -> str:
