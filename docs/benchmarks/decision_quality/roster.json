@@ -1,0 +1,85 @@
+{
+  "schema_version": "decision-quality-roster/1.0",
+  "conditions": {
+    "single_claude": {
+      "mode": "single",
+      "max_paid_cost_usd": 0.0,
+      "members": [
+        {
+          "family": "claude",
+          "requested_model": "claude-fable-5",
+          "allowed_resolved_models": [
+            "claude-fable-5"
+          ],
+          "transport": "vibeproxy-required",
+          "billing_class": "subscription"
+        }
+      ]
+    },
+    "single_openai": {
+      "mode": "single",
+      "max_paid_cost_usd": 0.0,
+      "members": [
+        {
+          "family": "openai",
+          "requested_model": "gpt-5.6-sol",
+          "allowed_resolved_models": [
+            "gpt-5.6-sol"
+          ],
+          "transport": "vibeproxy-required",
+          "billing_class": "subscription"
+        }
+      ]
+    },
+    "single_gemini": {
+      "mode": "single",
+      "max_paid_cost_usd": 0.0,
+      "members": [
+        {
+          "family": "gemini",
+          "requested_model": "gemini-3.1-pro-preview",
+          "allowed_resolved_models": [
+            "gemini-3.1-pro-preview"
+          ],
+          "transport": "vibeproxy-required",
+          "billing_class": "subscription"
+        }
+      ]
+    },
+    "aragora_team": {
+      "mode": "team",
+      "adversarial_rounds": 1,
+      "synthesizer_family": "claude",
+      "max_paid_cost_usd": 0.0,
+      "members": [
+        {
+          "family": "claude",
+          "requested_model": "claude-fable-5",
+          "allowed_resolved_models": [
+            "claude-fable-5"
+          ],
+          "transport": "vibeproxy-required",
+          "billing_class": "subscription"
+        },
+        {
+          "family": "openai",
+          "requested_model": "gpt-5.6-sol",
+          "allowed_resolved_models": [
+            "gpt-5.6-sol"
+          ],
+          "transport": "vibeproxy-required",
+          "billing_class": "subscription"
+        },
+        {
+          "family": "gemini",
+          "requested_model": "gemini-3.1-pro-preview",
+          "allowed_resolved_models": [
+            "gemini-3.1-pro-preview"
+          ],
+          "transport": "vibeproxy-required",
+          "billing_class": "subscription"
+        }
+      ]
+    }
+  }
+}

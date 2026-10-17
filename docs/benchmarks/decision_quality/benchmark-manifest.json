@@ -1,0 +1,106 @@
+{
+  "schema_version": "decision-quality-benchmark/1.0",
+  "benchmark_id": "outcome-backed-decision-quality-v1",
+  "revision": "v1",
+  "frozen_at": "2026-08-30T03:52:00Z",
+  "canonical_json": "python-json-sort-keys-compact-utf8-no-nan-v1",
+  "conditions": [
+    "single_claude",
+    "single_openai",
+    "single_gemini",
+    "aragora_team"
+  ],
+  "tranches": [
+    {
+      "corpus_path": "tranches/business-operations-1.corpus.json",
+      "outcomes_path": "tranches/business-operations-1.outcomes.json",
+      "corpus_sha256": "ac9676ff9715b724a436ac3f697e3599aba8416e061fe009088eea4360ad8bba",
+      "outcomes_sha256": "ce281b2caab29f79b07d7784c3d19a08243ad914e1e384226dd17ff63f1452d4"
+    },
+    {
+      "corpus_path": "tranches/business-operations-holdout-1.corpus.json",
+      "outcomes_path": "tranches/business-operations-holdout-1.outcomes.json",
+      "corpus_sha256": "2036afb2a909e1ffd16d5764fefd1fbccbeb298dd29924222d6034ec30d7e855",
+      "outcomes_sha256": "05a6640cbee4878d0726d8dbbe92f6e9ebcb97a7eae7b0a03939cea2829358ff"
+    },
+    {
+      "corpus_path": "tranches/policy-compliance-1.corpus.json",
+      "outcomes_path": "tranches/policy-compliance-1.outcomes.json",
+      "corpus_sha256": "17bce195c719c30c128b0ce86e906754c076e2c03da4a10f6421d9e80f57943b",
+      "outcomes_sha256": "171cb032ca3047305ecb2086ad0913417d5a95fcfaec8dc228ba1b4f1dcf197b"
+    },
+    {
+      "corpus_path": "tranches/policy-compliance-holdout-1.corpus.json",
+      "outcomes_path": "tranches/policy-compliance-holdout-1.outcomes.json",
+      "corpus_sha256": "318c209ccfc5d24b82f6083f284334fb89f752a9dfc6a8ab0ee68d6f5a5dbd4d",
+      "outcomes_sha256": "247848041189c398c20a57547901aafff6d30d51fd98206e5e5a5e0c4689e8a1"
+    },
+    {
+      "corpus_path": "tranches/science-forecasting-1.corpus.json",
+      "outcomes_path": "tranches/science-forecasting-1.outcomes.json",
+      "corpus_sha256": "2fc5525c8b7a23c5f57faed12967cb170be1e83c6afcba58ac45b43cefa18445",
+      "outcomes_sha256": "061f6dc846889b01a22e3562b998d6b2b43f3bcf24efbe048f33b2089286de38"
+    },
+    {
+      "corpus_path": "tranches/science-forecasting-holdout-1.corpus.json",
+      "outcomes_path": "tranches/science-forecasting-holdout-1.outcomes.json",
+      "corpus_sha256": "503a5cc94a26fcd38f8c0bb264413ac82b2ae7a3489da8d22e6d646254702ed6",
+      "outcomes_sha256": "9d93b2f085b1c8586f67ee73538219bc1a98888ef0d4b3d11f196b9976b4e7d4"
+    },
+    {
+      "corpus_path": "tranches/software-development-1.corpus.json",
+      "outcomes_path": "tranches/software-development-1.outcomes.json",
+      "corpus_sha256": "e9ec5a9a62b6d2d9a6cd9664989d3be6e45b7cc7cbfe0d57919a4238e0770b27",
+      "outcomes_sha256": "cb3f1c0b7762b144142044a510f8c0cb489a15699ce6a7c6e262e2f35b17938d"
+    },
+    {
+      "corpus_path": "tranches/software-engineering-holdout-1.corpus.json",
+      "outcomes_path": "tranches/software-engineering-holdout-1.outcomes.json",
+      "corpus_sha256": "97da356b5d70618c332e5fc52a0510996e28c6723aa00111206e663dc581295e",
+      "outcomes_sha256": "1db3bd542e913b09c820af98a9ce4237f7dbfe8bbfed53d77f35fcf7f0bce292"
+    }
+  ],
+  "aggregate": {
+    "case_count": 24,
+    "corpus_sha256": "3a46198fe33e4cc984cf777c6db7f046e4adb7db10840e775f83e9a46e87172b",
+    "outcomes_sha256": "98702fe5d220d171e77fd0276d5803ec851e46c6900445dd73ccb4cbfdbf194d"
+  },
+  "prompt": {
+    "path": "prompt.md",
+    "sha256": "767f6552a17ae179fed027ff1bc2f737d893a1f72859c090b1a5730979439647"
+  },
+  "roster": {
+    "path": "roster.json",
+    "sha256": "2d7027906c5da8fe137cca2f52773eb2a9b2f2864753884c715774d54df2df71"
+  },
+  "scorer": {
+    "contract_version": "outcome-decision-quality-scorer/1.0",
+    "module": "aragora.evaluation.outcome_decision_quality",
+    "primary_metrics": [
+      "binary_brier",
+      "directional_accuracy",
+      "crux_recall",
+      "provenance_completeness",
+      "receipt_verification_rate",
+      "latency",
+      "model_calls",
+      "cost"
+    ]
+  },
+  "budget": {
+    "paid_api_daily_usd": 25.0,
+    "infrastructure_retries_per_call": 1
+  },
+  "holdout": {
+    "repetitions": 2,
+    "cases_per_domain": 2,
+    "invalidate_on_change": [
+      "corpus",
+      "outcomes",
+      "prompt",
+      "roster",
+      "scorer_contract",
+      "implementation_sha"
+    ]
+  }
+}
