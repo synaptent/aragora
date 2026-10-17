@@ -129,7 +129,7 @@ class TestInMemoryEmbeddingServiceBM25:
         index = service_with_data._bm25_indices["workspace-1"]
         initial_count = index._total_docs
 
-        await service_with_data.delete_document_chunks("doc-1")
+        await service_with_data.delete_document_chunks("doc-1", "workspace-1")
 
         # Two chunks from doc-1 should be removed
         assert index._total_docs == initial_count - 2

@@ -50,6 +50,23 @@ def _to_enum_value(value: Any) -> Any:
     return str(value)
 
 
+# Metadata key of the organization stamp the knowledge pipeline writes.
+ORG_STAMP_KEY = "org_id"
+
+
+def content_dedup_hash(content: str, metadata: dict[str, Any] | None = None) -> str:
+    """SHA-256 hex digest that content-hash deduplication compares.
+
+    Workspaces are shared across organizations, so content stamped with an
+    organization hashes together with that stamp: identical text from two
+    organizations stays two items, each keeping its own stamp. Unstamped
+    content hashes exactly as before.
+    """
+    org_id = metadata.get(ORG_STAMP_KEY) if isinstance(metadata, dict) else None
+    keyed = f"{org_id}\x00{content}" if org_id else content
+    return hashlib.sha256(keyed.encode()).hexdigest()
+
+
 # Type alias for node types
 NodeType = Literal[
     "fact",
@@ -213,8 +230,8 @@ class KnowledgeNode:
 
     @property
     def content_hash(self) -> str:
-        """Hash of content for deduplication."""
-        return hashlib.sha256(self.content.encode()).hexdigest()[:32]
+        """Hash of content (and organization stamp) for deduplication."""
+        return content_dedup_hash(self.content, self.metadata)[:32]
 
     @property
     def is_verified(self) -> bool:

@@ -228,9 +228,14 @@ class SearchOperationsMixin:
     ) -> HandlerResult:
         """Handle GET /api/knowledge/search - Search chunks.
 
-        ``handler`` is unused here; ``@require_permission`` reads the request's
-        authorization context from it.
+        ``@require_permission`` reads the request's authorization context from
+        ``handler``. This handler confines its own results to the caller's
+        verified organization: 401 without authentication, 403
+        ``knowledge_org_required`` without an organization, before any read.
         """
+        org_id, err = caller_org_or_error(self, handler, "Knowledge search")
+        if err:
+            return err
 
         query = _extract_search_query(query_params)
         if not query:
@@ -254,14 +259,25 @@ class SearchOperationsMixin:
                 default_limit=limit,
             )
             if retriever.is_available():
+                from aragora.knowledge.pipeline import mound_read_sizes, new_mound_items_for_org
+
+                normalized: list[dict[str, Any]] = []
+                seen: set[Any] = set()
                 try:
-                    retrieved = _run_async(
-                        retriever.retrieve(
-                            query,
-                            limit=limit,
-                            workspace_id=workspace_id,
+                    for size in mound_read_sizes(limit):
+                        page = _retrieved_items(
+                            _run_async(
+                                retriever.retrieve(query, limit=size, workspace_id=workspace_id)
+                            )
                         )
-                    )
+                        own = new_mound_items_for_org(page, org_id, seen)
+                        normalized += _filter_normalized_results(
+                            [_normalize_search_result(item) for item in own],
+                            min_confidence=min_confidence,
+                            domain=domain,
+                        )
+                        if len(normalized) >= limit or len(page) < size:
+                            break
                 except (
                     KeyError,
                     ValueError,
@@ -273,15 +289,6 @@ class SearchOperationsMixin:
                 ) as e:
                     logger.error("Knowledge Mound search failed: %s", e)
                     return error_response("Search operation failed", 500)
-
-                normalized = [
-                    _normalize_search_result(item) for item in _retrieved_items(retrieved)
-                ]
-                normalized = _filter_normalized_results(
-                    normalized,
-                    min_confidence=min_confidence,
-                    domain=domain,
-                )
 
                 return json_response(
                     {
@@ -298,7 +305,7 @@ class SearchOperationsMixin:
         if not hasattr(engine, "search"):
             raise TypeError("Query engine does not support search")
         try:
-            results = _run_async(engine.search(query, workspace_id, limit))  # type: ignore[arg-type]
+            results = _run_async(engine.search(query, workspace_id, limit, org_id=org_id))  # type: ignore[arg-type]
         except (KeyError, ValueError, OSError, TypeError, RuntimeError) as e:
             logger.error("Search failed: %s", e)
             return error_response("Search operation failed", 500)
