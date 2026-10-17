@@ -17,7 +17,9 @@ module names none of the packages it reaches. Those declared registrations only
 fill what is missing: an entry registered before they ran (for example a caller's
 own workflow target or audit sink) is kept, and when two declared registrations
 provide the same key, the one that runs first wins (entry-point order is not
-defined, so plugins should not rely on overriding each other).
+defined, so plugins should not rely on overriding each other). The same holds while
+another hook's declared registrations (:mod:`aragora.utils.declared_registrations`)
+run: a package they import for the first time fills only the entries still missing.
 
 Every getter raises :class:`DecisionRouteNotRegisteredError` when nothing is
 registered after that. Registration is keyed, so registering again (for example
@@ -35,6 +37,10 @@ import threading
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, cast
+
+from aragora.utils.declared_registrations import (
+    declared_registrations_running as _other_declared_registrations_running,
+)
 
 if TYPE_CHECKING:
     from .decision_models import DecisionRequest, DecisionResult
@@ -183,12 +189,16 @@ def _run_registrations(entry_points: list[importlib.metadata.EntryPoint]) -> Non
 
 
 def declared_registrations_running() -> bool:
-    """Whether this thread is running the declared ``aragora.decision_routes`` registrations.
+    """Whether this thread is running the declared ``aragora.decision_routes`` registrations,
+    or those of another hook's entry-point group.
 
     A declared registration that also sets state outside this module uses it to apply
     the same rule there: only fill what is still missing.
     """
-    return bool(getattr(_declared_registrations_running, "active", False))
+    return (
+        bool(getattr(_declared_registrations_running, "active", False))
+        or _other_declared_registrations_running()
+    )
 
 
 def _register(registry: dict[str, Any], key: str, value: Any) -> None:

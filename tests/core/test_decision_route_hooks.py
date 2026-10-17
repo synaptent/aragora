@@ -326,6 +326,37 @@ def test_the_first_declared_registration_of_a_key_wins(undiscovered_hooks, monke
     assert hooks.get_decision_audit_sink() is first
 
 
+def test_another_hooks_declared_registrations_only_fill_what_the_caller_left_missing(
+    isolated_hooks, monkeypatch, tmp_path
+):
+    # For example the debate engine's first pipeline backend lookup, which imports
+    # aragora.pipeline and so runs its package-init integrity builder registration.
+    from aragora.utils.declared_registrations import DeclaredRegistrations
+
+    builder, declared_builder, declared_tts = AsyncMock(), AsyncMock(), MagicMock()
+    hooks.register_decision_integrity_builder(builder)
+
+    def register():
+        hooks.register_decision_integrity_builder(declared_builder)
+        hooks.register_tts_bridge_factory(declared_tts)
+
+    entry_point = SimpleNamespace(name="demo", value="tests.declared:demo", load=lambda: register)
+    monkeypatch.setattr(
+        importlib.metadata,
+        "entry_points",
+        lambda *, group: [entry_point] if group == "demo.other_hook" else [],
+    )
+    DeclaredRegistrations("demo.other_hook", source_pyproject=tmp_path / "missing.toml").load()
+
+    assert hooks.get_decision_integrity_builder() is builder
+    assert hooks.get_tts_bridge_factory() is declared_tts
+    assert hooks.declared_registrations_running() is False
+
+    # Outside discovery, registering again still replaces the entry.
+    hooks.register_decision_integrity_builder(declared_builder)
+    assert hooks.get_decision_integrity_builder() is declared_builder
+
+
 def test_registering_replaces_again_after_a_declared_registration_fails(
     undiscovered_hooks, monkeypatch
 ):

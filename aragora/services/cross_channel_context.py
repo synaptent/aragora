@@ -37,6 +37,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
+from aragora.runtime.connector_factory import create_connector
+
 if TYPE_CHECKING:
     from aragora.connectors.enterprise.collaboration.slack import SlackConnector
     from aragora.connectors.enterprise.communication.gmail import GmailConnector
@@ -693,12 +695,10 @@ async def create_context_service(
     Returns:
         Configured CrossChannelContextService
     """
-    slack_connector = None
+    slack_connector: SlackConnector | None = None
 
     if slack_token:
-        from aragora.connectors.enterprise.collaboration.slack import SlackConnector
-
-        slack_connector = SlackConnector()
+        slack_connector = create_connector("slack_enterprise")
         await slack_connector.authenticate(token=slack_token)
 
     # Get integration store for persistent mappings

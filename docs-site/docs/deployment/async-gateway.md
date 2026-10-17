@@ -339,6 +339,6 @@ kill -TERM $(cat /var/run/aragora.pid)
 
 ## Related Documentation
 
-- [SCALING.md](../operations/scaling) - Horizontal scaling guidelines
+- [SCALING.md](./scaling) - Horizontal scaling guidelines
 - [CONTAINER_VOLUMES.md](./container-volumes) - Volume requirements
 - [DISASTER_RECOVERY.md](./disaster-recovery) - Recovery procedures

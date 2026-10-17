@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from aragora.pipeline.execution_mode import ExecutionMode
+from aragora.runtime.connector_factory import create_connector
 from aragora.swarm.config import SwarmCommanderConfig
 from aragora.swarm.interrogator import SwarmInterrogator
 from aragora.swarm.reconciler import SwarmReconciler
@@ -462,16 +463,11 @@ class SwarmCommander:
     async def _load_from_obsidian(self, vault_path: str) -> list[str]:
         """Read goals from tagged Obsidian notes (Phase 4)."""
         try:
-            from aragora.connectors.knowledge.obsidian import (
-                ObsidianConfig,
-                ObsidianConnector,
-            )
-
-            config = ObsidianConfig(
+            connector = create_connector(
+                "obsidian",
                 vault_path=vault_path,
                 watch_tags=["#aragora", "#swarm"],
             )
-            connector = ObsidianConnector(config)
             notes = connector.list_notes(tags=["#swarm"])
             return [note.content for note in notes if note.content]
         except (ImportError, Exception):
@@ -483,23 +479,16 @@ class SwarmCommander:
         if not self.config.obsidian_vault_path or not self.config.obsidian_write_receipts:
             return
         try:
-            from aragora.connectors.knowledge.obsidian import (
-                Frontmatter,
-                ObsidianConfig,
-                ObsidianConnector,
-            )
-
-            config = ObsidianConfig(vault_path=self.config.obsidian_vault_path)
-            connector = ObsidianConnector(config)
+            connector = create_connector("obsidian", vault_path=self.config.obsidian_vault_path)
             receipt_md = report.to_markdown()
             goal_slug = (report.spec.raw_goal[:50] if report.spec else "unknown").strip()
             await connector.write_note(
                 path=f"aragora-receipts/Swarm Receipt - {goal_slug}",
                 content=receipt_md,
-                frontmatter=Frontmatter(
-                    title=f"Swarm Receipt - {goal_slug}",
-                    tags=["#aragora", "#receipt"],
-                ),
+                frontmatter={
+                    "title": f"Swarm Receipt - {goal_slug}",
+                    "tags": ["#aragora", "#receipt"],
+                },
                 overwrite=True,
             )
             logger.info("Decision receipt written to Obsidian vault")

@@ -148,7 +148,7 @@ EXEMPT_HANDLERS = frozenset(
         "PublicDebateViewerHandler",
         # Moderation analytics (admin dashboard, internal auth)
         "ModerationAnalyticsHandler",
-        # Plan management (uses subscription-level access control)
+        # Retired plan handler: claims no routes; PlansHandler serves /api/v1/plans
         "PlanManagementHandler",
         # Agent recommendation (read-only suggestion endpoint)
         "AgentRecommendationHandler",

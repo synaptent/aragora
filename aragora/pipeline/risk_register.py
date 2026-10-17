@@ -26,17 +26,10 @@ from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
+from aragora.types.decision_plans import RiskLevel
+
 if TYPE_CHECKING:
     from aragora.export.artifact import DebateArtifact
-
-
-class RiskLevel(Enum):
-    """Risk severity levels."""
-
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    CRITICAL = "critical"
 
 
 class RiskCategory(Enum):

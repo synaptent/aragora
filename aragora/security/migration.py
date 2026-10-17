@@ -14,13 +14,18 @@ Features:
 from __future__ import annotations
 
 import asyncio
+import base64
 import concurrent.futures
+import contextvars
+import inspect
 import logging
 import os
+import sqlite3
+import struct
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, TypeVar, cast
+from typing import Any, TypeVar
 from collections.abc import Callable, Coroutine
 
 logger = logging.getLogger(__name__)
@@ -254,7 +259,7 @@ class EncryptionMigrator:
 
         except (TypeError, RuntimeError, OSError, ValueError) as e:
             result.errors.append("Migration failed due to an internal error")
-            result.failed_records = result.total_records
+            result.failed_records = max(1, result.total_records)
             logger.error("Migration failed for %s: %s", store_name, e)
 
         return result
@@ -262,74 +267,217 @@ class EncryptionMigrator:
 
 # Store-specific migration functions
 
+_INTEGRATION_RECORD_ID_FIELD = "__integration_record_id__"
+
+# Integration backends cap list_all() at 1000 rows unless given a limit and
+# cannot page, so they are asked for one row past this bound to detect a store
+# too large to process in a single pass.
+_INTEGRATION_LIST_LIMIT = 1_000_000
+
+
+class _StoreListingError(RuntimeError):
+    """A store could not list its records; the cause is logged, never reported."""
+
+
+class _StorePass:
+    """A store plus the SQLite connections that one migration or rotation pass owns.
+
+    The SQLite stores (and the SQLite store inside their Redis variants) cache
+    one connection per context in a ContextVar and keep every connection they
+    open until the store itself is closed. ``run_async`` runs each call in a
+    copied context, or an empty one on its worker thread, so a pass making one
+    call per record would open and keep one connection per record. Each call
+    made through :meth:`run` first binds this pass's own connection in the
+    context the call runs in, and :meth:`close` closes only those connections.
+    A connection bound in the caller's context or opened by any other context
+    is never used or closed. Other backends are called exactly as before.
+    """
+
+    def __init__(self, store: Any, sqlite_type: type) -> None:
+        self.store = store
+        backends = (store, getattr(store, "_sqlite", None))
+        self._owned: list[list[Any]] = [
+            [backend, None] for backend in backends if isinstance(backend, sqlite_type)
+        ]
+
+    def _bind(self) -> None:
+        for entry in self._owned:
+            backend, conn = entry
+            if conn is None:
+                # An empty context, so the store opens a new connection rather than
+                # returning one already bound for the caller.
+                conn = entry[1] = contextvars.Context().run(backend._get_conn)
+            backend._conn_var.set(conn)
+
+    async def _bound(self, coro: Coroutine[Any, Any, T]) -> T:
+        self._bind()
+        return await coro
+
+    def run(self, coro: Coroutine[Any, Any, T]) -> T:
+        """Run ``coro`` through ``run_async`` on this pass's connections."""
+        from aragora.utils.async_utils import run_async
+
+        try:
+            return run_async(self._bound(coro))
+        finally:
+            # Not started when binding failed or run_async refused the call.
+            if (
+                inspect.iscoroutine(coro)
+                and inspect.getcoroutinestate(coro) == inspect.CORO_CREATED
+            ):
+                coro.close()
+
+    def close(self) -> None:
+        """Close the connections this pass opened; the store stays open."""
+        owned, self._owned = self._owned, []
+        for backend, conn in owned:
+            if conn is None:
+                continue
+            with backend._connections_lock:
+                backend._connections.discard(conn)
+            conn.close()
+
+
+def _list_store_records(
+    store_pass: _StorePass, store_name: str, limit: int | None = None
+) -> list[Any]:
+    """Await the pass store's ``list_all()``; every non-import failure is a listing error.
+
+    With ``limit``, a store holding more than ``limit`` records is a listing
+    error rather than a silently partial list. ImportError propagates so
+    callers keep their optional-dependency handling.
+    """
+    store = store_pass.store
+    try:
+        if limit is None:
+            records = list(store_pass.run(store.list_all()))
+        else:
+            records = list(store_pass.run(store.list_all(limit=limit + 1)))
+    except ImportError:
+        raise
+    except Exception as e:  # noqa: BLE001 - driver errors (sqlite3, asyncpg) are not builtins
+        # Driver messages can carry DSNs or file paths, so only the type is logged.
+        logger.error("Listing records failed for %s: %s", store_name, type(e).__name__)
+        raise _StoreListingError(f"Listing records failed for {store_name}") from e
+    if limit is not None and len(records) > limit:
+        logger.error("Listing records for %s exceeded the %d-record bound", store_name, limit)
+        raise _StoreListingError(f"Listing records exceeded the bound for {store_name}")
+    return records
+
+
+def _finish_migration(result: MigrationResult) -> MigrationResult:
+    result.completed_at = datetime.now(timezone.utc)
+    result.duration_seconds = (result.completed_at - result.started_at).total_seconds()
+    logger.info(
+        "Migration complete for %s: %s migrated, %s already encrypted, %s failed",
+        result.store_name,
+        result.migrated_records,
+        result.already_encrypted,
+        result.failed_records,
+    )
+    return result
+
+
+def _listing_failed(result: MigrationResult) -> MigrationResult:
+    result.errors.append("Migration failed due to an internal error")
+    result.failed_records = max(1, result.total_records)
+    return _finish_migration(result)
+
+
+def _is_undecrypted_token(token: Any) -> bool:
+    """Return True when a Gmail store handed back a token it could not decrypt.
+
+    Gmail backends return the stored ciphertext unchanged when decryption fails,
+    and saving it again would encrypt the ciphertext a second time.
+    """
+    if not isinstance(token, str) or not token:
+        return False
+    from aragora.security.encryption import EncryptedData
+
+    try:
+        data = EncryptedData.from_bytes(base64.b64decode(token, validate=True))
+    except (ValueError, struct.error):
+        return False
+    # An AES-GCM ciphertext always carries a nonce and at least the 16-byte tag.
+    return bool(data.nonce) and len(data.ciphertext) >= 16
+
 
 def migrate_integration_store(dry_run: bool = False) -> MigrationResult:
     """Migrate integration store secrets."""
     try:
-        from aragora.storage.integration_store import get_integration_store
-        from aragora.utils.async_utils import run_async
+        from aragora.storage.integration_models import EncryptionError
+        from aragora.storage.integration_store import (
+            SENSITIVE_KEYS,
+            SQLiteIntegrationStore,
+            get_integration_store,
+        )
 
         store = get_integration_store()
         result = MigrationResult(store_name="integration_store")
 
-        sensitive_fields = [
-            "api_key",
-            "api_secret",
-            "access_token",
-            "refresh_token",
-            "password",
-            "secret",
-            "credentials",
-            "token",
-        ]
+        # Exactly the keys the store encrypts on save, so every plaintext one is re-saved.
+        sensitive_fields = sorted(SENSITIVE_KEYS)
 
-        configs = list(run_async(store.list_all()))
-        result.total_records = len(configs)
-
-        logger.info(
-            "Starting migration for %s: %s records",
-            result.store_name,
-            result.total_records,
-        )
-
-        for config in configs:
-            integration_type = str(getattr(config, "type", "") or "unknown")
-            user_id = str(getattr(config, "user_id", "") or "default")
-            record_id = f"{user_id}:{integration_type}"
-
+        store_pass = _StorePass(store, SQLiteIntegrationStore)
+        try:
             try:
-                settings = getattr(config, "settings", {})
-                if not isinstance(settings, dict) or not needs_migration(
-                    settings, sensitive_fields
-                ):
-                    result.already_encrypted += 1
-                    continue
+                configs = _list_store_records(
+                    store_pass, result.store_name, limit=_INTEGRATION_LIST_LIMIT
+                )
+            except _StoreListingError:
+                return _listing_failed(result)
+            result.total_records = len(configs)
 
-                if dry_run:
+            logger.info(
+                "Starting migration for %s: %s records",
+                result.store_name,
+                result.total_records,
+            )
+
+            for config in configs:
+                integration_type = str(getattr(config, "type", "") or "unknown")
+                user_id = str(getattr(config, "user_id", "") or "default")
+                record_id = f"{user_id}:{integration_type}"
+
+                try:
+                    settings = getattr(config, "settings", {})
+                    if isinstance(settings, dict) and any(
+                        is_field_encrypted(settings.get(name)) for name in sensitive_fields
+                    ):
+                        # The store returns settings it could not decrypt unchanged. Such a
+                        # record is not cleanly encrypted, and saving it would encrypt that
+                        # ciphertext again.
+                        raise ValueError("Store returned a setting it could not decrypt")
+                    if not isinstance(settings, dict) or not needs_migration(
+                        settings, sensitive_fields
+                    ):
+                        result.already_encrypted += 1
+                        continue
+
+                    if dry_run:
+                        result.migrated_records += 1
+                        logger.debug("[DRY RUN] Would migrate record: %s", record_id)
+                        continue
+
+                    store_pass.run(store.save(config))
                     result.migrated_records += 1
-                    logger.debug("[DRY RUN] Would migrate record: %s", record_id)
-                    continue
+                    logger.debug("Migrated record: %s", record_id)
+                except (
+                    KeyError,
+                    ValueError,
+                    TypeError,
+                    RuntimeError,
+                    OSError,
+                    sqlite3.Error,
+                    EncryptionError,
+                ) as e:
+                    result.failed_records += 1
+                    result.errors.append(f"Error migrating record: {record_id}")
+                    logger.warning("Failed to migrate record %s: %s", record_id, type(e).__name__)
 
-                run_async(store.save(config))
-                result.migrated_records += 1
-                logger.debug("Migrated record: %s", record_id)
-            except (KeyError, ValueError, TypeError, RuntimeError, OSError) as e:
-                result.failed_records += 1
-                result.errors.append(f"Error migrating record: {record_id}")
-                logger.warning("Failed to migrate record %s: %s", record_id, e)
-
-        result.completed_at = datetime.now(timezone.utc)
-        result.duration_seconds = (result.completed_at - result.started_at).total_seconds()
-
-        logger.info(
-            "Migration complete for %s: %s migrated, %s already encrypted, %s failed",
-            result.store_name,
-            result.migrated_records,
-            result.already_encrypted,
-            result.failed_records,
-        )
-
-        return result
+            return _finish_migration(result)
+        finally:
+            store_pass.close()
     except ImportError as e:
         logger.warning("Integration store not available: %s", e)
         return MigrationResult(
@@ -338,31 +486,69 @@ def migrate_integration_store(dry_run: bool = False) -> MigrationResult:
 
 
 def migrate_gmail_token_store(dry_run: bool = False) -> MigrationResult:
-    """Migrate Gmail token store secrets."""
+    """Re-save Gmail OAuth tokens so the store encrypts them with the active key.
+
+    Gmail backends decrypt tokens in ``list_all()`` and encrypt them in
+    ``save()``, so re-saving a user's state migrates plaintext tokens and tokens
+    under older key versions alike. A dry run lists and counts without saving.
+    """
     try:
-        from aragora.storage.gmail_token_store import get_gmail_token_store
+        from aragora.storage.gmail_token_store import (
+            ENCRYPTED_FIELDS,
+            EncryptionError,
+            SQLiteGmailTokenStore,
+            get_gmail_token_store,
+        )
 
         store = get_gmail_token_store()
-        migrator = EncryptionMigrator(dry_run=dry_run)
+        result = MigrationResult(store_name="gmail_token_store")
 
-        sensitive_fields = ["access_token", "refresh_token"]
+        store_pass = _StorePass(store, SQLiteGmailTokenStore)
+        try:
+            try:
+                states = _list_store_records(store_pass, result.store_name)
+            except _StoreListingError:
+                return _listing_failed(result)
+            result.total_records = len(states)
 
-        def list_all():
-            # GmailTokenStore may not have list_all, get states instead
-            if hasattr(store, "list_all"):
-                return list(store.list_all())
-            return []
+            logger.info(
+                "Starting migration for %s: %s records",
+                result.store_name,
+                result.total_records,
+            )
 
-        def save(user_id, record):
-            return store.save_state(user_id, record)
+            for state in states:
+                user_id = str(getattr(state, "user_id", "") or "unknown")
+                try:
+                    tokens = [getattr(state, name) for name in ENCRYPTED_FIELDS]
+                    if not any(tokens):
+                        result.already_encrypted += 1
+                        continue
+                    if any(_is_undecrypted_token(token) for token in tokens):
+                        raise ValueError("Store returned a token it could not decrypt")
 
-        return migrator.migrate_store(
-            store_name="gmail_token_store",
-            list_fn=list_all,
-            save_fn=save,
-            sensitive_fields=sensitive_fields,
-            id_field="user_id",
-        )
+                    if dry_run:
+                        logger.debug("[DRY RUN] Would migrate record: %s", user_id)
+                    else:
+                        store_pass.run(store.save(state))
+                    result.migrated_records += 1
+                except (
+                    AttributeError,
+                    KeyError,
+                    ValueError,
+                    TypeError,
+                    RuntimeError,
+                    OSError,
+                    sqlite3.Error,
+                    EncryptionError,
+                ) as e:
+                    result.failed_records += 1
+                    result.errors.append(f"Error migrating record: {user_id}")
+                    logger.warning("Failed to migrate record %s: %s", user_id, type(e).__name__)
+
+            return _finish_migration(result)
+        finally:
+            store_pass.close()
     except ImportError as e:
         logger.warning("Gmail token store not available: %s", e)
         return MigrationResult(
@@ -830,6 +1016,25 @@ def rotate_encryption_key(
         new_key_version=old_version + 1,
     )
 
+    store_configs = {
+        "integration": _get_integration_store_config,
+        "gmail": _get_gmail_store_config,
+        "sync": _get_sync_store_config,
+    }
+    stores_to_process = stores or list(store_configs)
+    unknown_stores = [
+        name for name in stores_to_process if not isinstance(name, str) or name not in store_configs
+    ]
+    if unknown_stores:
+        # Reject before rotating so a mistyped name cannot rotate the key and skip its store.
+        result.new_key_version = old_version
+        result.failed_records += len(unknown_stores)
+        for name in unknown_stores:
+            label = name if isinstance(name, str) else type(name).__name__
+            result.errors.append(f"Unknown store for key rotation: {label[:64]}")
+        logger.warning("Key rotation rejected; unknown stores: %s", unknown_stores)
+        return result
+
     if dry_run:
         logger.info(
             "[DRY RUN] Would rotate key %s from v%s to v%s",
@@ -876,19 +1081,8 @@ def rotate_encryption_key(
                 e,
             )
 
-        # Re-encrypt stores
-        stores_to_process = stores or ["integration", "gmail", "sync"]
-        store_configs = {
-            "integration": _get_integration_store_config,
-            "gmail": _get_gmail_store_config,
-            "sync": _get_sync_store_config,
-        }
-
         for store_name in stores_to_process:
-            config_fn = store_configs.get(store_name)
-            if not config_fn:
-                logger.warning("Unknown store for key rotation: %s", store_name)
-                continue
+            config_fn = store_configs[store_name]
             config: dict[str, Any] | None = None
             try:
                 config = config_fn()
@@ -913,10 +1107,9 @@ def rotate_encryption_key(
                 result.failed_records += store_result.failed_records
                 result.errors.extend(store_result.errors)
 
-            except (ImportError, RuntimeError, ValueError, TypeError, OSError) as e:
+            except (ImportError, RuntimeError, ValueError, TypeError, OSError, sqlite3.Error) as e:
                 result.errors.append(f"Store {store_name} re-encryption failed")
-                if store_name == "sync":
-                    result.failed_records += 1
+                result.failed_records += 1
                 logger.error("Key rotation failed for store %s: %s", store_name, e)
             finally:
                 close_fn = config.get("close_fn") if config else None
@@ -933,53 +1126,123 @@ def rotate_encryption_key(
             result.failed_records,
         )
 
-    except (RuntimeError, ValueError, TypeError, OSError, ImportError, AttributeError) as e:
+    except (
+        RuntimeError,
+        ValueError,
+        TypeError,
+        OSError,
+        ImportError,
+        AttributeError,
+        sqlite3.Error,
+    ) as e:
         result.errors.append("Key rotation failed due to an internal error")
+        result.failed_records += 1
         logger.error("Key rotation failed: %s", e)
 
     return result
 
 
 def _get_integration_store_config() -> dict[str, Any] | None:
-    """Get configuration for integration store re-encryption."""
+    """Get configuration for integration store re-encryption.
+
+    The store decrypts settings when listing and encrypts them with the active
+    key when saving, so each listed config is re-saved as it was read. The
+    returned ``close_fn`` must be called once the store has been processed.
+    """
     try:
-        from aragora.storage.integration_store import get_integration_store
+        from aragora.storage.integration_models import EncryptionError
+        from aragora.storage.integration_store import (
+            SENSITIVE_KEYS,
+            SQLiteIntegrationStore,
+            get_integration_store,
+        )
 
         store = get_integration_store()
+        store_pass = _StorePass(store, SQLiteIntegrationStore)
+        configs_by_id: dict[str, Any] = {}
+
+        def list_configs() -> list[dict[str, Any]]:
+            configs = _list_store_records(
+                store_pass, "integration_store", limit=_INTEGRATION_LIST_LIMIT
+            )
+            configs_by_id.clear()
+            records: list[dict[str, Any]] = []
+            for config in configs:
+                record_id = f"{config.user_id or 'default'}:{config.type}"
+                configs_by_id[record_id] = config
+                settings = config.settings or {}
+                records.append({**settings, _INTEGRATION_RECORD_ID_FIELD: record_id})
+            return records
+
+        def save_config(record_id: str, _record: dict[str, Any]) -> bool:
+            try:
+                store_pass.run(store.save(configs_by_id[record_id]))
+            except EncryptionError as e:
+                # Counted per record by the caller; only the type is passed on, as for Gmail.
+                raise RuntimeError(f"Saving settings failed: {type(e).__name__}") from e
+            return True
 
         return {
-            "list_fn": lambda: list(cast(Any, store).list_all()),
-            "save_fn": lambda id, record: cast(Any, store).save(record),
-            "sensitive_fields": [
-                "api_key",
-                "api_secret",
-                "access_token",
-                "refresh_token",
-                "password",
-                "secret",
-                "credentials",
-                "token",
-            ],
-            "id_field": "integration_id",
+            "list_fn": list_configs,
+            "save_fn": save_config,
+            # Every key the store encrypts, so a setting it failed to decrypt
+            # fails the record instead of being encrypted a second time.
+            "sensitive_fields": sorted(SENSITIVE_KEYS),
+            "id_field": _INTEGRATION_RECORD_ID_FIELD,
+            "force_resave": True,
+            "close_fn": store_pass.close,
         }
     except ImportError:
         return None
 
 
 def _get_gmail_store_config() -> dict[str, Any] | None:
-    """Get configuration for Gmail store re-encryption."""
+    """Get configuration for Gmail store re-encryption.
+
+    The store decrypts tokens when listing and encrypts them with the active
+    key when saving, so each listed user state is re-saved as it was read. The
+    returned ``close_fn`` must be called once the store has been processed.
+    """
     try:
-        from aragora.storage.gmail_token_store import get_gmail_token_store
+        from aragora.storage.gmail_token_store import (
+            ENCRYPTED_FIELDS,
+            EncryptionError,
+            SQLiteGmailTokenStore,
+            get_gmail_token_store,
+        )
 
         store = get_gmail_token_store()
+        store_pass = _StorePass(store, SQLiteGmailTokenStore)
+        states_by_user: dict[str, Any] = {}
+
+        def list_states() -> list[dict[str, Any]]:
+            states = _list_store_records(store_pass, "gmail_token_store")
+            states_by_user.clear()
+            records: list[dict[str, Any]] = []
+            for state in states:
+                states_by_user[state.user_id] = state
+                tokens = {name: getattr(state, name) for name in ENCRYPTED_FIELDS}
+                records.append({**tokens, "user_id": state.user_id})
+            return records
+
+        def save_state(user_id: str, record: dict[str, Any]) -> bool:
+            if any(_is_undecrypted_token(record.get(name)) for name in ENCRYPTED_FIELDS):
+                raise RuntimeError("Store returned a token it could not decrypt")
+            try:
+                store_pass.run(store.save(states_by_user[user_id]))
+            except EncryptionError as e:
+                # Counted as a per-record failure by the caller; the store's message
+                # can carry key or path detail, so only the type is passed on.
+                raise RuntimeError(f"Saving tokens failed: {type(e).__name__}") from e
+            return True
 
         return {
-            "list_fn": lambda: list(cast(Any, store).list_all())
-            if hasattr(store, "list_all")
-            else [],
-            "save_fn": lambda id, record: cast(Any, store).save_state(id, record),
-            "sensitive_fields": ["access_token", "refresh_token"],
+            "list_fn": list_states,
+            "save_fn": save_state,
+            "sensitive_fields": list(ENCRYPTED_FIELDS),
             "id_field": "user_id",
+            "force_resave": True,
+            "close_fn": store_pass.close,
         }
     except ImportError:
         return None

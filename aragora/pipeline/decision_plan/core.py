@@ -39,7 +39,6 @@ import uuid
 from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -52,6 +51,8 @@ from aragora.pipeline.verification_plan import (
     CasePriority,
     VerificationPlan,
 )
+from aragora.types.decision_plans import ApprovalMode as ApprovalMode
+from aragora.types.decision_plans import PlanStatus as PlanStatus
 
 
 # ---------------------------------------------------------------------------
@@ -209,29 +210,6 @@ def _manual_entry(action: dict[str, Any], reason: str) -> dict[str, Any]:
         "reason": reason,
         "action": action,
     }
-
-
-class PlanStatus(Enum):
-    """Lifecycle status of a DecisionPlan."""
-
-    CREATED = "created"
-    AWAITING_APPROVAL = "awaiting_approval"
-    APPROVED = "approved"
-    REJECTED = "rejected"
-    EXECUTING = "executing"
-    VERIFYING = "verifying"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    ROLLED_BACK = "rolled_back"
-
-
-class ApprovalMode(Enum):
-    """How human approval is determined."""
-
-    ALWAYS = "always"  # Always require human approval
-    RISK_BASED = "risk_based"  # Auto-approve if no critical/high risks
-    CONFIDENCE_BASED = "confidence_based"  # Auto-approve above confidence threshold
-    NEVER = "never"  # Skip approval (for automated pipelines)
 
 
 @dataclass
@@ -492,6 +470,12 @@ class DecisionPlan:
     # Metadata
     metadata: dict[str, Any] = field(default_factory=dict)
     implementation_profile: ImplementationProfile | None = None
+
+    # Ownership: the org and user that created the plan. ``ownership_source``
+    # is set by PlanStore ("created", "backfilled" or "unknown"), not callers.
+    org_id: str | None = None
+    created_by: str | None = None
+    ownership_source: str | None = None
 
     def __post_init__(self) -> None:
         if self.debate_result and not self.debate_id:

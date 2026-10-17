@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from aragora.pipeline.execution_mode import ExecutionMode
+from aragora.types.execution_mode import ExecutionMode
 
 
 @dataclass

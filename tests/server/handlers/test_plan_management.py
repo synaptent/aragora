@@ -107,17 +107,23 @@ def clear_state():
 
 
 class TestRouteMatching:
-    def test_can_handle_plans_list(self, handler):
-        assert handler.can_handle("/api/v1/plans") is True
+    """The retired handler's store has no owners, so it must not serve any plans route."""
 
-    def test_can_handle_plan_detail(self, handler):
-        assert handler.can_handle("/api/v1/plans/dp-001") is True
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "/api/v1/plans",
+            "/api/plans",
+            "/api/v1/plans/dp-001",
+            "/api/v1/plans/dp-001/approve",
+            "/api/v1/plans/dp-001/memo",
+        ],
+    )
+    def test_does_not_handle_plans_routes(self, handler, path):
+        assert handler.can_handle(path) is False
 
-    def test_can_handle_plan_approve(self, handler):
-        assert handler.can_handle("/api/v1/plans/dp-001/approve") is True
-
-    def test_can_handle_plan_memo(self, handler):
-        assert handler.can_handle("/api/v1/plans/dp-001/memo") is True
+    def test_declares_no_routes(self, handler):
+        assert not hasattr(PlanManagementHandler, "ROUTES")
 
     def test_cannot_handle_debates(self, handler):
         assert handler.can_handle("/api/v1/debates") is False

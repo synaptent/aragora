@@ -130,11 +130,6 @@ _INDEX_ROUTE_METHODS: dict[str, tuple[str, ...]] = {
 # memory: 100 vectors of 768 floats (the largest local model) are about 1.6 MB of JSON.
 _MAX_EMBED_BATCH_TEXTS = 100
 _MAX_EMBED_BATCH_SIZE = 100
-# A request bound, not a model limit: sentence-transformers truncates every text to
-# the model's max_seq_length (256 word pieces for all-MiniLM-L6-v2), so no length
-# fails. 2,000 bytes still fits a full window of English prose and caps one request
-# at 200 KB of tokenizer input.
-_MAX_EMBED_TEXT_BYTES = 2000
 _NOT_IMPLEMENTED_MESSAGE = "Named vector indexes are not implemented on this server"
 
 
@@ -365,6 +360,13 @@ class KnowledgeHandler(
 
     def _handle_embed_batch(self, handler: Any) -> HandlerResult:
         """Handle POST /api/v1/index/embed-batch with the local model /api/v1/ml/embed uses."""
+        from aragora.server.handlers.knowledge.ml import (
+            MAX_EMBED_TEXT_BYTES,
+            embeddings_unavailable_response,
+            get_local_embedding_service,
+            texts_exceed_model_window,
+        )
+
         data, body_error = self.read_json_body_validated(handler)
         if data is None:
             return body_error if body_error is not None else error_response("Invalid JSON", 400)
@@ -382,9 +384,9 @@ class KnowledgeHandler(
         except UnicodeEncodeError:
             # A JSON "\ud800" escape decodes to a lone surrogate, which no tokenizer encodes.
             return error_response("Each text must be valid Unicode text (no lone surrogates)", 400)
-        if max(text_bytes) > _MAX_EMBED_TEXT_BYTES:
+        if max(text_bytes) > MAX_EMBED_TEXT_BYTES:
             return error_response(
-                f"Each text may be at most {_MAX_EMBED_TEXT_BYTES} bytes of UTF-8", 400
+                f"Each text may be at most {MAX_EMBED_TEXT_BYTES} bytes of UTF-8", 400
             )
         batch_size = data.get("batch_size", _MAX_EMBED_BATCH_SIZE)
         if (
@@ -396,11 +398,9 @@ class KnowledgeHandler(
                 f"'batch_size' must be an integer from 1 to {_MAX_EMBED_BATCH_SIZE}", 400
             )
 
-        from aragora.server.handlers.knowledge.ml import get_local_embedding_service
-
         service = get_local_embedding_service()
         if service is None:
-            return error_response("ML embeddings not available", 503)
+            return embeddings_unavailable_response()
         requested_model = data.get("model")
         if requested_model is not None and requested_model != service.model_name:
             return error_response(
@@ -419,15 +419,17 @@ class KnowledgeHandler(
             logger.warning("Index embed-batch failed: %s", e)
             return _coded_error("Embedding service unavailable", "service_unavailable", 503)
 
-        return json_response(
-            {
-                "embeddings": embeddings,
-                "dimension": len(embeddings[0]),
-                "count": len(embeddings),
-                "batch_count": len(batches),
-                "model": service.model_name,
-            }
-        )
+        response: dict[str, Any] = {
+            "embeddings": embeddings,
+            "dimension": len(embeddings[0]),
+            "count": len(embeddings),
+            "batch_count": len(batches),
+            "model": service.model_name,
+        }
+        truncated = texts_exceed_model_window(service, texts)
+        if truncated is not None:
+            response["truncated"] = truncated
+        return json_response(response)
 
     def _handle_fact_routes(
         self, path: str, query_params: dict, handler: Any

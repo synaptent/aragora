@@ -10,7 +10,7 @@ from aragora.resilience import CircuitBreaker
 
 if TYPE_CHECKING:
     from aragora.protocols.debate import DebateProtocol
-from aragora.spectate.stream import SpectatorStream
+from aragora.events.spectate.stream import SpectatorStream
 from aragora.protocols import (
     BroadcastPipelineProtocol,
     CalibrationTrackerProtocol,

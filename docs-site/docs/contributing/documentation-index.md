@@ -27,7 +27,7 @@ then wire it into CI.
 - [Getting Started](../getting-started/overview)
 - [Cold Reviewer Guide](./cold-reviewer-guide)
 - [SDK Guide (Python)](../guides/sdk)
-- [CLI Reference](../api/cli)
+- [CLI Reference](../reference/cli-reference)
 
 ## Receipts & Verification
 

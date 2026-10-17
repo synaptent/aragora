@@ -1329,6 +1329,9 @@ async def upgrade_handler_stores(nomic_dir: Path | None) -> dict[str, str]:
         from aragora.server.handler_registry import UnifiedHandler
 
         setattr(UnifiedHandler, "user_store", store)
+        from aragora.tenancy.membership import register_user_store
+
+        register_user_store(store)
     except (ImportError, OSError, ConnectionError, RuntimeError, AttributeError) as e:
         # Import, connection, or wiring errors - continue with SQLite store
         logger.info("[upgrade] UserStore upgrade failed: %s: %s", type(e).__name__, e)

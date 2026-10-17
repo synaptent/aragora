@@ -613,6 +613,7 @@ class TestRunPipeline:
         mock_validator_cls: MagicMock,
         mock_get_execution_bridge: MagicMock,
         handler: PromptEngineHandler,
+        isolated_plan_store: PlanStore,
     ) -> None:
         spec = Specification(
             title="Tainted spec",
@@ -651,7 +652,8 @@ class TestRunPipeline:
         mock_validator.last_operation_timings = []
         mock_config_cls.return_value = MagicMock()
         mock_config_cls.from_profile.return_value = MagicMock()
-        handler.require_permission_or_error = MagicMock(return_value=(MagicMock(), None))
+        user = MagicMock(org_id="org-a", user_id="user-1")
+        handler.require_permission_or_error = MagicMock(return_value=(user, None))
 
         req = _make_handler_request(
             {
@@ -678,6 +680,10 @@ class TestRunPipeline:
             in parsed["data"]["execution"]["execution_gate"]["reason_codes"]
         )
         mock_get_execution_bridge.return_value.schedule_execution.assert_not_called()
+        owned = isolated_plan_store.list_for_org("org-a")
+        assert [(p.id, p.org_id, p.created_by) for p in owned] == [
+            (parsed["data"]["decision_plan"]["id"], "org-a", "user-1")
+        ]
 
     def test_unknown_endpoint_returns_404(self, handler: PromptEngineHandler) -> None:
         req = _make_handler_request({"prompt": "test"})

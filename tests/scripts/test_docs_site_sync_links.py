@@ -20,29 +20,41 @@ def _docs_specs_map_entries() -> dict[str, str]:
     content = SYNC_SCRIPT.read_text(encoding="utf-8")
     return dict(
         re.findall(
-            r"'specs/([^']+\.md)'\s*:\s*'specs/([^']+\.md)'",
+            r"'(?:docs/)?specs/([^']+\.md)'\s*:\s*'specs/([^']+\.md)'",
             content,
         )
     )
 
 
+def _sync_script_map_entries(name: str) -> dict[str, str]:
+    """Return a `const NAME = {...};` source -> destination map from sync-docs.js."""
+    content = SYNC_SCRIPT.read_text(encoding="utf-8")
+    block = re.search(rf"const {name} = \{{(.*?)\n\}};", content, re.DOTALL)
+    if not block:
+        raise RuntimeError(f"Could not locate {name} in sync-docs.js")
+    return dict(re.findall(r"'([^']+\.md)'\s*:\s*'([^']+\.md)'", block.group(1)))
+
+
 def _docs_mirror_map_entries() -> dict[str, str]:
     """Return the full DOC_MAP from sync-docs.js as {source: destination}."""
-    content = SYNC_SCRIPT.read_text(encoding="utf-8")
-    doc_map_block = re.search(r"const DOC_MAP = \{(.*?)\n\};", content, re.DOTALL)
-    if not doc_map_block:
-        raise RuntimeError("Could not locate DOC_MAP in sync-docs.js")
-    return dict(
-        re.findall(
-            r"'([^']+\.md)'\s*:\s*'([^']+\.md)'",
-            doc_map_block.group(1),
-        )
-    )
+    return _sync_script_map_entries("DOC_MAP")
 
 
-def _docs_mirror_dest_to_source() -> dict[str, str]:
-    """Reverse DOC_MAP so we can look up the claimed source for a destination page."""
-    return {dest: src for src, dest in _docs_mirror_map_entries().items()}
+def _doc_map_by_source() -> dict[str, str]:
+    """DOC_MAP keyed by repo-relative source; keys not spelled docs/<path> are relative to docs/."""
+    return {
+        key if key.startswith("docs/") else f"docs/{key}": dest
+        for key, dest in _docs_mirror_map_entries().items()
+    }
+
+
+def _copy_sync_inputs(tmp_path: Path) -> None:
+    """Copy docs/, the sync script and the repo-root sources it publishes into tmp_path."""
+    shutil.copytree(REPO_ROOT / "docs", tmp_path / "docs")
+    shutil.copytree(REPO_ROOT / "docs-site" / "scripts", tmp_path / "docs-site" / "scripts")
+    for src_rel in _sync_script_map_entries("REPO_SOURCE_MAP"):
+        (tmp_path / src_rel).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(REPO_ROOT / src_rel, tmp_path / src_rel)
 
 
 def test_documentation_index_rewrites_status_and_planning_links() -> None:
@@ -173,19 +185,9 @@ def test_docs_site_sync_fallback_mirror_pages_match_source_content() -> None:
     If a destination differs from the source it is claimed to come from, the
     test fails.
     """
-    dest_to_source = _docs_mirror_dest_to_source()
-    root_source_files = {src for src in dest_to_source.values() if src.startswith("../")}
-
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
-        shutil.copytree(REPO_ROOT / "docs", tmp_path / "docs")
-        shutil.copytree(
-            REPO_ROOT / "docs-site" / "scripts",
-            tmp_path / "docs-site" / "scripts",
-        )
-        for src_rel in root_source_files:
-            src = (REPO_ROOT / "docs" / src_rel).resolve()
-            shutil.copy2(src, tmp_path / src.name)
+        _copy_sync_inputs(tmp_path)
 
         subprocess.run(
             ["node", str(tmp_path / "docs-site" / "scripts" / "sync-docs.js")],
@@ -213,6 +215,115 @@ def test_docs_site_sync_fallback_mirror_pages_match_source_content() -> None:
                 *mismatches,
             ]
         )
+
+
+def _exists_with_exact_case(rel: str) -> bool:
+    current = REPO_ROOT
+    for part in rel.split("/"):
+        if not current.is_dir() or part not in {child.name for child in current.iterdir()}:
+            return False
+        current = current / part
+    return current.is_file()
+
+
+def test_doc_map_sources_are_exact_paths_with_unique_destinations() -> None:
+    doc_map = _docs_mirror_map_entries()
+    sources = _doc_map_by_source()
+    repo_sources = _sync_script_map_entries("REPO_SOURCE_MAP")
+    content = SYNC_SCRIPT.read_text(encoding="utf-8")
+    link_only = re.search(r"const REPO_SOURCE_LINK_ONLY = \[(.*?)\n\];", content, re.DOTALL)
+
+    assert repo_sources == {
+        "CLAUDE.md": "contributing/claude.md",
+        "ROADMAP.md": "contributing/roadmap.md",
+    }
+    assert link_only and re.findall(r"'([^']+)'", link_only.group(1)) == [
+        "aragora/gauntlet/README.md"
+    ]
+    assert _exists_with_exact_case("aragora/gauntlet/README.md")
+    assert "resolveSourcePath" not in content and "SOURCE_INDEX" not in content
+
+    unresolved = [key for key in doc_map if key.startswith(("../", "/"))] + [
+        src for src in sources if not _exists_with_exact_case(src)
+    ]
+    assert not unresolved, f"DOC_MAP keys that are not exact docs/ paths: {unresolved}"
+    assert all(_exists_with_exact_case(src) for src in repo_sources)
+
+    destinations = [*doc_map.values(), *repo_sources.values()]
+    duplicates = sorted({dest for dest in destinations if destinations.count(dest) > 1})
+    assert not duplicates, f"Destinations claimed by more than one source: {duplicates}"
+
+
+def test_docs_site_sync_fails_closed_when_a_doc_map_source_is_missing() -> None:
+    # The key keeps an existing basename, so a basename fallback would still find a file.
+    for missing_key in ("docs/_moved/GETTING_STARTED.md", "docs/guides/getting_started.md"):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            _copy_sync_inputs(tmp_path)
+            script = tmp_path / "docs-site" / "scripts" / "sync-docs.js"
+            content, count = re.subn(
+                r"'(?:docs/)?guides/GETTING_STARTED\.md':",
+                f"'{missing_key}':",
+                script.read_text(encoding="utf-8"),
+            )
+            assert count == 1
+            script.write_text(content, encoding="utf-8")
+
+            result = subprocess.run(
+                ["node", str(script)], cwd=tmp_path, capture_output=True, text=True
+            )
+
+            assert result.returncode != 0
+            assert f"'{missing_key}'" in result.stderr
+            assert not (tmp_path / "docs-site" / "docs").exists()
+
+
+def test_cli_prose_reference_has_its_own_page_beside_the_generated_catalog() -> None:
+    doc_map = _doc_map_by_source()
+    prose = _read_docs_site("reference/cli-reference.md")
+
+    assert doc_map["docs/CLI_REFERENCE.md"] == "reference/cli-reference.md"
+    assert doc_map["docs/reference/CLI_REFERENCE.md"] == "api/cli.md"
+    assert "title: Aragora CLI Reference" in prose
+    assert "Generated Aragora CLI command catalog" not in prose
+    assert "](../api/cli)" in prose
+    assert "[CLI Reference](../reference/cli-reference)" in _read_docs_site(
+        "getting-started/overview.md"
+    )
+
+
+def test_incident_response_runbooks_publish_to_separate_pages() -> None:
+    doc_map = _doc_map_by_source()
+    pages = {
+        "operations/incident-response.md": "docs/runbooks/INCIDENT_RESPONSE.md",
+        "operations/incident-response-procedures.md": "docs/runbooks/incident-response.md",
+    }
+    for dest, src in pages.items():
+        assert doc_map[src] == dest
+        source = (REPO_ROOT / src).read_text(encoding="utf-8")
+        first_prose_line = next(
+            line for line in source.splitlines() if line.strip() and not line.startswith("#")
+        )
+        assert first_prose_line in _read_docs_site(dest)
+
+    assert "[Incident Response Runbook](./incident-response-procedures)" in _read_docs_site(
+        "operations/scaling.md"
+    )
+    assert "[Incident Response](../operations/incident-response)" in _read_docs_site(
+        "contributing/extended-readme.md"
+    )
+
+
+def test_rewritten_links_are_not_resolved_again_by_page_slug() -> None:
+    # deployment/SCALING.md publishes to deployment/scaling; runbooks/scaling.md to
+    # operations/scaling. A link already rewritten to deployment/scaling must keep that target.
+    assert "[SCALING.md](./scaling)" in _read_docs_site("deployment/async-gateway.md")
+    assert "[SCALING.md](../deployment/scaling)" in _read_docs_site(
+        "operations/production-readiness.md"
+    )
+    assert "[MONITORING_SETUP.md](../guides/monitoring-setup)" in _read_docs_site(
+        "advanced/resilience.md"
+    )
 
 
 # Pre-existing docs/reference mirror pairs: docs/reference/<NAME>.md source
@@ -766,7 +877,7 @@ def _docs_reference_map_entries() -> dict[str, str]:
     content = SYNC_SCRIPT.read_text(encoding="utf-8")
     return dict(
         re.findall(
-            r"'reference/([^']+\.md)'\s*:\s*'reference/([^']+\.md)'",
+            r"'(?:docs/)?reference/([^']+\.md)'\s*:\s*'reference/([^']+\.md)'",
             content,
         )
     )
@@ -853,18 +964,18 @@ def test_docs_reference_directory_is_mirrored() -> None:
 def test_public_commercial_sources_do_not_gain_duplicate_reference_pages() -> None:
     sync_script = SYNC_SCRIPT.read_text(encoding="utf-8")
     assert re.search(
-        r"^\s*'PRICING\.md':\s*'enterprise/pricing\.md',\s*$",
+        r"^\s*'docs/strategy/PRICING\.md':\s*'enterprise/pricing\.md',\s*$",
         sync_script,
         re.MULTILINE,
     )
     assert re.search(
-        r"^\s*'SLA\.md':\s*'enterprise/sla\.md',\s*$",
+        r"^\s*'docs/reference/SLA\.md':\s*'enterprise/sla\.md',\s*$",
         sync_script,
         re.MULTILINE,
     )
-    assert not re.search(r"^\s*'reference/PRICING_TIERS\.md':", sync_script, re.MULTILINE)
-    assert not re.search(r"^\s*'reference/SLA\.md':", sync_script, re.MULTILINE)
-    assert not re.search(r"^\s*'enterprise/SLA\.md':", sync_script, re.MULTILINE)
+    assert len(re.findall(r"^\s*'(?:docs/)?reference/SLA\.md':", sync_script, re.MULTILINE)) == 1
+    assert not re.search(r"^\s*'(?:docs/)?reference/PRICING_TIERS\.md':", sync_script, re.MULTILINE)
+    assert not re.search(r"^\s*'(?:docs/)?enterprise/SLA\.md':", sync_script, re.MULTILINE)
 
     enterprise_pricing = _read_docs_site("enterprise/pricing.md")
     assert "$49/seat/mo" in enterprise_pricing

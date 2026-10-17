@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 
+from aragora.debate.nomic_backends import nomic_backend
 from aragora.protocols.debate import DebateProtocol
 
 logger = logging.getLogger(__name__)
@@ -22,8 +23,7 @@ def resolve_default_protocol(
     profile = os.environ.get("ARAGORA_DEBATE_PROFILE", "").lower()
     if profile in {"full", "nomic", "structured"}:
         try:
-            # Deferred: aragora.nomic sits above aragora.debate in the layer order.
-            from aragora.nomic.debate_profile import NomicDebateProfile
+            NomicDebateProfile = nomic_backend().debate_profile()
 
             return NomicDebateProfile.from_env().to_protocol()
         except (ImportError, RuntimeError, ValueError, TypeError, AttributeError, OSError) as exc:

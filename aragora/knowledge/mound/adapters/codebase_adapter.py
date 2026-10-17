@@ -303,7 +303,7 @@ class CodebaseAdapter(KnowledgeMoundAdapter):
             Number of items ingested
         """
         try:
-            from aragora.connectors.repository_crawler import RepositoryCrawler
+            from aragora.analysis.codebase.repository_crawler import RepositoryCrawler
 
             crawler = RepositoryCrawler()
             crawl_result = await crawler.crawl(source=source)

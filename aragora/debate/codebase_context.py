@@ -127,7 +127,7 @@ class CodebaseContextProvider:
 
     async def _build_fresh_context(self, task: str) -> str:
         """Build fresh context using NomicContextBuilder, enhanced with RLM if available."""
-        from aragora.nomic.context_builder import NomicContextBuilder
+        from aragora.rlm.context_builder import NomicContextBuilder
 
         path = Path(self._config.codebase_path)  # type: ignore[arg-type]
         if not path.exists():

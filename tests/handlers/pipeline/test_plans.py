@@ -173,29 +173,22 @@ class MockPlan:
 
 
 class TestRouting:
-    def test_can_handle_plans_path(self):
-        h = _make_handler()
-        assert h.can_handle("/api/v1/plans") is True
+    """Retired: the in-memory store has no owners, so no plans route is served here."""
 
-    def test_can_handle_plans_with_id(self):
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "/api/v1/plans",
+            "/api/v1/plans/plan-001",
+            "/api/v1/plans/plan-001/memo",
+            "/api/v1/plans/plan-001/approve",
+            "/api/plans",
+            "/api/v2/plans",
+        ],
+    )
+    def test_does_not_handle_plans_routes(self, path):
         h = _make_handler()
-        assert h.can_handle("/api/v1/plans/plan-001") is True
-
-    def test_can_handle_plans_memo(self):
-        h = _make_handler()
-        assert h.can_handle("/api/v1/plans/plan-001/memo") is True
-
-    def test_can_handle_plans_approve(self):
-        h = _make_handler()
-        assert h.can_handle("/api/v1/plans/plan-001/approve") is True
-
-    def test_can_handle_without_version_prefix(self):
-        h = _make_handler()
-        assert h.can_handle("/api/plans") is True
-
-    def test_can_handle_v2_version(self):
-        h = _make_handler()
-        assert h.can_handle("/api/v2/plans") is True
+        assert h.can_handle(path) is False
 
     def test_cannot_handle_unrelated_path(self):
         h = _make_handler()
@@ -209,9 +202,8 @@ class TestRouting:
         h = _make_handler()
         assert h.can_handle("/api/v1/planning") is False
 
-    def test_routes_attribute(self):
-        h = _make_handler()
-        assert "/api/v1/plans" in h.ROUTES
+    def test_declares_no_routes(self):
+        assert not hasattr(PlanManagementHandler, "ROUTES")
 
     def test_constructor_default_ctx(self):
         h = PlanManagementHandler()

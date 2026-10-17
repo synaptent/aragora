@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -23,6 +24,7 @@ import os
 import pytest
 
 from aragora.server.handlers.decision import DecisionHandler
+from aragora.server.handlers.decisions import decision as decision_mod
 
 
 # ===========================================================================
@@ -124,41 +126,59 @@ class MockDecisionRouter:
         )
 
 
+ORG = "test-org-001"
+USER = "test-user-001"
+
+
 class MockDecisionResultStore:
-    """Mock decision result store for testing."""
+    """Mock decision result store for testing, with org ownership like the real store."""
 
     def __init__(self):
         self._results: dict[str, dict[str, Any]] = {}
 
-    def save(self, request_id: str, data: dict[str, Any]) -> None:
-        self._results[request_id] = data
+    def save(
+        self,
+        request_id: str,
+        data: dict[str, Any],
+        *,
+        org_id: str | None = None,
+        created_by: str | None = None,
+    ) -> bool:
+        previous = self._results.get(request_id) or {}
+        owned = bool(previous.get("org_id"))
+        self._results[request_id] = {
+            **data,
+            "org_id": previous["org_id"] if owned else (org_id or data.get("org_id")),
+            "created_by": (
+                previous.get("created_by") if owned else (created_by or data.get("created_by"))
+            ),
+        }
+        return True
 
     def get(self, request_id: str) -> dict[str, Any] | None:
         return self._results.get(request_id)
 
-    def get_status(self, request_id: str) -> dict[str, Any]:
+    def get_for_org(self, request_id: str, org_id: str | None) -> dict[str, Any] | None:
         result = self._results.get(request_id)
-        if result:
-            return {
-                "request_id": request_id,
-                "status": result.get("status", "unknown"),
-                "completed_at": result.get("completed_at"),
-            }
-        return {"request_id": request_id, "status": "not_found"}
+        if result is None or not org_id or result.get("org_id") != org_id:
+            return None
+        return result
 
-    def list_recent(self, limit: int = 20) -> list[dict[str, Any]]:
-        decisions = list(self._results.values())[-limit:]
+    def _owned(self, org_id: str) -> list[dict[str, Any]]:
+        return [d for d in self._results.values() if org_id and d.get("org_id") == org_id]
+
+    def list_recent_for_org(self, org_id: str, limit: int = 20) -> list[dict[str, Any]]:
         return [
             {
                 "request_id": d["request_id"],
                 "status": d.get("status"),
                 "completed_at": d.get("completed_at"),
             }
-            for d in decisions
+            for d in self._owned(org_id)[-limit:]
         ]
 
-    def count(self) -> int:
-        return len(self._results)
+    def count_for_org(self, org_id: str) -> int:
+        return len(self._owned(org_id))
 
 
 @dataclass
@@ -213,6 +233,12 @@ def mock_result_store():
     """Create mock result store with sample data."""
     store = MockDecisionResultStore()
     store.save(
+        "dec_other_org",
+        {"request_id": "dec_other_org", "status": "failed", "content": "Theirs"},
+        org_id="other-org-999",
+        created_by="other-user",
+    )
+    store.save(
         "dec_existing123",
         {
             "request_id": "dec_existing123",
@@ -220,6 +246,8 @@ def mock_result_store():
             "result": {"answer": "Test answer"},
             "completed_at": datetime.now(timezone.utc).isoformat(),
         },
+        org_id=ORG,
+        created_by=USER,
     )
     store.save(
         "dec_pending456",
@@ -227,6 +255,8 @@ def mock_result_store():
             "request_id": "dec_pending456",
             "status": "pending",
         },
+        org_id=ORG,
+        created_by=USER,
     )
     store.save(
         "dec_failed789",
@@ -236,6 +266,8 @@ def mock_result_store():
             "error": "Something went wrong",
             "result": {"task": "Test task", "request": {"content": "Test content"}},
         },
+        org_id=ORG,
+        created_by=USER,
     )
     return store
 
@@ -251,7 +283,10 @@ def handler(mock_server_context, mock_result_store):
             "aragora.server.handlers.decision._decision_result_store.get",
             return_value=mock_result_store,
         ),
-        patch("aragora.server.handlers.decision._get_result", side_effect=mock_result_store.get),
+        patch(
+            "aragora.server.handlers.decision._get_result",
+            side_effect=mock_result_store.get_for_org,
+        ),
         patch("aragora.server.handlers.decision._save_result", side_effect=mock_result_store.save),
         patch(
             "aragora.server.handlers.decision._decision_results_fallback",
@@ -447,6 +482,8 @@ class TestListDecisions:
             assert "decisions" in body
             assert "total" in body
             assert isinstance(body["decisions"], list)
+            assert body["total"] == 3
+            assert "dec_other_org" not in {d["request_id"] for d in body["decisions"]}
 
     def test_list_decisions_with_limit(self, mock_server_context, mock_result_store):
         """Test listing decisions with limit parameter."""
@@ -471,7 +508,7 @@ class TestGetDecision:
 
         with patch(
             "aragora.server.handlers.decision._get_result",
-            side_effect=mock_result_store.get,
+            side_effect=mock_result_store.get_for_org,
         ):
             result = h.handle("/api/v1/decisions/dec_existing123", {}, mock_handler)
             assert result.status_code == 200
@@ -485,10 +522,25 @@ class TestGetDecision:
 
         with patch(
             "aragora.server.handlers.decision._get_result",
-            side_effect=mock_result_store.get,
+            side_effect=mock_result_store.get_for_org,
         ):
             result = h.handle("/api/v1/decisions/nonexistent", {}, mock_handler)
             assert result.status_code == 404
+            assert json.loads(result.body) == {"error": "Decision not found", "code": "not_found"}
+
+    def test_get_other_org_decision_not_found(self, mock_server_context, mock_result_store):
+        """Another org's decision is reported exactly like a missing one."""
+        h = DecisionHandler(mock_server_context)
+        mock_handler = create_mock_handler()
+
+        with patch(
+            "aragora.server.handlers.decision._get_result",
+            side_effect=mock_result_store.get_for_org,
+        ):
+            foreign = h.handle("/api/v1/decisions/dec_other_org", {}, mock_handler)
+            missing = h.handle("/api/v1/decisions/nonexistent", {}, mock_handler)
+            assert foreign.status_code == missing.status_code == 404
+            assert json.loads(foreign.body) == json.loads(missing.body)
 
 
 class TestGetDecisionStatus:
@@ -618,7 +670,7 @@ class TestCancelDecision:
         with (
             patch(
                 "aragora.server.handlers.decision._get_result",
-                side_effect=mock_result_store.get,
+                side_effect=mock_result_store.get_for_org,
             ),
             patch(
                 "aragora.server.handlers.decision._save_result",
@@ -641,7 +693,7 @@ class TestCancelDecision:
 
         with patch(
             "aragora.server.handlers.decision._get_result",
-            side_effect=mock_result_store.get,
+            side_effect=mock_result_store.get_for_org,
         ):
             result = await h.handle_post(
                 "/api/v1/decisions/dec_existing123/cancel", {}, mock_handler
@@ -658,7 +710,7 @@ class TestCancelDecision:
 
         with patch(
             "aragora.server.handlers.decision._get_result",
-            side_effect=mock_result_store.get,
+            side_effect=mock_result_store.get_for_org,
         ):
             result = await h.handle_post("/api/v1/decisions/nonexistent/cancel", {}, mock_handler)
             assert result.status_code == 404
@@ -679,7 +731,7 @@ class TestRetryDecision:
         with (
             patch(
                 "aragora.server.handlers.decision._get_result",
-                side_effect=mock_result_store.get,
+                side_effect=mock_result_store.get_for_org,
             ),
             patch(
                 "aragora.server.handlers.decision._get_decision_router", return_value=mock_router
@@ -704,7 +756,7 @@ class TestRetryDecision:
 
         with patch(
             "aragora.server.handlers.decision._get_result",
-            side_effect=mock_result_store.get,
+            side_effect=mock_result_store.get_for_org,
         ):
             result = await h.handle_post(
                 "/api/v1/decisions/dec_existing123/retry", {}, mock_handler
@@ -721,7 +773,7 @@ class TestRetryDecision:
 
         with patch(
             "aragora.server.handlers.decision._get_result",
-            side_effect=mock_result_store.get,
+            side_effect=mock_result_store.get_for_org,
         ):
             result = await h.handle_post("/api/v1/decisions/nonexistent/retry", {}, mock_handler)
             assert result.status_code == 404
@@ -848,7 +900,7 @@ class TestDecisionHandlerErrors:
 
         with patch(
             "aragora.server.handlers.decision._get_result",
-            side_effect=mock_result_store.get,
+            side_effect=mock_result_store.get_for_org,
         ):
             result = h.handle("/api/v1/decisions/nonexistent", {}, mock_handler)
             assert result.status_code == 404
@@ -877,7 +929,7 @@ class TestRetryErrorHandling:
         with (
             patch(
                 "aragora.server.handlers.decision._get_result",
-                side_effect=mock_result_store.get,
+                side_effect=mock_result_store.get_for_org,
             ),
             patch(
                 "aragora.server.handlers.decision._get_decision_router", return_value=mock_router
@@ -905,7 +957,7 @@ class TestRetryErrorHandling:
         with (
             patch(
                 "aragora.server.handlers.decision._get_result",
-                side_effect=mock_result_store.get,
+                side_effect=mock_result_store.get_for_org,
             ),
             patch(
                 "aragora.server.handlers.decision._get_decision_router", return_value=mock_router
@@ -920,3 +972,54 @@ class TestRetryErrorHandling:
             assert result.status_code == 500
             body = json.loads(result.body)
             assert "failed" in body.get("error", "").lower()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("persistent", [True, False])
+async def test_other_org_cannot_overwrite_a_decision(tmp_path, monkeypatch, persistent):
+    """Org B reusing org A's request_id is answered like a missing decision; A's result stays."""
+    from aragora.server.handlers.decisions import decision as mod
+    from aragora.storage.decision_result_store import DecisionResultStore
+    from aragora.tenancy.record_scope import OrgScope
+
+    store = DecisionResultStore(db_path=tmp_path / "results.db") if persistent else None
+    monkeypatch.setattr(mod._decision_result_store, "get", lambda: store)
+    monkeypatch.setattr(mod, "_decision_results_fallback", {})
+    monkeypatch.setattr(mod, "_get_decision_router", lambda ctx=None: MockDecisionRouter())
+    scopes = {org: OrgScope(org_id=org, user_id=f"{org}-user", role="member") for org in "AB"}
+    h = DecisionHandler({})
+
+    async def create(org, body):
+        monkeypatch.setattr(mod, "require_org_scope", lambda handler: (scopes[org], None))
+        result = await h.handle_post("/api/v1/decisions", {}, create_mock_handler("POST", body))
+        return result.status_code, json.loads(result.body)
+
+    def read(org, request_id):
+        result = h._get_decision(request_id, scopes[org])
+        return result.status_code, json.loads(result.body)
+
+    rid_a = (await create("A", {"content": "A?"}))[1]["request_id"]
+    before = read("A", rid_a)
+    reused = await create("B", {"content": "B?", "request_id": rid_a})
+    refused = mod._save_result(rid_a, {"request_id": rid_a, "status": "failed"}, org_id="B")
+
+    missing = (404, {"error": "Decision not found", "code": "not_found"})
+    assert reused == read("B", rid_a) == read("B", "dec_never_created") == missing
+    assert refused is False
+    assert read("A", rid_a) == before
+    assert before[1]["result"]["answer"] == "Answer for: A?"
+
+
+async def test_fallback_save_refuses_other_org_atomically_across_threads(monkeypatch):
+    class _SlowReads(dict):  # unless check and write are atomic, both orgs read "unowned"
+        def get(self, *args):
+            value = super().get(*args)
+            time.sleep(0.2)
+            return value
+
+    monkeypatch.setattr(decision_mod._decision_result_store, "get", lambda: None)
+    monkeypatch.setattr(decision_mod, "_decision_results_fallback", _SlowReads())
+    save = decision_mod._save_result
+    saved = await asyncio.gather(*(asyncio.to_thread(save, "r", {}, org_id=o) for o in "AB"))
+
+    assert sorted(saved) == [False, True]

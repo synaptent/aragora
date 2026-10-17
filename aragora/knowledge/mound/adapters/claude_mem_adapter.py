@@ -28,6 +28,7 @@ from aragora.knowledge.mound.adapters._base import (
 )
 from aragora.knowledge.mound.adapters._semantic_mixin import SemanticSearchMixin
 from aragora.knowledge.mound.adapters._types import SyncResult
+from aragora.runtime.connector_factory import ConnectorFactoryNotRegisteredError, create_connector
 
 if TYPE_CHECKING:
     from aragora.connectors.memory.claude_mem import ClaudeMemConnector
@@ -97,16 +98,10 @@ class ClaudeMemAdapter(SemanticSearchMixin, KnowledgeMoundAdapter):
         """Lazy-init connector if not provided."""
         if self._connector is None:
             try:
-                from aragora.connectors.memory.claude_mem import (
-                    ClaudeMemConfig,
-                    ClaudeMemConnector as Cls,
-                )
-
-                config = ClaudeMemConfig.from_env()
-                self._connector = Cls(config)
+                self._connector = create_connector("claude_mem")
                 if self._project is None:
-                    self._project = config.project
-            except (ImportError, OSError, ValueError) as e:
+                    self._project = self._connector.config.project
+            except (ImportError, OSError, ValueError, ConnectorFactoryNotRegisteredError) as e:
                 logger.debug("claude-mem connector unavailable: %s", e)
                 return None
         return self._connector

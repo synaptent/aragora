@@ -34,6 +34,7 @@ from aragora.pipeline.backbone_errors import (
 from aragora.pipeline.backbone_runtime import BackboneRuntime
 from aragora.pipeline.decision_plan.factory import normalize_execution_mode
 from aragora.pipeline.execution_mode import ExecutionMode as SafetyMode
+from aragora.pipeline.execution_ownership import resolve_execution_owner
 from aragora.pipeline.executor import ExecutionMode as ExecutorExecutionMode
 
 from ..base import (
@@ -340,7 +341,7 @@ class PromptEngineHandler(SecureHandler):
                 400,
             )
 
-        _, perm_err = self.require_permission_or_error(handler, "plans:write")
+        user, perm_err = self.require_permission_or_error(handler, "plans:write")
         if perm_err:
             return None, perm_err
         if schedule_requested:
@@ -359,6 +360,7 @@ class PromptEngineHandler(SecureHandler):
                 "task": str(plan_data.get("task", "") or "").strip() or None,
                 "metadata": metadata,
                 "implementation_profile": implementation_profile,
+                "owner": resolve_execution_owner(user),
             },
             None,
         )
@@ -610,6 +612,7 @@ class PromptEngineHandler(SecureHandler):
                 plan.metadata = {}
             plan.metadata["execution_gate"] = execution_gate_decision.gate
 
+        plan.org_id, plan.created_by = plan_request["owner"]
         store.create(plan)
         try:
             ensure_backbone_persisted(

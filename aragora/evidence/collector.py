@@ -35,8 +35,12 @@ from typing import (
 from collections.abc import Callable
 from urllib.parse import urlparse
 
+from aragora.reasoning.provenance import ProvenanceManager
+from aragora.runtime.connector_factory import ConnectorFactoryNotRegisteredError, create_connector
+
 if TYPE_CHECKING:
     from aragora.knowledge.mound.adapters.evidence_adapter import EvidenceAdapter
+    from aragora.connectors.base import Connector
     from aragora.connectors.documents.parser import ParsedDocument
 
 logger = logging.getLogger(__name__)
@@ -81,9 +85,6 @@ DEFAULT_ALLOWED_DOMAINS: frozenset[str] = frozenset(
         "azure.microsoft.com",
     }
 )
-
-from aragora.connectors.base import Connector
-from aragora.reasoning.provenance import ProvenanceManager
 
 
 @dataclass
@@ -372,10 +373,8 @@ class EvidenceCollector:
         """Get or create the document connector (lazy initialization)."""
         if self._document_connector is None:
             try:
-                from aragora.connectors.documents import DocumentConnector
-
-                self._document_connector = DocumentConnector()
-            except ImportError:
+                self._document_connector = create_connector("documents")
+            except (ImportError, ConnectorFactoryNotRegisteredError):
                 logger.debug("DocumentConnector not available - document parsing disabled")
                 return None
         return self._document_connector

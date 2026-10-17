@@ -41,6 +41,7 @@ from collections.abc import Callable, Sequence
 from aragora.agents.base import AgentType
 from aragora.config.settings import get_settings
 from aragora.core import Agent, DebateResult, Environment
+from aragora.debate.nomic_backends import nomic_backend
 from aragora.debate.protocol_resolver import resolve_default_protocol
 from aragora.protocols.debate import DebateProtocol
 
@@ -147,7 +148,7 @@ class DebateOptions:
         profile = os.environ.get("ARAGORA_DEBATE_PROFILE", "").lower()
         if profile in {"full", "nomic", "structured"}:
             try:
-                from aragora.nomic.debate_profile import NomicDebateProfile
+                NomicDebateProfile = nomic_backend().debate_profile()
 
                 nomic_profile = NomicDebateProfile.from_env()
                 self.rounds = nomic_profile.rounds

@@ -32,6 +32,7 @@ from aragora.server.handlers.debates.implementation import (
 )
 from aragora.server.handlers.debates.routing import AUTH_REQUIRED_ENDPOINTS, ROUTES
 
+pytestmark = pytest.mark.usefixtures("caller_owns_source_debate")
 
 # ---------------------------------------------------------------------------
 # Helpers

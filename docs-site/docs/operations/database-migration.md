@@ -269,5 +269,5 @@ curl http://aragora.company.com/health
 
 ## See Also
 
-- [Incident Response Runbook](./incident-response)
+- [Incident Response Runbook](./incident-response-procedures)
 - [Backup and Recovery](../enterprise/features)

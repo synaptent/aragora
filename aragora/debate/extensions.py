@@ -25,6 +25,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from aragora.debate.pipeline_backends import pipeline_backend
+
 if TYPE_CHECKING:
     from aragora.billing.debate_costs import DebateCostSummary
     from aragora.core import Agent, DebateResult
@@ -756,15 +758,18 @@ class ArenaExtensions:
 
         try:
             # Import task event emitters
-            from aragora.control_plane.task_events import (
+            from aragora.events.task_events import (
                 emit_task_completed,
                 get_task_event_dispatcher,
+                load_declared_task_event_dispatcher_providers,
                 set_task_event_dispatcher,
             )
 
             # Use configured dispatcher or get default
             if self.notification_dispatcher is not None:
                 set_task_event_dispatcher(self.notification_dispatcher)
+            else:
+                load_declared_task_event_dispatcher_providers()
 
             # Get dispatcher (configured or default)
             dispatcher = get_task_event_dispatcher()
@@ -799,7 +804,7 @@ class ArenaExtensions:
             # Emit deliberation consensus notification for high-confidence results
             if confidence >= 0.7 and getattr(result, "consensus_reached", False):
                 try:
-                    from aragora.control_plane.channels import (
+                    from aragora.events.notification_types import (
                         NotificationEventType,
                         NotificationPriority,
                     )
@@ -962,9 +967,7 @@ class ArenaExtensions:
         try:
             # Lazy import to avoid circular dependencies
             if self.plan_executor is None:
-                from aragora.pipeline.executor import PlanExecutor
-
-                self.plan_executor = PlanExecutor()
+                self.plan_executor = pipeline_backend().plan_executor()()
 
             issue_result = self.plan_executor.execute_to_github_issue(plan)
             if issue_result.get("url"):

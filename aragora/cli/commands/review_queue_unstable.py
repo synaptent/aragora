@@ -452,6 +452,14 @@ def admin_squash_live_gate_blockers(packet: Any) -> list[str]:
         blockers.append(
             f"mergeStateStatus={merge_state_status}; admin squash requires CLEAN or BLOCKED"
         )
+
+    # A park record recorded against the *current* head is an explicit operator
+    # hold: the head was parked for a reason that admin squash would silently
+    # override. Parked-then-repushed heads carry no record, so this only blocks
+    # while the hold still applies to exactly what would be merged.
+    park_record = getattr(packet, "park_record", None)
+    if isinstance(park_record, dict) and park_record.get("blocked"):
+        blockers.append(str(park_record.get("blocker") or "current-head park record present"))
     return blockers
 
 

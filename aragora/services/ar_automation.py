@@ -330,9 +330,9 @@ class ARAutomation:
             return self._email
 
         if self._email_config is not None:
-            from aragora.integrations.email import EmailIntegration
+            from aragora.notifications.email_senders import create_email_sender
 
-            self._email = EmailIntegration(self._email_config)
+            self._email = create_email_sender(self._email_config)
             return self._email
 
         return None
@@ -492,7 +492,7 @@ class ARAutomation:
         text_body = self._build_invoice_text(invoice)
 
         # Create recipient
-        from aragora.integrations.email import EmailRecipient
+        from aragora.notifications.email_recipient import EmailRecipient
 
         recipient = EmailRecipient(
             email=invoice.customer_email,
@@ -783,7 +783,7 @@ class ARAutomation:
         )
 
         # Create recipient
-        from aragora.integrations.email import EmailRecipient
+        from aragora.notifications.email_recipient import EmailRecipient
 
         recipient = EmailRecipient(
             email=invoice.customer_email,
