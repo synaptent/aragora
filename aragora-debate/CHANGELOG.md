@@ -5,6 +5,12 @@ All notable changes to `aragora-debate` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Opt-in redacting logger, `aragora_debate._logging`: `configure_logging()` sends plain-text or JSON log lines to stderr and masks, as `***`, values that follow a name containing an API key, token, secret, password or Authorization word; `redact()` applies the same masking directly. Importing the package does not change logging. See the README's Logging section for coverage and the remaining limitations.
+
 ## [0.2.3] - 2026-02-24
 
 ### Changed
