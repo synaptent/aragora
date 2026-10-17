@@ -108,22 +108,64 @@ class GauntletAPI:
             input_type: Type of content.
             persona: Analysis persona.
             profile: Analysis depth.
-            timeout: Maximum wait time in seconds.
+            timeout: Polling budget in seconds after submission. Individual
+                requests retain the client's transport timeout.
 
         Returns:
             GauntletReceipt with full results.
         """
         response = self.run(input_content, input_type, persona, profile)
         gauntlet_id = response.gauntlet_id
+        if not gauntlet_id.strip():
+            raise AragoraAPIError(
+                "Gauntlet submission returned an empty run ID", "INVALID_RESPONSE", 200
+            )
 
-        start = time.time()
-        while time.time() - start < timeout:
-            try:
-                return self.get_receipt(gauntlet_id)
-            except AragoraAPIError as e:
-                if e.status_code != 404:
-                    raise
-            time.sleep(5)
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            # Pending AND failed runs return receipt HTTP 400/GAUNTLET_406.
+            # The shared transport specializes 400 as ValidationError, losing
+            # that code. Poll explicit status instead of guessing from an error.
+            # Read the actual server shape, not GauntletRun's legacy id/default.
+            run = self._client._get(f"/api/v1/gauntlet/{gauntlet_id}")
+            status = run.get("status") if isinstance(run, dict) else None
+            if (
+                not isinstance(run, dict)
+                or run.get("gauntlet_id") != gauntlet_id
+                or status not in ("pending", "running", "completed", "failed", "cancelled")
+            ):
+                raise AragoraAPIError(
+                    f"Gauntlet {gauntlet_id} returned invalid run status", "INVALID_RESPONSE", 200
+                )
+            if status in ("failed", "cancelled"):
+                # Do not echo potentially sensitive backend error details.
+                raise AragoraAPIError(
+                    f"Gauntlet {gauntlet_id} {status}",
+                    "GAUNTLET_RUN_FAILED",
+                    200,
+                    suggestion="Inspect the existing run before submitting another analysis",
+                )
+            if time.monotonic() >= deadline:
+                break
+            if status == "completed":
+                receipt = self.get_receipt(gauntlet_id)
+                if (
+                    receipt.gauntlet_id not in (None, gauntlet_id)
+                    or not receipt.verdict
+                    or not receipt.verdict.strip()
+                    or (
+                        receipt.status is not None and receipt.status.strip().lower() != "completed"
+                    )
+                ):
+                    raise AragoraAPIError(
+                        f"Gauntlet {gauntlet_id} returned an invalid completed receipt",
+                        "INVALID_RESPONSE",
+                        200,
+                    )
+                return receipt
+            remaining = deadline - time.monotonic()
+            if remaining > 0:
+                time.sleep(min(5, remaining))
 
         raise TimeoutError(f"Gauntlet {gauntlet_id} did not complete within {timeout}s")
 

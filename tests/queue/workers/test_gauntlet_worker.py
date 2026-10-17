@@ -10,6 +10,9 @@ Tests durable job processing for gauntlet stress-testing including:
 """
 
 import asyncio
+import inspect
+import json
+import sqlite3
 import tempfile
 import time
 from pathlib import Path
@@ -161,6 +164,60 @@ class TestEnqueueGauntletJob:
 # =============================================================================
 # Worker Initialization Tests
 # =============================================================================
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "attempts,status_write_fails", [(1, False), (3, False), (3, True), (3, "queue")]
+)
+async def test_execution_failure_visible_to_cached_consumers(
+    store, tmp_path, monkeypatch, attempts, status_write_fails
+):
+    from aragora.gauntlet import storage
+    from aragora.server.handlers.gauntlet import results, receipts
+
+    result_store = storage.GauntletStorage(str(tmp_path / "results.db"), backend="sqlite")
+    monkeypatch.setattr(storage, "GauntletStorage", lambda: result_store)
+    run_id = "gauntlet-terminal-failure"
+    result_store.save_inflight(run_id, "running", "spec", "fixture", "hash", None, "default", [])
+    for module in (results, receipts):
+        monkeypatch.setattr(module, "_get_storage_proxy", lambda: result_store)
+        monkeypatch.setattr(
+            module,
+            "get_gauntlet_runs",
+            lambda: {run_id: {"gauntlet_id": run_id, "status": "pending"}},
+        )
+    if status_write_fails is True:
+        monkeypatch.setattr(
+            result_store,
+            "update_inflight_status",
+            MagicMock(side_effect=sqlite3.OperationalError("secret path")),
+        )
+    job = QueuedJob(id=run_id, job_type="gauntlet", payload={"gauntlet_id": run_id})
+    await store.enqueue(job)
+    job = await store.dequeue(worker_id="test")
+    job.attempts = attempts
+    worker = GauntletWorker()
+    worker._execute_gauntlet = AsyncMock(side_effect=RuntimeError("private execution details"))
+    if status_write_fails == "queue":
+        monkeypatch.setattr(
+            store, "fail", AsyncMock(side_effect=sqlite3.OperationalError("secret queue"))
+        )
+        with pytest.raises(sqlite3.OperationalError):
+            await worker._process_job(job)
+    else:
+        await worker._process_job(job)
+    response = await inspect.unwrap(results.GauntletResultsMixin._get_status)(None, run_id)
+    assert json.loads(response.body)["status"] == ("pending" if attempts == 1 else "failed")
+    assert b"private execution" not in response.body
+    receipt = await inspect.unwrap(receipts.GauntletReceiptsMixin._get_receipt)(None, run_id, {})
+    assert receipt.status_code == 400
+    if status_write_fails != "queue":
+        assert (await store.get(run_id)).status == (
+            JobStatus.PENDING if attempts == 1 else JobStatus.FAILED
+        )
+    worker._execute_gauntlet.assert_awaited_once()
+    result_store.close()
 
 
 class TestGauntletWorker:

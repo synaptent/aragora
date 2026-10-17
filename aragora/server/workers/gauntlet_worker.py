@@ -24,7 +24,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import sqlite3
 import time
+from importlib import import_module
 from typing import TYPE_CHECKING, Any
 from collections.abc import Callable
 
@@ -38,8 +40,24 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Match supported drivers without importing the HTTP-handler package into workers.
+_STORAGE_ERRORS: tuple[type[Exception], ...] = (OSError, RuntimeError, ValueError, sqlite3.Error)
+for _driver, _error in (
+    ("psycopg2", "Error"),
+    ("asyncpg", "PostgresError"),
+    ("asyncpg", "InterfaceError"),
+):
+    try:
+        _STORAGE_ERRORS += (getattr(import_module(_driver), _error),)
+    except ImportError:
+        pass
+
 # Job type constant
 JOB_TYPE_GAUNTLET = "gauntlet"
+
+
+class _GauntletDeliveryError(RuntimeError):
+    """Delivery failure must not cause another analysis execution."""
 
 
 class GauntletWorker:
@@ -163,17 +181,21 @@ class GauntletWorker:
 
             # Execute the gauntlet
             result = await self._execute_gauntlet(job)
+            job.result = result
 
             # Mark job as completed
             duration = time.time() - start_time
-            await self._store.complete(
-                job.id,
-                result={
-                    "gauntlet_id": gauntlet_id,
-                    "verdict": result.get("verdict", "unknown"),
-                    "duration_seconds": duration,
-                },
-            )
+            try:
+                await self._store.complete(
+                    job.id,
+                    result={
+                        "gauntlet_id": gauntlet_id,
+                        "verdict": result.get("verdict", "unknown"),
+                        "duration_seconds": duration,
+                    },
+                )
+            except _STORAGE_ERRORS as e:
+                raise _GauntletDeliveryError("Gauntlet queue completion failed") from e
 
             logger.info(
                 "[%s] Completed gauntlet %s in %.1fs", self.worker_id, gauntlet_id, duration
@@ -189,12 +211,41 @@ class GauntletWorker:
             )
 
             # Check if we should retry
-            should_retry = job.attempts < job.max_attempts
-            await self._store.fail(
-                job.id,
-                error=str(e),
-                should_retry=should_retry,
+            should_retry = (
+                job.result is None
+                and not isinstance(e, _GauntletDeliveryError)
+                and job.attempts < job.max_attempts
             )
+            try:
+                await self._store.fail(
+                    job.id,
+                    error=str(e),
+                    should_retry=should_retry,
+                )
+            finally:
+                # Each store can preserve terminal truth when the other's write fails.
+                try:
+                    from aragora.gauntlet.storage import GauntletStorage
+
+                    storage = GauntletStorage()
+                    if storage.get_inflight(gauntlet_id) is None:
+                        storage.save_inflight(
+                            gauntlet_id,
+                            "pending" if should_retry else "failed",
+                            job.payload.get("input_type", "spec"),
+                            "",
+                            "",
+                            None,
+                            job.payload.get("profile", "default"),
+                            job.payload.get("agents", []),
+                        )
+                    storage.update_inflight_status(
+                        gauntlet_id,
+                        "pending" if should_retry else "failed",
+                        error="Gauntlet execution or result delivery failed",
+                    )
+                except _STORAGE_ERRORS as status_error:
+                    logger.warning("Failed to publish gauntlet failure: %s", status_error)
 
             if should_retry:
                 logger.info(
@@ -233,6 +284,21 @@ class GauntletWorker:
 
         # Get storage for status updates
         storage = GauntletStorage()
+        try:
+            stored = storage.get(gauntlet_id)
+            if stored:
+                if (
+                    not isinstance(stored, dict)
+                    or stored.get("gauntlet_id") != gauntlet_id
+                    or not stored.get("verdict")
+                ):
+                    raise ValueError("Invalid stored gauntlet result")
+                return stored  # Recovery after delivery failure must not rerun analysis.
+            inflight = storage.get_inflight(gauntlet_id)
+        except _STORAGE_ERRORS as e:
+            raise _GauntletDeliveryError("Gauntlet storage unavailable") from e
+        if inflight and inflight.status in ("failed", "cancelled"):
+            raise _GauntletDeliveryError("Gauntlet already terminated")
 
         # Create stream emitter if broadcast function is available
         emitter = None
@@ -250,8 +316,8 @@ class GauntletWorker:
         # Update status to running
         try:
             storage.update_inflight_status(gauntlet_id, "running")
-        except (OSError, RuntimeError) as e:
-            logger.debug("Failed to update inflight status: %s", e)
+        except _STORAGE_ERRORS as e:
+            raise _GauntletDeliveryError("Gauntlet status persistence failed") from e
 
         # Create agents
         agent_instances = []
@@ -284,6 +350,7 @@ class GauntletWorker:
 
         # Create config
         config = OrchestratorConfig(
+            gauntlet_id=gauntlet_id,
             input_type=input_type_enum,
             input_content=input_content,
             persona=persona,
@@ -320,7 +387,7 @@ class GauntletWorker:
                         current_phase=progress.phase,
                         progress_percent=progress.percent,
                     )
-                except (OSError, RuntimeError) as e:
+                except _STORAGE_ERRORS as e:
                     logger.warning(
                         "Failed to update inflight status for gauntlet %s: %s", gauntlet_id, e
                     )
@@ -328,6 +395,15 @@ class GauntletWorker:
         # Run gauntlet
         orchestrator = GauntletOrchestrator(agent_instances, on_progress=on_progress)
         result = await orchestrator.run(config)
+        job.result = result.to_dict()  # Execution is over, even if delivery fails below.
+
+        # Persist before reporting completion; a saved result outranks stale inflight state.
+        try:
+            storage.save(result)
+            storage.delete_inflight(gauntlet_id)
+            logger.info("Gauntlet %s persisted to storage", gauntlet_id)
+        except _STORAGE_ERRORS as e:
+            raise _GauntletDeliveryError("Gauntlet result delivery failed") from e
 
         # Emit completion events
         if emitter:
@@ -348,14 +424,6 @@ class GauntletWorker:
                 findings_count=result.total_findings,
                 duration_seconds=result.duration_seconds,
             )
-
-        # Persist result
-        try:
-            storage.save(result)
-            storage.delete_inflight(gauntlet_id)
-            logger.info("Gauntlet %s persisted to storage", gauntlet_id)
-        except (OSError, RuntimeError, ValueError) as e:
-            logger.warning("Failed to persist gauntlet %s: %s", gauntlet_id, e)
 
         # Feed gauntlet results back to ELO rankings
         try:
