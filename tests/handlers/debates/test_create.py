@@ -444,6 +444,42 @@ class TestCreateDebateDirect:
         assert body_data["debate_id"] == "debate-456"
         mock_emit.assert_called_once()
 
+    @pytest.mark.parametrize(
+        "user, expected",
+        [
+            ("org-a", "org-a"),
+            ("anonymous", None),
+            ("unauthenticated", None),
+            ("no-org", None),
+        ],
+    )
+    @patch("aragora.server.handlers.debates.create.emit_handler_event")
+    def test_direct_stamps_only_the_authenticated_org(self, mock_emit, user, expected):
+        """The org comes from the verified user, never from the body or its metadata."""
+        from aragora.billing.auth.context import UserAuthContext
+
+        users = {
+            "org-a": UserAuthContext(authenticated=True, user_id="u-1", org_id="org-a"),
+            "anonymous": None,
+            "unauthenticated": UserAuthContext(authenticated=False, org_id="org-a"),
+            "no-org": UserAuthContext(authenticated=True, user_id="u-1", org_id=None),
+        }
+        body = {"question": "Rate limiter?", "org_id": "evil", "metadata": {"org_id": "evil"}}
+        h = _make_handler(json_body=body)
+        h._mock_user = users[user]
+        handler = _mock_http_handler()
+        mock_controller = MagicMock()
+        mock_controller.start_debate.return_value = _MockDebateResponse(
+            success=True, debate_id="debate-789"
+        )
+        handler._get_debate_controller = MagicMock(return_value=mock_controller)
+
+        result = h._create_debate_direct(handler, body)
+
+        assert _status(result) == 200
+        request = mock_controller.start_debate.call_args.args[0]
+        assert request.org_id == expected
+
     @patch("aragora.server.handlers.debates.create.emit_handler_event")
     def test_direct_invalid_request(self, mock_emit):
         """ValueError from DebateRequest.from_dict returns 400."""

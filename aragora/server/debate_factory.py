@@ -134,6 +134,9 @@ class DebateConfig:
     enable_interventions: bool | None = None  # Enable intervention queue for human-in-the-loop
     comparison_config: dict | None = None  # Candidate lineups for best-result selection
     quality_pipeline: dict | None = None  # Post-consensus quality pipeline config
+    # Authenticated org that started the debate; stamps Knowledge Mound outcomes.
+    # Set only by HTTP entry points from the verified auth context.
+    org_id: str | None = None
 
     @property
     def model_comparison(self) -> dict | None:
@@ -753,6 +756,10 @@ class DebateFactory:
             logger.warning("ProviderRouter failed, proceeding without hints: %s", e)
 
         arena = builder.build()
+
+        # Kept apart from Arena.org_id (caller-settable billing attribution) and
+        # arena.auth_context (which switches on unrelated read filtering).
+        setattr(arena, "knowledge_org_id", config.org_id or None)
 
         # Apply per-debate budget cap if specified
         if config.budget_limit_usd and config.budget_limit_usd > 0:

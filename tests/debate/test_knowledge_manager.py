@@ -208,7 +208,7 @@ class TestArenaKnowledgeManagerKnowledgeOps:
         await manager.ingest_outcome(mock_result, mock_env)
 
         manager._knowledge_ops.ingest_debate_outcome.assert_awaited_once_with(
-            mock_result, env=mock_env
+            mock_result, env=mock_env, org_id=None
         )
 
 

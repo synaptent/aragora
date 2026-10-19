@@ -329,6 +329,10 @@ class KnowledgeFederationMixin:
             # Filter by visibility
             filtered_items = []
             for item in items:
+                # A push carries a whole workspace to a region that has no org scoping, and
+                # one workspace can hold several organizations' org-stamped items.
+                if (item.metadata or {}).get("org_id"):
+                    continue
                 item_vis = (item.metadata or {}).get("visibility", "workspace")
                 if item_vis in allowed_visibility:
                     # Filter by since if specified
