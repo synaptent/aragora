@@ -3,7 +3,7 @@
     "corpus_id": "tw-01-bounded-execution-v1",
     "in_progress_expected_count": 5,
     "issue_count": 10,
-    "manifest_sha256": "92c5df0190008beeac174319c621a9042fe9d5637d43ee6111d1b757a8079a35",
+    "manifest_sha256": "48a2d101a7aa0d3f41cf711524b4213a6a9fb90d7df9d057d224f26837012174",
     "membership_issue_numbers": [
       5185,
       5187,
@@ -50,7 +50,7 @@
   "failure_class_distribution": {
     "blocked_not_dispatch_bounded": 5
   },
-  "generated_at": "2026-09-29T13:36:38Z",
+  "generated_at": "2026-10-10T13:29:53Z",
   "in_flight_metrics": {
     "in_progress_attempted_count": 5,
     "in_progress_expected_count": 5,
