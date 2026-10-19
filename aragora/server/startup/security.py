@@ -347,6 +347,10 @@ async def init_approval_gate_recovery() -> int:
         Number of pending approvals recovered
     """
     try:
+        # Bound before anything can raise; an ImportError matches the ImportError
+        # clause before the DistributedStateError clause is evaluated.
+        from aragora.server.startup.workers import sqlite_fallback_skips_store_refusal
+        from aragora.storage.production_guards import DistributedStateError
         from aragora.server.middleware.approval_gate import recover_pending_approvals
 
         recovered = await recover_pending_approvals()
@@ -359,6 +363,18 @@ async def init_approval_gate_recovery() -> int:
         return 0
     except (OSError, RuntimeError, ValueError) as e:
         logger.warning("Failed to recover pending approvals: %s", e)
+        return 0
+    except DistributedStateError as e:
+        if not sqlite_fallback_skips_store_refusal(e.store_name, "governance_store"):
+            raise
+        # Approval requests still fail closed at runtime: creating, recovering
+        # or resolving one needs the same refused store.
+        logger.warning(
+            "Approval gate recovery skipped: storage guard refused %s "
+            "(ARAGORA_ALLOW_SQLITE_FALLBACK is set): %s",
+            e.store_name,
+            e.reason,
+        )
         return 0
 
 
