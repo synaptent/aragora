@@ -16,6 +16,25 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch, AsyncMock
 
 
+@pytest.fixture(autouse=True)
+def _reset_webhook_rate_limiters():
+    """Clear the module-level webhook rate limiters before and after each test.
+
+    The limiters are shared per client IP across test modules, so leftover
+    requests can push the register (10/min) and test-delivery (5/min) limits
+    over and turn expected responses into 429s.
+    """
+    from aragora.server.handlers import webhook_management
+
+    webhook_management._register_limiter.clear()
+    webhook_management._test_limiter.clear()
+    webhook_management._list_limiter.clear()
+    yield
+    webhook_management._register_limiter.clear()
+    webhook_management._test_limiter.clear()
+    webhook_management._list_limiter.clear()
+
+
 class TestWebhookSignature:
     """Tests for webhook signature utilities."""
 
