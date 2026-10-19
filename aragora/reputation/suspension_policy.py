@@ -18,8 +18,6 @@ Feature flag: ``ARAGORA_REPUTATION_SUSPENSION_ENABLED`` (default OFF).
 Out of scope for this slice:
 - Wiring into ``TeamSelector`` — follow-on after the AGT-* gate opens.
 - On-chain suspension records — lives with the blockchain anchoring layer.
-- Domain-filtered time-decay — domain scores currently sum deltas without
-  decay; apply_decay only works on the full-domain path via ``get_score``.
 - Notification / audit-event emission — follow-on once event dispatcher
   is stable.
 
@@ -84,9 +82,10 @@ class SuspensionThreshold:
             :class:`SuspensionDecision` for downstream ledgers. This
             module does not enforce a timeout (default ``7.0``).
         domains: When non-``None``, only deltas whose ``domain`` is in
-            this set contribute to the score check. When ``None`` all
-            domains are included and the store's decay-weighted score is
-            used; domain-filtered paths sum raw deltas without decay.
+            this set contribute to the score check, via the store's
+            decay-weighted :meth:`~aragora.reputation.store.ReputationStore.domain_score`.
+            When ``None`` all domains are included via ``get_score``.
+            Both paths apply the same per-delta time-decay.
     """
 
     score_floor: float = DEFAULT_SCORE_FLOOR
@@ -243,12 +242,13 @@ class SuspensionChecker:
                 sample_count=sample_count,
             )
 
-        # For all-domain path use the store's decay-weighted score.
-        # For domain-filtered path sum raw deltas (decay not supported here).
+        # Both paths use the store's decay-weighted score so a domain slice
+        # (AGT-05: "prediction_market — proper Brier rolling, decayed") is
+        # judged on the same footing as the all-domain score.
         if self._threshold.domains is None:
             score = store.get_score(agent_id, apply_decay=True)
         else:
-            score = sum(d.delta for d in relevant)
+            score = store.domain_score(agent_id, self._threshold.domains, apply_decay=True)
 
         # A NaN or infinite score (for example from a damaged ledger line) is
         # not evidence; NaN would otherwise compare as below every floor.
