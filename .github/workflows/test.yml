@@ -21,6 +21,13 @@ on:
       - 'scripts/generate_cli_reference.py'
       - 'aragora/capabilities.yaml'
       - 'aragora/capability_surfaces.yaml'
+      - 'docs/schemas/**'
+      # Canonical sources whose links tests/orientation asserts.
+      - 'docs/THESIS.md'
+      - 'docs/plans/ARAGORA_EVOLUTION_ROADMAP.md'
+      - 'docs/AGENT_FLYWHEEL_ARAGORA_NATIVE.md'
+      - 'docs/plans/2026-06-25-native-mission-orchestrator-spec.md'
+      - 'docs/architecture/nomic-context-builder-plan.md'
       - 'docs/CAPABILITY_MATRIX.md'
       - 'docs/reference/CLI_REFERENCE.md'
       - 'docs-site/docs/contributing/capability-matrix.md'
@@ -677,6 +684,13 @@ jobs:
               - 'tests/gauntlet/**'
               - 'tests/cli/**'
               - 'tests/verify/**'
+              - 'tests/orientation/**'
+              - 'docs/schemas/**'
+              - 'docs/THESIS.md'
+              - 'docs/plans/ARAGORA_EVOLUTION_ROADMAP.md'
+              - 'docs/AGENT_FLYWHEEL_ARAGORA_NATIVE.md'
+              - 'docs/plans/2026-06-25-native-mission-orchestrator-spec.md'
+              - 'docs/architecture/nomic-context-builder-plan.md'
 
       - name: Report scopes
         run: |
@@ -728,7 +742,7 @@ jobs:
             scope: storage
             timeout: 30
           - name: infra
-            pytest_args: tests/nomic tests/control_plane tests/rbac tests/events tests/observability tests/compliance tests/gauntlet tests/cli tests/verify
+            pytest_args: tests/nomic tests/control_plane tests/rbac tests/events tests/observability tests/compliance tests/gauntlet tests/cli tests/verify tests/orientation
             scope: infra
             timeout: 30
 
