@@ -277,9 +277,26 @@ class ReputationStore:
                 try:
                     payload = json.loads(raw)
                     delta = ReputationDelta.from_json(payload)
-                    store._deltas[delta.agent_id].append(delta)
-                    store._delta_by_id[delta.delta_id] = delta
-                except (KeyError, TypeError, ValueError, OverflowError, RecursionError) as exc:  # noqa: BLE001
+                    known_agent = delta.agent_id in store._deltas
+                    agent_deltas = store._deltas[delta.agent_id]
+                    agent_deltas.append(delta)
+                    try:
+                        store._delta_by_id[delta.delta_id] = delta
+                    except MemoryError:
+                        # Undo the append so a line skipped below leaves no half-inserted
+                        # delta (counted in _deltas but unknown to reverse_delta).
+                        agent_deltas.pop()
+                        if not known_agent:
+                            del store._deltas[delta.agent_id]
+                        raise
+                except (
+                    KeyError,
+                    TypeError,
+                    ValueError,
+                    OverflowError,
+                    RecursionError,
+                    MemoryError,
+                ) as exc:  # noqa: BLE001
                     logger.warning(
                         "ReputationStore: skipping invalid line %d in %s: %s",
                         lineno,
@@ -298,7 +315,14 @@ class ReputationStore:
                     try:
                         reversal = ReputationDeltaReversed.from_json(json.loads(raw))
                         store._reversals[reversal.original_delta_id] = reversal
-                    except (KeyError, TypeError, ValueError, OverflowError, RecursionError) as exc:  # noqa: BLE001
+                    except (
+                        KeyError,
+                        TypeError,
+                        ValueError,
+                        OverflowError,
+                        RecursionError,
+                        MemoryError,
+                    ) as exc:  # noqa: BLE001
                         logger.warning(
                             "ReputationStore: skipping invalid reversal line %d in %s: %s",
                             lineno,
