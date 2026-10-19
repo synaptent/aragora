@@ -435,11 +435,12 @@ class WeaviateEmbeddingService:
         logger.info("Deleted %s chunks for workspace %s", deleted, workspace_id)
         return deleted
 
-    async def delete_document_chunks(self, document_id: str) -> int:
-        """Delete all chunks for a document.
+    async def delete_document_chunks(self, document_id: str, workspace_id: str) -> int:
+        """Delete a document's chunks from one workspace (chunk namespace) only.
 
         Args:
             document_id: Document to delete chunks from
+            workspace_id: Chunk namespace to delete them from
 
         Returns:
             Number of chunks deleted
@@ -451,7 +452,9 @@ class WeaviateEmbeddingService:
             raise ConnectionError("Not connected to Weaviate")
 
         collection = self._client.collections.get(self.config.collection_name)
-        doc_filter = Filter.by_property("document_id").equal(document_id)
+        doc_filter = Filter.by_property("document_id").equal(document_id) & Filter.by_property(
+            "workspace_id"
+        ).equal(workspace_id)
 
         result = collection.data.delete_many(where=doc_filter)
         deleted = result.successful if hasattr(result, "successful") else 0
@@ -502,9 +505,12 @@ class InMemoryEmbeddingService:
 
     def __init__(self):
         """Initialize in-memory store."""
-        self._chunks: dict[str, dict[str, Any]] = {}  # chunk_id -> chunk data
+        # Keyed by (workspace_id, chunk_id): chunk ids are only unique within a
+        # workspace (organization chunk namespace), so a bare chunk_id key would
+        # let one namespace overwrite another's chunk.
+        self._chunks: dict[tuple[str, str], dict[str, Any]] = {}
         self._by_workspace: dict[str, set[str]] = {}  # workspace_id -> chunk_ids
-        self._by_document: dict[str, set[str]] = {}  # document_id -> chunk_ids
+        self._by_document: dict[str, set[tuple[str, str]]] = {}  # document_id -> chunk keys
         self._bm25_indices: dict[str, BM25Index] = {}  # workspace_id -> BM25 index
 
     def _get_bm25_index(self, workspace_id: str) -> BM25Index:
@@ -541,7 +547,7 @@ class InMemoryEmbeddingService:
             if not chunk_id:
                 continue
 
-            self._chunks[chunk_id] = {**chunk, "workspace_id": workspace_id}
+            self._chunks[(workspace_id, chunk_id)] = {**chunk, "workspace_id": workspace_id}
 
             # Index by workspace
             if workspace_id not in self._by_workspace:
@@ -553,7 +559,7 @@ class InMemoryEmbeddingService:
             if doc_id:
                 if doc_id not in self._by_document:
                     self._by_document[doc_id] = set()
-                self._by_document[doc_id].add(chunk_id)
+                self._by_document[doc_id].add((workspace_id, chunk_id))
 
             # Index in BM25
             content = chunk.get("content", "")
@@ -604,7 +610,7 @@ class InMemoryEmbeddingService:
         results = []
         for item in fused:
             chunk_id = item["id"]
-            chunk = self._chunks.get(chunk_id, {})
+            chunk = self._chunks.get((workspace_id, chunk_id), {})
             if item.get("score", 0) >= min_score:
                 results.append(
                     ChunkMatch(
@@ -652,7 +658,7 @@ class InMemoryEmbeddingService:
         results = []
 
         for chunk_id in chunk_ids:
-            chunk = self._chunks.get(chunk_id)
+            chunk = self._chunks.get((workspace_id, chunk_id))
             if not chunk:
                 continue
 
@@ -693,25 +699,27 @@ class InMemoryEmbeddingService:
             del self._bm25_indices[workspace_id]
 
         for chunk_id in chunk_ids:
-            chunk = self._chunks.pop(chunk_id, None)
+            chunk = self._chunks.pop((workspace_id, chunk_id), None)
             if chunk:
                 doc_id = chunk.get("document_id", "")
                 if doc_id in self._by_document:
-                    self._by_document[doc_id].discard(chunk_id)
+                    self._by_document[doc_id].discard((workspace_id, chunk_id))
         return len(chunk_ids)
 
-    async def delete_document_chunks(self, document_id: str) -> int:
-        """Delete document chunks."""
-        chunk_ids = self._by_document.pop(document_id, set())
+    async def delete_document_chunks(self, document_id: str, workspace_id: str) -> int:
+        """Delete a document's chunks from one chunk namespace only."""
+        keys = self._by_document.get(document_id, set())
+        chunk_ids = {chunk_id for ws_id, chunk_id in keys if ws_id == workspace_id}
+        keys -= {(workspace_id, chunk_id) for chunk_id in chunk_ids}
+        if not keys:
+            self._by_document.pop(document_id, None)
         for chunk_id in chunk_ids:
-            chunk = self._chunks.pop(chunk_id, None)
-            if chunk:
-                ws_id = chunk.get("workspace_id", "")
-                if ws_id in self._by_workspace:
-                    self._by_workspace[ws_id].discard(chunk_id)
+            if self._chunks.pop((workspace_id, chunk_id), None) is not None:
+                if workspace_id in self._by_workspace:
+                    self._by_workspace[workspace_id].discard(chunk_id)
                 # Remove from BM25 index
-                if ws_id in self._bm25_indices:
-                    self._bm25_indices[ws_id].remove_document(chunk_id)
+                if workspace_id in self._bm25_indices:
+                    self._bm25_indices[workspace_id].remove_document(chunk_id)
         return len(chunk_ids)
 
     def get_statistics(self, workspace_id: str | None = None) -> dict[str, Any]:

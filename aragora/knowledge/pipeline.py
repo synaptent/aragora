@@ -53,7 +53,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable, Iterable
 
 if TYPE_CHECKING:
     pass
@@ -112,6 +112,88 @@ try:
     )
 except ImportError:
     pass
+
+# The Knowledge Mound partitions only by workspace, so the pipeline stamps the
+# owning organization into each item's metadata and reads back only its own.
+MOUND_ORG_KEY = "org_id"
+
+
+def mound_items_for_org(items: Iterable[Any], org_id: str | None) -> list[Any]:
+    """Keep only Knowledge Mound items stamped with ``org_id``.
+
+    Items of another organization and unstamped items are dropped. Unstamped
+    items include everything written before this stamp existed and everything
+    written by Mound producers other than this pipeline; no organization can be
+    proven for them, so no organization reads them. Their count is logged.
+    Raises OrgScopeRequiredError without an organization.
+    """
+    if not org_id:
+        raise OrgScopeRequiredError("Knowledge Mound access requires an organization")
+    scoped = []
+    unstamped = 0
+    for item in items or []:
+        metadata = (
+            item.get("metadata") if isinstance(item, dict) else getattr(item, "metadata", None)
+        )
+        stamp = metadata.get(MOUND_ORG_KEY) if isinstance(metadata, dict) else None
+        if stamp == org_id:
+            scoped.append(item)
+        elif not stamp:
+            unstamped += 1
+    if unstamped:
+        logger.info("withheld %d Knowledge Mound item(s) without an organization stamp", unstamped)
+    return scoped
+
+
+# Most items one organization-scoped Mound read examines (the Mound's default
+# per-query cap, MoundConfig.max_query_limit), unless ``limit`` itself is larger.
+MOUND_ORG_SCAN_LIMIT = 100
+
+
+def mound_read_sizes(limit: int) -> list[int]:
+    """Read sizes for one organization-scoped Knowledge Mound read.
+
+    The Mound applies its limit before mound_items_for_org filters, so other
+    organizations' items in a shared workspace can crowd out the caller's. A
+    read that keeps fewer than ``limit`` items is repeated four times larger,
+    up to MOUND_ORG_SCAN_LIMIT, while the Mound keeps returning full pages.
+    """
+    bound = max(limit, MOUND_ORG_SCAN_LIMIT)
+    sizes = [max(limit, 1)]
+    while sizes[-1] < bound:
+        sizes.append(min(sizes[-1] * 4, bound))
+    return sizes
+
+
+def new_mound_items_for_org(items: Iterable[Any], org_id: str | None, seen: set[Any]) -> list[Any]:
+    """mound_items_for_org, without the items whose id is in ``seen``; adds the kept ids to it."""
+    new = []
+    for item in mound_items_for_org(items, org_id):
+        item_id = item.get("id") if isinstance(item, dict) else getattr(item, "id", None)
+        if item_id is None or item_id not in seen:
+            seen.add(item_id)
+            new.append(item)
+    return new
+
+
+async def read_mound_for_org(
+    fetch: Callable[[int], Awaitable[list[Any]]], org_id: str | None, limit: int
+) -> list[Any]:
+    """Up to ``limit`` of ``org_id``'s items, fetching ``fetch(size)`` per mound_read_sizes.
+
+    Every read starts from the first item: the Mound ranks each read afresh and
+    applies ``offset`` after that ranking, so offset pages overlap and skip
+    items. A larger read is not a superset of a smaller one either, so the
+    caller's items are kept across reads, each once.
+    """
+    kept: list[Any] = []
+    seen: set[Any] = set()
+    for size in mound_read_sizes(limit):
+        items = list(await fetch(size) or [])
+        kept += new_mound_items_for_org(items, org_id, seen)
+        if len(kept) >= limit or len(items) < size:
+            break
+    return kept[:limit]
 
 
 @dataclass
@@ -239,12 +321,21 @@ class KnowledgePipeline:
     def _org_id(self) -> str | None:
         return self.config.org_id or None
 
-    def _chunk_key(self) -> str:
+    def _scope_org(self) -> str | None:
         # A caller-built ScopedFactStore is the same trusted org boundary as config.org_id.
         org_id = self._org_id
         if org_id is None and isinstance(self._fact_store, ScopedFactStore):
             org_id = self._fact_store.org_id
-        return chunk_namespace(self.config.workspace_id, org_id, require_org=True)
+        return org_id
+
+    def _chunk_key(self) -> str:
+        return chunk_namespace(self.config.workspace_id, self._scope_org(), require_org=True)
+
+    def _mound_org(self) -> str:
+        org_id = self._scope_org()
+        if not org_id:
+            raise OrgScopeRequiredError("Knowledge Mound access requires an organization")
+        return org_id
 
     def set_progress_callback(self, callback: Callable[[str, float, str], None]) -> None:
         """Set progress callback: callback(document_id, progress, message)."""
@@ -272,6 +363,14 @@ class KnowledgePipeline:
                 except (OSError, RuntimeError, ValueError) as e:
                     logger.warning("Failed to create FactStore, using in-memory: %s", e)
                     self._fact_store = InMemoryFactStore()
+        if (
+            self.config.org_id
+            and isinstance(self._fact_store, ScopedFactStore)
+            and self._fact_store.org_id != self.config.org_id
+        ):
+            raise OrgScopeRequiredError(
+                "The supplied ScopedFactStore belongs to a different organization"
+            )
         if self.config.org_id and not isinstance(self._fact_store, ScopedFactStore):
             self._fact_store = ScopedFactStore(self._fact_store, self.config.org_id)
 
@@ -858,6 +957,7 @@ Include dates, numbers, names, and specific claims where possible."""
         if not self._knowledge_mound or not MOUND_AVAILABLE:
             return 0
 
+        org_id = self._mound_org()
         synced = 0
         try:
             base_metadata: dict[str, Any] = {}
@@ -889,7 +989,7 @@ Include dates, numbers, names, and specific claims where possible."""
                     "tags": tags or base_metadata.get("tags") or [],
                 },
             )
-            result = await self._knowledge_mound.store(doc_request)
+            result = await self._knowledge_mound.store(doc_request, org_id=org_id)
             if result.success:
                 synced += 1
 
@@ -912,7 +1012,7 @@ Include dates, numbers, names, and specific claims where possible."""
                         "parent_node_id": result.node_id if result.success else None,
                     },
                 )
-                chunk_result = await self._knowledge_mound.store(chunk_request)
+                chunk_result = await self._knowledge_mound.store(chunk_request, org_id=org_id)
                 if chunk_result.success:
                     synced += 1
 
@@ -936,7 +1036,7 @@ Include dates, numbers, names, and specific claims where possible."""
                         "source_documents": fact.source_documents,
                     },
                 )
-                fact_result = await self._knowledge_mound.store(fact_request)
+                fact_result = await self._knowledge_mound.store(fact_request, org_id=org_id)
                 if fact_result.success:
                     synced += 1
 
@@ -977,17 +1077,21 @@ Include dates, numbers, names, and specific claims where possible."""
 
         # Augment with Knowledge Mound results if available
         if use_mound and self._knowledge_mound and MOUND_AVAILABLE:
-            try:
-                mound_result = await self._knowledge_mound.query(
-                    query=question,
-                    workspace_id=self.config.workspace_id,
-                    limit=10,
+            org_id = self._mound_org()
+            mound = self._knowledge_mound
+
+            async def _fetch(size: int) -> list[Any]:
+                found = await mound.query(
+                    query=question, workspace_id=self.config.workspace_id, limit=size
                 )
+                return found.items
+
+            try:
+                mound_items = await read_mound_for_org(_fetch, org_id, 10)
                 # Merge mound results into the answer context
-                if mound_result.items and hasattr(result, "context"):
+                if mound_items and hasattr(result, "context"):
                     mound_context = "\n".join(
-                        f"[Knowledge Mound] {item.content[:200]}..."
-                        for item in mound_result.items[:3]
+                        f"[Knowledge Mound] {item.content[:200]}..." for item in mound_items[:3]
                     )
                     if result.context:
                         result.context = f"{result.context}\n\n{mound_context}"
@@ -1014,7 +1118,11 @@ Include dates, numbers, names, and specific claims where possible."""
             sources: Optional source filters (e.g., ["document", "debate", "consensus"])
 
         Returns:
-            QueryResult from Knowledge Mound, or None if not available
+            QueryResult from Knowledge Mound holding only the pipeline
+            organization's items, or None if not available
+
+        Raises:
+            OrgScopeRequiredError: the pipeline has no organization
         """
         if not self._running:
             await self.start()
@@ -1023,12 +1131,25 @@ Include dates, numbers, names, and specific claims where possible."""
             logger.warning("Knowledge Mound not available for direct query")
             return None
 
-        return await self._knowledge_mound.query(
-            query=query,
-            workspace_id=self.config.workspace_id,
-            sources=sources or ["all"],
-            limit=limit,
-        )
+        org_id = self._mound_org()
+        mound = self._knowledge_mound
+        last: list[Any] = []
+
+        async def _fetch(size: int) -> list[Any]:
+            found = await mound.query(
+                query=query,
+                workspace_id=self.config.workspace_id,
+                sources=sources or ["all"],
+                limit=size,
+            )
+            last[:] = [found]
+            return found.items
+
+        items = await read_mound_for_org(_fetch, org_id, limit)
+        result = last[0]
+        result.items = items
+        result.total_count = len(items)
+        return result
 
     async def search(
         self,

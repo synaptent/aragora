@@ -18,7 +18,6 @@ comments suppress mypy warnings that are expected for this mixin pattern.
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import uuid
 from collections.abc import Generator
@@ -61,6 +60,7 @@ except ImportError:
     TRACING_AVAILABLE = False
 
 
+from aragora.knowledge.mound_types import ORG_STAMP_KEY, content_dedup_hash
 from aragora.knowledge.mound.validation import (
     ValidationError,
     validate_content,
@@ -133,7 +133,9 @@ class CRUDProtocol(Protocol):
     ) -> Any: ...
 
     # Mixin methods that call each other - included for type checking
-    async def store(self, request: IngestionRequest) -> IngestionResult: ...
+    async def store(
+        self, request: IngestionRequest, *, org_id: str | None = None
+    ) -> IngestionResult: ...
     async def get(self, node_id: str) -> KnowledgeItem | None: ...
     async def add(
         self,
@@ -143,6 +145,8 @@ class CRUDProtocol(Protocol):
         node_type: str = "fact",
         confidence: float = 0.7,
         tier: str = "medium",
+        *,
+        org_id: str | None = None,
     ) -> str: ...
 
 
@@ -156,12 +160,18 @@ else:
 class CRUDOperationsMixin(_CRUDMixinBase):
     """Mixin providing CRUD operations for KnowledgeMound."""
 
-    async def store(self, request: IngestionRequest) -> IngestionResult:
+    async def store(
+        self, request: IngestionRequest, *, org_id: str | None = None
+    ) -> IngestionResult:
         """
         Store a new knowledge item with full provenance tracking.
 
         Args:
-            request: Ingestion request with content and metadata
+            request: Ingestion request with content and metadata; an
+                organization stamp in ``request.metadata`` is dropped
+            org_id: The writer's authenticated organization, the only source
+                of the stored organization stamp; without it the item is
+                unstamped
 
         Returns:
             IngestionResult with node ID and status
@@ -198,9 +208,15 @@ class CRUDOperationsMixin(_CRUDMixinBase):
             node_id = f"kn_{uuid.uuid4().hex[:16]}"
             span.set_tag("node_id", node_id)
 
+            request.metadata = {
+                k: v for k, v in (request.metadata or {}).items() if k != ORG_STAMP_KEY
+            }
+            if org_id:
+                request.metadata[ORG_STAMP_KEY] = org_id
+            content_hash = content_dedup_hash(request.content, request.metadata)[:32]
+
             # Check for duplicates if enabled
             if self.config.enable_deduplication:
-                content_hash = hashlib.sha256(request.content.encode()).hexdigest()[:32]
                 existing = await self._find_by_content_hash(content_hash, request.workspace_id)
                 if existing:
                     # Update existing node
@@ -221,7 +237,7 @@ class CRUDOperationsMixin(_CRUDMixinBase):
                 "workspace_id": request.workspace_id,
                 "node_type": request.node_type,
                 "content": request.content,
-                "content_hash": hashlib.sha256(request.content.encode()).hexdigest()[:32],
+                "content_hash": content_hash,
                 "confidence": request.confidence,
                 "tier": request.tier,
                 "source_type": request.source_type.value,
@@ -249,6 +265,7 @@ class CRUDOperationsMixin(_CRUDMixinBase):
                         tenant_id=request.workspace_id,
                         domain=request.topics[0] if request.topics else "general",
                         importance=request.confidence,
+                        metadata={ORG_STAMP_KEY: org_id} if org_id else None,
                     )
                     span.add_event("semantic_indexed")
                 except (OSError, ConnectionError, TimeoutError, RuntimeError) as e:  # noqa: BLE001 - adapter isolation
@@ -374,7 +391,13 @@ class CRUDOperationsMixin(_CRUDMixinBase):
             if "topics" in updates:
                 updates["topics"] = validate_topics(updates["topics"])
             if "metadata" in updates:
-                updates["metadata"] = validate_metadata(updates["metadata"])
+                # The organization stamp is written only with the node, from a verified
+                # org_id: an update keeps the node's stamp and never adds one.
+                existing = getattr(await self._get_node(node_id), "metadata", None) or {}
+                metadata = validate_metadata(updates["metadata"])
+                updates["metadata"] = {k: v for k, v in metadata.items() if k != ORG_STAMP_KEY}
+                if existing.get(ORG_STAMP_KEY):
+                    updates["metadata"][ORG_STAMP_KEY] = existing[ORG_STAMP_KEY]
             span.add_event("validation_complete")
 
             updates["updated_at"] = datetime.now().isoformat()
@@ -461,6 +484,8 @@ class CRUDOperationsMixin(_CRUDMixinBase):
         node_type: str = "fact",
         confidence: float = 0.7,
         tier: str = "medium",
+        *,
+        org_id: str | None = None,
     ) -> str:
         """
         Simplified method to add content to the Knowledge Mound.
@@ -475,6 +500,7 @@ class CRUDOperationsMixin(_CRUDMixinBase):
             node_type: Type of knowledge node (default: "fact")
             confidence: Confidence score 0-1 (default: 0.7)
             tier: Memory tier (default: "medium")
+            org_id: The writer's authenticated organization (see ``store``)
 
         Returns:
             The created node ID
@@ -490,7 +516,7 @@ class CRUDOperationsMixin(_CRUDMixinBase):
             source_type=KnowledgeSource.EXTERNAL,
             metadata=metadata or {},
         )
-        result = await self.store(request)
+        result = await self.store(request, org_id=org_id)
         return result.node_id
 
     async def add_node(self, node: Any) -> str:

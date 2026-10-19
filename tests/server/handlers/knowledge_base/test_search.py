@@ -121,8 +121,12 @@ class MockQueryEngine:
     def __init__(self, results: list[MockSearchResult] | None = None):
         self._results = results or []
         self._search_error: Exception | None = None
+        self.org_ids: list[str | None] = []
 
-    async def search(self, query: str, workspace_id: str, limit: int) -> list[MockSearchResult]:
+    async def search(
+        self, query: str, workspace_id: str, limit: int, *, org_id: str | None = None
+    ) -> list[MockSearchResult]:
+        self.org_ids.append(org_id)
         if self._search_error:
             raise self._search_error
         return self._results[:limit]
@@ -179,7 +183,7 @@ class SearchHandler(SearchOperationsMixin):
         self._query_engine = query_engine
         self._fact_store = fact_store
         self._knowledge_mound = knowledge_mound
-        self.ctx = {}
+        self.ctx: dict[str, Any] = {}
 
     def _get_query_engine(self):
         return self._query_engine
@@ -258,7 +262,7 @@ def mock_knowledge_mound():
                 confidence=0.92,
                 node_type="fact",
                 domain="architecture",
-                metadata={"title": "Rate limiting"},
+                metadata={"title": "Rate limiting", "org_id": "test-org-001"},
             ),
             MockKnowledgeItem(
                 id="km-2",
@@ -266,6 +270,7 @@ def mock_knowledge_mound():
                 confidence=0.41,
                 node_type="claim",
                 domain="finance",
+                metadata={"org_id": "test-org-001"},
             ),
         ]
     )
@@ -634,6 +639,80 @@ class TestHandleSearch:
             assert "chunk_id" in item
             assert "content" in item
             assert "score" in item
+
+
+class _OrglessSearchHandler(SearchHandler):
+    def require_auth_or_error(self, handler):
+        return MagicMock(org_id=None), None
+
+
+class TestSearchOrganizationScope:
+    """v1 search reads only the caller's verified organization and fails closed without one."""
+
+    def test_query_engine_search_receives_the_callers_organization(self):
+        engine = MockQueryEngine([MockSearchResult("c1", "content", 0.9)])
+        result = SearchHandler(query_engine=engine, fact_store=MockFactStore())._handle_search(
+            {"q": "content", "workspace_id": "ws-1"}
+        )
+
+        assert result.status_code == 200
+        assert engine.org_ids == ["test-org-001"]
+
+    def test_caller_without_an_organization_gets_403_before_any_read(self):
+        engine = MockQueryEngine([MockSearchResult("c1", "content", 0.9)])
+        result = _OrglessSearchHandler(
+            query_engine=engine, fact_store=MockFactStore()
+        )._handle_search({"q": "content"})
+
+        assert result.status_code == 403
+        assert parse_response(result)["error"]["code"] == "knowledge_org_required"
+        assert engine.org_ids == []
+
+    def test_knowledge_mound_results_are_confined_to_the_callers_organization(self):
+        items = [
+            MockKnowledgeItem("own", "own note", 0.9, metadata={"org_id": "test-org-001"}),
+            MockKnowledgeItem("other", "other org note", 0.9, metadata={"org_id": "beta"}),
+            MockKnowledgeItem("legacy", "legacy note", 0.9),
+        ]
+        handler = SearchHandler(
+            query_engine=MockQueryEngine(),
+            fact_store=MockFactStore(),
+            knowledge_mound=MockKnowledgeMound(items),
+        )
+        retrieved = MagicMock(items=items)
+
+        with patch(
+            "aragora.server.handlers.knowledge_base.search._run_async", lambda coro: retrieved
+        ):
+            result = handler._handle_search({"q": "note"})
+
+        assert result.status_code == 200
+        body = parse_response(result)
+        assert body["search_backend"] == "knowledge_mound"
+        assert [r["node_id"] for r in body["results"]] == ["own"]
+
+    def test_domain_filter_fills_the_page_from_matches_beyond_the_first_read(self):
+        stamp = {"org_id": "test-org-001"}
+        items = [
+            *(
+                MockKnowledgeItem(f"fin-{n}", "note", 0.9, domain="finance", metadata=stamp)
+                for n in range(3)
+            ),
+            *(
+                MockKnowledgeItem(f"arch-{n}", "note", 0.9, domain="architecture", metadata=stamp)
+                for n in range(3)
+            ),
+        ]
+        handler = SearchHandler(
+            query_engine=MockQueryEngine(),
+            fact_store=MockFactStore(),
+            knowledge_mound=MockKnowledgeMound(items),
+        )
+
+        result = handler._handle_search({"q": "note", "limit": "2", "domain": "architecture"})
+
+        assert result.status_code == 200
+        assert [r["node_id"] for r in parse_response(result)["results"]] == ["arch-0", "arch-1"]
 
 
 # =============================================================================
