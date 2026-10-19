@@ -857,6 +857,47 @@ class TestGustoRequest:
         gusto_connector.refresh_tokens.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_request_sends_api_version_header(self, authenticated_connector):
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.json = AsyncMock(return_value={})
+        mock_response.headers = {}
+        sent_headers = {}
+
+        class _ResponseCM:
+            async def __aenter__(self):
+                return mock_response
+
+            async def __aexit__(self, *args):
+                return False
+
+        class _Session:
+            def request(self, *args, **kwargs):
+                sent_headers.update(kwargs["headers"])
+                return _ResponseCM()
+
+        class _ClientSession:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            async def __aenter__(self):
+                return _Session()
+
+            async def __aexit__(self, *args):
+                return False
+
+        with patch("aiohttp.ClientSession", _ClientSession):
+            await authenticated_connector._request("GET", "/v1/test")
+
+        assert sent_headers["X-Gusto-API-Version"] == GustoConnector.API_VERSION
+
+    def test_api_version_can_be_overridden(self, monkeypatch):
+        connector = GustoConnector(api_version="2025-06-15", enable_circuit_breaker=False)
+        assert connector.api_version == "2025-06-15"
+        monkeypatch.setenv("GUSTO_API_VERSION", "2024-04-01")
+        assert GustoConnector(enable_circuit_breaker=False).api_version == "2024-04-01"
+
+    @pytest.mark.asyncio
     async def test_request_rate_limit_429(self, authenticated_connector):
         mock_response = MagicMock()
         mock_response.status = 429

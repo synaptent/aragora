@@ -310,6 +310,10 @@ class GustoConnector:
     BASE_URL = "https://api.gusto.com"
     AUTH_URL = "https://api.gusto.com/oauth/authorize"
     TOKEN_URL = "https://api.gusto.com/oauth/token"  # noqa: S105 -- OAuth endpoint URL
+    # Without X-Gusto-API-Version, Gusto answers with the minimum API version set on the
+    # application in its Developer Portal, so responses can differ per deployment.
+    # https://docs.gusto.com/app-integrations/docs/getting-setup
+    API_VERSION = "2026-06-15"
 
     # Default QBO account mappings
     DEFAULT_ACCOUNTS = {
@@ -331,6 +335,7 @@ class GustoConnector:
         redirect_uri: str | None = None,
         circuit_breaker: CircuitBreaker | None = None,
         enable_circuit_breaker: bool = True,
+        api_version: str | None = None,
     ):
         """
         Initialize Gusto connector.
@@ -341,10 +346,13 @@ class GustoConnector:
             redirect_uri: OAuth callback URL (or from GUSTO_REDIRECT_URI env var)
             circuit_breaker: Optional pre-configured circuit breaker
             enable_circuit_breaker: Enable circuit breaker protection (default: True)
+            api_version: Gusto API version to request (or from GUSTO_API_VERSION env var,
+                default API_VERSION)
         """
         self.client_id = client_id or os.getenv("GUSTO_CLIENT_ID")
         self.client_secret = client_secret or os.getenv("GUSTO_CLIENT_SECRET")
         self.redirect_uri = redirect_uri or os.getenv("GUSTO_REDIRECT_URI")
+        self.api_version = api_version or os.getenv("GUSTO_API_VERSION") or self.API_VERSION
 
         self._credentials: GustoCredentials | None = None
         self._account_mappings = dict(self.DEFAULT_ACCOUNTS)
@@ -507,6 +515,7 @@ class GustoConnector:
             "Authorization": f"Bearer {token}",
             "Accept": "application/json",
             "Content-Type": "application/json",
+            "X-Gusto-API-Version": self.api_version,
         }
 
         try:
