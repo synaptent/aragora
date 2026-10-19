@@ -22,6 +22,12 @@ from aragora.reports.generator import (
     ReportSection,
     ReportTemplate,
 )
+from tests.utils.weasyprint_isolation import hide_weasyprint, refuse_in_process_render
+
+
+@pytest.fixture(autouse=True)
+def _no_in_process_weasyprint_render(monkeypatch):
+    refuse_in_process_render(monkeypatch)
 
 
 class TestReportFormat:
@@ -592,16 +598,16 @@ class TestAuditReportGenerator:
             )
 
     @pytest.mark.asyncio
-    async def test_render_pdf_fallback(self):
+    async def test_render_pdf_fallback(self, monkeypatch):
         """PDF rendering falls back to HTML without weasyprint."""
+        hide_weasyprint(monkeypatch)
         generator = AuditReportGenerator()
         session = create_mock_session()
         session.findings = [create_mock_finding()]
 
         sections = [ReportSection(title="Test", content="Content", order=1)]
 
-        # This will try to import weasyprint and fall back to HTML
         content = await generator._render_pdf(sections, session, session.findings)
 
         # Should return HTML as fallback
-        assert b"<!DOCTYPE html>" in content or len(content) > 0
+        assert content.startswith(b"<!DOCTYPE html>")
