@@ -122,11 +122,11 @@ class TestClientIPExtraction:
 
     def test_xff_from_trusted_source(self):
         """Test X-Forwarded-For from trusted source is used."""
-        headers = {"X-Forwarded-For": "192.168.1.100, 10.0.0.1"}
+        headers = {"X-Forwarded-For": "192.168.1.100, 127.0.0.1"}
         # Remote addr is localhost (trusted)
         ip = _extract_client_ip(headers, "127.0.0.1")
 
-        # Should use first non-trusted IP from XFF
+        # Should use the rightmost non-trusted IP from XFF
         assert ip == "192.168.1.100"
 
     def test_x_real_ip_from_trusted_source(self):
