@@ -2363,3 +2363,21 @@ class DecisionReceipt:
 
         ssml_parts.append("</speak>")
         return "\n".join(ssml_parts)
+
+
+if not TYPE_CHECKING:
+    # Hidden from type checkers: a module __getattr__ would make mypy accept any attribute here.
+
+    def __getattr__(name: str) -> Any:
+        # aragora.gauntlet.receipt_models resolves to this module, and its private
+        # _detect_provider moved to aragora.agents.receipt_hooks.detect_provider.
+        # Returning the registered hook keeps the old path the same object without
+        # importing the agents package. With no detector registered the name is absent.
+        if name == "_detect_provider":
+            try:
+                return operations.provider_detector()
+            except operations.ReceiptOperationNotRegisteredError as exc:
+                raise AttributeError(
+                    f"module {__name__!r} has no attribute {name!r}: {exc}"
+                ) from exc
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
