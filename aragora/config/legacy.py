@@ -20,12 +20,16 @@ Import these values instead of hardcoding throughout the codebase.
 from __future__ import annotations
 
 
+import logging
 import os
+import threading
 import warnings
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 from aragora.config.data_dir import get_default_data_dir
+
+logger = logging.getLogger(__name__)
 
 # Emit deprecation warning on import
 warnings.warn(
@@ -39,6 +43,9 @@ warnings.warn(
 __all__ = [
     # Helper functions
     "get_api_key",
+    "get_provider_key",
+    "select_provider_key",
+    "ProviderKey",
     "validate_configuration",
     "ConfigurationError",
     # Authentication
@@ -182,13 +189,13 @@ from aragora.config.env_helpers import (
 
 
 def get_api_key(*env_vars: str, required: bool = True) -> str | None:
-    """Get and validate API key from environment variables or AWS Secrets Manager.
+    """Get and validate an API key from managed custody or the environment.
 
     Checks each variable in order, returning the first valid
     (non-empty, non-whitespace) value found. Strips whitespace from the result.
 
     Priority order:
-    1. AWS Secrets Manager (if ARAGORA_USE_SECRETS_MANAGER=true)
+    1. Configured managed custody
     2. Environment variables
 
     Args:
@@ -200,53 +207,127 @@ def get_api_key(*env_vars: str, required: bool = True) -> str | None:
 
     Raises:
         ValueError: If required=True and no valid key found
+        SecretNotFoundError: If strict mode requires managed custody for a missing key
+        SecretSourceError: If explicitly configured custody is unsafe
 
     Example:
         >>> api_key = get_api_key("GEMINI_API_KEY", "GOOGLE_API_KEY")
         >>> optional_key = get_api_key("BACKUP_KEY", required=False)
     """
-    # Optional provider probes are used for fallback availability checks. They
-    # should treat strict-mode env-blocked secrets as absent without emitting the
-    # "critical secret found in environment" warning from value retrieval.
-    if not required:
-        try:
-            from aragora.config.secrets import get_secret, get_secret_presence
-
-            for var in env_vars:
-                presence = get_secret_presence(var)
-                if presence.source == "aws":
-                    value = get_secret(var)
-                    if value and value.strip():
-                        return value.strip()
-                elif presence.source == "env":
-                    value = os.getenv(var)
-                    if value and value.strip():
-                        return value.strip()
-            return None
-        except ImportError:
-            pass  # secrets module not available, fall through to env vars
-
-    # Try AWS Secrets Manager first (if enabled).
     try:
-        from aragora.config.secrets import get_secret
-
+        from aragora.config.secrets import (
+            SecretNotFoundError,
+            get_secret,
+            get_secret_presence,
+            is_critical_secret,
+            is_secret_presence_available,
+            is_strict_mode,
+        )
+    except ImportError:
         for var in env_vars:
-            value = get_secret(var)
+            value = os.getenv(var)
             if value and value.strip():
                 return value.strip()
-    except ImportError:
-        pass  # secrets module not available, fall through to env vars
-
-    # Fall back to environment variables
-    for var in env_vars:
-        value = os.getenv(var)
-        if value and value.strip():
-            return value.strip()
+    else:
+        for var in env_vars:
+            presence = get_secret_presence(var)
+            # A rejected mounted file is read so its SecretSourceError surfaces
+            # instead of reading as absent and falling through to another alias.
+            if (
+                not is_secret_presence_available(presence)
+                and presence.source != "mounted_file_rejected"
+            ):
+                continue
+            if presence.source == "env" and not required:
+                value = os.getenv(var)
+            else:
+                try:
+                    value = get_secret(var)
+                except SecretNotFoundError:
+                    if required:
+                        raise
+                    continue
+                if not value and presence.source == "env":
+                    value = os.getenv(var)
+            if value and value.strip():
+                return value.strip()
+        if required and is_strict_mode():
+            for var in env_vars:
+                if is_critical_secret(var):
+                    raise SecretNotFoundError(var)
 
     if required:
         var_names = " or ".join(env_vars)
         raise ValueError(f"{var_names} environment variable required")
     return None
+
+
+class ProviderKey(NamedTuple):
+    """The key an optional provider reader selected.
+
+    ``value`` is ``None`` when ``name``'s mounted secret file was rejected.
+    """
+
+    name: str
+    value: str | None
+
+    @property
+    def rejected(self) -> bool:
+        return self.value is None
+
+
+_reported_rejected_provider_keys: set[tuple[str, str, str]] = set()
+_reported_rejected_provider_keys_lock = threading.Lock()
+
+
+def _report_rejected_provider_key(consumer: str, name: str, reason: str | None) -> None:
+    detail = reason or "its mounted file was rejected"
+    with _reported_rejected_provider_keys_lock:
+        if (consumer, name, detail) in _reported_rejected_provider_keys:
+            return
+        _reported_rejected_provider_keys.add((consumer, name, detail))
+    logger.warning(
+        "%s is unavailable: %s was rejected by secret custody (%s)", consumer, name, detail
+    )
+
+
+def select_provider_key(*env_vars: str, consumer: str) -> ProviderKey | None:
+    """Select the key for an optional reader that uses one provider at a time.
+
+    Names are read lazily in order and the first present one decides, so a valid
+    earlier name never touches a later name. When that name's mounted file was
+    rejected, the value-free reason is logged once per consumer and the result is
+    ``ProviderKey(name, None)``: the caller treats its provider as unavailable and
+    must not move on to a later name, an alias or another provider. Returns
+    ``None`` when no name is present.
+
+    Raises:
+        SecretSourceError: If configured custody itself is unusable.
+    """
+    from aragora.config.secrets import (
+        get_secret_manager,
+        get_secret_presence,
+        is_secret_presence_available,
+    )
+
+    for var in env_vars:
+        presence = get_secret_presence(var)
+        if presence.source == "mounted_file_rejected":
+            reason = get_secret_manager().rejected_mounted_secrets().get(var)
+            _report_rejected_provider_key(consumer, var, reason)
+            return ProviderKey(var, None)
+        if not is_secret_presence_available(presence):
+            continue
+        value = get_api_key(var, required=False)
+        if value:
+            return ProviderKey(var, value)
+    return None
+
+
+def get_provider_key(*env_vars: str, consumer: str) -> str | None:
+    """Return the key from ``select_provider_key``, or ``None`` when absent or rejected."""
+    selected = select_provider_key(*env_vars, consumer=consumer)
+    return selected.value if selected is not None else None
 
 
 # === Authentication ===

@@ -181,6 +181,12 @@ def _try_review_queue_fast_path(argv: list[str]) -> int | None:
 
 
 def main() -> int:
+    from aragora.cli.secret_custody_exit import run_reporting_unusable_secret_custody
+
+    return run_reporting_unusable_secret_custody(_run_cli)
+
+
+def _run_cli() -> int:
     fast_result = _try_review_queue_fast_path(sys.argv[1:])
     if fast_result is not None:
         return fast_result

@@ -28,7 +28,7 @@ import os
 from dataclasses import dataclass
 from typing import Final, Literal
 
-from aragora.config.secrets import get_secret_presence
+from aragora.config.secrets import get_secret_presence, is_secret_presence_available
 
 logger = logging.getLogger(__name__)
 
@@ -173,7 +173,7 @@ def route_through_openrouter() -> bool:
         return True
 
     # Auto-fallback: no direct Anthropic key -> OpenRouter becomes primary.
-    if get_secret_presence("ANTHROPIC_API_KEY").source not in {"aws", "env"}:
+    if not is_secret_presence_available(get_secret_presence("ANTHROPIC_API_KEY")):
         return True
 
     return False

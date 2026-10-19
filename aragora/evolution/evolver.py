@@ -14,7 +14,7 @@ from enum import Enum
 # Import gauntlet types for vulnerability recording
 from typing import TYPE_CHECKING, Any
 
-from aragora.config import DB_TIMEOUT_SECONDS, get_api_key
+from aragora.config import DB_TIMEOUT_SECONDS, select_provider_key
 from aragora.core import Agent, DebateResult
 from aragora.debate.safety import resolve_prompt_evolution
 from aragora.memory.store import CritiqueStore
@@ -507,9 +507,15 @@ class PromptEvolver(SQLiteStore):
         """
         import httpx
 
-        api_key = get_api_key("ANTHROPIC_API_KEY", "OPENAI_API_KEY", required=False)
-        if not api_key or not patterns:
+        selected = select_provider_key(
+            "ANTHROPIC_API_KEY", "OPENAI_API_KEY", consumer="Prompt refinement"
+        )
+        if selected is None or selected.value is None or not patterns:
             return self._evolve_append(current_prompt, patterns)
+        if selected.name == "ANTHROPIC_API_KEY":
+            anthropic_key, openai_key = selected.value, None
+        else:
+            anthropic_key, openai_key = None, selected.value
 
         # Format patterns for the refinement prompt
         patterns_text = "\n".join(
@@ -539,9 +545,6 @@ Return ONLY the refined prompt, no explanations."""
         transport = httpx.HTTPTransport(retries=2)
 
         try:
-            anthropic_key = get_api_key("ANTHROPIC_API_KEY", required=False)
-            openai_key = get_api_key("OPENAI_API_KEY", required=False)
-
             with httpx.Client(
                 transport=transport, timeout=httpx.Timeout(30.0, connect=5.0)
             ) as client:

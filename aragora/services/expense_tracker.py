@@ -35,7 +35,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
-from aragora.config import get_api_key
+from aragora.config import select_provider_key
 
 if TYPE_CHECKING:
     from aragora.connectors.accounting.qbo import QuickBooksConnector
@@ -809,16 +809,14 @@ class ExpenseTracker:
         categorize expenses based on vendor name, amount, and description.
         """
         # Try Anthropic first, then OpenAI
-        api_key = get_api_key("ANTHROPIC_API_KEY", required=False)
-        provider = "anthropic"
-
-        if not api_key:
-            api_key = get_api_key("OPENAI_API_KEY", required=False)
-            provider = "openai"
-
-        if not api_key:
+        selected = select_provider_key(
+            "ANTHROPIC_API_KEY", "OPENAI_API_KEY", consumer="Expense LLM categorization"
+        )
+        if selected is None or selected.value is None:
             logger.debug("No LLM API key configured, skipping LLM categorization")
             return None
+        api_key = selected.value
+        provider = "anthropic" if selected.name == "ANTHROPIC_API_KEY" else "openai"
 
         categories = [cat.value for cat in ExpenseCategory]
         prompt = f"""Categorize this expense into exactly one of these categories: {", ".join(categories)}

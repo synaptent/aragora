@@ -19,7 +19,7 @@ from dataclasses import asdict, dataclass
 from enum import Enum
 from typing import Any
 
-from aragora.config import get_api_key
+from aragora.config import select_provider_key
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +115,17 @@ def plan_rescue(
         )
 
     user_prompt = "\n\n".join(context_parts)
-    resolved_key = api_key or get_api_key("OPENROUTER_API_KEY", required=False) or ""
+    resolved_key = api_key or ""
+    if not resolved_key:
+        selected = select_provider_key("OPENROUTER_API_KEY", consumer="Rescue planning")
+        if selected is not None:
+            if selected.value is None:
+                return ActionPlan(
+                    action=RescueAction.ESCALATE.value,
+                    reason="OpenRouter API key for rescue planning was rejected by secret custody.",
+                    confidence=0.0,
+                )
+            resolved_key = selected.value
     resolved_model = model or _DEFAULT_MODEL
 
     if not resolved_key:

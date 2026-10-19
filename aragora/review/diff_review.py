@@ -10,7 +10,7 @@ import re
 from typing import Any, cast
 
 from aragora.agents.base import AgentType, create_agent
-from aragora.config.secrets import get_secret_presence
+from aragora.config.secrets import get_secret_presence, is_secret_presence_available
 from aragora.config.settings import AgentSettings, DebateSettings
 from aragora.core import Agent, DebateResult, Environment
 from aragora.debate.disagreement import DisagreementReporter
@@ -29,7 +29,7 @@ __all__ = [
 
 def _has_api_key(*names: str) -> bool:
     """Return API-key availability without exposing secret values."""
-    return any(get_secret_presence(name).source in {"aws", "env"} for name in names)
+    return any(is_secret_presence_available(get_secret_presence(name)) for name in names)
 
 
 # Default agents for code review (fast, diverse perspectives)

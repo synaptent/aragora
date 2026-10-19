@@ -39,6 +39,7 @@ def _presence_payload(presences: list[SecretPresence]) -> dict[str, Any]:
         "strict_mode": is_strict_mode(),
         "cache_ttl_seconds": config.cache_ttl_seconds,
         "secrets": [asdict(presence) for presence in presences],
+        "mounted_file_problems": manager.rejected_mounted_secrets(),
     }
 
 
@@ -54,6 +55,12 @@ def _print_presence_table(payload: dict[str, Any]) -> None:
     print("-" * 72)
     for row in payload["secrets"]:
         print(f"{row['name']:<28} {row['source']:<24} {str(row['critical']):<8} {row['managed']}")
+    problems = payload["mounted_file_problems"]
+    if problems:
+        print()
+        print("Rejected mounted secret files (reads of these names fail):")
+        for name, problem in problems.items():
+            print(f"  {name}: {problem}")
 
 
 def cmd_secrets(args: argparse.Namespace) -> int:
@@ -78,7 +85,8 @@ def cmd_secrets_health(args: argparse.Namespace) -> int:
         _print_presence_table(payload)
 
     if args.require_all and any(
-        presence.source in {"missing", "blocked_by_strict_mode"} for presence in presences
+        presence.source in {"missing", "blocked_by_strict_mode", "mounted_file_rejected"}
+        for presence in presences
     ):
         return 1
     return 0

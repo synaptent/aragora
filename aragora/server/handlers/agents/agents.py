@@ -96,16 +96,42 @@ _OPENROUTER_FALLBACK_MODELS = {
 }
 
 
-def _secret_configured(name: str) -> bool:
+def _secret_rejected(name: str) -> bool:
+    """Whether ``name``'s mounted secret file was rejected, so every read of it fails."""
     try:
-        from aragora.config.secrets import get_secret
+        from aragora.config.secrets import get_secret_presence
+    except ImportError:
+        return False
+    return get_secret_presence(name).source == "mounted_file_rejected"
 
-        value = get_secret(name)
-        if value and value.strip():
-            return True
-    except (ImportError, KeyError, ValueError, OSError) as e:
+
+def _rejected_env_vars(env_vars: str | None) -> list[str]:
+    """Names in an agent's ``env_vars`` spec whose mounted secret file was rejected."""
+    if not env_vars:
+        return []
+    return [var for var in _ENV_VAR_RE.findall(env_vars) if _secret_rejected(var)]
+
+
+def _secret_configured(name: str) -> bool:
+    # A rejected mounted key is not configured, and an environment copy must not stand in for it.
+    if _secret_rejected(name):
+        return False
+    try:
+        from aragora.config.secrets import SecretNotFoundError, get_secret
+    except ImportError as e:
         # Secrets module may not be available, fall back to env vars
-        logger.debug("Could not get secret '%s': %s", name, e)
+        logger.debug("Could not import secrets module for '%s': %s", name, e)
+    else:
+        try:
+            value = get_secret(name)
+            if value and value.strip():
+                return True
+        except SecretNotFoundError:
+            # Strict mode: a critical key outside approved custody is not configured,
+            # and an environment copy must not stand in for it.
+            return False
+        except (ImportError, KeyError, ValueError, OSError) as e:
+            logger.debug("Could not get secret '%s': %s", name, e)
     env_value = os.getenv(name)
     return bool(env_value and env_value.strip())
 
@@ -667,6 +693,7 @@ class AgentsHandler(  # type: ignore[misc]
 
             health["fallback"] = {
                 "openrouter_available": _secret_configured("OPENROUTER_API_KEY"),
+                "openrouter_rejected": _secret_rejected("OPENROUTER_API_KEY"),
                 "local_llm_available": is_local_llm_available(),
                 "local_providers": get_local_fallback_providers(),
             }
@@ -685,20 +712,23 @@ class AgentsHandler(  # type: ignore[misc]
 
             openrouter_available = _secret_configured("OPENROUTER_API_KEY")
             for agent_type, spec in all_agents.items():
+                env_vars = spec.get("env_vars")
+                rejected = _rejected_env_vars(env_vars)
                 agent_health = {
                     "type": spec.get("type", "unknown"),
-                    "requires_api_key": bool(spec.get("env_vars")),
+                    "requires_api_key": bool(env_vars),
                     "api_key_configured": False,
+                    "api_key_rejected": bool(rejected),
+                    "rejected_env_vars": rejected,
                     "available": False,
                 }
 
-                # Check if required API key is configured
-                env_vars = spec.get("env_vars")
+                # Check if required API key is configured; a rejected key gets no fallback
                 missing = _missing_required_env_vars(env_vars)
-                agent_health["api_key_configured"] = not missing
-                if not missing:
+                agent_health["api_key_configured"] = not missing and not rejected
+                if not missing and not rejected:
                     agent_health["available"] = True
-                else:
+                elif not rejected:
                     fallback_model = _OPENROUTER_FALLBACK_MODELS.get(agent_type)
                     uses_fallback = bool(openrouter_available and fallback_model)
                     agent_health["available"] = uses_fallback
@@ -792,12 +822,15 @@ class AgentsHandler(  # type: ignore[misc]
 
         availability: dict[str, Any] = {
             "openrouter_available": openrouter_available,
+            "openrouter_rejected": _secret_rejected("OPENROUTER_API_KEY"),
             "agents": {},
         }
 
         for agent_type, spec in AgentRegistry.list_all().items():
             env_vars = spec.get("env_vars")
-            missing = _missing_required_env_vars(env_vars)
+            rejected = _rejected_env_vars(env_vars)
+            # A rejected key is reported as rejected, never as missing, and gets no fallback.
+            missing = [] if rejected else _missing_required_env_vars(env_vars)
             fallback_model = _OPENROUTER_FALLBACK_MODELS.get(agent_type)
             uses_openrouter = bool(openrouter_available and missing and fallback_model)
 
@@ -805,7 +838,8 @@ class AgentsHandler(  # type: ignore[misc]
                 "type": spec.get("type"),
                 "env_vars": env_vars or "",
                 "missing_env_vars": missing,
-                "available": not missing or uses_openrouter,
+                "rejected_env_vars": rejected,
+                "available": not rejected and (not missing or uses_openrouter),
                 "uses_openrouter_fallback": uses_openrouter,
                 "fallback_model": fallback_model if uses_openrouter else None,
             }
