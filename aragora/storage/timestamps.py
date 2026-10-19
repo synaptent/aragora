@@ -1,9 +1,14 @@
 """Canonical UTC timestamps for stored records.
 
-The SQLite and PostgreSQL approval-request stores keep ``expires_at`` as
-ISO-8601 text and compare it with ``datetime.now(timezone.utc).isoformat()``.
-The canonical stored form is therefore UTC ISO-8601 text with a ``+00:00``
-offset, as produced by ``datetime.isoformat()`` on an aware UTC datetime.
+The SQLite and PostgreSQL approval-request stores keep ``expires_at``, and the
+SQLite finding-workflow store keeps ``due_date``, as ISO-8601 text and compare
+it with ``datetime.now(timezone.utc).isoformat()``. The canonical stored form
+is therefore UTC ISO-8601 text with a ``+00:00`` offset, as produced by
+``datetime.isoformat()`` on an aware UTC datetime. The in-memory, SQLite,
+Redis and PostgreSQL approval-request stores and the in-memory, SQLite and
+Redis finding-workflow stores write that form on ``save``, so text comparison
+orders instants and those backends return the same value. Rows written before
+a backend canonicalized on save are not rewritten.
 
 Policy for incoming values:
 
@@ -20,7 +25,9 @@ Policy for incoming values:
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from datetime import date, datetime, timezone
+from typing import Any
 
 from aragora.utils.datetime_helpers import from_iso_timestamp
 
@@ -30,6 +37,7 @@ __all__ = [
     "canonical_utc_timestamp",
     "parse_utc_timestamp",
     "timestamp_before",
+    "with_canonical_timestamp",
 ]
 
 
@@ -76,6 +84,20 @@ def canonical_utc_timestamp(value: object, *, field: str) -> str | None:
     if value is None:
         return None
     return parse_utc_timestamp(value, field=field).isoformat()
+
+
+def with_canonical_timestamp(data: Mapping[str, Any], field: str) -> dict[str, Any]:
+    """Return a shallow copy of ``data`` with ``data[field]`` in canonical form.
+
+    A missing ``field`` stays missing; ``data`` itself is never modified.
+
+    Raises:
+        ValueError: If ``data[field]`` is not a supported timestamp.
+    """
+    record = dict(data)
+    if field in record:
+        record[field] = canonical_utc_timestamp(record[field], field=field)
+    return record
 
 
 def timestamp_before(value: object, moment: datetime, *, field: str) -> bool:

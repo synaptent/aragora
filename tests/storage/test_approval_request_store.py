@@ -1,19 +1,25 @@
 """Tests for ApprovalRequestStore backends."""
 
 import asyncio
+import json
+import sqlite3
 import pytest
 import tempfile
 from pathlib import Path
 from datetime import date, datetime, timezone, timedelta
+from unittest.mock import MagicMock
 
 import aragora.storage.approval_request_store as approval_request_store_module
 from aragora.storage.approval_request_store import (
     ApprovalRequestItem,
     InMemoryApprovalRequestStore,
+    PostgresApprovalRequestStore,
+    RedisApprovalRequestStore,
     SQLiteApprovalRequestStore,
     get_approval_request_store,
     reset_approval_request_store,
 )
+from aragora.storage.generic_store import GenericPostgresStore
 
 
 @pytest.fixture
@@ -496,6 +502,110 @@ class TestSQLiteApprovalRequestStore:
         assert result["status"] == "approved"
         assert result["responder_id"] == "reviewer-999"
         assert result["response_data"]["approval_note"] == "Ship it!"
+
+
+PLUS_FIVE_THIRTY = timezone(timedelta(hours=5, minutes=30))
+
+TEMPORAL_MATRIX_INPUTS = [
+    pytest.param(datetime(2026, 3, 1, 7, 30, tzinfo=MINUS_FIVE), id="offset-datetime"),
+    pytest.param("2026-03-01T07:30:00-05:00", id="offset-iso"),
+    pytest.param("2026-03-01T12:30:00Z", id="z-suffix"),
+    pytest.param("2026-03-01T12:30:00", id="naive"),
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("raw", TEMPORAL_MATRIX_INPUTS)
+async def test_temporal_matrix_backend_parity_expires_at(tmp_path, sample_request_data, raw):
+    db_path = tmp_path / "temporal_matrix.db"
+    memory = InMemoryApprovalRequestStore()
+    sqlite_store = SQLiteApprovalRequestStore(db_path=db_path)
+    record = {**sample_request_data, "expires_at": raw}
+
+    await memory.save(record)
+    await sqlite_store.save(record)
+
+    from_memory = await memory.get(record["request_id"])
+    from_sqlite = await sqlite_store.get(record["request_id"])
+    assert from_memory["expires_at"] == CANONICAL
+    assert from_sqlite == from_memory
+    assert record["expires_at"] is raw
+    with sqlite3.connect(db_path) as conn:
+        (column,) = conn.execute(
+            "SELECT expires_at FROM approval_requests WHERE request_id = ?",
+            (record["request_id"],),
+        ).fetchone()
+    assert column == CANONICAL
+
+
+@pytest.mark.asyncio
+async def test_temporal_matrix_sqlite_list_expired_compares_instants(tmp_path, sample_request_data):
+    store = SQLiteApprovalRequestStore(db_path=tmp_path / "temporal_matrix.db")
+    now = datetime.now(timezone.utc)
+    future_at_minus_five = (now + timedelta(hours=1)).astimezone(MINUS_FIVE).isoformat()
+    past_at_plus_five_thirty = (now - timedelta(hours=1)).astimezone(PLUS_FIVE_THIRTY).isoformat()
+    # As raw text both values sort on the wrong side of now.
+    assert future_at_minus_five < now.isoformat() < past_at_plus_five_thirty
+
+    for request_id, expires_at in (
+        ("future-minus-five", future_at_minus_five),
+        ("past-plus-five-thirty", past_at_plus_five_thirty),
+    ):
+        await store.save(
+            {**sample_request_data, "request_id": request_id, "expires_at": expires_at}
+        )
+
+    expired = await store.list_expired()
+
+    assert [r["request_id"] for r in expired] == ["past-plus-five-thirty"]
+
+
+@pytest.mark.asyncio
+async def test_sqlite_save_rejects_invalid_expires_at_and_keeps_row(tmp_path, sample_request_data):
+    store = SQLiteApprovalRequestStore(db_path=tmp_path / "invalid.db")
+    await store.save(sample_request_data)
+
+    with pytest.raises(ValueError, match="expires_at"):
+        await store.save({**sample_request_data, "title": "Replacement", "expires_at": "garbage"})
+
+    stored = await store.get(sample_request_data["request_id"])
+    assert stored["title"] == sample_request_data["title"]
+    assert "expires_at" not in stored
+
+
+@pytest.mark.asyncio
+async def test_postgres_save_passes_canonical_expires_at(monkeypatch, sample_request_data):
+    saved = []
+
+    async def fake_save(self, data):
+        saved.append(data)
+
+    monkeypatch.setattr(GenericPostgresStore, "save", fake_save)
+    store = PostgresApprovalRequestStore.__new__(PostgresApprovalRequestStore)
+    record = {**sample_request_data, "expires_at": "2026-03-01T07:30:00-05:00"}
+
+    await store.save(record)
+
+    assert saved[0]["expires_at"] == CANONICAL
+    assert record["expires_at"] == "2026-03-01T07:30:00-05:00"
+
+
+@pytest.mark.asyncio
+async def test_redis_save_writes_canonical_expires_at_to_both_copies(
+    monkeypatch, tmp_path, sample_request_data
+):
+    monkeypatch.delenv("ARAGORA_REDIS_URL", raising=False)
+    store = RedisApprovalRequestStore(fallback_db_path=tmp_path / "fallback.db")
+    client = MagicMock()
+    store._redis_client = client
+    store._using_fallback = False
+
+    await store.save({**sample_request_data, "expires_at": "2026-03-01T12:30:00Z"})
+
+    redis_json = client.pipeline.return_value.set.call_args.args[1]
+    assert json.loads(redis_json)["expires_at"] == CANONICAL
+    fallback = await store._fallback.get(sample_request_data["request_id"])
+    assert fallback["expires_at"] == CANONICAL
 
 
 class TestGlobalStoreAccessor:

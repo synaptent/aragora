@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 
 
 from aragora.config import resolve_db_path
-from aragora.storage.timestamps import canonical_utc_timestamp, timestamp_before
+from aragora.storage.timestamps import timestamp_before, with_canonical_timestamp
 from aragora.utils.async_utils import run_async
 
 logger = logging.getLogger(__name__)
@@ -208,9 +208,7 @@ class InMemoryFindingWorkflowStore(FindingWorkflowStoreBackend):
         finding_id = data.get("finding_id")
         if not finding_id:
             raise ValueError("finding_id is required")
-        record = dict(data)
-        if "due_date" in record:
-            record["due_date"] = canonical_utc_timestamp(record["due_date"], field="due_date")
+        record = with_canonical_timestamp(data, "due_date")
         with self._lock:
             self._data[finding_id] = record
 
@@ -332,10 +330,16 @@ class SQLiteFindingWorkflowStore(FindingWorkflowStoreBackend):
                 conn.close()
 
     async def save(self, data: dict[str, Any]) -> None:
-        """Save workflow data for a finding."""
+        """Store a copy of ``data`` with ``due_date`` in canonical UTC form.
+
+        Raises:
+            ValueError: If ``finding_id`` is missing or ``due_date`` is not a
+                supported timestamp. The stored row is left unchanged.
+        """
         finding_id = data.get("finding_id")
         if not finding_id:
             raise ValueError("finding_id is required")
+        data = with_canonical_timestamp(data, "due_date")
 
         now = time.time()
         data_json = json.dumps(data)
@@ -516,10 +520,11 @@ class RedisFindingWorkflowStore(FindingWorkflowStoreBackend):
             return await self._fallback.get(finding_id)
 
     async def save(self, data: dict[str, Any]) -> None:
-        """Save workflow data for a finding."""
+        """Save workflow data for a finding, with ``due_date`` in canonical UTC form."""
         finding_id = data.get("finding_id")
         if not finding_id:
             raise ValueError("finding_id is required")
+        data = with_canonical_timestamp(data, "due_date")
 
         # Always save to SQLite fallback for durability
         await self._fallback.save(data)

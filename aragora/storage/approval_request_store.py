@@ -38,7 +38,7 @@ from aragora.storage.generic_store import (
     GenericSQLiteStore,
     GenericStoreBackend,
 )
-from aragora.storage.timestamps import canonical_utc_timestamp, timestamp_before
+from aragora.storage.timestamps import timestamp_before, with_canonical_timestamp
 
 if TYPE_CHECKING:
     pass
@@ -201,10 +201,7 @@ class InMemoryApprovalRequestStore(GenericInMemoryStore, ApprovalRequestStoreBac
             ValueError: If ``request_id`` is missing or ``expires_at`` is not a
                 supported timestamp. The stored record is left unchanged.
         """
-        record = dict(data)
-        if "expires_at" in record:
-            record["expires_at"] = canonical_utc_timestamp(record["expires_at"], field="expires_at")
-        await super().save(record)
+        await super().save(with_canonical_timestamp(data, "expires_at"))
 
     async def list_by_status(self, status: str) -> list[dict[str, Any]]:
         return self._filter_by("status", status)
@@ -287,6 +284,15 @@ class SQLiteApprovalRequestStore(GenericSQLiteStore, ApprovalRequestStoreBackend
         "expires_at",
         "responded_at",
     }
+
+    async def save(self, data: dict[str, Any]) -> None:
+        """Store a copy of ``data`` with ``expires_at`` in canonical UTC form.
+
+        Raises:
+            ValueError: If ``request_id`` is missing or ``expires_at`` is not a
+                supported timestamp. The stored row is left unchanged.
+        """
+        await super().save(with_canonical_timestamp(data, "expires_at"))
 
     async def list_by_status(self, status: str) -> list[dict[str, Any]]:
         return self._query_by_column("status", status, order_by="priority ASC, created_at DESC")
@@ -391,6 +397,7 @@ class RedisApprovalRequestStore(ApprovalRequestStoreBackend):
         request_id = data.get("request_id")
         if not request_id:
             raise ValueError("request_id is required")
+        data = with_canonical_timestamp(data, "expires_at")
 
         # Always save to SQLite fallback for durability
         await self._fallback.save(data)
@@ -595,6 +602,15 @@ class PostgresApprovalRequestStore(GenericPostgresStore, ApprovalRequestStoreBac
         "expires_at",
         "responded_at",
     }
+
+    async def save(self, data: dict[str, Any]) -> None:
+        """Store a copy of ``data`` with ``expires_at`` in canonical UTC form.
+
+        Raises:
+            ValueError: If ``request_id`` is missing or ``expires_at`` is not a
+                supported timestamp. The stored row is left unchanged.
+        """
+        await super().save(with_canonical_timestamp(data, "expires_at"))
 
     async def list_by_status(self, status: str) -> list[dict[str, Any]]:
         return await self._query_by_column(
