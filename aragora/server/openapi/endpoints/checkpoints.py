@@ -2,6 +2,7 @@
 
 from aragora.server.openapi.helpers import _ok_response, STANDARD_ERRORS
 
+_ID_DESCRIPTION = "Checkpoint id (km_ckpt_...) returned by create or list; names are not accepted"
 CHECKPOINT_ENDPOINTS = {
     "/api/km/checkpoints": {
         "get": {
@@ -39,9 +40,8 @@ CHECKPOINT_ENDPOINTS = {
                             "properties": {
                                 "name": {
                                     "type": "string",
-                                    "description": "Checkpoint name (must be unique)",
-                                    "minLength": 1,
-                                    "maxLength": 256,
+                                    "description": "Checkpoint label, not an identifier",
+                                    "pattern": "^[A-Za-z0-9_-]{1,128}$",
                                 },
                                 "description": {
                                     "type": "string",
@@ -82,12 +82,13 @@ CHECKPOINT_ENDPOINTS = {
             "tags": ["Knowledge Mound"],
             "summary": "Get checkpoint",
             "operationId": "getKmCheckpoint",
-            "description": "Get checkpoint metadata by name.",
+            "description": "Get checkpoint metadata by id.",
             "security": [{"bearerAuth": []}],
             "parameters": [
                 {
                     "name": "checkpoint_name",
                     "in": "path",
+                    "description": _ID_DESCRIPTION,
                     "required": True,
                     "schema": {"type": "string"},
                 },
@@ -102,12 +103,13 @@ CHECKPOINT_ENDPOINTS = {
             "tags": ["Knowledge Mound"],
             "summary": "Delete checkpoint",
             "operationId": "deleteKmCheckpoint",
-            "description": "Delete a checkpoint by name.",
+            "description": "Delete a checkpoint by id.",
             "security": [{"bearerAuth": []}],
             "parameters": [
                 {
                     "name": "checkpoint_name",
                     "in": "path",
+                    "description": _ID_DESCRIPTION,
                     "required": True,
                     "schema": {"type": "string"},
                 },
@@ -136,6 +138,7 @@ CHECKPOINT_ENDPOINTS = {
                 {
                     "name": "checkpoint_name",
                     "in": "path",
+                    "description": _ID_DESCRIPTION,
                     "required": True,
                     "schema": {"type": "string"},
                 },
@@ -182,6 +185,7 @@ CHECKPOINT_ENDPOINTS = {
                 {
                     "name": "checkpoint_name",
                     "in": "path",
+                    "description": _ID_DESCRIPTION,
                     "required": True,
                     "schema": {"type": "string"},
                 },
@@ -228,11 +232,11 @@ CHECKPOINT_ENDPOINTS = {
                             "properties": {
                                 "checkpoint_a": {
                                     "type": "string",
-                                    "description": "First checkpoint name",
+                                    "description": "First checkpoint id",
                                 },
                                 "checkpoint_b": {
                                     "type": "string",
-                                    "description": "Second checkpoint name",
+                                    "description": "Second checkpoint id",
                                 },
                             },
                         },

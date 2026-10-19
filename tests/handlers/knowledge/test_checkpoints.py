@@ -15,13 +15,17 @@ from __future__ import annotations
 
 import io
 import json
+import shutil
 from dataclasses import dataclass, field
 from datetime import datetime
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from aragora.knowledge.mound import checkpoint as checkpoint_module
+from aragora.rbac.models import AuthorizationContext
 from aragora.server.handlers.knowledge.checkpoints import KMCheckpointHandler
 
 
@@ -185,16 +189,14 @@ class TestHandlerInit:
     def test_routes_defined(self, handler):
         # Uppercase ROUTES: the registry route index and BaseHandler.can_handle
         # only read ROUTES; lowercase routes left this handler undispatchable.
-        # The bare /api/v1/km/checkpoints path stays owned (first-wins) by
-        # KnowledgeMoundHandler — only compare is claimed here.
         assert "/api/v1/km/checkpoints/compare" in handler.ROUTES
-        assert "/api/v1/km/checkpoints" not in handler.ROUTES
+        assert "/api/v1/km/checkpoints" in handler.ROUTES
 
     def test_dynamic_routes_defined(self, handler):
         assert "/api/v1/km/checkpoints/{name}" in handler.dynamic_routes
         assert "/api/v1/km/checkpoints/{name}/restore" in handler.dynamic_routes
         assert "/api/v1/km/checkpoints/{name}/compare" in handler.dynamic_routes
-        assert "/api/v1/km/checkpoints/{name}/download" in handler.dynamic_routes
+        assert "/api/v1/km/checkpoints/{name}/download" not in handler.dynamic_routes
 
 
 # =============================================================================
@@ -1493,7 +1495,7 @@ class TestHandleDeleteRouting:
         assert _status(result) == 200
 
     @pytest.mark.asyncio
-    async def test_handle_delete_base_path_returns_404(self, handler_with_store, mock_store):
+    async def test_handle_delete_base_path_returns_405(self, handler_with_store, mock_store):
         mock_handler = _MockHTTPHandler(
             method="DELETE",
             path="/api/v1/km/checkpoints",
@@ -1503,7 +1505,9 @@ class TestHandleDeleteRouting:
             query_params={},
             handler=mock_handler,
         )
-        assert _status(result) == 404
+        assert _status(result) == 405
+        assert result.headers.get("Allow") == "GET, POST"
+        mock_store.delete_checkpoint.assert_not_called()
 
 
 # =============================================================================
@@ -1777,15 +1781,219 @@ class TestEdgeCases:
     @pytest.mark.asyncio
     async def test_checkpoint_name_with_special_chars(self, handler_with_store, mock_store):
         """Checkpoint names with dashes and underscores should work."""
-        cp = MockCheckpointMetadata(name="my-checkpoint_v2.1")
+        cp = MockCheckpointMetadata(name="my-checkpoint_v2")
         mock_store.get_checkpoint_metadata.return_value = cp
-        mock_handler = _MockHTTPHandler(path="/api/v1/km/checkpoints/my-checkpoint_v2.1")
+        mock_handler = _MockHTTPHandler(path="/api/v1/km/checkpoints/my-checkpoint_v2")
         result = await handler_with_store.handle_get(
-            path="/api/v1/km/checkpoints/my-checkpoint_v2.1",
+            path="/api/v1/km/checkpoints/my-checkpoint_v2",
             query_params={},
             handler=mock_handler,
         )
         assert _status(result) == 200
         body = _body(result)
         data = body.get("data", body)
-        assert data["name"] == "my-checkpoint_v2.1"
+        assert data["name"] == "my-checkpoint_v2"
+
+
+# =============================================================================
+# Test: name validation and the Professional tier gate
+# =============================================================================
+# 405/Allow answers, 401/403 and tier denial on every route are covered through
+# the real RouteIndex in tests/server/handlers/test_serve_side_orphan_dispatch.py.
+
+UNSAFE_SEGMENTS = ["..", ".", "%2e%2e", "..%2Fetc", "a%5Cb", "%00", "x" * 129, "v2.1"]
+
+DETAIL_OPERATIONS = [
+    ("GET", "/api/v1/km/checkpoints/{name}", "get_checkpoint_metadata"),
+    ("DELETE", "/api/v1/km/checkpoints/{name}", "delete_checkpoint"),
+    ("POST", "/api/v1/km/checkpoints/{name}/restore", "restore_checkpoint"),
+    ("GET", "/api/v1/km/checkpoints/{name}/compare", "list_checkpoints"),
+]
+
+
+async def _call(handler, method, path, body=None, auth_context=None):
+    mock_handler = _MockHTTPHandler(method=method, path=path, body=body)
+    if auth_context is not None:
+        mock_handler._auth_context = auth_context
+    entry = {
+        "GET": handler.handle_get,
+        "POST": handler.handle_post,
+        "DELETE": handler.handle_delete,
+    }
+    return await entry[method](path=path, query_params={}, handler=mock_handler)
+
+
+class TestCheckpointNameValidation:
+    @pytest.mark.parametrize("name", UNSAFE_SEGMENTS)
+    @pytest.mark.parametrize(("method", "template", "store_method"), DETAIL_OPERATIONS)
+    async def test_unsafe_names_rejected_before_store(
+        self, handler_with_store, mock_store, method, template, store_method, name
+    ):
+        result = await _call(handler_with_store, method, template.format(name=name), body={})
+        assert _status(result) == 400
+        getattr(mock_store, store_method).assert_not_called()
+
+    async def test_compare_body_names_are_validated(self, handler_with_store, mock_store):
+        body = {"checkpoint_a": "../secrets", "checkpoint_b": "cp-beta"}
+        result = await _call(handler_with_store, "POST", "/api/v1/km/checkpoints/compare", body)
+        assert _status(result) == 400
+        mock_store.compare_checkpoints.assert_not_called()
+
+    async def test_store_name_rejection_maps_to_400(self, handler_with_store, mock_store):
+        mock_store.get_checkpoint_metadata.side_effect = (
+            checkpoint_module.InvalidCheckpointNameError("resolves outside")
+        )
+        result = await _call(handler_with_store, "GET", "/api/v1/km/checkpoints/km_ckpt_link")
+        assert _status(result) == 400
+
+
+class TestProfessionalTierGate:
+    @pytest.mark.parametrize(("tier", "status"), [("free", 403), ("professional", 200)])
+    async def test_detail_route_follows_org_tier(
+        self, handler_with_store, mock_store, tier, status
+    ):
+        mock_store.get_checkpoint_metadata.return_value = MockCheckpointMetadata(name="cp-1")
+        ctx = AuthorizationContext(user_id="user-1", org_id="org-1", roles={"admin"})
+        with patch("aragora.billing.tier_gating._resolve_org_tier", return_value=tier):
+            result = await _call(
+                handler_with_store, "GET", "/api/v1/km/checkpoints/cp-1", auth_context=ctx
+            )
+        assert _status(result) == status
+        assert mock_store.get_checkpoint_metadata.called is (status == 200)
+
+
+# =============================================================================
+# Test: a real KMCheckpointStore behind the API (only the returned id addresses)
+# =============================================================================
+
+BASE = "/api/v1/km/checkpoints"
+_NODE = {"id": "node-1", "node_type": "fact", "content": "c", "confidence": 0.9}
+
+
+class _StubMetaStore:
+    def query_nodes(self, workspace_id, limit, offset):
+        node = SimpleNamespace(**_NODE, workspace_id=workspace_id, metadata={}, topics=[])
+        return [node] if offset == 0 else []
+
+
+class _StubMound:
+    workspace_id = "ws"
+    config = SimpleNamespace(
+        backend="sqlite", enable_staleness_detection=False, enable_culture_accumulator=False
+    )
+
+    def __init__(self):
+        self._meta_store = _StubMetaStore()
+        self.saved: list[str] = []
+
+    async def _save_node(self, node):
+        self.saved.append(node["id"])
+
+
+@pytest.fixture
+def real_store(tmp_path):
+    store = checkpoint_module.KMCheckpointStore(_StubMound(), checkpoint_dir=str(tmp_path))
+    handler = KMCheckpointHandler(server_context={})
+    handler._checkpoint_store = store
+    return handler, store
+
+
+def _data(result) -> dict:
+    body = _body(result)
+    return body.get("data", body)
+
+
+class TestRealStoreIdContract:
+    async def test_lifecycle_uses_the_id_the_api_returned(self, real_store):
+        handler, store = real_store
+        created = []
+        for name in ("release-1", "release-2"):
+            result = await _call(handler, "POST", BASE, {"name": name})
+            assert _status(result) == 201
+            created.append(_data(result))
+        ids = [c["id"] for c in created]
+        assert all(i.startswith("km_ckpt_") for i in ids) and len(set(ids)) == 2
+        listed = _data(await _call(handler, "GET", BASE))["checkpoints"]
+        assert {(c["id"], c["name"]) for c in listed} == {(c["id"], c["name"]) for c in created}
+        first = ids[0]
+        detail = _data(await _call(handler, "GET", f"{BASE}/{first}"))
+        assert (detail["id"], detail["name"]) == (first, "release-1")
+        compared = await _call(handler, "GET", f"{BASE}/{first}/compare")
+        assert _status(compared) == 200 and _data(compared)["checkpoint_1"] == first
+        pair = {"checkpoint_a": ids[0], "checkpoint_b": ids[1]}
+        assert _status(await _call(handler, "POST", f"{BASE}/compare", pair)) == 200
+        restored = await _call(handler, "POST", f"{BASE}/{first}/restore", {})
+        assert _status(restored) == 200 and _data(restored)["checkpoint_id"] == first
+        assert store.mound.saved == ["node-1"]
+        assert _status(await _call(handler, "DELETE", f"{BASE}/{first}")) == 200
+        assert _status(await _call(handler, "GET", f"{BASE}/{first}")) == 404
+        listed = _data(await _call(handler, "GET", BASE))["checkpoints"]
+        assert [c["id"] for c in listed] == [ids[1]]
+
+    async def test_names_are_not_resolved_to_ids(self, real_store, tmp_path):
+        handler, _ = real_store
+        created = _data(await _call(handler, "POST", BASE, {"name": "release-1"}))
+        pair = {"checkpoint_a": "release-1", "checkpoint_b": created["id"]}
+        for method, path, body in [
+            ("GET", f"{BASE}/release-1", None),
+            ("GET", f"{BASE}/release-1/compare", None),
+            ("POST", f"{BASE}/release-1/restore", {}),
+            ("DELETE", f"{BASE}/release-1", None),
+            ("POST", f"{BASE}/compare", pair),
+        ]:
+            assert _status(await _call(handler, method, path, body)) == 404, (method, path)
+        assert [p.name for p in tmp_path.iterdir()] == [created["id"]]
+
+    @pytest.mark.parametrize("name", ["../outside", "a%2Fb", "release.1", "x" * 129])
+    async def test_invalid_create_names_get_400_and_persist_nothing(
+        self, real_store, tmp_path, name
+    ):
+        handler, _ = real_store
+        result = await _call(handler, "POST", BASE, {"name": name})
+        assert _status(result) == 400
+        assert _body(result)["error"].startswith("Invalid checkpoint name")
+        assert list(tmp_path.iterdir()) == []
+
+    async def test_older_on_disk_names_stay_listable(self, real_store):
+        handler, store = real_store
+        ckpt_id = await store.create_checkpoint(name="placeholder")
+        meta = store.checkpoint_dir / ckpt_id / "metadata.json"
+        meta.write_text(json.dumps({**json.loads(meta.read_text()), "name": "release.1"}))
+        listed = _data(await _call(handler, "GET", BASE))["checkpoints"]
+        assert [(c["id"], c["name"]) for c in listed] == [(ckpt_id, "release.1")]
+        assert _data(await _call(handler, "GET", f"{BASE}/{ckpt_id}"))["name"] == "release.1"
+
+    async def test_links_hidden_and_real_entries_still_work(self, real_store, tmp_path_factory):
+        handler, store = real_store
+        cid = _data(await _call(handler, "POST", BASE, {"name": "kept"}))["id"]
+        outside = tmp_path_factory.mktemp("outside")
+        meta = json.loads((store.checkpoint_dir / cid / "metadata.json").read_text())
+        (outside / "metadata.json").write_text(json.dumps({**meta, "id": "km_ckpt_external"}))
+        (store.checkpoint_dir / "km_ckpt_dir_link").symlink_to(outside, target_is_directory=True)
+        meta_link = store.checkpoint_dir / "km_ckpt_meta_link"
+        meta_link.mkdir()
+        (meta_link / "metadata.json").symlink_to(outside / "metadata.json")
+        listed = _data(await _call(handler, "GET", BASE))["checkpoints"]
+        assert [c["id"] for c in listed] == [cid]
+        assert _status(await _call(handler, "GET", f"{BASE}/km_ckpt_meta_link")) == 404
+        assert _data(await _call(handler, "GET", f"{BASE}/{cid}"))["name"] == "kept"
+        assert _data(await _call(handler, "GET", f"{BASE}/{cid}/compare"))["checkpoint"] == cid
+        restored = await _call(handler, "POST", f"{BASE}/{cid}/restore", {})
+        assert _status(restored) == 200 and store.mound.saved == ["node-1"]
+        assert _status(await _call(handler, "DELETE", f"{BASE}/{cid}")) == 200
+        assert _data(await _call(handler, "GET", BASE))["checkpoints"] == []
+
+    @pytest.mark.parametrize("linked", ["metadata.json", "content.json.gz"])
+    async def test_restore_refuses_linked_files_and_saves_nothing(
+        self, real_store, tmp_path_factory, linked
+    ):
+        handler, store = real_store
+        cid = _data(await _call(handler, "POST", BASE, {"name": "kept"}))["id"]
+        outside, entry = tmp_path_factory.mktemp("outside"), store.checkpoint_dir / "km_ckpt_link"
+        shutil.copytree(store.checkpoint_dir / cid, entry)
+        (entry / linked).rename(outside / linked)
+        (entry / linked).symlink_to(outside / linked)
+        restored = await _call(handler, "POST", f"{BASE}/km_ckpt_link/restore", {})
+        assert _status(restored) == 404 and store.mound.saved == []
+        restored = await _call(handler, "POST", f"{BASE}/{cid}/restore", {})
+        assert _status(restored) == 200 and store.mound.saved == ["node-1"]

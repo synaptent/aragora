@@ -32,6 +32,7 @@ import gzip
 import hashlib
 import json
 import logging
+import re
 import shutil
 import time
 from dataclasses import dataclass, field, asdict
@@ -43,6 +44,23 @@ if TYPE_CHECKING:
     from aragora.knowledge.mound import KnowledgeMound
 
 logger = logging.getLogger(__name__)
+
+# No ".", "/", "\\", "%" or NUL, so traversal and percent-encoded separators
+# are rejected without decoding.
+_CHECKPOINT_NAME_RE = re.compile(r"[A-Za-z0-9_-]{1,128}")
+
+
+class InvalidCheckpointNameError(ValueError):
+    """A checkpoint name is not a single safe segment inside the checkpoint directory."""
+
+
+def validate_checkpoint_name(name: object) -> str:
+    """Return ``name`` unchanged if it is a safe checkpoint name, else raise."""
+    if not isinstance(name, str) or not _CHECKPOINT_NAME_RE.fullmatch(name):
+        raise InvalidCheckpointNameError(
+            "Invalid checkpoint name: use 1-128 characters from A-Z, a-z, 0-9, '_' and '-'"
+        )
+    return name
 
 
 class _StalenessDetectorProtocol(Protocol):
@@ -205,6 +223,8 @@ class KMCheckpointStore:
         Returns:
             Checkpoint ID (str) or KMCheckpointMetadata if return_metadata=True
         """
+        if name is not None:
+            validate_checkpoint_name(name)
         start_time = time.time()
 
         # Generate checkpoint ID (not for security, just uniqueness)
@@ -335,7 +355,7 @@ class KMCheckpointStore:
         logger.info("Restoring KM from checkpoint: %s", checkpoint_id)
 
         # Load checkpoint
-        checkpoint_path = self.checkpoint_dir / checkpoint_id
+        checkpoint_path = self._checkpoint_path(checkpoint_id)
         if not checkpoint_path.exists():
             return RestoreResult(
                 success=False,
@@ -344,8 +364,8 @@ class KMCheckpointStore:
             )
 
         # Load metadata
-        metadata_file = checkpoint_path / "metadata.json"
-        if not metadata_file.exists():
+        metadata_file = self._contained_metadata_file(checkpoint_path)
+        if metadata_file is None:
             return RestoreResult(
                 success=False,
                 checkpoint_id=checkpoint_id,
@@ -356,10 +376,14 @@ class KMCheckpointStore:
         metadata = KMCheckpointMetadata(**metadata_dict)
 
         # Load content
-        if metadata.compressed:
-            content_file = checkpoint_path / "content.json.gz"
-        else:
-            content_file = checkpoint_path / "content.json"
+        content_name = "content.json.gz" if metadata.compressed else "content.json"
+        content_file = self._contained_file(checkpoint_path, content_name)
+        if content_file is None:
+            return RestoreResult(
+                success=False,
+                checkpoint_id=checkpoint_id,
+                errors=["Checkpoint content not found"],
+            )
 
         # Verify checksum first (before decompression)
         content_bytes = content_file.read_bytes()
@@ -465,9 +489,11 @@ class KMCheckpointStore:
         checkpoints = []
 
         for item in self.checkpoint_dir.iterdir():
+            if item.is_symlink() or item.resolve().parent != self.checkpoint_dir.resolve():
+                continue
             if item.is_dir() and item.name.startswith("km_ckpt_"):
-                metadata_file = item / "metadata.json"
-                if metadata_file.exists():
+                metadata_file = self._contained_metadata_file(item)
+                if metadata_file is not None:
                     try:
                         metadata_dict = json.loads(metadata_file.read_text())
                         checkpoints.append(KMCheckpointMetadata(**metadata_dict))
@@ -479,12 +505,37 @@ class KMCheckpointStore:
 
         return checkpoints
 
+    def _checkpoint_path(self, checkpoint_id: str) -> Path:
+        """Map a checkpoint name to its directory, refusing anything outside ``checkpoint_dir``."""
+        path = self.checkpoint_dir / validate_checkpoint_name(checkpoint_id)
+        # resolve() follows symlinks, so a link that points elsewhere is refused too.
+        if path.resolve().parent != self.checkpoint_dir.resolve():
+            raise InvalidCheckpointNameError(
+                "Invalid checkpoint name: resolves outside the checkpoint directory"
+            )
+        return path
+
+    @staticmethod
+    def _contained_metadata_file(entry: Path) -> Path | None:
+        """Return ``entry/metadata.json`` if it is a file that resolves directly inside ``entry``."""
+        return KMCheckpointStore._contained_file(entry, "metadata.json")
+
+    @staticmethod
+    def _contained_file(entry: Path, name: str) -> Path | None:
+        """Return ``entry/name`` if it is a regular file that resolves directly inside ``entry``."""
+        path = entry / name
+        try:
+            inside = path.resolve().parent == entry.resolve()
+        except (OSError, RuntimeError):  # RuntimeError: symlink loop (Python < 3.13)
+            return None
+        return path if inside and path.is_file() else None
+
     async def get_checkpoint_metadata(self, checkpoint_id: str) -> KMCheckpointMetadata | None:
         """Get metadata for a specific checkpoint."""
-        checkpoint_path = self.checkpoint_dir / checkpoint_id
-        metadata_file = checkpoint_path / "metadata.json"
+        checkpoint_path = self._checkpoint_path(checkpoint_id)
+        metadata_file = self._contained_metadata_file(checkpoint_path)
 
-        if not metadata_file.exists():
+        if metadata_file is None:
             return None
 
         try:
@@ -495,7 +546,7 @@ class KMCheckpointStore:
 
     async def delete_checkpoint(self, checkpoint_id: str) -> bool:
         """Delete a checkpoint."""
-        checkpoint_path = self.checkpoint_dir / checkpoint_id
+        checkpoint_path = self._checkpoint_path(checkpoint_id)
 
         if not checkpoint_path.exists():
             return False
@@ -722,8 +773,11 @@ class KMCheckpointStore:
         deleted = 0
 
         for ckpt in to_delete:
-            if await self.delete_checkpoint(ckpt.id):
-                deleted += 1
+            try:
+                if await self.delete_checkpoint(ckpt.id):
+                    deleted += 1
+            except InvalidCheckpointNameError:
+                logger.warning("Skipping checkpoint with unsafe id in metadata: %r", ckpt.id)
 
         if deleted > 0:
             logger.info("Pruned %s old KM checkpoints", deleted)
@@ -767,10 +821,12 @@ def reset_km_checkpoint_store() -> None:
 
 
 __all__ = [
+    "InvalidCheckpointNameError",
     "KMCheckpointStore",
     "KMCheckpointMetadata",
     "KMCheckpointContent",
     "RestoreResult",
     "get_km_checkpoint_store",
     "reset_km_checkpoint_store",
+    "validate_checkpoint_name",
 ]
