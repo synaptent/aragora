@@ -21,6 +21,10 @@ import pytest
 
 from aragora.exceptions import DatabaseError, RecordNotFoundError, StorageError
 
+# Reads, updates and deletes check the debate's stored org against the caller
+# from extract_user_from_request: requests come from test-user-001 of test-org-001.
+pytestmark = pytest.mark.usefixtures("org_scoped_request_user")
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -113,6 +117,9 @@ def _make_handler(
     ctx: dict[str, Any] = {}
     if storage is not None:
         ctx["storage"] = storage
+        if isinstance(storage, MagicMock) and storage.get_read_access.side_effect is None:
+            # The stored row (id, org_id, is_public): a private test-org-001 debate.
+            storage.get_read_access.side_effect = lambda ref: (ref, "test-org-001", False)
     if ctx_extra:
         ctx.update(ctx_extra)
 
@@ -1187,7 +1194,7 @@ class TestPatchDebate:
 
     def test_update_storage_without_save_debate(self):
         """Storage without save_debate method doesn't crash."""
-        storage = MagicMock(spec=["get_debate"])
+        storage = MagicMock(spec=["get_debate", "get_read_access"])
         storage.get_debate.return_value = {
             "id": "d1",
             "task": "Test",
@@ -1610,8 +1617,8 @@ class TestDeleteDebate:
         assert _status(result) == 200
         assert "d1" not in active_debates
 
-    def test_delete_uses_workspace_id_for_abac(self):
-        """ABAC check picks up workspace_id from debate."""
+    def test_delete_uses_stored_org_for_abac(self):
+        """ABAC check gets the stored org column, not the artifact's workspace_id."""
         storage = MagicMock()
         storage.get_debate.return_value = {
             "id": "d1",
@@ -1628,7 +1635,7 @@ class TestDeleteDebate:
             h._delete_debate(handler, "d1")
 
         call_kwargs = mock_access.call_args
-        assert call_kwargs.kwargs.get("resource_workspace_id") == "ws-001"
+        assert call_kwargs.kwargs.get("resource_workspace_id") == "test-org-001"
 
 
 # ---------------------------------------------------------------------------

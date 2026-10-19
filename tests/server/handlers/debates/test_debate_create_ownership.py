@@ -12,16 +12,19 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sqlite3
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
+from aragora.resilience import CircuitOpenError
 from aragora.server.debate_controller import DebateController, DebateRequest
 from aragora.server.debate_factory import DebateConfig
 from aragora.server.debate_queue import BatchItem
 from aragora.storage.debate_storage import DebateStorage
+from aragora.storage.postgres_store import PoolExhaustedError
 
 ORG_A = "org-a"
 ORG_B = "org-b"
@@ -614,6 +617,20 @@ ANON = SimpleNamespace(user_id=None, org_id=None, role=None, is_authenticated=Fa
 USER_B = _user(ORG_B, "user-b")
 
 
+def _lookup_errors() -> list[Exception]:
+    """Errors the SQLite and Postgres stores can raise while reading the owner row."""
+    errors: list[Exception] = [
+        sqlite3.OperationalError("database is locked"),
+        PoolExhaustedError(5.0, 1.0),
+        CircuitOpenError("postgres_pool", 30.0),
+    ]
+    try:
+        from asyncpg import exceptions as pg
+    except ImportError:
+        return errors
+    return [*errors, pg.ConnectionDoesNotExistError("closed"), pg.InterfaceError("pool closed")]
+
+
 class TestReadUsesStoredOrg:
     """Create paths record the org only in the ``org_id`` column, so reads must use it."""
 
@@ -677,7 +694,8 @@ class TestReadUsesStoredOrg:
         self._save(storage, "deb-legacy", None)
         _active_debates["deb-running-x"] = {"id": "deb-running-x", "task": "No org", "agents": "a"}
 
-        assert crud._stored_debate_org(storage, "deb-legacy") is None
+        assert crud._stored_debate_access(storage, "deb-legacy") == (None, False)
+        assert crud._debate_read_denial(MagicMock(), storage, "deb-legacy") is None
         assert crud._running_debate_org("deb-running-x") is None
         assert crud._org_read_denial(MagicMock(), None) is None
 
@@ -692,3 +710,125 @@ class TestReadUsesStoredOrg:
         assert (owner.status_code, _body(owner)["in_progress"]) == (200, True)
         assert (other.status_code, _body(other)) == (404, NOT_FOUND)
         assert read(ANON, path).status_code == 401
+
+    SUFFIXES = ("/messages", "/convergence", "/summary", "/meta-critique", "/graph/stats")
+
+    @pytest.fixture
+    def call(self, monkeypatch, storage, tmp_path):
+        """Send GET, PATCH or DELETE to the legacy handler as ``user``."""
+        from aragora.server.handlers.debates import DebatesHandler
+
+        debates = DebatesHandler(ctx={"storage": storage, "nomic_dir": tmp_path})
+        send = {"GET": debates.handle, "PATCH": debates.handle_patch}
+        send["DELETE"] = debates.handle_delete
+
+        def _call(user: Any, path: str, method: str = "GET", body: Any = None):
+            monkeypatch.setattr(
+                "aragora.billing.jwt_auth.extract_user_from_request",
+                lambda request, user_store=None: user,
+            )
+            raw = json.dumps(body).encode() if body is not None else b""
+            request = MagicMock(
+                command=method,
+                headers={"Host": "x", "Content-Length": str(len(raw))},
+                client_address=("10.0.0.12", 1),
+                body=raw,
+            )
+            return send[method](path, {}, request)
+
+        return _call
+
+    def test_suffix_routes_hide_a_private_org_debate(self, call, storage):
+        self._save(storage, "deb-a", ORG_A)
+
+        for suffix in self.SUFFIXES:
+            path = f"/api/v1/debates/deb-a{suffix}"
+            anon, no_org = call(ANON, path), call(_user(None, "user-x"), path)
+            other, missing = call(USER_B, path), call(USER_B, f"/api/v1/debates/deb-gone{suffix}")
+
+            assert (anon.status_code, _body(anon)["code"]) == (401, "auth_required"), suffix
+            assert (no_org.status_code, _body(no_org)["code"]) == (403, "org_required"), suffix
+            assert (other.status_code, _body(other)) == (404, NOT_FOUND), suffix
+            assert (missing.status_code, _body(missing)) == (404, NOT_FOUND), suffix
+            assert _body(call(_user(ORG_A), path)) != NOT_FOUND, suffix
+        for suffix in ("/messages", "/convergence"):
+            assert call(_user(ORG_A), f"/api/v1/debates/deb-a{suffix}").status_code == 200
+
+    def test_suffix_routes_keep_public_and_org_less_debates_open(self, call, storage):
+        assert storage.set_public(self._save(storage, "deb-public", ORG_A), True)
+        self._save(storage, "deb-legacy", None)
+
+        for debate_id in ("deb-public", "deb-legacy"):
+            for user in (ANON, USER_B):
+                assert call(user, f"/api/v1/debates/{debate_id}/messages").status_code == 200
+
+    def test_running_debate_suffix_route_checks_the_recorded_org(self, call, storage):
+        controller = _real_controller(storage)
+        controller._get_executor = Mock(return_value=Mock())  # type: ignore[method-assign]
+        debate_id = controller.start_debate(DebateRequest(question="Q?", org_id=ORG_A)).debate_id
+        path = f"/api/v1/debates/{debate_id}/events"
+
+        assert call(_user(ORG_A), path).status_code == 200
+        assert (call(USER_B, path).status_code, _body(call(USER_B, path))) == (404, NOT_FOUND)
+        assert call(ANON, path).status_code == 401
+
+    @pytest.mark.parametrize(
+        "failure",
+        ["no_row", "no_method", *_lookup_errors()],
+        ids=lambda f: str(f) if isinstance(f, str) else type(f).__name__,
+    )
+    def test_unreadable_owner_answers_like_a_missing_debate(
+        self, call, storage, monkeypatch, failure
+    ):
+        self._save(storage, "deb-a", ORG_A)
+        if failure == "no_method":
+            monkeypatch.setattr(DebateStorage, "get_read_access", None)
+        else:
+
+            def _lookup(debate_id: str) -> Any:
+                if isinstance(failure, Exception):
+                    raise failure
+                return None
+
+            monkeypatch.setattr(storage, "get_read_access", _lookup)
+
+        for path in ("/api/v1/debates/deb-a", "/api/v1/debates/deb-a/messages"):
+            for user in (ANON, _user(ORG_A)):
+                result = call(user, path)
+                assert (result.status_code, _body(result)) == (404, NOT_FOUND), (path, user)
+        delete = call(_user(ORG_A), "/api/v1/debates/deb-a", "DELETE")
+        assert (delete.status_code, _body(delete)) == (404, NOT_FOUND)
+        assert storage.get_by_id("deb-a") is not None
+
+    def test_writes_need_the_stored_owner_org(self, call, storage):
+        self._save(storage, "deb-a", ORG_A)
+        assert storage.set_public(self._save(storage, "deb-public", ORG_A), True)
+        self._save(storage, "deb-legacy", None)
+        before = {d: storage.get_by_id(d) for d in ("deb-a", "deb-public", "deb-legacy")}
+
+        for debate_id, users in (
+            ("deb-a", (USER_B,)),
+            ("deb-public", (USER_B,)),
+            ("deb-legacy", (_user(ORG_A), USER_B)),
+            ("deb-gone", (_user(ORG_A),)),
+        ):
+            path = f"/api/v1/debates/{debate_id}"
+            for user in users:
+                patch_result = call(user, path, "PATCH", {"title": "taken"})
+                delete_result = call(user, path, "DELETE")
+                assert (patch_result.status_code, _body(patch_result)) == (404, NOT_FOUND), path
+                assert (delete_result.status_code, _body(delete_result)) == (404, NOT_FOUND), path
+        assert call(ANON, "/api/v1/debates/deb-a", "DELETE").status_code == 401
+        no_org = call(_user(None, "user-x"), "/api/v1/debates/deb-a", "PATCH", {"title": "x"})
+        assert (no_org.status_code, _body(no_org)["code"]) == (403, "org_required")
+        assert {d: storage.get_by_id(d) for d in before} == before
+
+    def test_owner_org_patches_and_deletes_its_debate(self, call, storage):
+        self._save(storage, "deb-a", ORG_A, user_id="user-a")  # ABAC lets only the creator delete
+
+        patched = call(_user(ORG_A), "/api/v1/debates/deb-a", "PATCH", {"title": "renamed"})
+        assert (patched.status_code, _body(patched)["updated_fields"]) == (200, ["title"])
+
+        deleted = call(_user(ORG_A), "/api/v1/debates/deb-a", "DELETE")
+        assert (deleted.status_code, _body(deleted)) == (200, {"deleted": True, "id": "deb-a"})
+        assert storage.get_by_id("deb-a") is None

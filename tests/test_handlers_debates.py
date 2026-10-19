@@ -141,6 +141,8 @@ def mock_storage():
         "convergence_status": "converged",
         "convergence_similarity": 0.92,
     }
+    # Stored owner row: a private debate of the autouse test caller's org.
+    storage.get_read_access.side_effect = lambda ref: (ref, "test-org-001", False)
     return storage
 
 
@@ -430,12 +432,12 @@ class TestImpasseEndpoint:
 
         assert result.status_code == 404
 
-    def test_impasse_unavailable_returns_503(self):
-        """Should return 503 when storage not available."""
+    def test_impasse_without_storage_is_not_found(self):
+        """Without a store the debate's owner is unknown, so it answers like a missing debate."""
         handler = DebatesHandler({})
         result = handler.handle("/api/v1/debates/debate-001/impasse", {}, None)
 
-        assert result.status_code == 503
+        assert result.status_code == 404
 
 
 # ============================================================================
@@ -476,12 +478,12 @@ class TestConvergenceEndpoint:
 
         assert result.status_code == 404
 
-    def test_convergence_unavailable_returns_503(self):
-        """Should return 503 when storage not available."""
+    def test_convergence_without_storage_is_not_found(self):
+        """Without a store the debate's owner is unknown, so it answers like a missing debate."""
         handler = DebatesHandler({})
         result = handler.handle("/api/v1/debates/debate-001/convergence", {}, None)
 
-        assert result.status_code == 503
+        assert result.status_code == 404
 
 
 # ============================================================================
@@ -553,12 +555,12 @@ class TestCitationsEndpoint:
 
         assert result.status_code == 404
 
-    def test_citations_unavailable_returns_503(self):
-        """Should return 503 when storage not available."""
+    def test_citations_without_storage_is_not_found(self):
+        """Without a store the debate's owner is unknown, so it answers like a missing debate."""
         handler = DebatesHandler({})
         result = handler.handle("/api/v1/debates/debate-001/citations", {}, None)
 
-        assert result.status_code == 503
+        assert result.status_code == 404
 
 
 # ============================================================================

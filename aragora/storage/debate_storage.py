@@ -82,6 +82,13 @@ class DebateMetadata:
     is_public: bool = False  # If True, artifacts accessible without auth
 
 
+def _parse_created_at(value: str | None) -> datetime:
+    try:
+        return datetime.fromisoformat(value) if value else datetime.now()
+    except (ValueError, TypeError):
+        return datetime.now()
+
+
 class DebateStorage(SQLiteStore):
     """
     Debate persistence with shareable permalinks.
@@ -530,6 +537,50 @@ class DebateStorage(SQLiteStore):
             else:
                 cursor = conn.execute("SELECT COUNT(*) FROM debates")
             row = cursor.fetchone()
+        return row[0] if row else 0
+
+    def list_readable(
+        self, limit: int = 20, offset: int = 0, org_id: str | None = None
+    ) -> list[DebateMetadata]:
+        """List, newest first, the debates a caller acting for ``org_id`` may read.
+
+        Readable means public, recorded without an org, or owned by ``org_id``;
+        ``org_id = NULL`` never matches, so a None org sees only the first two.
+        """
+        with self.connection() as conn:
+            cursor = conn.execute(
+                """
+                SELECT slug, id, task, agents, consensus_reached,
+                       confidence, created_at, view_count, is_public
+                FROM debates
+                WHERE is_public = 1 OR org_id IS NULL OR org_id = '' OR org_id = ?
+                ORDER BY created_at DESC LIMIT ? OFFSET ?
+                """,
+                (org_id, limit, offset),
+            )
+            return [
+                DebateMetadata(
+                    slug=row[0],
+                    debate_id=row[1],
+                    task=row[2],
+                    agents=json.loads(row[3]) if row[3] else [],
+                    consensus_reached=bool(row[4]),
+                    confidence=row[5] or 0,
+                    created_at=_parse_created_at(row[6]),
+                    view_count=row[7] or 0,
+                    is_public=bool(row[8]),
+                )
+                for row in cursor.fetchall()
+            ]
+
+    def count_readable(self, org_id: str | None = None) -> int:
+        """Count the debates :meth:`list_readable` would return across all pages."""
+        with self.connection() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM debates"
+                " WHERE is_public = 1 OR org_id IS NULL OR org_id = '' OR org_id = ?",
+                (org_id,),
+            ).fetchone()
         return row[0] if row else 0
 
     def search(

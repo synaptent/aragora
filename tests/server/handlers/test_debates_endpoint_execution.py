@@ -86,6 +86,8 @@ def mock_storage():
     storage.get_debate = MagicMock(return_value=sample_debate)
     storage.list_recent = MagicMock(return_value=[sample_debate])
     storage.is_public = MagicMock(return_value=True)
+    # The stored row (id, org_id, is_public), public like is_public says.
+    storage.get_read_access = MagicMock(side_effect=lambda ref: (ref, "test-org-001", True))
 
     return storage
 

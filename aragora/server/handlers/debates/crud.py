@@ -24,6 +24,7 @@ from aragora.exceptions import (
 from aragora.rbac.decorators import require_permission
 from aragora.server.debate_utils import _active_debates
 from aragora.server.middleware.abac import Action, ResourceType, check_resource_access
+from aragora.server.postgres_storage import DEBATE_ACCESS_LOOKUP_ERRORS
 from aragora.server.validation.schema import (
     DEBATE_UPDATE_SCHEMA,
     validate_against_schema,
@@ -63,24 +64,32 @@ def _epoch_to_iso(epoch: float) -> str:
     return datetime.fromtimestamp(epoch, tz=timezone.utc).isoformat()
 
 
-def _stored_debate_org(storage: Any, ref: str) -> str | None:
-    """The org owning a private stored debate; None when public, unowned or unknown."""
-    read_access = getattr(storage, "get_read_access", None)
-    access = read_access(ref) if callable(read_access) else None
-    if not isinstance(access, tuple) or len(access) != 3 or access[2]:
+def _stored_debate_access(storage: Any, ref: str) -> tuple[str | None, bool] | None:
+    """``(org_id, is_public)`` from the debate's stored row; None when it cannot be read."""
+    lookup = getattr(storage, "get_read_access", None)
+    try:
+        access = lookup(ref) if callable(lookup) else None
+    except DEBATE_ACCESS_LOOKUP_ERRORS as e:
+        logger.warning("Debate access lookup failed for %s: %s", ref, type(e).__name__)
         return None
-    org_id = access[1]
-    return org_id if isinstance(org_id, str) and org_id else None
+    if not isinstance(access, tuple) or len(access) != 3 or access[0] != ref:
+        return None
+    org_id = access[1] if isinstance(access[1], str) and access[1] else None
+    return org_id, access[2] is True
+
+
+def _running_debate_state(debate_id: str) -> Any:
+    try:
+        from aragora.server.state import get_state_manager
+
+        return get_state_manager().get_debate(debate_id)
+    except (ImportError, RuntimeError):
+        return None
 
 
 def _running_debate_org(debate_id: str) -> str | None:
     """The org the create path recorded on a running debate, if any."""
-    try:
-        from aragora.server.state import get_state_manager
-
-        metadata = getattr(get_state_manager().get_debate(debate_id), "metadata", None)
-    except (ImportError, RuntimeError):
-        return None
+    metadata = getattr(_running_debate_state(debate_id), "metadata", None)
     org_id = metadata.get("org_id") if isinstance(metadata, dict) else None
     return org_id if isinstance(org_id, str) and org_id else None
 
@@ -93,6 +102,42 @@ def _org_read_denial(handler: Any, org_id: str | None) -> HandlerResult | None:
     if denial is None and not record_visible(org_id, scope):
         return record_not_found("Debate")
     return denial
+
+
+def _debate_read_denial(
+    handler: Any, storage: Any, ref: str, *, running: bool = False
+) -> HandlerResult | None:
+    """None when the caller may read debate ``ref``; otherwise the 401/403/404 to return.
+
+    The stored row decides: public debates and debates recorded without an org
+    stay open, an org's private debate is open only to that org. With
+    ``running``, a debate without a readable stored row that is still running is
+    checked against the org its create path recorded. Anything else is a 404.
+    """
+    access = _stored_debate_access(storage, ref)
+    if access is not None:
+        return None if access[1] else _org_read_denial(handler, access[0])
+    if running and _running_debate_state(ref) is not None:
+        return _org_read_denial(handler, _running_debate_org(ref))
+    return record_not_found("Debate")
+
+
+def _stored_debate_owner(
+    handler: Any, storage: Any, debate_id: str
+) -> tuple[str, None] | tuple[None, HandlerResult]:
+    """The caller's org when the stored row names it as the debate's owner.
+
+    Otherwise the 401/403 for a caller without an org scope, or the not-found
+    404 for another org's debate, a debate recorded without an org, a missing
+    debate and an unreadable row alike.
+    """
+    scope, denial = require_org_scope(handler)
+    if scope is None:
+        return None, denial or record_not_found("Debate")
+    access = _stored_debate_access(storage, debate_id)
+    if access is None or not record_visible(access[0], scope):
+        return None, record_not_found("Debate")
+    return scope.org_id, None
 
 
 class _DebatesHandlerProtocol(Protocol):
@@ -326,7 +371,7 @@ class CrudOperationsMixin:
         storage = self.get_storage()
         debate = storage.get_debate(slug)
         if debate:
-            if denied := _org_read_denial(handler, _stored_debate_org(storage, slug)):
+            if denied := _debate_read_denial(handler, storage, slug):
                 return denied
 
             # Public playground debates are accessible without authentication
@@ -624,6 +669,9 @@ class CrudOperationsMixin:
 
         # Get storage and find debate
         storage = self.get_storage()
+        owner_org, denied = _stored_debate_owner(handler, storage, debate_id)
+        if denied:
+            return denied
         try:
             debate = storage.get_debate(debate_id)
             if not debate:
@@ -633,7 +681,7 @@ class CrudOperationsMixin:
             user = self.get_current_user(handler)
             if user:
                 debate_owner_id = debate.get("user_id") or debate.get("owner_id")
-                debate_workspace_id = debate.get("workspace_id") or debate.get("org_id")
+                debate_workspace_id = owner_org
 
                 access_decision = check_resource_access(
                     user_id=user.user_id,
@@ -872,6 +920,9 @@ class CrudOperationsMixin:
             JSON confirmation with deleted debate ID.
         """
         storage = self.get_storage()
+        owner_org, denied = _stored_debate_owner(handler, storage, debate_id)
+        if denied:
+            return denied
         try:
             debate = storage.get_debate(debate_id)
             if not debate:
@@ -881,7 +932,7 @@ class CrudOperationsMixin:
             user = self.get_current_user(handler)
             if user:
                 debate_owner_id = debate.get("user_id") or debate.get("owner_id")
-                debate_workspace_id = debate.get("workspace_id") or debate.get("org_id")
+                debate_workspace_id = owner_org
 
                 access_decision = check_resource_access(
                     user_id=user.user_id,

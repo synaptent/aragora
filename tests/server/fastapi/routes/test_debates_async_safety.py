@@ -5,6 +5,7 @@ import os
 import time
 
 import pytest
+from starlette.requests import Request
 
 os.environ.setdefault("ARAGORA_USE_SECRETS_MANAGER", "0")
 
@@ -13,11 +14,11 @@ from aragora.server.fastapi.routes.debates import CreateDebateRequest, create_de
 
 
 class _SlowSyncStorage:
-    def list_debates(self, **kwargs):
+    def list_readable(self, **kwargs):
         time.sleep(0.2)
         return []
 
-    def count_debates(self, status: str | None = None) -> int:
+    def count_readable(self, org_id: str | None = None) -> int:
         time.sleep(0.2)
         return 0
 
@@ -58,8 +59,9 @@ async def test_list_debates_does_not_block_event_loop_for_sync_storage() -> None
     task = asyncio.create_task(ticker())
     await asyncio.sleep(0)
 
+    anonymous = Request({"type": "http", "method": "GET", "path": "/", "headers": []})
     response = await list_debates(
-        request=None,
+        request=anonymous,
         limit=10,
         offset=0,
         status=None,

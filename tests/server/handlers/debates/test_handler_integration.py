@@ -105,6 +105,8 @@ class TestGetDebateBySlug:
         from aragora.server.handlers.debates.handler import DebatesHandler
 
         mock_storage = MagicMock()
+        # The stored row (id, org_id, is_public): a private test-org-001 debate.
+        mock_storage.get_read_access.side_effect = lambda ref: (ref, "test-org-001", False)
         return DebatesHandler(server_context={"storage": mock_storage})
 
     def test_get_debate_found(self, handler_with_storage):
@@ -773,6 +775,7 @@ class TestHandlePatch:
             }
         )
         mock_storage.save_debate = MagicMock()
+        mock_storage.get_read_access.side_effect = lambda ref: (ref, "test-org-001", False)
         return DebatesHandler(server_context={"storage": mock_storage})
 
     def test_handle_patch_updates_debate(self, handler_with_storage):

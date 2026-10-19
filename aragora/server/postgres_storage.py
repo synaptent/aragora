@@ -10,14 +10,39 @@ from __future__ import annotations
 import json
 import logging
 import re
+import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
-from aragora.storage.postgres_store import PostgresStore
+from aragora.exceptions import StorageError
+from aragora.resilience import CircuitOpenError
+from aragora.storage.postgres_store import PoolExhaustedError, PostgresStore
 from aragora.utils.async_utils import run_async
 
 logger = logging.getLogger(__name__)
+
+# What a debate store's ``get_read_access`` may raise: SQLite, the Postgres
+# driver, pool and circuit breaker, or a malformed row. Callers that gate access
+# on the stored owner deny on any of them.
+DEBATE_ACCESS_LOOKUP_ERRORS: tuple[type[Exception], ...] = (
+    sqlite3.Error,
+    StorageError,
+    OSError,
+    RuntimeError,
+    ValueError,
+    TypeError,
+    KeyError,
+    PoolExhaustedError,
+    CircuitOpenError,
+)
+try:
+    from asyncpg.exceptions import InterfaceError as _PgInterfaceError
+    from asyncpg.exceptions import PostgresError as _PgError
+except ImportError:
+    pass
+else:
+    DEBATE_ACCESS_LOOKUP_ERRORS += (_PgInterfaceError, _PgError)
 
 if TYPE_CHECKING:
     from aragora.export.artifact import DebateArtifact
@@ -211,6 +236,20 @@ class PostgresDebateStorage(PostgresStore):
     def set_public(self, debate_id: str, is_public: bool, org_id: str | None = None) -> bool:
         """Set debate public status (sync wrapper)."""
         return run_async(self.set_public_async(debate_id, is_public, org_id))
+
+    def get_read_access(self, debate_id: str) -> tuple[str, str | None, bool] | None:
+        """Return ``(id, org_id, is_public)`` for a stored debate id (sync wrapper)."""
+        return run_async(self.get_read_access_async(debate_id))
+
+    def list_readable(
+        self, limit: int = 20, offset: int = 0, org_id: str | None = None
+    ) -> list[DebateMetadata]:
+        """List the debates a caller acting for ``org_id`` may read (sync wrapper)."""
+        return run_async(self.list_readable_async(limit, offset, org_id))
+
+    def count_readable(self, org_id: str | None = None) -> int:
+        """Count the debates a caller acting for ``org_id`` may read (sync wrapper)."""
+        return run_async(self.count_readable_async(org_id))
 
     # Alias methods for interface compatibility
     def get(self, debate_id: str) -> dict | None:
@@ -559,6 +598,44 @@ class PostgresDebateStorage(PostgresStore):
         async with self.connection() as conn:
             row = await conn.fetchrow("SELECT is_public FROM debates WHERE id = $1", debate_id)
             return bool(row and row["is_public"])
+
+    async def get_read_access_async(self, debate_id: str) -> tuple[str, str | None, bool] | None:
+        """Return ``(id, org_id, is_public)`` for a stored debate id, else None."""
+        async with self.connection() as conn:
+            row = await conn.fetchrow(
+                "SELECT id, org_id, is_public FROM debates WHERE id = $1", debate_id
+            )
+        return (row["id"], row["org_id"] or None, bool(row["is_public"])) if row else None
+
+    async def list_readable_async(
+        self, limit: int = 20, offset: int = 0, org_id: str | None = None
+    ) -> list[DebateMetadata]:
+        """List, newest first, public debates, debates without an org and ``org_id``'s."""
+        async with self.connection() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT slug, id, task, agents, consensus_reached,
+                       confidence, created_at, view_count, is_public
+                FROM debates
+                WHERE is_public OR org_id IS NULL OR org_id = '' OR org_id = $1
+                ORDER BY created_at DESC
+                LIMIT $2 OFFSET $3
+                """,
+                org_id,
+                limit,
+                offset,
+            )
+            return [self._row_to_metadata(row) for row in rows]
+
+    async def count_readable_async(self, org_id: str | None = None) -> int:
+        """Count the debates :meth:`list_readable_async` would return across all pages."""
+        async with self.connection() as conn:
+            row = await conn.fetchrow(
+                "SELECT COUNT(*) FROM debates"
+                " WHERE is_public OR org_id IS NULL OR org_id = '' OR org_id = $1",
+                org_id,
+            )
+            return row[0] if row else 0
 
     async def set_public_async(
         self, debate_id: str, is_public: bool, org_id: str | None = None
