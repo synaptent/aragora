@@ -32,6 +32,7 @@ from aragora.debate.phases.vote_collector import (
     _VoteTaskOwner,
     VoteCollector,
     VoteCollectorConfig,
+    VoterSlot,
     create_vote_collector,
 )
 
@@ -884,6 +885,178 @@ class TestRLMEarlyTermination:
             release_cleanup.set()
             await asyncio.sleep(0)
             loop.set_exception_handler(old_handler)
+
+    @pytest.mark.asyncio
+    async def test_majority_early_stop_forwards_detached_returned_control_flow(self):
+        """A detached slot task that returns control flow is reported, not dropped."""
+
+        class VoteAbort(BaseException):
+            pass
+
+        release_cleanup = asyncio.Event()
+        loop_contexts: list[dict[str, Any]] = []
+
+        async def mock_vote(agent, proposals, task):
+            if agent.name != "agent3":
+                return make_vote(agent=agent.name, choice="winner")
+            try:
+                await asyncio.sleep(10)
+            except asyncio.CancelledError:
+                await release_cleanup.wait()
+            return VoteAbort("late control flow returned as a result")
+
+        collector = VoteCollector(VoteCollectorConfig(vote_with_agent=mock_vote))
+        agents = [MockAgent(name=f"agent{i}") for i in range(4)]
+        ctx = make_context(agents=agents)
+        roster = tuple(
+            (VoterSlot(index=index, name=agent.name), agent) for index, agent in enumerate(agents)
+        )
+
+        def should_stop(ballots):
+            return len(ballots) >= 3, "winner"
+
+        loop = asyncio.get_running_loop()
+        old_handler = loop.get_exception_handler()
+        loop.set_exception_handler(lambda _loop, context: loop_contexts.append(context))
+
+        try:
+            collection = await asyncio.wait_for(
+                collector.collect_majority_votes(ctx, roster, should_stop=should_stop),
+                timeout=0.2,
+            )
+            assert len(collection.ballots) == 3
+            assert [slot.index for slot in collection.skipped_slots] == [3]
+
+            release_cleanup.set()
+            await asyncio.sleep(0.02)
+            assert [type(context.get("exception")) for context in loop_contexts] == [VoteAbort]
+            assert all(
+                context.get("message") != "Task exception was never retrieved"
+                for context in loop_contexts
+            )
+        finally:
+            release_cleanup.set()
+            await asyncio.sleep(0)
+            loop.set_exception_handler(old_handler)
+
+
+class TestMajorityCollectionTimeout:
+    """Majority collection must keep its deadline on every supported Python."""
+
+    @staticmethod
+    def _roster(agents):
+        return tuple(
+            (VoterSlot(index=index, name=agent.name), agent) for index, agent in enumerate(agents)
+        )
+
+    @pytest.mark.asyncio
+    async def test_majority_collection_completes_without_asyncio_timeout(self, monkeypatch):
+        """Python 3.10 has no ``asyncio.timeout``; collection must not depend on it."""
+        monkeypatch.delattr(asyncio, "timeout", raising=False)
+
+        async def mock_vote(agent, proposals, task):
+            await asyncio.sleep(0)
+            return make_vote(agent=agent.name, choice="winner")
+
+        collector = VoteCollector(VoteCollectorConfig(vote_with_agent=mock_vote))
+        agents = [MockAgent(name=f"agent{i}") for i in range(3)]
+        ctx = make_context(agents=agents)
+
+        collection = await asyncio.wait_for(
+            collector.collect_majority_votes(ctx, self._roster(agents), collection_timeout=1.0),
+            timeout=2.0,
+        )
+
+        assert [ballot.slot.index for ballot in collection.ballots] == [0, 1, 2]
+        assert [ballot.vote.choice for ballot in collection.ballots] == ["winner"] * 3
+        assert collection.failed_slots == ()
+        assert collection.skipped_slots == ()
+
+    @pytest.mark.asyncio
+    async def test_majority_collection_timeout_reported_without_asyncio_timeout(
+        self, monkeypatch, caplog
+    ):
+        """On Python 3.10 the deadline still fails, cancels and observes hanging slots."""
+        monkeypatch.delattr(asyncio, "timeout", raising=False)
+        release = asyncio.Event()
+        cancelled: list[str] = []
+        loop_contexts: list[dict[str, Any]] = []
+
+        async def mock_vote(agent, proposals, task):
+            if agent.name != "agent2":
+                return make_vote(agent=agent.name, choice="winner")
+            try:
+                await release.wait()
+            except asyncio.CancelledError:
+                cancelled.append(agent.name)
+                raise
+            return make_vote(agent=agent.name, choice="late")
+
+        collector = VoteCollector(VoteCollectorConfig(vote_with_agent=mock_vote))
+        agents = [MockAgent(name=f"agent{i}") for i in range(3)]
+        ctx = make_context(agents=agents)
+        loop = asyncio.get_running_loop()
+        old_handler = loop.get_exception_handler()
+        loop.set_exception_handler(lambda _loop, context: loop_contexts.append(context))
+
+        try:
+            with caplog.at_level("WARNING", logger="aragora.debate.phases.vote_collector"):
+                collection = await asyncio.wait_for(
+                    collector.collect_majority_votes(
+                        ctx, self._roster(agents), collection_timeout=0.05
+                    ),
+                    timeout=2.0,
+                )
+            await asyncio.sleep(0)
+
+            assert [ballot.slot.index for ballot in collection.ballots] == [0, 1]
+            assert [slot.index for slot in collection.failed_slots] == [2]
+            assert collection.skipped_slots == ()
+            assert cancelled == ["agent2"]
+            assert any(
+                record.getMessage().startswith("vote_collection_timeout collected=2 expected=3")
+                for record in caplog.records
+            )
+            assert loop_contexts == []
+        finally:
+            release.set()
+            await asyncio.sleep(0)
+            loop.set_exception_handler(old_handler)
+
+    @pytest.mark.asyncio
+    async def test_majority_zero_collection_timeout_still_owns_every_slot(self):
+        """An immediately expired deadline still consumes finished work and fails the rest."""
+        release = asyncio.Event()
+        cancelled: list[str] = []
+
+        async def mock_vote(agent, proposals, task):
+            if agent.name == "agent0":
+                return make_vote(agent=agent.name, choice="winner")
+            try:
+                await release.wait()
+            except asyncio.CancelledError:
+                cancelled.append(agent.name)
+                raise
+            return make_vote(agent=agent.name, choice="late")
+
+        collector = VoteCollector(VoteCollectorConfig(vote_with_agent=mock_vote))
+        agents = [MockAgent(name=f"agent{i}") for i in range(3)]
+        ctx = make_context(agents=agents)
+
+        try:
+            collection = await asyncio.wait_for(
+                collector.collect_majority_votes(ctx, self._roster(agents), collection_timeout=0),
+                timeout=2.0,
+            )
+            await asyncio.sleep(0)
+
+            assert [ballot.slot.index for ballot in collection.ballots] == [0]
+            assert [slot.index for slot in collection.failed_slots] == [1, 2]
+            assert collection.skipped_slots == ()
+            assert sorted(cancelled) == ["agent1", "agent2"]
+        finally:
+            release.set()
+            await asyncio.sleep(0)
 
 
 # =============================================================================
