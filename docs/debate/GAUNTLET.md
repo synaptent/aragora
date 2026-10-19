@@ -201,6 +201,17 @@ max_high_findings: 2        # >2 high = CONDITIONAL
 min_robustness_score: 0.7   # <0.7 = CONDITIONAL
 ```
 
+### Waiting for API runs
+
+`client.gauntlet.run_and_wait(...)` polls only `pending`/`running`; `completed` fetches the receipt.
+HTTP `400` / `GAUNTLET_406` alone does not mean pending. Failed/cancelled, missing, malformed,
+or mismatched results stop waiting; operational errors propagate. Terminal diagnostics omit backend details.
+`timeout` bounds monotonic polling after submission, not active transport; no request starts after expiry.
+API/queued runs retain their submitted ID; standalone runs generate one. Legacy receipts may omit status,
+but mismatched IDs are rejected, not migrated. Durable results outrank stale caches/inflight records;
+exhausted jobs fail while analysis retries stay nonterminal. Lookup faults are errors, not missing runs.
+Saved results survive cleanup faults with diagnostics. No delivery retries or resubmission: inspect the run.
+
 ## Decision Receipts
 
 Decision Receipts are audit-ready artifacts documenting the validation:
