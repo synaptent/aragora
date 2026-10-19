@@ -33,9 +33,11 @@ def app():
 def mock_storage():
     """Create a mock debate storage with sample data."""
     storage = MagicMock()
-    storage.list_debates = MagicMock(return_value=[])
-    storage.count_debates = MagicMock(return_value=0)
+    storage.list_readable = MagicMock(return_value=[])
+    storage.count_readable = MagicMock(return_value=0)
     storage.get_debate = MagicMock(return_value=None)
+    # The stored row (id, org_id, is_public): a private org-1 debate.
+    storage.get_read_access = MagicMock(side_effect=lambda ref: (ref, "org-1", False))
     storage.save_debate = MagicMock()
     storage.delete_debate = MagicMock(return_value=True)
     return storage
@@ -137,6 +139,16 @@ def _make_auth_context(*permissions: str):
     )
 
 
+@pytest.fixture
+def org_1_caller(monkeypatch):
+    """Requests come from user-1 of org-1, the org owning the mock debates."""
+
+    async def _auth(request, require_auth=False):
+        return _make_auth_context("debates:read", "debates:write", "debates:delete")
+
+    monkeypatch.setattr("aragora.server.handlers.utils.auth.get_auth_context", _auth)
+
+
 # =============================================================================
 # GET /api/v2/debates
 # =============================================================================
@@ -157,8 +169,8 @@ class TestListDebates:
 
     def test_returns_debates_with_data(self, client, mock_storage, sample_debates_list):
         """List debates returns summaries from storage."""
-        mock_storage.list_debates.return_value = sample_debates_list
-        mock_storage.count_debates.return_value = 3
+        mock_storage.list_readable.return_value = sample_debates_list
+        mock_storage.count_readable.return_value = 3
 
         response = client.get("/api/v2/debates")
         assert response.status_code == 200
@@ -177,27 +189,26 @@ class TestListDebates:
 
     def test_pagination_params(self, client, mock_storage):
         """List debates passes pagination params to storage."""
-        mock_storage.list_debates.return_value = []
-        mock_storage.count_debates.return_value = 0
+        mock_storage.list_readable.return_value = []
+        mock_storage.count_readable.return_value = 0
 
         response = client.get("/api/v2/debates?limit=10&offset=20")
         assert response.status_code == 200
         data = response.json()
         assert data["limit"] == 10
         assert data["offset"] == 20
-        mock_storage.list_debates.assert_called_once_with(limit=10, offset=20, status=None)
+        mock_storage.list_readable.assert_called_once_with(limit=10, offset=20, org_id=None)
 
-    def test_status_filter(self, client, mock_storage, sample_debates_list):
-        """List debates supports status filter."""
-        active_only = [d for d in sample_debates_list if d["status"] == "active"]
-        mock_storage.list_debates.return_value = active_only
-        mock_storage.count_debates.return_value = 1
+    def test_status_is_accepted_but_not_applied(self, client, mock_storage, sample_debates_list):
+        """The stores keep no status column, so ``status`` does not narrow the list."""
+        mock_storage.list_readable.return_value = sample_debates_list
+        mock_storage.count_readable.return_value = 3
 
         response = client.get("/api/v2/debates?status=active")
         assert response.status_code == 200
         data = response.json()
-        assert len(data["debates"]) == 1
-        mock_storage.list_debates.assert_called_once_with(limit=50, offset=0, status="active")
+        assert len(data["debates"]) == 3
+        mock_storage.list_readable.assert_called_once_with(limit=50, offset=0, org_id=None)
 
     def test_limit_validation_min(self, client):
         """Limit must be >= 1."""
@@ -216,7 +227,7 @@ class TestListDebates:
 
     def test_no_consensus_shows_false(self, client, mock_storage):
         """Debate without consensus shows has_consensus=False."""
-        mock_storage.list_debates.return_value = [
+        mock_storage.list_readable.return_value = [
             {
                 "id": "d-1",
                 "task": "No consensus yet",
@@ -226,7 +237,7 @@ class TestListDebates:
                 "consensus": None,
             }
         ]
-        mock_storage.count_debates.return_value = 1
+        mock_storage.count_readable.return_value = 1
 
         response = client.get("/api/v2/debates")
         data = response.json()
@@ -245,6 +256,7 @@ class TestListDebates:
 # =============================================================================
 
 
+@pytest.mark.usefixtures("org_1_caller")
 class TestGetDebate:
     """Tests for GET /api/v2/debates/{debate_id}."""
 
@@ -343,6 +355,7 @@ class TestGetDebate:
 # =============================================================================
 
 
+@pytest.mark.usefixtures("org_1_caller")
 class TestGetDebateMessages:
     """Tests for GET /api/v2/debates/{debate_id}/messages."""
 
@@ -416,6 +429,7 @@ class TestGetDebateMessages:
 # =============================================================================
 
 
+@pytest.mark.usefixtures("org_1_caller")
 class TestGetDebateConvergence:
     """Tests for GET /api/v2/debates/{debate_id}/convergence."""
 
@@ -562,6 +576,37 @@ class TestCreateDebate:
         assert debate_request.metadata["source"] == "browser_extension_context_menu"
         assert debate_request.metadata["source_url"] == "https://example.com"
 
+    def test_create_debate_stamps_caller_org_not_client_metadata(self, client):
+        """The debate owner comes from the auth context, never from the body."""
+        from aragora.server.debate_controller import DebateResponse
+        from aragora.server.fastapi.dependencies.auth import require_authenticated
+
+        client.app.dependency_overrides[require_authenticated] = lambda: _make_auth_context(
+            "debates:create"
+        )
+        mock_controller = MagicMock()
+        mock_controller.start_debate.return_value = DebateResponse(
+            success=True, debate_id="adhoc_owned", status="created"
+        )
+
+        with patch(
+            "aragora.server.fastapi.routes.debates._get_debate_controller",
+            return_value=mock_controller,
+        ):
+            response = client.post(
+                "/api/v2/debates",
+                json={
+                    "question": "Should we shard the database?",
+                    "metadata": {"organization_id": "org-evil", "org_id": "org-evil"},
+                },
+            )
+
+        client.app.dependency_overrides.clear()
+
+        assert response.status_code == 200
+        debate_request = mock_controller.start_debate.call_args.args[0]
+        assert debate_request.org_id == "org-1"
+
     def test_maps_controller_failures_to_http_errors(self, client):
         """Create debate returns controller error details/status for popup display."""
         from aragora.server.debate_controller import DebateResponse
@@ -631,7 +676,7 @@ class TestUpdateDebate:
         )
         assert response.status_code == 401
 
-    def test_returns_404_for_nonexistent(self, client, mock_storage):
+    def test_returns_404_for_nonexistent(self, client, org_1_caller, mock_storage):
         """PATCH returns 404 for nonexistent debate."""
         mock_storage.get_debate.return_value = None
 
@@ -655,7 +700,7 @@ class TestUpdateDebate:
 
         assert response.status_code == 404
 
-    def test_updates_title(self, client, mock_storage, sample_debate_dict):
+    def test_updates_title(self, client, org_1_caller, mock_storage, sample_debate_dict):
         """PATCH updates debate title."""
         mock_storage.get_debate.return_value = sample_debate_dict.copy()
 
@@ -683,7 +728,7 @@ class TestUpdateDebate:
         assert data["debate_id"] == "debate-abc123"
         assert "title" in data["updated_fields"]
 
-    def test_updates_status(self, client, mock_storage, sample_debate_dict):
+    def test_updates_status(self, client, org_1_caller, mock_storage, sample_debate_dict):
         """PATCH updates debate status."""
         mock_storage.get_debate.return_value = sample_debate_dict.copy()
 
@@ -709,7 +754,7 @@ class TestUpdateDebate:
         data = response.json()
         assert "status" in data["updated_fields"]
 
-    def test_rejects_invalid_status(self, client, mock_storage, sample_debate_dict):
+    def test_rejects_invalid_status(self, client, org_1_caller, mock_storage, sample_debate_dict):
         """PATCH rejects invalid status values."""
         mock_storage.get_debate.return_value = sample_debate_dict.copy()
 
@@ -733,7 +778,7 @@ class TestUpdateDebate:
 
         assert response.status_code == 400
 
-    def test_rejects_empty_update(self, client, mock_storage, sample_debate_dict):
+    def test_rejects_empty_update(self, client, org_1_caller, mock_storage, sample_debate_dict):
         """PATCH rejects update with no fields."""
         mock_storage.get_debate.return_value = sample_debate_dict.copy()
 
@@ -757,7 +802,7 @@ class TestUpdateDebate:
 
         assert response.status_code == 400
 
-    def test_updates_tags(self, client, mock_storage, sample_debate_dict):
+    def test_updates_tags(self, client, org_1_caller, mock_storage, sample_debate_dict):
         """PATCH updates debate tags."""
         mock_storage.get_debate.return_value = sample_debate_dict.copy()
 
@@ -783,7 +828,7 @@ class TestUpdateDebate:
         data = response.json()
         assert "tags" in data["updated_fields"]
 
-    def test_updates_metadata(self, client, mock_storage, sample_debate_dict):
+    def test_updates_metadata(self, client, org_1_caller, mock_storage, sample_debate_dict):
         """PATCH updates debate metadata."""
         mock_storage.get_debate.return_value = sample_debate_dict.copy()
 
@@ -809,7 +854,7 @@ class TestUpdateDebate:
         data = response.json()
         assert "metadata" in data["updated_fields"]
 
-    def test_calls_save_debate(self, client, mock_storage, sample_debate_dict):
+    def test_calls_save_debate(self, client, org_1_caller, mock_storage, sample_debate_dict):
         """PATCH calls storage.save_debate after update."""
         mock_storage.get_debate.return_value = sample_debate_dict.copy()
 
@@ -847,7 +892,7 @@ class TestDeleteDebate:
         response = client.delete("/api/v2/debates/debate-abc123")
         assert response.status_code == 401
 
-    def test_deletes_debate(self, client, mock_storage, sample_debate_dict):
+    def test_deletes_debate(self, client, org_1_caller, mock_storage, sample_debate_dict):
         """DELETE removes debate from storage."""
         mock_storage.get_debate.return_value = sample_debate_dict
         mock_storage.delete_debate.return_value = True
@@ -872,7 +917,7 @@ class TestDeleteDebate:
         assert data["deleted"] is True
         assert data["id"] == "debate-abc123"
 
-    def test_returns_404_for_nonexistent(self, client, mock_storage):
+    def test_returns_404_for_nonexistent(self, client, org_1_caller, mock_storage):
         """DELETE returns 404 for nonexistent debate."""
         mock_storage.get_debate.return_value = None
 
@@ -893,7 +938,9 @@ class TestDeleteDebate:
 
         assert response.status_code == 404
 
-    def test_calls_delete_with_cascade(self, client, mock_storage, sample_debate_dict):
+    def test_calls_delete_with_cascade(
+        self, client, org_1_caller, mock_storage, sample_debate_dict
+    ):
         """DELETE calls storage.delete_debate with cascade=True."""
         mock_storage.get_debate.return_value = sample_debate_dict
         mock_storage.delete_debate.return_value = True
@@ -938,9 +985,9 @@ class TestStorageFallback:
         response = c.get("/api/v2/debates")
         assert response.status_code == 503
 
-    def test_fallback_to_debates_dict(self, app):
-        """Routes fall back to storage.debates when list_debates not available."""
-        storage = MagicMock(spec=[])  # No list_debates or count_debates
+    def test_store_without_visibility_queries_lists_nothing(self, app):
+        """A store without list_readable/count_readable cannot filter, so it lists nothing."""
+        storage = MagicMock(spec=[])
         storage.debates = {
             "d-1": {
                 "id": "d-1",
@@ -961,4 +1008,4 @@ class TestStorageFallback:
         response = c.get("/api/v2/debates")
         assert response.status_code == 200
         data = response.json()
-        assert len(data["debates"]) == 1
+        assert (data["debates"], data["total"]) == ([], 0)

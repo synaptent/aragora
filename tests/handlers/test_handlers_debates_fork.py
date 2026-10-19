@@ -142,6 +142,8 @@ def mock_storage():
             ],
         },
     }
+    # Stored owner row: a private debate of the autouse test caller's org.
+    storage.get_read_access.side_effect = lambda ref: (ref, "test-org-001", False)
     return storage
 
 

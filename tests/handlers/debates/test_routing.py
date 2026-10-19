@@ -23,6 +23,10 @@ import pytest
 # Patch target for auth_config (imported lazily inside _check_auth)
 _AUTH_CONFIG_TARGET = "aragora.server.auth.auth_config"
 
+# Suffix routes check the debate's stored org against the caller from
+# extract_user_from_request: requests come from test-user-001 of test-org-001.
+pytestmark = pytest.mark.usefixtures("org_scoped_request_user")
+
 
 # =============================================================================
 # Helpers
@@ -97,6 +101,8 @@ def mock_storage():
     storage = MagicMock()
     storage.get_debate.return_value = None
     storage.is_public.return_value = False
+    # The stored row (id, org_id, is_public): a private test-org-001 debate.
+    storage.get_read_access.side_effect = lambda ref: (ref, "test-org-001", False)
     return storage
 
 

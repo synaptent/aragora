@@ -43,6 +43,12 @@ def handler(handler_context):
     return h
 
 
+@pytest.fixture(autouse=True)
+def _stored_debate_row(mock_storage):
+    """Stored rows (id, org_id, is_public): private debates of the test caller's org."""
+    mock_storage.get_read_access.side_effect = lambda ref: (ref, "test-org-001", False)
+
+
 @pytest.fixture
 def sample_debate():
     """Return a sample debate dict for testing."""

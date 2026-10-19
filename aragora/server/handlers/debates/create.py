@@ -71,6 +71,16 @@ def _normalize_debate_body(body: dict[str, Any]) -> dict[str, Any]:
     return normalized
 
 
+def _caller_org_id(user: Any) -> str | None:
+    """Org of an authenticated caller, or None for anonymous / org-less callers."""
+    if user is None or not getattr(user, "is_authenticated", False):
+        return None
+    org_id = getattr(user, "org_id", None)
+    if isinstance(org_id, str) and org_id.strip():
+        return org_id
+    return None
+
+
 def _get_validate_against_schema():
     handler_module = sys.modules.get("aragora.server.handlers.debates.handler")
     if handler_module is not None:
@@ -304,6 +314,8 @@ class CreateOperationsMixin:
         except ValueError as e:
             logger.warning("Handler error: %s", e)
             return error_response("Invalid request", 400)
+
+        request.org_id = _caller_org_id(self.get_current_user(handler))
 
         # Get debate controller and start debate
         try:

@@ -22,6 +22,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+# Reads, updates and deletes check the debate's stored org against the caller
+# from extract_user_from_request: requests come from test-user-001 of test-org-001.
+pytestmark = pytest.mark.usefixtures("org_scoped_request_user")
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -63,6 +67,8 @@ def mock_storage():
     storage.search.return_value = ([], 0)
     storage.is_public.return_value = False
     storage.delete_debate.return_value = True
+    # The stored row (id, org_id, is_public): a private test-org-001 debate.
+    storage.get_read_access.side_effect = lambda ref: (ref, "test-org-001", False)
     return storage
 
 
@@ -549,14 +555,14 @@ class TestHandleSuffixRoutes:
             body = _body(result)
             assert body["debate_id"] == "d1"
 
-    def test_meta_critique_no_nomic_dir(self, mock_http_handler):
-        handler = _make_handler()
+    def test_meta_critique_no_nomic_dir(self, mock_storage, mock_http_handler):
+        handler = _make_handler(storage=mock_storage)
         result = handler.handle("/api/debates/d1/meta-critique", {}, mock_http_handler)
         # No nomic_dir => 503
         assert _status(result) == 503
 
-    def test_graph_stats_no_nomic_dir(self, mock_http_handler):
-        handler = _make_handler()
+    def test_graph_stats_no_nomic_dir(self, mock_storage, mock_http_handler):
+        handler = _make_handler(storage=mock_storage)
         result = handler.handle("/api/debates/d1/graph/stats", {}, mock_http_handler)
         # Without nomic dir, returns 503
         assert _status(result) == 503
@@ -585,13 +591,13 @@ class TestHandleSuffixRoutes:
         result = handler.handle("/api/debates/d1/forks", {}, mock_http_handler)
         assert result is not None
 
-    def test_rhetorical_route_no_nomic_dir(self, mock_http_handler):
-        handler = _make_handler()
+    def test_rhetorical_route_no_nomic_dir(self, mock_storage, mock_http_handler):
+        handler = _make_handler(storage=mock_storage)
         result = handler.handle("/api/debates/d1/rhetorical", {}, mock_http_handler)
         assert _status(result) == 503
 
-    def test_trickster_route_no_nomic_dir(self, mock_http_handler):
-        handler = _make_handler()
+    def test_trickster_route_no_nomic_dir(self, mock_storage, mock_http_handler):
+        handler = _make_handler(storage=mock_storage)
         result = handler.handle("/api/debates/d1/trickster", {}, mock_http_handler)
         assert _status(result) == 503
 

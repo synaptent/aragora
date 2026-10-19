@@ -21,6 +21,7 @@ from ..base import (
     error_response,
     get_int_param,
 )
+from .crud import _debate_read_denial
 
 if TYPE_CHECKING:
     pass
@@ -327,6 +328,10 @@ class RoutingMixin:
                 access_error = self._check_artifact_access(debate_id, suffix, handler)
                 if access_error:
                     return access_error
+                if denied := _debate_read_denial(
+                    handler, self.get_storage(), debate_id, running=True
+                ):
+                    return denied
 
             # Get handler method
             method = getattr(self, method_name, None)

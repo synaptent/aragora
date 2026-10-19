@@ -472,6 +472,7 @@ class TestDebatesHandlerDispatchSuffixRoute:
 
         mock_storage = MagicMock()
         mock_storage.is_public = MagicMock(return_value=True)
+        mock_storage.get_read_access = MagicMock(side_effect=lambda ref: (ref, "org-1", True))
         return DebatesHandler(server_context={"storage": mock_storage})
 
     def test_dispatch_returns_none_for_unknown_suffix(self, handler):

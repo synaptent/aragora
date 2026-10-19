@@ -91,8 +91,15 @@ def _get_playground_debate_result(debate_id: str) -> dict[str, Any] | None:
         return None
 
 
-def _get_primary_storage_debate_result(debate_id: str) -> dict[str, Any] | None:
-    """Retrieve a debate from the primary debates storage when it is publicly shareable."""
+def _get_primary_storage_debate_result(
+    debate_id: str, storage: Any | None = None
+) -> dict[str, Any] | None:
+    """Retrieve a debate from the primary debates storage when it is publicly shareable.
+
+    ``storage`` should be the server's DebateStorage (handler ctx). The
+    ``get_debates_db()`` fallback opens ``aragora_debates.db``, which is not the
+    file the server writes debates to.
+    """
     try:
         from aragora.server.handlers.debates.share import is_publicly_shared
         from aragora.server.storage import get_debates_db
@@ -100,7 +107,8 @@ def _get_primary_storage_debate_result(debate_id: str) -> dict[str, Any] | None:
         logger.debug("Primary debate storage unavailable: %s", exc)
         return None
 
-    storage = get_debates_db()
+    if storage is None:
+        storage = get_debates_db()
     if storage is None:
         return None
 
@@ -133,7 +141,7 @@ def _get_primary_storage_debate_result(debate_id: str) -> dict[str, Any] | None:
     return normalized
 
 
-def _get_debate_result(debate_id: str) -> dict[str, Any] | None:
+def _get_debate_result(debate_id: str, storage: Any | None = None) -> dict[str, Any] | None:
     """Retrieve a debate from the debate store.
 
     Returns the full result dict, or None if not found/expired.
@@ -141,7 +149,7 @@ def _get_debate_result(debate_id: str) -> dict[str, Any] | None:
     result = _get_playground_debate_result(debate_id)
     if result is not None:
         return result
-    return _get_primary_storage_debate_result(debate_id)
+    return _get_primary_storage_debate_result(debate_id, storage)
 
 
 def _is_shareable(result: dict[str, Any]) -> bool:
@@ -331,7 +339,7 @@ class PublicDebateViewerHandler(BaseHandler):
 
     def _handle_public_debate(self, debate_id: str) -> HandlerResult:
         """Return the debate result JSON for a publicly shared debate."""
-        result = _get_debate_result(debate_id)
+        result = _get_debate_result(debate_id, self.ctx.get("storage"))
         if result is None:
             return error_response("Debate not found", 404)
 
@@ -342,7 +350,7 @@ class PublicDebateViewerHandler(BaseHandler):
 
     def _handle_og(self, debate_id: str) -> HandlerResult:
         """Return HTML with Open Graph meta tags for social previews."""
-        result = _get_debate_result(debate_id)
+        result = _get_debate_result(debate_id, self.ctx.get("storage"))
         if result is None:
             return error_response("Debate not found", 404)
 

@@ -186,6 +186,8 @@ class TestGetDebateBySlug:
     def setup_method(self) -> None:
         """Set up test fixtures."""
         self.mock_storage = MagicMock()
+        # The stored row (id, org_id, is_public): a private test-org-001 debate.
+        self.mock_storage.get_read_access.side_effect = lambda ref: (ref, "test-org-001", False)
         self.handler = DebatesHandler(server_context={"storage": self.mock_storage})
 
     def test_returns_found_debate(self) -> None:
@@ -344,6 +346,8 @@ class TestHandle:
     def setup_method(self) -> None:
         """Set up test fixtures."""
         self.mock_storage = MagicMock()
+        # The stored row (id, org_id, is_public): a private test-org-001 debate.
+        self.mock_storage.get_read_access.side_effect = lambda ref: (ref, "test-org-001", False)
         self.handler = DebatesHandler(server_context={"storage": self.mock_storage})
         self.mock_http_handler = _mock_handler_with_auth()
 

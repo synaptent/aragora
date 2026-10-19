@@ -41,9 +41,15 @@ from pydantic import BaseModel, Field, field_validator
 
 from aragora.agents.spec import AgentSpec
 from aragora.rbac.models import AuthorizationContext
+from aragora.server.postgres_storage import DEBATE_ACCESS_LOOKUP_ERRORS
+from aragora.tenancy.record_scope import (
+    record_not_found_error,
+    record_visible,
+    require_org_scope_fastapi,
+)
 
 from ..dependencies.auth import require_permission
-from ..middleware.error_handling import NotFoundError
+from ..middleware.error_handling import APIError, NotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -273,6 +279,37 @@ async def _call_sync_aware(func: Any, *args: Any, **kwargs: Any) -> Any:
     return result
 
 
+async def _authorize_debate(
+    request: Request,
+    storage: Any,
+    debate_id: str,
+    *,
+    public: bool = True,
+    unowned: bool = True,
+) -> None:
+    """Raise unless the debate's stored row lets the caller at it.
+
+    Ownership comes only from the stored ``(id, org_id, is_public)`` row. A
+    private debate with an org is open only to that org (anonymous 401, a
+    caller without an org 403). ``public`` and ``unowned`` open public debates
+    and debates recorded without an org to anyone. Another org's debate, a
+    missing row and a failed or unavailable lookup all get the missing-debate 404.
+    """
+    lookup = getattr(storage, "get_read_access", None)
+    try:
+        access = await _call_sync_aware(lookup, debate_id) if callable(lookup) else None
+    except DEBATE_ACCESS_LOOKUP_ERRORS as e:
+        logger.warning("Debate access lookup failed for %s: %s", debate_id, type(e).__name__)
+        access = None
+    if not isinstance(access, tuple) or len(access) != 3 or access[0] != debate_id:
+        raise record_not_found_error("Debate")
+    org_id = access[1] if isinstance(access[1], str) and access[1] else None
+    if (public and access[2] is True) or (unowned and org_id is None):
+        return
+    if not record_visible(org_id, await require_org_scope_fastapi(request)):
+        raise record_not_found_error("Debate")
+
+
 def get_nomic_dir() -> Path | None:
     """Get the nomic directory from environment."""
     nomic_dir_str = os.environ.get("ARAGORA_NOMIC_DIR", ".")
@@ -351,7 +388,7 @@ def _extract_rounds(record: Any) -> list[dict[str, Any]]:
     if isinstance(rounds, list):
         normalized_rounds: list[dict[str, Any]] = []
         for index, round_data in enumerate(rounds, start=1):
-            round_dict = (
+            round_dict: dict[str, Any] = (
                 dict(round_data) if isinstance(round_data, dict) else _coerce_dict(round_data)
             )
             if not round_dict:
@@ -535,30 +572,28 @@ async def list_debates(
     storage=Depends(get_storage),
 ) -> DebateListResponse:
     """
-    List all debates with pagination.
+    List the debates the caller may read, with pagination.
 
-    Returns a paginated list of debate summaries.
+    Returns public debates, debates recorded without an org and, for a caller
+    acting for an org, that org's debates. ``status`` is accepted but not
+    applied: the debate stores keep no status column.
     """
     try:
-        # Get debates from storage
-        if hasattr(storage, "list_debates"):
+        scope = await require_org_scope_fastapi(request)
+    except APIError:
+        scope = None
+    org_id = scope.org_id if scope else None
+    try:
+        # A store that cannot filter by visibility lists nothing.
+        debates_raw: list[Any] = []
+        total = 0
+        if callable(getattr(storage, "list_readable", None)) and callable(
+            getattr(storage, "count_readable", None)
+        ):
             debates_raw = await _call_storage_method(
-                storage,
-                "list_debates",
-                limit=limit,
-                offset=offset,
-                status=status,
+                storage, "list_readable", limit=limit, offset=offset, org_id=org_id
             )
-        else:
-            # Fallback for simpler storage implementations
-            all_debates = list(storage.debates.values()) if hasattr(storage, "debates") else []
-            debates_raw = all_debates[offset : offset + limit]
-
-        # Get total count
-        if hasattr(storage, "count_debates"):
-            total = await _call_storage_method(storage, "count_debates", status=status)
-        else:
-            total = len(storage.debates) if hasattr(storage, "debates") else 0
+            total = await _call_storage_method(storage, "count_readable", org_id=org_id)
 
         # Convert to summaries
         debates = []
@@ -592,6 +627,7 @@ async def list_debates(
 @router.get("/debates/{debate_id}", response_model=DebateDetail)
 async def get_debate(
     debate_id: str,
+    request: Request,
     storage=Depends(get_storage),
 ) -> DebateDetail:
     """
@@ -599,6 +635,7 @@ async def get_debate(
 
     Returns full debate details including rounds and consensus.
     """
+    await _authorize_debate(request, storage, debate_id)
     try:
         # Get debate from storage
         if hasattr(storage, "get_debate"):
@@ -638,6 +675,7 @@ async def get_debate(
 @router.get("/debates/{debate_id}/messages", response_model=MessageResponse)
 async def get_debate_messages(
     debate_id: str,
+    request: Request,
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     storage=Depends(get_storage),
@@ -647,6 +685,7 @@ async def get_debate_messages(
 
     Returns paginated list of debate messages/rounds.
     """
+    await _authorize_debate(request, storage, debate_id)
     try:
         # Get debate
         if hasattr(storage, "get_debate"):
@@ -701,6 +740,7 @@ async def get_debate_messages(
 @router.get("/debates/{debate_id}/convergence", response_model=ConvergenceResponse)
 async def get_debate_convergence(
     debate_id: str,
+    request: Request,
     storage=Depends(get_storage),
 ) -> ConvergenceResponse:
     """
@@ -708,6 +748,7 @@ async def get_debate_convergence(
 
     Returns whether the debate has converged and related metrics.
     """
+    await _authorize_debate(request, storage, debate_id)
     try:
         # Get debate
         if hasattr(storage, "get_debate"):
@@ -769,6 +810,7 @@ _VALID_STATUSES = {
 async def update_debate(
     debate_id: str,
     body: UpdateDebateRequest,
+    request: Request,
     auth: AuthorizationContext = Depends(require_permission("debates:write")),
     storage=Depends(get_storage),
 ) -> UpdateDebateResponse:
@@ -776,8 +818,9 @@ async def update_debate(
     Update debate metadata.
 
     Allows updating title, tags, status, and custom metadata.
-    Requires `debates:write` permission.
+    Requires `debates:write` permission and the caller's org must own the debate.
     """
+    await _authorize_debate(request, storage, debate_id, public=False, unowned=False)
     try:
         # Get debate from storage
         if hasattr(storage, "get_debate"):
@@ -864,6 +907,7 @@ async def update_debate(
 @router.delete("/debates/{debate_id}", response_model=DeleteDebateResponse)
 async def delete_debate(
     debate_id: str,
+    request: Request,
     auth: AuthorizationContext = Depends(require_permission("debates:delete")),
     storage=Depends(get_storage),
 ) -> DeleteDebateResponse:
@@ -872,8 +916,9 @@ async def delete_debate(
 
     Permanently deletes a debate and cascades to associated data.
     For soft-delete, use PATCH with status='archived' instead.
-    Requires `debates:delete` permission.
+    Requires `debates:delete` permission and the caller's org must own the debate.
     """
+    await _authorize_debate(request, storage, debate_id, public=False, unowned=False)
     try:
         # Check debate exists
         if hasattr(storage, "get_debate"):
@@ -963,6 +1008,11 @@ async def create_debate(
             logger.warning("Invalid debate request: %s", e)
             raise HTTPException(status_code=400, detail="Invalid debate request")
 
+        caller_org = getattr(auth, "org_id", None)
+        debate_request.org_id = (
+            caller_org if isinstance(caller_org, str) and caller_org.strip() else None
+        )
+
         try:
             controller = _get_debate_controller(request, storage)
             response = await _call_sync_aware(controller.start_debate, debate_request)
@@ -1010,6 +1060,7 @@ _VALID_EXPORT_FORMATS = {"json", "csv", "html", "txt", "md"}
 async def export_debate(
     debate_id: str,
     export_format: str,
+    request: Request,
     table: str = Query("summary", description="Table type for CSV export"),
     auth: AuthorizationContext = Depends(require_permission("export:read")),
     storage=Depends(get_storage),
@@ -1018,13 +1069,15 @@ async def export_debate(
     Export a debate in the specified format.
 
     Supports JSON, CSV, HTML, TXT, and Markdown formats.
-    Requires `export:read` permission.
+    Requires `export:read` permission. Public debates export for anyone with
+    it; other debates only for the org that owns them.
     """
     if export_format not in _VALID_EXPORT_FORMATS:
         raise HTTPException(
             status_code=400,
             detail=f"Invalid format: {export_format}. Valid: {', '.join(sorted(_VALID_EXPORT_FORMATS))}",
         )
+    await _authorize_debate(request, storage, debate_id, unowned=False)
 
     try:
         # Get debate from storage
@@ -1102,10 +1155,12 @@ async def export_debate(
 @router.get("/debates/{debate_id}/argument-graph", response_model=ArgumentGraphResponse)
 async def get_argument_graph(
     debate_id: str,
+    request: Request,
     output_format: str = Query(
         "json", alias="format", description="Output format: json or mermaid"
     ),
     auth: AuthorizationContext = Depends(require_permission("analysis:read")),
+    storage=Depends(get_storage),
 ) -> ArgumentGraphResponse:
     """
     Get the argument graph for a debate.
@@ -1114,6 +1169,7 @@ async def get_argument_graph(
     Supports JSON (default) and Mermaid diagram output.
     Requires `analysis:read` permission.
     """
+    await _authorize_debate(request, storage, debate_id)
     try:
         from aragora.debate.traces import DebateTrace
         from aragora.visualization.mapper import ArgumentCartographer
@@ -1180,7 +1236,9 @@ async def get_argument_graph(
 @router.get("/debates/{debate_id}/stats", response_model=GraphStatsResponse)
 async def get_debate_stats(
     debate_id: str,
+    request: Request,
     auth: AuthorizationContext = Depends(require_permission("analysis:read")),
+    storage=Depends(get_storage),
 ) -> GraphStatsResponse:
     """
     Get argument graph statistics for a debate.
@@ -1188,6 +1246,7 @@ async def get_debate_stats(
     Returns node counts, edge counts, depth, branching factor, and complexity.
     Requires `analysis:read` permission.
     """
+    await _authorize_debate(request, storage, debate_id)
     try:
         from aragora.debate.traces import DebateTrace
         from aragora.visualization.mapper import ArgumentCartographer

@@ -82,6 +82,13 @@ class DebateMetadata:
     is_public: bool = False  # If True, artifacts accessible without auth
 
 
+def _parse_created_at(value: str | None) -> datetime:
+    try:
+        return datetime.fromisoformat(value) if value else datetime.now()
+    except (ValueError, TypeError):
+        return datetime.now()
+
+
 class DebateStorage(SQLiteStore):
     """
     Debate persistence with shareable permalinks.
@@ -260,9 +267,9 @@ class DebateStorage(SQLiteStore):
                 """
                 INSERT INTO debates (
                     id, slug, task, agents, artifact_json,
-                    consensus_reached, confidence
+                    consensus_reached, confidence, is_public
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 0)
             """,
                 (
                     artifact.artifact_id,
@@ -345,6 +352,8 @@ class DebateStorage(SQLiteStore):
         Save debate data directly (without DebateArtifact).
 
         Useful for saving streaming debates before full artifact is built.
+        New debates are private (``is_public = 0``); only ``set_public``
+        (the share flow) makes a debate public.
 
         Args:
             debate_data: Debate data dict
@@ -361,9 +370,9 @@ class DebateStorage(SQLiteStore):
                 """
                 INSERT INTO debates (
                     id, slug, task, agents, artifact_json,
-                    consensus_reached, confidence, org_id
+                    consensus_reached, confidence, org_id, is_public
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
             """,
                 (
                     debate_id,
@@ -536,6 +545,50 @@ class DebateStorage(SQLiteStore):
             row = cursor.fetchone()
         return row[0] if row else 0
 
+    def list_readable(
+        self, limit: int = 20, offset: int = 0, org_id: str | None = None
+    ) -> list[DebateMetadata]:
+        """List, newest first, the debates a caller acting for ``org_id`` may read.
+
+        Readable means public, recorded without an org, or owned by ``org_id``;
+        ``org_id = NULL`` never matches, so a None org sees only the first two.
+        """
+        with self.connection() as conn:
+            cursor = conn.execute(
+                """
+                SELECT slug, id, task, agents, consensus_reached,
+                       confidence, created_at, view_count, is_public
+                FROM debates
+                WHERE is_public = 1 OR org_id IS NULL OR org_id = '' OR org_id = ?
+                ORDER BY created_at DESC LIMIT ? OFFSET ?
+                """,
+                (org_id, limit, offset),
+            )
+            return [
+                DebateMetadata(
+                    slug=row[0],
+                    debate_id=row[1],
+                    task=row[2],
+                    agents=json.loads(row[3]) if row[3] else [],
+                    consensus_reached=bool(row[4]),
+                    confidence=row[5] or 0,
+                    created_at=_parse_created_at(row[6]),
+                    view_count=row[7] or 0,
+                    is_public=bool(row[8]),
+                )
+                for row in cursor.fetchall()
+            ]
+
+    def count_readable(self, org_id: str | None = None) -> int:
+        """Count the debates :meth:`list_readable` would return across all pages."""
+        with self.connection() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM debates"
+                " WHERE is_public = 1 OR org_id IS NULL OR org_id = '' OR org_id = ?",
+                (org_id,),
+            ).fetchone()
+        return row[0] if row else 0
+
     def search(
         self,
         query: str,
@@ -672,6 +725,14 @@ class DebateStorage(SQLiteStore):
             cursor = conn.execute("SELECT is_public FROM debates WHERE id = ?", (debate_id,))
             row = cursor.fetchone()
         return bool(row and row[0])
+
+    def get_read_access(self, debate_id: str) -> tuple[str, str | None, bool] | None:
+        """Return ``(id, org_id, is_public)`` for a stored debate id, else None."""
+        with self.connection() as conn:
+            row = conn.execute(
+                "SELECT id, org_id, is_public FROM debates WHERE id = ?", (debate_id,)
+            ).fetchone()
+        return (row[0], row[1] or None, bool(row[2])) if row else None
 
     def set_public(self, debate_id: str, is_public: bool, org_id: str | None = None) -> bool:
         """
