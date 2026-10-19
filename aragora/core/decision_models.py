@@ -10,7 +10,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .decision_types import (
     DecisionType,
@@ -21,6 +21,9 @@ from .decision_types import (
     _DEFAULT_DECISION_ROUNDS,
     _default_decision_agents,
 )
+
+if TYPE_CHECKING:
+    from aragora.tenancy.record_scope import OrgScope
 
 
 @dataclass
@@ -321,6 +324,23 @@ class DecisionRequest:
 
     # Request ID
     request_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+
+    # Set only through bind_verified_org(); not a constructor argument and never read
+    # from or written to a payload, so tenant_id/workspace_id can never stand in for it.
+    _verified_org_id: str | None = field(default=None, init=False, repr=False, compare=False)
+
+    @property
+    def verified_org_id(self) -> str | None:
+        """The authenticated caller's organization, or None when ingress verified none."""
+        return self._verified_org_id
+
+    def bind_verified_org(self, scope: OrgScope) -> None:
+        """Record the organization authenticated ingress resolved for this request."""
+        from aragora.tenancy.record_scope import OrgScope
+
+        if not isinstance(scope, OrgScope):
+            raise TypeError("bind_verified_org() takes the OrgScope resolved from authentication")
+        self._verified_org_id = scope.org_id
 
     def __post_init__(self):
         """Validate and normalize the request."""

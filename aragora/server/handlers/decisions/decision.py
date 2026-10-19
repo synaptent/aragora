@@ -272,6 +272,7 @@ class DecisionHandler(BaseHandler):
             # the body must not select another tenant's identity or knowledge.
             request.context.user_id = scope.user_id
             request.context.workspace_id = scope.org_id
+            request.bind_verified_org(scope)
 
         except ValueError as e:
             logger.warning("Handler error: %s", e)
@@ -559,6 +560,7 @@ class DecisionHandler(BaseHandler):
             request.request_id = new_request_id
             request.context.user_id = scope.user_id
             request.context.workspace_id = scope.org_id
+            request.bind_verified_org(scope)
 
             # Track retry lineage
             request.context.metadata = request.context.metadata or {}

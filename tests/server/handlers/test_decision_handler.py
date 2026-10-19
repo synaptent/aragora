@@ -90,6 +90,10 @@ class MockDecisionRequest:
     decision_type: str = "auto"
     config: dict[str, Any] = field(default_factory=dict)
     context: MockDecisionContext = field(default_factory=MockDecisionContext)
+    verified_org_id: str | None = None
+
+    def bind_verified_org(self, scope: Any) -> None:
+        self.verified_org_id = scope.org_id
 
     @classmethod
     def from_http(cls, body: dict[str, Any], headers: dict[str, str]) -> MockDecisionRequest:
