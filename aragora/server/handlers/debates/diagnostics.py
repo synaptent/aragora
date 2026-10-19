@@ -13,6 +13,8 @@ from __future__ import annotations
 import logging
 from typing import Any, Protocol
 
+from aragora.models.catalog import CATALOG
+
 from ..base import (
     HandlerResult,
     error_response,
@@ -24,8 +26,14 @@ from .response_formatting import normalize_status
 
 logger = logging.getLogger(__name__)
 
-# Known provider mappings for agent names
-_AGENT_PROVIDER_MAP: dict[str, str] = {
+# Known provider mappings for agent names. Hand-written HISTORICAL rows
+# (kept verbatim, and they WIN a key collision: their POSITION drives
+# ``_infer_provider``'s prefix fallback, so "claude" must keep coming before
+# any full Claude model id) plus one generated row per spelling of every
+# active catalog model, so a debate that names an agent by its current
+# frontier id no longer reports "unknown" (2026-09-04 controller ruling,
+# wave 3).
+_LEGACY_AGENT_PROVIDER_MAP: dict[str, str] = {
     "claude": "anthropic",
     "claude-sonnet": "anthropic",
     "claude-opus": "anthropic",
@@ -59,8 +67,10 @@ _AGENT_PROVIDER_MAP: dict[str, str] = {
     "llama4-maverick": "openrouter",
     "llama4-scout": "openrouter",
     "qwen": "openrouter",
-    "qwen-3.5": "openrouter",
-    "yi": "openrouter",
+    # NOTE (frontier-model-refresh, 2026-09-05): "qwen-3.5" and "yi" are
+    # deliberately absent. Both registrations were removed with their models
+    # (Qwen3.5 Plus and Yi Large are off the live OpenRouter catalog), so a
+    # diagnostics row for either described an agent type the server rejects.
     "kimi": "openrouter",
 }
 
@@ -72,6 +82,32 @@ _PROVIDER_API_KEY_MAP: dict[str, str] = {
     "xai": "XAI_API_KEY",
     "mistral": "MISTRAL_API_KEY",
     "openrouter": "OPENROUTER_API_KEY",
+}
+
+
+def _catalog_provider_rows() -> dict[str, str]:
+    """Spelling -> provider for every spelling of every ACTIVE catalog row.
+
+    The value this map exists to produce is a credential hint, so a catalog
+    ``provider`` Aragora has no direct credential for (``moonshot``,
+    ``perplexity``, ``cohere``, ``ai21`` -- families it reaches only through
+    OpenRouter) is reported as ``openrouter``. That is exactly the
+    convention the hand-written rows above already use for deepseek, llama,
+    qwen and kimi, and it keeps ``_PROVIDER_API_KEY_MAP`` able to name a
+    real environment variable instead of falling through to the generic
+    "check agent configuration" message.
+    """
+    return {
+        spelling: (spec.provider if spec.provider in _PROVIDER_API_KEY_MAP else "openrouter")
+        for spec in CATALOG.values()
+        if not spec.retired
+        for spelling in spec.all_ids()
+    }
+
+
+_AGENT_PROVIDER_MAP: dict[str, str] = {
+    **_LEGACY_AGENT_PROVIDER_MAP,
+    **{k: v for k, v in _catalog_provider_rows().items() if k not in _LEGACY_AGENT_PROVIDER_MAP},
 }
 
 

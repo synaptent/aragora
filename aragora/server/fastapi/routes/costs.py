@@ -696,6 +696,15 @@ async def estimate_cost(
 
         cost = calculate_token_cost(provider, body.model, tokens_in, tokens_out)
 
+        # The breakdown must SUM to the total. Costing the output half with
+        # tokens_in=0 asked for a flat-rate quote, so above a documented
+        # long-context threshold (gpt-6-astra's 272k, xAI's) the two halves
+        # no longer added up -- 300k in / 10k out on gpt-6-astra reported
+        # 6.00 + 0.50 against a real 6.75 (2026-09-05 wave-2 re-review).
+        # Deriving the output half by subtraction makes the identity hold by
+        # construction for every model, tiered or flat.
+        input_cost = calculate_token_cost(provider, body.model, tokens_in, 0)
+
         return EstimateResponse(
             data=EstimateData(
                 estimated_cost_usd=float(cost),
@@ -703,8 +712,8 @@ async def estimate_cost(
                 tokens_output=tokens_out,
                 model=body.model,
                 breakdown={
-                    "input_cost": float(calculate_token_cost(provider, body.model, tokens_in, 0)),
-                    "output_cost": float(calculate_token_cost(provider, body.model, 0, tokens_out)),
+                    "input_cost": float(input_cost),
+                    "output_cost": float(cost - input_cost),
                     "rounds": body.rounds,
                     "agents": body.agents,
                 },

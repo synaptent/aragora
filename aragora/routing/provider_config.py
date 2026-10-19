@@ -9,49 +9,16 @@ Pricing is per 1M tokens (consistent with aragora.billing.usage).
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from datetime import date
-from typing import Any
-
-logger = logging.getLogger(__name__)
-
-
-@dataclass(frozen=True)
-class ProviderPricing:
-    """Pricing and capabilities for a single provider/model combination."""
-
-    provider_name: str
-    model_name: str
-    input_cost_per_1k: float  # USD per 1K input tokens
-    output_cost_per_1k: float  # USD per 1K output tokens
-    context_window: int  # Maximum context window in tokens
-    supports_streaming: bool = True
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serialize to dictionary."""
-        return {
-            "provider_name": self.provider_name,
-            "model_name": self.model_name,
-            "input_cost_per_1k": self.input_cost_per_1k,
-            "output_cost_per_1k": self.output_cost_per_1k,
-            "context_window": self.context_window,
-            "supports_streaming": self.supports_streaming,
-        }
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> ProviderPricing:
-        """Deserialize from dictionary."""
-        return cls(
-            provider_name=data["provider_name"],
-            model_name=data["model_name"],
-            input_cost_per_1k=data["input_cost_per_1k"],
-            output_cost_per_1k=data["output_cost_per_1k"],
-            context_window=data["context_window"],
-            supports_streaming=data.get("supports_streaming", True),
-        )
-
 
 from aragora.models import CATALOG, by_any_id, utc_today
+
+# ProviderPricing is defined in the foundation layer so that
+# aragora.models.pricing_mirror can build these rows without importing
+# aragora.routing (.importlinter layers); it stays importable from here.
+from aragora.models.pricing_mirror import ProviderPricing, provider_config_rows
+
+logger = logging.getLogger(__name__)
 
 # Legacy hand-maintained rows (models not yet in the canonical catalog).
 # Cataloged models are PROJECTED from aragora.models.CATALOG below — do not
@@ -241,19 +208,17 @@ def _catalog_projection(today: date | None = None) -> dict[str, ProviderPricing]
     the same ``by_any_id`` fallback, which has no soak gating.
 
     ``today`` anchors soak evaluation; pass one value through a whole
-    rebuild so gating and the refresh stamp share a coherent date."""
-    rows: dict[str, ProviderPricing] = {}
-    for spec in CATALOG.values():
-        if spec.is_under_soak(today):
-            continue
-        rows[spec.canonical_id] = ProviderPricing(
-            provider_name=spec.provider,
-            model_name=spec.direct_id,
-            input_cost_per_1k=spec.input_per_mtok / 1000.0,
-            output_cost_per_1k=spec.output_per_mtok / 1000.0,
-            context_window=spec.context_window,
-        )
-    return rows
+    rebuild so gating and the refresh stamp share a coherent date.
+
+    Delegates to :func:`aragora.models.pricing_mirror.provider_config_rows`,
+    the single generator for this shape (frontier-model-refresh Task 6): the
+    row construction itself lives there so every consumer of catalog
+    pricing shares one implementation. ``CATALOG`` is passed through
+    explicitly (this module's own, possibly-monkeypatched, module attribute)
+    rather than letting the mirror re-import the real catalog, so tests that
+    ``monkeypatch.setattr(provider_config, "CATALOG", ...)`` to inject
+    synthetic rows are observed correctly."""
+    return provider_config_rows(today, catalog=CATALOG)
 
 
 def _apply_catalog_projection(table: dict[str, ProviderPricing], today: date | None = None) -> None:
@@ -268,21 +233,28 @@ def _apply_catalog_projection(table: dict[str, ProviderPricing], today: date | N
 
         Every key of the resulting table that ``by_any_id`` resolves to a
         catalog model (a) IS that model's canonical_id and (b) that model
-        is NOT under soak (as of ``today``).
+        is NOT RETIRED.
+
+    The filter is retirement, not soak (frontier-model-refresh final review
+    #7). Soak-gating an enumeration table inverted the intended candidate
+    set — the roster offered retired ids that are dead on the wire while
+    withholding the current defaults — and made the table calendar-
+    dependent. Soak gating still applies to routing SELECTION, where it
+    belongs, via ``provider_router._is_under_soak``.
 
     The projection is applied first (it overrides any hand row keyed by an
-    adoptable model's canonical id: single source), then one sweep deletes
+    active model's canonical id: single source), then one sweep deletes
     every violating key — alias-keyed hand rows, stale canonical rows of
-    under-soak models, or any future spelling the catalog learns about.
+    retired models, or any future spelling the catalog learns about.
     Hand rows for models unknown to the catalog are preserved. Cost lookup
-    for every dropped spelling (aliases and under-soak ids alike) still
+    for every dropped spelling (aliases and retired ids alike) still
     works via the ``by_any_id`` fallback in ``get_estimated_cost``, which
-    has no soak gating.
+    has no soak or retirement gating.
     """
     table.update(_catalog_projection(today))
     for key in list(table):
         spec = by_any_id(key)
-        if spec is not None and (key != spec.canonical_id or spec.is_under_soak(today)):
+        if spec is not None and (key != spec.canonical_id or spec.retired):
             del table[key]
 
 

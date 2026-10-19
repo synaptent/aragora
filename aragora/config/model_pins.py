@@ -11,6 +11,9 @@ constants from this module instead of hardcoding IDs. The goal is:
 3. Direct-provider IDs are still exposed for code paths that prefer to hit
    the native API when a key is available and the router allows it.
 
+Values derive from ``aragora.models.catalog``; bump the catalog, not this
+file.
+
 Naming convention:
 - ``*_VIA_OPENROUTER`` -> the alias you pass to ``OpenRouterAgent``
   (e.g. ``anthropic/claude-opus-5``).
@@ -29,67 +32,79 @@ from dataclasses import dataclass
 from typing import Final, Literal
 
 from aragora.config.secrets import get_secret_presence
+from aragora.models.catalog import CATALOG as _CATALOG
 
 logger = logging.getLogger(__name__)
 
 
 # -----------------------------------------------------------------------------
-# Frontier pins (user-requested floor: Opus 5 / GPT 5.5 / Gemini 3.1 Pro)
+# Frontier pins, derived from aragora.models.catalog.CATALOG
+# (frontier-model-refresh, 2026-09-04)
 # -----------------------------------------------------------------------------
 
-# Anthropic Claude Opus 5 - top-tier reasoning, debate, synthesis. Same
-# economics as Opus 4.8 ($5/$25), so this bump costs nothing per call.
+
+def _pin(canonical_id: str) -> tuple[str, str]:
+    """Return (direct_id, openrouter_id) for a catalog row."""
+    spec = _CATALOG[canonical_id]
+    return spec.direct_id, spec.openrouter_id
+
+
+# Anthropic Claude Fable 5.1 - Mythos-class flagship, the frontier pick for
+# every Claude role (debate roles, judge/audit roles, and the claude CLI
+# agent default per the 2026-09-04 frontier-model-refresh).
+FABLE_51_DIRECT, FABLE_51_VIA_OPENROUTER = _pin("claude-fable-5-1")
+
+# Anthropic Claude Opus 5 - general fallback model. Same economics as Opus
+# 4.8 ($5/$25), so this bump costs nothing per call.
 # NOTE: adopted on release day (2026-07-24) by explicit operator direction;
 # the 14-day availability rule was waived for this bump. See the soak comment
 # on the claude-opus-5 spec in aragora/models/catalog.py.
-OPUS_5_DIRECT: Final = "claude-opus-5"
-OPUS_5_VIA_OPENROUTER: Final = "anthropic/claude-opus-5"
+OPUS_5_DIRECT, OPUS_5_VIA_OPENROUTER = _pin("claude-opus-5")
 
-# Anthropic Claude Opus 4.8 - previous frontier. Deliberately NOT re-pointed at
-# Opus 5: it is still Active upstream and is Opus 5's documented fallback target
-# for cyber-classifier refusals, so this constant must keep naming the real 4.8.
-OPUS_48_DIRECT: Final = "claude-opus-4-8"
-OPUS_48_VIA_OPENROUTER: Final = "anthropic/claude-opus-4.8"
+# Anthropic Claude Opus 4.8 - refusal-fallback model. Deliberately NOT
+# re-pointed at Opus 5 or Fable 5.1: it is still Active upstream and is the
+# documented fallback target for cyber-classifier refusals, so this constant
+# must keep naming the real 4.8.
+OPUS_48_DIRECT, OPUS_48_VIA_OPENROUTER = _pin("claude-opus-4-8")
 
-# Anthropic Claude Fable 5 - Mythos-class flagship at 2x Opus 5 price
-# ($10/$50 vs $5/$25). Pinned where quality-per-call dominates volume: judge
-# and audit roles here, plus the claude CLI agent default (subscription-priced
-# on that surface, so the 2x API rate does not multiply across bulk rounds).
-# API-billed bulk debate roles stay on Opus 5 by design.
-FABLE_5_DIRECT: Final = "claude-fable-5"
-FABLE_5_VIA_OPENROUTER: Final = "anthropic/claude-fable-5"
-# Backwards-compatible constant names for callers that have not migrated yet.
-OPUS_47_DIRECT: Final = OPUS_48_DIRECT
-OPUS_47_VIA_OPENROUTER: Final = OPUS_48_VIA_OPENROUTER
+# OpenAI GPT-6 Astra - frontier pick for every OpenAI role, including the
+# merge-gate reviewer duty. This is a one-time override of the 14-day
+# reviewer-availability rule in #9069 (Astra released 2026-09-03; recorded
+# on #9069).
+GPT6_ASTRA_DIRECT, GPT6_ASTRA_VIA_OPENROUTER = _pin("gpt-6-astra")
 
-# OpenAI GPT-5.6 Sol - same price as GPT-5.5 ($5/$30), strictly better
-# benchmarks (Terminal-Bench 2.1 88.8 vs 82.7). The Codex-CLI reviewer
-# harness deliberately stays on gpt-5.5 until Sol passes the 14-day
-# availability rule (#9069) — do not route quorum evidence through a
-# day-0 model.
-GPT56_SOL_DIRECT: Final = "gpt-5.6-sol"
-GPT56_SOL_VIA_OPENROUTER: Final = "openai/gpt-5.6-sol"
+# OpenAI GPT-5.6 Terra - cheap/bulk-route sibling of Astra.
+GPT56_TERRA_DIRECT, GPT56_TERRA_VIA_OPENROUTER = _pin("gpt-5.6-terra")
 
-# OpenAI GPT-5.5 - previous flagship; still the reviewer-harness pin.
-GPT55_DIRECT: Final = "gpt-5.5"
-GPT55_VIA_OPENROUTER: Final = "openai/gpt-5.5"
-# Backwards-compatible constant names for callers that have not migrated yet.
-GPT54_DIRECT: Final = GPT55_DIRECT
-GPT54_VIA_OPENROUTER: Final = GPT55_VIA_OPENROUTER
+# Google Gemini 3.1 Pro - top-tier long-context + multimodal; the researcher
+# role default. ``gemini-3.1-pro-preview`` is the real Gemini API code (the
+# bare "gemini-3.1-pro" spelling is not a valid direct-provider id).
+GEMINI_31_PRO_DIRECT, GEMINI_31_PRO_VIA_OPENROUTER = _pin("gemini-3.1-pro-preview")
 
-# Google Gemini 3.1 Pro - top-tier long-context + multimodal
-GEMINI_31_PRO_DIRECT: Final = "gemini-3.1-pro"
-GEMINI_31_PRO_VIA_OPENROUTER: Final = "google/gemini-3.1-pro-preview"
+# Google Gemini 3.8 Flash - cheap tier, added alongside Gemini 3.1 Pro.
+GEMINI_38_FLASH_DIRECT, GEMINI_38_FLASH_VIA_OPENROUTER = _pin("gemini-3.8-flash")
 
-# xAI Grok 4.5 - contrarian / contrarian-by-design agent. The OpenRouter path
-# stays on 4.5 until Grok 4.6 completes its repository soak; the direct-provider
-# ``grok-4-latest`` alias remains unchanged.
-GROK_4_DIRECT: Final = "grok-4-latest"
-GROK_4_VIA_OPENROUTER: Final = "x-ai/grok-4.5"
+# xAI Grok 4.6 - contrarian / devil's-advocate role default.
+GROK_46_DIRECT, GROK_46_VIA_OPENROUTER = _pin("grok-4.6")
 
-# Mistral Large (latest) - European provider diversity
-MISTRAL_LARGE_DIRECT: Final = "mistral-large-2512"
-MISTRAL_LARGE_VIA_OPENROUTER: Final = "mistralai/mistral-large-2512"
+# Mistral Medium (2604) - European provider diversity, fallback-family
+# flagship.
+MISTRAL_MEDIUM_DIRECT, MISTRAL_MEDIUM_VIA_OPENROUTER = _pin("mistral-medium-2604")
+
+# Mistral Large (2512) - kept resolvable/priced.
+MISTRAL_LARGE_DIRECT, MISTRAL_LARGE_VIA_OPENROUTER = _pin("mistral-large-2512")
+
+
+# -----------------------------------------------------------------------------
+# Back-compat names (kept for importers and the canonical-metrics claim).
+# They now point at the frontier ids above.
+# -----------------------------------------------------------------------------
+FABLE_5_DIRECT, FABLE_5_VIA_OPENROUTER = FABLE_51_DIRECT, FABLE_51_VIA_OPENROUTER
+GPT56_SOL_DIRECT, GPT56_SOL_VIA_OPENROUTER = GPT6_ASTRA_DIRECT, GPT6_ASTRA_VIA_OPENROUTER
+GPT55_DIRECT, GPT55_VIA_OPENROUTER = GPT6_ASTRA_DIRECT, GPT6_ASTRA_VIA_OPENROUTER
+GPT54_DIRECT, GPT54_VIA_OPENROUTER = GPT55_DIRECT, GPT55_VIA_OPENROUTER
+GROK_4_DIRECT, GROK_4_VIA_OPENROUTER = GROK_46_DIRECT, GROK_46_VIA_OPENROUTER
+OPUS_47_DIRECT, OPUS_47_VIA_OPENROUTER = OPUS_48_DIRECT, OPUS_48_VIA_OPENROUTER
 
 
 # -----------------------------------------------------------------------------
@@ -137,22 +152,22 @@ class _RolePin:
 
 
 _ROLE_TO_PIN: Final[dict[Role, _RolePin]] = {
-    # Anthropic leads on adversarial reasoning, nuance, and long-form synthesis,
-    # so it is the default for the core debate roles.
-    "proposer": _RolePin(OPUS_5_DIRECT, OPUS_5_VIA_OPENROUTER),
-    "critic": _RolePin(OPUS_5_DIRECT, OPUS_5_VIA_OPENROUTER),
-    "synthesizer": _RolePin(OPUS_5_DIRECT, OPUS_5_VIA_OPENROUTER),
-    "devils_advocate": _RolePin(GROK_4_DIRECT, GROK_4_VIA_OPENROUTER),
+    # Claude Fable 5.1 leads on adversarial reasoning, nuance, and long-form
+    # synthesis, so it is the default for the core debate and audit roles.
+    "proposer": _RolePin(FABLE_51_DIRECT, FABLE_51_VIA_OPENROUTER),
+    "critic": _RolePin(FABLE_51_DIRECT, FABLE_51_VIA_OPENROUTER),
+    "synthesizer": _RolePin(FABLE_51_DIRECT, FABLE_51_VIA_OPENROUTER),
+    "devils_advocate": _RolePin(GROK_46_DIRECT, GROK_46_VIA_OPENROUTER),
     "researcher": _RolePin(GEMINI_31_PRO_DIRECT, GEMINI_31_PRO_VIA_OPENROUTER),
-    # Reviewer routing holds gpt-5.5 until Sol clears the 14-day availability
-    # rule (public Jul 9 -> eligible Jul 23); flipping this pin early was a
-    # convergent review finding on #9075.
-    "reviewer": _RolePin(GPT55_DIRECT, GPT55_VIA_OPENROUTER),
-    "quality_reviewer": _RolePin(OPUS_5_DIRECT, OPUS_5_VIA_OPENROUTER),
-    "security_auditor": _RolePin(FABLE_5_DIRECT, FABLE_5_VIA_OPENROUTER),
-    "compliance_auditor": _RolePin(FABLE_5_DIRECT, FABLE_5_VIA_OPENROUTER),
-    "judge": _RolePin(FABLE_5_DIRECT, FABLE_5_VIA_OPENROUTER),
-    "default": _RolePin(OPUS_5_DIRECT, OPUS_5_VIA_OPENROUTER),
+    # Reviewer routing pins GPT-6 Astra as of the 2026-09-04 frontier-model
+    # refresh -- a one-time override of the 14-day reviewer-availability rule
+    # (Astra released 2026-09-03; recorded on #9069).
+    "reviewer": _RolePin(GPT6_ASTRA_DIRECT, GPT6_ASTRA_VIA_OPENROUTER),
+    "quality_reviewer": _RolePin(FABLE_51_DIRECT, FABLE_51_VIA_OPENROUTER),
+    "security_auditor": _RolePin(FABLE_51_DIRECT, FABLE_51_VIA_OPENROUTER),
+    "compliance_auditor": _RolePin(FABLE_51_DIRECT, FABLE_51_VIA_OPENROUTER),
+    "judge": _RolePin(FABLE_51_DIRECT, FABLE_51_VIA_OPENROUTER),
+    "default": _RolePin(FABLE_51_DIRECT, FABLE_51_VIA_OPENROUTER),
 }
 
 
@@ -203,8 +218,14 @@ def direct_model_for_role(role: Role = "default") -> str:
 
 
 __all__ = [
+    "FABLE_51_DIRECT",
+    "FABLE_51_VIA_OPENROUTER",
     "FABLE_5_DIRECT",
     "FABLE_5_VIA_OPENROUTER",
+    "GPT6_ASTRA_DIRECT",
+    "GPT6_ASTRA_VIA_OPENROUTER",
+    "GPT56_TERRA_DIRECT",
+    "GPT56_TERRA_VIA_OPENROUTER",
     "GPT56_SOL_DIRECT",
     "GPT56_SOL_VIA_OPENROUTER",
     "OPUS_5_DIRECT",
@@ -219,8 +240,14 @@ __all__ = [
     "GPT54_VIA_OPENROUTER",
     "GEMINI_31_PRO_DIRECT",
     "GEMINI_31_PRO_VIA_OPENROUTER",
+    "GEMINI_38_FLASH_DIRECT",
+    "GEMINI_38_FLASH_VIA_OPENROUTER",
+    "GROK_46_DIRECT",
+    "GROK_46_VIA_OPENROUTER",
     "GROK_4_DIRECT",
     "GROK_4_VIA_OPENROUTER",
+    "MISTRAL_MEDIUM_DIRECT",
+    "MISTRAL_MEDIUM_VIA_OPENROUTER",
     "MISTRAL_LARGE_DIRECT",
     "MISTRAL_LARGE_VIA_OPENROUTER",
     "OPUS_4_7",

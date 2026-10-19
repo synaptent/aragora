@@ -1,10 +1,27 @@
 #!/usr/bin/env python3
 """Round 31b Phase 1 — Single-family baseline panel runner.
 
-Runs 6 single-family panelists with varied temperatures so the panel is
-heterogeneous-by-temperature but homogeneous-by-family. The default provider is
-Anthropic (claude-haiku-4-5 panelists, claude-sonnet-4-5 judge); OpenAI remains
-available via BASELINE_PROVIDER=openai.
+Runs 6 single-family panelists so the panel is homogeneous-by-family. The
+JUDGE is deliberately drawn from a DIFFERENT family than the panel, so it
+can score the panel's output independently. Both models come from
+``aragora.config.model_pins`` (Anthropic Fable 5.1 and OpenAI GPT-6 Astra),
+so a catalog refresh moves them without editing this script.
+``BASELINE_PROVIDER`` picks which of the two runs the panel: the default
+``anthropic`` gives a Fable panel judged by Astra, and ``openai`` swaps the
+roles.
+
+DECODING CAVEAT — the temperature sweep is INERT on the currently pinned
+models. Both Fable 5.1 and GPT-6 Astra have
+``supports_sampling_params=False`` in ``aragora.models.CATALOG``: a
+non-default ``temperature`` returns HTTP 400, so this script does not send
+one for them (see ``_request_kwargs``). The six "panelists" are therefore
+six REPEATED SAMPLES at the provider's own decoding defaults, not six
+decoding conditions, and the receipt's heterogeneity claim reduces to
+sampling variance. That is recorded, not silently papered over: whether a
+temperature-free baseline is still the right comparator for the
+heterogeneous-panel runs is a founder question, deliberately NOT redesigned
+here. The sweep still applies verbatim to any pinned model whose catalog row
+does accept sampling params.
 
 The baseline covers 5 composition-matched prompts: 3 seeded classes
 (single_seeded_error, multi_seeded_error, red_team_paraphrase) plus 2
@@ -25,6 +42,7 @@ Phase 0 found missing on disk.
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import sys
@@ -38,6 +56,13 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
+from aragora.config.model_pins import FABLE_51_DIRECT, GPT6_ASTRA_DIRECT
+from aragora.models.catalog import spec_or_none
+from aragora.models.compat import (
+    max_tokens_param,
+    reasoning_effort_default,
+    rejects_sampling_params,
+)
 from aragora.heterogeneity.judge import (
     build_judge_prompt,
     parse_judge_output,
@@ -60,12 +85,85 @@ RECEIPTS_DIR = REPO_ROOT / "docs" / "receipts" / "heterogeneity"
 
 PROVIDER = os.environ.get("BASELINE_PROVIDER", "anthropic")
 
+# Panel and judge must stay in DIFFERENT model families (2026-09-04
+# controller ruling, wave 3). A judge drawn from the panel's own family
+# cannot independently score the panel's output, and this file previously
+# pinned two same-family ids per branch -- which PR 3's trial sweep then
+# collapsed onto ONE id, erasing the panel/judge distinction outright.
+# Both ids come from the pins module, so a catalog refresh moves them here
+# for free and neither can drift into a retired spelling again.
 if PROVIDER == "openai":
-    PANEL_MODEL = "gpt-4o-mini"
-    JUDGE_MODEL = "gpt-4.1-mini"
+    PANEL_MODEL, JUDGE_MODEL = GPT6_ASTRA_DIRECT, FABLE_51_DIRECT
 else:
-    PANEL_MODEL = "claude-haiku-4-5"
-    JUDGE_MODEL = "claude-sonnet-4-5"  # different model than panel; same family for baseline
+    PANEL_MODEL, JUDGE_MODEL = FABLE_51_DIRECT, GPT6_ASTRA_DIRECT
+
+
+# Which native endpoint each model is called through, derived from its
+# catalog row rather than from BASELINE_PROVIDER -- panel and judge are now
+# different providers, so one process-wide provider string is no longer
+# enough to route a call.
+def _provider_for(model_id: str) -> str:
+    spec = spec_or_none(model_id)
+    if spec is None:  # pragma: no cover - a pin always has a catalog row
+        raise RuntimeError(f"no catalog row for pinned model {model_id!r}")
+    return spec.provider
+
+
+PANEL_PROVIDER = _provider_for(PANEL_MODEL)
+JUDGE_PROVIDER = _provider_for(JUDGE_MODEL)
+
+
+def _request_kwargs(model: str, *, temperature: float, max_tokens: int) -> dict[str, Any]:
+    """Catalog-flag-driven request fields for one call to ``model``.
+
+    Reads the SAME ``aragora.models.compat`` helpers the agents' shared
+    payload builders read (``OpenAICompatibleMixin._build_payload`` and
+    ``AnthropicAPIAgent._build_payload``) rather than hand-copying
+    request-shape knowledge into a third table. Before this existed the
+    script sent ``temperature`` on every call and ``max_tokens`` on the
+    OpenAI path, so with the frontier pins in place every panelist and every
+    judge call returned HTTP 400 (finding C-P2 on #9989).
+
+    * ``temperature`` is sent only when the row's
+      ``supports_sampling_params`` is true. On a row that rejects it the
+      sweep degenerates to repeated samples -- see the module docstring.
+    * The output-token cap uses the row's ``max_tokens_param`` on the
+      OpenAI (chat-completions) wire, so GPT-6 Astra gets
+      ``max_completion_tokens`` and not ``max_tokens``. The Anthropic
+      Messages API names that field ``max_tokens`` unconditionally, and no
+      cataloged Anthropic row says otherwise, so that wire is fixed.
+    * ``reasoning_effort`` is sent when the row documents a default, and
+      only on the OpenAI wire: the Messages API has no top-level
+      ``reasoning_effort`` field, so forwarding one there would 400.
+    """
+    provider = _provider_for(model)
+    kwargs: dict[str, Any] = {}
+    if provider == "anthropic":
+        kwargs["max_tokens"] = max_tokens
+    else:
+        kwargs[max_tokens_param(model)] = max_tokens
+        effort = reasoning_effort_default(model)
+        if effort:
+            kwargs["reasoning_effort"] = effort
+    if not rejects_sampling_params(model):
+        kwargs["temperature"] = temperature
+    return kwargs
+
+
+def _model_flags(model: str) -> dict[str, Any]:
+    """Catalog request-shape flags for ``model``, for the run header/receipt."""
+    spec = spec_or_none(model)
+    if spec is None:  # pragma: no cover - a pin always has a catalog row
+        raise RuntimeError(f"no catalog row for pinned model {model!r}")
+    return {
+        "model": spec.canonical_id,
+        "provider": spec.provider,
+        "family": spec.family,
+        "supports_sampling_params": spec.supports_sampling_params,
+        "max_tokens_param": spec.max_tokens_param,
+        "reasoning_effort_default": spec.reasoning_effort_default,
+    }
+
 
 PANELIST_TEMPERATURES = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
 
@@ -77,13 +175,14 @@ PROMPT_FILES = [
     PROMPTS_ROOT / "null_negative" / "02_no_error_implicit_pressure.md",
 ]
 
-PRICE_PER_MTOK = {
-    "gpt-4o-mini": {"input": 0.150, "output": 0.600},
-    "gpt-4.1-mini": {"input": 0.400, "output": 1.600},
-    "claude-haiku-4-5": {"input": 1.000, "output": 5.000},
-    "claude-sonnet-4-5": {"input": 3.000, "output": 15.000},
-}
 
+# NOTE (frontier-model-refresh wave 3, 2026-09-05): these rails were sized
+# for the retired mini SKUs this script used to pin (~$0.15-$3 per MTok).
+# The pinned frontier models cost ~$10/$50 per MTok, so a full 5-prompt x 6-
+# temperature run now projects well past the trip and the estimator will
+# skip panelists mid-run. Raising the caps is a spend decision, deliberately
+# NOT made here: run this script only with caps a human has re-approved for
+# the frontier rates.
 BUDGET_HARD_CAP_USD = 1.00
 BUDGET_ESTIMATOR_TRIP_USD = 0.85
 
@@ -93,10 +192,16 @@ MAX_JUDGE_TOKENS = 400
 
 
 def _estimate_usd(model: str, input_tokens: int, output_tokens: int) -> float:
-    rates = PRICE_PER_MTOK[model]
-    return (input_tokens / 1_000_000) * rates["input"] + (output_tokens / 1_000_000) * rates[
-        "output"
-    ]
+    """Budget-rail estimate from the catalog's own rates.
+
+    Was a four-row hand table keyed on the retired ids this script used to
+    pin; the catalog is the single priced source, so the rail can no longer
+    quote a stale rate (or KeyError) after a model refresh."""
+    spec = spec_or_none(model)
+    if spec is None:  # pragma: no cover - a pin always has a catalog row
+        raise RuntimeError(f"no catalog row for {model!r}; cannot price the budget rail")
+    rate_in, rate_out = spec.rates_for(input_tokens)
+    return (input_tokens / 1_000_000) * rate_in + (output_tokens / 1_000_000) * rate_out
 
 
 def _approx_tokens(text: str) -> int:
@@ -111,19 +216,19 @@ def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
     tmp.replace(path)
 
 
-def _load_client():
-    """Load provider client with key resolved through SecretManager."""
+def _load_client(provider: str):
+    """Load a provider client with its key resolved through SecretManager."""
     from aragora.config.secrets import SecretManager
 
     sm = SecretManager()
-    if PROVIDER == "openai":
+    if provider == "openai":
         api_key = sm.get("OPENAI_API_KEY")
         if not api_key:
             raise RuntimeError("OPENAI_API_KEY missing from SecretManager")
         from openai import OpenAI  # type: ignore
 
         return ("openai", OpenAI(api_key=api_key))
-    if PROVIDER == "anthropic":
+    if provider == "anthropic":
         api_key = sm.get("ANTHROPIC_API_KEY")
         if not api_key:
             raise RuntimeError("ANTHROPIC_API_KEY missing from SecretManager")
@@ -133,7 +238,7 @@ def _load_client():
             return ("anthropic", anthropic.Anthropic(api_key=api_key))
         except ModuleNotFoundError:
             return ("anthropic_http", api_key)
-    raise RuntimeError(f"unknown PROVIDER: {PROVIDER}")
+    raise RuntimeError(f"unknown provider: {provider}")
 
 
 def _call_openai_impl(
@@ -142,8 +247,7 @@ def _call_openai_impl(
     model: str,
     system_prompt: str,
     user_prompt: str,
-    temperature: float,
-    max_tokens: int,
+    request_kwargs: dict[str, Any],
     wall_seconds: int,
 ) -> dict[str, Any]:
     start = time.time()
@@ -154,9 +258,8 @@ def _call_openai_impl(
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
-            temperature=temperature,
-            max_tokens=max_tokens,
             timeout=wall_seconds,
+            **request_kwargs,
         )
         latency_ms = int((time.time() - start) * 1000)
         text = resp.choices[0].message.content or ""
@@ -186,19 +289,17 @@ def _call_anthropic_impl(
     model: str,
     system_prompt: str,
     user_prompt: str,
-    temperature: float,
-    max_tokens: int,
+    request_kwargs: dict[str, Any],
     wall_seconds: int,
 ) -> dict[str, Any]:
     start = time.time()
     try:
         resp = client.messages.create(
             model=model,
-            max_tokens=max_tokens,
-            temperature=temperature,
             system=system_prompt,
             messages=[{"role": "user", "content": user_prompt}],
             timeout=wall_seconds,
+            **request_kwargs,
         )
         latency_ms = int((time.time() - start) * 1000)
         # Anthropic returns content as a list of content-blocks; concat text blocks
@@ -230,17 +331,15 @@ def _call_anthropic_http_impl(
     model: str,
     system_prompt: str,
     user_prompt: str,
-    temperature: float,
-    max_tokens: int,
+    request_kwargs: dict[str, Any],
     wall_seconds: int,
 ) -> dict[str, Any]:
     start = time.time()
-    payload = {
+    payload: dict[str, Any] = {
         "model": model,
-        "max_tokens": max_tokens,
-        "temperature": temperature,
         "system": system_prompt,
         "messages": [{"role": "user", "content": user_prompt}],
+        **request_kwargs,
     }
     request = urllib.request.Request(
         "https://api.anthropic.com/v1/messages",
@@ -302,14 +401,14 @@ def _call_provider(
     wall_seconds: int,
 ) -> dict[str, Any]:
     kind, client = client_tuple
+    request_kwargs = _request_kwargs(model, temperature=temperature, max_tokens=max_tokens)
     if kind == "openai":
         return _call_openai_impl(
             client,
             model=model,
             system_prompt=system_prompt,
             user_prompt=user_prompt,
-            temperature=temperature,
-            max_tokens=max_tokens,
+            request_kwargs=request_kwargs,
             wall_seconds=wall_seconds,
         )
     if kind == "anthropic":
@@ -318,8 +417,7 @@ def _call_provider(
             model=model,
             system_prompt=system_prompt,
             user_prompt=user_prompt,
-            temperature=temperature,
-            max_tokens=max_tokens,
+            request_kwargs=request_kwargs,
             wall_seconds=wall_seconds,
         )
     if kind == "anthropic_http":
@@ -328,8 +426,7 @@ def _call_provider(
             model=model,
             system_prompt=system_prompt,
             user_prompt=user_prompt,
-            temperature=temperature,
-            max_tokens=max_tokens,
+            request_kwargs=request_kwargs,
             wall_seconds=wall_seconds,
         )
     raise RuntimeError(f"unknown client kind: {kind}")
@@ -346,11 +443,55 @@ PANELIST_SYSTEM_PROMPT = (
 JUDGE_SYSTEM_PROMPT = "You are a strict evaluator. Output ONLY JSON. No surrounding text."
 
 
-def main() -> int:
+def _run_header() -> dict[str, Any]:
+    """Panel/judge ids plus the catalog request-shape flags this run will use.
+
+    Printed at the top of every run and embedded in the transcripts payload:
+    the flags decide whether the temperature sweep is a real decoding sweep
+    or six repeated samples, so a receipt that does not carry them cannot be
+    read back correctly (finding C-P2 on #9989).
+    """
+    panel_flags = _model_flags(PANEL_MODEL)
+    judge_flags = _model_flags(JUDGE_MODEL)
+    return {
+        "baseline_provider": PROVIDER,
+        "panel": panel_flags,
+        "judge": judge_flags,
+        "panelist_temperatures": list(PANELIST_TEMPERATURES),
+        "temperature_sweep_effective": panel_flags["supports_sampling_params"],
+    }
+
+
+def _print_run_header(header: dict[str, Any]) -> None:
+    print(f"panel model: {header['panel']['model']} ({header['panel']['provider']})")
+    print(f"  flags: {json.dumps(header['panel'], sort_keys=True)}")
+    print(f"judge model: {header['judge']['model']} ({header['judge']['provider']})")
+    print(f"  flags: {json.dumps(header['judge'], sort_keys=True)}")
+    if header["temperature_sweep_effective"]:
+        print(f"temperature sweep: ACTIVE {header['panelist_temperatures']}")
+    else:
+        print(
+            "temperature sweep: INERT -- the panel model's catalog row sets "
+            "supports_sampling_params=False, so no temperature is sent and the "
+            f"{len(PANELIST_TEMPERATURES)} panelists are repeated samples at the "
+            "provider's default decoding, not decoding conditions."
+        )
+
+
+def main(argv: list[str] | None = None) -> int:
+    argparse.ArgumentParser(
+        prog="run_baseline_panel.py",
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    ).parse_args(argv)
+
     run_id = datetime.now(timezone.utc).strftime(
         f"baseline-single-family-{PROVIDER}-%Y%m%dT%H%M%SZ"
     )
     started_at = datetime.now(timezone.utc).isoformat()
+
+    header = _run_header()
+    _print_run_header(header)
 
     prompts: list[ProbePrompt] = [load_prompt_file(p) for p in PROMPT_FILES]
     print(f"loaded {len(prompts)} prompts: " + ", ".join(p.prompt_id for p in prompts))
@@ -359,7 +500,10 @@ def main() -> int:
     print(f"panel: {len(panel_models)} panelists (temps: {PANELIST_TEMPERATURES})")
     print(f"judge: {JUDGE_MODEL}")
 
-    client = _load_client()
+    panel_client = _load_client(PANEL_PROVIDER)
+    judge_client = (
+        panel_client if JUDGE_PROVIDER == PANEL_PROVIDER else _load_client(JUDGE_PROVIDER)
+    )
 
     cumulative_estimate_usd = 0.0
     cumulative_actual_usd = 0.0
@@ -398,7 +542,7 @@ def main() -> int:
 
             # 1. Panelist call
             panel_resp = _call_provider(
-                client,
+                panel_client,
                 model=PANEL_MODEL,
                 system_prompt=PANELIST_SYSTEM_PROMPT,
                 user_prompt=panel_user_prompt,
@@ -435,7 +579,7 @@ def main() -> int:
             # 2. Judge call
             judge_user_prompt = build_judge_prompt(prompt, panel_resp["text"][:4000])
             judge_resp = _call_provider(
-                client,
+                judge_client,
                 model=JUDGE_MODEL,
                 system_prompt=JUDGE_SYSTEM_PROMPT,
                 user_prompt=judge_user_prompt,
@@ -543,6 +687,7 @@ def main() -> int:
         "ended_at": datetime.now(timezone.utc).isoformat(),
         "panel_models": panel_models,
         "judge_model": JUDGE_MODEL,
+        "run_header": header,
         "transcripts": transcripts,
         "cumulative_estimate_usd": round(cumulative_estimate_usd, 5),
         "cumulative_actual_usd": round(cumulative_actual_usd, 5),
@@ -564,10 +709,29 @@ def main() -> int:
         pilot_token_spend_usd_estimate=round(cumulative_estimate_usd, 5),
         scope_caveats=[
             "Single-family baseline (Round 31a' / 31b Phase 1, composition-matched).",
-            f"All 6 panelists are {PANEL_MODEL} with varied temperatures "
-            "(0.0, 0.2, 0.4, 0.6, 0.8, 1.0) - homogeneous family, "
-            "heterogeneous decoding.",
-            f"Judge: {JUDGE_MODEL} (different model than panel) at temperature 0.0.",
+            f"All 6 panelists are {PANEL_MODEL} at the requested temperatures "
+            "(0.0, 0.2, 0.4, 0.6, 0.8, 1.0) - homogeneous family.",
+            (
+                "Decoding: temperature WAS sent (the panel model's catalog row "
+                "accepts sampling params), so the panelists are distinct "
+                "decoding conditions."
+                if header["temperature_sweep_effective"]
+                else "Decoding: temperature was NOT sent - the panel model's "
+                "catalog row sets supports_sampling_params=False (a non-default "
+                "value returns HTTP 400), so the 6 panelists are REPEATED "
+                "SAMPLES at the provider's default decoding, not 6 decoding "
+                "conditions. Heterogeneity here is sampling variance only."
+            ),
+            f"Request-shape flags: panel={json.dumps(header['panel'], sort_keys=True)}; "
+            f"judge={json.dumps(header['judge'], sort_keys=True)}.",
+            (
+                f"Judge: {JUDGE_MODEL} (a DIFFERENT family than the panel) at temperature 0.0."
+                if header["judge"]["supports_sampling_params"]
+                else f"Judge: {JUDGE_MODEL} (a DIFFERENT family than the panel); "
+                "NO temperature was sent -- its catalog row sets "
+                "supports_sampling_params=False, so the judge ran at the "
+                "provider's default decoding, not at 0.0."
+            ),
             "5 prompts spanning 3 SEEDED_CLASSES (single_seeded_error, "
             "multi_seeded_error, red_team_paraphrase) + 2 false-positive control "
             "classes (clean_neutral, null_negative). N_seeded_trials = 18 "

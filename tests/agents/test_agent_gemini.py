@@ -48,7 +48,10 @@ class TestGeminiAgentInitialization:
         )
 
         assert agent.name == "my-gemini"
-        assert agent.model == "gemini-2.0-flash"
+        # "gemini-2.0-flash" has no catalog row of its own; resolve_model_id
+        # upgrades it to the current Google value-tier frontier
+        # (frontier-model-refresh, 2026-09-04).
+        assert agent.model == "gemini-3.8-flash"
         assert agent.role == "critic"
         assert agent.timeout == 60
         assert agent.enable_fallback is False
@@ -462,11 +465,10 @@ REASONING: Test reasoning"""
 class TestGeminiModelMapping:
     """Tests for OpenRouter model mapping."""
 
-    def test_model_mapping_exists(self):
-        """Test model mapping dictionary exists and has entries."""
+    def test_current_model_resolves_to_an_openrouter_slug(self):
+        """The mixin resolves through the catalog, not a hand-written map."""
         agent = GeminiAgent(api_key="test-key")
-        assert len(agent.OPENROUTER_MODEL_MAP) > 0
-        assert "gemini-3.1-pro-preview" in agent.OPENROUTER_MODEL_MAP
+        assert agent.get_fallback_model() == "google/gemini-3.1-pro-preview"
 
     def test_fallback_uses_correct_model(self):
         """Test fallback agent uses mapped model via mixin."""
@@ -479,8 +481,19 @@ class TestGeminiModelMapping:
             fallback = agent._get_cached_fallback_agent()
             assert fallback.model == "google/gemini-3.1-pro-preview"
 
-    def test_all_fallback_mappings_use_live_catalog_slug(self):
-        assert set(GeminiAgent.OPENROUTER_MODEL_MAP.values()) == {"google/gemini-3.1-pro-preview"}
+    def test_every_legacy_spelling_uses_the_live_catalog_slug(self):
+        """Every historical Gemini spelling upgrades to the family frontier
+        — including ones no hand-written map ever enumerated."""
+        for model in (
+            "gemini-3.1-pro-preview",
+            "gemini-3.1-pro",
+            "gemini-3-pro",
+            "gemini-2.5-pro",
+            "gemini-1.5-pro",
+            "gemini-pro",
+        ):
+            agent = GeminiAgent(api_key="test-key", model=model)
+            assert agent.get_fallback_model() == "google/gemini-3.1-pro-preview", model
         assert GeminiAgent.DEFAULT_FALLBACK_MODEL == "google/gemini-3.1-pro-preview"
 
     def test_default_fallback_model(self):

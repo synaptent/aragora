@@ -16,6 +16,8 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+from aragora.config.model_pins import GEMINI_31_PRO_DIRECT
+
 
 def cmd_upload(args: argparse.Namespace) -> int:
     """Upload documents for processing."""
@@ -503,7 +505,7 @@ Examples:
         help="Audit types: all,security,compliance,consistency,quality",
     )
     scan_parser.add_argument(
-        "--model", "-m", default="gemini-3-pro", help="Primary model for scanning"
+        "--model", "-m", default=GEMINI_31_PRO_DIRECT, help="Primary model for scanning"
     )
     scan_parser.add_argument(
         "--confidence", type=float, default=0.7, help="Minimum confidence threshold"

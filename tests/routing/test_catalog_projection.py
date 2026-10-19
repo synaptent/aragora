@@ -11,9 +11,16 @@ ProviderRouter._details_from_pricing) treat table keys as distinct candidate
 models, so alias spellings must not occupy extra candidate slots. Aliases
 price through the by_any_id fallback in get_estimated_cost instead.
 
-Models still inside their catalog soak window (ModelSpec.is_under_soak) are
-not projected at all — the enumerated table is an adoption surface — but
-their ids keep pricing through the same fallback.
+RETIRED catalog models are not projected at all — the enumerated table is a
+candidate set and a retired id is dead on the wire — but their ids keep
+pricing through the same fallback so old receipts still resolve.
+
+Soak is deliberately NOT a filter here (frontier-model-refresh final review
+#7). Soak-gating the enumerated table inverted the candidate set (it offered
+retired ids while withholding the current defaults) and made a module-level
+constant change contents on a wall-clock date. Soak gating applies to
+routing SELECTION instead, via provider_router._is_under_soak — see
+TestMetricsPathSoakGating, which is unchanged.
 """
 
 from __future__ import annotations
@@ -46,33 +53,43 @@ from aragora.routing.provider_router import (
 def _snapshot_and_as_of() -> tuple[dict[str, ProviderPricing], date | None]:
     """A real-table snapshot plus the UTC date it was built for.
 
-    Real-table tests evaluate is_under_soak against the SAME date the
-    snapshot was built for (the refresh stamp), so a UTC-midnight rollover
-    between taking the snapshot and checking soak state cannot desynchronize
-    the two."""
+    The projection no longer depends on the date (retirement, not soak), but
+    selection-path tests still need the snapshot's coherent as-of value, so
+    the accessor keeps returning both."""
     table = current_pricing_table()
     return table, provider_config._projection_refreshed_on
 
 
 class TestCatalogProjection:
-    # Real-table tests take ONE snapshot via the accessor plus its build
-    # date (_snapshot_and_as_of), never the bare module attribute — both
-    # the table AND the soak evaluation share one instant.
+    # Real-table tests take ONE snapshot via the accessor, never the bare
+    # module attribute, so the whole assertion sees one instant.
 
-    def test_adoptable_canonical_ids_have_a_pricing_row(self) -> None:
-        table, as_of = _snapshot_and_as_of()
+    def test_active_canonical_ids_have_a_pricing_row(self) -> None:
+        table, _as_of = _snapshot_and_as_of()
         for spec in CATALOG.values():
-            if spec.is_under_soak(as_of):
+            if spec.retired:
                 assert spec.canonical_id not in table, (
-                    f"{spec.canonical_id} is under soak and must not be enumerated"
+                    f"{spec.canonical_id} is retired and must not be enumerated"
                 )
             else:
                 assert spec.canonical_id in table, f"no projected row for {spec.canonical_id}"
 
+    def test_soaking_but_active_models_are_still_candidates(self) -> None:
+        """Final review #7: the routing roster must see the current
+        frontier. Before the fix `gpt-6-astra` (the OpenAI default) was
+        excluded for soaking while retired `gpt-5.5` was offered."""
+        table, _as_of = _snapshot_and_as_of()
+        soaking = [s for s in CATALOG.values() if s.soak_until is not None and not s.retired]
+        assert soaking, "fixture assumption: the catalog carries a soaking active row"
+        for spec in soaking:
+            assert spec.canonical_id in table, (
+                f"{spec.canonical_id} is soaking but active; it must stay a routing candidate"
+            )
+
     def test_projected_rows_match_catalog_rates(self) -> None:
-        table, as_of = _snapshot_and_as_of()
+        table, _as_of = _snapshot_and_as_of()
         for spec in CATALOG.values():
-            if spec.is_under_soak(as_of):
+            if spec.retired:
                 continue
             row = table[spec.canonical_id]
             assert row.input_cost_per_1k * 1000 == pytest.approx(spec.input_per_mtok)
@@ -83,8 +100,8 @@ class TestCatalogProjection:
         """THE bug: every platform default routed at $0 before the projection.
 
         Covers every spelling — canonical via the table, alias/openrouter
-        spellings AND every id of under-soak models via the by_any_id
-        fallback in get_estimated_cost.
+        spellings AND every id of retired models via the by_any_id
+        fallback in get_estimated_cost (old receipts must still resolve).
         """
         for spec in CATALOG.values():
             for model_id in spec.all_ids():
@@ -126,11 +143,11 @@ class TestAliasesDoNotInflateEnumeration:
     """
 
     def test_catalog_model_occupies_at_most_one_available_slot(self) -> None:
-        table, as_of = _snapshot_and_as_of()
+        table, _as_of = _snapshot_and_as_of()
         available = set(table)
         for spec in CATALOG.values():
             spellings_in_table = set(spec.all_ids()) & available
-            expected = set() if spec.is_under_soak(as_of) else {spec.canonical_id}
+            expected = set() if spec.retired else {spec.canonical_id}
             assert spellings_in_table == expected, (
                 f"{spec.canonical_id} occupies {sorted(spellings_in_table)} — "
                 "aliases must not be enumerated as distinct candidates"
@@ -140,10 +157,9 @@ class TestAliasesDoNotInflateEnumeration:
         # kimi-k2.7-code has 3 spellings; a generous budget admits them all
         # if they are (wrongly) projected as separate rows.
         affordable = get_models_within_budget(budget_per_debate=1_000.0)
-        as_of = provider_config._projection_refreshed_on
         for spec in CATALOG.values():
             spellings = [m for m in affordable if m in set(spec.all_ids())]
-            expected = [] if spec.is_under_soak(as_of) else [spec.canonical_id]
+            expected = [] if spec.retired else [spec.canonical_id]
             assert spellings == expected
 
     def test_details_from_pricing_returns_distinct_models(self) -> None:
@@ -227,34 +243,39 @@ def _stale_row(model_name: str) -> ProviderPricing:
 
 
 def _synthetic_catalog() -> dict[str, ModelSpec]:
-    """One under-soak and one adoptable spec, soak dates relative to today
-    so the tests never couple to the real catalog's wall-clock dates."""
-    soaking = ModelSpec(
-        canonical_id="soaking-model",
+    """One retired spec and one active spec.
+
+    The active one is deliberately still inside a soak window (dates
+    relative to today so the tests never couple to the real catalog's
+    wall-clock dates): soak must NOT keep it out of the projection.
+    """
+    retired = ModelSpec(
+        canonical_id="retired-model",
         provider="testprov",
-        direct_id="soaking-model",
-        openrouter_id="testprov/soaking-model",
+        direct_id="retired-model",
+        openrouter_id="testprov/retired-model",
         input_per_mtok=4.00,
         output_per_mtok=20.00,
         context_window=100_000,
         max_output_tokens=8_192,
-        release_date=utc_today() - timedelta(days=1),
-        soak_until=utc_today() + timedelta(days=13),
-        aliases=("soaking-alias",),
+        release_date=utc_today() - timedelta(days=400),
+        retired=True,
+        aliases=("retired-alias",),
     )
-    adoptable = ModelSpec(
-        canonical_id="adoptable-model",
+    active = ModelSpec(
+        canonical_id="active-model",
         provider="testprov",
-        direct_id="adoptable-model",
-        openrouter_id="testprov/adoptable-model",
+        direct_id="active-model",
+        openrouter_id="testprov/active-model",
         input_per_mtok=1.00,
         output_per_mtok=2.00,
         context_window=100_000,
         max_output_tokens=8_192,
-        release_date=utc_today() - timedelta(days=60),
-        aliases=("adoptable-alias",),
+        release_date=utc_today() - timedelta(days=1),
+        soak_until=utc_today() + timedelta(days=13),
+        aliases=("active-alias",),
     )
-    return {s.canonical_id: s for s in (soaking, adoptable)}
+    return {s.canonical_id: s for s in (retired, active)}
 
 
 class TestProjectionInvariant:
@@ -263,11 +284,14 @@ class TestProjectionInvariant:
 
         every final-table key that by_any_id resolves to a catalog model
         (a) is exactly that model's canonical_id and (b) that model is not
-        under soak.
+        RETIRED.
+
+    Clause (b) was soak until the frontier-model-refresh final review (#7);
+    see the module docstring for why it moved to the selection path.
 
     These tests start from PRE-POPULATED tables (the round-4 miss: an
     empty-table synthetic test cannot catch a surviving stale canonical
-    row of an under-soak model) and check the invariant on the result.
+    row of an excluded model) and check the invariant on the result.
     """
 
     @staticmethod
@@ -277,9 +301,9 @@ class TestProjectionInvariant:
     ) -> None:
         for key in table:
             spec = resolver(key)
-            assert spec is None or (key == spec.canonical_id and not spec.is_under_soak()), (
+            assert spec is None or (key == spec.canonical_id and not spec.retired), (
                 f"invariant violated: table key {key!r} resolves to "
-                f"{spec.canonical_id!r} (under_soak={spec.is_under_soak()})"
+                f"{spec.canonical_id!r} (retired={spec.retired})"
             )
 
     @pytest.fixture()
@@ -302,18 +326,18 @@ class TestProjectionInvariant:
         "seed_keys",
         [
             [],  # empty table (rounds 1-3 baseline)
-            ["soaking-model"],  # THE round-4 edge: stale canonical under-soak row
-            ["soaking-alias", "testprov/soaking-model"],  # under-soak alias rows
-            ["adoptable-alias", "testprov/adoptable-model"],  # adoptable alias rows
-            ["adoptable-model"],  # stale canonical row of adoptable model
+            ["retired-model"],  # THE round-4 edge: stale canonical retired row
+            ["retired-alias", "testprov/retired-model"],  # retired alias rows
+            ["active-alias", "testprov/active-model"],  # active alias rows
+            ["active-model"],  # stale canonical row of active model
             ["legacy-standalone"],  # hand row unknown to the catalog
             [  # everything at once
-                "soaking-model",
-                "soaking-alias",
-                "testprov/soaking-model",
-                "adoptable-model",
-                "adoptable-alias",
-                "testprov/adoptable-model",
+                "retired-model",
+                "retired-alias",
+                "testprov/retired-model",
+                "active-model",
+                "active-alias",
+                "testprov/active-model",
                 "legacy-standalone",
             ],
         ],
@@ -329,14 +353,16 @@ class TestProjectionInvariant:
 
         self._assert_invariant(table, resolver)
 
-        # Adoptable model: exactly its canonical row, at catalog rates
-        # (a stale seeded canonical row must be overridden, not kept).
-        adoptable = catalog["adoptable-model"]
-        row = table["adoptable-model"]
-        assert row.input_cost_per_1k * 1000 == pytest.approx(adoptable.input_per_mtok)
-        assert row.output_cost_per_1k * 1000 == pytest.approx(adoptable.output_per_mtok)
-        # Under-soak model: no spelling survives.
-        assert not any(key in table for key in catalog["soaking-model"].all_ids())
+        # Active model: exactly its canonical row, at catalog rates (a stale
+        # seeded canonical row must be overridden, not kept). It is inside a
+        # soak window and must be projected anyway.
+        active = catalog["active-model"]
+        assert active.is_under_soak(), "fixture must exercise the soaking-but-active case"
+        row = table["active-model"]
+        assert row.input_cost_per_1k * 1000 == pytest.approx(active.input_per_mtok)
+        assert row.output_cost_per_1k * 1000 == pytest.approx(active.output_per_mtok)
+        # Retired model: no spelling survives.
+        assert not any(key in table for key in catalog["retired-model"].all_ids())
         # Hand rows unknown to the catalog are preserved verbatim.
         if "legacy-standalone" in seed_keys:
             assert table["legacy-standalone"] == _stale_row("legacy-standalone")
@@ -353,77 +379,78 @@ class TestProjectionInvariant:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Cost lookup keeps working for every deleted spelling — including
-        all ids of the under-soak model — via the by_any_id fallback."""
+        all ids of the retired model, so old receipts still resolve — via
+        the by_any_id fallback."""
         catalog, _resolver = synthetic
-        table = {key: _stale_row(key) for key in ("soaking-model", "adoptable-alias")}
+        table = {key: _stale_row(key) for key in ("retired-model", "active-alias")}
         _apply_catalog_projection(table)
         monkeypatch.setattr(provider_config, "PROVIDER_PRICING", table)
 
-        soaking = catalog["soaking-model"]
-        for model_id in soaking.all_ids():
+        retired = catalog["retired-model"]
+        for model_id in retired.all_ids():
             cost = provider_config.get_estimated_cost(model_id, 1_000_000, 1_000_000)
-            assert cost == pytest.approx(soaking.input_per_mtok + soaking.output_per_mtok)
-        adoptable = catalog["adoptable-model"]
+            assert cost == pytest.approx(retired.input_per_mtok + retired.output_per_mtok)
+        active = catalog["active-model"]
         assert provider_config.get_estimated_cost(
-            "adoptable-alias", 1_000_000, 1_000_000
-        ) == pytest.approx(adoptable.input_per_mtok + adoptable.output_per_mtok)
+            "active-alias", 1_000_000, 1_000_000
+        ) == pytest.approx(active.input_per_mtok + active.output_per_mtok)
 
     def test_real_table_satisfies_invariant(self) -> None:
         """The published real snapshot satisfies the same post-condition."""
-        table, as_of = _snapshot_and_as_of()
+        table, _as_of = _snapshot_and_as_of()
         for key in table:
             spec = by_any_id(key)
-            assert spec is None or (key == spec.canonical_id and not spec.is_under_soak(as_of))
+            assert spec is None or (key == spec.canonical_id and not spec.retired)
 
 
-class TestUnderSoakModelsNotEnumerated:
-    """Round-3 residual (#9364, openai): the enumerated table is an adoption
-    surface, so catalog models still inside their soak window (must-not-adopt
-    before ModelSpec.soak_until) must not appear in get_available_models(),
-    get_models_within_budget(), or the no-metrics pricing fallback — while
-    cost lookup for their ids keeps working via the by_any_id fallback,
-    which has no soak gating.
+class TestRetiredModelsNotEnumerated:
+    """The enumerated table is a candidate set, so RETIRED catalog models
+    must not appear in get_available_models(), get_models_within_budget(),
+    or the no-metrics pricing fallback — while cost lookup for their ids
+    keeps working via the by_any_id fallback, which has no retirement
+    gating, so old receipts still resolve.
+
+    This class was TestUnderSoakModelsNotEnumerated (#9364 round 3) until
+    the frontier-model-refresh final review (#7) found the filter inverted
+    the candidate set. Soak gating on the SELECTION path is unchanged and
+    still covered by TestMetricsPathSoakGating.
     """
 
-    def test_no_enumerated_key_is_under_soak_today(self) -> None:
-        """Invariant on the real applied table (soak checked against the
-        snapshot's own build date)."""
-        table, as_of = _snapshot_and_as_of()
+    def test_no_enumerated_key_is_retired(self) -> None:
+        """Invariant on the real applied table."""
+        table, _as_of = _snapshot_and_as_of()
         for key in table:
             spec = by_any_id(key)
-            assert spec is None or not spec.is_under_soak(as_of), (
-                f"{key!r} is enumerated but {spec.canonical_id} is under soak "
-                f"until {spec.soak_until}"
+            assert spec is None or not spec.retired, (
+                f"{key!r} is enumerated but {spec.canonical_id} is retired"
             )
 
-    def test_details_from_pricing_never_offers_under_soak_models(self) -> None:
+    def test_details_from_pricing_never_offers_retired_models(self) -> None:
         router = ProviderRouter()  # empty metrics store -> pricing fallback
         details = router.select_providers_with_details(num_agents=len(current_pricing_table()) + 5)
-        as_of = provider_config._projection_refreshed_on
         for entry in details:
             spec = by_any_id(entry["provider"])
-            assert spec is None or not spec.is_under_soak(as_of)
+            assert spec is None or not spec.retired
 
-    def test_under_soak_model_excluded_but_all_ids_still_price(
+    def test_retired_model_excluded_but_all_ids_still_price(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Synthetic spec with a stable future soak_until (no wall-clock
-        dependence on the real catalog's dates): excluded from the applied
-        table, yet every spelling prices at the catalog rate."""
-        soaking = ModelSpec(
-            canonical_id="soak-model-x",
+        """A retired spec is excluded from the applied table, yet every
+        spelling still prices at the catalog rate (old receipts)."""
+        retired = ModelSpec(
+            canonical_id="retired-model-x",
             provider="testprov",
-            direct_id="soak-model-x",
-            openrouter_id="testprov/soak-model-x",
+            direct_id="retired-model-x",
+            openrouter_id="testprov/retired-model-x",
             input_per_mtok=4.00,
             output_per_mtok=20.00,
             context_window=100_000,
             max_output_tokens=8_192,
-            release_date=utc_today() - timedelta(days=1),
-            soak_until=utc_today() + timedelta(days=13),
-            aliases=("soak-alias-x",),
+            release_date=utc_today() - timedelta(days=400),
+            retired=True,
+            aliases=("retired-alias-x",),
         )
-        adoptable = ModelSpec(
+        active = ModelSpec(
             canonical_id="ready-model-y",
             provider="testprov",
             direct_id="ready-model-y",
@@ -434,7 +461,7 @@ class TestUnderSoakModelsNotEnumerated:
             max_output_tokens=8_192,
             release_date=utc_today() - timedelta(days=60),
         )
-        fake_catalog = {s.canonical_id: s for s in (soaking, adoptable)}
+        fake_catalog = {s.canonical_id: s for s in (retired, active)}
 
         def fake_by_any_id(model_id: str) -> ModelSpec | None:
             for s in fake_catalog.values():
@@ -448,44 +475,47 @@ class TestUnderSoakModelsNotEnumerated:
         table: dict[str, ProviderPricing] = {}
         _apply_catalog_projection(table)
 
-        # Under-soak model has NO enumerated row; adoptable one does.
+        # Retired model has NO enumerated row; the active one does.
         assert "ready-model-y" in table
-        assert not any(key in table for key in soaking.all_ids())
+        assert not any(key in table for key in retired.all_ids())
 
-        # Cost lookup still resolves every under-soak spelling at the
-        # catalog rate through the by_any_id fallback.
+        # Cost lookup still resolves every retired spelling at the catalog
+        # rate through the by_any_id fallback.
         monkeypatch.setattr(provider_config, "PROVIDER_PRICING", table)
-        for model_id in soaking.all_ids():
+        for model_id in retired.all_ids():
             cost = provider_config.get_estimated_cost(model_id, 1_000_000, 1_000_000)
-            assert cost == pytest.approx(24.00), f"{model_id} lost cost lookup under soak"
+            assert cost == pytest.approx(24.00), f"{model_id} lost cost lookup when retired"
 
-    def test_soak_expiry_admits_the_model(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Once soak_until passes, the same spec projects normally."""
-        expired = ModelSpec(
-            canonical_id="soaked-model-z",
+    def test_soaking_model_is_enumerated(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The inverse of the old behaviour: a model inside its soak window
+        IS a routing candidate. Its adoption is gated on the selection path
+        (provider_router._is_under_soak), not by withholding its price row."""
+        soaking = ModelSpec(
+            canonical_id="soaking-model-z",
             provider="testprov",
-            direct_id="soaked-model-z",
-            openrouter_id="testprov/soaked-model-z",
+            direct_id="soaking-model-z",
+            openrouter_id="testprov/soaking-model-z",
             input_per_mtok=3.00,
             output_per_mtok=9.00,
             context_window=100_000,
             max_output_tokens=8_192,
-            release_date=utc_today() - timedelta(days=15),
-            soak_until=utc_today(),  # must-not-adopt BEFORE today: now OK
+            release_date=utc_today() - timedelta(days=1),
+            soak_until=utc_today() + timedelta(days=13),
         )
-        monkeypatch.setattr(provider_config, "CATALOG", {expired.canonical_id: expired})
+        assert soaking.is_under_soak()
+        monkeypatch.setattr(provider_config, "CATALOG", {soaking.canonical_id: soaking})
         monkeypatch.setattr(
             provider_config,
             "by_any_id",
-            lambda mid: expired if str(mid).strip() in expired.all_ids() else None,
+            lambda mid: soaking if str(mid).strip() in soaking.all_ids() else None,
         )
         table: dict[str, ProviderPricing] = {}
         _apply_catalog_projection(table)
-        assert "soaked-model-z" in table
+        assert "soaking-model-z" in table
 
 
 # ---------------------------------------------------------------------------
-# Round-5: soak gating must be date-fresh, not frozen at import
+# Round-5/6: snapshot semantics (memoized per UTC date, never mutated)
 # ---------------------------------------------------------------------------
 
 
@@ -592,14 +622,18 @@ class _Clock:
         return self.current
 
 
-class TestSoakRefreshIsDateFresh:
-    """Round-5 (#9364, openai): _apply_catalog_projection ran once at module
-    import, freezing soak gating — a long-running process that imported
-    before a model's soak_until would never enumerate it after the date
-    passed. Round-6 semantics: the published snapshot is memoized per UTC
-    date; a rollover builds a NEW dict and atomically rebinds it, and a
-    published snapshot is never mutated (stale-but-never-corrupt for
-    re-entrant iteration and from-importers).
+class TestSnapshotSemantics:
+    """Round-5/6 (#9364, openai + claude convergent): the published snapshot
+    is memoized per UTC date; a rollover builds a NEW dict and atomically
+    rebinds it, and a published snapshot is never mutated
+    (stale-but-never-corrupt for re-entrant iteration and from-importers).
+
+    This class was TestSoakRefreshIsDateFresh: soak gating was the reason
+    the table had to be date-fresh, and the frontier-model-refresh final
+    review (#7) removed soak from the projection. The snapshot machinery is
+    retained (it is what makes concurrent iteration safe), and the
+    now-load-bearing property — that the enumerated table does NOT change
+    contents when the calendar rolls — is asserted directly.
     All dates here come from a fake clock: no wall-clock sleeps.
     """
 
@@ -646,6 +680,9 @@ class TestSoakRefreshIsDateFresh:
         monkeypatch.setattr(provider_config, "utc_today", clock.today)
         monkeypatch.setattr(provider_config, "CATALOG", catalog)
         monkeypatch.setattr(provider_config, "by_any_id", resolver)
+        # The router resolves ids through its OWN by_any_id import, which is
+        # what _is_under_soak (the selection-path soak gate) calls.
+        monkeypatch.setattr(provider_router_module, "by_any_id", resolver)
         # Two non-catalog legacy rows so mid-iteration refresh has room to
         # bite (a one-row table ends before a second next() call).
         monkeypatch.setattr(
@@ -659,41 +696,47 @@ class TestSoakRefreshIsDateFresh:
         monkeypatch.setattr(provider_config, "_projection_refreshed_on", None)
         return clock, catalog
 
-    def test_soak_expiry_is_observed_without_reimport(
+    def test_enumeration_does_not_change_when_the_calendar_rolls(
         self, dated_world: tuple[_Clock, dict[str, ModelSpec]]
     ) -> None:
+        """Final review #7: the enumerated table must not gain or lose rows
+        on a wall-clock date. Under the old soak filter this exact fixture
+        silently gained `soaking-model` at midnight on soak_until, which is
+        a latent flake for any membership or count assertion.
+        """
         clock, catalog = dated_world
         soaking = catalog["soaking-model"]
+        assert soaking.is_under_soak(self.BASE), "fixture must start inside the soak window"
 
-        # "Today": under soak -> excluded from every enumeration surface.
-        assert "soaking-model" not in provider_config.get_available_models()
-        assert "adoptable-model" in provider_config.get_available_models()
-        assert "soaking-model" not in provider_config.get_models_within_budget(1_000.0)
-        router = ProviderRouter()  # empty metrics -> pricing fallback
-        assert all(
-            d["provider"] != "soaking-model"
-            for d in router.select_providers_with_details(num_agents=10)
-        )
-        # ...but cost lookup prices it throughout the window.
+        # "Today": a soaking-but-active model IS a candidate.
+        before = set(provider_config.get_available_models())
+        assert {"soaking-model", "adoptable-model"} <= before
+        assert "soaking-model" in provider_config.get_models_within_budget(1_000.0)
         assert provider_config.get_estimated_cost(
             "soaking-alias", 1_000_000, 1_000_000
         ) == pytest.approx(soaking.input_per_mtok + soaking.output_per_mtok)
 
-        # Roll the calendar to soak_until (adoptable ON the date itself).
+        # Roll the calendar past soak_until: identical enumeration.
         clock.current = self.BASE + timedelta(days=1)
-
-        assert "soaking-model" in provider_config.get_available_models()
-        assert "soaking-model" in provider_config.get_models_within_budget(1_000.0)
-        assert any(
-            d["provider"] == "soaking-model"
-            for d in router.select_providers_with_details(num_agents=10)
-        )
-        # Enumerated row now carries the catalog rate; cost lookup unchanged.
+        assert set(provider_config.get_available_models()) == before
         row = provider_config.PROVIDER_PRICING["soaking-model"]
         assert row.input_cost_per_1k * 1000 == pytest.approx(soaking.input_per_mtok)
-        assert provider_config.get_estimated_cost(
-            "soaking-model", 1_000_000, 1_000_000
-        ) == pytest.approx(soaking.input_per_mtok + soaking.output_per_mtok)
+
+    def test_selection_still_withholds_the_model_until_soak_expiry(
+        self, dated_world: tuple[_Clock, dict[str, ModelSpec]]
+    ) -> None:
+        """Soak gating did not disappear, it moved: the pricing-fallback
+        SELECTION path must still not offer an under-soak model, and must
+        offer it once soak_until passes."""
+        clock, _catalog = dated_world
+        router = ProviderRouter()  # empty metrics -> pricing fallback
+        offered = {d["provider"] for d in router.select_providers_with_details(num_agents=10)}
+        assert "soaking-model" not in offered
+        assert "adoptable-model" in offered
+
+        clock.current = self.BASE + timedelta(days=1)
+        offered = {d["provider"] for d in router.select_providers_with_details(num_agents=10)}
+        assert "soaking-model" in offered
 
     def test_refresh_memoized_per_date_with_snapshot_semantics(
         self, dated_world: tuple[_Clock, dict[str, ModelSpec]], monkeypatch: pytest.MonkeyPatch
@@ -729,10 +772,11 @@ class TestSoakRefreshIsDateFresh:
         assert calls["n"] == 2
 
         # The superseded snapshot was never mutated: holders of the old
-        # object (from-importers, mid-loop iterators) see yesterday's view,
-        # not a dict that changed under them.
-        assert "soaking-model" not in first
-        assert "soaking-model" in second
+        # object (from-importers, mid-loop iterators) keep iterating a
+        # stable dict rather than one that changed under them. Since the
+        # projection no longer depends on the date, the two snapshots are
+        # distinct OBJECTS with identical contents.
+        assert set(second) == set(first)
 
     def test_mid_iteration_refresh_does_not_corrupt_enumeration(
         self, dated_world: tuple[_Clock, dict[str, ModelSpec]], monkeypatch: pytest.MonkeyPatch
@@ -753,9 +797,12 @@ class TestSoakRefreshIsDateFresh:
 
         monkeypatch.setattr(provider_config, "get_estimated_cost", rolling_cost)
 
-        # Must not raise; enumerates the pre-rollover snapshot coherently.
+        # Must not raise; enumerates the captured snapshot coherently.
         models = provider_config.get_models_within_budget(1_000.0)
         assert "adoptable-model" in models
-        assert "soaking-model" not in models  # captured snapshot predates expiry
+        assert "soaking-model" in models
         # The next enumeration observes the post-rollover snapshot.
-        assert "soaking-model" in provider_config.get_available_models()
+        assert set(provider_config.get_available_models()) >= {
+            "adoptable-model",
+            "soaking-model",
+        }
