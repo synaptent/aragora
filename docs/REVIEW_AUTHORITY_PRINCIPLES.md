@@ -23,6 +23,8 @@ A model review quorum is satisfied only when the review artifact records:
 
 Machine reviews remain advisory in GitHub terms: they do not become bot `APPROVE` reviews. For low-risk tiers, a receipt-backed model quorum can make admin squash a documented settlement action instead of an ad hoc bypass. For high-risk tiers, the same quorum prepares the risk packet, but the human still explicitly accepts or rejects the risk before merge.
 
+**Standing settlement delegation (2026-10-08).** The operator has delegated that acceptance to agents for Tier 3 and for Tier 4 outside the carve-outs: the review gate itself and its governance, secrets, deploy or workflow policy, and protected files. An agent may record the settlement on the operator's behalf once the PR meets the conditions in [`docs/AGENT_OPERATING_CONTRACT.md` § Standing settlement delegation](AGENT_OPERATING_CONTRACT.md#standing-settlement-delegation). The paragraph above about reviewer calibration still describes the risk; the operator retains accountability and receives a daily list of explicitly delegated settlements ([record](governance/records/20261008T0300Z-standing-settlement-delegation.md)).
+
 ## Merge Tiers
 
 | Tier | Class | Requirement | Settlement |
@@ -30,8 +32,8 @@ Machine reviews remain advisory in GitHub terms: they do not become bot `APPROVE
 | 0 | Docs-only, tests-only, status/report PRs | Green required checks plus 1 independent model review or dogfood note | Admin squash allowed |
 | 1 | Additive internal code with no live caller and no persistence/security/public API effect | Green checks plus 2 model signals, at least one adversarial or dogfood signal | Admin squash allowed |
 | 2 | Live automation, CLI, observability, retry/cache behavior | Green checks plus 2 heterogeneous model signals, focused dogfood, and no unresolved dissent | Admin squash allowed |
-| 3 | Semantic correctness, persistence, reputation, security/RBAC/auth, public API, SDK, migrations | Model quorum plus explicit human risk settlement | Human risk acceptance required |
-| 4 | Secrets, deployment, workflow policy, destructive operations, legal/compliance, irreversible data changes, **merge-authority self-modifications** (changes to the model-quorum gate code itself) | Human approval before implementation and before merge | Human preapproval required |
+| 3 | Semantic correctness, persistence, reputation, security/RBAC/auth, public API, SDK, migrations | Model quorum plus explicit human risk settlement | Human risk acceptance required, or delegated settlement under the standing delegation |
+| 4 | Secrets, deployment, workflow policy, destructive operations, legal/compliance, irreversible data changes, **merge-authority self-modifications** (changes to the model-quorum gate code itself) | Human approval before implementation and before merge | Human preapproval required; merge settlement may be delegated only outside the standing delegation's carve-outs |
 
 A change to `aragora/cli/commands/review_queue.py` is treated as Tier 4 because the model-quorum logic that gates the change *is* the code being changed. Without the elevation, a bug or weakening introduced in the diff would be evaluated by the version of the gate it is trying to land — the artifact under review would be its own arbiter. Tier 4 keeps the human in the chain of trust for these PRs specifically.
 
@@ -44,6 +46,8 @@ Two workflows express this policy on GitHub, and they are deliberately separate.
 `aragora-merge-quorum.yml` ("aragora-merge-quorum") is enforcing. It is the required status check on `main`. It builds the read-only merge-authorization packet (`review-queue merge-packet`) for the PR's exact head SHA and fails the check unless the packet authorizes the merge. For Tier 0-2 it passes when the model-quorum verdict is `admin_squash_allowed` with no unresolved dissent. For Tier 3-4 it passes only when, in addition to the model quorum, a head-SHA-bound human settlement signal is recorded — the `aragora/human-settlement` commit status, set by the operator after the local settlement receipt is written — and it fails closed until then.
 
 Branch protection on `main` therefore requires status checks (CI plus `aragora-merge-quorum`) and does not require a human approving review. This is intentional. A human `APPROVE` review by the author, or by any second GitHub identity the author controls, is a symbolic approval with no independent competence behind it: it satisfies the mechanism while defeating the four factors above. The model quorum supplies the technical review; the operator's recorded risk settlement supplies accountability and stake. Neither is a bot `APPROVE`, and neither pretends a second person reviewed the diff.
+
+For a PR covered by the standing delegation, an authorized agent may record that exact-head settlement using the existing receipt and status mechanism. Its receipt and PR comment must identify it as **delegated**, name the agent and mission, and cite the operator's delegation; the legacy status name is not a claim that the operator personally reviewed or accepted that head. Counted review families, meaningful-finding resolution, helper checks and branch protection are unchanged. The delegation cannot approve its own governance amendment.
 
 A second GitHub account operated by the same person as the PR author MUST NOT be used to satisfy any review requirement. It fails the independence factor this document is built on, and in the audit trail it is indistinguishable from a genuine independent review — which makes it worse than no approval at all. Review authority on this repo comes from the model quorum and the operator's recorded settlement, never from a second login.
 
