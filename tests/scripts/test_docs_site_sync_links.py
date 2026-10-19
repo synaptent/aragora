@@ -20,7 +20,7 @@ def _docs_specs_map_entries() -> dict[str, str]:
     content = SYNC_SCRIPT.read_text(encoding="utf-8")
     return dict(
         re.findall(
-            r"'(?:docs/)?specs/([^']+\.md)'\s*:\s*'specs/([^']+\.md)'",
+            r"'docs/specs/([^']+\.md)'\s*:\s*'specs/([^']+\.md)'",
             content,
         )
     )
@@ -41,11 +41,22 @@ def _docs_mirror_map_entries() -> dict[str, str]:
 
 
 def _doc_map_by_source() -> dict[str, str]:
-    """DOC_MAP keyed by repo-relative source; keys not spelled docs/<path> are relative to docs/."""
-    return {
-        key if key.startswith("docs/") else f"docs/{key}": dest
-        for key, dest in _docs_mirror_map_entries().items()
-    }
+    """DOC_MAP keyed by repo-relative source (every key is a literal docs/<path>.md)."""
+    return _docs_mirror_map_entries()
+
+
+def _docsite_exclude_entries() -> dict[str, str]:
+    content = SYNC_SCRIPT.read_text(encoding="utf-8")
+    block = re.search(r"const DOCSITE_EXCLUDE = \{(.*?)\n\};", content, re.DOTALL)
+    assert block, "DOCSITE_EXCLUDE not found in sync-docs.js"
+    return dict(re.findall(r"^  '([^']+)':\s*'([^']*)',$", block.group(1), re.MULTILINE))
+
+
+def _docsite_hand_maintained_pages() -> list[str]:
+    content = SYNC_SCRIPT.read_text(encoding="utf-8")
+    block = re.search(r"const DOCSITE_HAND_MAINTAINED = \[(.*?)\n\];", content, re.DOTALL)
+    assert block, "DOCSITE_HAND_MAINTAINED not found in sync-docs.js"
+    return re.findall(r"'([^']+)'", block.group(1))
 
 
 def _copy_sync_inputs(tmp_path: Path) -> None:
@@ -243,7 +254,7 @@ def test_doc_map_sources_are_exact_paths_with_unique_destinations() -> None:
     assert _exists_with_exact_case("aragora/gauntlet/README.md")
     assert "resolveSourcePath" not in content and "SOURCE_INDEX" not in content
 
-    unresolved = [key for key in doc_map if key.startswith(("../", "/"))] + [
+    unresolved = [key for key in doc_map if not re.fullmatch(r"docs/.+\.md", key)] + [
         src for src in sources if not _exists_with_exact_case(src)
     ]
     assert not unresolved, f"DOC_MAP keys that are not exact docs/ paths: {unresolved}"
@@ -254,28 +265,114 @@ def test_doc_map_sources_are_exact_paths_with_unique_destinations() -> None:
     assert not duplicates, f"Destinations claimed by more than one source: {duplicates}"
 
 
+def _run_sync_with_edited_script(edit, expected_in_stderr: str) -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        _copy_sync_inputs(tmp_path)
+        script = tmp_path / "docs-site" / "scripts" / "sync-docs.js"
+        script.write_text(edit(script.read_text(encoding="utf-8")), encoding="utf-8")
+
+        result = subprocess.run(["node", str(script)], cwd=tmp_path, capture_output=True, text=True)
+
+        assert result.returncode != 0
+        assert expected_in_stderr in result.stderr
+        assert not (tmp_path / "docs-site" / "docs").exists()
+
+
+def _replace_once(pattern: str, replacement: str):
+    def edit(content: str) -> str:
+        content, count = re.subn(pattern, replacement, content)
+        assert count == 1
+        return content
+
+    return edit
+
+
 def test_docs_site_sync_fails_closed_when_a_doc_map_source_is_missing() -> None:
-    # The key keeps an existing basename, so a basename fallback would still find a file.
-    for missing_key in ("docs/_moved/GETTING_STARTED.md", "docs/guides/getting_started.md"):
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp_path = Path(tmp)
-            _copy_sync_inputs(tmp_path)
-            script = tmp_path / "docs-site" / "scripts" / "sync-docs.js"
-            content, count = re.subn(
-                r"'(?:docs/)?guides/GETTING_STARTED\.md':",
-                f"'{missing_key}':",
-                script.read_text(encoding="utf-8"),
-            )
-            assert count == 1
-            script.write_text(content, encoding="utf-8")
+    # Each key keeps an existing basename (and guides/GETTING_STARTED.md exists relative to
+    # docs/), so a basename or docs/-relative fallback would still find a file.
+    for bad_key in (
+        "docs/_moved/GETTING_STARTED.md",
+        "docs/guides/getting_started.md",
+        "guides/GETTING_STARTED.md",
+    ):
+        _run_sync_with_edited_script(
+            _replace_once(r"'docs/guides/GETTING_STARTED\.md':", f"'{bad_key}':"),
+            f"'{bad_key}'",
+        )
 
-            result = subprocess.run(
-                ["node", str(script)], cwd=tmp_path, capture_output=True, text=True
-            )
 
-            assert result.returncode != 0
-            assert f"'{missing_key}'" in result.stderr
-            assert not (tmp_path / "docs-site" / "docs").exists()
+def test_docs_site_sync_rejects_excluded_keys_and_reserved_destinations() -> None:
+    excluded = next(iter(_docsite_exclude_entries()))
+    _run_sync_with_edited_script(
+        _replace_once(
+            r"'docs/guides/GETTING_STARTED\.md': 'getting-started/overview\.md',",
+            f"'{excluded}': 'getting-started/excluded-probe.md',",
+        ),
+        f"'{excluded}' is both a DOC_MAP key and a DOCSITE_EXCLUDE entry",
+    )
+    _run_sync_with_edited_script(
+        _replace_once(r"'getting-started/overview\.md',", "'getting-started/installation.md',"),
+        "destination getting-started/installation.md of 'docs/guides/GETTING_STARTED.md'"
+        " would overwrite a hand-maintained page",
+    )
+    _run_sync_with_edited_script(
+        _replace_once(r"'getting-started/overview\.md',", "'getting-started/index.md',"),
+        "destination getting-started/index.md of 'docs/guides/GETTING_STARTED.md'"
+        " would be overwritten by a generated category index",
+    )
+
+
+CURATED_DOC_DIRS = (
+    "architecture",
+    "getting-started",
+    "governance",
+    "guides",
+    "operations",
+    "reference",
+    "strategy",
+)
+
+
+def test_every_root_and_curated_doc_is_published_or_excluded_with_a_reason() -> None:
+    docs_root = REPO_ROOT / "docs"
+    universe = {path.relative_to(REPO_ROOT).as_posix() for path in docs_root.glob("*.md")}
+    for name in CURATED_DOC_DIRS:
+        universe |= {
+            path.relative_to(REPO_ROOT).as_posix() for path in (docs_root / name).rglob("*.md")
+        }
+    doc_map = _docs_mirror_map_entries()
+    excluded = _docsite_exclude_entries()
+
+    unaccounted = sorted(path for path in universe if path not in doc_map and path not in excluded)
+    assert not unaccounted, f"Map these in DOC_MAP or add them to DOCSITE_EXCLUDE: {unaccounted}"
+    assert not sorted(set(doc_map) & set(excluded))
+    assert not [path for path, reason in excluded.items() if not reason.strip()]
+    assert not [path for path in excluded if not _exists_with_exact_case(path)]
+    assert all(re.fullmatch(r"docs/[^*?\[\]]+\.md", path) for path in excluded)
+    assert "withheld" in excluded["docs/reference/PRICING_TIERS.md"]
+    assert not (DOCS_SITE_ROOT / "reference" / "pricing-tiers.md").exists()
+
+
+def test_every_docs_site_page_has_a_source_or_is_hand_maintained() -> None:
+    content = SYNC_SCRIPT.read_text(encoding="utf-8")
+    categories = re.search(r"const INDEX_CATEGORIES = \[(.*?)\n\];", content, re.DOTALL)
+    assert categories
+    generated_indexes = {
+        f"{name}/index.md" for name in re.findall(r"path: '([^']+)'", categories.group(1))
+    }
+    destinations = {
+        *_docs_mirror_map_entries().values(),
+        *_sync_script_map_entries("REPO_SOURCE_MAP").values(),
+    }
+    hand_maintained = _docsite_hand_maintained_pages()
+
+    assert "enterprise/positioning.md" in hand_maintained
+    assert not sorted(set(hand_maintained) & (destinations | generated_indexes))
+    assert all((DOCS_SITE_ROOT / page).is_file() for page in hand_maintained)
+    pages = {path.relative_to(DOCS_SITE_ROOT).as_posix() for path in DOCS_SITE_ROOT.rglob("*.md")}
+    stale = sorted(pages - destinations - generated_indexes - set(hand_maintained))
+    assert not stale, f"docs-site pages that no source writes: {stale}"
 
 
 def test_cli_prose_reference_has_its_own_page_beside_the_generated_catalog() -> None:
@@ -877,7 +974,7 @@ def _docs_reference_map_entries() -> dict[str, str]:
     content = SYNC_SCRIPT.read_text(encoding="utf-8")
     return dict(
         re.findall(
-            r"'(?:docs/)?reference/([^']+\.md)'\s*:\s*'reference/([^']+\.md)'",
+            r"'docs/reference/([^']+\.md)'\s*:\s*'reference/([^']+\.md)'",
             content,
         )
     )
@@ -973,9 +1070,10 @@ def test_public_commercial_sources_do_not_gain_duplicate_reference_pages() -> No
         sync_script,
         re.MULTILINE,
     )
-    assert len(re.findall(r"^\s*'(?:docs/)?reference/SLA\.md':", sync_script, re.MULTILINE)) == 1
-    assert not re.search(r"^\s*'(?:docs/)?reference/PRICING_TIERS\.md':", sync_script, re.MULTILINE)
-    assert not re.search(r"^\s*'(?:docs/)?enterprise/SLA\.md':", sync_script, re.MULTILINE)
+    assert len(re.findall(r"^\s*'docs/reference/SLA\.md':", sync_script, re.MULTILINE)) == 1
+    doc_map = _docs_mirror_map_entries()
+    assert "docs/reference/PRICING_TIERS.md" not in doc_map
+    assert "docs/enterprise/SLA.md" not in doc_map
 
     enterprise_pricing = _read_docs_site("enterprise/pricing.md")
     assert "$49/seat/mo" in enterprise_pricing
