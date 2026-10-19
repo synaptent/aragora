@@ -20,7 +20,7 @@ from aragora.server.http_utils import run_async as _run_async
 from aragora.server.validation.query_params import safe_query_float, safe_query_int
 
 from ...base import HandlerResult, error_response
-from ...utils.rate_limit import get_client_ip
+from ...utils.rate_limit import get_exact_client_ip
 from ...utils.tenant_validation import validate_workspace_access_sync
 
 if TYPE_CHECKING:
@@ -903,7 +903,7 @@ class RoutingMixin:
             user=user,
             workspace_id=workspace_id,
             endpoint="/api/v1/knowledge/mound/dedup/merge",
-            ip_address=get_client_ip(handler),
+            ip_address=get_exact_client_ip(handler),
         )
         if workspace_err:
             return workspace_err
@@ -935,7 +935,7 @@ class RoutingMixin:
             user=user,
             workspace_id=workspace_id,
             endpoint="/api/v1/knowledge/mound/dedup/auto-merge",
-            ip_address=get_client_ip(handler),
+            ip_address=get_exact_client_ip(handler),
         )
         if workspace_err:
             return workspace_err
@@ -979,7 +979,7 @@ class RoutingMixin:
             user=user,
             workspace_id=workspace_id,
             endpoint="/api/v1/knowledge/mound/pruning/execute",
-            ip_address=get_client_ip(handler),
+            ip_address=get_exact_client_ip(handler),
         )
         if workspace_err:
             return workspace_err

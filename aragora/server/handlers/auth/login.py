@@ -10,14 +10,14 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 from aragora.auth.lockout import get_lockout_tracker  # noqa: F401
 
 from aragora.events.handler_events import emit_handler_event, CREATED, COMPLETED, FAILED
 from ..base import HandlerResult, error_response, json_response, handle_errors, log_request
 from ..openapi_decorator import api_endpoint
-from ..utils.rate_limit import auth_rate_limit, get_client_ip
+from ..utils.rate_limit import auth_rate_limit, get_client_ip, get_exact_client_ip
 from .validation import validate_email, validate_password
 
 if TYPE_CHECKING:
@@ -30,9 +30,7 @@ try:
     AUDIT_AVAILABLE = True
 except ImportError:
     AUDIT_AVAILABLE = False
-    audit_admin = None
-    audit_login = None
-    audit_security = None
+    audit_admin = audit_login = audit_security = cast(Any, None)
 
 logger = logging.getLogger(__name__)
 
@@ -261,8 +259,9 @@ def handle_login(handler_instance: AuthHandler, handler) -> HandlerResult:
     if not email or not password:
         return error_response("Email and password required", 400)
 
-    # Get client IP for lockout tracking
+    # Lockout is keyed like the rate limiters (IPv6 by /64); audit records get the exact address.
     client_ip = get_client_ip(handler)
+    audit_ip = get_exact_client_ip(handler)
 
     # Get user store
     user_store = handler_instance._get_user_store()
@@ -281,7 +280,7 @@ def handle_login(handler_instance: AuthHandler, handler) -> HandlerResult:
     if lockout_tracker.is_locked(email=email, ip=client_ip):
         remaining_seconds = lockout_tracker.get_remaining_time(email=email, ip=client_ip)
         remaining_minutes = max(1, remaining_seconds // 60)
-        logger.warning("Login attempt on locked account/IP: ip=%s", client_ip)
+        logger.warning("Login attempt on locked account/IP: ip=%s", audit_ip)
         return error_response(
             f"Too many failed attempts. Try again in {remaining_minutes} minute(s).", 429
         )
@@ -327,7 +326,7 @@ def handle_login(handler_instance: AuthHandler, handler) -> HandlerResult:
                 audit_security(
                     event_type="anomaly",
                     actor_id=email,
-                    ip_address=client_ip,
+                    ip_address=audit_ip,
                     reason="account_locked_due_to_failed_attempts",
                 )
             return error_response(
@@ -336,7 +335,7 @@ def handle_login(handler_instance: AuthHandler, handler) -> HandlerResult:
             )
         # Audit log: failed login
         if AUDIT_AVAILABLE and audit_login:
-            audit_login(email, success=False, ip_address=client_ip, method="password")
+            audit_login(email, success=False, ip_address=audit_ip, method="password")
         emit_handler_event("auth", FAILED, {"action": "login", "email": email})
         return error_response("Invalid email or password", 401)
 
@@ -372,7 +371,7 @@ def handle_login(handler_instance: AuthHandler, handler) -> HandlerResult:
 
     # Audit log: successful login
     if AUDIT_AVAILABLE and audit_login:
-        audit_login(user.id, success=True, ip_address=client_ip, method="password")
+        audit_login(user.id, success=True, ip_address=audit_ip, method="password")
 
     emit_handler_event("auth", COMPLETED, {"action": "login"}, user_id=user.id)
 

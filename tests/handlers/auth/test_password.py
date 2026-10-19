@@ -37,14 +37,14 @@ def _body(result: object) -> dict:
     """Extract JSON body dict from a HandlerResult."""
     if isinstance(result, dict):
         return result
-    return json.loads(result.body)
+    return json.loads(result.body)  # type: ignore[attr-defined]
 
 
 def _status(result: object) -> int:
     """Extract HTTP status code from a HandlerResult."""
     if isinstance(result, dict):
         return result.get("status_code", 200)
-    return result.status_code
+    return result.status_code  # type: ignore[attr-defined]
 
 
 class MockHTTPHandler:
@@ -511,6 +511,18 @@ class TestForgotPassword:
         assert len(audit_calls) == 1
         assert audit_calls[0]["reason"] == "password_reset_requested"
         assert audit_calls[0]["event_type"] == "anomaly"
+
+    @patch("aragora.server.handlers.auth.password.send_password_reset_email")
+    @patch("aragora.server.handlers.auth.password.audit_security")
+    @patch("aragora.storage.password_reset_store.get_password_reset_store")
+    def test_audit_records_exact_ipv6_client(
+        self, mock_get_store, mock_audit, _send, handler_instance, http
+    ):
+        mock_get_store.return_value.create_token.return_value = ("token-abc", None)
+        request = http(body={"email": "test@example.com"})
+        request.client_address = ("2001:db8:1:2::a", 52000)
+        handle_forgot_password(handler_instance[0], request)
+        assert mock_audit.call_args.kwargs["ip_address"] == "2001:db8:1:2::a"
 
     @patch("aragora.storage.password_reset_store.get_password_reset_store")
     def test_audit_not_called_when_unavailable(
