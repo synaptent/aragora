@@ -160,6 +160,7 @@ aragora/live/test-results/
 aragora/live/playwright/.cache/
 .playwright-cli/
 .playwright-mcp/
+docs/audit/
 
 # Test results (Playwright, pytest, etc.)
 test-results/
