@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.10"
 resolution-markers = [
     "python_full_version >= '3.15'",
@@ -389,7 +389,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0.3,<7.0" },
     { name = "pyyaml", marker = "extra == 'test'", specifier = ">=6.0.3,<7.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = "==0.14.14" },
-    { name = "setuptools", marker = "extra == 'test'", specifier = ">=83.0.0,<84.0" },
+    { name = "setuptools", marker = "extra == 'test'", specifier = ">=83.0.0,<85.0" },
     { name = "supabase", marker = "extra == 'all'", specifier = ">=2.31.0,<3.0" },
     { name = "supabase", marker = "extra == 'enterprise'", specifier = ">=2.31.0,<3.0" },
     { name = "twine", marker = "extra == 'test'", specifier = ">=6.2.0,<8.0" },
