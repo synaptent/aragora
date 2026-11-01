@@ -409,7 +409,7 @@ runs:
         fi
 
     - name: Upload artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: aragora-review-${{ steps.diff.outputs.pr_number }}
         path: ./aragora-artifacts/

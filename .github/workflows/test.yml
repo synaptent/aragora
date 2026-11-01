@@ -164,7 +164,7 @@ jobs:
 
       - name: Upload epistemic compliance summary artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: epistemic-compliance-summary
           path: |
@@ -185,7 +185,7 @@ jobs:
 
       - name: Upload capability matrix summary artifact
         if: github.event_name == 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: capability-matrix-summary
           path: /tmp/capability-matrix-summary.md
@@ -396,7 +396,7 @@ jobs:
           echo "$CURRENT" > skip_count.txt
 
       - name: Upload skip audit
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: skip-audit
           path: skip_count.txt
@@ -455,7 +455,7 @@ jobs:
 
       - name: Upload reconciliation report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: status-reconciliation
           path: reconciliation_report.md
@@ -977,7 +977,7 @@ jobs:
 
       - name: Upload epistemic gate artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: epistemic-settlement-gate
           path: |
@@ -1364,7 +1364,7 @@ jobs:
 
       - name: Upload pollution-guard artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: pollution-guard-${{ matrix.slice }}-${{ github.run_number }}-${{ github.run_attempt }}
           path: artifacts/pollution-guard/
@@ -1611,7 +1611,7 @@ jobs:
 
       - name: Upload shard coverage
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-${{ matrix.os }}-py${{ matrix.python-version }}-${{ matrix.shard.name }}
           path: coverage-${{ matrix.shard.name }}.xml
@@ -1794,7 +1794,7 @@ jobs:
           "
 
       - name: Upload merged coverage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-report
           path: coverage.xml
@@ -2122,7 +2122,7 @@ jobs:
           NEXT_PUBLIC_WS_URL: ws://localhost:8765
 
       - name: Upload Playwright report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: playwright-report-shard-${{ matrix.shard }}
@@ -2130,7 +2130,7 @@ jobs:
           retention-days: 7
 
       - name: Upload test results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: playwright-results-shard-${{ matrix.shard }}
@@ -2138,7 +2138,7 @@ jobs:
           retention-days: 7
 
       - name: Upload server logs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: frontend-e2e-server-logs-shard-${{ matrix.shard }}
@@ -2262,7 +2262,7 @@ jobs:
           bandit -c pyproject.toml -r aragora/ -ll -iii -b "$BASELINE" --format txt
 
       - name: Upload security report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: security-report
@@ -2727,7 +2727,7 @@ jobs:
 
       - name: Upload test results
         continue-on-error: true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results
           path: |

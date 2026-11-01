@@ -83,7 +83,7 @@ jobs:
           PLAYWRIGHT_BASE_URL: https://aragora.ai
 
       - name: Upload test report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: production-health-report
@@ -177,7 +177,7 @@ jobs:
         continue-on-error: true
 
       - name: Upload auth test report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: production-auth-report
@@ -247,7 +247,7 @@ jobs:
           PLAYWRIGHT_BASE_URL: https://aragora.ai
 
       - name: Upload full test report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: production-full-report

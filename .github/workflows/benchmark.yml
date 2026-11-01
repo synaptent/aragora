@@ -108,7 +108,7 @@ jobs:
           alert-comment-cc-users: '@an0mium'
 
       - name: Upload benchmark artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: benchmark-results
           path: benchmark-results.json
@@ -274,7 +274,7 @@ jobs:
 
       - name: Upload regression report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: regression-report
           path: |
@@ -435,7 +435,7 @@ jobs:
             });
 
       - name: Upload baseline results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: baseline-comparison
           path: baseline_results.json

@@ -114,7 +114,7 @@ jobs:
           delete-branch: true
 
       - name: Upload generated types as artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: typescript-types
           path: sdk/typescript/src/generated-types.ts

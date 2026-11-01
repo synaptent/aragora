@@ -315,7 +315,7 @@ jobs:
 
       - name: Upload dogfood artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: self-improve-hard-check-artifacts
           path: |
