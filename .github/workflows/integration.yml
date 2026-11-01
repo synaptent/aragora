@@ -210,7 +210,7 @@ jobs:
           PYTHONUNBUFFERED: "1"
 
       - name: Upload test results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: e2e-test-results
@@ -218,7 +218,7 @@ jobs:
           retention-days: 14
 
       - name: Upload logs on failure
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: e2e-failure-logs
@@ -375,7 +375,7 @@ jobs:
           fail_ci_if_error: false
 
       - name: Upload test results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: integration-test-results
@@ -383,7 +383,7 @@ jobs:
           retention-days: 14
 
       - name: Upload logs on failure
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: integration-failure-logs
@@ -500,7 +500,7 @@ jobs:
           PYTHONUNBUFFERED: "1"
 
       - name: Upload test results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: control-plane-test-results

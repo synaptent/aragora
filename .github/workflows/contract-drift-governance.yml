@@ -53,7 +53,7 @@ jobs:
             --base-ref "$BASE_SHA" --head-ref "$HEAD_SHA" --strict --json \
             --repo-root "$GITHUB_WORKSPACE" | tee contract-drift-pr-delta.json
       - if: always() && !cancelled()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with: {name: "contract-drift-pr-delta-${{ github.event.pull_request.head.sha }}", path: contract-drift-pr-delta.json}
       - if: always()
         run: |
@@ -116,7 +116,7 @@ jobs:
           fi
       - if: success()
         id: receipt-upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: "${{ github.event_name == 'workflow_dispatch' && inputs.historical_backfill && format('contract-drift-main-receipt-analyzer-{0}', github.sha) || format('contract-drift-main-receipt-{0}', github.sha) }}"
           path: "${{ github.event_name == 'workflow_dispatch' && inputs.historical_backfill && 'contract-drift-main-receipt-analyzer.json' || 'contract-drift-main-receipt.json' }}"
@@ -203,5 +203,5 @@ jobs:
             --ref "$SOURCE_SHA" --as-of "$(date -u +%F)" --strict --json \
             --repo-root "$GITHUB_WORKSPACE" | tee contract-drift-program-trajectory.json
       - if: always() && !cancelled()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with: {name: "contract-drift-program-trajectory-${{ github.sha }}", path: contract-drift-program-trajectory.json}

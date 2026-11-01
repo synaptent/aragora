@@ -66,7 +66,7 @@ jobs:
             --output-file aragora-sdk-sbom-${VERSION}.xml
 
       - name: Upload Python SBOM
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: python-sbom
           path: |
@@ -136,7 +136,7 @@ jobs:
           npx @cyclonedx/cyclonedx-npm --output-format XML --output-file ../../${{ matrix.package.name }}-sbom.xml
 
       - name: Upload Node.js SBOM
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.package.name }}-sbom
           path: |
@@ -201,7 +201,7 @@ jobs:
           syft aragora:latest -o spdx-json > aragora-container-sbom-${VERSION}.spdx.json
 
       - name: Upload Container SBOM
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: container-sbom
           path: |
@@ -252,7 +252,7 @@ jobs:
           done
 
       - name: Upload Vulnerability Report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: vulnerability-report
           path: vulnerability-report.md

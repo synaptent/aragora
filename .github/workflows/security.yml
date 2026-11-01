@@ -114,7 +114,7 @@ jobs:
           bandit -r aragora/ -c pyproject.toml -lll
 
       - name: Upload Bandit results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: bandit-results
@@ -168,7 +168,7 @@ jobs:
           python scripts/security_scan.py --json --quiet
 
       - name: Upload scan results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: aragora-security-report

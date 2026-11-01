@@ -72,7 +72,7 @@ jobs:
         run: npm exec -- vsce publish -p ${{ secrets.VSCE_PAT }}
 
       - name: Upload VSIX artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: aragora-vscode-extension
           path: ide/vscode-aragora/*.vsix

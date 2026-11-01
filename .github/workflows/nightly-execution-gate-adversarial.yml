@@ -37,7 +37,7 @@ jobs:
 
       - name: Upload adversarial suite artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: execution-gate-adversarial-suite
           path: artifacts/execution_gate_adversarial_suite.json
