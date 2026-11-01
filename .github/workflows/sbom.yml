@@ -223,13 +223,13 @@ jobs:
 
     steps:
       - name: Download Python SBOM
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: python-sbom
           path: sboms/
 
       - name: Download SDK SBOM
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: aragora-sdk-sbom
           path: sboms/

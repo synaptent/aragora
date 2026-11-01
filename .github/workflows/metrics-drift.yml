@@ -369,7 +369,7 @@ jobs:
           echo "ATLAS_OUT=$RUNNER_TEMP/atlas-output" >> "$GITHUB_ENV"
 
       - name: Download this run's Atlas artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           # No cross-run token or run-id override: consume only this run's upload.
           artifact-ids: ${{ needs.atlas.outputs.artifact-id }}

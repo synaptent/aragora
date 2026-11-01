@@ -603,7 +603,7 @@ jobs:
           fi
 
       - name: Download generated spec
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ env.OPENAPI_RUN_ARTIFACT }}
           path: /tmp/openapi-spec/
@@ -740,7 +740,7 @@ jobs:
           fi
 
       - name: Download run-level spec artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ env.OPENAPI_RUN_ARTIFACT }}
           path: /tmp/openapi-envelope/payload/
